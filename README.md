@@ -1,73 +1,151 @@
-# Welcome to your Lovable project
+# Finance Tracker - Personal Finance Management
 
-## Project info
+A full-stack personal finance tracking application with **multi-bank CSV import** capabilities, transaction management, and spending analytics.
 
-**URL**: https://lovable.dev/projects/411315a2-2e01-4fef-93ea-e7d6cdab8261
+## 📁 Project Structure
 
-## How can I edit this code?
+```
+vault-voyager-vision/
+├── apps/
+│   ├── frontend/          # React + TypeScript frontend
+│   │   ├── src/          # Source code
+│   │   ├── public/       # Static assets
+│   │   └── index.html    # Entry HTML
+│   └── backend/          # Python FastAPI backend
+│       ├── main.py       # API server
+│       ├── models.py     # Database models
+│       ├── schemas.py    # Pydantic schemas
+│       ├── auth.py       # Authentication
+│       ├── bank_parsers.py      # Bank-specific parsers
+│       ├── csv_parser_manager.py # Parser routing
+│       ├── requirements.txt     # Python dependencies
+│       └── sample_csv/   # Sample bank CSV files
+├── config/               # Configuration files
+│   ├── vite.config.ts    # Vite configuration
+│   ├── tsconfig*.json    # TypeScript configs
+│   ├── tailwind.config.ts # Tailwind CSS
+│   ├── postcss.config.js # PostCSS
+│   ├── eslint.config.js  # ESLint
+│   └── components.json   # shadcn/ui config
+├── docs/                 # Documentation
+│   ├── README.md         # Main documentation
+│   ├── QUICKSTART.md     # Quick start guide
+│   ├── MULTI_BANK_IMPORT.md  # Bank import guide
+│   ├── BANK_IMPORT_QUICK_REF.md # Quick reference
+│   └── MIGRATION.md      # Migration notes
+├── .env                  # Frontend environment
+├── .gitignore           # Git ignore rules
+├── package.json         # Node dependencies & scripts
+└── start.sh            # Quick start script
+```
 
-There are several ways of editing your application.
+## 🏗️ Architecture
 
-**Use Lovable**
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS + shadcn/ui
+- **Backend**: Python FastAPI + SQLAlchemy + Bank-Specific CSV Parsers
+- **Database**: SQLite (default) or PostgreSQL
+- **Config Management**: Centralized in `/config` directory
+- **Documentation**: Organized in `/docs` directory
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/411315a2-2e01-4fef-93ea-e7d6cdab8261) and start prompting.
+## 🚀 Quick Start
 
-Changes made via Lovable will be committed automatically to this repo.
+### Option 1: Automated Setup
+```bash
+./start.sh
+```
 
-**Use your preferred IDE**
+### Option 2: Manual Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### Backend
+```bash
+cd apps/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+#### Frontend
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## 📚 Documentation
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+All documentation is organized in the `docs/` folder:
 
-**Use GitHub Codespaces**
+- **[Main README](docs/README.md)** - Complete project documentation
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes
+- **[Multi-Bank Import](docs/MULTI_BANK_IMPORT.md)** - Bank parser documentation
+- **[Quick Reference](docs/BANK_IMPORT_QUICK_REF.md)** - Bank import cheat sheet
+- **[Migration Guide](docs/MIGRATION.md)** - Supabase to Python backend
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🛠️ Development Commands
 
-## What technologies are used for this project?
+```bash
+# Frontend
+npm run dev          # Start dev server
+npm run build        # Build for production
+npm run lint         # Run ESLint
 
-This project is built with:
+# Backend
+npm run backend             # Start backend server
+npm run backend:install     # Install Python dependencies
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Both (with start.sh)
+./start.sh          # Start frontend & backend
+```
 
-## How can I deploy this project?
+## 🔧 Configuration
 
-Simply open [Lovable](https://lovable.dev/projects/411315a2-2e01-4fef-93ea-e7d6cdab8261) and click on Share -> Publish.
+All configuration files are in the `config/` directory:
+- TypeScript: `tsconfig*.json`
+- Vite: `vite.config.ts`
+- Tailwind: `tailwind.config.ts`
+- ESLint: `eslint.config.js`
+- PostCSS: `postcss.config.js`
+- shadcn/ui: `components.json`
 
-## Can I connect a custom domain to my Lovable project?
+## 🏦 Features
 
-Yes, you can!
+- **Multi-Bank CSV Import**: 7+ banks with automatic format detection
+- **Smart Categorization**: Auto-categorizes transactions
+- **Transaction Management**: Full CRUD operations
+- **Spending Analytics**: Charts and statistics
+- **User Authentication**: JWT-based auth
+- **Duplicate Prevention**: Smart duplicate detection
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 📍 Access Points
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- **Frontend**: http://localhost:8080
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+## 🎯 Supported Banks
+
+- Chase Bank
+- Bank of America
+- Wells Fargo
+- Capital One
+- Citi Bank
+- Discover Card
+- American Express
+- Generic CSV parser for any bank
+
+## 📖 Learn More
+
+See the [docs/](docs/) folder for detailed documentation on:
+- Setup and installation
+- Bank import system
+- API endpoints
+- Adding custom banks
+- Troubleshooting
+
+## 🔗 Links
+
+**Project URL**: https://lovable.dev/projects/411315a2-2e01-4fef-93ea-e7d6cdab8261
+
+---
+
+**Modern monorepo structure** with clear separation of concerns and comprehensive documentation.
