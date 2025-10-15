@@ -207,12 +207,17 @@ class TransactionImportService:
             start_date: Optional[datetime] = None,
             end_date: Optional[datetime] = None,
             category_id: Optional[int] = None,
+            recipient_id: Optional[int] = None,
+            recipient_name: Optional[str] = None,
             limit: int = 100,
             offset: int = 0
     ) -> List[Transaction]:
         """Get transactions with optional filters"""
 
         query = self.db.query(Transaction)
+
+        if bank_account:
+            query = query.filter(Transaction.bank_account.ilike(f"%{bank_account}%"))
 
         if start_date:
             query = query.filter(Transaction.date >= start_date)
@@ -222,6 +227,12 @@ class TransactionImportService:
 
         if category_id:
             query = query.filter(Transaction.category_id == category_id)
+
+        if recipient_id:
+            query = query.filter(Transaction.recipient_id == recipient_id)
+
+        if recipient_name:
+            query = query.join(Recipient).filter(Recipient.name.ilike(f"%{recipient_name}%"))
 
         return query.order_by(Transaction.date.desc()).offset(offset).limit(limit).all()
 
