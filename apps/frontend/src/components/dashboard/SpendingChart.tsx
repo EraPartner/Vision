@@ -24,10 +24,10 @@ export function SpendingChart({ data }: SpendingChartProps) {
           <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
             <PieChart className="h-6 w-6 text-white" />
           </div>
-          <div>
-            <CardTitle className="text-xl">Spending by Category</CardTitle>
+          <div className="flex-1">
+            <CardTitle className="text-xl">Spending Distribution</CardTitle>
             <CardDescription className="text-base">
-              Total: <span className="font-semibold text-slate-900 dark:text-white">${totalSpending.toFixed(2)}</span>
+              Total spending: <span className="font-semibold text-slate-900 dark:text-white">${totalSpending.toFixed(2)}</span>
             </CardDescription>
           </div>
         </div>
