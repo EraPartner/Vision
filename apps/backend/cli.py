@@ -61,25 +61,77 @@ def list_transactions_command(args):
     """Handle list transactions command"""
     db = SessionLocal()
     try:
+        from datetime import datetime
+
         service = TransactionImportService(db)
-        transactions = service.get_transactions(limit=args.limit, offset=args.offset)
+
+        # Parse date filters if provided
+        start_date = None
+        end_date = None
+
+        if args.start_date:
+            try:
+                start_date = datetime.strptime(args.start_date, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"Invalid start date format. Use YYYY-MM-DD")
+                return
+
+        if args.end_date:
+            try:
+                end_date = datetime.strptime(args.end_date, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"Invalid end date format. Use YYYY-MM-DD")
+                return
+
+        # Get transactions with filters
+        transactions = service.get_transactions(
+            bank_account=args.bank_account,
+            start_date=start_date,
+            end_date=end_date,
+            category_id=args.category_id,
+            recipient_id=args.recipient_id,
+            recipient_name=args.recipient_name,
+            limit=args.limit,
+            offset=args.offset
+        )
 
         if not transactions:
-            print("No transactions found.")
+            print("No transactions found matching the filters.")
             return
 
+        # Display active filters
+        filters_applied = []
+        if args.bank_account:
+            filters_applied.append(f"Bank: {args.bank_account}")
+        if args.start_date:
+            filters_applied.append(f"From: {args.start_date}")
+        if args.end_date:
+            filters_applied.append(f"To: {args.end_date}")
+        if args.category_id:
+            filters_applied.append(f"Category ID: {args.category_id}")
+        if args.recipient_id:
+            filters_applied.append(f"Recipient ID: {args.recipient_id}")
+        if args.recipient_name:
+            filters_applied.append(f"Recipient: {args.recipient_name}")
+
+        if filters_applied:
+            print(f"Filters: {' | '.join(filters_applied)}")
+            print()
+
         print(f"Found {len(transactions)} transactions:")
-        print(f"{'Date':<12} {'Amount':<10} {'Bank/Account':<25} {'Recipient':<30} {'Memo':<30}")
-        print("-" * 107)
+        print(f"{'Date':<12} {'Amount':<10} {'Bank/Account':<25} {'Recipient':<30} {'Category':<15} {'Memo':<30}")
+        print("-" * 122)
 
         for txn in transactions:
             bank_acct = (txn.bank_account[:22] + "...") if txn.bank_account and len(txn.bank_account) > 25 else (
-                        txn.bank_account or "N/A")
+                    txn.bank_account or "N/A")
             memo = (txn.memo[:27] + "...") if txn.memo and len(txn.memo) > 30 else (txn.memo or "")
             recipient = (txn.recipient.name[:27] + "...") if len(txn.recipient.name) > 30 else txn.recipient.name
+            category = (txn.category.name[:12] + "...") if txn.category and len(txn.category.name) > 15 else (
+                txn.category.name if txn.category else "N/A")
 
             print(
-                f"{txn.date.strftime('%Y-%m-%d'):<12} ${float(txn.amount):<9.2f} {bank_acct:<25} {recipient:<30} {memo:<30}")
+                f"{txn.date.strftime('%Y-%m-%d'):<12} ${float(txn.amount):<9.2f} {bank_acct:<25} {recipient:<30} {category:<15} {memo:<30}")
 
     finally:
         db.close()
@@ -89,13 +141,15 @@ def list_recipients_command(args):
     """Handle list recipients command"""
     db = SessionLocal()
     try:
+        from database.models import Recipient
+
         service = TransactionImportService(db)
 
         if args.with_accounts:
             recipients = service.get_recipients_with_account_numbers()
             print("Recipients with account numbers:")
         else:
-            recipients = db.query(service.db.query(Recipient).all())
+            recipients = db.query(Recipient).all()
             print("All recipients:")
 
         if not recipients:
@@ -269,6 +323,12 @@ def main():
     list_parser = subparsers.add_parser('list', help='List transactions')
     list_parser.add_argument('--limit', type=int, default=50, help='Number of transactions to show')
     list_parser.add_argument('--offset', type=int, default=0, help='Offset for pagination')
+    list_parser.add_argument('--start-date', help='Start date for filtering (YYYY-MM-DD)')
+    list_parser.add_argument('--end-date', help='End date for filtering (YYYY-MM-DD)')
+    list_parser.add_argument('--bank-account', help='Filter by bank account')
+    list_parser.add_argument('--recipient-id', type=int, help='Filter by recipient ID')
+    list_parser.add_argument('--recipient-name', help='Filter by recipient name (partial match)')
+    list_parser.add_argument('--category-id', type=int, help='Filter by category ID')
 
     # List recipients command
     recipients_parser = subparsers.add_parser('recipients', help='List recipients')
