@@ -15,6 +15,8 @@ class Transaction(Base):
     # Core transaction data
     date = Column(Date, nullable=False, index=True)  # Changed from DateTime to Date
     amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), nullable=True)  # Currency code (EUR, USD, etc.)
+    balance = Column(Numeric(12, 2), nullable=True)  # Account balance after transaction
     memo = Column(Text, nullable=True)
     comment = Column(Text, nullable=True)  # Additional comment field for bank-specific data
     bank_account = Column(String(100), nullable=True,

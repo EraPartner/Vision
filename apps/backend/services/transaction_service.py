@@ -116,6 +116,8 @@ class TransactionImportService:
                 transaction = Transaction(
                     date=transaction_data.date,
                     amount=Decimal(str(transaction_data.amount)),
+                    currency=transaction_data.currency,
+                    balance=Decimal(str(transaction_data.balance)) if transaction_data.balance is not None else None,
                     memo=transaction_data.memo or '',
                     comment=transaction_data.comment,
                     bank_account=transaction_data.bank_account,  # Store the bank/account name

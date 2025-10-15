@@ -43,36 +43,67 @@ class BelfiusAdapter(BaseBankAdapter):
     """Specialized adapter for Belfius CSV format"""
 
     def parse_csv(self, file_path: str) -> List[TransactionData]:
-        """Parse Belfius CSV format (tab-separated)"""
+        """Parse Belfius CSV format (semicolon-separated)"""
         transactions = []
+        last_balance = None
 
         with open(file_path, 'r', encoding='utf-8') as file:
-            for line_num, line in enumerate(file, 1):
+            lines = file.readlines()
+
+            # Extract the last balance from line 10 (index 9): "Laatste saldo;0,00 EUR"
+            if len(lines) > 9:
+                balance_line = lines[9].strip()
+                if balance_line.startswith("Laatste saldo;"):
+                    balance_str = balance_line.split(';')[1].replace(' EUR', '').replace(',', '.')
+                    try:
+                        last_balance = float(balance_str)
+                    except ValueError:
+                        pass
+
+            # Skip metadata lines (first 13 lines) and header line (line 14)
+            # Actual data starts at line 15 (index 14)
+            for line_num, line in enumerate(lines[14:], start=15):
                 try:
                     # Skip empty lines
                     line = line.strip()
                     if not line:
                         continue
 
-                    # Split by tab (Belfius uses tab-separated format)
-                    parts = line.split('\t')
+                    # Split by semicolon
+                    parts = line.split(';')
 
-                    # Belfius format has many fields, we need at least the core ones
+                    # Belfius format has 15 columns
                     if len(parts) < 12:
                         print(f"Skipping Belfius line {line_num}: insufficient columns ({len(parts)} < 12)")
                         continue
 
-                    account_number = parts[0].strip()  # BE81 0637 5061 4024
-                    # parts[2] and parts[3] seem to be codes (4, 20)
-                    # parts[4] appears to be empty or contains additional info
-                    recipient_account = parts[4].strip()  # Recipient account number - use this directly
-                    recipient = parts[5].strip()  # BVBA KAZIMO
-                    location = parts[7].strip()  # 3000 LEUVEN
-                    long_description = parts[8].strip()  # Full transaction description
-                    transaction_date = parts[9].strip()  # 13/05/2025
-                    amount_str = parts[10].strip()  # -16
-                    currency = parts[11].strip()  # EUR
-                    # Additional fields may exist but we use the last one as memo
+                    # Column mapping based on the example:
+                    # 0: Rekening (Account number)
+                    # 1: Boekingsdatum (Transaction date)
+                    # 2: Rekeninguittrekselnummer (Statement number)
+                    # 3: Transactienummer (Transaction number)
+                    # 4: Rekening tegenpartij (Recipient account)
+                    # 5: Naam tegenpartij bevat (Recipient name)
+                    # 6: Straat en nummer (Street and number)
+                    # 7: Postcode en plaats (Postal code and place)
+                    # 8: Transactie (Transaction description)
+                    # 9: Valutadatum (Value date)
+                    # 10: Bedrag (Amount)
+                    # 11: Devies (Currency)
+                    # 12: BIC
+                    # 13: Landcode (Country code)
+                    # 14: Mededelingen (Additional messages)
+
+                    account_number = parts[0].strip()
+                    transaction_date = parts[1].strip()
+                    recipient_account = parts[4].strip()
+                    recipient = parts[5].strip()
+                    street = parts[6].strip()
+                    location = parts[7].strip()
+                    transaction_description = parts[8].strip()
+                    amount_str = parts[10].strip()
+                    currency = parts[11].strip()
+                    additional_message = parts[14].strip() if len(parts) > 14 else ""
 
                     # Parse the transaction date (format: DD/MM/YYYY)
                     try:
@@ -81,35 +112,43 @@ class BelfiusAdapter(BaseBankAdapter):
                         print(f"Error parsing Belfius date '{transaction_date}': {e}")
                         continue
 
-                    # Parse amount
+                    # Parse amount (format: -8,70 needs to become -8.70)
                     try:
-                        amount = float(amount_str)
+                        amount = float(amount_str.replace(',', '.'))
                     except ValueError as e:
                         print(f"Error parsing Belfius amount '{amount_str}': {e}")
                         continue
 
-                    # Combine recipient with location if both exist
+                    # Build full recipient name
                     full_recipient = recipient
-                    if location and location.strip():
+                    if street and location:
+                        full_recipient = f"{recipient}, {street}, {location}"
+                    elif location:
                         full_recipient = f"{recipient} - {location}"
+                    elif street:
+                        full_recipient = f"{recipient}, {street}"
 
-                    # Use the long description as memo
-                    memo = long_description if long_description else ""
+                    # If recipient is empty, use transaction description
+                    if not full_recipient:
+                        full_recipient = transaction_description
 
-                    # Get comment from field 14 (parts[14]) for Belfius
-                    comment = parts[14].strip() if len(parts) > 14 else ""
+                    # Use transaction description as memo
+                    memo = transaction_description if transaction_description else ""
 
-                    # Create transaction with recipient account number if available
+                    # Use additional message as comment if available
+                    comment = additional_message if additional_message else None
+
+                    # Create transaction
                     transaction = TransactionData(
                         date=date,
-                        bank_account="Belfius Checking Account",  # Map account number to readable name
+                        bank_account="Belfius Checking Account",
                         recipient=full_recipient,
                         memo=memo,
                         amount=amount,
                         currency=currency,
-                        balance=None,  # Belfius doesn't seem to provide balance in this format
-                        recipient_account=recipient_account if recipient_account.strip() else None,
-                        comment=comment if comment else None,
+                        balance=last_balance,  # Use the last balance from header
+                        recipient_account=recipient_account if recipient_account else None,
+                        comment=comment,
                         raw_data=line
                     )
 
@@ -220,7 +259,7 @@ class KBCAdapter(BaseBankAdapter):
     """Specialized adapter for KBC CSV format"""
 
     def parse_csv(self, file_path: str) -> List[TransactionData]:
-        """Parse KBC CSV format (tab-separated)"""
+        """Parse KBC CSV format (semicolon-separated)"""
         transactions = []
 
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -231,8 +270,12 @@ class KBCAdapter(BaseBankAdapter):
                     if not line:
                         continue
 
-                    # Split by tab (KBC uses tab-separated format)
-                    parts = line.split('\t')
+                    # Skip header line (starts with "Rekeningnummer")
+                    if line.startswith("Rekeningnummer;"):
+                        continue
+
+                    # Split by semicolon (KBC uses semicolon-separated format)
+                    parts = line.split(';')
 
                     # KBC format needs at least the core fields
                     if len(parts) < 15:
@@ -280,18 +323,18 @@ class KBCAdapter(BaseBankAdapter):
                         print(f"Error parsing KBC date '{transaction_date}': {e}")
                         continue
 
-                    # Parse amount
+                    # Parse amount (KBC uses comma as decimal separator, convert to dot)
                     try:
-                        amount = float(amount_str)
+                        amount = float(amount_str.replace(',', '.'))
                     except ValueError as e:
                         print(f"Error parsing KBC amount '{amount_str}': {e}")
                         continue
 
-                    # Parse balance (optional)
+                    # Parse balance (optional, also uses comma as decimal separator)
                     balance = None
                     if balance_str and balance_str.strip():
                         try:
-                            balance = float(balance_str)
+                            balance = float(balance_str.replace(',', '.'))
                         except ValueError:
                             balance = None
 
