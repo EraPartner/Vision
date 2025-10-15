@@ -1,15 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-interface RegisterCredentials {
-  email: string;
-  password: string;
-}
-
 interface Transaction {
   id?: number;
   transaction_date: string;
@@ -20,39 +10,16 @@ interface Transaction {
 }
 
 class ApiClient {
-  private getToken(): string | null {
-    return localStorage.getItem('access_token');
-  }
-
-  private setToken(token: string): void {
-    localStorage.setItem('access_token', token);
-  }
-
-  private removeToken(): void {
-    localStorage.removeItem('access_token');
-  }
-
   private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const token = this.getToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
-
-    if (response.status === 401) {
-      this.removeToken();
-      window.location.href = '/auth';
-      throw new Error('Unauthorized');
-    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -60,36 +27,6 @@ class ApiClient {
     }
 
     return response.json();
-  }
-
-  // Auth methods
-  async register(credentials: RegisterCredentials) {
-    const data = await this.request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-    return data;
-  }
-
-  async login(credentials: LoginCredentials) {
-    const data = await this.request('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-    this.setToken(data.access_token);
-    return data;
-  }
-
-  logout() {
-    this.removeToken();
-  }
-
-  async getCurrentUser() {
-    return this.request('/api/auth/me');
-  }
-
-  isAuthenticated(): boolean {
-    return !!this.getToken();
   }
 
   // Transaction methods
@@ -127,4 +64,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-export type { Transaction, LoginCredentials, RegisterCredentials };
+export type { Transaction };

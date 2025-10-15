@@ -3,66 +3,48 @@
 echo "🚀 Starting Finance Tracker..."
 echo ""
 
-# Start backend
-echo "📦 Starting Python backend..."
+# Start backend API
+echo "📦 Starting Python backend API..."
 cd apps/backend
 
-# Find a compatible Python version (3.10-3.13)
-PYTHON_CMD=""
-for version in python3.13 python3.12 python3.11 python3.10 python3; do
-    if command -v $version &> /dev/null; then
-        PYTHON_VERSION=$($version --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-        MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
-        MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-        
-        # Check if version is 3.10-3.13 (compatible range)
-        if [ "$MAJOR" = "3" ] && [ "$MINOR" -ge "10" ] && [ "$MINOR" -le "13" ]; then
-            PYTHON_CMD=$version
-            echo "✓ Using $version (Python $PYTHON_VERSION)"
-            break
-        fi
-    fi
-done
-
-if [ -z "$PYTHON_CMD" ]; then
-    echo "❌ Error: Python 3.10-3.13 not found. Python 3.14 is too new for some dependencies."
-    echo "Please install Python 3.13 or 3.12:"
-    echo "  - macOS: brew install python@3.13"
-    echo "  - Ubuntu: sudo apt install python3.13"
+# Check if virtual environment exists
+if [ ! -d "venv" ]; then
+    echo "❌ Error: Virtual environment not found at apps/backend/venv"
+    echo "Please create it first:"
+    echo "  cd apps/backend"
+    echo "  python3 -m venv venv"
+    echo "  ./venv/bin/pip install -r requirements.txt"
     exit 1
 fi
 
-# Create/activate virtual environment using bash
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    bash -c "$PYTHON_CMD -m venv venv"
-fi
+echo "✓ Using virtual environment at apps/backend/venv"
 
-echo "Installing dependencies..."
-bash -c "source venv/bin/activate && pip install --upgrade pip > /dev/null 2>&1 && pip install -r requirements.txt > /dev/null 2>&1"
+# Install/update dependencies using venv's pip directly (no activation needed)
+echo "Installing/updating dependencies..."
+./venv/bin/pip install --upgrade pip > /dev/null 2>&1
+./venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 
-# Start the backend
-bash -c "source venv/bin/activate && python main.py" &
+# Start the backend API server using venv's python directly
+echo "✓ Starting FastAPI server on http://localhost:8000"
+./venv/bin/python main.py > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 cd ../..
 
 # Wait for backend to start
+echo "Waiting for backend to be ready..."
 sleep 3
 
-# Start frontend
-echo "🎨 Starting React frontend..."
-npm run dev &
-FRONTEND_PID=$!
+# Check if backend is running
+if curl -s http://localhost:8000/ > /dev/null 2>&1; then
+    echo "✓ Backend API is running"
+else
+    echo "⚠ Backend may not have started correctly. Check /tmp/backend.log"
+    cat /tmp/backend.log
+fi
 
 echo ""
-echo "✅ Application started!"
-echo "📱 Frontend: http://localhost:8080"
-echo "🔧 Backend API: http://localhost:8000"
-echo "📚 API Docs: http://localhost:8000/docs"
-echo ""
-echo "Press Ctrl+C to stop all servers"
+echo "📱 Starting frontend..."
+npm run dev
 
-# Handle Ctrl+C
-trap "echo '🛑 Shutting down...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT
-
-wait
+# Cleanup on exit
+trap "kill $BACKEND_PID 2>/dev/null" EXIT

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
-import { Upload, Loader2, CheckCircle2 } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, Database } from "lucide-react";
 
 interface CSVImportProps {
   onImportComplete: () => void;
@@ -13,7 +13,7 @@ interface CSVImportProps {
 
 export function CSVImport({ onImportComplete }: CSVImportProps) {
   const [loading, setLoading] = useState(false);
-  const [bankSource, setBankSource] = useState("");
+  const [bankSource, setBankSource] = useState("auto-detect");
   const [supportedBanks, setSupportedBanks] = useState<string[]>([]);
 
   useEffect(() => {
@@ -38,13 +38,15 @@ export function CSVImport({ onImportComplete }: CSVImportProps) {
     try {
       const csvContent = await file.text();
       
-      const data = await apiClient.importCSV(csvContent, bankSource || file.name);
+      // Use filename for auto-detect, otherwise use the selected bank
+      const bankValue = bankSource === "auto-detect" ? file.name : bankSource;
+      const data = await apiClient.importCSV(csvContent, bankValue);
 
       toast.success(`Successfully imported ${data.imported} transactions!`, {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       onImportComplete();
-      setBankSource("");
+      setBankSource("auto-detect");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to import CSV";
       toast.error(message);
@@ -57,22 +59,34 @@ export function CSVImport({ onImportComplete }: CSVImportProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Import Transactions</CardTitle>
-        <CardDescription>
-          Upload a CSV file from your bank. We support {supportedBanks.length}+ banks and automatically detect the format.
-        </CardDescription>
+    <Card className="border-none shadow-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 hover:shadow-2xl transition-shadow duration-300">
+      <CardHeader className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <Upload className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-xl">Import Transactions</CardTitle>
+            <CardDescription className="text-base">
+              Upload CSV files from {supportedBanks.length}+ supported banks
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="bank-source">Select Your Bank (Optional)</Label>
+      <CardContent className="space-y-5">
+        <div className="space-y-3">
+          <Label htmlFor="bank-source" className="text-sm font-semibold">Select Your Bank (Optional)</Label>
           <Select value={bankSource} onValueChange={setBankSource}>
-            <SelectTrigger id="bank-source">
+            <SelectTrigger id="bank-source" className="h-11 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <SelectValue placeholder="Auto-detect from file" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Auto-detect</SelectItem>
+              <SelectItem value="auto-detect">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Auto-detect
+                </div>
+              </SelectItem>
               {supportedBanks.map((bank) => (
                 <SelectItem key={bank} value={bank}>
                   {bank}
@@ -81,42 +95,48 @@ export function CSVImport({ onImportComplete }: CSVImportProps) {
               <SelectItem value="custom">Other/Custom</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Selecting your bank helps us parse the CSV more accurately
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            💡 Selecting your bank helps us parse the CSV more accurately
           </p>
         </div>
         
-        <div className="space-y-2">
-          <Label htmlFor="csv-file">CSV File</Label>
-          <div className="flex gap-2">
+        <div className="space-y-3">
+          <Label htmlFor="csv-file" className="text-sm font-semibold">CSV File</Label>
+          <div className="relative">
             <Input
               id="csv-file"
               type="file"
               accept=".csv"
               onChange={handleFileUpload}
               disabled={loading}
-              className="cursor-pointer"
+              className="h-11 cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300 border-slate-200 dark:border-slate-700"
             />
-            {loading && <Loader2 className="h-4 w-4 animate-spin self-center" />}
+            {loading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              </div>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Expected format: Date, Description, Amount (columns auto-detected)
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            📊 Expected format: Date, Description, Amount (columns auto-detected)
           </p>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-start gap-2 p-3 bg-muted rounded-lg">
-            <Upload className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <div className="flex-1 text-sm text-muted-foreground">
-              <p className="font-medium mb-1">Supported Banks:</p>
-              <p className="text-xs leading-relaxed">
-                {supportedBanks.length > 0 
-                  ? supportedBanks.join(", ")
-                  : "Chase, Bank of America, Wells Fargo, Capital One, Citi, Discover, Amex, and more"}
-              </p>
-              <p className="text-xs mt-2">
-                Don't see your bank? No problem! Our generic parser works with most CSV formats.
-              </p>
+        <div className="space-y-3 pt-2">
+          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 border border-blue-100 dark:border-blue-900/50">
+            <div className="flex items-start gap-3">
+              <Database className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">Supported Banks:</p>
+                <p className="text-xs leading-relaxed text-blue-700 dark:text-blue-300">
+                  {supportedBanks.length > 0 
+                    ? supportedBanks.slice(0, 6).join(", ") + (supportedBanks.length > 6 ? `, and ${supportedBanks.length - 6} more...` : "")
+                    : "Chase, Bank of America, Wells Fargo, Capital One, Citi, Discover, and more"}
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                  ✨ Don't see your bank? Our smart parser works with most CSV formats!
+                </p>
+              </div>
             </div>
           </div>
         </div>
