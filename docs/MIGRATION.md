@@ -1,88 +1,68 @@
-# Migration Summary: Supabase → Python Backend
+# Migration Summary: SQLite Backend Architecture
 
-## What Changed
+## Current Architecture
 
-### Architecture
-- **Before**: Supabase (PostgreSQL + Auth + Edge Functions)
-- **After**: Python FastAPI + SQLAlchemy + JWT Auth
+**Backend**: Python FastAPI + SQLAlchemy + SQLite  
+**Frontend**: React + TypeScript + Vite
 
 ### Benefits
 1. **Full Control**: Own your data and backend logic
-2. **No Vendor Lock-in**: Standard SQL database (SQLite or PostgreSQL)
+2. **No Vendor Lock-in**: Standard SQL database (SQLite)
 3. **Easier Debugging**: Direct access to backend code
 4. **Cost**: No external service fees
 5. **Flexibility**: Easy to extend and customize
+6. **Simplicity**: Single file database, easy to backup and manage
 
-## File Changes
+## Backend Structure
 
-### New Backend Files
-- `backend/main.py` - FastAPI server with all endpoints
-- `backend/models.py` - SQLAlchemy database models
-- `backend/schemas.py` - Pydantic validation schemas
-- `backend/auth.py` - JWT authentication system
-- `backend/database.py` - Database configuration
-- `backend/csv_parser.py` - CSV parsing with auto-categorization
-- `backend/requirements.txt` - Python dependencies
-- `backend/.env` - Environment configuration
+### Core Files
+- `apps/backend/main.py` - FastAPI server with all endpoints
+- `apps/backend/database/models.py` - SQLAlchemy database models
+- `apps/backend/database/connection.py` - Database configuration
+- `apps/backend/services/bank_adapters.py` - Bank CSV format adapters
+- `apps/backend/services/transaction_service.py` - Transaction business logic
+- `apps/backend/cli.py` - Command-line interface for imports
+- `apps/backend/requirements.txt` - Python dependencies
+- `apps/backend/financial_transactions.db` - SQLite database file
 
-### Modified Frontend Files
-- `src/lib/api.ts` - NEW: API client for backend communication
-- `src/App.tsx` - Updated to use API client instead of Supabase
-- `src/pages/Dashboard.tsx` - Updated to use API client
-- `src/components/auth/AuthForm.tsx` - Updated authentication flow
-- `src/components/dashboard/CSVImport.tsx` - Updated CSV import to use API
-- `src/components/dashboard/TransactionsTable.tsx` - Added delete functionality
-
-### Removed Dependencies
-The frontend no longer needs:
-- `@supabase/supabase-js`
-- Supabase configuration files
+### Frontend Integration
+- `apps/frontend/src/lib/api.ts` - API client for backend communication
+- Direct REST API calls to Python backend
+- No external dependencies for data management
 
 ### Database Schema
-Maintained the same structure:
-- Users table (email, password)
 - Transactions table (date, description, amount, category, bank_source)
-- Categories enum (groceries, dining, transportation, etc.)
-
-## API Comparison
-
-### Supabase
-```typescript
-const { data } = await supabase.from('transactions').select('*')
-```
-
-### New Python Backend
-```typescript
-const data = await apiClient.getTransactions()
-```
-
-## Authentication
-
-### Supabase
-- Magic links, OAuth providers
-- Session management built-in
-
-### New Backend
-- Email/password with JWT tokens
-- Token stored in localStorage
-- Bearer token authentication
+- Recipients table (for transaction counterparties)
+- Bank account tracking
+- Automatic duplicate detection
 
 ## CSV Import
 
-### Supabase
-- Edge function (Deno/TypeScript)
-- Required Supabase deployment
-
-### New Backend
-- Direct Python function
-- Uses pandas for robust CSV parsing
+- Direct Python function with pandas
+- Multi-bank support (Belfius, KBC, Revolut, Chase, etc.)
+- Configurable adapters for any CSV format
 - Runs locally with your backend
+- Auto-categorization capabilities
 
-## Next Steps
+## Authentication Status
 
-1. ✅ Backend is ready to run
-2. ✅ Frontend is updated
-3. ✅ Database will auto-create on first run
-4. ✅ Sample CSV file provided
+**Currently**: No authentication (removed for simplicity)  
+**Future**: Can implement custom JWT auth when needed
+- Will use Python backend for auth
+- No Supabase required
+- Complete control over auth flow
 
-Just run `./start.sh` to begin!
+## Running the Application
+
+```bash
+./start.sh  # Starts both backend and frontend
+```
+
+Or separately:
+```bash
+# Backend
+cd apps/backend && python main.py
+
+# Frontend
+npm run dev
+```
