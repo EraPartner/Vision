@@ -474,45 +474,6 @@ BANK_CONFIGURATIONS = {
         "bank_name": "KBC",
         "adapter_class": "KBCAdapter"
     },
-    "chase": {
-        "bank_name": "Chase",
-        "encoding": "utf-8",
-        "separator": ",",
-        "skip_rows": 0,
-        "date_format": "%m/%d/%Y",
-        "column_mapping": {
-            "date": "Transaction Date",
-            "recipient": "Description",
-            "memo": "Type",
-            "amount": "Amount"
-        }
-    },
-    "bank_of_america": {
-        "bank_name": "Bank of America",
-        "encoding": "utf-8",
-        "separator": ",",
-        "skip_rows": 0,
-        "date_format": "%m/%d/%Y",
-        "column_mapping": {
-            "date": "Date",
-            "recipient": "Payee",
-            "memo": "Address",
-            "amount": "Amount"
-        }
-    },
-    "wells_fargo": {
-        "bank_name": "Wells Fargo",
-        "encoding": "utf-8",
-        "separator": ",",
-        "skip_rows": 0,
-        "date_format": "%m/%d/%Y",
-        "column_mapping": {
-            "date": "Date",
-            "recipient": "Description",
-            "memo": "",
-            "amount": "Amount"
-        }
-    }
 }
 
 

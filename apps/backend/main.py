@@ -1,11 +1,11 @@
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -567,6 +567,143 @@ async def get_statistics(db: Session = Depends(get_db)):
             } for stat in category_stats
         ]
     }
+
+
+@app.get("/export/csv")
+async def export_transactions_csv(
+        from_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD format)"),
+        to_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD format, defaults to today)"),
+        bank_account: Optional[str] = Query(None, description="Filter by specific bank account"),
+        category_id: Optional[int] = Query(None, description="Filter by category ID"),
+        db: Session = Depends(get_db)
+):
+    """
+    Export transactions to CSV file from a certain date until now
+
+    Returns a downloadable CSV file with all matching transactions
+    """
+    # Parse dates if provided
+    from_date_obj = None
+    to_date_obj = None
+
+    if from_date:
+        try:
+            from_date_obj = date.fromisoformat(from_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format. Use YYYY-MM-DD")
+
+    if to_date:
+        try:
+            to_date_obj = date.fromisoformat(to_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format. Use YYYY-MM-DD")
+
+    # Create temporary file for export
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as tmp_file:
+        tmp_file_path = tmp_file.name
+
+    try:
+        # Export transactions
+        service = TransactionImportService(db)
+        result = service.export_transactions_to_csv(
+            file_path=tmp_file_path,
+            from_date=from_date_obj,
+            to_date=to_date_obj,
+            bank_account=bank_account,
+            category_id=category_id
+        )
+
+        if not result['success']:
+            os.unlink(tmp_file_path)
+            raise HTTPException(status_code=404, detail=result['message'])
+
+        # Generate filename
+        filename = f"transactions_export_{date.today().isoformat()}.csv"
+        if from_date_obj:
+            filename = f"transactions_{from_date_obj.isoformat()}_to_{to_date_obj or date.today()}.csv"
+
+        # Return file as downloadable response
+        return FileResponse(
+            path=tmp_file_path,
+            media_type='text/csv',
+            filename=filename,
+            background=None  # File will be cleaned up after response
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
+        raise HTTPException(status_code=500, detail=f"Error exporting transactions: {str(e)}")
+
+
+@app.get("/api/export-csv")
+async def export_transactions_csv_frontend(
+        from_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD format)"),
+        to_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD format, defaults to today)"),
+        bank_account: Optional[str] = Query(None, description="Filter by specific bank account"),
+        db: Session = Depends(get_db)
+):
+    """
+    Frontend endpoint: Export transactions to CSV file from a certain date until now
+
+    Returns a downloadable CSV file with all matching transactions
+    """
+    # Parse dates if provided
+    from_date_obj = None
+    to_date_obj = None
+
+    if from_date:
+        try:
+            from_date_obj = date.fromisoformat(from_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format. Use YYYY-MM-DD")
+
+    if to_date:
+        try:
+            to_date_obj = date.fromisoformat(to_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format. Use YYYY-MM-DD")
+
+    # Create temporary file for export
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as tmp_file:
+        tmp_file_path = tmp_file.name
+
+    try:
+        # Export transactions
+        service = TransactionImportService(db)
+        result = service.export_transactions_to_csv(
+            file_path=tmp_file_path,
+            from_date=from_date_obj,
+            to_date=to_date_obj,
+            bank_account=bank_account,
+            category_id=None
+        )
+
+        if not result['success']:
+            os.unlink(tmp_file_path)
+            raise HTTPException(status_code=404, detail=result['message'])
+
+        # Generate filename
+        filename = f"transactions_export_{date.today().isoformat()}.csv"
+        if from_date_obj:
+            filename = f"transactions_{from_date_obj.isoformat()}_to_{to_date_obj or date.today()}.csv"
+
+        # Return file as downloadable response
+        return FileResponse(
+            path=tmp_file_path,
+            media_type='text/csv',
+            filename=filename,
+            background=None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
+        raise HTTPException(status_code=500, detail=f"Error exporting transactions: {str(e)}")
 
 
 if __name__ == "__main__":
