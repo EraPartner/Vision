@@ -57,6 +57,59 @@ def import_csv_command(args):
         db.close()
 
 
+def export_csv_command(args):
+    """Handle CSV export command"""
+    from datetime import datetime
+
+    print(f"Starting export to {args.output}")
+    db = SessionLocal()
+    try:
+        service = TransactionImportService(db)
+
+        # Parse date filters if provided
+        from_date = None
+        to_date = None
+
+        if args.from_date:
+            try:
+                from_date = datetime.strptime(args.from_date, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"Invalid from_date format. Use YYYY-MM-DD")
+                return
+
+        if args.to_date:
+            try:
+                to_date = datetime.strptime(args.to_date, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"Invalid to_date format. Use YYYY-MM-DD")
+                return
+
+        # Export transactions
+        result = service.export_transactions_to_csv(
+            file_path=args.output,
+            from_date=from_date,
+            to_date=to_date,
+            bank_account=args.bank_account,
+            category_id=args.category_id
+        )
+
+        if result['success']:
+            print(f"\n✓ Export successful!")
+            print(f"  Exported: {result['count']} transactions")
+            print(f"  File: {result['file_path']}")
+            if result.get('date_range'):
+                print(f"  Date range: {result['date_range']['from']} to {result['date_range']['to']}")
+        else:
+            print(f"\n✗ Export failed: {result['message']}")
+
+    except Exception as e:
+        print(f"Fatal error during export: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
 def list_transactions_command(args):
     """Handle list transactions command"""
     db = SessionLocal()
@@ -319,6 +372,14 @@ def main():
     import_parser.add_argument('--amount-column', help='Amount column name (for custom config)')
     import_parser.add_argument('--memo-column', help='Memo column name (for custom config)')
 
+    # Export CSV command
+    export_parser = subparsers.add_parser('export', help='Export transactions to CSV')
+    export_parser.add_argument('output', help='Output file path for CSV')
+    export_parser.add_argument('bank_account', help='Bank account name or ID')
+    export_parser.add_argument('--from-date', help='Start date for filtering (YYYY-MM-DD)')
+    export_parser.add_argument('--to-date', help='End date for filtering (YYYY-MM-DD)')
+    export_parser.add_argument('--category-id', type=int, help='Filter by category ID')
+
     # List transactions command
     list_parser = subparsers.add_parser('list', help='List transactions')
     list_parser.add_argument('--limit', type=int, default=50, help='Number of transactions to show')
@@ -367,6 +428,8 @@ def main():
 
     if args.command == 'import':
         import_csv_command(args)
+    elif args.command == 'export':
+        export_csv_command(args)
     elif args.command == 'list':
         list_transactions_command(args)
     elif args.command == 'recipients':

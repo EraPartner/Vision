@@ -30,9 +30,3 @@ Thumbs.db
 # Build
 build/
 *.log
-
-# Legacy (removed)
-backend/
-src/
-public/
-supabase/
