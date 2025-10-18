@@ -45,11 +45,18 @@ class Category(Base):
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, unique=True)
+    name = Column(String(100), nullable=False,
+                  index=True)  # Changed from unique to allow same name in different hierarchies
     description = Column(Text, nullable=True)
     color = Column(String(7), nullable=True)  # Hex color code for UI
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_active = Column(Boolean, default=True)
+
+    # New field to store the type (general or detailed)
+    category_type = Column(String(20), nullable=True)  # 'general' or 'detailed'
+
+    # Full path for easy queries (e.g., "Food:Meat")
+    full_path = Column(String(200), nullable=True, unique=True, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -61,6 +68,11 @@ class Category(Base):
     # Self-referential for subcategories
     parent = relationship("Category", remote_side=[id], back_populates="children")
     children = relationship("Category", back_populates="parent")
+
+    # Add constraint to ensure unique path
+    __table_args__ = (
+        Index('idx_category_path', 'full_path'),
+    )
 
 
 class BankAdapter(Base):
