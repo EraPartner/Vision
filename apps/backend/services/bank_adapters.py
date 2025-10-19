@@ -38,6 +38,36 @@ class BaseBankAdapter(ABC):
         """Create hash for deduplication"""
         return hashlib.sha256(raw_data.encode()).hexdigest()
 
+    def _clean_recipient_name(self, recipient: str) -> str:
+        """
+        Clean recipient name by removing common prefixes and suffixes
+        that don't add value (e.g., 'Payment from ', 'To ', 'From ')
+        """
+        if not recipient:
+            return recipient
+
+        # List of prefixes to remove (case-insensitive)
+        prefixes_to_remove = [
+            "Payment from ",
+            "Payment to ",
+            "From ",
+            "To ",
+            "Transfer from ",
+            "Transfer to ",
+            "Sent to ",
+            "Received from ",
+        ]
+
+        cleaned = recipient.strip()
+
+        # Remove prefixes (case-insensitive)
+        for prefix in prefixes_to_remove:
+            if cleaned.lower().startswith(prefix.lower()):
+                cleaned = cleaned[len(prefix):].strip()
+                break  # Only remove one prefix
+
+        return cleaned
+
 
 class BelfiusAdapter(BaseBankAdapter):
     """Specialized adapter for Belfius CSV format"""
@@ -121,16 +151,13 @@ class BelfiusAdapter(BaseBankAdapter):
 
                     # Build full recipient name
                     full_recipient = recipient
-                    if street and location:
-                        full_recipient = f"{recipient}, {street}, {location}"
-                    elif location:
-                        full_recipient = f"{recipient} - {location}"
-                    elif street:
-                        full_recipient = f"{recipient}, {street}"
 
                     # If recipient is empty, use transaction description
                     if not full_recipient:
                         full_recipient = transaction_description
+
+                    # Clean the recipient name
+                    full_recipient = self._clean_recipient_name(full_recipient)
 
                     # Use transaction description as memo
                     memo = transaction_description if transaction_description else ""
@@ -232,11 +259,14 @@ class RevolutAdapter(BaseBankAdapter):
                         except ValueError:
                             balance = None
 
+                    # Clean the recipient/description name
+                    cleaned_description = self._clean_recipient_name(description)
+
                     # Create transaction
                     transaction = TransactionData(
                         date=date,
                         bank_account="Revolut",
-                        recipient=description,  # Use description as recipient (merchant name)
+                        recipient=cleaned_description,  # Use cleaned description as recipient
                         memo=f"{transaction_type} - {product}",  # Combine type and product for context
                         amount=amount,
                         currency=currency,
@@ -358,6 +388,9 @@ class KBCAdapter(BaseBankAdapter):
                     # If recipient name is empty, fallback to memo
                     if not final_recipient:
                         final_recipient = memo
+
+                    # Clean the recipient name
+                    final_recipient = self._clean_recipient_name(final_recipient)
 
                     # Get comment from field 17 (parts[17]) for KBC - this is the additional_info field
                     comment = additional_info if additional_info else None

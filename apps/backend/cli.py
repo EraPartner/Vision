@@ -454,6 +454,81 @@ def import_category_mappings_command(args):
         db.close()
 
 
+def import_categories_from_activity_command(args):
+    """Handle import category mappings from activity CSV with most-occurring logic"""
+    db = SessionLocal()
+    try:
+        cat_service = CategoryService(db)
+
+        print(f"Importing category mappings from activity CSV file(s)...")
+        print(f"Using most-occurring category strategy for duplicate mappings\n")
+
+        # Convert single file or glob pattern to list
+        import glob
+        files = []
+        if args.file:
+            if '*' in args.file or '?' in args.file:
+                files = glob.glob(args.file)
+            else:
+                files = [args.file]
+
+        if not files:
+            print(f"✗ No files found matching: {args.file}")
+            return
+
+        print(f"Processing {len(files)} file(s)...")
+
+        result = cat_service.import_recipient_categories_from_activity_csv(
+            files=files,
+            recipient_columns=tuple(args.recipient_columns.split(',')) if args.recipient_columns else ("Recipient",
+                                                                                                       "Payee",
+                                                                                                       "Description"),
+            category_columns=tuple(args.category_columns.split(',')) if args.category_columns else ("Category",),
+            delimiter_candidates=tuple(args.delimiters.split(',')) if args.delimiters else (",", ";", "\t"),
+            create_missing_recipients=args.create_recipients,
+            apply_to_existing_transactions=args.apply_to_transactions
+        )
+
+        print(f"\n✓ Import completed!")
+        print(f"  Files processed: {result['files_processed']}")
+        print(f"  Rows read: {result['rows_read']}")
+        print(f"  Recipients considered: {result['recipients_considered']}")
+        print(f"  Recipients updated: {result['recipients_updated']}")
+        print(f"  Recipients created: {result['recipients_created']}")
+        print(f"  Categories created: {result['categories_created']}")
+
+        if result.get('skipped_files'):
+            print(f"\n⚠️  Skipped files ({len(result['skipped_files'])}):")
+            for skip in result['skipped_files'][:5]:
+                print(f"    - {skip['file']}: {skip['reason']}")
+            if len(result['skipped_files']) > 5:
+                print(f"    ... and {len(result['skipped_files']) - 5} more")
+
+        if result.get('errors'):
+            print(f"\n✗ Errors ({len(result['errors'])}):")
+            for error in result['errors'][:5]:
+                print(f"    - {error}")
+            if len(result['errors']) > 5:
+                print(f"    ... and {len(result['errors']) - 5} more")
+
+        if result.get('applied_to_transactions'):
+            print(f"\n📊 Applied to existing transactions:")
+            print(f"  Transactions updated: {result['applied_to_transactions']['updated']}")
+
+        # Show category stats after import
+        if result['recipients_updated'] > 0 or result['recipients_created'] > 0:
+            print(f"\n💡 Run 'python cli.py category-stats' to see overall categorization coverage")
+            if not args.apply_to_transactions:
+                print(f"   Run 'python cli.py apply-categories' to apply these categories to existing transactions")
+
+    except Exception as e:
+        print(f"Fatal error during import: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
 def apply_categories_command(args):
     """Apply recipient categories to transactions"""
     db = SessionLocal()
@@ -666,6 +741,22 @@ def main():
     import_mappings_parser.add_argument('--category-column', help='Category column name (default: Category)')
     import_mappings_parser.add_argument('--no-header', action='store_true', help='Specify if CSV has no header row')
 
+    # Import categories from activity CSV (with most-occurring logic)
+    import_activity_parser = subparsers.add_parser('import-categories-from-activity',
+                                                   help='Import category mappings from activity CSV with most-occurring strategy')
+    import_activity_parser.add_argument('file', help='Path to CSV file(s) - supports wildcards like "*.csv"')
+    import_activity_parser.add_argument('--recipient-columns',
+                                        help='Comma-separated recipient column names to try (default: Recipient,Payee,Description)')
+    import_activity_parser.add_argument('--category-columns',
+                                        help='Comma-separated category column names to try (default: Category)')
+    import_activity_parser.add_argument('--delimiters', help='Comma-separated delimiters to try (default: ,;\\t)')
+    import_activity_parser.add_argument('--create-recipients', action='store_true', default=True,
+                                        help='Create recipients if they don\'t exist (default: True)')
+    import_activity_parser.add_argument('--no-create-recipients', dest='create_recipients', action='store_false',
+                                        help='Do not create missing recipients')
+    import_activity_parser.add_argument('--apply-to-transactions', action='store_true',
+                                        help='Apply categories to existing transactions immediately')
+
     # Export category mappings command
     export_mappings_parser = subparsers.add_parser('export-category-mappings', help='Export category mappings to CSV')
     export_mappings_parser.add_argument('output', help='Output file path for CSV')
@@ -730,6 +821,8 @@ def main():
         category_stats_command(args)
     elif args.command == 'assign-category':
         assign_category_command(args)
+    elif args.command == 'import-categories-from-activity':
+        import_categories_from_activity_command(args)
     else:
         parser.print_help()
 
