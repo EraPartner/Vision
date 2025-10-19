@@ -180,9 +180,10 @@ def list_transactions_command(args):
             bank_acct = (txn.bank_account[:22] + "...") if txn.bank_account and len(txn.bank_account) > 25 else (
                     txn.bank_account or "N/A")
             memo = (txn.memo[:27] + "...") if txn.memo and len(txn.memo) > 30 else (txn.memo or "")
-            recipient = (txn.recipient.name[:27] + "...") if len(txn.recipient.name) > 30 else txn.recipient.name
-            category = (txn.category.name[:12] + "...") if txn.category and len(txn.category.name) > 15 else (
-                txn.category.name if txn.category else "N/A")
+            recipient_name = txn.recipient.name if txn.recipient else "N/A"
+            recipient = (recipient_name[:27] + "...") if len(recipient_name) > 30 else recipient_name
+            category_name = txn.category.name if txn.category else "N/A"
+            category = (category_name[:12] + "...") if len(category_name) > 15 else category_name
 
             print(
                 f"{txn.date.strftime('%Y-%m-%d'):<12} ${float(txn.amount):<9.2f} {bank_acct:<25} {recipient:<30} {category:<15} {memo:<30}")
@@ -272,26 +273,10 @@ def create_category_command(args):
     """Handle create category command"""
     db = SessionLocal()
     try:
-        from database.models import Category
-
-        # Check if category already exists
-        existing = db.query(Category).filter(Category.name == args.name).first()
-        if existing:
-            print(f"Category '{args.name}' already exists.")
-            return
-
-        category = Category(
-            name=args.name,
-            description=args.description,
-            color=args.color,
-            parent_id=args.parent_id if args.parent_id and args.parent_id > 0 else None
-        )
-
-        db.add(category)
-        db.commit()
-        db.refresh(category)
-
-        print(f"Created category '{category.name}' with ID {category.id}")
+        # Use CategoryService to support hierarchical paths like "General:Detailed"
+        cat_service = CategoryService(db)
+        category = cat_service.get_or_create_category(args.name, description=args.description, color=args.color)
+        print(f"Created or found category '{category.full_path}' with ID {category.id}")
 
     except Exception as e:
         print(f"Error creating category: {e}")
@@ -303,317 +288,54 @@ def create_category_command(args):
 def list_categories_command(args):
     """Handle list categories command"""
     db = SessionLocal()
-    cat_service = CategoryService(db)
-
-    if args.hierarchical:
-        # Show hierarchical view
-        categories = cat_service.get_all_categories_hierarchical()
-
-        if not categories:
-            print("No categories found.")
-            return
-
-        print("Categories (Hierarchical View):")
-        print("=" * 80)
-
-        for general in categories:
-            print(f"\n📁 {general['name']} (ID: {general['id']})")
-            print(f"   Path: {general['full_path']}")
-            print(f"   Transactions: {general['transaction_count']}")
-            if general['description']:
-                print(f"   Description: {general['description']}")
-
-            if general['children']:
-                for detailed in general['children']:
-                    print(f"   └─ {detailed['name']} (ID: {detailed['id']})")
-                    print(f"      Path: {detailed['full_path']}")
-                    print(f"      Transactions: {detailed['transaction_count']}")
-    else:
-        # Show flat view
-        from database.models import Category
-        categories = db.query(Category).filter(Category.is_active == True).order_by(Category.full_path).all()
-        categories = db.query(Category).filter(Category.is_active == True).all()
-    if not categories:
-        print("No categories found.")
-        return
-    return
-    print(f"{'ID':<5} {'Full Path':<40} {'Type':<10} {'Txns':<8} {'Description':<30}")
-    print("-" * 95)
-        print("-" * 97)
-for category in categories:
-    txn_count = len(category.transactions)
-    description = (category.description[:27] + "...") if category.description and len(
-        category.description) > 30 else (category.description or "")
-    path = (category.full_path[:37] + "...") if category.full_path and len(
-        category.full_path) > 40 else (category.full_path or "")
-    category.description) > 30 else (category.description or "")
-    print(f"{category.id:<5} {path:<40} {category.category_type or 'N/A':<10} {txn_count:<8} {description:<30}")
-            print(f"{category.id:<5} {category.name:<30} {parent_name:<20} {recipient_count:<12} {description:<30}")
-
-    except Exception as e:
-import traceback
-
-traceback.print_exc()
-finally:
-db.close()
-
-
-def assign_category_command(args):
-    """Handle assign category command"""
-    db = SessionLocal()
-    try:
-        from database.models import Recipient, Category
-
-        # Find the category by path
-        category = db.query(Category).filter(Category.path == args.category_path).first()
-        if not category:
-            print(f"Category with path '{args.category_path}' not found.")
-            return
-
-        recipient_ids = []
-        if args.recipient_id:
-            recipient_ids = [args.recipient_id]
-        elif args.recipient_ids:
-            recipient_ids = [int(id) for id in args.recipient_ids.split(",")]
-
-        if not recipient_ids:
-            print("No recipient IDs provided.")
-            return
-
-        # Assign category to recipients
-        recipients = db.query(Recipient).filter(Recipient.id.in_(recipient_ids)).all()
-        for recipient in recipients:
-            recipient.default_category = category
-            print(f"Assigned category '{category.name}' to recipient '{recipient.name}'")
-
-        db.commit()
-        print("Category assignment updated successfully.")
-
-    except Exception as e:
-        print(f"Error assigning category: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-
-def export_category_mappings_command(args):
-    """Handle export category mappings command"""
-    db = SessionLocal()
-    try:
-        from database.models import Recipient, Category
-
-        # Get all recipients with their categories
-        if args.include_uncategorized:
-            recipients = db.query(Recipient).outerjoin(Category).all()
-        else:
-            recipients = db.query(Recipient).join(Category).all()
-
-        if not recipients:
-            print("No recipients found.")
-            return
-
-        # Prepare CSV export
-        import csv
-        from io import StringIO
-
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['Recipient ID', 'Recipient Name', 'Account Number', 'Category ID', 'Category Name', 'Notes'])
-
-        for recipient in recipients:
-            category_id = recipient.default_category.id if recipient.default_category else ""
-            category_name = recipient.default_category.name if recipient.default_category else ""
-            account_number = recipient.account_number or ""
-            notes = recipient.notes or ""
-
-            writer.writerow([recipient.id, recipient.name, account_number, category_id, category_name, notes])
-
-        output.seek(0)
-
-        # Save to file
-        with open(args.output, 'w', newline='', encoding='utf-8') as f:
-            f.write(output.getvalue())
-
-        print(f"✓ Exported category mappings to {args.output}")
-
-    except Exception as e:
-        print(f"Error exporting category mappings: {e}")
-    finally:
-        db.close()
-
-
-def import_category_mappings_command(args):
-    """Handle import category mappings from CSV"""
-    db = SessionLocal()
     try:
         cat_service = CategoryService(db)
 
-        print(f"Importing category mappings from {args.file}...")
+        if args.hierarchical:
+            # Show hierarchical view
+            categories = cat_service.get_all_categories_hierarchical()
 
-        result = cat_service.import_category_mappings_from_csv(
-            file_path=args.file,
-            recipient_column=args.recipient_column,
-            category_column=args.category_column,
-            has_header=not args.no_header
-        )
+            if not categories:
+                print("No categories found.")
+                return
 
-        print(f"\n✓ Import completed!")
-        print(f"  Total processed: {result['total_processed']}")
-        print(f"  Mappings created: {result['mappings_created']}")
-        print(f"  Categories created: {result['categories_created']}")
-
-        if result['recipients_not_found']:
-            print(f"\n⚠️  Recipients not found ({len(result['recipients_not_found'])}):")
-            for name in result['recipients_not_found'][:10]:  # Show first 10
-                print(f"    - {name}")
-            if len(result['recipients_not_found']) > 10:
-                print(f"    ... and {len(result['recipients_not_found']) - 10} more")
-
-        if result['errors']:
-            print(f"\n✗ Errors ({len(result['errors'])}):")
-            for error in result['errors'][:5]:  # Show first 5
-                print(f"    - {error}")
-            if len(result['errors']) > 5:
-                print(f"    ... and {len(result['errors']) - 5} more")
-
-        # Ask if user wants to apply categories to transactions
-        if result['mappings_created'] > 0:
-            print(f"\n💡 You can now apply these categories to transactions using:")
-            print(f"   python cli.py apply-categories")
-
-    except Exception as e:
-        print(f"Fatal error during import: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        db.close()
-
-
-def apply_categories_command(args):
-    """Apply recipient categories to transactions"""
-    db = SessionLocal()
-    try:
-        cat_service = CategoryService(db)
-
-        print("Applying recipient categories to transactions...")
-
-        result = cat_service.apply_recipient_categories_to_transactions(
-            recipient_id=args.recipient_id,
-            overwrite_existing=args.overwrite
-        )
-
-        print(f"\n✓ Categories applied!")
-        print(f"  Transactions updated: {result['updated']}")
-    # Assign category command
-    assign_cat_parser = subparsers.add_parser('assign-category', help='Assign category to recipient(s)')
-    assign_cat_parser.add_argument('category_path', help='Category path (e.g., "Food:Groceries")')
-    assign_cat_parser.add_argument('--recipient-id', type=int, help='Recipient ID to assign category')
-    assign_cat_parser.add_argument('--recipient-ids', help='Comma-separated list of recipient IDs')
-
-    # Export category mappings command
-    export_mappings_parser = subparsers.add_parser('export-category-mappings', help='Export category mappings to CSV')
-    export_mappings_parser.add_argument('output', help='Output file path for CSV')
-    export_mappings_parser.add_argument('--include-uncategorized', action='store_true',
-                                        help='Include recipients without categories')
-
-    print(f"  Transactions checked: {result['total_checked']}")
-
-except Exception as e:
-print(f"Error applying categories: {e}")
-import traceback
-
-traceback.print_exc()
-finally:
-db.close()
-
-
-def show_uncategorized_command(args):
-    """Show uncategorized recipients and transactions"""
-    db = SessionLocal()
-    try:
-        cat_service = CategoryService(db)
-
-        if args.type == 'recipients' or args.type == 'all':
-            print("\n📋 Uncategorized Recipients:")
+            print("Categories (Hierarchical View):")
             print("=" * 80)
-            recipients = cat_service.get_uncategorized_recipients()
 
-            if not recipients:
-                print("  All recipients have categories assigned! 🎉")
-            else:
-    elif args.command == 'assign-category':
-    assign_category_command(args)
+            for general in categories:
+                print(f"\n📁 {general['name']} (ID: {general['id']})")
+                print(f"   Path: {general['full_path']}")
+                print(f"   Transactions: {general['transaction_count']}")
+                if general['description']:
+                    print(f"   Description: {general['description']}")
 
-elif args.command == 'export-category-mappings':
-export_category_mappings_command(args)
-print(f"{'ID':<5} {'Name':<50} {'Txns':<8}")
-print("-" * 63)
-for recipient in recipients[:args.limit]:
-    name = (recipient.name[:47] + "...") if len(recipient.name) > 50 else recipient.name
-    txn_count = len(recipient.transactions)
-    print(f"{recipient.id:<5} {name:<50} {txn_count:<8}")
+                if general['children']:
+                    for detailed in general['children']:
+                        print(f"   └─ {detailed['name']} (ID: {detailed['id']})")
+                        print(f"      Path: {detailed['full_path']}")
+                        print(f"      Transactions: {detailed['transaction_count']}")
+        else:
+            # Show flat view
+            from database.models import Category
+            categories = db.query(Category).filter(Category.is_active == True).order_by(Category.full_path).all()
 
-if len(recipients) > args.limit:
-    print(f"\n... and {len(recipients) - args.limit} more")
+            if not categories:
+                print("No categories found.")
+                return
 
-print(f"\nTotal uncategorized recipients: {len(recipients)}")
-
-if args.type == 'transactions' or args.type == 'all':
-    print("\n📋 Uncategorized Transactions:")
-    print("=" * 80)
-    transactions = cat_service.get_uncategorized_transactions(limit=args.limit)
-
-    if not transactions:
-        print("  All transactions have categories assigned! 🎉")
-    else:
-        print(f"{'Date':<12} {'Amount':<10} {'Recipient':<40}")
-        print("-" * 62)
-        for txn in transactions:
-            recipient_name = (txn.recipient.name[:37] + "...") if len(txn.recipient.name) > 40 else txn.recipient.name
-            print(f"{txn.date.strftime('%Y-%m-%d'):<12} ${float(txn.amount):<9.2f} {recipient_name:<40}")
-
-except Exception as e:
-print(f"Error showing uncategorized: {e}")
-import traceback
-
-traceback.print_exc()
-finally:
-db.close()
-
-
-def category_stats_command(args):
-    """Show category statistics"""
-    db = SessionLocal()
-    try:
-        cat_service = CategoryService(db)
-
-        stats = cat_service.get_category_statistics()
-
-        print("\n📊 Category Statistics")
-        print("=" * 60)
-        print(f"\nCategories:")
-        print(f"  Total: {stats['total_categories']}")
-        print(f"  General (parent): {stats['general_categories']}")
-        print(f"  Detailed (child): {stats['detailed_categories']}")
-
-        print(f"\nTransactions:")
-        print(f"  Categorized: {stats['categorized_transactions']}")
-        print(f"  Uncategorized: {stats['uncategorized_transactions']}")
-        total_txns = stats['categorized_transactions'] + stats['uncategorized_transactions']
-        if total_txns > 0:
-            pct = (stats['categorized_transactions'] / total_txns) * 100
-            print(f"  Coverage: {pct:.1f}%")
-
-        print(f"\nRecipients:")
-        print(f"  Categorized: {stats['categorized_recipients']}")
-        print(f"  Uncategorized: {stats['uncategorized_recipients']}")
-        total_recipients = stats['categorized_recipients'] + stats['uncategorized_recipients']
-        if total_recipients > 0:
-            pct = (stats['categorized_recipients'] / total_recipients) * 100
-            print(f"  Coverage: {pct:.1f}%")
+            print(f"{'ID':<5} {'Full Path':<40} {'Type':<10} {'Txns':<8} {'Description':<30}")
+            print("-" * 95)
+            for category in categories:
+                txn_count = len(category.transactions)
+                description = (category.description[:27] + "...") if category.description and len(
+                    category.description) > 30 else (category.description or "")
+                path = (category.full_path[:37] + "...") if category.full_path and len(
+                    category.full_path) > 40 else (category.full_path or "")
+                cat_type = category.category_type or 'N/A'
+                print(f"{category.id:<5} {path:<40} {cat_type:<10} {txn_count:<8} {description:<30}")
 
     except Exception as e:
-        print(f"Error showing statistics: {e}")
+        print(f"Error listing categories: {e}")
         import traceback
         traceback.print_exc()
     finally:
@@ -681,7 +403,166 @@ def export_category_mappings_command(args):
         print(f"Error exporting: {e}")
         import traceback
         traceback.print_exc()
-        print(f"Error listing categories: {e}")
+    finally:
+        db.close()
+
+
+def import_category_mappings_command(args):
+    """Handle import category mappings from CSV"""
+    db = SessionLocal()
+    try:
+        cat_service = CategoryService(db)
+
+        print(f"Importing category mappings from {args.file}...")
+
+        result = cat_service.import_category_mappings_from_csv(
+            file_path=args.file,
+            recipient_column=args.recipient_column or 'Recipient',
+            category_column=args.category_column or 'Category',
+            has_header=not args.no_header
+        )
+
+        print(f"\n✓ Import completed!")
+        print(f"  Total processed: {result['total_processed']}")
+        print(f"  Mappings created: {result['mappings_created']}")
+        print(f"  Categories created: {result['categories_created']}")
+
+        if result['recipients_not_found']:
+            print(f"\n⚠️  Recipients not found ({len(result['recipients_not_found'])}):")
+            for name in result['recipients_not_found'][:10]:  # Show first 10
+                print(f"    - {name}")
+            if len(result['recipients_not_found']) > 10:
+                print(f"    ... and {len(result['recipients_not_found']) - 10} more")
+
+        if result['errors']:
+            print(f"\n✗ Errors ({len(result['errors'])}):")
+            for error in result['errors'][:5]:  # Show first 5
+                print(f"    - {error}")
+            if len(result['errors']) > 5:
+                print(f"    ... and {len(result['errors']) - 5} more")
+
+        # Hint for next step
+        if result['mappings_created'] > 0:
+            print(f"\n💡 You can now apply these categories to transactions using:")
+            print(f"   python cli.py apply-categories")
+
+    except Exception as e:
+        print(f"Fatal error during import: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
+def apply_categories_command(args):
+    """Apply recipient categories to transactions"""
+    db = SessionLocal()
+    try:
+        cat_service = CategoryService(db)
+
+        print("Applying recipient categories to transactions...")
+
+        result = cat_service.apply_recipient_categories_to_transactions(
+            recipient_id=args.recipient_id,
+            overwrite_existing=args.overwrite
+        )
+
+        print(f"\n✓ Categories applied!")
+        print(f"  Transactions updated: {result['updated']}")
+        print(f"  Transactions checked: {result['total_checked']}")
+
+    except Exception as e:
+        print(f"Error applying categories: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
+def show_uncategorized_command(args):
+    """Show uncategorized recipients and transactions"""
+    db = SessionLocal()
+    try:
+        cat_service = CategoryService(db)
+
+        if args.type in ('recipients', 'all'):
+            print("\n📋 Uncategorized Recipients:")
+            print("=" * 80)
+            recipients = cat_service.get_uncategorized_recipients()
+
+            if not recipients:
+                print("  All recipients have categories assigned! 🎉")
+            else:
+                print(f"{'ID':<5} {'Name':<50} {'Txns':<8}")
+                print("-" * 63)
+                for recipient in recipients[:args.limit]:
+                    name = (recipient.name[:47] + "...") if len(recipient.name) > 50 else recipient.name
+                    txn_count = len(recipient.transactions)
+                    print(f"{recipient.id:<5} {name:<50} {txn_count:<8}")
+
+                if len(recipients) > args.limit:
+                    print(f"\n... and {len(recipients) - args.limit} more")
+
+                print(f"\nTotal uncategorized recipients: {len(recipients)}")
+
+        if args.type in ('transactions', 'all'):
+            print("\n📋 Uncategorized Transactions:")
+            print("=" * 80)
+            transactions = cat_service.get_uncategorized_transactions(limit=args.limit)
+
+            if not transactions:
+                print("  All transactions have categories assigned! 🎉")
+            else:
+                print(f"{'Date':<12} {'Amount':<10} {'Recipient':<40}")
+                print("-" * 62)
+                for txn in transactions:
+                    recipient_name = (txn.recipient.name[:37] + "...") if len(
+                        txn.recipient.name) > 40 else txn.recipient.name
+                    print(f"{txn.date.strftime('%Y-%m-%d'):<12} ${float(txn.amount):<9.2f} {recipient_name:<40}")
+
+    except Exception as e:
+        print(f"Error showing uncategorized: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
+def category_stats_command(args):
+    """Show category statistics"""
+    db = SessionLocal()
+    try:
+        cat_service = CategoryService(db)
+
+        stats = cat_service.get_category_statistics()
+
+        print("\n📊 Category Statistics")
+        print("=" * 60)
+        print(f"\nCategories:")
+        print(f"  Total: {stats['total_categories']}")
+        print(f"  General (parent): {stats['general_categories']}")
+        print(f"  Detailed (child): {stats['detailed_categories']}")
+
+        print(f"\nTransactions:")
+        print(f"  Categorized: {stats['categorized_transactions']}")
+        print(f"  Uncategorized: {stats['uncategorized_transactions']}")
+        total_txns = stats['categorized_transactions'] + stats['uncategorized_transactions']
+        if total_txns > 0:
+            pct = (stats['categorized_transactions'] / total_txns) * 100
+            print(f"  Coverage: {pct:.1f}%")
+
+        print(f"\nRecipients:")
+        print(f"  Categorized: {stats['categorized_recipients']}")
+        print(f"  Uncategorized: {stats['uncategorized_recipients']}")
+        total_recipients = stats['categorized_recipients'] + stats['uncategorized_recipients']
+        if total_recipients > 0:
+            pct = (stats['categorized_recipients'] / total_recipients) * 100
+            print(f"  Coverage: {pct:.1f}%")
+
+    except Exception as e:
+        print(f"Error showing statistics: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
 
@@ -722,9 +603,9 @@ def main():
     # Import CSV command
     import_parser = subparsers.add_parser('import', help='Import transactions from CSV')
     import_parser.add_argument('file', help='Path to CSV file')
-    import_parser.add_argument('bank', help='Bank name (chase, wells_fargo, bank_of_america, or custom)')
+    import_parser.add_argument('bank', help='Bank name (revolut, kbc, belfius, or custom)')
     import_parser.add_argument('--custom', action='store_true', help='Use custom configuration')
-    import_parser.add_argument('--date-format', help='Date format (e.g., %%m/%%d/%%Y)')
+    import_parser.add_argument('--date-format', help='Date format (e.g., %m/%d/%Y)')
     import_parser.add_argument('--date-column', help='Date column name (for custom config)')
     import_parser.add_argument('--recipient-column', help='Recipient column name (for custom config)')
     import_parser.add_argument('--amount-column', help='Amount column name (for custom config)')
@@ -763,27 +644,33 @@ def main():
 
     # Create category command
     create_cat_parser = subparsers.add_parser('create-category', help='Create a new category')
-    create_cat_parser.add_argument('name', help='Category name')
+    create_cat_parser.add_argument('name', help='Category name or path (e.g., "Food:Groceries")')
     create_cat_parser.add_argument('--description', help='Category description')
     create_cat_parser.add_argument('--color', help='Category color (hex code)')
-    create_cat_parser.add_argument('--parent-id', type=int, help='Parent category ID for subcategories')
 
     # List categories command
-    categories_parser.add_argument('--hierarchical', action='store_true', help='Show hierarchical view')
     categories_parser = subparsers.add_parser('categories', help='List categories')
+    categories_parser.add_argument('--hierarchical', action='store_true', help='Show hierarchical view')
 
     # Initialize database command
-    init_parser = subparsers.add_parser('init-db', help='Initialize database tables')
+    subparsers.add_parser('init-db', help='Initialize database tables')
 
     # Reset database command
     reset_parser = subparsers.add_parser('reset-db', help='Reset database (DROP ALL DATA and recreate tables)')
     reset_parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
+
     # Import category mappings command
     import_mappings_parser = subparsers.add_parser('import-category-mappings', help='Import category mappings from CSV')
     import_mappings_parser.add_argument('file', help='Path to CSV file')
-    import_mappings_parser.add_argument('--recipient-column', help='Recipient column name (for custom config)')
-    import_mappings_parser.add_argument('--category-column', help='Category column name (for custom config)')
+    import_mappings_parser.add_argument('--recipient-column', help='Recipient column name (default: Recipient)')
+    import_mappings_parser.add_argument('--category-column', help='Category column name (default: Category)')
     import_mappings_parser.add_argument('--no-header', action='store_true', help='Specify if CSV has no header row')
+
+    # Export category mappings command
+    export_mappings_parser = subparsers.add_parser('export-category-mappings', help='Export category mappings to CSV')
+    export_mappings_parser.add_argument('output', help='Output file path for CSV')
+    export_mappings_parser.add_argument('--include-uncategorized', action='store_true',
+                                        help='Include recipients without categories')
 
     # Apply categories command
     apply_categories_parser = subparsers.add_parser('apply-categories',
@@ -799,14 +686,13 @@ def main():
     show_uncategorized_parser.add_argument('--limit', type=int, default=50, help='Limit number of results')
 
     # Category statistics command
-    stats_parser = subparsers.add_parser('category-stats', help='Show category statistics')
+    subparsers.add_parser('category-stats', help='Show category statistics')
 
     # Assign category command
     assign_cat_parser = subparsers.add_parser('assign-category', help='Assign category to recipient(s)')
     assign_cat_parser.add_argument('category_path', help='Category path (e.g., "Food:Groceries")')
     assign_cat_parser.add_argument('--recipient-id', type=int, help='Recipient ID to assign category')
     assign_cat_parser.add_argument('--recipient-ids', help='Comma-separated list of recipient IDs')
-
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -831,8 +717,11 @@ def main():
     elif args.command == 'init-db':
         init_db_command(args)
     elif args.command == 'reset-db':
+        reset_db_command(args)
     elif args.command == 'import-category-mappings':
         import_category_mappings_command(args)
+    elif args.command == 'export-category-mappings':
+        export_category_mappings_command(args)
     elif args.command == 'apply-categories':
         apply_categories_command(args)
     elif args.command == 'show-uncategorized':
@@ -841,7 +730,6 @@ def main():
         category_stats_command(args)
     elif args.command == 'assign-category':
         assign_category_command(args)
-        reset_db_command(args)
     else:
         parser.print_help()
 

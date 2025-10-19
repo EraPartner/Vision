@@ -55,6 +55,10 @@ class Category(Base):
     # New field to store the type (general or detailed)
     category_type = Column(String(20), nullable=True)  # 'general' or 'detailed'
 
+    # Store General and Detail parts separately
+    general = Column(String(100), nullable=True, index=True)  # General category (e.g., "Food")
+    detail = Column(String(100), nullable=True, index=True)  # Detail category (e.g., "Groceries")
+
     # Full path for easy queries (e.g., "Food:Meat")
     full_path = Column(String(200), nullable=True, unique=True, index=True)
 
