@@ -4,12 +4,13 @@ Category Management Service
 Handles hierarchical categories with General:Detailed format
 """
 import csv
-from typing import Dict, List, Optional, Tuple, Any, Iterable
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database.models import Category, Recipient, Transaction
+from database.models import Category, Recipient, Transaction, RecipientCategoryMapping
 
 
 class CategoryService:
@@ -37,30 +38,55 @@ class CategoryService:
     ) -> Category:
         """
         Get or create a category from path like "Food:Meat"
-        Only creates categories with both general and detail parts (General:Detail format)
-        Categories without detail part are not stored
+        Creates both parent (General) and child (Detailed) if needed
         """
         general_name, detailed_name = self.parse_category_path(category_path)
 
-        if not detailed_name:
-            raise ValueError(f"Category must be in 'General:Detail' format. Got: '{category_path}'")
+        if detailed_name:
+            # Create/get general category first
+            general_category = self._get_or_create_general_category(general_name)
 
-        # Build full path
-        full_path = f"{general_name}:{detailed_name}"
+            # Create/get detailed category
+            full_path = f"{general_name}:{detailed_name}"
+            detailed_category = self.db.query(Category).filter(
+                Category.full_path == full_path
+            ).first()
 
-        # Check if category already exists
+            if not detailed_category:
+                detailed_category = Category(
+                    name=detailed_name,
+                    full_path=full_path,
+                    parent_id=general_category.id,
+                    category_type='detailed',
+                    description=description,
+                    color=color,
+                    is_active=True
+                )
+                self.db.add(detailed_category)
+                self.db.commit()
+                self.db.refresh(detailed_category)
+
+            return detailed_category
+        else:
+            # Just a general category
+            return self._get_or_create_general_category(general_name, description, color)
+
+    def _get_or_create_general_category(
+            self,
+            name: str,
+            description: Optional[str] = None,
+            color: Optional[str] = None
+    ) -> Category:
+        """Get or create a general (parent) category"""
         category = self.db.query(Category).filter(
-            Category.full_path == full_path
+            Category.name == name,
+            Category.parent_id == None
         ).first()
 
         if not category:
             category = Category(
-                name=detailed_name,
-                full_path=full_path,
-                general=general_name,
-                detail=detailed_name,
+                name=name,
                 parent_id=None,
-                category_type='detailed',
                 description=description,
                 color=color,
                 is_active=True
@@ -143,179 +169,6 @@ class CategoryService:
             self.db.rollback()
 
         return results
-
-    def import_recipient_categories_from_activity_csv(
-            self,
-            files: Iterable[str],
-            recipient_columns: Iterable[str] = ("Recipient", "Payee", "Description"),
-            category_columns: Iterable[str] = ("Category",),
-            delimiter_candidates: Iterable[str] = (",", ";", "\t"),
-            create_missing_recipients: bool = True,
-            apply_to_existing_transactions: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Aggregate recipient->category mappings from one or more transaction/activity CSV files
-        that include a recipient and a category column (e.g., "Date, Check, Recipient, Category, ...").
-
-        Logic:
-        - For each file, detect a supported delimiter and map header columns case-insensitively.
-        - Tally categories per normalized recipient name.
-        - Choose the most common category for each recipient (ties broken by lexicographic order of full_path).
-        - Create categories as needed using the existing hierarchical structure (General:Detailed).
-        - Update recipients' default_category_id; create recipients if allowed and missing.
-        - Optionally apply default recipient categories to existing transactions without a category.
-
-        Returns stats including files processed, recipients updated/created, and any errors.
-        """
-
-        # Helper: normalize strings for matching keys
-        def _norm(s: str) -> str:
-            return (s or '').strip().lower()
-
-        # Map of norm_recipient -> { 'display_name': most common casing, 'categories': {path: count} }
-        tallies: Dict[str, Dict[str, Any]] = {}
-        stats = {
-            'files_processed': 0,
-            'rows_read': 0,
-            'recipients_considered': 0,
-            'recipients_updated': 0,
-            'recipients_created': 0,
-            'categories_created': 0,
-            'skipped_files': [],
-            'errors': []
-        }
-
-        # Build lowercase lookup sets for header matching
-        rcands = [c.lower() for c in recipient_columns]
-        ccands = [c.lower() for c in category_columns]
-
-        for path in files:
-            try:
-                # Try each delimiter until headers can be matched
-                header = None
-                reader = None
-                file_obj = None
-                used_delim = None
-
-                for delim in delimiter_candidates:
-                    try:
-                        file_obj = open(path, 'r', encoding='utf-8')
-                        reader = csv.DictReader(file_obj, delimiter=delim)
-                        header = [h.strip() for h in (reader.fieldnames or [])]
-                        if not header:
-                            file_obj.close()
-                            continue
-                        lower = [h.lower() for h in header]
-                        if any(h in lower for h in rcands) and any(h in lower for h in ccands):
-                            used_delim = delim
-                            break
-                        file_obj.close()
-                        file_obj = None
-                        reader = None
-                    except Exception:
-                        if file_obj:
-                            file_obj.close()
-                        reader = None
-                        continue
-
-                if reader is None or header is None or used_delim is None:
-                    stats['skipped_files'].append({'file': path, 'reason': 'No suitable delimiter or headers'})
-                    continue
-
-                # Identify actual column names
-                lower = [h.lower() for h in header]
-                try:
-                    r_idx = next(i for i, h in enumerate(lower) if h in rcands)
-                    c_idx = next(i for i, h in enumerate(lower) if h in ccands)
-                except StopIteration:
-                    stats['skipped_files'].append({'file': path, 'reason': 'Missing Recipient or Category header'})
-                    file_obj.close()
-                    continue
-
-                recipient_col = header[r_idx]
-                category_col = header[c_idx]
-
-                # Read rows
-                for row in reader:
-                    stats['rows_read'] += 1
-                    try:
-                        recipient_name = (row.get(recipient_col) or '').strip()
-                        category_path = (row.get(category_col) or '').strip()
-                        if not recipient_name or not category_path:
-                            continue
-
-                        nkey = _norm(recipient_name)
-                        entry = tallies.setdefault(nkey, {'display_name_counts': {}, 'categories': {}})
-                        # Track most common display name casing
-                        d_counts = entry['display_name_counts']
-                        d_counts[recipient_name] = d_counts.get(recipient_name, 0) + 1
-                        # Tally category
-                        cats = entry['categories']
-                        cats[category_path] = cats.get(category_path, 0) + 1
-                    except Exception as e:
-                        stats['errors'].append(f"{path}: row error: {e}")
-                        continue
-
-                file_obj.close()
-                stats['files_processed'] += 1
-
-            except Exception as e:
-                stats['errors'].append(f"{path}: {e}")
-                try:
-                    if file_obj:
-                        file_obj.close()
-                except Exception:
-                    pass
-                continue
-
-        # Apply tallied mappings
-        stats['recipients_considered'] = len(tallies)
-        for nkey, data in tallies.items():
-            # Choose display name with highest count; tie -> longest then lexicographic
-            display_name = max(
-                data['display_name_counts'].items(),
-                key=lambda kv: (kv[1], len(kv[0]), kv[0])
-            )[0]
-            # Choose category with highest count; tie -> lexicographic of path
-            category_path = max(
-                data['categories'].items(),
-                key=lambda kv: (kv[1], kv[0])
-            )[0]
-
-            # Ensure category exists (only creates if it has General:Detail format)
-            try:
-                pre_full = self.db.query(Category).filter(Category.full_path == category_path).first()
-                category = self.get_or_create_category(category_path)
-                if not pre_full:
-                    stats['categories_created'] += 1
-            except ValueError as e:
-                # Skip categories that don't have General:Detail format
-                stats['errors'].append(f"Skipping recipient '{display_name}': {str(e)}")
-                continue
-
-            # Find or create recipient (case-insensitive exact match)
-            recipient = self.db.query(Recipient).filter(func.lower(Recipient.name) == func.lower(display_name)).first()
-            if not recipient:
-                if not create_missing_recipients:
-                    continue
-                recipient = Recipient(name=display_name)
-                self.db.add(recipient)
-                self.db.flush()
-                stats['recipients_created'] += 1
-
-            # Update default category if different
-            if recipient.default_category_id != category.id:
-                recipient.default_category_id = category.id
-                stats['recipients_updated'] += 1
-
-        self.db.commit()
-
-        # Optionally apply to transactions
-        if apply_to_existing_transactions:
-            apply_stats = self.apply_recipient_categories_to_transactions(overwrite_existing=False)
-            stats['applied_to_transactions'] = apply_stats
-
-        return stats
 
     def apply_recipient_categories_to_transactions(
             self,
@@ -415,11 +268,15 @@ class CategoryService:
     def get_category_statistics(self) -> Dict[str, Any]:
         """Get statistics about categories"""
         total_categories = self.db.query(func.count(Category.id)).scalar()
+
+        # Count top-level (parent) categories
         general_count = self.db.query(func.count(Category.id)).filter(
-            Category.category_type == 'general'
+            Category.parent_id == None
         ).scalar()
+
+        # Count child (detailed) categories
         detailed_count = self.db.query(func.count(Category.id)).filter(
-            Category.category_type == 'detailed'
+            Category.parent_id.isnot(None)
         ).scalar()
 
         categorized_transactions = self.db.query(func.count(Transaction.id)).filter(
@@ -515,7 +372,18 @@ class CategoryService:
                 recipients = query.order_by(Recipient.name).all()
 
                 for recipient in recipients:
-                    category_path = recipient.default_category.full_path if recipient.default_category else ''
+                    if recipient.default_category:
+                        # Build category path
+                        if recipient.default_category.parent_id:
+                            parent = self.db.query(Category).filter(
+                                Category.id == recipient.default_category.parent_id
+                            ).first()
+                            category_path = f"{parent.name}:{recipient.default_category.name}" if parent else recipient.default_category.name
+                        else:
+                            category_path = recipient.default_category.name
+                    else:
+                        category_path = ''
+
                     txn_count = len(recipient.transactions)
                     writer.writerow([recipient.name, category_path, txn_count])
 
@@ -530,3 +398,197 @@ class CategoryService:
                 'success': False,
                 'error': str(e)
             }
+
+    def parse_category_detail(self, category_string: str) -> Tuple[str, Optional[str]]:
+        """
+        Parse a category string in the format 'CATEGORY:DETAIL' or 'CATEGORY'
+        Returns: (category, detail)
+        """
+        if not category_string:
+            return ("Uncategorized", None)
+
+        parts = category_string.split(":", 1)
+        category = parts[0].strip()
+        detail = parts[1].strip() if len(parts) > 1 else None
+        return (category, detail)
+
+    def get_or_create_recipient(self, name: str, iban: Optional[str] = None) -> Recipient:
+        """Get or create a recipient by name and optionally IBAN"""
+        # Try to find by IBAN first if provided
+        if iban:
+            recipient = self.db.query(Recipient).filter(
+                Recipient.account_number == iban
+            ).first()
+            if recipient:
+                return recipient
+
+        # Try to find by name
+        recipient = self.db.query(Recipient).filter(
+            Recipient.name == name
+        ).first()
+
+        if not recipient:
+            recipient = Recipient(
+                name=name,
+                account_number=iban,
+                is_active=True
+            )
+            self.db.add(recipient)
+            self.db.flush()
+        elif iban and not recipient.account_number:
+            # Update recipient with IBAN if we found by name but didn't have IBAN
+            recipient.account_number = iban
+            self.db.flush()
+
+        return recipient
+
+    def add_recipient_category_mapping(
+            self,
+            recipient: Recipient,
+            category_name: str,
+            detail_name: Optional[str] = None,
+            priority: int = 0,
+            confidence: int = 100
+    ) -> RecipientCategoryMapping:
+        """
+        Add or update a category mapping for a recipient
+        """
+        # Check if mapping already exists
+        existing = self.db.query(RecipientCategoryMapping).filter(
+            RecipientCategoryMapping.recipient_id == recipient.id,
+            RecipientCategoryMapping.category_name == category_name,
+            RecipientCategoryMapping.detail_name == detail_name
+        ).first()
+
+        if existing:
+            # Update existing mapping
+            existing.priority = max(existing.priority, priority)
+            existing.confidence = max(existing.confidence, confidence)
+            existing.is_active = True
+            existing.updated_at = datetime.utcnow()
+            return existing
+
+        # Create new mapping
+        mapping = RecipientCategoryMapping(
+            recipient_id=recipient.id,
+            category_name=category_name,
+            detail_name=detail_name,
+            priority=priority,
+            confidence=confidence,
+            is_active=True
+        )
+        self.db.add(mapping)
+        self.db.flush()
+
+        return mapping
+
+    def get_recipient_mappings(self, recipient_id: int) -> List[RecipientCategoryMapping]:
+        """Get all category mappings for a recipient"""
+        return self.db.query(RecipientCategoryMapping).filter(
+            RecipientCategoryMapping.recipient_id == recipient_id,
+            RecipientCategoryMapping.is_active == True
+        ).order_by(RecipientCategoryMapping.priority.desc()).all()
+
+    def get_best_category_for_recipient(
+            self, recipient_id: int
+    ) -> Optional[Tuple[str, Optional[str]]]:
+        """
+        Get the best category mapping for a recipient based on priority
+        Returns: (category_name, detail_name) or None
+        """
+        mappings = self.get_recipient_mappings(recipient_id)
+        if mappings:
+            best = mappings[0]
+            return (best.category_name, best.detail_name)
+        return None
+
+    def import_category_mapping(
+            self,
+            recipient_name: str,
+            category_string: str,
+            iban: Optional[str] = None,
+            priority: int = 0
+    ) -> Dict[str, any]:
+        """
+        Import a single category mapping from CSV data
+        Returns: dict with status and created objects
+        """
+        # Parse category:detail
+        category_name, detail_name = self.parse_category_detail(category_string)
+
+        # Get or create recipient
+        recipient = self.get_or_create_recipient(recipient_name, iban)
+
+        # Create categories - use the full path method
+        if detail_name:
+            full_path = f"{category_name}:{detail_name}"
+            category = self.get_or_create_category(full_path)
+        else:
+            category = self.get_or_create_category(category_name)
+
+        # Add mapping
+        mapping = self.add_recipient_category_mapping(
+            recipient,
+            category_name,
+            detail_name,
+            priority=priority
+        )
+
+        return {
+            "recipient": recipient,
+            "category": category_name,
+            "detail": detail_name,
+            "mapping": mapping
+        }
+
+    def get_all_recipients_with_mappings(self) -> List[Dict]:
+        """Get all recipients with their category mappings"""
+        recipients = self.db.query(Recipient).filter(
+            Recipient.is_active == True
+        ).all()
+
+        result = []
+        for recipient in recipients:
+            mappings = self.get_recipient_mappings(recipient.id)
+            result.append({
+                "id": recipient.id,
+                "name": recipient.name,
+                "iban": recipient.account_number,
+                "mappings": [
+                    {
+                        "category": m.category_name,
+                        "detail": m.detail_name,
+                        "full": f"{m.category_name}:{m.detail_name}" if m.detail_name else m.category_name,
+                        "priority": m.priority,
+                        "confidence": m.confidence
+                    }
+                    for m in mappings
+                ]
+            })
+
+        return result
+
+    def get_categories_hierarchy(self) -> List[Dict]:
+        """Get all categories with their hierarchy"""
+        categories = self.db.query(Category).filter(
+            Category.is_active == True,
+            Category.parent_id == None
+        ).all()
+
+        result = []
+        for category in categories:
+            result.append({
+                "id": category.id,
+                "name": category.name,
+                "description": category.description,
+                "children": [
+                    {
+                        "id": child.id,
+                        "name": child.name,
+                        "description": child.description
+                    }
+                    for child in category.subcategories if child.is_active
+                ]
+            })
+
+        return result
