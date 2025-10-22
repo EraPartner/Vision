@@ -422,12 +422,24 @@ class CategoryService:
             Category.category_type == 'detailed'
         ).scalar()
 
-        categorized_transactions = self.db.query(func.count(Transaction.id)).filter(
-            Transaction.category_id.isnot(None)
+        # Count transactions as categorized if they have:
+        # 1. A direct category_id, OR
+        # 2. A recipient with a default_category_id
+        categorized_transactions = self.db.query(func.count(Transaction.id)).join(
+            Recipient
+        ).filter(
+            (Transaction.category_id.isnot(None)) |
+            (Recipient.default_category_id.isnot(None))
         ).scalar()
 
-        uncategorized_transactions = self.db.query(func.count(Transaction.id)).filter(
-            Transaction.category_id.is_(None)
+        # Count transactions as uncategorized only if they have:
+        # 1. No direct category_id, AND
+        # 2. No categorized recipient
+        uncategorized_transactions = self.db.query(func.count(Transaction.id)).join(
+            Recipient
+        ).filter(
+            Transaction.category_id.is_(None),
+            Recipient.default_category_id.is_(None)
         ).scalar()
 
         categorized_recipients = self.db.query(func.count(Recipient.id)).filter(

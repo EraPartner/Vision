@@ -1,3 +1,4 @@
+import csv
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -197,19 +198,17 @@ class RevolutAdapter(BaseBankAdapter):
         transactions = []
 
         with open(file_path, 'r', encoding='utf-8') as file:
-            for line_num, line in enumerate(file, 1):
+            csv_reader = csv.reader(file)
+
+            for line_num, parts in enumerate(csv_reader, 1):
                 try:
                     # Skip empty lines
-                    line = line.strip()
-                    if not line:
+                    if not parts or all(not field.strip() for field in parts):
                         continue
 
                     # Skip header line
-                    if line_num == 1 and line.startswith('Type,'):
+                    if line_num == 1 and parts[0].strip() == 'Type':
                         continue
-
-                    # Split by comma (Revolut uses comma-separated format)
-                    parts = line.split(',')
 
                     # Revolut format: Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance
                     if len(parts) < 10:
@@ -239,14 +238,18 @@ class RevolutAdapter(BaseBankAdapter):
                     # Parse the completed date (format: YYYY-MM-DD HH:MM:SS)
                     # We only want the date part, not the time
                     try:
-                        date = datetime.strptime(completed_date, "%Y-%m-%d %H:%M:%S").date()
+                        date = datetime.strptime(completed_date, "%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         try:
-                            # Try alternative format without seconds
-                            date = datetime.strptime(completed_date, "%Y-%m-%d %H:%M").date()
+                            # Try alternative format
+                            date = datetime.strptime(completed_date, "%d/%m/%Y %H:%M:%S")
                         except ValueError:
-                            # Try date only
-                            date = datetime.strptime(completed_date.split()[0], "%Y-%m-%d").date()
+                            try:
+                                # Try alternative format without seconds
+                                date = datetime.strptime(completed_date, "%Y-%m-%d %H:%M")
+                            except ValueError:
+                                # Try date only
+                                date = datetime.strptime(completed_date.split()[0], "%Y-%m-%d")
 
                     # Parse amount
                     amount = float(amount_str)
@@ -262,6 +265,9 @@ class RevolutAdapter(BaseBankAdapter):
                     # Clean the recipient/description name
                     cleaned_description = self._clean_recipient_name(description)
 
+                    # Create raw data string for hashing (join the original parts)
+                    raw_data = ','.join(parts)
+
                     # Create transaction
                     transaction = TransactionData(
                         date=date,
@@ -272,14 +278,14 @@ class RevolutAdapter(BaseBankAdapter):
                         currency=currency,
                         balance=balance,
                         comment=description,  # For Revolut, comment is same as description
-                        raw_data=line
+                        raw_data=raw_data
                     )
 
                     transactions.append(transaction)
 
                 except (ValueError, IndexError) as e:
                     print(f"Error parsing Revolut line {line_num}: {e}")
-                    print(f"Line content: {line}")
+                    print(f"Line content: {parts}")
                     continue
 
         return transactions
@@ -301,7 +307,10 @@ class KBCAdapter(BaseBankAdapter):
                         continue
 
                     # Skip header line (starts with "Rekeningnummer")
-                    if line.startswith("Rekeningnummer;"):
+                    if line.endswith("Vrije Mededeling,,,,,,,,,,,,,,,,,,") or line.startswith("Rekeningnummer"):
+                        continue
+
+                    if line.startswith(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"):
                         continue
 
                     # Split by semicolon (KBC uses semicolon-separated format)
