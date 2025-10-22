@@ -294,6 +294,66 @@ class RevolutAdapter(BaseBankAdapter):
 class KBCAdapter(BaseBankAdapter):
     """Specialized adapter for KBC CSV format"""
 
+    def _clean_kbc_recipient_name(self, recipient: str) -> str:
+        """
+        Clean KBC recipient names by extracting the main transaction type.
+
+        Examples:
+        - "GELDOPNEMING VIA BANCONTACT 26-09..." -> "Geldopneming"
+        - "OVERSCHRIJVING NAAR BE12..." -> "Overschrijving"
+        - "DOMICILIËRING VAN XYZ..." -> "Domiciliëring"
+        - "AANKOOP MET DEBETKAART..." -> "Aankoop"
+        """
+        if not recipient:
+            return recipient
+
+        recipient = recipient.strip()
+
+        # Common KBC transaction type keywords (first word or phrase)
+        # These are typically at the start of the description
+        kbc_transaction_types = [
+            "GELDOPNEMING",
+            "OVERSCHRIJVING",
+            "DOMICILIËRING",
+            "DOMICILIERING",
+            "AANKOOP",
+            "TERUGBETALING",
+            "STORTING",
+            "AFHALING",
+            "BETALING",
+            "RETRO-SEPA",
+            "SEPA",
+            "EUROPESE",
+            "INTERNATIONALE",
+        ]
+
+        # Check if it starts with a known transaction type
+        upper_recipient = recipient.upper()
+        for trans_type in kbc_transaction_types:
+            if upper_recipient.startswith(trans_type):
+                # Return just the transaction type, properly capitalized
+                return trans_type.capitalize()
+
+        # If no match, try to extract the first meaningful word/phrase before common separators
+        # Look for patterns like "WORD VIA", "WORD NAAR", "WORD VAN", "WORD MET"
+        separators = [" VIA ", " NAAR ", " VAN ", " MET ", " DOOR ", " OP ", " OM "]
+        for separator in separators:
+            if separator in upper_recipient:
+                first_part = recipient.split(separator, 1)[0].strip()
+                return first_part.capitalize()
+
+        # If still no match, take only the first word if it's long enough to be meaningful
+        first_word = recipient.split()[0] if recipient.split() else recipient
+        if len(first_word) > 3:  # Only use if it's a substantial word
+            return first_word.capitalize()
+
+        # Fallback: take first 2-3 words if they form a meaningful phrase
+        words = recipient.split()[:3]
+        if words:
+            return " ".join(words).capitalize()
+
+        return recipient
+
     def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse KBC CSV format (semicolon-separated)"""
         transactions = []
@@ -398,8 +458,8 @@ class KBCAdapter(BaseBankAdapter):
                     if not final_recipient:
                         final_recipient = memo
 
-                    # Clean the recipient name
-                    final_recipient = self._clean_recipient_name(final_recipient)
+                    # Clean the recipient name using KBC-specific logic
+                    final_recipient = self._clean_kbc_recipient_name(final_recipient)
 
                     # Get comment from field 17 (parts[17]) for KBC - this is the additional_info field
                     comment = additional_info if additional_info else None

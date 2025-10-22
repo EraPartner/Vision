@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 """
 CLI utility for managing financial transactions
 """
@@ -180,6 +180,14 @@ def list_transactions_command(args):
             bank_acct = (txn.bank_account[:22] + "...") if txn.bank_account and len(txn.bank_account) > 25 else (
                     txn.bank_account or "N/A")
             memo = (txn.memo[:27] + "...") if txn.memo and len(txn.memo) > 30 else (txn.memo or "")
+            # Delete transactions command
+            delete_parser = subparsers.add_parser('delete-transactions', help='Delete transactions by recipient')
+            delete_parser.add_argument('--recipient-id', type=int, help='Recipient ID whose transactions to delete')
+            delete_parser.add_argument('--recipient-name', help='Recipient name whose transactions to delete')
+            delete_parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
+            delete_parser.add_argument('--delete-recipient', action='store_true',
+                                       help='Also delete the recipient after deleting transactions')
+
             recipient_name = txn.recipient.name if txn.recipient else "N/A"
             recipient = (recipient_name[:27] + "...") if len(recipient_name) > 30 else recipient_name
             category_name = txn.category.name if txn.category else "N/A"
@@ -603,6 +611,63 @@ def show_uncategorized_command(args):
         db.close()
 
 
+def delete_transactions_command(args):
+    """Delete transactions by recipient name or ID"""
+    db = SessionLocal()
+    try:
+        from database.models import Transaction, Recipient
+
+        # Find recipient
+        if args.recipient_id:
+            recipient = db.query(Recipient).filter(Recipient.id == args.recipient_id).first()
+            if not recipient:
+                print(f"✗ Recipient with ID {args.recipient_id} not found.")
+                return
+        elif args.recipient_name:
+            recipient = db.query(Recipient).filter(Recipient.name == args.recipient_name).first()
+            if not recipient:
+                print(f"✗ Recipient '{args.recipient_name}' not found.")
+                return
+        else:
+            print("✗ Error: You must specify either --recipient-id or --recipient-name")
+            return
+
+        # Count transactions before deletion
+        transaction_count = db.query(Transaction).filter(Transaction.recipient_id == recipient.id).count()
+
+        if transaction_count == 0:
+            print(f"ℹ️  No transactions found for recipient '{recipient.name}'")
+            return
+
+        # Confirm deletion
+        if not args.force:
+            print(f"⚠️  WARNING: This will DELETE {transaction_count} transaction(s) from recipient '{recipient.name}'")
+            response = input("   Are you sure you want to continue? (yes/no): ")
+            if response.lower() != 'yes':
+                print("Deletion cancelled.")
+                return
+
+        # Delete transactions
+        deleted_count = db.query(Transaction).filter(Transaction.recipient_id == recipient.id).delete()
+        db.commit()
+
+        print(f"✓ Successfully deleted {deleted_count} transaction(s) from recipient '{recipient.name}'")
+
+        # Optionally delete the recipient too
+        if args.delete_recipient:
+            db.delete(recipient)
+            db.commit()
+            print(f"✓ Also deleted recipient '{recipient.name}'")
+
+    except Exception as e:
+        print(f"Error deleting transactions: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+    finally:
+        db.close()
+
+
 def category_stats_command(args):
     """Show category statistics"""
     db = SessionLocal()
@@ -785,6 +850,14 @@ def main():
     assign_cat_parser.add_argument('--recipient-id', type=int, help='Recipient ID to assign category')
     assign_cat_parser.add_argument('--recipient-ids', help='Comma-separated list of recipient IDs')
 
+    # Delete transactions command
+    delete_parser = subparsers.add_parser('delete-transactions', help='Delete transactions by recipient')
+    delete_parser.add_argument('--recipient-id', type=int, help='Recipient ID whose transactions to delete')
+    delete_parser.add_argument('--recipient-name', help='Recipient name whose transactions to delete')
+    delete_parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
+    delete_parser.add_argument('--delete-recipient', action='store_true',
+                               help='Also delete the recipient after deleting transactions')
+
     if len(sys.argv) == 1:
         parser.print_help()
         return
@@ -823,6 +896,8 @@ def main():
         assign_category_command(args)
     elif args.command == 'import-categories-from-activity':
         import_categories_from_activity_command(args)
+    elif args.command == 'delete-transactions':
+        delete_transactions_command(args)
     else:
         parser.print_help()
 
