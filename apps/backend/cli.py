@@ -707,6 +707,111 @@ def category_stats_command(args):
         db.close()
 
 
+def view_transactions_command(args):
+    """View transactions with joined recipient and category information"""
+    db = SessionLocal()
+    try:
+        from database.models import Transaction, Recipient, Category
+        from sqlalchemy.orm import aliased
+
+        # Create aliases for both category sources
+        TransactionCategory = aliased(Category)  # Category from transaction.category_id
+        RecipientCategory = aliased(Category)  # Category from recipient.default_category_id
+
+        # Build the query with joins:
+        # transactions -> recipients (via recipient_id)
+        # transactions -> categories (via category_id - transaction's assigned category)
+        # recipients -> categories (via default_category_id - recipient's default category)
+        query = db.query(
+            Transaction,
+            Recipient,
+            TransactionCategory,
+            RecipientCategory
+        ).join(
+            Recipient, Transaction.recipient_id == Recipient.id
+        ).outerjoin(
+            TransactionCategory, Transaction.category_id == TransactionCategory.id
+        ).outerjoin(
+            RecipientCategory, Recipient.default_category_id == RecipientCategory.id
+        )
+
+        # Apply filters
+        if args.batch_id:
+            query = query.filter(Transaction.batch_id == args.batch_id)
+            print(f"\n📊 Viewing transactions for Batch ID: {args.batch_id}")
+        else:
+            print(f"\n📊 Viewing last {args.limit} transactions")
+
+        # Order by date (most recent first) and ID
+        query = query.order_by(Transaction.date.desc(), Transaction.id.desc())
+
+        # Apply limit
+        query = query.limit(args.limit)
+
+        results = query.all()
+
+        if not results:
+            print("No transactions found matching the criteria.")
+            return
+
+        # Display header
+        print()
+        print("=" * 165)
+        print(
+            f"{'ID':<6} {'Date':<12} {'Amount':<12} {'Recipient':<35} {'Category':<30} {'Bank Account':<20}")
+        print("=" * 165)
+
+        # Display transactions
+        total_amount = 0
+        for txn, recipient, txn_category, recip_category in results:
+            # Format fields
+            txn_id = str(txn.id)
+            date = txn.date.strftime('%Y-%m-%d')
+            amount = f"${float(txn.amount):,.2f}"
+
+            recipient_name = recipient.name if recipient else "N/A"
+            recipient_display = (recipient_name[:32] + "...") if len(recipient_name) > 35 else recipient_name
+
+            # Use transaction's category if set, otherwise fall back to recipient's default category
+            effective_category = txn_category if txn_category else recip_category
+            category_name = effective_category.full_path if effective_category else "Uncategorized"
+            category_display = (category_name[:27] + "...") if len(category_name) > 30 else category_name
+
+            bank_account = (txn.bank_account[:17] + "...") if txn.bank_account and len(txn.bank_account) > 20 else (
+                    txn.bank_account or "N/A")
+            print(
+                f"{txn_id:<6} {date:<12} {amount:<12} {recipient_display:<35} {category_display:<30} {bank_account:<20} ")
+
+            total_amount += float(txn.amount)
+
+        # Display summary
+        print("=" * 165)
+        print(f"\nTotal transactions: {len(results)}")
+        print(f"Total amount: ${total_amount:,.2f}")
+
+        # Show batch information if batch_id filter is applied
+        if args.batch_id:
+            from database.models import ImportBatch
+            batch = db.query(ImportBatch).filter(ImportBatch.id == args.batch_id).first()
+            if batch:
+                print(f"\nBatch Information:")
+                print(f"  Filename: {batch.filename}")
+                print(f"  Bank: {batch.bank_name}")
+                print(f"  Status: {batch.status}")
+                print(f"  Total Processed: {batch.total_processed}")
+                print(f"  Imported: {batch.imported_count}")
+                print(f"  Duplicates: {batch.duplicate_count}")
+                print(f"  Errors: {batch.error_count}")
+                print(f"  Created: {batch.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    except Exception as e:
+        print(f"Error viewing transactions: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        db.close()
+
+
 def init_db_command(args):
     """Handle init-db command"""
     init_db()
@@ -850,6 +955,11 @@ def main():
     assign_cat_parser.add_argument('--recipient-id', type=int, help='Recipient ID to assign category')
     assign_cat_parser.add_argument('--recipient-ids', help='Comma-separated list of recipient IDs')
 
+    # View transactions command (with joins)
+    view_parser = subparsers.add_parser('view', help='View transactions with joined recipient and category information')
+    view_parser.add_argument('--limit', type=int, default=20, help='Number of transactions to view (default: 20)')
+    view_parser.add_argument('--batch-id', type=int, help='Filter by batch ID')
+
     # Delete transactions command
     delete_parser = subparsers.add_parser('delete-transactions', help='Delete transactions by recipient')
     delete_parser.add_argument('--recipient-id', type=int, help='Recipient ID whose transactions to delete')
@@ -898,6 +1008,8 @@ def main():
         import_categories_from_activity_command(args)
     elif args.command == 'delete-transactions':
         delete_transactions_command(args)
+    elif args.command == 'view':
+        view_transactions_command(args)
     else:
         parser.print_help()
 
