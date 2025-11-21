@@ -93,7 +93,7 @@ class BelfiusAdapter(BaseBankAdapter):
 
             # Skip metadata lines (first 13 lines) and header line (line 14)
             # Actual data starts at line 15 (index 14)
-            for line_num, line in enumerate(lines[14:], start=15):
+            for line_num, line in enumerate(lines[13:], start=14):
                 try:
                     # Skip empty lines
                     line = line.strip()
@@ -265,8 +265,13 @@ class RevolutAdapter(BaseBankAdapter):
                     # Clean the recipient/description name
                     cleaned_description = self._clean_recipient_name(description)
 
-                    # Create raw data string for hashing (join the original parts)
-                    raw_data = ','.join(parts)
+                    # Create raw data string for hashing with normalized date (YYYY-MM-DD)
+                    # Replace started_date and completed_date with parsed date in YYYY-MM-DD format
+                    normalized_parts = parts.copy()
+                    normalized_date = date.strftime("%Y-%m-%d")
+                    normalized_parts[2] = normalized_date  # Replace started_date
+                    normalized_parts[3] = normalized_date  # Replace completed_date
+                    raw_data = ','.join(normalized_parts)
 
                     # Create transaction
                     transaction = TransactionData(
