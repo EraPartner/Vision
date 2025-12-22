@@ -23,6 +23,42 @@ class TransactionData:
     raw_data: str = ""  # Original CSV row for hashing
 
 
+def _create_hash(raw_data: str) -> str:
+    """Create hash for deduplication"""
+    return hashlib.sha256(raw_data.encode()).hexdigest()
+
+
+def _clean_recipient_name(recipient: str) -> str:
+    """
+    Clean recipient name by removing common prefixes and suffixes
+    that don't add value (e.g., 'Payment from ', 'To ', 'From ')
+    """
+    if not recipient:
+        return recipient
+
+    # List of prefixes to remove (case-insensitive)
+    prefixes_to_remove = [
+        "Payment from ",
+        "Payment to ",
+        "From ",
+        "To ",
+        "Transfer from ",
+        "Transfer to ",
+        "Sent to ",
+        "Received from ",
+    ]
+
+    cleaned = recipient.strip()
+
+    # Remove prefixes (case-insensitive)
+    for prefix in prefixes_to_remove:
+        if cleaned.lower().startswith(prefix.lower()):
+            cleaned = cleaned[len(prefix):].strip()
+            break  # Only remove one prefix
+
+    return cleaned
+
+
 class BaseBankAdapter(ABC):
     """Abstract base class for bank adapters"""
 
@@ -34,40 +70,6 @@ class BaseBankAdapter(ABC):
     def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse CSV file and return list of standardized transactions"""
         pass
-
-    def _create_hash(self, raw_data: str) -> str:
-        """Create hash for deduplication"""
-        return hashlib.sha256(raw_data.encode()).hexdigest()
-
-    def _clean_recipient_name(self, recipient: str) -> str:
-        """
-        Clean recipient name by removing common prefixes and suffixes
-        that don't add value (e.g., 'Payment from ', 'To ', 'From ')
-        """
-        if not recipient:
-            return recipient
-
-        # List of prefixes to remove (case-insensitive)
-        prefixes_to_remove = [
-            "Payment from ",
-            "Payment to ",
-            "From ",
-            "To ",
-            "Transfer from ",
-            "Transfer to ",
-            "Sent to ",
-            "Received from ",
-        ]
-
-        cleaned = recipient.strip()
-
-        # Remove prefixes (case-insensitive)
-        for prefix in prefixes_to_remove:
-            if cleaned.lower().startswith(prefix.lower()):
-                cleaned = cleaned[len(prefix):].strip()
-                break  # Only remove one prefix
-
-        return cleaned
 
 
 class BelfiusAdapter(BaseBankAdapter):
@@ -158,7 +160,7 @@ class BelfiusAdapter(BaseBankAdapter):
                         full_recipient = transaction_description
 
                     # Clean the recipient name
-                    full_recipient = self._clean_recipient_name(full_recipient)
+                    full_recipient = _clean_recipient_name(full_recipient)
 
                     # Use transaction description as memo
                     memo = transaction_description if transaction_description else ""
@@ -263,7 +265,7 @@ class RevolutAdapter(BaseBankAdapter):
                             balance = None
 
                     # Clean the recipient/description name
-                    cleaned_description = self._clean_recipient_name(description)
+                    cleaned_description = _clean_recipient_name(description)
 
                     # Create raw data string for hashing with normalized date (YYYY-MM-DD)
                     # Replace started_date and completed_date with parsed date in YYYY-MM-DD format
@@ -296,68 +298,69 @@ class RevolutAdapter(BaseBankAdapter):
         return transactions
 
 
+def _clean_kbc_recipient_name(recipient: str) -> str:
+    """
+    Clean KBC recipient names by extracting the main transaction type.
+
+    Examples:
+    - "GELDOPNEMING VIA BANCONTACT 26-09..." -> "Geldopneming"
+    - "OVERSCHRIJVING NAAR BE12..." -> "Overschrijving"
+    - "DOMICILIËRING VAN XYZ..." -> "Domiciliëring"
+    - "AANKOOP MET DEBETKAART..." -> "Aankoop"
+    """
+    if not recipient:
+        return recipient
+
+    recipient = recipient.strip()
+
+    # Common KBC transaction type keywords (first word or phrase)
+    # These are typically at the start of the description
+    kbc_transaction_types = [
+        "GELDOPNEMING",
+        "OVERSCHRIJVING",
+        "DOMICILIËRING",
+        "DOMICILIERING",
+        "AANKOOP",
+        "TERUGBETALING",
+        "STORTING",
+        "AFHALING",
+        "BETALING",
+        "RETRO-SEPA",
+        "SEPA",
+        "EUROPESE",
+        "INTERNATIONALE",
+    ]
+
+    # Check if it starts with a known transaction type
+    upper_recipient = recipient.upper()
+    for trans_type in kbc_transaction_types:
+        if upper_recipient.startswith(trans_type):
+            # Return just the transaction type, properly capitalized
+            return trans_type.capitalize()
+
+    # If no match, try to extract the first meaningful word/phrase before common separators
+    # Look for patterns like "WORD VIA", "WORD NAAR", "WORD VAN", "WORD MET"
+    separators = [" VIA ", " NAAR ", " VAN ", " MET ", " DOOR ", " OP ", " OM "]
+    for separator in separators:
+        if separator in upper_recipient:
+            first_part = recipient.split(separator, 1)[0].strip()
+            return first_part.capitalize()
+
+    # If still no match, take only the first word if it's long enough to be meaningful
+    first_word = recipient.split()[0] if recipient.split() else recipient
+    if len(first_word) > 3:  # Only use if it's a substantial word
+        return first_word.capitalize()
+
+    # Fallback: take first 2-3 words if they form a meaningful phrase
+    words = recipient.split()[:3]
+    if words:
+        return " ".join(words).capitalize()
+
+    return recipient
+
+
 class KBCAdapter(BaseBankAdapter):
     """Specialized adapter for KBC CSV format"""
-
-    def _clean_kbc_recipient_name(self, recipient: str) -> str:
-        """
-        Clean KBC recipient names by extracting the main transaction type.
-
-        Examples:
-        - "GELDOPNEMING VIA BANCONTACT 26-09..." -> "Geldopneming"
-        - "OVERSCHRIJVING NAAR BE12..." -> "Overschrijving"
-        - "DOMICILIËRING VAN XYZ..." -> "Domiciliëring"
-        - "AANKOOP MET DEBETKAART..." -> "Aankoop"
-        """
-        if not recipient:
-            return recipient
-
-        recipient = recipient.strip()
-
-        # Common KBC transaction type keywords (first word or phrase)
-        # These are typically at the start of the description
-        kbc_transaction_types = [
-            "GELDOPNEMING",
-            "OVERSCHRIJVING",
-            "DOMICILIËRING",
-            "DOMICILIERING",
-            "AANKOOP",
-            "TERUGBETALING",
-            "STORTING",
-            "AFHALING",
-            "BETALING",
-            "RETRO-SEPA",
-            "SEPA",
-            "EUROPESE",
-            "INTERNATIONALE",
-        ]
-
-        # Check if it starts with a known transaction type
-        upper_recipient = recipient.upper()
-        for trans_type in kbc_transaction_types:
-            if upper_recipient.startswith(trans_type):
-                # Return just the transaction type, properly capitalized
-                return trans_type.capitalize()
-
-        # If no match, try to extract the first meaningful word/phrase before common separators
-        # Look for patterns like "WORD VIA", "WORD NAAR", "WORD VAN", "WORD MET"
-        separators = [" VIA ", " NAAR ", " VAN ", " MET ", " DOOR ", " OP ", " OM "]
-        for separator in separators:
-            if separator in upper_recipient:
-                first_part = recipient.split(separator, 1)[0].strip()
-                return first_part.capitalize()
-
-        # If still no match, take only the first word if it's long enough to be meaningful
-        first_word = recipient.split()[0] if recipient.split() else recipient
-        if len(first_word) > 3:  # Only use if it's a substantial word
-            return first_word.capitalize()
-
-        # Fallback: take first 2-3 words if they form a meaningful phrase
-        words = recipient.split()[:3]
-        if words:
-            return " ".join(words).capitalize()
-
-        return recipient
 
     def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse KBC CSV format (semicolon-separated)"""
@@ -464,7 +467,7 @@ class KBCAdapter(BaseBankAdapter):
                         final_recipient = memo
 
                     # Clean the recipient name using KBC-specific logic
-                    final_recipient = self._clean_kbc_recipient_name(final_recipient)
+                    final_recipient = _clean_kbc_recipient_name(final_recipient)
 
                     # Get comment from field 17 (parts[17]) for KBC - this is the additional_info field
                     comment = additional_info if additional_info else None
@@ -493,6 +496,18 @@ class KBCAdapter(BaseBankAdapter):
         return transactions
 
 
+def _parse_amount(amount_str: str) -> float:
+    """Parse amount string to float, handling various formats"""
+    # Remove currency symbols and spaces
+    cleaned = amount_str.replace("$", "").replace("€", "").replace("£", "").replace(",", "").strip()
+
+    # Handle negative amounts in parentheses
+    if cleaned.startswith("(") and cleaned.endswith(")"):
+        cleaned = "-" + cleaned[1:-1]
+
+    return float(cleaned)
+
+
 class GenericCSVAdapter(BaseBankAdapter):
     """Generic adapter that can be configured for most CSV formats"""
 
@@ -516,7 +531,7 @@ class GenericCSVAdapter(BaseBankAdapter):
 
                 # Parse amount
                 amount_str = str(row[column_mapping["amount"]])
-                amount = self._parse_amount(amount_str)
+                amount = _parse_amount(amount_str)
 
                 # Get other fields
                 recipient = str(row[column_mapping["recipient"]])
@@ -554,17 +569,6 @@ class GenericCSVAdapter(BaseBankAdapter):
                 continue
 
         return transactions
-
-    def _parse_amount(self, amount_str: str) -> float:
-        """Parse amount string to float, handling various formats"""
-        # Remove currency symbols and spaces
-        cleaned = amount_str.replace("$", "").replace("€", "").replace("£", "").replace(",", "").strip()
-
-        # Handle negative amounts in parentheses
-        if cleaned.startswith("(") and cleaned.endswith(")"):
-            cleaned = "-" + cleaned[1:-1]
-
-        return float(cleaned)
 
 
 # Predefined configurations for common banks

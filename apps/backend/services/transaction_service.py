@@ -5,13 +5,22 @@ from datetime import datetime, timezone, date
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
-import pandas as pd
-from sqlalchemy import and_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database.models import Transaction, Recipient, ImportBatch
 from services.bank_adapters import BankAdapterFactory, TransactionData
+
+
+def _create_transaction_hash(transaction_data: TransactionData) -> str:
+    """Create a unique hash for the transaction to detect exact duplicates"""
+    # Create a hash based on the raw CSV data to ensure exact duplicate detection
+    raw_data = transaction_data.raw_data
+    if not raw_data:
+        # Fallback: create hash from key fields if raw_data is not available
+        hash_string = f"{transaction_data.date.isoformat()}|{transaction_data.amount}|{transaction_data.recipient}|{transaction_data.memo or ''}"
+        raw_data = hash_string
+
+    return hashlib.sha256(raw_data.encode('utf-8')).hexdigest()
 
 
 class TransactionImportService:
@@ -100,7 +109,7 @@ class TransactionImportService:
         for transaction_data in transaction_data_list:
             try:
                 # Create hash for duplicate detection
-                transaction_hash = self._create_transaction_hash(transaction_data)
+                transaction_hash = _create_transaction_hash(transaction_data)
 
                 # Check for exact duplicates using hash
                 if self._is_duplicate_transaction(transaction_hash):
@@ -138,17 +147,6 @@ class TransactionImportService:
         self.db.commit()
         return results
 
-    def _create_transaction_hash(self, transaction_data: TransactionData) -> str:
-        """Create a unique hash for the transaction to detect exact duplicates"""
-        # Create a hash based on the raw CSV data to ensure exact duplicate detection
-        raw_data = transaction_data.raw_data
-        if not raw_data:
-            # Fallback: create hash from key fields if raw_data is not available
-            hash_string = f"{transaction_data.date.isoformat()}|{transaction_data.amount}|{transaction_data.recipient}|{transaction_data.memo or ''}"
-            raw_data = hash_string
-
-        return hashlib.sha256(raw_data.encode('utf-8')).hexdigest()
-
     def _is_duplicate_transaction(self, transaction_hash: str) -> bool:
         """Check if a transaction with this exact hash already exists"""
         # For now, we'll store the hash in the bank_reference field
@@ -185,7 +183,7 @@ class TransactionImportService:
 
     def _generate_bank_reference(self, transaction_data: TransactionData) -> str:
         """Generate a bank reference/hash for the transaction"""
-        return self._create_transaction_hash(transaction_data)
+        return _create_transaction_hash(transaction_data)
 
     def get_recipients_with_account_numbers(self) -> List[Recipient]:
         """Get all recipients that have account numbers"""
