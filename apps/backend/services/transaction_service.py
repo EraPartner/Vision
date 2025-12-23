@@ -1,13 +1,14 @@
-import csv
-import hashlib
 import json
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
 
 from database.models import Transaction, Recipient, ImportBatch
+from repositories.category_repository import CategoryRepository
+from repositories.import_batch_repository import ImportBatchRepository
+from repositories.transaction_repository import TransactionRepository
 from services.bank_adapters import BankAdapterFactory, TransactionData
 
 
@@ -28,6 +29,12 @@ class TransactionImportService:
 
     def __init__(self, db_session: Session):
         self.db = db_session
+        self.txn_repo = TransactionRepository(db_session)
+        self.batch_repo = ImportBatchRepository(db_session)
+        self.category_repo = CategoryRepository(db_session)
+        # Inject dependencies for separated concerns
+        self.dedup_service = DeduplicationService(db_session)
+        self.recipient_service = RecipientService(db_session)
 
     def import_csv(
             self,
@@ -108,16 +115,13 @@ class TransactionImportService:
 
         for transaction_data in transaction_data_list:
             try:
-                # Create hash for duplicate detection
-                transaction_hash = _create_transaction_hash(transaction_data)
-
-                # Check for exact duplicates using hash
-                if self._is_duplicate_transaction(transaction_hash):
+                # Check for duplicates using dedicated deduplication service
+                if self.dedup_service.is_duplicate_by_data(transaction_data):
                     results['duplicates'] += 1
                     continue
 
-                # Get or create recipient (with account number if available)
-                recipient = self._get_or_create_recipient(
+                # Get or create recipient using dedicated recipient service
+                recipient = self.recipient_service.get_or_create_recipient(
                     transaction_data.recipient,
                     transaction_data.recipient_account
                 )
@@ -130,11 +134,11 @@ class TransactionImportService:
                     balance=Decimal(str(transaction_data.balance)) if transaction_data.balance is not None else None,
                     memo=transaction_data.memo or '',
                     comment=transaction_data.comment,
-                    bank_account=transaction_data.bank_account,  # Store the bank/account name
-                    recipient_id=recipient.id,  # Set the recipient_id
+                    bank_account=transaction_data.bank_account,
+                    recipient_id=recipient.id,
                     batch_id=batch_id,
                     original_raw_data=transaction_data.raw_data,
-                    bank_reference=self._generate_bank_reference(transaction_data)
+                    bank_reference=self.dedup_service.get_hash_for_data(transaction_data)
                 )
 
                 self.db.add(transaction)
@@ -147,266 +151,10 @@ class TransactionImportService:
         self.db.commit()
         return results
 
-    def _is_duplicate_transaction(self, transaction_hash: str) -> bool:
-        """Check if a transaction with this exact hash already exists"""
-        # For now, we'll store the hash in the bank_reference field
-        # In a production system, you might want a separate hash field
-        existing = self.db.query(Transaction).filter(
-            Transaction.bank_reference == transaction_hash
-        ).first()
-
-        return existing is not None
-
-    def _get_or_create_recipient(self, name: str, account_number: Optional[str] = None) -> Recipient:
-        """Get existing recipient or create a new one with account number"""
-        # First, try to find by exact name match
-        recipient = self.db.query(Recipient).filter(Recipient.name == name).first()
-
-        if recipient:
-            # Update account number if provided and not already set
-            if account_number and not recipient.account_number:
-                recipient.account_number = account_number
-                self.db.commit()
-            return recipient
-
-        # Create new recipient
-        recipient = Recipient(
-            name=name,
-            account_number=account_number,
-            is_active=True
-        )
-        self.db.add(recipient)
-        self.db.commit()
-        self.db.refresh(recipient)
-
-        return recipient
-
-    def _generate_bank_reference(self, transaction_data: TransactionData) -> str:
-        """Generate a bank reference/hash for the transaction"""
-        return _create_transaction_hash(transaction_data)
-
     def get_recipients_with_account_numbers(self) -> List[Recipient]:
         """Get all recipients that have account numbers"""
-        return self.db.query(Recipient).filter(
-            Recipient.account_number.isnot(None)
-        ).all()
+        return self.recipient_service.get_with_account_numbers()
 
     def update_recipient_category(self, recipient_id: int, category_id: Optional[int]) -> bool:
-        """Update the default category for a recipient (for future use)"""
-        recipient = self.db.query(Recipient).filter(Recipient.id == recipient_id).first()
-        if recipient:
-            recipient.default_category_id = category_id
-            self.db.commit()
-            return True
-        return False
-
-    def get_transactions(
-            self,
-            bank_account: Optional[str] = None,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None,
-            category_id: Optional[int] = None,
-            recipient_id: Optional[int] = None,
-            recipient_name: Optional[str] = None,
-            limit: int = 100,
-            offset: int = 0
-    ) -> List[Transaction]:
-        """Get transactions with optional filters"""
-
-        query = self.db.query(Transaction)
-
-        if bank_account:
-            query = query.filter(Transaction.bank_account.ilike(f"%{bank_account}%"))
-
-        if start_date:
-            query = query.filter(Transaction.date >= start_date)
-
-        if end_date:
-            query = query.filter(Transaction.date <= end_date)
-
-        if category_id:
-            query = query.filter(Transaction.category_id == category_id)
-
-        if recipient_id:
-            query = query.filter(Transaction.recipient_id == recipient_id)
-
-        if recipient_name:
-            query = query.join(Recipient).filter(Recipient.name.ilike(f"%{recipient_name}%"))
-
-        return query.order_by(Transaction.date.desc()).offset(offset).limit(limit).all()
-
-    def get_transaction_summary(
-            self,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None
-    ) -> Dict[str, Any]:
-        """Get summary statistics for transactions"""
-
-        query = self.db.query(Transaction)
-
-        if start_date:
-            query = query.filter(Transaction.date >= start_date)
-
-        if end_date:
-            query = query.filter(Transaction.date <= end_date)
-
-        transactions = query.all()
-
-        if not transactions:
-            return {
-                "total_transactions": 0,
-                "total_amount": 0,
-                "average_amount": 0,
-                "date_range": None
-            }
-
-        amounts = [float(t.amount) for t in transactions]
-        dates = [t.date for t in transactions]
-
-        return {
-            "total_transactions": len(transactions),
-            "total_amount": sum(amounts),
-            "average_amount": sum(amounts) / len(amounts),
-            "min_amount": min(amounts),
-            "max_amount": max(amounts),
-            "date_range": {
-                "start": min(dates),
-                "end": max(dates)
-            }
-        }
-
-    def update_transaction_category(self, transaction_id: int, category_id: int) -> bool:
-        """Update category for a transaction"""
-        transaction = self.db.query(Transaction).filter(Transaction.id == transaction_id).first()
-
-        if not transaction:
-            return False
-
-        transaction.category_id = category_id
-        transaction.updated_at = datetime.now(timezone.utc)
-
-        try:
-            self.db.commit()
-            return True
-        except Exception:
-            self.db.rollback()
-            return False
-
-    def export_transactions_to_csv(
-            self,
-            file_path: str,
-            from_date: Optional[date] = None,
-            to_date: Optional[date] = None,
-            bank_account: Optional[str] = None,
-            category_id: Optional[int] = None
-    ) -> Dict[str, Any]:
-        """
-        Export transactions to CSV file from a certain date until now
-
-        Args:
-            file_path: Path where the CSV file will be saved
-            from_date: Start date for transactions (optional)
-            to_date: End date for transactions (optional, defaults to today)
-            bank_account: Filter by specific bank account (optional)
-            category_id: Filter by category (optional)
-
-        Returns:
-            Dictionary with export results including count and file path
-        """
-        from database.models import Category
-
-        # Default to_date to today if not provided
-        if to_date is None:
-            to_date = date.today()
-
-        # Build query
-        query = self.db.query(Transaction).join(Recipient)
-
-        # Apply filters
-        if from_date:
-            query = query.filter(Transaction.date >= from_date)
-
-        if to_date:
-            query = query.filter(Transaction.date <= to_date)
-
-        if bank_account:
-            query = query.filter(Transaction.bank_account == bank_account)
-
-        if category_id:
-            query = query.filter(Transaction.category_id == category_id)
-
-        # Order by date (oldest first for export)
-        transactions = query.order_by(Transaction.date.asc()).all()
-
-        if not transactions:
-            return {
-                'success': False,
-                'message': 'No transactions found for the specified criteria',
-                'count': 0,
-                'file_path': None
-            }
-
-        # Write to CSV
-        try:
-            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
-                fieldnames = [
-                    'Date',
-                    'Bank Account',
-                    'Recipient',
-                    'Recipient Account',
-                    'Memo',
-                    'Amount',
-                    'Currency',
-                    'Balance',
-                    'Category',
-                    'Comment'
-                ]
-
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
-
-                for transaction in transactions:
-                    # Get category name if available
-                    category_name = ''
-                    if transaction.category_id:
-                        category = self.db.query(Category).filter(
-                            Category.id == transaction.category_id
-                        ).first()
-                        if category:
-                            category_name = category.name
-
-                    # Get recipient info
-                    recipient_name = transaction.recipient.name if transaction.recipient else ''
-                    recipient_account = transaction.recipient.account_number if transaction.recipient else ''
-
-                    writer.writerow({
-                        'Date': transaction.date.isoformat(),
-                        'Bank Account': transaction.bank_account or '',
-                        'Recipient': recipient_name,
-                        'Recipient Account': recipient_account or '',
-                        'Memo': transaction.memo or '',
-                        'Amount': float(transaction.amount),
-                        'Currency': transaction.currency or '',
-                        'Balance': float(transaction.balance) if transaction.balance else '',
-                        'Category': category_name,
-                        'Comment': transaction.comment or ''
-                    })
-
-            return {
-                'success': True,
-                'message': f'Successfully exported {len(transactions)} transactions',
-                'count': len(transactions),
-                'file_path': file_path,
-                'date_range': {
-                    'from': transactions[0].date.isoformat(),
-                    'to': transactions[-1].date.isoformat()
-                }
-            }
-
-        except Exception as e:
-            return {
-                'success': False,
-                'message': f'Error exporting transactions: {str(e)}',
-                'count': 0,
-                'file_path': None
-            }
+        """Update the default category for a recipient"""
+        return self.recipient_service.update_category(recipient_id, category_id)

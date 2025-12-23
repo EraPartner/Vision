@@ -1,11 +1,12 @@
 import csv
-import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 import pandas as pd
+
+from services.text_normalization_service import TextNormalizationService
 
 
 @dataclass
@@ -21,42 +22,6 @@ class TransactionData:
     recipient_account: Optional[str] = None  # Account number of recipient when available
     comment: Optional[str] = None  # Additional comment field for bank-specific data
     raw_data: str = ""  # Original CSV row for hashing
-
-
-def _create_hash(raw_data: str) -> str:
-    """Create hash for deduplication"""
-    return hashlib.sha256(raw_data.encode()).hexdigest()
-
-
-def _clean_recipient_name(recipient: str) -> str:
-    """
-    Clean recipient name by removing common prefixes and suffixes
-    that don't add value (e.g., 'Payment from ', 'To ', 'From ')
-    """
-    if not recipient:
-        return recipient
-
-    # List of prefixes to remove (case-insensitive)
-    prefixes_to_remove = [
-        "Payment from ",
-        "Payment to ",
-        "From ",
-        "To ",
-        "Transfer from ",
-        "Transfer to ",
-        "Sent to ",
-        "Received from ",
-    ]
-
-    cleaned = recipient.strip()
-
-    # Remove prefixes (case-insensitive)
-    for prefix in prefixes_to_remove:
-        if cleaned.lower().startswith(prefix.lower()):
-            cleaned = cleaned[len(prefix):].strip()
-            break  # Only remove one prefix
-
-    return cleaned
 
 
 class BaseBankAdapter(ABC):
@@ -159,8 +124,8 @@ class BelfiusAdapter(BaseBankAdapter):
                     if not full_recipient:
                         full_recipient = transaction_description
 
-                    # Clean the recipient name
-                    full_recipient = _clean_recipient_name(full_recipient)
+                    # Clean the recipient name using the normalization service
+                    full_recipient = TextNormalizationService.clean_recipient_name(full_recipient)
 
                     # Use transaction description as memo
                     memo = transaction_description if transaction_description else ""
@@ -264,8 +229,8 @@ class RevolutAdapter(BaseBankAdapter):
                         except ValueError:
                             balance = None
 
-                    # Clean the recipient/description name
-                    cleaned_description = _clean_recipient_name(description)
+                    # Clean the recipient/description name using normalization service
+                    cleaned_description = TextNormalizationService.clean_recipient_name(description)
 
                     # Create raw data string for hashing with normalized date (YYYY-MM-DD)
                     # Replace started_date and completed_date with parsed date in YYYY-MM-DD format
@@ -296,67 +261,6 @@ class RevolutAdapter(BaseBankAdapter):
                     continue
 
         return transactions
-
-
-def _clean_kbc_recipient_name(recipient: str) -> str:
-    """
-    Clean KBC recipient names by extracting the main transaction type.
-
-    Examples:
-    - "GELDOPNEMING VIA BANCONTACT 26-09..." -> "Geldopneming"
-    - "OVERSCHRIJVING NAAR BE12..." -> "Overschrijving"
-    - "DOMICILIËRING VAN XYZ..." -> "Domiciliëring"
-    - "AANKOOP MET DEBETKAART..." -> "Aankoop"
-    """
-    if not recipient:
-        return recipient
-
-    recipient = recipient.strip()
-
-    # Common KBC transaction type keywords (first word or phrase)
-    # These are typically at the start of the description
-    kbc_transaction_types = [
-        "GELDOPNEMING",
-        "OVERSCHRIJVING",
-        "DOMICILIËRING",
-        "DOMICILIERING",
-        "AANKOOP",
-        "TERUGBETALING",
-        "STORTING",
-        "AFHALING",
-        "BETALING",
-        "RETRO-SEPA",
-        "SEPA",
-        "EUROPESE",
-        "INTERNATIONALE",
-    ]
-
-    # Check if it starts with a known transaction type
-    upper_recipient = recipient.upper()
-    for trans_type in kbc_transaction_types:
-        if upper_recipient.startswith(trans_type):
-            # Return just the transaction type, properly capitalized
-            return trans_type.capitalize()
-
-    # If no match, try to extract the first meaningful word/phrase before common separators
-    # Look for patterns like "WORD VIA", "WORD NAAR", "WORD VAN", "WORD MET"
-    separators = [" VIA ", " NAAR ", " VAN ", " MET ", " DOOR ", " OP ", " OM "]
-    for separator in separators:
-        if separator in upper_recipient:
-            first_part = recipient.split(separator, 1)[0].strip()
-            return first_part.capitalize()
-
-    # If still no match, take only the first word if it's long enough to be meaningful
-    first_word = recipient.split()[0] if recipient.split() else recipient
-    if len(first_word) > 3:  # Only use if it's a substantial word
-        return first_word.capitalize()
-
-    # Fallback: take first 2-3 words if they form a meaningful phrase
-    words = recipient.split()[:3]
-    if words:
-        return " ".join(words).capitalize()
-
-    return recipient
 
 
 class KBCAdapter(BaseBankAdapter):
@@ -467,7 +371,7 @@ class KBCAdapter(BaseBankAdapter):
                         final_recipient = memo
 
                     # Clean the recipient name using KBC-specific logic
-                    final_recipient = _clean_kbc_recipient_name(final_recipient)
+                    final_recipient = TextNormalizationService.clean_kbc_recipient_name(final_recipient)
 
                     # Get comment from field 17 (parts[17]) for KBC - this is the additional_info field
                     comment = additional_info if additional_info else None
