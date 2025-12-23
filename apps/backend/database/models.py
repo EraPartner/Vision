@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, Index, UniqueConstraint, ForeignKey, \
+from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
     Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -45,22 +45,13 @@ class Category(Base):
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False,
-                  index=True)  # Changed from unique to allow same name in different hierarchies
+    # Store General and Detail parts separately for easy querying
+    general = Column(String(100), nullable=False, index=True)  # e.g., "Food"
+    detail = Column(String(100), nullable=False, index=True)  # e.g., "Groceries"
     description = Column(Text, nullable=True)
     color = Column(String(7), nullable=True)  # Hex color code for UI
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_active = Column(Boolean, default=True)
-
-    # New field to store the type (general or detailed)
-    category_type = Column(String(20), nullable=True)  # 'general' or 'detailed'
-
-    # Store General and Detail parts separately
-    general = Column(String(100), nullable=True, index=True)  # General category (e.g., "Food")
-    detail = Column(String(100), nullable=True, index=True)  # Detail category (e.g., "Groceries")
-
-    # Full path for easy queries (e.g., "Food:Meat")
-    full_path = Column(String(200), nullable=True, unique=True, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -69,14 +60,19 @@ class Category(Base):
     # Relationships
     recipients = relationship("Recipient", back_populates="default_category")
     transactions = relationship("Transaction", back_populates="category")
-    # Self-referential for subcategories
-    parent = relationship("Category", remote_side=[id], back_populates="children")
+    # Self-referential for parent-child relationships
+    parent = relationship("Category", remote_side=[id], back_populates="children", foreign_keys=[parent_id])
     children = relationship("Category", back_populates="parent")
 
-    # Add constraint to ensure unique path
+    # Table-level constraints
     __table_args__ = (
-        Index('idx_category_path', 'full_path'),
+        UniqueConstraint('general', 'detail', name='uq_general_detail'),
     )
+
+    @property
+    def full_path(self) -> str:
+        """Get the full category path in General:Detail format"""
+        return f"{self.general}:{self.detail}"
 
 
 class BankAdapter(Base):

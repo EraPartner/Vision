@@ -194,27 +194,6 @@ def list_transactions_command(args):
                 if txn.memo and len(txn.memo) > 30
                 else (txn.memo or "")
             )
-            # Delete transactions command
-            delete_parser = subparsers.add_parser(
-                "delete-transactions", help="Delete transactions by recipient"
-            )
-            delete_parser.add_argument(
-                "--recipient-id",
-                type=int,
-                help="Recipient ID whose transactions to delete",
-            )
-            delete_parser.add_argument(
-                "--recipient-name", help="Recipient name whose transactions to delete"
-            )
-            delete_parser.add_argument(
-                "--force", action="store_true", help="Skip confirmation prompt"
-            )
-            delete_parser.add_argument(
-                "--delete-recipient",
-                action="store_true",
-                help="Also delete the recipient after deleting transactions",
-            )
-
             recipient_name = txn.recipient.name if txn.recipient else "N/A"
             recipient = (
                 (recipient_name[:27] + "...")
@@ -335,13 +314,15 @@ def create_category_command(args):
     """Handle create category command"""
     db = SessionLocal()
     try:
-        # Use CategoryService to support hierarchical paths like "General:Detailed"
         cat_service = CategoryService(db)
-        category = cat_service.get_or_create_category(
-            args.name, description=args.description, color=args.color
+        category = cat_service.create_flat(
+            name=args.name, description=args.description, color=args.color
         )
-        print(f"Created or found category '{category.full_path}' with ID {category.id}")
+        print(f"Created category '{category.name}' with ID {category.id}")
 
+    except ValueError as e:
+        print(f"Error: {e}")
+        db.rollback()
     except Exception as e:
         print(f"Error creating category: {e}")
         db.rollback()
@@ -354,65 +335,31 @@ def list_categories_command(args):
     db = SessionLocal()
     try:
         cat_service = CategoryService(db)
+        categories = cat_service.get_all_flat()
 
-        if args.hierarchical:
-            # Show hierarchical view
-            categories = cat_service.get_all_categories_hierarchical()
+        if not categories:
+            print("No categories found.")
+            return
 
-            if not categories:
-                print("No categories found.")
-                return
-
-            print("Categories (Hierarchical View):")
-            print("=" * 80)
-
-            for general in categories:
-                print(f"\n📁 {general['name']} (ID: {general['id']})")
-                print(f"   Path: {general['full_path']}")
-                print(f"   Transactions: {general['transaction_count']}")
-                if general["description"]:
-                    print(f"   Description: {general['description']}")
-
-                if general["children"]:
-                    for detailed in general["children"]:
-                        print(f"   └─ {detailed['name']} (ID: {detailed['id']})")
-                        print(f"      Path: {detailed['full_path']}")
-                        print(f"      Transactions: {detailed['transaction_count']}")
-        else:
-            # Show flat view
-            from database.models import Category
-
-            categories = (
-                db.query(Category)
-                .filter(Category.is_active == True)
-                .order_by(Category.full_path)
-                .all()
+        print(
+            f"{'ID':<5} {'Name':<30} {'Txns':<8} {'Description':<30}"
+        )
+        print("-" * 75)
+        for category in categories:
+            txn_count = len(category.transactions)
+            description = (
+                (category.description[:27] + "...")
+                if category.description and len(category.description) > 30
+                else (category.description or "")
             )
-
-            if not categories:
-                print("No categories found.")
-                return
-
+            name = (
+                (category.name[:27] + "...")
+                if category.name and len(category.name) > 30
+                else (category.name or "")
+            )
             print(
-                f"{'ID':<5} {'Full Path':<40} {'Type':<10} {'Txns':<8} {'Description':<30}"
+                f"{category.id:<5} {name:<30} {txn_count:<8} {description:<30}"
             )
-            print("-" * 95)
-            for category in categories:
-                txn_count = len(category.transactions)
-                description = (
-                    (category.description[:27] + "...")
-                    if category.description and len(category.description) > 30
-                    else (category.description or "")
-                )
-                path = (
-                    (category.full_path[:37] + "...")
-                    if category.full_path and len(category.full_path) > 40
-                    else (category.full_path or "")
-                )
-                cat_type = category.category_type or "N/A"
-                print(
-                    f"{category.id:<5} {path:<40} {cat_type:<10} {txn_count:<8} {description:<30}"
-                )
 
     except Exception as e:
         print(f"Error listing categories: {e}")
@@ -429,8 +376,8 @@ def assign_category_command(args):
     try:
         cat_service = CategoryService(db)
 
-        # Create or get the category
-        category = cat_service.get_or_create_category(args.category_path)
+        # Get or create the category
+        category = cat_service.get_or_create_category(args.category_name)
 
         if args.recipient_id:
             # Single recipient
@@ -447,14 +394,14 @@ def assign_category_command(args):
             db.commit()
 
             print(
-                f"✓ Assigned category '{category.full_path}' to recipient '{recipient.name}'"
+                f"✓ Assigned category '{category.name}' to recipient '{recipient.name}'"
             )
         elif args.recipient_ids:
             # Multiple recipients
             recipient_ids = [int(id.strip()) for id in args.recipient_ids.split(",")]
-            result = cat_service.bulk_assign_category(recipient_ids, args.category_path)
+            result = cat_service.bulk_assign_category(recipient_ids, args.category_name)
             print(
-                f"✓ Assigned category '{category.full_path}' to {result['updated']} recipients"
+                f"✓ Assigned category '{category.name}' to {result['updated']} recipients"
             )
         else:
             print("Error: You must specify either --recipient-id or --recipient-ids")
@@ -803,8 +750,6 @@ def category_stats_command(args):
         print("=" * 60)
         print(f"\nCategories:")
         print(f"  Total: {stats['total_categories']}")
-        print(f"  General (parent): {stats['general_categories']}")
-        print(f"  Detailed (child): {stats['detailed_categories']}")
 
         print(f"\nTransactions:")
         print(f"  Categorized: {stats['categorized_transactions']}")
@@ -908,7 +853,7 @@ def view_transactions_command(args):
             # Use transaction's category if set, otherwise fall back to recipient's default category
             effective_category = txn_category if txn_category else recip_category
             category_name = (
-                effective_category.full_path if effective_category else "Uncategorized"
+                effective_category.name if effective_category else "Uncategorized"
             )
             category_display = (
                 (category_name[:27] + "...")
@@ -1070,16 +1015,13 @@ def main():
         "create-category", help="Create a new category"
     )
     create_cat_parser.add_argument(
-        "name", help='Category name or path (e.g., "Food:Groceries")'
+        "name", help='Category name (e.g., "Groceries")'
     )
     create_cat_parser.add_argument("--description", help="Category description")
     create_cat_parser.add_argument("--color", help="Category color (hex code)")
 
     # List categories command
     categories_parser = subparsers.add_parser("categories", help="List categories")
-    categories_parser.add_argument(
-        "--hierarchical", action="store_true", help="Show hierarchical view"
-    )
 
     # Initialize database command
     subparsers.add_parser("init-db", help="Initialize database tables")
@@ -1188,7 +1130,7 @@ def main():
         "assign-category", help="Assign category to recipient(s)"
     )
     assign_cat_parser.add_argument(
-        "category_path", help='Category path (e.g., "Food:Groceries")'
+        "category_name", help='Category name (e.g., "Groceries")'
     )
     assign_cat_parser.add_argument(
         "--recipient-id", type=int, help="Recipient ID to assign category"
