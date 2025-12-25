@@ -1,5 +1,16 @@
+"""Database connection and session management module.
+
+This module handles:
+- Database engine creation with support for SQLite and PostgreSQL
+- Session factory configuration
+- Dependency injection for database sessions in FastAPI
+- Database initialization
+
+The module automatically configures the database connection based on the
+DATABASE_URL setting and handles environment-specific configurations
+(SQLite for development, PostgreSQL for production).
+"""
 import os
-# Import config
 import sys
 
 from dotenv import load_dotenv
@@ -17,7 +28,7 @@ load_dotenv()
 
 logger = setup_logging(__name__)
 
-# Get settings
+# Get configuration
 settings = get_settings()
 database_config = settings.database
 
@@ -25,17 +36,18 @@ database_config = settings.database
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.dirname(BASE_DIR)
 
-# Use configured database URL
+# Configure database URL with proper path handling for SQLite
 DATABASE_URL = database_config.url
 if DATABASE_URL.startswith("sqlite") and not DATABASE_URL.startswith("sqlite:///"):
-    # Ensure proper sqlite path
+    # Ensure proper SQLite absolute path
     DEFAULT_DB_PATH = os.path.join(BACKEND_DIR, "financial_transactions.db")
     DATABASE_URL = f"sqlite:///{DEFAULT_DB_PATH}"
 
 logger.info(f"Database location: {DATABASE_URL[:50]}...")
 
-# Create engine with appropriate settings
+# Create SQLAlchemy engine with environment-specific configuration
 if DATABASE_URL.startswith("sqlite"):
+    # SQLite configuration (development/testing)
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
@@ -43,7 +55,7 @@ if DATABASE_URL.startswith("sqlite"):
         echo=database_config.echo,
     )
 else:
-    # PostgreSQL or other production databases
+    # PostgreSQL or other production database configuration
     engine = create_engine(
         DATABASE_URL,
         pool_size=database_config.pool_size,
@@ -52,13 +64,33 @@ else:
         echo=database_config.echo,
     )
 
+# Session factory configuration
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Declarative base for all ORM models
 Base = declarative_base()
 
 
 def get_db():
-    """Dependency to get database session"""
+    """Get a database session for dependency injection.
+
+    This is a FastAPI dependency that provides a database session to routes.
+    The session is automatically closed after use to ensure proper resource cleanup.
+
+    Yields:
+        Session: SQLAlchemy database session.
+
+    Example:
+        @router.get("/users")
+        async def get_all_users(db = Depends(get_db)):
+            # db is automatically provided by FastAPI dependency injection
+            result = db.query(User).all()
+            return result
+
+    Note:
+        Always use this as a dependency in FastAPI routes to ensure proper
+        session management. Do not create sessions manually.
+    """
     db = SessionLocal()
     try:
         yield db
@@ -67,7 +99,31 @@ def get_db():
 
 
 def init_db():
-    """Initialize database tables"""
+    """Initialize database tables based on SQLAlchemy models.
+
+    Creates all tables defined in the models using the declarative base metadata.
+    This operation is idempotent - tables that already exist are not recreated.
+
+    The function:
+    - Creates all tables from registered models
+    - Logs successful initialization
+    - Handles SQLite and PostgreSQL databases
+
+    Example:
+        # Call during application startup
+        if __name__ == "__main__":
+            init_db()
+            # All tables are now created
+
+    Note:
+        - Safe to call multiple times
+        - Does not drop existing tables
+        - Should be called once on application startup
+        - Use database migrations (Alembic) for schema changes in production
+
+    Raises:
+        SQLAlchemy exceptions if table creation fails (e.g., permission issues).
+    """
     from database.models import Base
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized")

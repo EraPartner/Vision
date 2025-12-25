@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from api.api_schemas import (
-    TransactionFrontend, ExportCSVRequest, ExportCSVResponse
+    TransactionFrontend, ExportCSVRequest, ExportCSVResponse, UncategorizedResponse
 )
 from config.logging_config import setup_logging
 from database.connection import get_db
@@ -186,3 +186,23 @@ async def delete_transactions_by_recipient(
     except Exception as e:
         logger.error(f"Error deleting transactions: {str(e)}")
         raise HTTPException(status_code=500, detail="Error deleting transactions")
+
+
+@router.get("/transactions/uncategorized", response_model=UncategorizedResponse)
+async def get_uncategorized_transactions(
+        limit: int = Query(50, ge=1, le=1000),
+        db: Session = Depends(get_db)
+):
+    """Show uncategorized transactions"""
+    try:
+        from repositories.transaction_repository import TransactionRepository
+        transaction_service = TransactionRepository(db)
+        txns = transaction_service.get_uncategorized(limit=limit)
+        return [{
+            "date": t.date.isoformat(),
+            "amount": float(t.amount),
+            "recipient": t.recipient.name if t.recipient else None
+        } for t in txns]
+    except Exception as e:
+        logger.error(f"Error retrieving uncategorized transactions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving uncategorized transactions")
