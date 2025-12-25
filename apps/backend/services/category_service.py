@@ -1,85 +1,152 @@
-"""
-Category Management Service
+"""Category Management Service module.
 
-Handles hierarchical categories with General:Detail structure
-"""
-from typing import Dict, List, Optional, Tuple, Any
+This module provides high-level business logic for managing hierarchical categories
+with a General:Detail structure. It uses the repository pattern to abstract database
+operations and coordinates between multiple repositories to enforce business rules.
 
-from sqlalchemy import func
+The service layer is responsible for:
+- Category CRUD operations with validation
+- Hierarchical category management
+- Assigning categories to recipients and transactions
+- Category statistics and reporting
+- Bulk operations on categories
+
+Classes:
+    CategoryService: Main service class for category management.
+"""
+from typing import Dict, List, Optional
+
 from sqlalchemy.orm import Session
 
-from database.models import Category, Recipient, Transaction
+from database.models import Category
 from repositories.category_repository import CategoryRepository
 from repositories.recipient_repository import RecipientRepository
 
 
 class CategoryService:
-    """Service for managing hierarchical categories"""
+    """Service for managing hierarchical categories.
+
+    Provides high-level business logic for category operations, coordinating
+    between repositories and enforcing business rules. This service layer separates
+    business logic from data access, making the code more testable and maintainable.
+
+    The service handles:
+    - Getting, creating, updating, and deleting categories
+    - Hierarchical General:Detail category structure
+    - Assigning categories to recipients and transactions
+    - Category statistics and reporting
+    - Bulk operations
+
+    Attributes:
+        category_repo (CategoryRepository): Repository for category data access.
+        recipient_repo (RecipientRepository): Repository for recipient data access.
+
+    Example:
+        service = CategoryService(db_session)
+        category = service.get_or_create_category("Groceries", "Food")
+        updated = service.update(category.id, color="#FF5733")
+    """
 
     def __init__(self, db_session: Session):
-        self.db = db_session
+        """Initialize the category service with repositories.
+        """
         self.category_repo = CategoryRepository(db_session)
         self.recipient_repo = RecipientRepository(db_session)
 
-    # ==================== Parsing and Validation ====================
-
-    def parse_category_path(self, category_path: str) -> Tuple[str, str]:
-        """
-        Parse category path in format "General:Detail"
-
-        Args:
-            category_path: Path in "General:Detail" format
-
-        Returns:
-            Tuple of (general, detail)
-
-        Raises:
-            ValueError: If format is invalid
-        """
-        if ':' not in category_path:
-            raise ValueError(f"Category must be in 'General:Detail' format. Got: '{category_path}'")
-
-        parts = category_path.split(':', 1)
-        general = parts[0].strip()
-        detail = parts[1].strip()
-
-        if not general or not detail:
-            raise ValueError(f"Category must have non-empty general and detail parts. Got: '{category_path}'")
-
-        return general, detail
-
     # ==================== Category CRUD Methods ====================
 
-    def get_all_flat(self) -> List[Category]:
-        """Get all active categories in flat list"""
-        return self.category_repo.get_all_active()
+    def get_all_flat(self, limit: int | None = None, offset: int | None = None) -> List[Category]:
+        """Get all active categories in a flat list.
+
+        Retrieves all active categories in a single flat list, sorted by
+        general and detail names. This is useful for UI displays and exports.
+
+        Args:
+            limit: Max rows to return (None for all).
+            offset: Rows to skip before returning results.
+
+        Returns:
+            List[Category]: List of all active categories sorted by general and detail.
+
+        Example:
+            service = CategoryService(db)
+            all_categories = service.get_all_flat()
+            for cat in all_categories:
+                print(f"{cat.general}: {cat.detail}")
+
+        Note:
+            - Only includes active categories (is_active=True)
+            - Returns empty list if no categories exist
+            - Results are always sorted for consistent ordering
+        """
+        return self.category_repo.get_all_active(limit=limit, offset=offset)
 
     def get_by_id(self, category_id: int) -> Optional[Category]:
-        """Get a category by ID"""
+        """Get a category by its ID.
+
+        Retrieves a single category identified by its unique ID, regardless of
+        whether it's active or inactive.
+
+        Args:
+            category_id (int): The unique identifier of the category to retrieve.
+
+        Returns:
+            Optional[Category]: The Category object if found, None otherwise.
+
+        Example:
+            service = CategoryService(db)
+            category = service.get_by_id(5)
+            if category:
+                print(f"{category.general}: {category.detail}")
+
+        Note:
+            - Returns both active and inactive categories
+            - Returns None if category doesn't exist
+            - Does not raise exceptions on missing categories
+        """
         return self.category_repo.get_by_id(category_id)
 
     def get_or_create_category(
             self,
-            category_path: str,
+            general: str,
+            detail: str,
             description: Optional[str] = None,
             color: Optional[str] = None
     ) -> Category:
-        """
-        Get or create a category from path like "Food:Groceries"
+        """Get an existing category or create a new one.
+
+        Looks up a category by its general and detail names. If it doesn't exist,
+        creates a new category with the provided details and returns it.
+
+        This is an idempotent operation - calling it multiple times with the same
+        general and detail names will return the same category object without
+        creating duplicates.
 
         Args:
-            category_path: Path in "General:Detail" format
-            description: Optional description
-            color: Optional hex color code
+            general (str): General (parent) category name (e.g., "Groceries").
+            detail (str): Detail (child) category name (e.g., "Food").
+            description (str, optional): Optional category description.
+            color (str, optional): Optional hex color code (e.g., "#FF5733").
 
         Returns:
-            The Category object (existing or newly created)
+            Category: The found or newly created Category object.
 
-        Raises:
-            ValueError: If path format is invalid
+        Example:
+            service = CategoryService(db)
+
+            # Create new category
+            cat = service.get_or_create_category("Groceries", "Food", color="#FF5733")
+
+            # Get same category again (doesn't create duplicate)
+            cat2 = service.get_or_create_category("Groceries", "Food")
+            assert cat.id == cat2.id
+
+        Note:
+            - Idempotent operation - safe to call multiple times
+            - Case-sensitive category matching
+            - New categories are created as active (is_active=True)
+            - Useful for transaction imports and batch operations
         """
-        general, detail = self.parse_category_path(category_path)
-
         category = self.category_repo.get_by_general_detail(general, detail)
 
         if not category:
@@ -102,18 +169,46 @@ class CategoryService:
             description: Optional[str] = None,
             color: Optional[str] = None
     ) -> Optional[Category]:
-        """
-        Update a category.
+        """Update a category with validation.
+
+        Updates one or more properties of an existing category. Only provided
+        parameters are updated; omitted parameters leave existing values unchanged.
+        Validates that general and detail names are not empty.
 
         Args:
-            category_id: The ID of the category to update
-            general: New general name (if provided)
-            detail: New detail name (if provided)
-            description: New description (if provided)
-            color: New color (if provided)
+            category_id (int): The ID of the category to update.
+            general (str, optional): New general category name. If provided,
+                must not be empty after stripping whitespace.
+            detail (str, optional): New detail category name. If provided,
+                must not be empty after stripping whitespace.
+            description (str, optional): New category description.
+            color (str, optional): New hex color code.
 
         Returns:
-            The updated Category object if found, None otherwise
+            Optional[Category]: The updated Category object if found and modified,
+                None if category not found.
+
+        Raises:
+            ValueError: If general or detail name is provided but empty after stripping.
+
+        Example:
+            service = CategoryService(db)
+
+            # Update just the color
+            updated = service.update(5, color="#FF5733")
+
+            # Update multiple fields
+            updated = service.update(5, general="New General", color="#00FF00")
+
+            # Returns None if category doesn't exist
+            updated = service.update(999)
+
+        Note:
+            - Partial updates are allowed (provide only fields to change)
+            - Both general and detail are validated for non-empty values
+            - Strings are stripped of leading/trailing whitespace
+            - Transaction is committed if any fields are updated
+            - Returns None without raising exception if category not found
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
@@ -149,14 +244,33 @@ class CategoryService:
         return category
 
     def delete(self, category_id: int) -> bool:
-        """
-        Delete a category (soft delete - mark as inactive).
+        """Delete a category (soft delete - mark as inactive).
+
+        Performs a soft delete by marking the category as inactive. The category
+        record remains in the database for historical reference and won't appear
+        in active category queries.
 
         Args:
-            category_id: The ID of the category to delete
+            category_id (int): The ID of the category to delete.
 
         Returns:
-            True if category was deleted, False if not found
+            bool: True if category was found and deleted, False if not found.
+
+        Example:
+            service = CategoryService(db)
+
+            # Delete a category
+            success = service.delete(5)
+            if success:
+                print("Category deleted")
+            else:
+                print("Category not found")
+
+        Note:
+            - This is a soft delete - data is preserved in the database
+            - Deleted categories don't appear in get_all_flat() results
+            - Historical transactions linked to deleted categories are preserved
+            - To restore a deleted category, update is_active=True manually
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
@@ -165,92 +279,70 @@ class CategoryService:
         self.category_repo.soft_delete(category)
         return True
 
-    def apply_recipient_categories_to_transactions(
-            self,
-            recipient_id: Optional[int] = None,
-            overwrite_existing: bool = False
-    ) -> Dict[str, int]:
-        """
-        Apply default recipient categories to transactions
-
-        Args:
-            recipient_id: If specified, only update transactions for this recipient
-            overwrite_existing: If True, overwrite transactions that already have categories
-
-        Returns:
-            Dictionary with update statistics
-        """
-        query = self.db.query(Transaction).join(Recipient)
-
-        if recipient_id:
-            query = query.filter(Recipient.id == recipient_id)
-
-        if not overwrite_existing:
-            query = query.filter(Transaction.category_id.is_(None))
-
-        # Only update where recipient has a default category
-        query = query.filter(Recipient.default_category_id.isnot(None))
-
-        transactions = query.all()
-
-        updated = 0
-        for transaction in transactions:
-            transaction.category_id = transaction.recipient.default_category_id
-            updated += 1
-
-        self.db.commit()
-
-        return {
-            'updated': updated,
-            'total_checked': len(transactions)
-        }
-
-    def get_uncategorized_recipients(self) -> List[Recipient]:
-        """Get all recipients without a default category"""
-        return self.recipient_repo.get_uncategorized()
-
-    def get_category_statistics(self) -> Dict[str, Any]:
-        """Get statistics about categories"""
-        total_categories = self.db.query(func.count(Category.id)).filter(
-            Category.is_active == True
-        ).scalar() or 0
-
-        from repositories.transaction_repository import TransactionRepository
-        counts = TransactionRepository(self.db).count_categorized_vs_uncategorized()
-        categorized_transactions = counts['categorized']
-        uncategorized_transactions = counts['uncategorized']
-
-        categorized_recipients = self.db.query(func.count(Recipient.id)).filter(
-            Recipient.default_category_id.isnot(None)
-        ).scalar() or 0
-        uncategorized_recipients = self.db.query(func.count(Recipient.id)).filter(
-            Recipient.default_category_id.is_(None)
-        ).scalar() or 0
-
-        return {
-            'total_categories': int(total_categories),
-            'categorized_transactions': int(categorized_transactions),
-            'uncategorized_transactions': int(uncategorized_transactions),
-            'categorized_recipients': int(categorized_recipients),
-            'uncategorized_recipients': int(uncategorized_recipients)
-        }
-
-    def bulk_assign_category(
+    def assign_category(
             self,
             recipient_ids: List[int],
-            category_path: str
+            category: Category
     ) -> Dict[str, int]:
-        """
-        Assign a category to multiple recipients at once
-        """
-        category = self.get_or_create_category(category_path)
+        """Assign a category to multiple recipients at once.
 
+        Performs a bulk operation to assign the same default category to multiple
+        recipients in a single operation. Creates the category if it doesn't exist.
+
+        This is useful for setting default categories for groups of recipients
+        that share the same transaction patterns.
+
+        Args:
+            recipient_ids (List[int]): List of recipient IDs to assign the category to.
+            category (Category): The Category object to assign.
+
+        Returns:
+            Dict[str, int]: Dictionary containing:
+                - 'updated' (int): Number of recipients successfully updated
+
+        Example:
+            service = CategoryService(db)
+
+            # Assign same category to multiple recipients
+            recipients = [1, 2, 3, 4, 5]
+            result = service.bulk_assign_category(recipients, "Utilities:Electric")
+            print(f"Updated {result['updated']} recipients")
+
+        Note:
+            - Non-existent recipients in the list are silently skipped
+            - Creates the category if it doesn't exist
+            - Overwrites existing default category assignments
+            - Transaction is committed after all updates
+            - Useful for batch operations after recipient imports
+        """
         updated = 0
         for recipient_id in recipient_ids:
             recipient = self.recipient_repo.get_by_id(recipient_id)
             if recipient:
                 recipient.default_category_id = category.id
                 updated += 1
+                self.recipient_repo.update(recipient)
 
-        self.db.commit()
         return {'updated': updated}
+
+    def get_by_general_detail(
+            self,
+            general: str,
+            detail: str
+    ) -> Optional[Category]:
+        """Get a category by its general and detail names.
+
+        Retrieves a single category identified by its general and detail names.
+
+        Args:
+            general (str): General (parent) category name.
+            detail (str): Detail (child) category name.
+        Returns:
+            Optional[Category]: The Category object if found, None otherwise.
+        Example:
+            service = CategoryService(db)
+            category = service.get_by_general_detail("Groceries", "Food")
+            if category:
+                print(f"Found category ID: {category.id}")
+        """
+        return self.category_repo.get_by_general_detail(general, detail)

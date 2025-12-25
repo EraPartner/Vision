@@ -88,7 +88,24 @@ async def update_recipient(
         recipient_update: RecipientUpdate,
         db: Session = Depends(get_db)
 ):
-    """Update a recipient (supports clearing fields and setting default category/notes)"""
+    """Update a recipient with support for clearing fields.
+
+    Updates the specified recipient with new values. Supports clearing fields by
+    setting them to null and updating default category and notes.
+
+    Args:
+        recipient_id (int): The ID of the recipient to update.
+        recipient_update (RecipientUpdate): Updated recipient data including name,
+            account_number, category_id, and notes.
+        db (Session): Database session dependency.
+
+    Returns:
+        RecipientResponse: The updated recipient.
+
+    Raises:
+        HTTPException: 404 error if recipient not found.
+        HTTPException: 500 error if update fails.
+    """
     try:
         service = RecipientService(db)
         recipient = service.update(
@@ -110,7 +127,22 @@ async def update_recipient(
 
 @router.delete("/recipients/{recipient_id}")
 async def delete_recipient(recipient_id: int, db: Session = Depends(get_db)):
-    """Delete a recipient (soft delete - mark as inactive)"""
+    """Delete a recipient (soft delete - mark as inactive).
+
+    Performs a soft delete by marking the recipient as inactive rather than removing
+    it from the database. This preserves historical transaction data integrity.
+
+    Args:
+        recipient_id (int): The ID of the recipient to delete.
+        db (Session): Database session dependency.
+
+    Returns:
+        dict: Success message confirming deletion.
+
+    Raises:
+        HTTPException: 404 error if recipient not found.
+        HTTPException: 500 error if deletion fails.
+    """
     try:
         service = RecipientService(db)
         if not service.delete(recipient_id):

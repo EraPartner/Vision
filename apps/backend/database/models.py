@@ -50,7 +50,6 @@ class Category(Base):
     detail = Column(String(100), nullable=False, index=True)  # e.g., "Groceries"
     description = Column(Text, nullable=True)
     color = Column(String(7), nullable=True)  # Hex color code for UI
-    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     is_active = Column(Boolean, default=True)
 
     # Timestamps
@@ -60,9 +59,6 @@ class Category(Base):
     # Relationships
     recipients = relationship("Recipient", back_populates="default_category")
     transactions = relationship("Transaction", back_populates="category")
-    # Self-referential for parent-child relationships
-    parent = relationship("Category", remote_side=[id], back_populates="children", foreign_keys=[parent_id])
-    children = relationship("Category", back_populates="parent")
 
     # Table-level constraints
     __table_args__ = (

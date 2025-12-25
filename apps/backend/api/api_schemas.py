@@ -92,14 +92,10 @@ class ExportCSVResponse(BaseModel):
 
 class CategoryBase(BaseModel):
     """Base category schema"""
-    name: str = Field(..., description="Category name")
+    general: str = Field(..., description="General name")
+    detail: str = Field(..., description="Detail name")
     description: Optional[str] = Field(None, description="Category description")
     color: Optional[str] = Field(None, description="Hex color code")
-
-
-class CategoryCreate(CategoryBase):
-    """Schema for creating a category"""
-    pass
 
 
 class CategoryResponse(BaseModel):
@@ -141,7 +137,7 @@ class RecipientResponse(BaseModel):
         from_attributes = True
 
 
-# ===== Additional Category/Recipient management for CLI parity =====
+# ===== Additional Category/Recipient management =====
 class RecipientUpdate(BaseModel):
     name: Optional[str] = Field(None, description="Recipient name")
     account_number: Optional[str] = Field(None, description="Account number (empty string to clear)")
@@ -150,9 +146,9 @@ class RecipientUpdate(BaseModel):
 
 
 class AssignCategoryRequest(BaseModel):
-    category_name: str = Field(..., description='Category name (e.g., "Groceries")')
-    recipient_id: Optional[int] = Field(None, description="Single recipient ID")
-    recipient_ids: Optional[List[int]] = Field(None, description="List of recipient IDs")
+    category_general: str = Field(..., description="Category general name")
+    category_detail: str = Field(..., description="Category detail name")
+    recipient_ids: List[int] = Field(None, description="List of recipient IDs")
 
 
 class ApplyCategoriesRequest(BaseModel):
