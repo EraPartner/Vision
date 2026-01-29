@@ -103,7 +103,7 @@ class TransactionExportService:
                             Category.id == transaction.category_id
                         ).first()
                         if category:
-                            category_name = category.name
+                            category_name = category.general + ':' + category.detail
 
                     # Get recipient info
                     recipient_name = transaction.recipient.name if transaction.recipient else ''
@@ -195,7 +195,7 @@ class TransactionExportService:
                     Category.id == transaction.category_id
                 ).first()
                 if category:
-                    category_name = category.name
+                    category_name = category.general + ':' + category.detail
 
             # Get recipient info
             recipient_name = transaction.recipient.name if transaction.recipient else None

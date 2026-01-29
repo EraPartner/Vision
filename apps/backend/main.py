@@ -21,7 +21,7 @@ from config.logging_config import setup_logging
 from database.connection import init_db
 
 # Setup logging
-logger = setup_logging(__name__)
+logger = setup_logging(__name__, use_json=True)
 
 # Get configuration
 settings = get_settings()

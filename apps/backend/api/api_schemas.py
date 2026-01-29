@@ -6,7 +6,7 @@ Organized by resource type for better maintainability.
 from datetime import datetime, date
 from typing import Optional, List, Dict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ==================== Transaction Schemas ====================
@@ -100,15 +100,32 @@ class CategoryBase(BaseModel):
 
 class CategoryResponse(BaseModel):
     """Schema for category responses"""
-    id: int
-    general: str
-    detail: str
-    description: Optional[str] = None
-    color: Optional[str] = None
-    created_at: datetime
+    id: int = Field(..., description="Category ID")
+    general: str = Field(..., description="General name")
+    detail: str = Field(..., description="Detail name")
+    description: Optional[str] = Field(None, description="Category description")
+    color: Optional[str] = Field(None, description="Hex color code")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
     class Config:
         from_attributes = True
+
+
+class CategoryUpdate(BaseModel):
+    """Schema for updating a category"""
+    general: Optional[str] = Field(None, description="General name")
+    detail: Optional[str] = Field(None, description="Detail name")
+    description: Optional[str] = Field(None, description="Category description")
+    color: Optional[str] = Field(None, description="Hex color code")
+
+
+# ==================== Admin Schemas ====================
+
+class AdminResponse(BaseModel):
+    """Standard response model for admin operations"""
+    message: str = Field(..., description="Response message")
+    details: Optional[dict[str, str]] = Field(None, description="Additional details")
 
 
 # ==================== Recipient Schemas ====================
@@ -148,7 +165,16 @@ class RecipientUpdate(BaseModel):
 class AssignCategoryRequest(BaseModel):
     category_general: str = Field(..., description="Category general name")
     category_detail: str = Field(..., description="Category detail name")
-    recipient_ids: List[int] = Field(None, description="List of recipient IDs")
+    recipient_ids: list[int] | int = Field(..., description="Recipient ID or list of recipient IDs")
+
+    @field_validator("recipient_ids")
+    @classmethod
+    def normalise_recipient_ids(cls, value: list[int] | int) -> list[int]:
+        if isinstance(value, int):
+            return [value]
+        if not value:
+            raise ValueError("recipient_ids must contain at least one ID")
+        return value
 
 
 class ApplyCategoriesRequest(BaseModel):

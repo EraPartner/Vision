@@ -10,6 +10,8 @@ from repositories.category_repository import CategoryRepository
 from repositories.import_batch_repository import ImportBatchRepository
 from repositories.transaction_repository import TransactionRepository
 from services.bank_adapters import BankAdapterFactory, TransactionData
+from services.deduplication_service import DeduplicationService
+from services.recipient_service import RecipientService
 
 
 def _create_transaction_hash(transaction_data: TransactionData) -> str:

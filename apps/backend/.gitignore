@@ -3,5 +3,5 @@
 .env.local
 # Common Python env files
 .env
-
+*/__pycache__/
 *.db
