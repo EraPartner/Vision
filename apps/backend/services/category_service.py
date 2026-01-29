@@ -14,7 +14,7 @@ The service layer is responsible for:
 Classes:
     CategoryService: Main service class for category management.
 """
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -48,8 +48,7 @@ class CategoryService:
     """
 
     def __init__(self, db_session: Session):
-        """Initialize the category service with repositories.
-        """
+        """Initialize the category service with repositories."""
         self.category_repo = CategoryRepository(db_session)
         self.recipient_repo = RecipientRepository(db_session)
 
@@ -243,7 +242,7 @@ class CategoryService:
 
         return category
 
-    def delete(self, category_id: int) -> bool:
+    def soft_delete(self, category_id: int) -> bool:
         """Delete a category (soft delete - mark as inactive).
 
         Performs a soft delete by marking the category as inactive. The category
@@ -279,42 +278,81 @@ class CategoryService:
         self.category_repo.soft_delete(category)
         return True
 
+    def hard_delete(self, category_id: int) -> bool:
+        """Permanently delete a category from the database.
+
+        This operation removes the category record entirely from the database.
+        Use with caution, as this action is irreversible and may affect data integrity
+        if other records reference this category.
+
+        Args:
+            category_id (int): The ID of the category to permanently delete.
+
+        Returns:
+            bool: True if category was found and deleted, False if not found.
+
+        Example:
+            service = CategoryService(db)
+
+            # Permanently delete a category
+            success = service.hard_delete(5)
+            if success:
+                print("Category permanently deleted")
+            else:
+                print("Category not found")
+
+        Note:
+            - This is a hard delete - data is permanently removed
+            - Use with caution to avoid breaking data integrity
+            - Consider soft deleting first to preserve historical data
+        """
+        category = self.category_repo.get_by_id(category_id)
+        if not category:
+            return False
+
+        self.category_repo.hard_delete(category)
+        return True
+
     def assign_category(
             self,
             recipient_ids: List[int],
             category: Category
-    ) -> Dict[str, int]:
+    ) -> int:
         """Assign a category to multiple recipients at once.
 
         Performs a bulk operation to assign the same default category to multiple
-        recipients in a single operation. Creates the category if it doesn't exist.
+        recipients in a single operation.
 
         This is useful for setting default categories for groups of recipients
         that share the same transaction patterns.
 
         Args:
-            recipient_ids (List[int]): List of recipient IDs to assign the category to.
+            recipient_ids (List[int] | None): List of recipient IDs to assign the category to.
             category (Category): The Category object to assign.
 
         Returns:
-            Dict[str, int]: Dictionary containing:
-                - 'updated' (int): Number of recipients successfully updated
+            int: Number of recipients successfully updated.
+
+        Raises:
+            ValueError: If recipient_ids is empty.
 
         Example:
             service = CategoryService(db)
 
             # Assign same category to multiple recipients
             recipients = [1, 2, 3, 4, 5]
-            result = service.bulk_assign_category(recipients, "Utilities:Electric")
-            print(f"Updated {result['updated']} recipients")
+            updated = service.assign_category(recipients, category)
+            print(f"Updated {updated} recipients")
 
         Note:
             - Non-existent recipients in the list are silently skipped
-            - Creates the category if it doesn't exist
             - Overwrites existing default category assignments
             - Transaction is committed after all updates
             - Useful for batch operations after recipient imports
         """
+        if not recipient_ids:
+            raise ValueError("recipient_ids must contain at least one ID")
+
         updated = 0
         for recipient_id in recipient_ids:
             recipient = self.recipient_repo.get_by_id(recipient_id)
@@ -323,7 +361,7 @@ class CategoryService:
                 updated += 1
                 self.recipient_repo.update(recipient)
 
-        return {'updated': updated}
+        return updated
 
     def get_by_general_detail(
             self,

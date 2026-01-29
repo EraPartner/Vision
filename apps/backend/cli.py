@@ -7,6 +7,8 @@ import argparse
 import os
 import sys
 
+from services.transaction_export_service import TransactionExportService
+
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -67,7 +69,7 @@ def export_csv_command(args):
     print(f"Starting export to {args.output}")
     db = SessionLocal()
     try:
-        service = TransactionImportService(db)
+        service = TransactionExportService(db)
 
         # Parse date filters if provided
         from_date = None
@@ -88,7 +90,7 @@ def export_csv_command(args):
                 return
 
         # Export transactions
-        result = service.export_transactions_to_csv(
+        result = service.export_to_csv(
             file_path=args.output,
             from_date=from_date,
             to_date=to_date,
@@ -853,7 +855,7 @@ def view_transactions_command(args):
             # Use transaction's category if set, otherwise fall back to recipient's default category
             effective_category = txn_category if txn_category else recip_category
             category_name = (
-                effective_category.name if effective_category else "Uncategorized"
+                effective_category.general + ":" + effective_category.detail if effective_category else "Uncategorized"
             )
             category_display = (
                 (category_name[:27] + "...")

@@ -28,6 +28,7 @@ class TextNormalizationService:
         "Virement: ",
         "Virement automatique: ",
         "Domiciliation: ",
+        "Creditrente ",
     ]
 
     @staticmethod
@@ -93,6 +94,7 @@ class TextNormalizationService:
             "SEPA",
             "EUROPESE",
             "INTERNATIONALE",
+            "CREDITRENTE",
         ]
 
         # Check if it starts with a known transaction type

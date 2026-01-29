@@ -68,8 +68,9 @@ class CategoryRepository:
             - Results are always sorted for consistent ordering
             - Empty list is returned if no active categories exist
         """
-        query = self.db.query(Category).filter(Category.is_active == True).order_by(
-            Category.general, Category.detail
+        query = self.db.query(Category).filter(Category.is_active).order_by(
+            Category.general,
+            Category.detail
         )
 
         if offset is not None:
@@ -133,60 +134,6 @@ class CategoryRepository:
             Category.general == general,
             Category.detail == detail
         ).first()
-
-    def get_by_general(self, general: str) -> List[Category]:
-        """Get all detail categories under a general category.
-
-        Retrieves all active categories that belong to the specified general category.
-        Results are sorted alphabetically by detail name.
-
-        Args:
-            general (str): The general (parent) category name to query.
-
-        Returns:
-            List[Category]: List of active Category objects matching the general name,
-                sorted by detail name. Empty list if no matches found.
-
-        Example:
-            groceries = repo.get_by_general("Groceries")
-            for item in groceries:
-                print(f"  - {item.detail}")  # Prints: Food, Household, etc.
-
-        Note:
-            - Only returns active categories
-            - Search is case-sensitive
-            - Results are automatically sorted by detail name
-            - Returns empty list if general category has no active sub-categories
-        """
-        return self.db.query(Category).filter(Category.general == general, Category.is_active == True).order_by(
-            Category.detail).all()
-
-    def get_general_categories(self) -> List[Category]:
-        """Get all general (parent) categories with no parent.
-
-        Retrieves all top-level (general) categories that don't have a parent category.
-        These are the root categories under which detail categories are organized.
-        Results are sorted alphabetically by general name.
-
-        Returns:
-            List[Category]: List of active general Category objects, sorted by name.
-                Empty list if no general categories exist.
-
-        Example:
-            general_cats = repo.get_general_categories()
-            for cat in general_cats:
-                print(f"- {cat.general}")  # Prints: Groceries, Utilities, etc.
-
-        Note:
-            - Only returns active categories
-            - Only includes categories where parent_id is None
-            - Results are automatically sorted by general name
-            - Useful for building category hierarchies in UI
-        """
-        return self.db.query(Category).filter(
-            Category.parent_id.is_(None),
-            Category.is_active == True
-        ).order_by(Category.general).all()
 
     def create(self, category: Category) -> Category:
         """Create a new category in the database.
@@ -290,4 +237,32 @@ class CategoryRepository:
             - To restore a deleted category, set is_active=True and call update()
         """
         category.is_active = False
+        self.db.commit()
+
+    def hard_delete(self, category: Category) -> None:
+        """Permanently delete a category from the database.
+
+        Removes a category record entirely from the database. This operation is
+        irreversible and should be used with caution, especially if there are
+        foreign key dependencies.
+
+        Args:
+            category (Category): An existing Category object (obtained from a query)
+                to delete permanently. Must have an id that exists in the database.
+        Returns:
+            None
+        Example:
+            category = repo.get_by_id(5)
+            repo.delete(category)
+            # Category is now permanently removed from the database
+        Raises:
+            SQLAlchemy exceptions: If the database operation fails, such as due to
+                foreign key constraints.
+        Note:
+            - This is a hard delete - data is permanently removed
+            - Use with caution if other records reference this category
+            - Transaction is automatically committed
+            - Prefer soft_delete() for most use cases to preserve data integrity
+        """
+        self.db.delete(category)
         self.db.commit()

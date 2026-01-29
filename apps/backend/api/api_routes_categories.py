@@ -1,14 +1,15 @@
 """
-API routes for category management
+API routes for category management.
 
 Handles all category-related endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.params import Path
 from sqlalchemy.orm import Session
 
 from api.api_schemas import (
-    CategoryResponse, AssignCategoryRequest, CategoryBase
+    CategoryResponse, AssignCategoryRequest, CategoryBase, CategoryUpdate
 )
 from config.logging_config import setup_logging
 from database.connection import get_db
@@ -18,29 +19,23 @@ router = APIRouter(prefix="/api", tags=["categories"])
 logger = setup_logging(__name__)
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=list[CategoryResponse], description="Retrieves all categories.")
 async def get_categories(
-        limit: int = Query(100, ge=1, le=5000, description="Maximum number of categories to return"),
+        limit: int = Query(50, ge=1, le=1000, description="Maximum number of categories to return"),
         offset: int = Query(0, ge=0, description="Number of categories to skip for pagination"),
         db: Session = Depends(get_db)
 ):
-    """Get all categories.
+    """Get categories with pagination.
 
-    Retrieves a list of active categories with pagination support.
+    Retrieves a list of categories with pagination support.
 
     Args:
-        limit (int): Maximum number of categories to return (1-5000). Defaults to 1000.
+        limit (int): Maximum number of categories to return (1-1000). Defaults to 50.
         offset (int): Number of categories to skip before returning results. Defaults to 0.
         db (Session): Database session dependency.
 
     Returns:
-        list[dict]: List of category dictionaries containing:
-            - id (int)
-            - general (str)
-            - detail (str)
-            - description (str)
-            - color (str)
-            - created_at (datetime)
+        list[CategoryResponse]: List of categories.
 
     Raises:
         HTTPException: 500 error if retrieval fails.
@@ -49,31 +44,24 @@ async def get_categories(
         service = CategoryService(db)
         categories = service.get_all_flat(limit=limit, offset=offset)
         logger.info(f"Retrieved {len(categories)} categories (offset={offset}, limit={limit})")
-        return [{
-            "id": c.id,
-            "general": c.general,
-            "detail": c.detail,
-            "description": c.description,
-            "color": c.color,
-            "created_at": c.created_at
-        } for c in categories]
+        return [CategoryResponse.model_validate(c) for c in categories]
     except Exception as e:
         logger.error(f"Error retrieving categories: {str(e)}")
         raise HTTPException(status_code=500, detail="Error retrieving categories")
 
 
-@router.post("/categories", response_model=CategoryResponse)
+@router.post("/categories", response_model=CategoryResponse, description="Creates a new category.")
 async def get_or_create_category(
         category: CategoryBase,
         db: Session = Depends(get_db)
 ):
-    """Create a new category or return existing one in General:Detail format.
+    """Create a new category or return an existing one.
 
     Creates a new category with the specified general and detail names. If a category
     with the same general:detail combination already exists, returns the existing category.
 
     Args:
-        category (CategoryCreate): Category creation data including general, detail,
+        category (CategoryBase): Category creation data including general, detail,
             description, and color.
         db (Session): Database session dependency.
 
@@ -87,7 +75,7 @@ async def get_or_create_category(
     try:
         service = CategoryService(db)
         new_category = service.get_or_create_category(
-            general=category.genera,
+            general=category.general,
             detail=category.detail,
             description=category.description,
             color=category.color
@@ -100,9 +88,10 @@ async def get_or_create_category(
         raise HTTPException(status_code=500, detail="Error creating category")
 
 
-@router.get("/categories/{category_id}", response_model=CategoryResponse)
+@router.get("/categories/{category_id}", response_model=CategoryResponse,
+            description="Retrieves a specific category by ID.")
 async def get_category(
-        category_id: int,
+        category_id: int = Path(..., ge=1, description="The ID of the category to retrieve"),
         db: Session = Depends(get_db)
 ):
     """Get a specific category by ID.
@@ -133,19 +122,20 @@ async def get_category(
         raise HTTPException(status_code=500, detail="Error retrieving category")
 
 
-@router.put("/categories/{category_id}", response_model=CategoryResponse)
+@router.patch("/categories/{category_id}", response_model=CategoryResponse, description="Updates a category.")
 async def update_category(
-        category_id: int,
-        category_update: CategoryBase,
+        category_update: CategoryUpdate,
+        category_id: int = Path(..., ge=1, description="The ID of the category to update"),
         db: Session = Depends(get_db)
 ):
-    """Update an existing category.
+    """Partially update an existing category.
 
-    Updates the specified category with new values for name, description, and/or color.
+    Updates the specified category with any provided values for general, detail,
+    description, and/or color.
 
     Args:
         category_id (int): The ID of the category to update.
-        category_update (CategoryCreate): Updated category data.
+        category_update (CategoryUpdate): Updated category data.
         db (Session): Database session dependency.
 
     Returns:
@@ -174,15 +164,20 @@ async def update_category(
         raise HTTPException(status_code=500, detail="Error updating category")
 
 
-@router.delete("/categories/{category_id}")
-async def delete_category(category_id: int, db: Session = Depends(get_db)):
-    """Delete a category (soft delete - mark as inactive).
+@router.delete("/categories/{category_id}", description="Deletes a category.")
+async def delete_category(
+        category_id: int = Path(..., ge=1, description="The ID of the category to delete"),
+        soft: bool = Query(True, description="Perform a soft delete or not"),
+        db: Session = Depends(get_db)
+):
+    """Delete a category (soft delete).
 
     Performs a soft delete by marking the category as inactive rather than removing
-    it from the database. This preserves historical data integrity.
+    it from the database.
 
     Args:
         category_id (int): The ID of the category to delete.
+        soft (bool): Whether to perform a soft delete (True) or hard delete (False).
         db (Session): Database session dependency.
 
     Returns:
@@ -194,8 +189,12 @@ async def delete_category(category_id: int, db: Session = Depends(get_db)):
     """
     try:
         service = CategoryService(db)
-        if not service.delete(category_id):
-            raise HTTPException(status_code=404, detail="Category not found")
+        if soft:
+            if not service.soft_delete(category_id):
+                raise HTTPException(status_code=404, detail="Category not found")
+        else:
+            if not service.hard_delete(category_id):
+                raise HTTPException(status_code=404, detail="Category not found")
         return {"message": "Category deleted successfully"}
     except HTTPException:
         raise
@@ -204,26 +203,26 @@ async def delete_category(category_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Error deleting category")
 
 
-@router.post("/categories/assign")
+@router.post("/categories/assign", description="Assign category to one or many recipients.")
 async def assign_category(request: AssignCategoryRequest, db: Session = Depends(get_db)):
-    """Assign category to one or many recipients.
+    """Assign a category to one or many recipients.
 
-    Assigns a default category to either a single recipient (using recipient_id) or
-    multiple recipients (using recipient_ids). The category is created if it doesn't exist.
+    Assigns a default category to multiple recipients. The category is created if it
+    doesn't exist.
 
     Args:
         request (AssignCategoryRequest): Assignment request containing:
-            - category_name (str): Name of the category to assign
-            - recipient_id (int, optional): Single recipient ID
-            - recipient_ids (list[int], optional): Multiple recipient IDs
+            - category_general (str): Category general name
+            - category_detail (str): Category detail name
+            - recipient_ids (int | list[int]): Recipient ID or list of recipient IDs
         db (Session): Database session dependency.
 
     Returns:
         dict: Number of recipients updated.
 
     Raises:
-        HTTPException: 400 error if neither recipient_id nor recipient_ids provided.
-        HTTPException: 404 error if recipient not found.
+        HTTPException: 400 error for invalid request data.
+        HTTPException: 404 error if a recipient is not found.
         HTTPException: 500 error if assignment fails.
     """
     try:
@@ -234,6 +233,8 @@ async def assign_category(request: AssignCategoryRequest, db: Session = Depends(
             category=category,
         )
         return {"updated_recipients": updated_count}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -241,17 +242,20 @@ async def assign_category(request: AssignCategoryRequest, db: Session = Depends(
         raise HTTPException(status_code=500, detail="Error assigning category")
 
 
-@router.get("/categories/path")
+@router.get("/categories/path/{general}/{detail}", response_model=CategoryResponse,
+            description="Retrieves a specific category by General:Detail path.")
 async def get_category_by_path(
-        category: CategoryBase,
+        general: str = Path(..., description="General name"),
+        detail: str = Path(..., description="Detail name"),
         db: Session = Depends(get_db)
 ):
-    """Get category by General:Detail path.
+    """Get a category by General:Detail path.
 
     Retrieves a category based on its general and detail names.
 
     Args:
-        category (CategoryBase): Category path data including general and detail names.
+        general (str): General name of the category.
+        detail (str): Detail name of the category.
         db (Session): Database session dependency.
 
     Returns:
@@ -263,12 +267,12 @@ async def get_category_by_path(
     """
     try:
         service = CategoryService(db)
-        category = service.get_by_general_detail(category.general, category.detail)
+        category = service.get_by_general_detail(general, detail)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
         return CategoryResponse.model_validate(category)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving category {category.general}:{category.detail}: {str(e)}")
+        logger.error(f"Error retrieving category {general}:{detail}: {str(e)}")
         raise HTTPException(status_code=500, detail="Error retrieving category")

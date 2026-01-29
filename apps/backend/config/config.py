@@ -20,7 +20,7 @@ if os.path.exists(ENV_LOCAL_PATH):
 @dataclass
 class ServerConfig:
     """Server configuration (sensitive values loaded from .env.local)"""
-    host: str = os.getenv("HOSTNAME", "127.0.0.1")
+    host: str = os.getenv("HOSTNAME", "localhost")
     port: int = int(os.getenv("PORT", "8000"))
     environment: str = os.getenv("ENVIRONMENT", "development")
 
@@ -49,15 +49,18 @@ class APIConfig:
 
     def __post_init__(self):
         if self.cors_origins is None:
-            self.cors_origins = [
-                "http://localhost:8080",
-                "http://localhost:5173",
-                "http://localhost:3000"
-            ]
+            cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5174")
+            self.cors_origins = cors_env.split(",")
         if self.cors_methods is None:
             self.cors_methods = ["*"]
         if self.cors_headers is None:
             self.cors_headers = ["*"]
+
+
+@dataclass
+class AdminConfig:
+    """Admin API configuration"""
+    enable_reset_db: bool = os.getenv("ENABLE_RESET_DB", "False").lower() == "true"
 
 
 @dataclass
@@ -68,6 +71,7 @@ class Settings:
     server: ServerConfig = None
     database: DatabaseConfig = None
     api: APIConfig = None
+    admin: AdminConfig = None
 
     def __post_init__(self):
         if self.server is None:
@@ -76,6 +80,8 @@ class Settings:
             self.database = DatabaseConfig()
         if self.api is None:
             self.api = APIConfig()
+        if self.admin is None:
+            self.admin = AdminConfig()
 
     def is_production(self) -> bool:
         """Check if running in production environment"""

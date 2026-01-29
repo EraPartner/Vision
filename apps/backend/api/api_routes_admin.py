@@ -6,8 +6,9 @@ including initialization and reset operations. These endpoints should be used wi
 caution, especially in production environments.
 """
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
 
+from api_schemas import AdminResponse
+from config.config import get_settings
 from config.logging_config import setup_logging
 from database.connection import init_db, engine
 from database.models import Base
@@ -16,13 +17,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = setup_logging(__name__)
 
 
-class AdminResponse(BaseModel):
-    """Standard response model for admin operations"""
-    message: str
-    details: dict | None = None
-
-
-@router.post("/init-db", response_model=AdminResponse)
+@router.post("/init-db", response_model=AdminResponse, description="Initialize the database.")
 async def init_db_endpoint():
     """Initialize database tables (idempotent operation).
 
@@ -65,7 +60,6 @@ async def init_db_endpoint():
         )
 
 
-@router.post("/reset-db", response_model=AdminResponse)
 async def reset_db_endpoint(
         force: bool = Query(
             False,
@@ -142,3 +136,9 @@ async def reset_db_endpoint(
             status_code=500,
             detail=f"Error resetting database: {str(e)}"
         )
+
+
+# Conditionally register reset_db endpoint based on config
+_settings = get_settings()
+if _settings.admin.enable_reset_db:
+    router.post("/reset-db", response_model=AdminResponse, description="Reset the Database")(reset_db_endpoint)
