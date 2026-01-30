@@ -5,7 +5,7 @@ Main application entry point. Combines routes and middleware configuration.
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
@@ -16,6 +16,8 @@ from api import (
     import_router,
     admin_router
 )
+from api.api_schemas import RootOptionsResponse, APIRootResponse, MethodInfo
+from api.hateoas_links import get_root_links
 from config.config import get_settings
 from config.logging_config import setup_logging
 from database.connection import init_db
@@ -67,15 +69,38 @@ app.include_router(import_router)
 app.include_router(admin_router)
 
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {
-        "message": "Financial Transaction Manager API",
-        "status": "running",
-        "version": settings.api.version,
-        "environment": settings.environment
-    }
+@app.options("/api/", response_model=RootOptionsResponse, tags=["Root"])
+async def root_options(request: Request):
+    """
+    OPTIONS method for API root endpoint discovery.
+
+    Allows clients to discover what HTTP methods are available on the API root endpoint
+    and view all available API resources.
+
+    Returns:
+        RootOptionsResponse: Available methods and all API resource links
+    """
+    return RootOptionsResponse(
+        methods=[
+            MethodInfo(
+                method="GET",
+                description="Retrieve API root with available resources"
+            )
+        ],
+        description="API root discovery endpoint for Level 3 REST API (HATEOAS)",
+        links=get_root_links(request)
+    )
+
+
+@app.get("/api/", response_model=APIRootResponse, status_code=200, tags=["Root"])
+async def root(request: Request):
+    """API root discovery endpoint with HATEOAS links"""
+    return APIRootResponse(
+        version=settings.api.version,
+        title=settings.api.title,
+        description=settings.api.description,
+        links=get_root_links(request),
+    )
 
 
 if __name__ == "__main__":

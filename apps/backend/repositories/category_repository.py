@@ -266,3 +266,22 @@ class CategoryRepository:
         """
         self.db.delete(category)
         self.db.commit()
+
+    def get_total_count(self) -> int:
+        """Get the total count of categories in the database.
+
+        Retrieves the total number of category records, including both active
+        and inactive categories.
+
+        Returns:
+            int: The total count of categories.
+
+        Example:
+            total = repo.get_total_count()
+            print(f"Total categories: {total}")
+
+        Note:
+            - Includes all categories regardless of is_active status
+            - Useful for pagination and reporting
+        """
+        return self.db.query(Category).count()

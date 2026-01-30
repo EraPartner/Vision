@@ -105,7 +105,7 @@ class CategoryService:
         """
         return self.category_repo.get_by_id(category_id)
 
-    def get_or_create_category(
+    def create_or_get_category(
             self,
             general: str,
             detail: str,
@@ -384,3 +384,16 @@ class CategoryService:
                 print(f"Found category ID: {category.id}")
         """
         return self.category_repo.get_by_general_detail(general, detail)
+
+    def get_total_count(self) -> int:
+        """Get the total count of categories in the database.
+
+        Returns:
+            int: Total number of categories.
+
+        Example:
+            service = CategoryService(db)
+            total = service.get_total_count()
+            print(f"Total categories: {total}")
+        """
+        return self.category_repo.get_total_count()
