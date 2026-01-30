@@ -379,7 +379,7 @@ def assign_category_command(args):
         cat_service = CategoryService(db)
 
         # Get or create the category
-        category = cat_service.get_or_create_category(args.category_name)
+        category = cat_service.create_or_get_category(args.category_name)
 
         if args.recipient_id:
             # Single recipient
