@@ -1,9 +1,9 @@
+import { useState } from "react";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
+import { toast } from "sonner";
 
-const recipients = [
+const initialRecipients = [
   { id: 1, name: "Whole Foods", transactionCount: 34, totalAmount: 2856.78, lastTransaction: "2026-02-07" },
   { id: 2, name: "Employer Inc.", transactionCount: 12, totalAmount: 50400.00, lastTransaction: "2026-02-06" },
   { id: 3, name: "City Power", transactionCount: 12, totalAmount: 1491.60, lastTransaction: "2026-02-05" },
@@ -16,53 +16,54 @@ const recipients = [
   { id: 10, name: "WaterCorp", transactionCount: 12, totalAmount: 462.00, lastTransaction: "2026-01-29" },
 ];
 
-const columns = [
-  {
-    key: "name",
-    header: "Recipient",
-    render: (row: (typeof recipients)[0]) => (
-      <span className="font-medium text-foreground">{row.name}</span>
-    ),
-  },
-  {
-    key: "transactionCount",
-    header: "Transactions",
-    render: (row: (typeof recipients)[0]) => (
-      <Badge variant="secondary" className="font-medium">
-        {row.transactionCount}
-      </Badge>
-    ),
-  },
-  {
-    key: "totalAmount",
-    header: "Total Amount",
-    className: "text-right",
-    render: (row: (typeof recipients)[0]) => (
-      <span className="font-semibold text-foreground">
-        €{row.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-      </span>
-    ),
-  },
-  {
-    key: "lastTransaction",
-    header: "Last Transaction",
-    render: (row: (typeof recipients)[0]) => (
-      <span className="text-muted-foreground">{row.lastTransaction}</span>
-    ),
-  },
-  {
-    key: "actions",
-    header: "",
-    className: "w-12",
-    render: () => (
-      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
-        <Pencil className="h-4 w-4" />
-      </Button>
-    ),
-  },
-];
+type Recipient = (typeof initialRecipients)[0];
 
 export default function RecipientsPage() {
+  const [recipients, setRecipients] = useState(initialRecipients);
+
+  const handleUpdate = (idx: number, updated: Recipient) => {
+    setRecipients((prev) => prev.map((r, i) => (i === idx ? updated : r)));
+    toast.success("Recipient updated");
+  };
+
+  const columns = [
+    {
+      key: "name",
+      header: "Recipient",
+      editable: true,
+      render: (row: Recipient, isEditing: boolean) =>
+        isEditing ? null : (
+          <span className="font-medium text-foreground">{row.name}</span>
+        ),
+    },
+    {
+      key: "transactionCount",
+      header: "Transactions",
+      render: (row: Recipient) => (
+        <Badge variant="secondary" className="font-medium">
+          {row.transactionCount}
+        </Badge>
+      ),
+    },
+    {
+      key: "totalAmount",
+      header: "Total Amount",
+      className: "text-right",
+      render: (row: Recipient) => (
+        <span className="font-semibold text-foreground">
+          €{row.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      key: "lastTransaction",
+      header: "Last Transaction",
+      render: (row: Recipient) => (
+        <span className="text-muted-foreground">{row.lastTransaction}</span>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-8 animate-in">
       <div>
@@ -75,6 +76,7 @@ export default function RecipientsPage() {
         subtitle={`${recipients.length} recipients`}
         columns={columns}
         data={recipients}
+        onRowUpdate={handleUpdate}
         emptyMessage="No recipients found."
       />
     </div>
