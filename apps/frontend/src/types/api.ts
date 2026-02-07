@@ -135,10 +135,8 @@ export interface TransactionUpdate {
 // ==================== Other Types ====================
 
 export interface CategoryStats {
-    category_general: string;
-    category_detail: string;
-    transaction_count: number;
-    total_amount: number;
+    name: string;
+    count: number;
 }
 
 export interface StatisticsResponse {

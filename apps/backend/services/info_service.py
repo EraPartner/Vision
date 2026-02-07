@@ -22,7 +22,7 @@ class InfoService:
 
     def __init__(self, db_session: Session):
         self.db = db_session
-        self.stats_repo = InfoRepository(db_session)
+        self.info_repo = InfoRepository(db_session)
 
     def get_statistics(self) -> Dict[str, Any]:
         """
@@ -31,9 +31,9 @@ class InfoService:
         Returns:
             Dictionary containing total transactions, total amount, and category breakdown
         """
-        total_transactions = self.stats_repo.get_transaction_count()
-        total_amount = self.stats_repo.get_total_amount()
-        categories = self.stats_repo.get_category_statistics()
+        total_transactions = self.info_repo.get_transaction_count()
+        total_amount = self.info_repo.get_total_amount()
+        categories = self.info_repo.get_category_statistics()
 
         logger.info(f"Retrieved statistics: {total_transactions} transactions, {len(categories)} categories")
 
@@ -50,9 +50,20 @@ class InfoService:
         Returns:
             List of unique bank account names
         """
-        banks = self.stats_repo.get_bank_accounts()
+        banks = self.info_repo.get_bank_accounts()
         logger.info(f"Retrieved {len(banks)} unique bank accounts")
         return banks
+
+    def get_transaction_count(self) -> int:
+        """
+        Get total count of transactions in the database.
+
+        Returns:
+            Total number of transactions
+        """
+        count = self.info_repo.get_transaction_count()
+        logger.info(f"Retrieved transaction count: {count}")
+        return count
 
     def get_import_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -156,4 +167,81 @@ class InfoService:
                     "total": float(stat[4] or 0)
                 } for stat in category_stats_query
             ]
+        }
+
+    def get_monthly_financial_summary(self) -> Dict[str, Any]:
+        """
+        Get financial summary for the past 6 months, broken down month by month.
+
+        Returns spending, income, net amount, and transaction count for each of the
+        last 6 calendar months, allowing for trend analysis.
+
+        Returns:
+            Dictionary with months array containing monthly breakdowns and overall summary
+        """
+        from calendar import monthrange
+
+        today = date.today()
+        months_data = []
+
+        # Calculate data for each of the last 6 months
+        for months_ago in range(5, -1, -1):  # 5, 4, 3, 2, 1, 0 (most recent last)
+            # Calculate the target month and year
+            target_month = today.month - months_ago
+            target_year = today.year
+
+            # Handle year rollover
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+
+            # Get the first and last day of the target month
+            first_day = date(target_year, target_month, 1)
+            last_day_num = monthrange(target_year, target_month)[1]
+            last_day = date(target_year, target_month, last_day_num)
+
+            # For the current month, use today as the end date
+            if target_year == today.year and target_month == today.month:
+                last_day = today
+
+            # Get financial data for this month
+            financial_data = self.info_repo.get_spending_and_income_by_date_range(
+                start_date=first_day,
+                end_date=last_day
+            )
+
+            months_data.append({
+                "month": target_month,
+                "year": target_year,
+                "period_start": first_day,
+                "period_end": last_day,
+                "total_spending": financial_data["total_spending"],
+                "total_income": financial_data["total_income"],
+                "net_amount": financial_data["net_amount"],
+                "transaction_count": financial_data["transaction_count"]
+            })
+
+        # Calculate overall totals
+        total_spending = sum(m["total_spending"] for m in months_data)
+        total_income = sum(m["total_income"] for m in months_data)
+        total_transactions = sum(m["transaction_count"] for m in months_data)
+
+        logger.info(
+            f"Retrieved 6-month financial summary: "
+            f"{len(months_data)} months, "
+            f"{total_transactions} total transactions, "
+            f"total spending: {total_spending:.2f}, "
+            f"total income: {total_income:.2f}"
+        )
+
+        return {
+            "months": months_data,
+            "summary": {
+                "total_spending": total_spending,
+                "total_income": total_income,
+                "net_amount": total_income + total_spending,
+                "transaction_count": total_transactions,
+                "period_start": months_data[0]["period_start"],
+                "period_end": months_data[-1]["period_end"]
+            }
         }

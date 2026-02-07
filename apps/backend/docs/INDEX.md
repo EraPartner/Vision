@@ -1,5 +1,10 @@
 # Documentation Index
 
+## API Endpoint Documentation
+
+- [Transaction Count Endpoint](./INFO_TRANSACTION_COUNT_ENDPOINT.md) - Documentation for `/api/info/transaction-count`
+  endpoint
+
 ## API Development Guidelines
 
 - [HTTP Parameter Usage Guidelines](./HTTP_PARAMETER_USAGE_GUIDELINES.md) - Comprehensive guide for query vs body

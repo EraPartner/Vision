@@ -226,3 +226,50 @@ class InfoRepository:
                 }
 
         return stats
+
+    def get_spending_and_income_by_date_range(
+            self,
+            start_date: date,
+            end_date: date
+    ) -> Dict[str, Any]:
+        """
+        Calculate total spending (negative amounts) and income (positive amounts) for a date range.
+
+        Args:
+            start_date: Start date (inclusive)
+            end_date: End date (inclusive)
+
+        Returns:
+            Dictionary with spending, income, net_amount, and transaction count
+        """
+        query = self.db.query(Transaction).filter(
+            Transaction.date >= start_date,
+            Transaction.date <= end_date
+        )
+
+        transactions = query.all()
+
+        if not transactions:
+            return {
+                "total_spending": 0.0,
+                "total_income": 0.0,
+                "net_amount": 0.0,
+                "transaction_count": 0
+            }
+
+        spending = 0.0
+        income = 0.0
+
+        for transaction in transactions:
+            amount = float(transaction.amount)
+            if amount < 0:
+                spending += amount
+            else:
+                income += amount
+
+        return {
+            "total_spending": spending,
+            "total_income": income,
+            "net_amount": income + spending,
+            "transaction_count": len(transactions)
+        }

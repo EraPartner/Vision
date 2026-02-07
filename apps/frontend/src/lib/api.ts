@@ -13,7 +13,7 @@ import type {
   TransactionUpdate,
 } from '@/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
 class ApiClient {
     async getTransactions(params?: {
@@ -176,6 +176,72 @@ class ApiClient {
         });
     }
 
+    // ==================== Info/Statistics Methods ====================
+
+    async getStatistics(): Promise<{
+        total_transactions: number;
+        total_amount: number;
+        categories: Array<{ name: string; count: number }>;
+    }> {
+        return this.request('/api/info');
+    }
+
+    async getBanks(): Promise<{ banks: string[] }> {
+        return this.request('/api/info/banks');
+    }
+
+    async getTransactionSummary(params?: {
+        bank_account?: string;
+        start_date?: string;
+        end_date?: string;
+    }): Promise<{
+        total_count: number;
+        total_amount: number;
+        average: number;
+        min: number | null;
+        max: number | null;
+    }> {
+        const queryParams = new URLSearchParams();
+
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    queryParams.append(key, String(value));
+                }
+            });
+        }
+
+        const query = queryParams.toString();
+        return this.request(`/api/info/transaction-summary${query ? `?${query}` : ''}`);
+    }
+
+    async getTransactionCount(): Promise<{ total_transactions: number }> {
+        return this.request('/api/info/transaction-count');
+    }
+
+    async getMonthlyFinancialSummary(): Promise<{
+        months: Array<{
+            month: number;
+            year: number;
+            period_start: string;
+            period_end: string;
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+        }>;
+        summary: {
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+            period_start: string;
+            period_end: string;
+        };
+    }> {
+        return this.request('/api/info/monthly-summary');
+    }
+
     // ==================== CSV Import ====================
 
     private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -184,17 +250,23 @@ class ApiClient {
             ...options.headers,
         };
 
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        const url = `${API_BASE_URL}${endpoint}`;
+        console.log(`API Request: ${options.method || 'GET'} ${url}`);
+
+        const response = await fetch(url, {
             ...options,
             headers,
         });
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
+            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
-        return response.json();
+        const data = await response.json();
+        console.log(`API Response: ${url}`, data);
+        return data;
     }
 }
 

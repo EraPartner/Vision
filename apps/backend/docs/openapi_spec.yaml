@@ -2646,6 +2646,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/info/transaction-count:
+    get:
+      tags: [ info ]
+      summary: Get total transaction count
+      description: |
+        Retrieves the total count of all transactions in the database.
+        
+        **Features:**
+        - Simple count of all transaction records
+        - Fast query optimised for performance
+        - Useful for dashboard statistics
+        - Real-time count without caching delays
+        
+        **Use Cases:**
+        - Dashboard metrics and KPIs
+        - System health monitoring
+        - Data volume tracking
+        - Import verification and validation
+        - Progress indicators for long-running operations
+        
+        **Performance:**
+        - Optimised database query using COUNT aggregate
+        - Sub-millisecond response time for typical datasets
+        - Scales efficiently with large transaction volumes
+      operationId: getTransactionCount
+      responses:
+        '200':
+          description: Transaction count retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionCountResponse'
+              example:
+                total_transactions: 1523
+        '500':
+          description: Error retrieving transaction count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error retrieving transaction count"
+                status_code: 500
+
   /api/info/transaction-summary:
     get:
       tags: [ info ]
@@ -3958,6 +4002,16 @@ components:
             List of unique bank account identifiers present in transactions.
             Used for filtering and reporting.
           example: [ "Chase Current Account", "Belfius Savings", "HSBC Premium" ]
+
+    TransactionCountResponse:
+      type: object
+      required: [ total_transactions ]
+      properties:
+        total_transactions:
+          type: integer
+          minimum: 0
+          description: Total number of transactions in the database
+          example: 1523
 
     BankListResponseWithLinks:
       type: object

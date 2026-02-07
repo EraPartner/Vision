@@ -5,3 +5,4 @@ TODO for Frontend
 - Add a way to track recurring transactions (subscriptions, bills etc)
 - Add a way to track planned expenses
 - Add a way to track (planned) income (repayments,...)
+- Add a export feature (export transactions as csv, json,...)
