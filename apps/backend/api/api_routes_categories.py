@@ -33,11 +33,19 @@ logger = setup_logging(__name__)
 
 @router.options("", response_model=OptionsResponse,
                 description="Discover available methods on categories collection endpoint")
-async def categories_collection_options(request: Request):
+async def categories_collection_options(
+        request: Request,
+        limit: int = Query(50, ge=1, le=1000, description="Maximum number of categories to return"),
+        offset: int = Query(0, ge=0, description="Number of categories to skip for pagination"),
+        general: Optional[str] = Query(None, description="Filter by partial general name match"),
+        detail: Optional[str] = Query(None, description="Filter by partial detail name match"),
+        active: bool = Query(True, description="Filter by active status")
+):
     """
     OPTIONS method for categories collection endpoint discovery.
 
     Allows clients to discover what HTTP methods are available on the categories collection endpoint.
+    Accepts same query parameters as GET endpoint to support CORS preflight requests with query strings.
 
     Returns:
         OptionsResponse: Available methods and HATEOAS links

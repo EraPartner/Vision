@@ -32,11 +32,20 @@ logger = setup_logging(__name__)
 
 @router.options("", response_model=OptionsResponse,
                 description="Discover available methods on recipients collection endpoint")
-async def recipients_collection_options(request: Request):
+async def recipients_collection_options(
+        request: Request,
+        limit: int = Query(50, ge=1, le=1000, description="Maximum number of recipients to return"),
+        offset: int = Query(0, ge=0, description="Number of recipients to skip for pagination"),
+        name: Optional[str] = Query(None, description="Filter by partial name match"),
+        account_number: Optional[str] = Query(None, description="Filter by partial account number match"),
+        default_category_id: Optional[int] = Query(None, description="Filter by default category ID"),
+        active: bool = Query(True, description="Filter by active status")
+):
     """
     OPTIONS method for recipients collection endpoint discovery.
 
     Allows clients to discover what HTTP methods are available on the recipients collection endpoint.
+    Accepts same query parameters as GET endpoint to support CORS preflight requests with query strings.
 
     Returns:
         OptionsResponse: Available methods and HATEOAS links
