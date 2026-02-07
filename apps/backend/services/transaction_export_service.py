@@ -6,7 +6,7 @@ Handles all export-related business logic and file operations.
 """
 import csv
 from datetime import date
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -143,76 +143,3 @@ class TransactionExportService:
                 'count': 0,
                 'file_path': None
             }
-
-    def export_to_dict(
-            self,
-            from_date: Optional[date] = None,
-            to_date: Optional[date] = None,
-            bank_account: Optional[str] = None,
-            category_id: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Export transactions as dictionaries (for API responses, JSON export, etc.).
-
-        Args:
-            from_date: Start date for transactions (optional)
-            to_date: End date for transactions (optional)
-            bank_account: Filter by specific bank account (optional)
-            category_id: Filter by category (optional)
-
-        Returns:
-            List of transaction dictionaries
-        """
-        # Default to_date to today if not provided
-        if to_date is None:
-            to_date = date.today()
-
-        # Build query
-        query = self.db.query(Transaction).join(Transaction.recipient)
-
-        # Apply filters
-        if from_date:
-            query = query.filter(Transaction.date >= from_date)
-
-        if to_date:
-            query = query.filter(Transaction.date <= to_date)
-
-        if bank_account:
-            query = query.filter(Transaction.bank_account == bank_account)
-
-        if category_id:
-            query = query.filter(Transaction.category_id == category_id)
-
-        # Order by date
-        transactions = query.order_by(Transaction.date.asc()).all()
-
-        result = []
-        for transaction in transactions:
-            # Get category name if available
-            category_name = None
-            if transaction.category_id:
-                category = self.db.query(Category).filter(
-                    Category.id == transaction.category_id
-                ).first()
-                if category:
-                    category_name = category.general + ':' + category.detail
-
-            # Get recipient info
-            recipient_name = transaction.recipient.name if transaction.recipient else None
-            recipient_account = transaction.recipient.account_number if transaction.recipient else None
-
-            result.append({
-                'id': transaction.id,
-                'date': transaction.date.isoformat(),
-                'bank_account': transaction.bank_account,
-                'recipient': recipient_name,
-                'recipient_account': recipient_account,
-                'memo': transaction.memo,
-                'amount': float(transaction.amount),
-                'currency': transaction.currency,
-                'balance': float(transaction.balance) if transaction.balance else None,
-                'category': category_name,
-                'comment': transaction.comment
-            })
-
-        return result

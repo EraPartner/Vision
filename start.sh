@@ -25,7 +25,7 @@ echo "Installing/updating dependencies..."
 ./venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 
 # Start the backend API server using venv's python directly
-echo "✓ Starting FastAPI server on http://localhost:8000"
+echo "✓ Starting FastAPI server on http://localhost:3002"
 ./venv/bin/python main.py > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 cd ../..
@@ -35,7 +35,7 @@ echo "Waiting for backend to be ready..."
 sleep 3
 
 # Check if backend is running
-if curl -s http://localhost:8000/ > /dev/null 2>&1; then
+if curl -s http://localhost:3002/ > /dev/null 2>&1; then
     echo "✓ Backend API is running"
 else
     echo "⚠ Backend may not have started correctly. Check /tmp/backend.log"

@@ -2,10 +2,17 @@
 API routes for category management.
 
 Handles all category-related endpoints with Level 3 REST API (HATEOAS) support.
+Provides CRUD operations for financial transaction categories with hierarchical
+General:Detail structure.
+
+See docs/HTTP_PARAMETER_USAGE_GUIDELINES.md for comprehensive parameter usage patterns.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.params import Path
+from fastapi.params import Path, Body
+from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 
 from api.api_schemas import (
@@ -14,7 +21,7 @@ from api.api_schemas import (
     MethodInfo, Link
 )
 from api.hateoas_links import (
-    get_resource_links, get_pagination_links, get_deletion_response_links
+    get_resource_links, get_deletion_response_links, get_collection_links
 )
 from config.logging_config import setup_logging
 from database.connection import get_db
@@ -44,12 +51,16 @@ async def categories_collection_options(request: Request):
             MethodInfo(
                 method="POST",
                 description="Create a new category"
+            ),
+            MethodInfo(
+                method="OPTIONS",
+                description="Discover available methods on this endpoint"
             )
         ],
         links=[
             Link(
                 rel="self",
-                href=f"{str(request.base_url).rstrip('/')}/api/categories",
+                href=HttpUrl(f"{str(request.base_url).rstrip('/')}/api/categories"),
                 method="GET",
                 title="List all categories"
             )
@@ -61,47 +72,111 @@ async def categories_collection_options(request: Request):
 async def get_categories(
         limit: int = Query(50, ge=1, le=1000, description="Maximum number of categories to return"),
         offset: int = Query(0, ge=0, description="Number of categories to skip for pagination"),
+        general: Optional[str] = Query(None, description="Filter by partial general name match (case-insensitive)"),
+        detail: Optional[str] = Query(None, description="Filter by partial detail name match (case-insensitive)"),
+        active: bool = Query(True, description="Filter by active status. True for active only, False for all"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
-    """Get categories with pagination and HATEOAS links.
+    """Get categories with pagination, filtering, and HATEOAS links.
 
-    Retrieves a paginated list of categories with links to available actions.
+    Retrieves a paginated and optionally filtered list of categories with links to available actions.
+    Supports filtering by general and detail names, and by active status for flexible category discovery.
+
+    **Category Storage and Display:**
+    Categories are always stored and displayed in UPPERCASE for consistency. Users can input
+    category names in any case, but they will be automatically normalized to uppercase.
 
     Args:
         limit (int): Maximum number of categories to return (1-1000). Defaults to 50.
         offset (int): Number of categories to skip before returning results. Defaults to 0.
+        general (Optional[str]): Filter by partial general name match (case-insensitive).
+        detail (Optional[str]): Filter by partial detail name match (case-insensitive).
+        active (bool): Filter by active status. True for active only, False for all. Defaults to True.
         request (Request): Request object for generating absolute URLs.
         db (Session): Database session dependency.
 
     Returns:
-        CategoriesListResponse: Paginated categories list with HATEOAS links.
+        CategoriesListResponse: Paginated and filtered categories list with HATEOAS links.
+        All category names will be in UPPERCASE regardless of input case.
 
     Raises:
         HTTPException: 500 error if retrieval fails.
+
+    Example:
+        # Get all active categories (all names returned in UPPERCASE)
+        GET /api/categories
+
+        # Get all categories including inactive ones
+        GET /api/categories?active=false
+
+        # Filter by general name (case-insensitive input, UPPERCASE results)
+        GET /api/categories?general=groceries  # Finds categories with "GROCERIES"
+
+        # Filter by both general and detail (case-insensitive input)
+        GET /api/categories?general=groceries&detail=food  # Finds "GROCERIES:FOOD"
+
+        # Combined with pagination and active filter
+        GET /api/categories?general=groceries&limit=10&offset=0&active=true
+
+        # Filter by detail only
+        GET /api/categories?detail=beverages  # Finds categories with "BEVERAGES"
     """
     try:
         service = CategoryService(db)
-        categories = service.get_all_flat(limit=limit, offset=offset)
-        total = service.get_total_count()
+        categories = service.get_all(limit, offset, general, detail, active)
 
-        logger.info(f"Retrieved {len(categories)} categories (offset={offset}, limit={limit})")
+        # Use filtered count when filters are applied, otherwise use total count
+        if general or detail:
+            total = service.get_filtered_count(general, detail, active)
+        else:
+            total = service.get_total_count(active)
+
+        logger.info(
+            "Retrieved categories successfully",
+            extra={
+                "operation": "get_categories",
+                "resource_type": "categories",
+                "count": len(categories),
+                "offset": offset,
+                "limit": limit,
+                "total": total,
+                "active_filter": active,
+                "filters": {
+                    "general": general,
+                    "detail": detail
+                }
+            }
+        )
+
+        for category in categories:
+            category.links = get_resource_links(request, "categories", category.id)
 
         return CategoriesListResponse(
             items=[CategoryResponse.model_validate(c) for c in categories],
             total=total,
             limit=limit,
             offset=offset,
-            links=get_pagination_links(request, "/api/categories", limit, offset, total)
+            links=get_collection_links(request, "categories", limit, offset, total, general=general, detail=detail,
+                                       active=active)
         )
     except Exception as e:
-        logger.error(f"Error retrieving categories: {str(e)}")
+        logger.error(
+            "Failed to retrieve categories",
+            extra={
+                "operation": "get_categories",
+                "resource_type": "categories",
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error retrieving categories")
 
 
 @router.post("", response_model=CategoryResponse, status_code=201, description="Creates a new category.")
 async def create_or_get_category(
-        category: CategoryBase,
+        category: CategoryBase = Body(...,
+                                      description="Category creation data including general, detail, and optional description."),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
@@ -110,18 +185,44 @@ async def create_or_get_category(
     Creates a new category with the specified general and detail names. If a category
     with the same general:detail combination already exists, returns the existing category.
 
+    **Category Normalization:**
+    General and detail names are automatically normalized to UPPERCASE for consistency.
+    Input can be provided in any case.
+
     Args:
         category (CategoryBase): Category creation data including general, detail,
-            description, and colour.
+            description.
         request (Request): Request object for generating absolute URLs.
         db (Session): Database session dependency.
 
     Returns:
         CategoryResponse: The created or existing category with HATEOAS links.
+        Category names will be normalized to UPPERCASE in the response.
 
     Raises:
         HTTPException: 400 error for validation errors.
         HTTPException: 500 error if creation fails.
+
+    Example:
+        POST /api/categories
+        Content-Type: application/json
+
+        {
+            "general": "groceries",      // Will be stored as "GROCERIES"
+            "detail": "food",            // Will be stored as "FOOD"
+            "description": "Food and grocery purchases",
+
+        Response:
+        {
+            "id": 1,
+            "general": "GROCERIES",      // Always returned in UPPERCASE
+            "detail": "FOOD",            // Always returned in UPPERCASE
+            "description": "Food and grocery purchases",
+            ...
+        }
+
+    Note:
+        Requires testing: TODO duplicate handling, HATEOAS links, validation errors
     """
     try:
         service = CategoryService(db)
@@ -129,23 +230,29 @@ async def create_or_get_category(
             general=category.general,
             detail=category.detail,
             description=category.description,
-            color=category.color
         )
-        return CategoryResponse(
-            **CategoryResponse.model_validate(new_category).model_dump(),
-            links=get_resource_links(request, "categories", new_category.id)
-        )
+        new_category.links = get_resource_links(request, "categories", new_category.id)
+
+        return CategoryResponse.model_validate(new_category)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error creating category: {str(e)}")
+        logger.error(
+            "Failed to create category",
+            extra={
+                "operation": "create_category",
+                "resource_type": "category",
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error creating category")
 
 
 @router.options("/{category_id}", response_model=OptionsResponse,
                 description="Discover available methods on individual category endpoint")
 async def category_resource_options(
-        category_id: int = Path(..., ge=1, description="The ID of the category"),
+        category_id: int = Path(ge=1, description="The ID of the category"),
         request: Request = None
 ):
     """
@@ -173,6 +280,10 @@ async def category_resource_options(
             MethodInfo(
                 method="DELETE",
                 description="Delete a category"
+            ),
+            MethodInfo(
+                method="OPTIONS",
+                description="Discover available methods on this endpoint"
             )
         ],
         links=get_resource_links(request, "categories", category_id)
@@ -182,7 +293,7 @@ async def category_resource_options(
 @router.get("/{category_id}", response_model=CategoryResponse, status_code=200,
             description="Retrieves a specific category by ID.")
 async def get_category(
-        category_id: int = Path(..., ge=1, description="The ID of the category to retrieve"),
+        category_id: int = Path(ge=1, description="The ID of the category to retrieve"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
@@ -207,28 +318,35 @@ async def get_category(
         category = service.get_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
-        return CategoryResponse(
-            **CategoryResponse.model_validate(category).model_dump(),
-            links=get_resource_links(request, "categories", category_id)
-        )
+        category.links = get_resource_links(request, "categories", category.id)
+        return CategoryResponse.model_validate(category)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving category {category_id}: {str(e)}")
+        logger.error(
+            "Failed to retrieve category",
+            extra={
+                "operation": "get_category",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error retrieving category")
 
 
 @router.patch("/{category_id}", response_model=CategoryResponse, status_code=200, description="Updates a category.")
 async def update_category(
-        category_update: CategoryUpdate,
-        category_id: int = Path(..., ge=1, description="The ID of the category to update"),
+        category_update: CategoryUpdate = Body(description="Updated category data."),
+        category_id: int = Path(ge=1, description="The ID of the category to update"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
     """Partially update an existing category with HATEOAS links.
 
-    Updates the specified category with any provided values for general, detail,
-    description, and/or colour.
+    Updates the specified category with any provided values for general, detail and/or
+    description.
 
     Args:
         category_id (int): The ID of the category to update.
@@ -242,6 +360,9 @@ async def update_category(
     Raises:
         HTTPException: 404 error if category not found.
         HTTPException: 500 error if update fails.
+
+    Note:
+        Requires testing: TODO partial updates, not found scenarios, HATEOAS links
     """
     try:
         service = CategoryService(db)
@@ -250,24 +371,30 @@ async def update_category(
             general=category_update.general,
             detail=category_update.detail,
             description=category_update.description,
-            color=category_update.color
         )
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
-        return CategoryResponse(
-            **CategoryResponse.model_validate(category).model_dump(),
-            links=get_resource_links(request, "categories", category_id)
-        )
+        category.links = get_resource_links(request, "categories", category.id)
+        return CategoryResponse.model_validate(category)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating category {category_id}: {str(e)}")
+        logger.error(
+            "Failed to update category",
+            extra={
+                "operation": "update_category",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error updating category")
 
 
 @router.delete("/{category_id}", response_model=MessageResponse, status_code=200, description="Deletes a category.")
 async def delete_category(
-        category_id: int = Path(..., ge=1, description="The ID of the category to delete"),
+        category_id: int = Path(ge=1, description="The ID of the category to delete"),
         soft: bool = Query(True, description="Perform a soft delete or not"),
         request: Request = None,
         db: Session = Depends(get_db)
@@ -293,6 +420,9 @@ async def delete_category(
     Raises:
         HTTPException: 404 error if category not found.
         HTTPException: 500 error if deletion fails.
+
+    Note:
+        Requires testing: TODO soft vs hard delete, not found scenarios, HATEOAS links
     """
     try:
         service = CategoryService(db)
@@ -304,14 +434,24 @@ async def delete_category(
                 raise HTTPException(status_code=404, detail="Category not found")
 
         return MessageResponse(
-            message="Category deleted successfully",
+            message="Category soft deleted successfully" if soft else "Category deleted permanently",
             details={"method": "soft delete" if soft else "hard delete"},
             links=get_deletion_response_links(request, "categories")
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting category {category_id}: {str(e)}")
+        logger.error(
+            "Failed to delete category",
+            extra={
+                "operation": "delete_category",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "soft_delete": soft,
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail="Error deleting category")
 
 
@@ -325,6 +465,9 @@ async def assign_category_options(request: Request):
 
     Returns:
         OptionsResponse: Available methods and HATEOAS links
+
+    Note:
+        Requires testing: TODO OPTIONS response format, HATEOAS compliance
     """
     base_url = str(request.base_url).rstrip('/')
     return OptionsResponse(
@@ -332,18 +475,22 @@ async def assign_category_options(request: Request):
             MethodInfo(
                 method="POST",
                 description="Assign a category to one or many recipients"
+            ),
+            MethodInfo(
+                method="OPTIONS",
+                description="Discover available methods on this endpoint"
             )
         ],
         links=[
             Link(
                 rel="self",
-                href=f"{base_url}/api/categories/assign",
+                href=HttpUrl(f"{base_url}/api/categories/assign"),
                 method="POST",
                 title="Assign category to recipients"
             ),
             Link(
                 rel="categories",
-                href=f"{base_url}/api/categories",
+                href=HttpUrl(f"{base_url}/api/categories"),
                 method="GET",
                 title="List all categories"
             )
@@ -354,7 +501,7 @@ async def assign_category_options(request: Request):
 @router.post("/assign", response_model=AssignCategoryResponse, status_code=200,
              description="Assign category to one or many recipients.")
 async def assign_category(
-        assignment_request: AssignCategoryRequest,
+        assignment_request: AssignCategoryRequest = Body(description="Assign a category to one or many recipients."),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
@@ -380,6 +527,9 @@ async def assign_category(
         HTTPException: 400 error for invalid request data.
         HTTPException: 404 error if a recipient is not found.
         HTTPException: 500 error if assignment fails.
+
+    Note:
+        Requires testing: TODO bulk assignment, validation errors, HATEOAS links
     """
     try:
         service = CategoryService(db)
@@ -395,111 +545,33 @@ async def assign_category(
             links=[
                 Link(
                     rel="assigned_category",
-                    href=f"{base_url}/api/categories/{category.id}",
+                    href=HttpUrl(f"{base_url}/api/categories/{category.id}"),
                     method="GET",
                     title="Get the assigned category"
                 ),
                 Link(
                     rel="categories_list",
-                    href=f"{base_url}/api/categories",
+                    href=HttpUrl(f"{base_url}/api/categories"),
                     method="GET",
                     title="Get all categories"
                 )
             ]
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error assigning category: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error assigning category")
-
-
-@router.options("/path/{general}/{detail}", response_model=OptionsResponse,
-                description="Discover available methods on category path endpoint")
-async def category_path_options(
-        general: str = Path(..., description="General name"),
-        detail: str = Path(..., description="Detail name"),
-        request: Request = None
-):
-    """
-    OPTIONS method for category path endpoint discovery.
-
-    Allows clients to discover what HTTP methods are available on a category accessed by path.
-
-    Args:
-        general (str): General name of the category.
-        detail (str): Detail name of the category.
-        request (Request): Request object for generating absolute URLs.
-
-    Returns:
-        OptionsResponse: Available methods and HATEOAS links
-    """
-    base_url = str(request.base_url).rstrip('/')
-    return OptionsResponse(
-        methods=[
-            MethodInfo(
-                method="GET",
-                description="Retrieve a specific category by General:Detail path"
-            )
-        ],
-        links=[
-            Link(
-                rel="self",
-                href=f"{base_url}/api/categories/path/{general}/{detail}",
-                method="GET",
-                title="Get this category by path"
-            ),
-            Link(
-                rel="categories",
-                href=f"{base_url}/api/categories",
-                method="GET",
-                title="List all categories"
-            )
-        ]
-    )
-
-
-@router.get("/path/{general}/{detail}", response_model=CategoryResponse,
-            description="Retrieves a specific category by General:Detail path.")
-async def get_category_by_path(
-        general: str = Path(..., description="General name"),
-        detail: str = Path(..., description="Detail name"),
-        request: Request = None,
-        db: Session = Depends(get_db)
-):
-    """Get a category by General:Detail path with HATEOAS links.
-
-    Retrieves a category based on its general and detail names. Response includes
-    HATEOAS links for available actions.
-
-    This is a Level 3 REST API endpoint that returns hypermedia links.
-
-    Args:
-        general (str): General name of the category.
-        detail (str): Detail name of the category.
-        request (Request): Request object for generating absolute URLs.
-        db (Session): Database session dependency.
-
-    Returns:
-        CategoryResponse: The requested category details with HATEOAS links.
-
-    Raises:
-        HTTPException: 404 error if category not found.
-        HTTPException: 500 error if retrieval fails.
-    """
-    try:
-        service = CategoryService(db)
-        category = service.get_by_general_detail(general, detail)
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
-        return CategoryResponse(
-            **CategoryResponse.model_validate(category).model_dump(),
-            links=get_resource_links(request, "categories", category.id)
+        logger.error(
+            "Failed to assign category",
+            extra={
+                "operation": "assign_category",
+                "resource_type": "category",
+                "category_general": assignment_request.category_general,
+                "category_detail": assignment_request.category_detail,
+                "recipient_count": len(assignment_request.recipient_ids),
+                "status": "failed"
+            },
+            exc_info=True
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrieving category {general}:{detail}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error retrieving category")
+        raise HTTPException(status_code=500, detail="Error assigning category")

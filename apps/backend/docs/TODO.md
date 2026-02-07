@@ -874,7 +874,7 @@ Since all access is through frontend (not direct API), focus on backend validati
         - Only CRUD permissions needed
     - [ ] SQLite: Protect database file permissions
       ```bash
-      chmod 600 financial_transactions.db
+      chmod 600 financial_transactions.db.bak
       ```
 
 - [ ] **API keys for future integrations**
@@ -1134,7 +1134,7 @@ open htmlcov/index.html
 - [ ] **Document environment variables**
     - Create `.env.example`:
       ```bash
-      DATABASE_URL=sqlite:///./financial_transactions.db
+      DATABASE_URL=sqlite:///./financial_transactions.db.bak
       ENVIRONMENT=development
       PORT=8000
       CORS_ORIGINS=["http://localhost:3000"]
@@ -1147,7 +1147,7 @@ open htmlcov/index.html
   ```dockerfile
   FROM python:3.12-slim
   WORKDIR /app
-  COPY ../requirements.txt .
+  COPY ../config/requirements.txt .
   RUN pip install --no-cache-dir -r requirements.txt
   COPY .. .
   CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

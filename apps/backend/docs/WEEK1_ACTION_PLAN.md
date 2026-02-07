@@ -250,7 +250,7 @@ alembic init alembic
 
 # Edit alembic.ini
 # Change: sqlalchemy.url = driver://user:pass@localhost/dbname
-# To: sqlalchemy.url = sqlite:///./financial_transactions.db
+# To: sqlalchemy.url = sqlite:///./financial_transactions.db.bak
 
 # Edit alembic/env.py
 # Add after imports:

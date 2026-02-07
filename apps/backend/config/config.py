@@ -7,12 +7,13 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 
-# Load variables from .env.local if present (highest priority), then fall back to process env
+# Load variables from .env.local.local if present (highest priority), then fall back to process env
 from dotenv import load_dotenv
 
-# Explicitly load .env.local in backend directory
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ENV_LOCAL_PATH = os.path.join(BASE_DIR, ".env.local")
+# Explicitly load .env.local.local in backend directory
+CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_LOCAL_PATH = os.path.join(CONFIG_DIR, ".env.local")
+
 if os.path.exists(ENV_LOCAL_PATH):
     load_dotenv(ENV_LOCAL_PATH, override=True)
 
@@ -27,7 +28,7 @@ class ServerConfig:
 
 @dataclass
 class DatabaseConfig:
-    """Database configuration"""
+    """Database configuration with validation"""
     url: str = os.getenv("DATABASE_URL", "sqlite:///./financial_transactions.db")
     echo: bool = os.getenv("DB_ECHO", "False").lower() == "true"
     pool_size: int = int(os.getenv("DB_POOL_SIZE", "5"))
@@ -36,21 +37,22 @@ class DatabaseConfig:
 
 @dataclass
 class APIConfig:
-    """API configuration"""
+    """API configuration with CORS validation"""
     title: str = "Financial Transaction Manager"
     version: str = "1.0.0"
     description: str = "Import and manage financial transactions from various banks"
 
     # CORS settings
-    cors_origins: list = None
+    cors_origins: list[str] = None
     cors_credentials: bool = True
-    cors_methods: list = None
-    cors_headers: list = None
+    cors_methods: list[str] = None
+    cors_headers: list[str] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialise CORS configuration with defaults."""
         if self.cors_origins is None:
             cors_env = os.getenv("CORS_ORIGINS", "http://localhost:5174")
-            self.cors_origins = cors_env.split(",")
+            self.cors_origins = [origin.strip() for origin in cors_env.split(",")]
         if self.cors_methods is None:
             self.cors_methods = ["*"]
         if self.cors_headers is None:
@@ -65,7 +67,7 @@ class AdminConfig:
 
 @dataclass
 class Settings:
-    """Main application settings"""
+    """Main application settings with validation"""
     debug: bool = os.getenv("DEBUG", "True").lower() == "true"
 
     server: ServerConfig = None
@@ -73,7 +75,8 @@ class Settings:
     api: APIConfig = None
     admin: AdminConfig = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialise all configuration sections."""
         if self.server is None:
             self.server = ServerConfig()
         if self.database is None:
@@ -84,11 +87,11 @@ class Settings:
             self.admin = AdminConfig()
 
     def is_production(self) -> bool:
-        """Check if running in production environment"""
+        """Check if running in production environment."""
         return self.server.environment.lower() == "production"
 
     def is_development(self) -> bool:
-        """Check if running in development environment"""
+        """Check if running in development environment."""
         return self.server.environment.lower() == "development"
 
 

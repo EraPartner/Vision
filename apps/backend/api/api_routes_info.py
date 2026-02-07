@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session
 from api.api_schemas import BankListResponse, StatisticsResponse, CategoryStats
 from config.logging_config import setup_logging
 from database.connection import get_db
-from services.statistics_service import StatisticsService
+from services.statistics_service import InfoService
 
-router = APIRouter(prefix="/api/statistics", tags=["statistics"])
+router = APIRouter(prefix="/api/info", tags=["info"])
 logger = setup_logging(__name__)
 
 
@@ -22,11 +22,12 @@ logger = setup_logging(__name__)
 async def get_statistics(db: Session = Depends(get_db)):
     """Get overview statistics for the dashboard"""
     try:
-        service = StatisticsService(db)
+        service = InfoService(db)
         stats = service.get_statistics()
 
         return StatisticsResponse(
             total_transactions=stats["total_transactions"],
+            total_amount=stats["total_amount"],
             categories=[CategoryStats(**cat) for cat in stats["categories"]]
         )
     except Exception as e:
@@ -38,26 +39,12 @@ async def get_statistics(db: Session = Depends(get_db)):
 async def get_banks(db: Session = Depends(get_db)):
     """Get list of all bank accounts/sources in the database"""
     try:
-        service = StatisticsService(db)
+        service = InfoService(db)
         bank_list = service.get_banks()
         return BankListResponse(banks=bank_list)
     except Exception as e:
         logger.error(f"Error retrieving banks: {str(e)}")
         raise HTTPException(status_code=500, detail="Error retrieving banks")
-
-
-@router.get("/import-history")
-async def get_import_history(
-        limit: int = Query(10, ge=1, le=100),
-        db: Session = Depends(get_db)
-):
-    """Get recent import batch history"""
-    try:
-        service = StatisticsService(db)
-        return service.get_import_history(limit=limit)
-    except Exception as e:
-        logger.error(f"Error retrieving import history: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error retrieving import history")
 
 
 @router.get("/transaction-summary")
@@ -85,7 +72,7 @@ async def get_transaction_summary(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid end_date format")
 
-        service = StatisticsService(db)
+        service = InfoService(db)
         return service.get_transaction_summary(
             bank_account=bank_account,
             start_date=start,

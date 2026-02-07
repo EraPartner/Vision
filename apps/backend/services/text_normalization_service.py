@@ -217,3 +217,64 @@ class TextNormalizationService:
             return float(amount_str)
         except (ValueError, AttributeError):
             return None
+
+    @staticmethod
+    def normalize_category_name(name) -> str:
+        """
+        Normalize category names to uppercase with consistent formatting.
+
+        This is the single source of truth for category name normalization
+        across the entire application.
+
+        Args:
+            name: The category name to normalize (must be string-like)
+
+        Returns:
+            The normalized category name (uppercase, stripped whitespace)
+
+        Raises:
+            ValueError: If name is not a string or cannot be converted to string
+
+        Example:
+            normalize_category_name("groceries") -> "GROCERIES"
+            normalize_category_name("  Food  ") -> "FOOD"
+            normalize_category_name("Transport & Travel") -> "TRANSPORT & TRAVEL"
+        """
+        if not name:
+            return name
+
+        # Handle non-string types
+        if not isinstance(name, str):
+            raise ValueError(f"Category name must be a string, got {type(name).__name__}")
+
+        return name.strip().upper()
+
+    @staticmethod
+    def normalize_recipient_name(name) -> str:
+        """
+        Normalize recipient names to uppercase with consistent formatting.
+
+        This is the single source of truth for recipient name normalization
+        across the entire application.
+
+        Args:
+            name: The recipient name to normalize (must be string-like)
+
+        Returns:
+            The normalized recipient name (uppercase, stripped whitespace)
+
+        Raises:
+            ValueError: If name is not a string or cannot be converted to string
+
+        Example:
+            normalize_recipient_name("john smith") -> "JOHN SMITH"
+            normalize_recipient_name("  ABC Corp  ") -> "ABC CORP"
+        """
+        if not name:
+            return name
+
+        # Handle non-string types
+        if not isinstance(name, str):
+            raise ValueError(f"Recipient name must be a string, got {type(name).__name__}")
+
+        return name.strip().upper()

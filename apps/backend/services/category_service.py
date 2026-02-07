@@ -18,9 +18,14 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from config.logging_config import setup_logging
 from database.models import Category
 from repositories.category_repository import CategoryRepository
 from repositories.recipient_repository import RecipientRepository
+from services.text_normalization_service import TextNormalizationService
+
+# Setup logging
+logger = setup_logging(__name__)
 
 
 class CategoryService:
@@ -44,7 +49,7 @@ class CategoryService:
     Example:
         service = CategoryService(db_session)
         category = service.get_or_create_category("Groceries", "Food")
-        updated = service.update(category.id, color="#FF5733")
+        updated = service.update(category.id, detail="Groceries")
     """
 
     def __init__(self, db_session: Session):
@@ -52,20 +57,31 @@ class CategoryService:
         self.category_repo = CategoryRepository(db_session)
         self.recipient_repo = RecipientRepository(db_session)
 
-    # ==================== Category CRUD Methods ====================
+    # ==================== Basic CRUD Operations ====================
 
-    def get_all_flat(self, limit: int | None = None, offset: int | None = None) -> List[Category]:
-        """Get all active categories in a flat list.
+    def get_all(
+            self,
+            limit: Optional[int] = None,
+            offset: Optional[int] = None,
+            general: Optional[str] = None,
+            detail: Optional[str] = None,
+            active: bool = True
+    ) -> List[Category]:
+        """Get all categories in a flat list.
 
-        Retrieves all active categories in a single flat list, sorted by
+        Retrieves all categories in a single flat list, sorted by
         general and detail names. This is useful for UI displays and exports.
+        Supports filtering by general and detail names, and by active status.
 
         Args:
             limit: Max rows to return (None for all).
             offset: Rows to skip before returning results.
+            general: Filter by partial general name match (case-insensitive).
+            detail: Filter by partial detail name match (case-insensitive).
+            active: Filter by active status. True for active only, False for all.
 
         Returns:
-            List[Category]: List of all active categories sorted by general and detail.
+            List[Category]: List of categories matching the filters, sorted by general and detail.
 
         Example:
             service = CategoryService(db)
@@ -73,12 +89,23 @@ class CategoryService:
             for cat in all_categories:
                 print(f"{cat.general}: {cat.detail}")
 
+            # Filter by general name
+            groceries = service.get_all_flat(general="GROCERIES")
+
+            # Filter by both general and detail
+            food_cats = service.get_all_flat(general="GROCERIES", detail="FOOD")
+
+            # Get all categories including inactive ones
+            all_including_inactive = service.get_all_flat(active=False)
+
         Note:
-            - Only includes active categories (is_active=True)
+            - By default, only active categories are included (active=True)
+            - When active=False, both active and inactive categories are returned
             - Returns empty list if no categories exist
             - Results are always sorted for consistent ordering
+            - General and detail filtering is case-insensitive and supports partial matches
         """
-        return self.category_repo.get_all_active(limit=limit, offset=offset)
+        return self.category_repo.get_all_active(limit, offset, general, detail, active)
 
     def get_by_id(self, category_id: int) -> Optional[Category]:
         """Get a category by its ID.
@@ -110,22 +137,23 @@ class CategoryService:
             general: str,
             detail: str,
             description: Optional[str] = None,
-            color: Optional[str] = None
     ) -> Category:
         """Get an existing category or create a new one.
 
         Looks up a category by its general and detail names. If it doesn't exist,
         creates a new category with the provided details and returns it.
 
+        General and detail names are automatically normalized to uppercase by
+        SQLAlchemy event handlers for consistent storage and display.
+
         This is an idempotent operation - calling it multiple times with the same
         general and detail names will return the same category object without
         creating duplicates.
 
         Args:
-            general (str): General (parent) category name (e.g., "Groceries").
-            detail (str): Detail (child) category name (e.g., "Food").
+            general (str): General (parent) category name (e.g., "groceries" -> "GROCERIES").
+            detail (str): Detail (child) category name (e.g., "food" -> "FOOD").
             description (str, optional): Optional category description.
-            color (str, optional): Optional hex color code (e.g., "#FF5733").
 
         Returns:
             Category: The found or newly created Category object.
@@ -133,30 +161,58 @@ class CategoryService:
         Example:
             service = CategoryService(db)
 
-            # Create new category
-            cat = service.get_or_create_category("Groceries", "Food", color="#FF5733")
+            # Create new category (input will be normalized automatically)
+            cat = service.create_or_get_category("groceries", "food")
+            print(cat.general)  # "GROCERIES"
+            print(cat.detail)   # "FOOD"
 
             # Get same category again (doesn't create duplicate)
-            cat2 = service.get_or_create_category("Groceries", "Food")
+            cat2 = service.create_or_get_category("GROCERIES", "FOOD")
             assert cat.id == cat2.id
 
         Note:
             - Idempotent operation - safe to call multiple times
-            - Case-sensitive category matching
+            - General and detail names are automatically converted to uppercase
+            - Case-insensitive matching for lookups
             - New categories are created as active (is_active=True)
             - Useful for transaction imports and batch operations
         """
-        category = self.category_repo.get_by_general_detail(general, detail)
+        # Normalize input for lookup to match uppercase stored values
+        general_normalized = TextNormalizationService.normalize_category_name(general) if general else ""
+        detail_normalized = TextNormalizationService.normalize_category_name(detail) if detail else ""
+
+        category = self.category_repo.get_by_general_detail(general_normalized, detail_normalized)
 
         if not category:
+            # SQLAlchemy events will automatically normalize these to uppercase
             category = Category(
-                general=general,
-                detail=detail,
+                general=general,  # Will be normalized automatically by SQLAlchemy events
+                detail=detail,  # Will be normalized automatically by SQLAlchemy events
                 description=description,
-                color=color,
                 is_active=True
             )
             self.category_repo.create(category)
+            logger.info(
+                "Category created successfully",
+                extra={
+                    "operation": "create_category",
+                    "resource_type": "category",
+                    "resource_id": category.id,
+                    "general": category.general,  # Now uppercase due to events
+                    "detail": category.detail  # Now uppercase due to events
+                }
+            )
+        else:
+            logger.debug(
+                "Category already exists",
+                extra={
+                    "operation": "get_existing_category",
+                    "resource_type": "category",
+                    "resource_id": category.id,
+                    "general": category.general,
+                    "detail": category.detail
+                }
+            )
 
         return category
 
@@ -166,66 +222,65 @@ class CategoryService:
             general: Optional[str] = None,
             detail: Optional[str] = None,
             description: Optional[str] = None,
-            color: Optional[str] = None
     ) -> Optional[Category]:
         """Update a category with validation.
 
         Updates one or more properties of an existing category. Only provided
         parameters are updated; omitted parameters leave existing values unchanged.
-        Validates that general and detail names are not empty.
+        General and detail names are automatically normalized to uppercase.
 
         Args:
             category_id (int): The ID of the category to update.
             general (str, optional): New general category name. If provided,
-                must not be empty after stripping whitespace.
+                will be normalized to uppercase.
             detail (str, optional): New detail category name. If provided,
-                must not be empty after stripping whitespace.
+                will be normalized to uppercase.
             description (str, optional): New category description.
-            color (str, optional): New hex color code.
 
         Returns:
             Optional[Category]: The updated Category object if found and modified,
                 None if category not found.
 
-        Raises:
-            ValueError: If general or detail name is provided but empty after stripping.
-
         Example:
             service = CategoryService(db)
 
-            # Update just the color
-            updated = service.update(5, color="#FF5733")
-
-            # Update multiple fields
-            updated = service.update(5, general="New General", color="#00FF00")
+            # Update category names (will be normalized to uppercase)
+            updated = service.update(5, general="new general", detail="new detail")
+            print(updated.general)  # "NEW GENERAL"
+            print(updated.detail)   # "NEW DETAIL"
 
             # Returns None if category doesn't exist
             updated = service.update(999)
 
         Note:
             - Partial updates are allowed (provide only fields to change)
-            - Both general and detail are validated for non-empty values
+            - General and detail names are automatically converted to uppercase
             - Strings are stripped of leading/trailing whitespace
             - Transaction is committed if any fields are updated
             - Returns None without raising exception if category not found
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
+            logger.debug(
+                "Category not found for update",
+                extra={
+                    "operation": "update_category",
+                    "resource_type": "category",
+                    "resource_id": category_id,
+                    "status": "not_found"
+                }
+            )
             return None
 
         updated = False
 
         if general is not None:
-            general = general.strip()
-            if not general:
-                raise ValueError("General name cannot be empty")
+            # SQLAlchemy events will automatically normalize to uppercase
             category.general = general
             updated = True
 
         if detail is not None:
-            detail = detail.strip()
-            if not detail:
-                raise ValueError("Detail name cannot be empty")
+            # SQLAlchemy events will automatically normalize to uppercase
             category.detail = detail
             updated = True
 
@@ -233,12 +288,17 @@ class CategoryService:
             category.description = description
             updated = True
 
-        if color is not None:
-            category.color = color
-            updated = True
-
         if updated:
             self.category_repo.update(category)
+            logger.info(
+                "Category updated successfully",
+                extra={
+                    "operation": "update_category",
+                    "resource_type": "category",
+                    "resource_id": category_id,
+                    "status": "success"
+                }
+            )
 
         return category
 
@@ -273,9 +333,27 @@ class CategoryService:
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
+            logger.debug(
+                "Category not found for soft delete",
+                extra={
+                    "operation": "soft_delete_category",
+                    "resource_type": "category",
+                    "resource_id": category_id,
+                    "status": "not_found"
+                }
+            )
             return False
 
         self.category_repo.soft_delete(category)
+        logger.info(
+            "Category soft deleted successfully",
+            extra={
+                "operation": "soft_delete_category",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "status": "success"
+            }
+        )
         return True
 
     def hard_delete(self, category_id: int) -> bool:
@@ -308,16 +386,34 @@ class CategoryService:
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
+            logger.debug(
+                "Category not found for hard delete",
+                extra={
+                    "operation": "hard_delete_category",
+                    "resource_type": "category",
+                    "resource_id": category_id,
+                    "status": "not_found"
+                }
+            )
             return False
 
         self.category_repo.hard_delete(category)
+        logger.warning(
+            "Category hard deleted permanently",
+            extra={
+                "operation": "hard_delete_category",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "status": "success"
+            }
+        )
         return True
 
     def assign_category(
             self,
             recipient_ids: List[int],
             category: Category
-    ) -> int:
+    ) -> Optional[int]:
         """Assign a category to multiple recipients at once.
 
         Performs a bulk operation to assign the same default category to multiple
@@ -350,9 +446,6 @@ class CategoryService:
             - Transaction is committed after all updates
             - Useful for batch operations after recipient imports
         """
-        if not recipient_ids:
-            raise ValueError("recipient_ids must contain at least one ID")
-
         updated = 0
         for recipient_id in recipient_ids:
             recipient = self.recipient_repo.get_by_id(recipient_id)
@@ -360,6 +453,20 @@ class CategoryService:
                 recipient.default_category_id = category.id
                 updated += 1
                 self.recipient_repo.update(recipient)
+            else:
+                logger.debug(f"Recipient not found: {recipient_id}")
+                return None
+
+        logger.info(
+            "Category assigned to recipients",
+            extra={
+                "operation": "assign_category",
+                "resource_type": "category",
+                "resource_id": category.id,
+                "count": updated,
+                "recipient_count": len(recipient_ids)
+            }
+        )
 
         return updated
 
@@ -371,29 +478,75 @@ class CategoryService:
         """Get a category by its general and detail names.
 
         Retrieves a single category identified by its general and detail names.
+        Input is automatically normalized to uppercase for case-insensitive lookup.
 
         Args:
-            general (str): General (parent) category name.
-            detail (str): Detail (child) category name.
+            general (str): General (parent) category name (case-insensitive).
+            detail (str): Detail (child) category name (case-insensitive).
+
         Returns:
             Optional[Category]: The Category object if found, None otherwise.
+
         Example:
             service = CategoryService(db)
+
+            # These all find the same category:
+            category = service.get_by_general_detail("groceries", "food")
+            category = service.get_by_general_detail("GROCERIES", "FOOD")
             category = service.get_by_general_detail("Groceries", "Food")
+
             if category:
                 print(f"Found category ID: {category.id}")
+                print(f"Stored as: {category.general}:{category.detail}")  # Always uppercase
         """
-        return self.category_repo.get_by_general_detail(general, detail)
+        # Normalize input to uppercase for case-insensitive lookup against uppercase DB values
+        general_normalized = TextNormalizationService.normalize_category_name(general) if general else ""
+        detail_normalized = TextNormalizationService.normalize_category_name(detail) if detail else ""
 
-    def get_total_count(self) -> int:
+        return self.category_repo.get_by_general_detail(general_normalized, detail_normalized)
+
+    def get_total_count(self, active: bool = True) -> int:
         """Get the total count of categories in the database.
 
+        Args:
+            active (bool): Filter by active status. True for active only, False for all.
+
         Returns:
-            int: Total number of categories.
+            int: Total number of categories matching the active filter.
 
         Example:
             service = CategoryService(db)
-            total = service.get_total_count()
-            print(f"Total categories: {total}")
+            active_total = service.get_total_count()
+            all_total = service.get_total_count(active=False)
         """
-        return self.category_repo.get_total_count()
+        return self.category_repo.get_total_count(active)
+
+    def get_filtered_count(self, general: Optional[str] = None, detail: Optional[str] = None,
+                           active: bool = True) -> int:
+        """Get the count of categories matching the specified filters.
+
+        Returns the total number of categories that match the provided
+        general and detail filters, and active status. This is useful for pagination calculations
+        when filters are applied.
+
+        Args:
+            general: Filter by partial general name match (case-insensitive).
+            detail: Filter by partial detail name match (case-insensitive).
+            active: Filter by active status. True for active only, False for all.
+
+        Returns:
+            int: Count of categories matching the filters.
+
+        Example:
+            service = CategoryService(db)
+
+            # Count all active categories
+            total = service.get_filtered_count()
+
+            # Count categories with general name containing "groceries"
+            groceries_count = service.get_filtered_count(general="groceries")
+
+            # Count all categories including inactive ones
+            all_count = service.get_filtered_count(active=False)
+        """
+        return self.category_repo.get_filtered_count(general, detail, active)

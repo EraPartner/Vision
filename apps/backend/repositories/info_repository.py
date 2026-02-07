@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database.models import Transaction, Category
 
 
-class StatisticsRepository:
+class InfoRepository:
     """Repository for statistics and reporting operations"""
 
     def __init__(self, db: Session):
@@ -23,6 +23,11 @@ class StatisticsRepository:
         """Get total count of all transactions"""
         return self.db.query(func.count(Transaction.id)).scalar() or 0
 
+    def get_total_amount(self) -> float:
+        """Get total sum of all transaction amounts"""
+        total = self.db.query(func.sum(Transaction.amount)).scalar() or 0
+        return float(total)
+
     def get_category_statistics(self) -> List[Dict[str, Any]]:
         """
         Get statistics grouped by category.
@@ -31,16 +36,18 @@ class StatisticsRepository:
             List of dictionaries with category name, count, and total
         """
         category_stats_query = self.db.query(
-            Category.name,
+            Category.id,
+            Category.general,
+            Category.detail,
             func.count(Transaction.id).label('count'),
             func.sum(Transaction.amount).label('total')
-        ).join(Transaction).group_by(Category.name).all()
+        ).join(Transaction).group_by(Category.id, Category.general, Category.detail).all()
 
         return [
             {
-                "name": stat[0],
-                "count": stat[1],
-                "total": float(stat[2] or 0)
+                "name": f"{stat[1]}:{stat[2]}",  # general:detail format
+                "count": stat[3],
+                "total": float(stat[4] or 0)
             } for stat in category_stats_query
         ]
 
