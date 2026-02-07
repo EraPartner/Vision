@@ -97,29 +97,3 @@ class FileImportHandler:
             return False, "File is empty"
 
         return True, None
-
-    @staticmethod
-    def get_filename(file_path: str) -> str:
-        """
-        Extract filename from file path.
-
-        Args:
-            file_path: The full file path
-
-        Returns:
-            The filename without path
-        """
-        return os.path.basename(file_path)
-
-    @staticmethod
-    def file_exists(file_path: str) -> bool:
-        """
-        Check if file exists.
-
-        Args:
-            file_path: Path to check
-
-        Returns:
-            True if file exists, False otherwise
-        """
-        return os.path.exists(file_path)

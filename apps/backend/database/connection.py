@@ -1,3 +1,5 @@
+import sys
+
 """Database connection and session management module.
 
 This module handles:
@@ -11,7 +13,6 @@ DATABASE_URL setting and handles environment-specific configurations
 (SQLite for development, PostgreSQL for production).
 """
 import os
-import sys
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -23,7 +24,6 @@ from config.config import get_settings
 from config.logging_config import setup_logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 load_dotenv()
 
 logger = setup_logging(__name__)

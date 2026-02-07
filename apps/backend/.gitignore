@@ -1,6 +1,6 @@
 # ...existing entries...
 # Local environment overrides (do not commit sensitive values)
-.env.local
+config/.env.local
 # Common Python env files
 .env
 */__pycache__/

@@ -15,13 +15,6 @@ class CSVConfigurationError(Exception):
 class CSVConfigurationFactory:
     """Factory for creating and validating CSV import configurations"""
 
-    # Default configuration
-    DEFAULT_CONFIG = {
-        "encoding": "utf-8",
-        "separator": ",",
-        "skip_rows": 0,
-    }
-
     @staticmethod
     def create_custom_config(
             bank_name: str,
@@ -99,6 +92,9 @@ class CSVConfigurationFactory:
             }
         }
 
+        if not CSVConfigurationFactory.validate_config(config):
+            raise CSVConfigurationError(f"Invalid configuration: {config}")
+
         return config
 
     @staticmethod
@@ -132,33 +128,3 @@ class CSVConfigurationFactory:
                 raise CSVConfigurationError(f"Missing required column mapping: {col}")
 
         return True
-
-    @staticmethod
-    def get_default_config(bank_name: str) -> Dict[str, Any]:
-        """
-        Get default configuration with bank name.
-
-        Args:
-            bank_name: The bank name
-
-        Returns:
-            Default configuration dictionary
-        """
-        config = CSVConfigurationFactory.DEFAULT_CONFIG.copy()
-        config["bank_name"] = bank_name
-        return config
-
-    @staticmethod
-    def merge_with_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merge provided configuration with defaults.
-
-        Args:
-            config: Configuration to merge
-
-        Returns:
-            Merged configuration
-        """
-        merged = CSVConfigurationFactory.DEFAULT_CONFIG.copy()
-        merged.update(config)
-        return merged

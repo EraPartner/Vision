@@ -7,21 +7,22 @@ Delegates data retrieval to StatisticsRepository (Information Expert).
 from datetime import date
 from typing import List, Optional, Dict, Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config.logging_config import setup_logging
-from database.models import ImportBatch
-from repositories.statistics_repository import StatisticsRepository
+from database.models import ImportBatch, Transaction, Category
+from repositories.info_repository import InfoRepository
 
 logger = setup_logging(__name__)
 
 
-class StatisticsService:
+class InfoService:
     """Service for managing statistics and reporting"""
 
     def __init__(self, db_session: Session):
         self.db = db_session
-        self.stats_repo = StatisticsRepository(db_session)
+        self.stats_repo = InfoRepository(db_session)
 
     def get_statistics(self) -> Dict[str, Any]:
         """
@@ -31,12 +32,14 @@ class StatisticsService:
             Dictionary containing total transactions, total amount, and category breakdown
         """
         total_transactions = self.stats_repo.get_transaction_count()
+        total_amount = self.stats_repo.get_total_amount()
         categories = self.stats_repo.get_category_statistics()
 
         logger.info(f"Retrieved statistics: {total_transactions} transactions, {len(categories)} categories")
 
         return {
             "total_transactions": total_transactions,
+            "total_amount": total_amount if total_amount is not None else 0.0,
             "categories": categories
         }
 
@@ -138,18 +141,19 @@ class StatisticsService:
         """
         category_stats_query = self.db.query(
             Category.id,
-            Category.name,
+            Category.general,
+            Category.detail,
             func.count(Transaction.id).label('count'),
             func.sum(Transaction.amount).label('total')
-        ).join(Transaction).group_by(Category.id, Category.name).all()
+        ).join(Transaction).group_by(Category.id, Category.general, Category.detail).all()
 
         return {
             "categories": [
                 {
                     "id": stat[0],
-                    "name": stat[1],
-                    "count": stat[2],
-                    "total": float(stat[3] or 0)
+                    "name": f"{stat[1]}:{stat[2]}",  # general:detail format
+                    "count": stat[3],
+                    "total": float(stat[4] or 0)
                 } for stat in category_stats_query
             ]
         }

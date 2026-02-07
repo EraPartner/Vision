@@ -66,7 +66,7 @@ pip install -r requirements.txt
 
 4. Configure environment variables:
 ```bash
-# Edit backend/.env if needed
+# Edit backend/.env.local if needed
 # Default uses SQLite - no additional setup required
 ```
 
@@ -87,7 +87,7 @@ npm install
 
 2. Configure environment variables:
 ```bash
-# Edit .env if needed
+# Edit .env.local if needed
 # VITE_API_URL should point to your backend (default: http://localhost:8000)
 ```
 

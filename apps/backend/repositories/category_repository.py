@@ -14,7 +14,12 @@ from typing import Optional, List
 
 from sqlalchemy.orm import Session
 
+from config.logging_config import setup_logging
 from database.models import Category
+from services.text_normalization_service import TextNormalizationService
+
+# Setup logging
+logger = setup_logging(__name__)
 
 
 class CategoryRepository:
@@ -44,41 +49,93 @@ class CategoryRepository:
         """
         self.db = db
 
-    def get_all_active(self, limit: int | None = None, offset: int | None = None) -> List[Category]:
-        """Get all active categories in a flat list ordered by general and detail.
+    def get_all_active(self,
+                       limit: Optional[int] = None,
+                       offset: Optional[int] = None,
+                       general: Optional[str] = None,
+                       detail: Optional[str] = None,
+                       active: bool = True) -> List[Category]:
+        """Get all categories in a flat list ordered by general and detail.
 
-        Retrieves active categories ordered by general then detail. Optional limit
+        Retrieves categories ordered by general then detail. Optional limit
         and offset enable pagination directly in the query to avoid loading all
-        rows into memory.
+        rows into memory. Supports filtering by general and detail names, and
+        by active status.
+
+        General and detail names are stored in uppercase, but filtering is case-insensitive
+        to provide a better user experience.
 
         Args:
             limit (int | None): Maximum number of rows to return. If None, returns all.
             offset (int | None): Number of rows to skip before returning results.
+            general (str | None): Filter by partial general name match (case-insensitive).
+            detail (str | None): Filter by partial detail name match (case-insensitive).
+            active (bool): Filter by active status. True for active only, False for all.
 
         Returns:
-            List[Category]: Active categories sorted by general and detail.
+            List[Category]: Categories matching the filters, sorted by general and detail.
 
         Example:
             categories = repo.get_all_active(limit=10, offset=20)
             for cat in categories:
                 print(f"{cat.general}: {cat.detail}")
 
-        Note:
-            - Inactive categories are excluded
-            - Results are always sorted for consistent ordering
-            - Empty list is returned if no active categories exist
-        """
-        query = self.db.query(Category).filter(Category.is_active).order_by(
-            Category.general,
-            Category.detail
-        )
+            # Filter by general name (case-insensitive)
+            groceries = repo.get_all_active(general="groceries")  # Finds "GROCERIES"
 
+            # Filter by both general and detail (case-insensitive)
+            food_cats = repo.get_all_active(general="GROCERIES", detail="food")  # Finds "GROCERIES:FOOD"
+
+            # Get all categories including inactive ones
+            all_cats = repo.get_all_active(active=False)
+
+        Note:
+            - By default, only active categories are returned (active=True)
+            - When active=False, both active and inactive categories are returned
+            - Results are always sorted for consistent ordering
+            - Empty list is returned if no categories exist
+            - General and detail filtering is case-insensitive and supports partial matches
+            - All database operations are logged for audit purposes
+            - Categories are stored in uppercase but search is case-insensitive
+        """
+        query = self.db.query(Category).order_by(Category.id)
+
+        # Apply active filter
+        if active:
+            query = query.filter(Category.is_active)
+
+        # Apply filters if provided - normalize input for case-insensitive search
+        if general:
+            # Normalize search input to match uppercase stored values
+            general_normalized = TextNormalizationService.normalize_category_name(general)
+            query = query.filter(Category.general.ilike(f"%{general_normalized}%"))
+        if detail:
+            # Normalize search input to match uppercase stored values
+            detail_normalized = TextNormalizationService.normalize_category_name(detail)
+            query = query.filter(Category.detail.ilike(f"%{detail_normalized}%"))
+
+        # Apply pagination if provided
         if offset is not None:
             query = query.offset(offset)
         if limit is not None:
             query = query.limit(limit)
 
-        return query.all()
+        results = query.all()
+        logger.debug(
+            "Retrieved active categories from database",
+            extra={
+                "operation": "get_all_active",
+                "resource_type": "category",
+                "count": len(results),
+                "limit": limit,
+                "offset": offset,
+                "filters": {
+                    "general": general,
+                    "detail": detail
+                }
+            }
+        )
+        return results
 
     def get_by_id(self, category_id: int) -> Optional[Category]:
         """Get a category by its primary key ID.
@@ -104,7 +161,17 @@ class CategoryRepository:
             - Returns None if category doesn't exist
             - Does not raise exceptions on missing categories
         """
-        return self.db.query(Category).filter(Category.id == category_id).first()
+        result = self.db.query(Category).filter(Category.id == category_id).first()
+        logger.debug(
+            "Category lookup by ID",
+            extra={
+                "operation": "get_by_id",
+                "resource_type": "category",
+                "resource_id": category_id,
+                "found": result is not None
+            }
+        )
+        return result
 
     def get_by_general_detail(self, general: str, detail: str) -> Optional[Category]:
         """Get a category by general and detail names.
@@ -130,10 +197,22 @@ class CategoryRepository:
             - Returns None if the category combination doesn't exist
             - Use for looking up categories by their hierarchical names
         """
-        return self.db.query(Category).filter(
+        result = self.db.query(Category).filter(
             Category.general == general,
             Category.detail == detail
         ).first()
+
+        logger.debug(
+            "Category lookup by general:detail",
+            extra={
+                "operation": "get_by_general_detail",
+                "resource_type": "category",
+                "general": general,
+                "detail": detail,
+                "found": result is not None
+            }
+        )
+        return result
 
     def create(self, category: Category) -> Category:
         """Create a new category in the database.
@@ -142,8 +221,8 @@ class CategoryRepository:
         the created category with the database-generated ID populated.
 
         Args:
-            category (Category): A Category object with general and detail names,
-                description, and color already set. The object should NOT have
+            category (Category): A Category object with general and detail names and
+                description already set. The object should NOT have
                 an id assigned yet.
 
         Returns:
@@ -153,7 +232,7 @@ class CategoryRepository:
         Example:
             from database.models import Category
 
-            new_cat = Category(general="Groceries", detail="Food", color="#FF5733")
+            new_cat = Category(general="Groceries", detail="Food")
             created = repo.create(new_cat)
             print(f"Created category with ID: {created.id}")
 
@@ -169,6 +248,14 @@ class CategoryRepository:
         self.db.add(category)
         self.db.commit()
         self.db.refresh(category)
+        logger.debug(
+            "Category created in database",
+            extra={
+                "operation": "create_category",
+                "resource_type": "category",
+                "resource_id": category.id
+            }
+        )
         return category
 
     def update(self, category: Category) -> Category:
@@ -189,7 +276,6 @@ class CategoryRepository:
 
         Example:
             category = repo.get_by_id(5)
-            category.color = "#FF5733"
             category.description = "Updated description"
             updated = repo.update(category)
 
@@ -205,6 +291,14 @@ class CategoryRepository:
         """
         self.db.commit()
         self.db.refresh(category)
+        logger.debug(
+            "Category updated in database",
+            extra={
+                "operation": "update_category",
+                "resource_type": "category",
+                "resource_id": category.id
+            }
+        )
         return category
 
     def soft_delete(self, category: Category) -> None:
@@ -238,6 +332,14 @@ class CategoryRepository:
         """
         category.is_active = False
         self.db.commit()
+        logger.debug(
+            "Category soft deleted in database",
+            extra={
+                "operation": "soft_delete_category",
+                "resource_type": "category",
+                "resource_id": category.id
+            }
+        )
 
     def hard_delete(self, category: Category) -> None:
         """Permanently delete a category from the database.
@@ -266,22 +368,122 @@ class CategoryRepository:
         """
         self.db.delete(category)
         self.db.commit()
+        logger.warning(
+            "Category hard deleted from database",
+            extra={
+                "operation": "hard_delete_category",
+                "resource_type": "category",
+                "resource_id": category.id
+            }
+        )
 
-    def get_total_count(self) -> int:
+    def get_total_count(self, active: bool = True) -> int:
         """Get the total count of categories in the database.
 
-        Retrieves the total number of category records, including both active
-        and inactive categories.
+        Retrieves the total number of category records filtered by active status.
+
+        Args:
+            active (bool): Filter by active status. True for active only, False for all.
 
         Returns:
-            int: The total count of categories.
+            int: The count of categories matching the active filter.
 
         Example:
-            total = repo.get_total_count()
-            print(f"Total categories: {total}")
+            # Count active categories only
+            active_total = repo.get_total_count()
+
+            # Count all categories including inactive
+            total = repo.get_total_count(active=False)
 
         Note:
-            - Includes all categories regardless of is_active status
+            - By default, only counts active categories (active=True)
+            - When active=False, counts both active and inactive categories
             - Useful for pagination and reporting
         """
-        return self.db.query(Category).count()
+        query = self.db.query(Category)
+        if active:
+            query = query.filter(Category.is_active)
+
+        total = query.count()
+        logger.debug(
+            "Category total count retrieved",
+            extra={
+                "operation": "get_total_count",
+                "resource_type": "category",
+                "total": total,
+                "active_filter": active
+            }
+        )
+        return total
+
+    def get_filtered_count(self, general: Optional[str] = None, detail: Optional[str] = None,
+                           active: bool = True) -> int:
+        """Get the count of categories matching the specified filters.
+
+        Retrieves the total number of category records that match the
+        provided general and detail filters, and active status. This is useful for pagination
+        calculations when filters are applied.
+
+        General and detail names are stored in uppercase, but filtering is case-insensitive.
+
+        Args:
+            general (str | None): Filter by partial general name match (case-insensitive).
+            detail (str | None): Filter by partial detail name match (case-insensitive).
+            active (bool): Filter by active status. True for active only, False for all.
+
+        Returns:
+            int: The count of categories matching the filters.
+
+        Example:
+            # Count all active categories
+            total = repo.get_filtered_count()
+
+            # Count categories with general name containing "groceries" (case-insensitive)
+            groceries_count = repo.get_filtered_count(general="groceries")  # Finds "GROCERIES"
+
+            # Count with both filters (case-insensitive)
+            specific_count = repo.get_filtered_count(general="groceries", detail="food")  # Finds "GROCERIES:FOOD"
+
+            # Count all categories including inactive ones
+            all_count = repo.get_filtered_count(active=False)
+
+        Note:
+            - By default, only counts active categories (active=True)
+            - When active=False, counts both active and inactive categories
+            - General and detail filtering is case-insensitive and supports partial matches
+            - Returns 0 if no matching categories exist
+            - Count operations are efficient and don't load full records
+            - All count operations are logged for audit purposes
+            - Categories are stored in uppercase but search is case-insensitive
+        """
+        query = self.db.query(Category)
+
+        # Apply active filter
+        if active:
+            query = query.filter(Category.is_active)
+
+        # Apply same filters as get_all_active - normalize input for case-insensitive search
+        if general:
+            # Normalize search input to match uppercase stored values
+            general_normalized = TextNormalizationService.normalize_category_name(general)
+            query = query.filter(Category.general.ilike(f"%{general_normalized}%"))
+        if detail:
+            # Normalize search input to match uppercase stored values
+            detail_normalized = TextNormalizationService.normalize_category_name(detail)
+            query = query.filter(Category.detail.ilike(f"%{detail_normalized}%"))
+
+        total = query.count()
+        logger.debug(
+            "Category filtered count retrieved",
+            extra={
+                "operation": "get_filtered_count",
+                "resource_type": "category",
+                "total": total,
+                "active_filter": active,
+                "filters": {
+                    "general": general,
+                    "detail": detail
+                }
+            }
+        )
+        return total

@@ -13,7 +13,7 @@ from services.transaction_export_service import TransactionExportService
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database.connection import SessionLocal, init_db
-from services.transaction_service import TransactionImportService
+from services.transaction_import_service import TransactionImportService
 from services.category_service import CategoryService
 
 

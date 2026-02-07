@@ -2,7 +2,7 @@
 Admin API routes for database lifecycle operations
 
 This module provides administrative endpoints for managing the database lifecycle,
-including initialization and reset operations. These endpoints should be used with
+including initialisation and reset operations. These endpoints should be used with
 caution, especially in production environments.
 
 Level 3 REST API Implementation (HATEOAS - Hypermedia As The Engine Of Application State)
@@ -13,6 +13,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import HttpUrl
 from sqlalchemy import inspect
 
 from api.api_schemas import MessageResponse, AdminStatusResponse, Link, OptionsResponse, MethodInfo
@@ -42,13 +43,13 @@ def get_admin_links(request: Request) -> List[Link]:
     links = [
         Link(
             rel="self",
-            href=f"{base_url}/api/admin",
+            href=HttpUrl(f"{base_url}/api/admin"),
             method="GET",
             title="Get current database administration status"
         ),
         Link(
             rel="init",
-            href=f"{base_url}/api/admin/database/init",
+            href=HttpUrl(f"{base_url}/api/admin/database/init"),
             method="POST",
             title="Initialise the database"
         ),
@@ -60,7 +61,7 @@ def get_admin_links(request: Request) -> List[Link]:
         links.append(
             Link(
                 rel="reset",
-                href=f"{base_url}/api/admin/database/reset?force=true",
+                href=HttpUrl(f"{base_url}/api/admin/database/reset?force=true"),
                 method="POST",
                 title="Reset the database (DESTRUCTIVE - use with caution)"
             )
@@ -81,7 +82,15 @@ def get_database_status() -> tuple[bool, int]:
         tables = inspector.get_table_names()
         return len(tables) > 0, len(tables)
     except Exception as e:
-        logger.error(f"Error inspecting database: {e}")
+        logger.error(
+            "Error inspecting database status",
+            extra={
+                "operation": "get_database_status",
+                "resource_type": "database",
+                "status": "failed"
+            },
+            exc_info=True
+        )
         return False, 0
 
 
@@ -150,11 +159,19 @@ async def get_admin_status(request: Request):
         return AdminStatusResponse(
             is_initialised=is_initialised,
             table_count=table_count,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(timezone.utc),
             links=get_admin_links(request)
         )
     except Exception as e:
-        logger.error(f"Error getting admin status: {e}", exc_info=True)
+        logger.error(
+            "Error retrieving admin status",
+            extra={
+                "operation": "get_admin_status",
+                "resource_type": "admin",
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -203,15 +220,30 @@ async def initialise_database(request: Request):
     """
     try:
         init_db()
-        logger.info("Database initialized successfully")
-        return MessageResponse(message="Database initialized successfully",
+        logger.info(
+            "Database initialised successfully",
+            extra={
+                "operation": "database_init",
+                "resource_type": "database",
+                "status": "success"
+            }
+        )
+        return MessageResponse(message="Database initialised successfully",
                                details={"note": "All tables created or verified"},
                                links=get_admin_links(request))
     except Exception as e:
-        logger.error(f"Error initializing DB: {e}", exc_info=True)
+        logger.error(
+            "Failed to initialise database",
+            extra={
+                "operation": "database_init",
+                "resource_type": "database",
+                "status": "failed"
+            },
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
-            detail=f"Error initializing database: {str(e)}"
+            detail=f"Error initialising database: {str(e)}"
         )
 
 
@@ -281,7 +313,15 @@ async def reset_database(
         - Restrict access to this endpoint in production
     """
     if not force:
-        logger.warning("Database reset attempted without force=true")
+        logger.warning(
+            "Database reset attempted without force parameter",
+            extra={
+                "operation": "reset_database",
+                "resource_type": "database",
+                "status": "rejected",
+                "reason": "force_parameter_missing"
+            }
+        )
         error_response = MessageResponse(
             message="Database reset requires force=true parameter",
             details={"error": "Set force=true query parameter to confirm reset (DESTRUCTIVE OPERATION)"},
@@ -293,10 +333,24 @@ async def reset_database(
         )
 
     try:
-        logger.warning("Database reset initiated - dropping all tables")
+        logger.warning(
+            "Database reset initiated - dropping all tables",
+            extra={
+                "operation": "reset_database",
+                "resource_type": "database",
+                "status": "in_progress"
+            }
+        )
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
-        logger.info("Database reset completed successfully")
+        logger.info(
+            "Database reset completed successfully",
+            extra={
+                "operation": "reset_database",
+                "resource_type": "database",
+                "status": "success"
+            }
+        )
 
         return MessageResponse(
             message="Database reset successfully",
@@ -304,7 +358,11 @@ async def reset_database(
             links=get_admin_links(request)
         )
     except Exception as e:
-        logger.error(f"Error resetting DB: {e}", exc_info=True)
+        logger.error(
+            "Failed to reset database",
+            extra={"operation": "reset_database", "resource_type": "database"},
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Error resetting database: {str(e)}"

@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
-    Boolean
+    Boolean, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -19,7 +19,7 @@ class Transaction(Base):
     balance = Column(Numeric(12, 2), nullable=True)  # Account balance after transaction
     memo = Column(Text, nullable=True)
     comment = Column(Text, nullable=True)  # Additional comment field for bank-specific data
-    bank_account = Column(String(100), nullable=True,
+    bank_account = Column(Text, nullable=True,
                           index=True)  # Which bank/account (e.g., "Revolut", "KBC Checking Account")
 
     # Foreign keys
@@ -29,11 +29,11 @@ class Transaction(Base):
 
     # Import metadata
     original_raw_data = Column(Text, nullable=True)  # Store original CSV row
-    bank_reference = Column(String(100), nullable=True)  # Bank's transaction ID
+    bank_reference = Column(Text, nullable=True)  # Bank's transaction ID
 
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
+    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
 
     # Relationships
     recipient = relationship("Recipient", back_populates="transactions")
@@ -42,19 +42,26 @@ class Transaction(Base):
 
 
 class Category(Base):
+    """
+    Category model - stores information about transaction categories
+
+    Automatically converts general and detail fields to uppercase for consistent storage and display.
+    Uses SQLAlchemy events for seamless normalization without breaking type hints.
+    """
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
+
     # Store General and Detail parts separately for easy querying
-    general = Column(String(100), nullable=False, index=True)  # e.g., "Food"
-    detail = Column(String(100), nullable=False, index=True)  # e.g., "Groceries"
+    # These are automatically converted to uppercase via SQLAlchemy events
+    general = Column(Text, nullable=False, index=True)  # e.g., "FOOD"
+    detail = Column(Text, nullable=False, index=True)  # e.g., "GROCERIES"
     description = Column(Text, nullable=True)
-    color = Column(String(7), nullable=True)  # Hex color code for UI
     is_active = Column(Boolean, default=True)
 
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
+    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
 
     # Relationships
     recipients = relationship("Recipient", back_populates="default_category")
@@ -65,46 +72,79 @@ class Category(Base):
         UniqueConstraint('general', 'detail', name='uq_general_detail'),
     )
 
-    @property
+    def __init__(self, **kwargs):
+        """Initialize category with automatic uppercase normalization."""
+        # Normalize general and detail to uppercase before calling super().__init__
+        if 'general' in kwargs and kwargs['general']:
+            kwargs['general'] = kwargs['general'].strip().upper()
+        if 'detail' in kwargs and kwargs['detail']:
+            kwargs['detail'] = kwargs['detail'].strip().upper()
+        super().__init__(**kwargs)
+
+    def set_general(self, value: str) -> None:
+        """Set the general category name (automatically converted to uppercase)."""
+        if value:
+            self.general = value.strip().upper()
+        else:
+            self.general = value
+
+    def set_detail(self, value: str) -> None:
+        """Set the detail category name (automatically converted to uppercase)."""
+        if value:
+            self.detail = value.strip().upper()
+        else:
+            self.detail = value
+
     def full_path(self) -> str:
-        """Get the full category path in General:Detail format"""
+        """Get the full category path in General:Detail format (uppercase)."""
         return f"{self.general}:{self.detail}"
 
 
-class BankAdapter(Base):
-    __tablename__ = "bank_adapters"
+# SQLAlchemy event listeners for automatic uppercase normalization
+@event.listens_for(Category.general, 'set')
+def normalize_general(target, value, oldvalue, initiator):
+    """Automatically normalize general field to uppercase using TextNormalizationService."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_category_name(value)
+    return value
 
-    id = Column(Integer, primary_key=True, index=True)
-    bank_name = Column(String(100), nullable=False, unique=True)
-    adapter_config = Column(Text, nullable=False)  # JSON configuration
-    is_active = Column(String(10), default="true", nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+@event.listens_for(Category.detail, 'set')
+def normalize_detail(target, value, oldvalue, initiator):
+    """Automatically normalize detail field to uppercase using TextNormalizationService."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_category_name(value)
+    return value
 
 
 class Recipient(Base):
     """
     Recipient model - stores information about transaction recipients/payees
-    Designed to be extensible for future category assignments
     """
     __tablename__ = "recipients"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, index=True)
-    account_number = Column(String(50), nullable=True)  # Current requirement
 
-    # Future extensibility fields
+    name = Column(Text, nullable=False, index=True)
+    account_number = Column(Text, nullable=True)
     default_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     notes = Column(Text, nullable=True)
+    address = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
+    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
 
     # Relationships
     transactions = relationship("Transaction", back_populates="recipient")
     default_category = relationship("Category", back_populates="recipients")
+
+    __table_args__ = (
+        UniqueConstraint('name', name='uq_account_number'),
+    )
 
 
 class ImportBatch(Base):
@@ -128,9 +168,9 @@ class ImportBatch(Base):
     status = Column(String(20), default="processing")  # processing, completed, failed
     error_message = Column(Text, nullable=True)
 
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
+    completed_at = Column(DateTime, nullable=True)
 
     # Relationships
     transactions = relationship("Transaction", back_populates="import_batch")

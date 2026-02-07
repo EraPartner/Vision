@@ -1,0 +1,4083 @@
+openapi: 3.1.0
+info:
+  title: Financial Transaction Manager API
+  description: |
+    A comprehensive REST Level 3 (HATEOAS) API for managing financial transactions, categories, recipients, and administrative operations.
+    
+    ## Features
+    - Level 3 REST API implementation with full HATEOAS support
+    - Financial transaction categorisation and management
+    - Database administration capabilities
+    - Audit logging and compliance features
+    - British English terminology throughout
+    
+    ## Authentication
+    Currently no authentication required (development setup)
+    
+    ## Error Handling
+    All endpoints follow standard HTTP status codes and return structured error responses.
+
+  version: 1.0.0
+  contact:
+    name: Financial Transaction Manager
+    url: https://github.com/EraPartner/Vault-Voyager # TODO
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3002
+    description: Development server
+
+tags:
+  - name: root
+    description: API discovery and navigation endpoints
+  - name: admin
+    description: Database administration and lifecycle operations
+  - name: categories
+    description: Financial transaction category management
+  - name: recipients
+    description: Transaction recipient management
+  - name: transactions
+    description: Financial transaction management and retrieval
+  - name: import
+    description: CSV file import and data processing operations
+  - name: info
+    description: Financial information and reporting endpoints
+
+paths:
+  # ==================== Root API Endpoints ====================
+
+  /api/:
+    options:
+      tags: [ root ]
+      summary: Discover API root capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the API root.
+        Use this as the entry point for API discovery and navigation.
+      operationId: getRootOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootOptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve API root with available resources
+                description: "API root discovery endpoint for Level 3 REST API (HATEOAS)"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/
+                    method: GET
+                    title: API root
+                  - rel: admin
+                    href: http://localhost:3002/api/admin
+                    method: GET
+                    title: Admin status
+        '500':
+          description: Unable to generate API options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [ root ]
+      summary: API root discovery endpoint
+      description: |
+        Serves as the entry point for Level 3 REST API navigation, providing hypermedia
+        links that guide clients to available resources and operations. This endpoint
+        implements the HATEOAS (Hypermedia As The Engine Of Application State) principle.
+        
+        **Features:**
+        - API version information
+        - Hypermedia links to all available resources
+        - Self-documenting through links
+        - Audit logging for access tracking
+        
+        **Security:**
+        - Logs all access for audit purposes
+        - No sensitive information exposed
+        - Rate limiting applied through middleware
+      operationId: getAPIRoot
+      responses:
+        '200':
+          description: API metadata and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIRootResponse'
+              example:
+                version: "1.0.0"
+                title: "Financial Transaction Manager"
+                description: "Import and manage financial transactions from various banks"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/
+                    method: GET
+                    title: API root
+                  - rel: admin
+                    href: http://localhost:3002/api/admin
+                    method: GET
+                    title: Admin status
+                  - rel: categories
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: List categories
+                  - rel: recipients
+                    href: http://localhost:3002/api/recipients
+                    method: GET
+                    title: List recipients
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: List transactions
+                  - rel: info
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: View info
+                  - rel: import
+                    href: http://localhost:3002/api/import/csv
+                    method: POST
+                    title: Import transactions
+        '500':
+          description: Unable to generate API root response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Admin Endpoints ====================
+
+  /api/admin:
+    options:
+      tags: [ admin ]
+      summary: Discover admin endpoint capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the admin endpoint.
+        Use this to discover what administrative operations are available.
+      operationId: getAdminOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Get current database administration status
+                  - method: POST
+                    description: Initialise database or reset (see links for actions)
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/admin
+                    method: GET
+                    title: Get current database administration status
+
+    get:
+      tags: [ admin ]
+      summary: Get database administration status
+      description: |
+        Returns the current status of the database including whether it's initialised,
+        table count, and available administrative actions as HATEOAS links.
+        
+        This endpoint provides crucial information for system health monitoring
+        and guides administrators on available operations.
+      operationId: getAdminStatus
+      responses:
+        '200':
+          description: Database status with available actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatusResponse'
+              example:
+                is_initialised: true
+                table_count: 8
+                timestamp: "2026-02-03T10:30:00.000Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/admin
+                    method: GET
+                    title: Get current database administration status
+                  - rel: init
+                    href: http://localhost:3002/api/admin/database/init
+                    method: POST
+                    title: Initialise the database
+        '500':
+          description: Internal server error retrieving status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error retrieving admin status"
+                error_code: "INTERNAL_SERVER_ERROR"
+
+  /api/admin/database/init:
+    post:
+      tags: [ admin ]
+      summary: Initialise database tables
+      description: |
+        Initialises all database tables defined in the SQLAlchemy models.
+        This operation is idempotent and safe to run multiple times.
+        
+        **Key Features:**
+        - Creates missing tables without affecting existing data
+        - Preserves all existing tables and data
+        - Returns HATEOAS links for next available actions
+        - Logs all operations for audit purposes
+        
+        **Use Cases:**
+        - First-time database setup
+        - Recovery after table deletion
+        - Development environment setup
+      operationId: initialiseDatabase
+      responses:
+        '201':
+          description: Database initialised successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Database initialised successfully"
+                details:
+                  note: "All tables created or verified"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/admin
+                    method: GET
+                    title: Get current database administration status
+        '500':
+          description: Database initialisation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error initialising database: connection failed"
+                error_code: "DATABASE_INIT_ERROR"
+
+  /api/admin/database/reset:
+    post:
+      tags: [ admin ]
+      summary: Reset database (DESTRUCTIVE OPERATION)
+      description: |
+        **⚠️ DESTRUCTIVE OPERATION ⚠️**
+        
+        Completely resets the database by dropping and recreating all tables.
+        This operation permanently deletes ALL data and cannot be undone.
+        
+        **Requirements:**
+        - Must include `force=true` query parameter
+        - Should only be used in development environments
+        - Always backup database before using
+        
+        **Security Considerations:**
+        - This endpoint can be disabled via configuration
+        - Should be restricted in production environments
+        - Consider additional authentication for this endpoint
+        
+        **Use Cases:**
+        - Development environment resets
+        - Test data cleanup
+        - Starting fresh during development
+      operationId: resetDatabase
+      parameters:
+        - name: force
+          in: query
+          required: true
+          schema:
+            type: boolean
+            enum: [ true ]
+          description: Must be set to true to confirm the destructive operation
+          example: true
+      responses:
+        '200':
+          description: Database reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Database reset successfully"
+                details:
+                  warning: "All previous data has been permanently deleted"
+                links:
+                  - rel: init
+                    href: http://localhost:3002/api/admin/database/init
+                    method: POST
+                    title: Initialise the database
+        '400':
+          description: Force parameter missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Database reset requires force=true parameter"
+                details:
+                  error: "Set force=true query parameter to confirm reset (DESTRUCTIVE OPERATION)"
+        '500':
+          description: Database reset failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error resetting database: operation failed"
+                error_code: "DATABASE_RESET_ERROR"
+        '404':
+          description: Endpoint not available (disabled in configuration)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Database reset endpoint is disabled"
+                error_code: "ENDPOINT_DISABLED"
+
+  # ==================== Categories Endpoints ====================
+
+  /api/categories:
+    options:
+      tags: [ categories ]
+      summary: Discover categories collection capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the categories collection.
+        Use this to discover what operations are available on categories.
+      operationId: getCategoriesOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve all categories with pagination
+                  - method: POST
+                    description: Create a new category
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: List all categories
+
+    get:
+      tags: [ categories ]
+      summary: List all categories with pagination
+      description: |
+        Retrieves a paginated list of all active categories in the system.
+        Each category includes HATEOAS links for available operations.
+        
+        **Features:**
+        - Pagination support for large datasets
+        - Hierarchical category structure (General:Detail)
+        - HATEOAS links for individual category operations
+        - Audit logging for access tracking
+        
+        **Sorting:**
+        Categories are sorted by creation order (ID) for consistent pagination.
+      operationId: getCategories
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: |
+            Maximum number of categories to return per page.
+            **Default**: 50, **Range**: 1-1000
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of categories to skip for pagination (zero-based).
+            Use with limit for page navigation. **Default**: 0
+          example: 0
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Filter categories by active status. When true, returns only active categories.
+            When false, returns all categories including inactive ones.
+            **Default**: true
+          example: true
+      responses:
+        '200':
+          description: Paginated categories list with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriesListResponse'
+              example:
+                items:
+                  - id: 1
+                    general: "GROCERIES"
+                    detail: "FOOD"
+                    description: "Food and grocery purchases"
+                    created_at: "2026-01-15T10:30:00Z"
+                    updated_at: "2026-01-20T14:45:00Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/categories/1
+                        method: GET
+                        title: Get this category
+                      - rel: update
+                        href: http://localhost:3002/api/categories/1
+                        method: PATCH
+                        title: Update this category
+                      - rel: delete
+                        href: http://localhost:3002/api/categories/1
+                        method: DELETE
+                        title: Delete this category
+                total: 25
+                limit: 10
+                offset: 0
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories?limit=10&offset=0
+                    method: GET
+                    title: Current page
+                  - rel: next
+                    href: http://localhost:3002/api/categories?limit=10&offset=10
+                    method: GET
+                    title: Next page
+        '500':
+          description: Error retrieving categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error retrieving categories"
+                error_code: "INTERNAL_SERVER_ERROR"
+
+    post:
+      tags: [ categories ]
+      summary: Create or get existing category
+      description: |
+        Creates a new category with the specified general and detail names.
+        If a category with the same General:Detail combination already exists,
+        returns the existing category instead of creating a duplicate.
+        
+        **Features:**
+        - Automatic deduplication based on General:Detail combination
+        - Input normalisation (uppercase, trimmed)
+        - Optional description 
+        - HATEOAS links for category operations
+        
+        **Validation:**
+        - General and Detail names are required
+        - Names are automatically normalised to uppercase
+        - Colour must be valid hex format if provided
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryBase'
+            example:
+              general: "groceries"
+              detail: "food"
+              description: "Food and grocery purchases"
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+              example:
+                id: 5
+                general: "GROCERIES"
+                detail: "FOOD"
+                description: "Food and grocery purchases"
+                created_at: "2026-02-03T10:30:00Z"
+                updated_at: null
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories/5
+                    method: GET
+                    title: Get this category
+                  - rel: update
+                    href: http://localhost:3002/api/categories/5
+                    method: PATCH
+                    title: Update this category
+        '200':
+          description: Existing category returned (no duplicate created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          description: Validation error in request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "General name cannot be empty"
+                error_code: "VALIDATION_ERROR"
+        '500':
+          description: Error creating category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/categories/{categoryId}:
+    options:
+      tags: [ categories ]
+      summary: Discover individual category capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for a specific category.
+        Use this to discover what operations are available on an individual category.
+      operationId: getCategoryOptions
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve a specific category by ID
+                  - method: PATCH
+                    description: Update a category
+                  - method: DELETE
+                    description: Delete a category
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories/1
+                    method: GET
+                    title: Get this category
+                  - rel: update
+                    href: http://localhost:3002/api/categories/1
+                    method: PATCH
+                    title: Update this category
+
+    get:
+      tags: [ categories ]
+      summary: Get category by ID
+      description: |
+        Retrieves detailed information for a single category identified by its ID.
+        Returns the category with all its properties and HATEOAS links for available operations.
+        
+        **Features:**
+        - Complete category information
+        - HATEOAS links for operations (update, delete, list)
+        - Audit logging for access tracking
+      operationId: getCategoryById
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      responses:
+        '200':
+          description: Category details with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+              example:
+                id: 1
+                general: "GROCERIES"
+                detail: "FOOD"
+                description: "Food and grocery purchases"
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-01-20T14:45:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories/1
+                    method: GET
+                    title: Get this category
+                  - rel: update
+                    href: http://localhost:3002/api/categories/1
+                    method: PATCH
+                    title: Update this category
+                  - rel: delete
+                    href: http://localhost:3002/api/categories/1
+                    method: DELETE
+                    title: Delete this category
+                  - rel: list
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: List all categories
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Category not found"
+                error_code: "CATEGORY_NOT_FOUND"
+        '500':
+          description: Error retrieving category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [ categories ]
+      summary: Update category
+      description: |
+        Partially updates an existing category with the provided values.
+        Only fields included in the request body will be updated.
+        
+        **Features:**
+        - Partial updates (only specified fields changed)
+        - Input normalisation for text fields
+        - Validation for all updated fields
+        - Returns updated category with HATEOAS links
+        
+        **Validation:**
+        - All fields are optional (partial update)
+        - Text fields are normalised to uppercase
+        - Colour must be valid hex format if provided
+      operationId: updateCategory
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdate'
+            example:
+              description: "Updated description for food category"
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+              example:
+                id: 1
+                general: "GROCERIES"
+                detail: "FOOD"
+                description: "Updated description for food category"
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-02-03T10:30:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/categories/1
+                    method: GET
+                    title: Get this category
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Category not found"
+                error_code: "CATEGORY_NOT_FOUND"
+        '400':
+          description: Validation error in update data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error updating category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [ categories ]
+      summary: Delete category
+      description: |
+        Deletes a category from the system. Supports both soft delete (default)
+        and hard delete operations.
+        
+        **Soft Delete (Default):**
+        - Marks category as inactive (is_active=False)
+        - Preserves data for historical reference
+        - Maintains referential integrity
+        - Recommended for production use
+        
+        **Hard Delete:**
+        - Permanently removes category from database
+        - Cannot be undone
+        - May cause referential integrity issues
+        - Use with caution
+        
+        **Features:**
+        - Configurable delete type via query parameter
+        - HATEOAS links for next available actions
+        - Audit logging for delete operations
+      operationId: deleteCategory
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+        - name: soft
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Whether to perform a soft delete (true) or hard delete (false).
+            Soft delete is recommended to preserve historical data.
+          example: true
+      responses:
+        '200':
+          description: Category deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Category deleted successfully"
+                details:
+                  operation: "soft_delete"
+                  note: "Category marked as inactive but preserved for historical reference"
+                links:
+                  - rel: list
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: List remaining categories
+                  - rel: create
+                    href: http://localhost:3002/api/categories
+                    method: POST
+                    title: Create a new category
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Category not found"
+                error_code: "CATEGORY_NOT_FOUND"
+        '500':
+          description: Error deleting category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/categories/assign:
+    options:
+      tags: [ categories ]
+      summary: Discover category assignment capabilities
+      description: |
+        Returns available HTTP methods for the category assignment endpoint.
+        Use this to discover how to assign categories to recipients.
+      operationId: getAssignCategoryOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+
+    post:
+      tags: [ categories ]
+      summary: Assign category to recipients
+      description: |
+        Assigns a category to one or multiple recipients. Creates the category
+        if it doesn't exist using the provided general and detail names.
+        
+        **Features:**
+        - Bulk assignment to multiple recipients
+        - Automatic category creation if needed
+        - Input validation and normalisation
+        - Returns count of updated recipients
+        - HATEOAS links for next actions
+        
+        **Validation:**
+        - Category general and detail names are required
+        - At least one recipient ID must be provided
+        - All recipient IDs must exist in the system
+        
+        **Use Cases:**
+        - Setting default categories for new recipients
+        - Bulk categorisation operations
+        - Category assignment workflows
+      operationId: assignCategoryToRecipients
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignCategoryRequest'
+            examples:
+              single_recipient:
+                summary: Assign to single recipient
+                value:
+                  category_general: "groceries"
+                  category_detail: "food"
+                  recipient_ids: 5
+              multiple_recipients:
+                summary: Assign to multiple recipients
+                value:
+                  category_general: "groceries"
+                  category_detail: "food"
+                  recipient_ids: [ 5, 8, 12, 15 ]
+      responses:
+        '200':
+          description: Category assigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignCategoryResponse'
+              example:
+                updated_recipients: 4
+                links:
+                  - rel: assigned_category
+                    href: http://localhost:3002/api/categories/3
+                    method: GET
+                    title: Get the assigned category
+                  - rel: categories_list
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: Get all categories
+        '400':
+          description: Invalid request data or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_category:
+                  summary: Missing category information
+                  value:
+                    detail: "Category general name is required"
+                    error_code: "VALIDATION_ERROR"
+                empty_recipients:
+                  summary: No recipients provided
+                  value:
+                    detail: "At least one recipient ID must be provided"
+                    error_code: "VALIDATION_ERROR"
+        '404':
+          description: One or more recipients not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Recipient with ID 999 not found"
+                error_code: "RECIPIENT_NOT_FOUND"
+        '500':
+          description: Error assigning category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+
+  # ==================== Recipients Endpoints ====================
+
+  /api/recipients:
+    options:
+      tags: [ recipients ]
+      summary: Discover recipients collection capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the recipients collection.
+        Use this to discover what operations are available on recipients.
+      operationId: getRecipientsOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve all recipients with optional filtering
+                  - method: POST
+                    description: Create a new recipient
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients
+                    method: GET
+                    title: List all recipients
+
+    get:
+      tags: [ recipients ]
+      summary: List all recipients with optional filtering
+      description: |
+        Retrieves a paginated list of all active recipients in the system.
+        Each recipient includes HATEOAS links for available operations.
+        Supports filtering by name, account number, and default category.
+        
+        **Features:**
+        - Pagination support for large datasets
+        - Optional filtering by multiple criteria
+        - HATEOAS links for individual recipient operations
+        - Audit logging for access tracking
+        
+        **Filtering:**
+        - Name: Partial match search (case-insensitive)
+        - Account Number: Exact match search
+        - Default Category: Filter by category ID
+      operationId: getRecipients
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: |
+            Maximum number of recipients to return per page.
+            **Default**: 50, **Range**: 1-1000
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of recipients to skip for pagination (zero-based).
+            Use with limit for page navigation. **Default**: 0
+          example: 0
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: |
+            Filter recipients by partial name match (case-insensitive).
+            Searches for recipients containing this text in their name.
+          example: "john"
+        - name: account_number
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+          description: |
+            Filter recipients by exact account number match.
+            Use for precise recipient identification.
+          example: "12345678"
+        - name: default_category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter recipients by their default category assignment.
+            Shows recipients that default to this category ID.
+          example: 5
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Filter recipients by active status. When true, returns only active recipients.
+            When false, returns all recipients including inactive ones.
+            **Default**: true
+          example: true
+      responses:
+        '200':
+          description: Paginated recipients list with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientsListResponse'
+              example:
+                items:
+                  - id: 1
+                    name: "JOHN SMITH"
+                    account_number: "12345678"
+                    default_category_id: 5
+                    notes: "Regular client"
+                    address: "123 MAIN STREET"
+                    created_at: "2026-01-15T10:30:00Z"
+                    updated_at: "2026-01-20T14:45:00Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/recipients/1
+                        method: GET
+                        title: Get this recipient
+                      - rel: update
+                        href: http://localhost:3002/api/recipients/1
+                        method: PATCH
+                        title: Update this recipient
+                      - rel: delete
+                        href: http://localhost:3002/api/recipients/1
+                        method: DELETE
+                        title: Delete this recipient
+                total: 45
+                limit: 10
+                offset: 0
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients?limit=10&offset=0
+                    method: GET
+                    title: Current page
+                  - rel: next
+                    href: http://localhost:3002/api/recipients?limit=10&offset=10
+                    method: GET
+                    title: Next page
+        '500':
+          description: Error retrieving recipients
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error retrieving recipients"
+                error_code: "INTERNAL_SERVER_ERROR"
+
+    post:
+      tags: [ recipients ]
+      summary: Create or get existing recipient
+      description: |
+        Creates a new recipient with the specified name and account details.
+        If a recipient with the same name already exists, returns the existing recipient
+        instead of creating a duplicate.
+        
+        **Features:**
+        - Automatic deduplication based on name
+        - Input normalisation (uppercase, trimmed)
+        - Optional account number, notes, and address
+        - Default category assignment support
+        - HATEOAS links for recipient operations
+        
+        **Validation:**
+        - Name is required and automatically normalised
+        - Account number is optional but must be unique if provided
+        - Default category ID must exist if specified
+      operationId: createRecipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipientBase'
+            example:
+              name: "john smith"
+              account_number: "12345678"
+              default_category_id: 5
+              notes: "Regular client for grocery transactions"
+              address: "123 main street, london"
+      responses:
+        '201':
+          description: Recipient created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientResponse'
+              example:
+                id: 15
+                name: "JOHN SMITH"
+                account_number: "12345678"
+                default_category_id: 5
+                notes: "Regular client for grocery transactions"
+                address: "123 MAIN STREET, LONDON"
+                created_at: "2026-02-03T10:30:00Z"
+                updated_at: null
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients/15
+                    method: GET
+                    title: Get this recipient
+                  - rel: update
+                    href: http://localhost:3002/api/recipients/15
+                    method: PATCH
+                    title: Update this recipient
+        '200':
+          description: Existing recipient returned (no duplicate created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientResponse'
+        '400':
+          description: Validation error in request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Name cannot be empty"
+                error_code: "VALIDATION_ERROR"
+                field_errors:
+                  name: [ "Field is required" ]
+                  account_number: [ "Account number already exists" ]
+        '500':
+          description: Error creating recipient
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/recipients/{recipientId}:
+    options:
+      tags: [ recipients ]
+      summary: Discover individual recipient capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for a specific recipient.
+        Use this to discover what operations are available on an individual recipient.
+      operationId: getRecipientOptions
+      parameters:
+        - $ref: '#/components/parameters/RecipientId'
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve a specific recipient by ID
+                  - method: PATCH
+                    description: Update a recipient
+                  - method: DELETE
+                    description: Delete a recipient
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients/1
+                    method: GET
+                    title: Get this recipient
+                  - rel: update
+                    href: http://localhost:3002/api/recipients/1
+                    method: PATCH
+                    title: Update this recipient
+
+    get:
+      tags: [ recipients ]
+      summary: Get recipient by ID
+      description: |
+        Retrieves detailed information for a single recipient identified by its ID.
+        Returns the recipient with all its properties and HATEOAS links for available operations.
+        
+        **Features:**
+        - Complete recipient information
+        - HATEOAS links for operations (update, delete, list)
+        - Audit logging for access tracking
+        - Includes transaction count and statistics
+      operationId: getRecipientById
+      parameters:
+        - $ref: '#/components/parameters/RecipientId'
+      responses:
+        '200':
+          description: Recipient details with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientResponse'
+              example:
+                id: 1
+                name: "JOHN SMITH"
+                account_number: "12345678"
+                default_category_id: 5
+                notes: "Regular client for grocery transactions"
+                address: "123 MAIN STREET, LONDON"
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-01-20T14:45:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients/1
+                    method: GET
+                    title: Get this recipient
+                  - rel: update
+                    href: http://localhost:3002/api/recipients/1
+                    method: PATCH
+                    title: Update this recipient
+                  - rel: delete
+                    href: http://localhost:3002/api/recipients/1
+                    method: DELETE
+                    title: Delete this recipient
+                  - rel: list
+                    href: http://localhost:3002/api/recipients
+                    method: GET
+                    title: List all recipients
+        '404':
+          description: Recipient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Recipient not found"
+                error_code: "RECIPIENT_NOT_FOUND"
+        '500':
+          description: Error retrieving recipient
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [ recipients ]
+      summary: Update recipient
+      description: |
+        Partially updates an existing recipient with the provided values.
+        Only fields included in the request body will be updated.
+        
+        **Features:**
+        - Partial updates (only specified fields changed)
+        - Input normalisation for text fields
+        - Validation for all updated fields
+        - Support for clearing optional fields (set to null)
+        - Returns updated recipient with HATEOAS links
+        
+        **Validation:**
+        - All fields are optional (partial update)
+        - Name is normalised to uppercase if provided
+        - Account number must be unique if changed
+        - Default category ID must exist if specified
+        - Supports clearing fields by setting them to null
+      operationId: updateRecipient
+      parameters:
+        - $ref: '#/components/parameters/RecipientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecipientUpdate'
+            examples:
+              partial_update:
+                summary: Update specific fields
+                value:
+                  notes: "Updated notes for this recipient"
+                  default_category_id: 8
+              clear_fields:
+                summary: Clear optional fields
+                value:
+                  notes: null
+                  address: null
+                  account_number: null
+      responses:
+        '200':
+          description: Recipient updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipientResponse'
+              example:
+                id: 1
+                name: "JOHN SMITH"
+                account_number: "12345678"
+                default_category_id: 8
+                notes: "Updated notes for this recipient"
+                address: "123 MAIN STREET, LONDON"
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-02-03T10:30:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/recipients/1
+                    method: GET
+                    title: Get this recipient
+        '404':
+          description: Recipient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Recipient not found"
+                error_code: "RECIPIENT_NOT_FOUND"
+        '400':
+          description: Validation error in update data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Account number already exists"
+                error_code: "VALIDATION_ERROR"
+                field_errors:
+                  account_number: [ "Account number must be unique" ]
+        '500':
+          description: Error updating recipient
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [ recipients ]
+      summary: Delete recipient
+      description: |
+        Deletes a recipient from the system using soft delete (default).
+        Soft delete marks the recipient as inactive while preserving historical data.
+        
+        **Soft Delete (Default):**
+        - Marks recipient as inactive (is_active=False)
+        - Preserves data for historical reference
+        - Maintains transaction history integrity
+        - Recommended for production use
+        
+        **Features:**
+        - Safe deletion that preserves transaction history
+        - HATEOAS links for next available actions
+        - Audit logging for delete operations
+        - Prevents data loss while cleaning up active lists
+        
+        **Use Cases:**
+        - Removing recipients from active lists
+        - Cleaning up old or unused recipients
+        - Maintaining data integrity for historical transactions
+      operationId: deleteRecipient
+      parameters:
+        - $ref: '#/components/parameters/RecipientId'
+      responses:
+        '200':
+          description: Recipient deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Recipient deleted successfully"
+                details:
+                  operation: "soft_delete"
+                  note: "Recipient marked as inactive but preserved for historical reference"
+                links:
+                  - rel: list
+                    href: http://localhost:3002/api/recipients
+                    method: GET
+                    title: List remaining recipients
+                  - rel: create
+                    href: http://localhost:3002/api/recipients
+                    method: POST
+                    title: Create a new recipient
+        '404':
+          description: Recipient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Recipient not found"
+                error_code: "RECIPIENT_NOT_FOUND"
+        '500':
+          description: Error deleting recipient
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Transactions Endpoints ====================
+
+  /api/transactions:
+    options:
+      tags: [ transactions ]
+      summary: Discover transactions collection capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the transactions collection.
+        Use this to discover what operations are available on transactions.
+      operationId: getTransactionsOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve all transactions with pagination and filtering
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: List all transactions
+
+    get:
+      tags: [ transactions ]
+      summary: List all transactions with pagination and filtering
+      description: |
+        Retrieves a paginated list of all transactions in the system.
+        Each transaction includes HATEOAS links for available operations.
+        
+        **Features:**
+        - Pagination support for large datasets
+        - Filtering by date range, category, recipient, and amount
+        - Sorting options (date, amount, recipient)
+        - HATEOAS links for individual transaction operations
+        - Audit logging for access tracking
+        
+        **Default Sorting:**
+        Transactions are sorted by date (newest first) for consistent pagination.
+      operationId: getTransactions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: |
+            Maximum number of transactions to return per page.
+            **Default**: 50, **Range**: 1-1000
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of transactions to skip for pagination (zero-based).
+            Use with limit for page navigation. **Default**: 0
+          example: 0
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter transactions by category ID.
+            Only returns transactions assigned to this category.
+          example: 5
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter transactions by recipient ID.
+            Only returns transactions with this recipient.
+          example: 3
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Filter transactions from this date (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-01-01"
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Filter transactions to this date (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-01-31"
+        - name: amount_min
+          in: query
+          required: false
+          schema:
+            type: number
+            format: float
+            multipleOf: 0.01
+          description: |
+            Filter transactions with minimum amount (inclusive).
+            Supports negative values for expenses.
+          example: -1000.00
+        - name: amount_max
+          in: query
+          required: false
+          schema:
+            type: number
+            format: float
+            multipleOf: 0.01
+          description: |
+            Filter transactions with maximum amount (inclusive).
+            Supports positive values for income.
+          example: 1000.00
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ date_asc, date_desc, amount_asc, amount_desc, recipient_asc, recipient_desc ]
+            default: date_desc
+          description: |
+            Sort order for transactions.
+            **Default**: date_desc (newest first)
+            
+            **Options:**
+            - date_asc: Oldest first
+            - date_desc: Newest first
+            - amount_asc: Smallest amount first  
+            - amount_desc: Largest amount first
+            - recipient_asc: Alphabetical by recipient
+            - recipient_desc: Reverse alphabetical by recipient
+          example: date_desc
+      responses:
+        '200':
+          description: Paginated transactions list with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionsListResponse'
+              example:
+                items:
+                  - id: 1
+                    date: "2026-01-15"
+                    description: "TESCO STORE 1234"
+                    amount: -45.67
+                    balance: 1254.33
+                    category_id: 1
+                    category_general: "GROCERIES"
+                    category_detail: "FOOD"
+                    recipient_id: 3
+                    recipient_name: "Tesco PLC"
+                    created_at: "2026-01-15T10:30:00Z"
+                    updated_at: "2026-01-20T14:45:00Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/transactions/1
+                        method: GET
+                        title: Get this transaction
+                      - rel: update
+                        href: http://localhost:3002/api/transactions/1
+                        method: PATCH
+                        title: Update this transaction
+                      - rel: delete
+                        href: http://localhost:3002/api/transactions/1
+                        method: DELETE
+                        title: Delete this transaction
+                      - rel: category
+                        href: http://localhost:3002/api/categories/1
+                        method: GET
+                        title: View transaction category
+                      - rel: recipient
+                        href: http://localhost:3002/api/recipients/3
+                        method: GET
+                        title: View transaction recipient
+                total: 1250
+                limit: 10
+                offset: 0
+                applied_filters:
+                  category_id: null
+                  recipient_id: null
+                  date_from: null
+                  date_to: null
+                  amount_min: null
+                  amount_max: null
+                  sort: date_desc
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions?limit=10&offset=0
+                    method: GET
+                    title: Current page
+                  - rel: next
+                    href: http://localhost:3002/api/transactions?limit=10&offset=10
+                    method: GET
+                    title: Next page
+                  - rel: first
+                    href: http://localhost:3002/api/transactions?limit=10&offset=0
+                    method: GET
+                    title: First page
+                  - rel: last
+                    href: http://localhost:3002/api/transactions?limit=10&offset=1240
+                    method: GET
+                    title: Last page
+                  - rel: categories
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: Browse categories
+                  - rel: recipients
+                    href: http://localhost:3002/api/recipients
+                    method: GET
+                    title: Browse recipients
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Invalid date format. Expected YYYY-MM-DD"
+                error_code: "INVALID_DATE_FORMAT"
+        '500':
+          description: Error retrieving transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/transactions/{transactionId}:
+    options:
+      tags: [ transactions ]
+      summary: Discover individual transaction capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for a specific transaction.
+        Use this to discover what operations are available on an individual transaction.
+      operationId: getTransactionOptions
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve a specific transaction by ID
+                  - method: PATCH
+                    description: Update a transaction
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions/1
+                    method: GET
+                    title: Get this transaction
+                  - rel: update
+                    href: http://localhost:3002/api/transactions/1
+                    method: PATCH
+                    title: Update this transaction
+
+    get:
+      tags: [ transactions ]
+      summary: Get transaction by ID
+      description: |
+        Retrieves detailed information for a single transaction identified by its ID.
+        Returns the transaction with all its properties and HATEOAS links for available operations.
+        
+        **Features:**
+        - Complete transaction information
+        - Related category and recipient details
+        - HATEOAS links for operations (update, list)
+        - Audit logging for access tracking
+      operationId: getTransactionById
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Transaction details with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: 1
+                date: "2026-01-15"
+                bank_account: "Chase Current Account"
+                recipient_id: 3
+                memo: "Grocery shopping"
+                amount: -45.67
+                currency: "GBP"
+                balance: 1254.33
+                category_id: 1
+                comment: null
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-01-20T14:45:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions/1
+                    method: GET
+                    title: Get this transaction
+                  - rel: update
+                    href: http://localhost:3002/api/transactions/1
+                    method: PATCH
+                    title: Update this transaction
+                  - rel: list
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: List all transactions
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Transaction not found"
+                error_code: "TRANSACTION_NOT_FOUND"
+        '500':
+          description: Error retrieving transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [ transactions ]
+      summary: Update transaction
+      description: |
+        Partially updates an existing transaction with the provided values.
+        Only fields included in the request body will be updated.
+        
+        **Features:**
+        - Partial updates (only specified fields changed)
+        - Validation for all updated fields
+        - Support for updating category and recipient associations
+        - Returns updated transaction with HATEOAS links
+        
+        **Validation:**
+        - All fields are optional (partial update)
+        - Amount must be a valid number
+        - Date must be in YYYY-MM-DD format
+        - Category and recipient IDs must reference existing entities
+      operationId: updateTransaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionUpdate'
+            examples:
+              update_amount:
+                summary: Update transaction amount
+                value:
+                  amount: -52.30
+              update_category:
+                summary: Change transaction category
+                value:
+                  category_id: 8
+              update_multiple:
+                summary: Update multiple fields
+                value:
+                  amount: -52.30
+                  category_id: 8
+                  memo: "Updated grocery shopping note"
+                  comment: "Split payment with flatmate"
+      responses:
+        '200':
+          description: Transaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: 1
+                date: "2026-01-15"
+                bank_account: "Chase Current Account"
+                recipient_id: 3
+                memo: "Updated grocery shopping note"
+                amount: -52.30
+                currency: "GBP"
+                balance: 1254.33
+                category_id: 8
+                comment: "Split payment with flatmate"
+                created_at: "2026-01-15T10:30:00Z"
+                updated_at: "2026-02-03T10:30:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions/1
+                    method: GET
+                    title: Get this transaction
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Transaction not found"
+                error_code: "TRANSACTION_NOT_FOUND"
+        '400':
+          description: Validation error in update data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Invalid amount value"
+                error_code: "VALIDATION_ERROR"
+        '500':
+          description: Error updating transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Import Endpoints ====================
+
+  /api/import/csv:
+    options:
+      tags: [ import ]
+      summary: Discover CSV import capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the CSV import endpoint.
+        Use this to discover what import operations are available and supported bank formats.
+      operationId: getCSVImportOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: POST
+                    description: Import transactions from CSV file using predefined bank configurations
+                links:
+                  - rel: custom_import
+                    href: http://localhost:3002/api/import/csv/custom
+                    method: POST
+                    title: Import with custom configuration
+
+    post:
+      tags: [ import ]
+      summary: Import transactions from CSV file
+      description: |
+        Upload and import financial transactions from a CSV file using predefined bank configurations.
+        
+        **Features:**
+        - Support for multiple bank formats (Chase, Belfius, etc.)
+        - Automatic duplicate detection and prevention
+        - File validation (type and size)
+        - Batch processing with detailed results
+        - Audit logging for compliance
+        
+        **File Requirements:**
+        - Must be a CSV file (.csv extension)
+        - Maximum size: 50MB
+        - Supported encodings: UTF-8 (default), others configurable
+        
+        **Duplicate Handling:**
+        - System automatically detects duplicate transactions
+        - Duplicates are counted but not imported
+        - Import continues with unique transactions
+      operationId: importCSVFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ file, bank_name ]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file containing transaction data
+                bank_name:
+                  type: string
+                  description: Name of the bank (e.g., 'chase', 'belfius')
+                  example: "chase"
+            examples:
+              chase_upload:
+                summary: Upload Chase bank CSV
+                value:
+                  bank_name: "chase"
+              belfius_upload:
+                summary: Upload Belfius bank CSV
+                value:
+                  bank_name: "belfius"
+      parameters:
+        - name: bank_name
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ "chase", "belfius", "hsbc", "barclays", "lloyds" ]
+          description: |
+            Name of the bank configuration to use for CSV parsing.
+            Each bank has predefined column mappings and formats.
+            
+            **Supported Banks:**
+            - chase: JPMorgan Chase Bank format
+            - belfius: Belfius Bank (Belgium) format  
+            - hsbc: HSBC Bank format
+            - barclays: Barclays Bank format
+            - lloyds: Lloyds Bank format
+            
+            For unsupported banks, use `/api/import/csv/custom` endpoint.
+          example: "chase"
+      responses:
+        '200':
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResultWithLinks'
+              example:
+                batch_id: "batch_20260203_103045_abc123"
+                total_processed: 150
+                imported: 142
+                duplicates: 8
+                errors: 0
+                status: "completed"
+                error_message: null
+                links:
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: View imported transactions
+                  - rel: info
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: Updated info
+                  - rel: categories
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: Manage transaction categories
+        '400':
+          description: Invalid file or bank configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_file_type:
+                  summary: Invalid file type
+                  value:
+                    detail: "File must be a CSV"
+                    error_code: "INVALID_FILE_TYPE"
+                file_too_large:
+                  summary: File size exceeded
+                  value:
+                    detail: "File size exceeds 50MB limit"
+                    error_code: "FILE_TOO_LARGE"
+                invalid_bank:
+                  summary: Unsupported bank
+                  value:
+                    detail: "Bank 'unknown_bank' not supported"
+                    error_code: "UNSUPPORTED_BANK"
+        '500':
+          description: Import processing error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/import/csv/custom:
+    options:
+      tags: [ import ]
+      summary: Discover custom CSV import capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the custom CSV import endpoint.
+        Use this to discover what custom import configurations are supported.
+      operationId: getCustomCSVImportOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: POST
+                    description: Import CSV with custom configuration for unsupported bank formats
+                links:
+                  - rel: standard_import
+                    href: http://localhost:3002/api/import/csv
+                    method: POST
+                    title: Import with predefined bank configuration
+
+    post:
+      tags: [ import ]
+      summary: Import CSV with custom configuration
+      description: |
+        Import transactions using a custom CSV configuration for banks not included 
+        in the predefined configurations.
+        
+        **Features:**
+        - Flexible column mapping
+        - Custom date formats
+        - Configurable separators and encodings
+        - Row skipping for headers
+        - Full validation and error reporting
+        
+        **Configuration Requirements:**
+        - Date format must be valid Python strftime format
+        - Column names must exist in the CSV header
+        - Amount column should contain numeric values
+        
+        **Use Cases:**
+        - Regional banks with unique CSV formats
+        - Custom export formats from accounting software
+        - Legacy bank systems with non-standard layouts
+      operationId: importCSVCustomConfig
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ file, bank_name, date_format, date_column, recipient_column, amount_column ]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file containing transaction data
+                bank_name:
+                  type: string
+                  description: Custom bank name for identification
+                  example: "regional_credit_union"
+                date_format:
+                  type: string
+                  description: Date format using Python strftime syntax
+                  example: "%m/%d/%Y"
+                date_column:
+                  type: string
+                  description: Name of the date column in CSV
+                  example: "Transaction Date"
+                recipient_column:
+                  type: string
+                  description: Name of the recipient/description column
+                  example: "Description"
+                amount_column:
+                  type: string
+                  description: Name of the amount column
+                  example: "Amount"
+                memo_column:
+                  type: string
+                  description: Optional memo/notes column name
+                  example: "Memo"
+                separator:
+                  type: string
+                  description: CSV field separator
+                  default: ","
+                  example: ";"
+                encoding:
+                  type: string
+                  description: File encoding
+                  default: "utf-8"
+                  example: "utf-8"
+                skip_rows:
+                  type: integer
+                  minimum: 0
+                  description: Number of header rows to skip
+                  default: 0
+                  example: 1
+      parameters:
+        - name: bank_name
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: '^[a-zA-Z0-9_\-\s]+$'
+          description: |
+            Custom bank name for identification and tracking.
+            Used in transaction records and audit logs.
+            **Constraints**: Alphanumeric, spaces, hyphens, underscores only
+          example: "regional_credit_union"
+        - name: date_format
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+          description: |
+            Date format using Python strftime syntax.
+            **Common formats**:
+            - %m/%d/%Y (MM/DD/YYYY, US format)
+            - %d/%m/%Y (DD/MM/YYYY, European format)
+            - %Y-%m-%d (YYYY-MM-DD, ISO format)
+            - %d-%b-%Y (DD-MMM-YYYY, e.g., 01-Jan-2026)
+          example: "%m/%d/%Y"
+        - name: date_column
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Name of the date column in your CSV file.
+            Must match the header exactly (case-sensitive).
+          example: "Transaction Date"
+        - name: recipient_column
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Name of the recipient/description column in your CSV file.
+            Contains payee names or transaction descriptions.
+          example: "Description"
+        - name: amount_column
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Name of the amount column in your CSV file.
+            Should contain numeric values (positive for income, negative for expenses).
+          example: "Amount"
+        - name: memo_column
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Optional memo/notes column name in your CSV file.
+            Used for additional transaction details or references.
+          example: "Memo"
+        - name: separator
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ ",", ";", "\t", "|" ]
+            default: ","
+          description: |
+            CSV field separator character.
+            **Default**: "," (comma)
+            **Options**: comma, semicolon, tab, pipe
+          example: ";"
+        - name: encoding
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ "utf-8", "utf-16", "iso-8859-1", "windows-1252" ]
+            default: "utf-8"
+          description: |
+            File encoding format.
+            **Default**: utf-8 (recommended)
+            Use windows-1252 for older Excel exports, iso-8859-1 for legacy systems.
+          example: "utf-8"
+        - name: skip_rows
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10
+            default: 0
+          description: |
+            Number of header/metadata rows to skip before data starts.
+            **Default**: 0 (data starts immediately)
+            **Range**: 0-10
+          example: 1
+      responses:
+        '200':
+          description: Custom import completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResultWithLinks'
+              example:
+                batch_id: "batch_20260203_103045_custom_xyz"
+                total_processed: 89
+                imported: 89
+                duplicates: 0
+                errors: 0
+                status: "completed"
+                error_message: null
+                links:
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: View imported transactions
+        '400':
+          description: Invalid configuration or file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_date_format:
+                  summary: Invalid date format
+                  value:
+                    detail: "Invalid configuration: Date format '%invalid%' is not supported"
+                    error_code: "INVALID_CONFIG"
+                missing_column:
+                  summary: Column not found
+                  value:
+                    detail: "Column 'InvalidColumn' not found in CSV"
+                    error_code: "COLUMN_NOT_FOUND"
+
+  /api/import/batches:
+    options:
+      tags: [ import ]
+      summary: Discover import batch history capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the import batches collection.
+        Use this to discover what operations are available for viewing import history.
+      operationId: getImportBatchesOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve import batch history with pagination and filtering
+                  - method: OPTIONS
+                    description: Discover available methods on this endpoint
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/import/batches
+                    method: GET
+                    title: View import history
+                  - rel: new_import
+                    href: http://localhost:3002/api/import/csv
+                    method: POST
+                    title: Import new CSV file
+
+    get:
+      tags: [ import ]
+      summary: List import batch history
+      description: |
+        Retrieves a paginated list of import batches with support for filtering by
+        bank name and status. Each batch includes comprehensive statistics about the
+        import operation and links to view the imported transactions.
+        
+        **Features:**
+        - Pagination support for large import histories
+        - Filtering by bank name and status
+        - Complete import statistics and metadata
+        - Links to view imported transactions
+        - Audit trail for compliance
+        
+        **Use Cases:**
+        - Audit import history
+        - Monitor import failures
+        - Track data provenance
+        - Identify duplicate import attempts
+        - Review custom import configurations
+        
+        **Sorting:**
+        Batches are sorted by creation date (newest first) for easy access to recent imports.
+      operationId: getImportBatches
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: |
+            Maximum number of batches to return per page.
+            **Default**: 50, **Range**: 1-1000
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of batches to skip for pagination (zero-based).
+            Use with limit for page navigation. **Default**: 0
+          example: 0
+        - name: bank_name
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Filter by partial bank name match (case-insensitive).
+            Useful for viewing imports from specific banks.
+          example: "Chase"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ "processing", "completed", "completed_with_errors", "failed" ]
+          description: |
+            Filter by exact import status match.
+            **Options:**
+            - processing: Import currently in progress
+            - completed: Import finished successfully with no errors
+            - completed_with_errors: Import finished but some transactions failed
+            - failed: Import failed completely
+          example: "completed"
+      responses:
+        '200':
+          description: Paginated import batches list with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchesListResponse'
+              example:
+                items:
+                  - id: 123
+                    filename: "transactions_jan_2026.csv"
+                    bank_name: "Chase"
+                    status: "completed"
+                    total_processed: 150
+                    imported_count: 145
+                    duplicate_count: 5
+                    error_count: 0
+                    error_message: null
+                    config_used: null
+                    created_at: "2026-01-15T10:30:00Z"
+                    completed_at: "2026-01-15T10:30:15Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/import/batches/123
+                        method: GET
+                        title: View batch details
+                      - rel: transactions
+                        href: http://localhost:3002/api/transactions?batch_id=123
+                        method: GET
+                        title: View imported transactions
+                total: 45
+                limit: 50
+                offset: 0
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/import/batches?limit=50&offset=0
+                    method: GET
+                    title: Current page
+                  - rel: next
+                    href: http://localhost:3002/api/import/batches?limit=50&offset=50
+                    method: GET
+                    title: Next page
+        '500':
+          description: Error retrieving import batches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error retrieving import batches"
+                error_code: "INTERNAL_SERVER_ERROR"
+
+  /api/import/batches/{batchId}:
+    options:
+      tags: [ import ]
+      summary: Discover individual import batch capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for a specific import batch.
+        Use this to discover what operations are available on an individual batch.
+      operationId: getImportBatchOptions
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve a specific import batch by ID
+                  - method: OPTIONS
+                    description: Discover available methods on this endpoint
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/import/batches/123
+                    method: GET
+                    title: View this batch
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions?batch_id=123
+                    method: GET
+                    title: View imported transactions
+
+    get:
+      tags: [ import ]
+      summary: Get import batch by ID
+      description: |
+        Retrieves detailed information about a specific import batch, including
+        all statistics, configuration used, and links to view the imported transactions.
+        
+        **Features:**
+        - Complete import batch metadata and statistics
+        - Error messages for failed imports
+        - Custom configuration details (if applicable)
+        - Links to view imported transactions
+        - Timestamps for audit and tracking
+        
+        **Use Cases:**
+        - Debugging failed imports
+        - Reviewing import configuration
+        - Verifying import statistics
+        - Accessing imported transactions
+      operationId: getImportBatchById
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '200':
+          description: Import batch details with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportBatchResponse'
+              example:
+                id: 123
+                filename: "transactions_jan_2026.csv"
+                bank_name: "Chase"
+                status: "completed"
+                total_processed: 150
+                imported_count: 145
+                duplicate_count: 5
+                error_count: 0
+                error_message: null
+                config_used: null
+                created_at: "2026-01-15T10:30:00Z"
+                completed_at: "2026-01-15T10:30:15Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/import/batches/123
+                    method: GET
+                    title: View this batch
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions?batch_id=123
+                    method: GET
+                    title: View imported transactions
+                  - rel: list
+                    href: http://localhost:3002/api/import/batches
+                    method: GET
+                    title: View all import batches
+                  - rel: new_import
+                    href: http://localhost:3002/api/import/csv
+                    method: POST
+                    title: Import another file
+        '404':
+          description: Import batch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Import batch not found"
+                error_code: "BATCH_NOT_FOUND"
+        '500':
+          description: Error retrieving import batch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Info Endpoints ====================
+
+  /api/info:
+    options:
+      tags: [ info ]
+      summary: Discover info capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the info endpoint.
+        Use this to discover what financial information and reports are available.
+      operationId: getInfoOptions
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Get comprehensive financial information and overview
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: Get overview info
+                  - rel: banks
+                    href: http://localhost:3002/api/info/banks
+                    method: GET
+                    title: View bank accounts
+                  - rel: summary
+                    href: http://localhost:3002/api/info/transaction-summary
+                    method: GET
+                    title: Get filtered transaction summary
+
+    get:
+      tags: [ info ]
+      summary: Get overview info
+      description: |
+        Retrieves comprehensive financial information for dashboard and reporting purposes.
+        
+        **Features:**
+        - Total transaction count and amounts
+        - Category-wise transaction breakdown
+        - Financial summaries for decision making
+        - Real-time data aggregation
+        - HATEOAS links for detailed exploration
+        
+        **Use Cases:**
+        - Dashboard widgets and visualisations
+        - Financial reporting and analysis
+        - Budget tracking and planning
+        - Expense category analysis
+        
+        **Performance:**
+        - Results are computed in real-time from current data
+        - Consider caching for high-frequency dashboard requests
+      operationId: getInfo
+      responses:
+        '200':
+          description: Info retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticsResponse'
+              example:
+                total_transactions: 1250
+                total_amount: -15432.67
+                categories:
+                  - name: "GROCERIES:FOOD"
+                    count: 342
+                  - name: "TRANSPORT:FUEL"
+                    count: 89
+                  - name: "UTILITIES:ELECTRICITY"
+                    count: 24
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: Refresh info
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: View all transactions
+                  - rel: categories
+                    href: http://localhost:3002/api/categories
+                    method: GET
+                    title: Manage categories
+                  - rel: banks
+                    href: http://localhost:3002/api/info/banks
+                    method: GET
+                    title: View bank accounts
+        '500':
+          description: Error retrieving info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/info/banks:
+    get:
+      tags: [ info ]
+      summary: Get list of bank accounts
+      description: |
+        Retrieves all unique bank account sources present in the transaction database.
+        
+        **Features:**
+        - List of all bank account identifiers
+        - Useful for filtering and reporting
+        - Supports multi-bank transaction management
+        - HATEOAS links for filtered views
+        
+        **Use Cases:**
+        - Account selection for filtered reports
+        - Multi-bank portfolio overview
+        - Import validation and verification
+        - Account-specific transaction analysis
+      operationId: getBanks
+      responses:
+        '200':
+          description: Bank list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankListResponse'
+              example:
+                banks:
+                  - "Chase Current Account"
+                  - "Belfius Savings"
+                  - "HSBC Premium"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info/banks
+                    method: GET
+                    title: Refresh bank list
+                  - rel: info
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: View info
+                  - rel: summary
+                    href: http://localhost:3002/api/info/transaction-summary
+                    method: GET
+                    title: Get transaction summary
+        '500':
+          description: Error retrieving banks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/info/transaction-summary:
+    get:
+      tags: [ info ]
+      summary: Get filtered transaction summary
+      description: |
+        Provides detailed transaction summary with optional filtering by bank account and date range.
+        
+        **Features:**
+        - Flexible filtering by bank account, date range
+        - Aggregated statistics for filtered data
+        - Support for custom reporting periods
+        - Real-time calculations
+        - HATEOAS navigation to related resources
+        
+        **Filtering Options:**
+        - Bank account: Filter by specific bank account
+        - Date range: Start and end dates (inclusive)
+        - Combinations: Multiple filters can be applied together
+        
+        **Use Cases:**
+        - Monthly/quarterly financial reports
+        - Account-specific analysis
+        - Period comparison reporting
+        - Budget vs actual analysis
+      operationId: getTransactionSummary
+      parameters:
+        - name: bank_account
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: |
+            Filter by specific bank account name.
+            Use exact account name as it appears in imported transactions.
+            **Note**: Use `/api/statistics/banks` to get available account names.
+          example: "Chase Current Account"
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Start date for filtering (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+            **Note**: Must be before or equal to end_date if both provided.
+          example: "2026-01-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            End date for filtering (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+            **Note**: Must be after or equal to start_date if both provided.
+          example: "2026-01-31"
+      responses:
+        '200':
+          description: Transaction summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionSummaryResponse'
+              example:
+                total_transactions: 89
+                total_amount: -2456.78
+                date_range:
+                  start: "2026-01-01"
+                  end: "2026-01-31"
+                bank_account: "Chase Current Account"
+                category_breakdown:
+                  - category: "GROCERIES:FOOD"
+                    count: 23
+                    total_amount: -567.89
+                  - category: "TRANSPORT:FUEL"
+                    count: 8
+                    total_amount: -234.56
+                average_transaction: -27.60
+                largest_expense: -123.45
+                largest_income: 1500.00
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info/transaction-summary?bank_account=Chase%20Current%20Account&start_date=2026-01-01&end_date=2026-01-31
+                    method: GET
+                    title: Current summary
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions?bank_account=Chase%20Current%20Account&date_from=2026-01-01&date_to=2026-01-31
+                    method: GET
+                    title: View filtered transactions
+        '400':
+          description: Invalid date format or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_start_date:
+                  summary: Invalid start date format
+                  value:
+                    detail: "Invalid start_date format"
+                    error_code: "INVALID_DATE_FORMAT"
+                invalid_end_date:
+                  summary: Invalid end date format
+                  value:
+                    detail: "Invalid end_date format"
+                    error_code: "INVALID_DATE_FORMAT"
+        '500':
+          description: Error retrieving transaction summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    # ==================== Path Parameters ====================
+
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique identifier for the category
+      example: 1
+
+    CategoryGeneral:
+      name: general
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Category general name (will be normalised to uppercase)
+      example: groceries
+
+    CategoryDetail:
+      name: detail
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Category detail name (will be normalised to uppercase)
+      example: food
+
+    RecipientId:
+      name: recipientId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique identifier for the recipient
+      example: 1
+
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique identifier for the transaction
+      example: 1
+
+    BatchId:
+      name: batchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique identifier for the import batch
+      example: 123
+
+  schemas:
+    # ==================== Foundation Schemas ====================
+
+    Link:
+      type: object
+      required: [ rel, href, method ]
+      properties:
+        rel:
+          type: string
+          description: Relation type indicating the link's purpose
+          examples: [ self, parent, init, reset, next, prev, update, delete ]
+        href:
+          type: string
+          format: uri
+          description: URL to follow for the related action
+          example: "http://localhost:3002/api/categories/1"
+        method:
+          type: string
+          description: HTTP method to use for the related action
+          enum: [ GET, POST, PATCH, PUT, DELETE, OPTIONS ]
+          example: GET
+        title:
+          type: string
+          description: Human-readable description of the action
+          example: "Get this category"
+
+    MethodInfo:
+      type: object
+      required: [ method, description ]
+      properties:
+        method:
+          type: string
+          enum: [ GET, POST, PATCH, PUT, DELETE, OPTIONS ]
+          description: HTTP method
+          example: GET
+        description:
+          type: string
+          description: Description of what the method does
+          example: "Retrieve all categories with pagination"
+
+    ErrorResponse:
+      type: object
+      required: [ detail ]
+      properties:
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: |
+            Human-readable error message describing what went wrong.
+            Suitable for displaying to end users.
+          example: "Category not found"
+        error_code:
+          type: string
+          pattern: '^[A-Z_]+$'
+          maxLength: 100
+          description: |
+            Machine-readable error code for programmatic error handling.
+            Uses UPPER_SNAKE_CASE format for consistency.
+          example: "CATEGORY_NOT_FOUND"
+        field_errors:
+          type: object
+          description: |
+            Field-specific validation errors for form submissions.
+            Maps field names to arrays of error messages.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+              minLength: 1
+              maxLength: 200
+          example:
+            general: [ "Field is required" ]
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 timestamp when the error occurred.
+            Useful for debugging and log correlation.
+          example: "2026-02-03T10:30:00.000Z"
+
+    # ==================== Common Response Schemas ====================
+
+    MessageResponse:
+      type: object
+      required: [ message ]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: |
+            Human-readable success message describing the completed operation.
+            Suitable for displaying to end users as confirmation.
+          example: "Operation completed successfully"
+        details:
+          type: object
+          description: |
+            Additional structured information about the operation.
+            Contains operation-specific metadata and context.
+          additionalProperties:
+            type: string
+            maxLength: 200
+          example:
+            operation: "soft_delete"
+            note: "Category marked as inactive"
+            affected_records: "1"
+        timestamp:
+          type: string
+          format: date-time
+          description: |
+            ISO 8601 timestamp when the operation completed.
+            Useful for audit trails and synchronization.
+          example: "2026-02-03T10:30:00.000Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available next actions (HATEOAS links)
+
+    OptionsResponse:
+      type: object
+      required: [ methods, links ]
+      properties:
+        methods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MethodInfo'
+          description: Available HTTP methods on this endpoint
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available navigation links (HATEOAS)
+
+    RootOptionsResponse:
+      type: object
+      required: [ methods, description, links ]
+      properties:
+        methods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MethodInfo'
+          description: Available HTTP methods on API root endpoint
+        description:
+          type: string
+          description: API root description
+          example: "API root discovery endpoint for Level 3 REST API (HATEOAS)"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available navigation links (HATEOAS)
+
+    APIRootResponse:
+      type: object
+      required: [ version, title, description, links ]
+      properties:
+        version:
+          type: string
+          description: API version
+          example: "1.0.0"
+        title:
+          type: string
+          description: API title
+          example: "Financial Transaction Manager"
+        description:
+          type: string
+          description: API description
+          example: "Import and manage financial transactions from various banks"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available resource endpoints (HATEOAS links)
+
+    # ==================== Admin Schemas ====================
+
+    AdminStatusResponse:
+      type: object
+      required: [ is_initialised, table_count, timestamp, links ]
+      properties:
+        is_initialised:
+          type: boolean
+          description: Whether the database has been initialised
+          example: true
+        table_count:
+          type: integer
+          minimum: 0
+          description: Number of tables in the database
+          example: 8
+        timestamp:
+          type: string
+          format: date-time
+          description: Response timestamp in ISO 8601 format
+          example: "2026-02-03T10:30:00.000Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available administrative actions (HATEOAS links)
+
+    # ==================== Category Schemas ====================
+
+    CategoryBase:
+      type: object
+      required: [ general, detail ]
+      properties:
+        general:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Za-z0-9\s\-_]+$'
+          description: |
+            General category name (automatically normalised to uppercase).
+            **Constraints**: 1-50 characters, alphanumeric, spaces, hyphens, underscores only.
+            **Examples**: "Groceries", "Transport", "Utilities"
+          example: "groceries"
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[A-Za-z0-9\s\-_]+$'
+          description: |
+            Detail category name (automatically normalised to uppercase).
+            **Constraints**: 1-50 characters, alphanumeric, spaces, hyphens, underscores only.
+            **Examples**: "Food", "Fuel", "Electricity"
+          example: "food"
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            Optional detailed description of the category.
+            Used for clarification and reporting purposes.
+          example: "Food and grocery purchases including supermarkets and restaurants"
+
+    CategoryUpdate:
+      type: object
+      properties:
+        general:
+          type: string
+          minLength: 1
+          nullable: true
+          description: General category name (automatically normalised to uppercase)
+          example: "groceries"
+        detail:
+          type: string
+          minLength: 1
+          nullable: true
+          description: Detail category name (automatically normalised to uppercase)
+          example: "food"
+        description:
+          type: string
+          nullable: true
+          description: Category description
+          example: "Updated food category description"
+
+    CategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CategoryBase'
+        - type: object
+          required: [ id, created_at, links ]
+          properties:
+            id:
+              type: integer
+              minimum: 1
+              description: Unique category identifier
+              example: 1
+            created_at:
+              type: string
+              format: date-time
+              description: Category creation timestamp
+              example: "2026-01-15T10:30:00Z"
+            updated_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: Last update timestamp
+              example: "2026-01-20T14:45:00Z"
+            links:
+              type: array
+              items:
+                $ref: '#/components/schemas/Link'
+              description: Available actions for this category (HATEOAS links)
+
+    CategoriesListResponse:
+      type: object
+      required: [ items, total, limit, offset, links ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+          description: Array of category objects
+        total:
+          type: integer
+          minimum: 0
+          description: Total count of categories in the system
+          example: 25
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used for this page
+          example: 10
+        offset:
+          type: integer
+          minimum: 0
+          description: Offset used for this page
+          example: 0
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Pagination and navigation links (HATEOAS)
+
+    AssignCategoryRequest:
+      type: object
+      required: [ category_general, category_detail, recipient_ids ]
+      properties:
+        category_general:
+          type: string
+          minLength: 1
+          description: Category general name (automatically normalised to uppercase)
+          example: "groceries"
+        category_detail:
+          type: string
+          minLength: 1
+          description: Category detail name (automatically normalised to uppercase)
+          example: "food"
+        recipient_ids:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: array
+              items:
+                type: integer
+                minimum: 1
+              minItems: 1
+          description: Single recipient ID or array of recipient IDs to assign category to
+          examples:
+            - 5
+            - [ 5, 8, 12, 15 ]
+
+    AssignCategoryResponse:
+      type: object
+      required: [ updated_recipients, links ]
+      properties:
+        updated_recipients:
+          type: integer
+          minimum: 0
+          description: Number of recipients that were updated
+          example: 4
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available next actions (HATEOAS links)
+
+    # ==================== Recipient Schemas ====================
+
+    RecipientBase:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[A-Za-z0-9\s\-\.,&]+$'
+          description: |
+            Recipient name (automatically normalised to uppercase).
+            **Constraints**: 1-255 characters, alphanumeric, spaces, hyphens, periods, commas, ampersands.
+            **Examples**: "John Smith", "ACME Corp Ltd", "Smith & Associates"
+          example: "john smith"
+        account_number:
+          type: string
+          nullable: true
+          minLength: 4
+          maxLength: 50
+          pattern: '^[A-Za-z0-9\-]+$'
+          description: |
+            Optional recipient account number (must be unique if provided).
+            **Constraints**: 4-50 characters, alphanumeric and hyphens only.
+            **Use**: For precise recipient identification and duplicate detection.
+          example: "12345678"
+        default_category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Optional default category ID for transactions with this recipient.
+            **Use**: Automatically categorise transactions from this recipient.
+            **Note**: Must reference an existing active category.
+          example: 5
+        notes:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Optional notes about the recipient for reference and context.
+            **Use**: Additional details, business relationship, contact info.
+          example: "Regular client for grocery transactions, preferred payment terms NET30"
+        address:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            Optional recipient address (automatically normalised to uppercase).
+            **Use**: For reporting, invoicing, and record-keeping purposes.
+          example: "123 main street, london, UK"
+
+    RecipientUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          nullable: true
+          description: Recipient name (automatically normalised to uppercase)
+          example: "jane doe"
+        account_number:
+          type: string
+          nullable: true
+          description: Account number (must be unique if provided, null to clear)
+          example: "87654321"
+        default_category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Default category ID (null to clear)
+          example: 8
+        notes:
+          type: string
+          nullable: true
+          description: Notes about the recipient (null to clear)
+          example: "Updated notes"
+        address:
+          type: string
+          nullable: true
+          description: Recipient address (null to clear, automatically normalised to uppercase)
+          example: "456 new street, manchester"
+
+    RecipientResponse:
+      type: object
+      required: [ id, name, created_at, links ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Unique recipient identifier
+          example: 1
+        name:
+          type: string
+          description: Recipient name (normalised to uppercase)
+          example: "JOHN SMITH"
+        account_number:
+          type: string
+          nullable: true
+          description: Account number
+          example: "12345678"
+        default_category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Default category ID
+          example: 5
+        notes:
+          type: string
+          nullable: true
+          description: Notes about the recipient
+          example: "Regular client for grocery transactions"
+        address:
+          type: string
+          nullable: true
+          description: Recipient address (normalised to uppercase)
+          example: "123 MAIN STREET, LONDON"
+        created_at:
+          type: string
+          format: date-time
+          description: Recipient creation timestamp
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: "2026-01-20T14:45:00Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions for this recipient (HATEOAS links)
+
+    RecipientsListResponse:
+      type: object
+      required: [ items, total, limit, offset, links ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipientResponse'
+          description: Array of recipient objects
+        total:
+          type: integer
+          minimum: 0
+          description: Total count of recipients in the system
+          example: 45
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used for this page
+          example: 10
+        offset:
+          type: integer
+          minimum: 0
+          description: Offset used for this page
+          example: 0
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Pagination and navigation links (HATEOAS)
+
+    # ==================== Transaction Schemas ====================
+
+    TransactionBase:
+      type: object
+      required: [ date, bank_account, recipient_id, amount ]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Transaction date in YYYY-MM-DD format (ISO 8601).
+            Must be a valid date.
+          example: "2026-01-15"
+        bank_account:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            Bank account identifier or name.
+            Used for filtering and grouping transactions by account.
+          example: "Chase Current Account"
+        recipient_id:
+          type: integer
+          minimum: 1
+          description: |
+            ID of the recipient/payee for this transaction.
+            Must reference an existing recipient.
+          example: 3
+        memo:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Optional memo or note about the transaction.
+            Usually contains the description from the bank statement.
+          example: "Grocery shopping at Tesco"
+        amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Transaction amount.
+            Negative values represent expenses/debits, positive values represent income/credits.
+          example: -45.67
+        currency:
+          type: string
+          nullable: true
+          minLength: 3
+          maxLength: 3
+          pattern: '^[A-Z]{3}$'
+          description: |
+            Currency code in ISO 4217 format (3-letter code).
+            **Examples**: GBP, EUR, USD, JPY
+          example: "GBP"
+        balance:
+          type: number
+          format: float
+          nullable: true
+          multipleOf: 0.01
+          description: |
+            Account balance after this transaction.
+            Optional field, useful for reconciliation.
+          example: 1254.33
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Optional category ID for transaction classification.
+            Must reference an existing active category.
+          example: 1
+        comment:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Optional additional comment or note.
+            Used for annotations beyond the transaction memo.
+          example: "Split payment with flatmate"
+
+    TransactionUpdate:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          nullable: true
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Transaction date (YYYY-MM-DD format)
+          example: "2026-01-15"
+        bank_account:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+          description: Bank account identifier
+          example: "Chase Current Account"
+        recipient_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Recipient ID
+          example: 3
+        memo:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Transaction memo/note (null to clear)
+          example: "Updated memo"
+        amount:
+          type: number
+          format: float
+          nullable: true
+          multipleOf: 0.01
+          description: Transaction amount
+          example: -52.30
+        currency:
+          type: string
+          nullable: true
+          minLength: 3
+          maxLength: 3
+          pattern: '^[A-Z]{3}$'
+          description: Currency code (ISO 4217)
+          example: "GBP"
+        balance:
+          type: number
+          format: float
+          nullable: true
+          multipleOf: 0.01
+          description: Account balance (null to clear)
+          example: 1200.00
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Category ID (null to clear)
+          example: 8
+        comment:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Additional comment (null to clear)
+          example: "Split payment noted"
+
+    TransactionResponse:
+      type: object
+      required: [ id, date, bank_account, recipient_id, amount, created_at, links ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Unique transaction identifier
+          example: 1
+        date:
+          type: string
+          format: date
+          description: Transaction date (YYYY-MM-DD)
+          example: "2026-01-15"
+        bank_account:
+          type: string
+          description: Bank account identifier
+          example: "Chase Current Account"
+        recipient_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Recipient ID
+          example: 3
+        memo:
+          type: string
+          nullable: true
+          description: Transaction memo/note
+          example: "Grocery shopping"
+        amount:
+          type: number
+          format: float
+          description: Transaction amount (negative for expenses, positive for income)
+          example: -45.67
+        currency:
+          type: string
+          nullable: true
+          description: Currency code (ISO 4217)
+          example: "GBP"
+        balance:
+          type: number
+          format: float
+          nullable: true
+          description: Account balance after transaction
+          example: 1254.33
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Category ID
+          example: 1
+        comment:
+          type: string
+          nullable: true
+          description: Additional comment
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          description: Transaction creation timestamp
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: "2026-01-20T14:45:00Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions for this transaction (HATEOAS links)
+
+    TransactionsListResponse:
+      type: object
+      required: [ items, total, limit, offset, applied_filters, links ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Unique transaction identifier
+          example: 1
+        date:
+          type: string
+          format: date
+          description: Transaction date (YYYY-MM-DD)
+          example: "2026-01-15"
+        description:
+          type: string
+          description: Transaction description from bank statement
+          example: "TESCO STORE 1234"
+        amount:
+          type: number
+          format: float
+          description: Transaction amount (negative for debits, positive for credits)
+          example: -45.67
+        balance:
+          type: number
+          format: float
+          description: Account balance after this transaction
+          example: 1254.33
+        category_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Associated category ID
+          example: 1
+        category_general:
+          type: string
+          nullable: true
+          description: Category general classification
+          example: "GROCERIES"
+        category_detail:
+          type: string
+          nullable: true
+          description: Category detail classification
+          example: "FOOD"
+        recipient_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Associated recipient ID
+          example: 3
+        recipient_name:
+          type: string
+          nullable: true
+          description: Recipient name
+          example: "Tesco PLC"
+        created_at:
+          type: string
+          format: date-time
+          description: Transaction creation timestamp
+          example: "2026-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last update timestamp
+          example: "2026-01-20T14:45:00Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions for this transaction (HATEOAS links)
+
+    TransactionsListResponse:
+      type: object
+      required: [ items, total, limit, offset, applied_filters, links ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+          description: Array of transaction objects
+        total:
+          type: integer
+          minimum: 0
+          description: Total count of transactions matching filters
+          example: 1250
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used for this page
+          example: 10
+        offset:
+          type: integer
+          minimum: 0
+          description: Offset used for this page
+          example: 0
+        applied_filters:
+          type: object
+          description: Summary of applied filters
+          properties:
+            category_id:
+              type: integer
+              nullable: true
+              description: Applied category filter
+              example: null
+            recipient_id:
+              type: integer
+              nullable: true
+              description: Applied recipient filter
+              example: null
+            date_from:
+              type: string
+              format: date
+              nullable: true
+              description: Applied start date filter
+              example: null
+            date_to:
+              type: string
+              format: date
+              nullable: true
+              description: Applied end date filter
+              example: null
+            bank_account:
+              type: string
+              nullable: true
+              description: Applied bank account filter
+              example: null
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Pagination and navigation links (HATEOAS)
+
+    # ==================== Import Schemas ====================
+
+    ImportResultWithLinks:
+      type: object
+      required: [ batch_id, total_processed, imported, duplicates, errors, status ]
+      properties:
+        batch_id:
+          type: string
+          description: |
+            Unique identifier for the import batch.
+            Format: batch_YYYYMMDD_HHMMSS_random
+          example: "batch_20260203_103045_abc123"
+        total_processed:
+          type: integer
+          minimum: 0
+          description: |
+            Total number of transactions processed from CSV file.
+            Includes imported, duplicates, and errors.
+          example: 150
+        imported:
+          type: integer
+          minimum: 0
+          description: |
+            Number of new transactions successfully imported into the database.
+          example: 142
+        duplicates:
+          type: integer
+          minimum: 0
+          description: |
+            Number of duplicate transactions skipped.
+            Duplicates are detected based on date, amount, and recipient.
+          example: 8
+        errors:
+          type: integer
+          minimum: 0
+          description: |
+            Number of transactions that failed to import due to validation or processing errors.
+          example: 0
+        status:
+          type: string
+          enum: [ "completed", "completed_with_errors", "failed", "processing" ]
+          description: |
+            Overall import status.
+            - completed: All transactions processed successfully
+            - completed_with_errors: Import finished but some transactions failed
+            - failed: Import failed completely
+            - processing: Import currently in progress
+          example: "completed"
+        error_message:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Detailed error message if status is 'failed' or 'completed_with_errors'.
+            Contains information about what went wrong.
+          example: null
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available next actions (HATEOAS links)
+
+    ImportBatchResponse:
+      type: object
+      required: [ id, filename, bank_name, status, total_processed, imported_count, duplicate_count, error_count, created_at, links ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Import batch ID
+          example: 123
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            Name of the imported CSV file.
+            Stored for audit and tracking purposes.
+          example: "transactions_jan_2026.csv"
+        bank_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: |
+            Bank or source name for this import.
+            Identifies the bank adapter or custom configuration used.
+          example: "Chase"
+        status:
+          type: string
+          enum: [ "processing", "completed", "completed_with_errors", "failed" ]
+          description: |
+            Current status of the import batch.
+            - processing: Import is currently in progress
+            - completed: All transactions processed successfully
+            - completed_with_errors: Import finished but some transactions failed
+            - failed: Import failed completely
+          example: "completed"
+        total_processed:
+          type: integer
+          minimum: 0
+          description: Total number of transactions processed from CSV
+          example: 150
+        imported_count:
+          type: integer
+          minimum: 0
+          description: Number of new transactions successfully imported
+          example: 145
+        duplicate_count:
+          type: integer
+          minimum: 0
+          description: Number of duplicate transactions skipped
+          example: 5
+        error_count:
+          type: integer
+          minimum: 0
+          description: Number of transactions that failed to import
+          example: 0
+        error_message:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Error message if import failed
+          example: null
+        config_used:
+          type: string
+          nullable: true
+          description: |
+            JSON configuration used for custom imports.
+            Null for predefined bank adapters.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          description: Import batch creation timestamp
+          example: "2026-01-15T10:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Import completion timestamp
+          example: "2026-01-15T10:30:15Z"
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions for this import batch (HATEOAS links)
+
+    ImportBatchesListResponse:
+      type: object
+      required: [ items, total, limit, offset, links ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportBatchResponse'
+          description: Array of import batch objects
+        total:
+          type: integer
+          minimum: 0
+          description: Total count of import batches in the system
+          example: 45
+        limit:
+          type: integer
+          minimum: 1
+          description: Limit used for this page
+          example: 50
+        offset:
+          type: integer
+          minimum: 0
+          description: Offset used for this page
+          example: 0
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Pagination and navigation links (HATEOAS)
+
+    # ==================== Info Schemas ====================
+
+    CategoryStats:
+      type: object
+      required: [ name, count ]
+      properties:
+        name:
+          type: string
+          description: Category name in GENERAL:DETAIL format
+          example: "GROCERIES:FOOD"
+        count:
+          type: integer
+          minimum: 0
+          description: Number of transactions in this category
+          example: 342
+
+    StatisticsResponse:
+      type: object
+      required: [ total_transactions, total_amount, categories ]
+      properties:
+        total_transactions:
+          type: integer
+          minimum: 0
+          description: Total number of transactions in the system
+          example: 1250
+        total_amount:
+          type: number
+          format: float
+          description: |
+            Sum of all transaction amounts.
+            Negative value indicates net expenses, positive indicates net income.
+          example: -15432.67
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryStats'
+          description: Category-wise transaction breakdown
+
+    InfoResponseWithLinks:
+      type: object
+      required: [ total_transactions, total_amount, categories, links ]
+      properties:
+        total_transactions:
+          type: integer
+          minimum: 0
+          description: Total number of transactions in the system
+          example: 1250
+        total_amount:
+          type: number
+          format: float
+          description: |
+            Sum of all transaction amounts.
+            Negative value indicates net expenses, positive indicates net income.
+          example: -15432.67
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryStats'
+          description: Category-wise transaction breakdown
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
+    BankListResponse:
+      type: object
+      required: [ banks ]
+      properties:
+        banks:
+          type: array
+          items:
+            type: string
+          description: |
+            List of unique bank account identifiers present in transactions.
+            Used for filtering and reporting.
+          example: [ "Chase Current Account", "Belfius Savings", "HSBC Premium" ]
+
+    BankListResponseWithLinks:
+      type: object
+      required: [ banks, links ]
+      properties:
+        banks:
+          type: array
+          items:
+            type: string
+          description: |
+            List of unique bank account identifiers present in transactions.
+            Used for filtering and reporting.
+          example: [ "Chase Current Account", "Belfius Savings", "HSBC Premium" ]
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
+    TransactionSummaryResponse:
+      type: object
+      required: [ total_transactions, total_amount, links ]
+      properties:
+        total_transactions:
+          type: integer
+          minimum: 0
+          description: Total number of transactions matching filters
+          example: 89
+        total_amount:
+          type: number
+          format: float
+          description: Sum of all transaction amounts matching filters
+          example: -2456.78
+        date_range:
+          type: object
+          nullable: true
+          properties:
+            start:
+              type: string
+              format: date
+              description: Start date of the filtered range
+              example: "2026-01-01"
+            end:
+              type: string
+              format: date
+              description: End date of the filtered range
+              example: "2026-01-31"
+          description: Date range used for filtering (if applicable)
+        bank_account:
+          type: string
+          nullable: true
+          description: Bank account used for filtering (if applicable)
+          example: "Chase Current Account"
+        category_breakdown:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                description: Category name in GENERAL:DETAIL format
+                example: "GROCERIES:FOOD"
+              count:
+                type: integer
+                minimum: 0
+                description: Number of transactions in this category
+                example: 23
+              total_amount:
+                type: number
+                format: float
+                description: Sum of transaction amounts in this category
+                example: -567.89
+          description: Category-wise breakdown of filtered transactions
+        average_transaction:
+          type: number
+          format: float
+          nullable: true
+          description: Average transaction amount for filtered transactions
+          example: -27.60
+        largest_expense:
+          type: number
+          format: float
+          nullable: true
+          description: Largest expense (most negative amount) in filtered transactions
+          example: -123.45
+        largest_income:
+          type: number
+          format: float
+          nullable: true
+          description: Largest income (most positive amount) in filtered transactions
+          example: 1500.00
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
+  # ==================== Security Schemes ====================
+
+  securitySchemes:
+    # Future authentication schemes can be added here
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key authentication (not currently implemented)
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT bearer token authentication (not currently implemented)
+
+# ==================== Global Security ====================
+
+# Currently no security required - for development
+# security: []
+
+# Future production security
+# security:
+#   - BearerAuth: []
+#   - ApiKeyAuth: []
