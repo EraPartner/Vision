@@ -44,11 +44,12 @@ export function MonthlyTrendsChart({ data }: MonthlyTrendsChartProps) {
   const totalSpending = Math.abs(data.reduce((sum, m) => sum + m.total_spending, 0));
 
   return (
-    <Card className="border-none shadow-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 hover:shadow-2xl transition-shadow duration-300">
+    <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
       <CardHeader className="space-y-3">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-            <TrendingUp className="h-6 w-6 text-white" />
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center shadow-sm text-blue-600 dark:text-blue-400">
+            <TrendingUp className="h-6 w-6" />
           </div>
           <div className="flex-1">
             <CardTitle className="text-xl">6-Month Trends</CardTitle>
@@ -83,7 +84,7 @@ export function MonthlyTrendsChart({ data }: MonthlyTrendsChartProps) {
             <YAxis
               className="text-xs"
               tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-              tickFormatter={(value) => `$${value}`}
+              tickFormatter={(value) => `€${value}`}
             />
             <Tooltip
               contentStyle={{
@@ -94,7 +95,7 @@ export function MonthlyTrendsChart({ data }: MonthlyTrendsChartProps) {
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
               }}
               formatter={(value: number, name: string) => {
-                const formattedValue = `$${value.toFixed(2)}`;
+                const formattedValue = `€${value.toFixed(2)}`;
                 const label = name === "income" ? "Income" : name === "spending" ? "Spending" : "Transactions";
                 return [formattedValue, label];
               }}
@@ -117,14 +118,14 @@ export function MonthlyTrendsChart({ data }: MonthlyTrendsChartProps) {
             <div className="w-3 h-3 rounded-full flex-shrink-0 bg-green-500"></div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-green-700 dark:text-green-300">Total Income</p>
-              <p className="text-sm font-bold text-green-900 dark:text-green-100">${totalIncome.toFixed(2)}</p>
+              <p className="text-sm font-bold text-green-900 dark:text-green-100">€{totalIncome.toFixed(2)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <div className="w-3 h-3 rounded-full flex-shrink-0 bg-red-500"></div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-red-700 dark:text-red-300">Total Spending</p>
-              <p className="text-sm font-bold text-red-900 dark:text-red-100">${totalSpending.toFixed(2)}</p>
+              <p className="text-sm font-bold text-red-900 dark:text-red-100">€{totalSpending.toFixed(2)}</p>
             </div>
           </div>
         </div>

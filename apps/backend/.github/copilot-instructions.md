@@ -32,3 +32,5 @@ transactions.
 - General coding practices (clean code, security, error handling, performance) are covered by global instructions.
 - Focus on financial transaction domain-specific requirements and Level 3 REST API implementation.
 - Maintain professional tone appropriate for financial software development.
+- Never return JSON responses directly in API calls; instead, use Pydantic models for structured responses and
+  validation.

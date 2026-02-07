@@ -13,7 +13,7 @@ Classes:
 """
 from typing import Optional, List, cast
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from config.logging_config import setup_logging
 from database.models import Recipient
@@ -97,7 +97,9 @@ class RecipientRepository:
             - Empty list is returned if no matching recipients exist
             - All database operations are logged for audit purposes
         """
-        query = self.db.query(Recipient).order_by(Recipient.id)
+        query = self.db.query(Recipient).options(
+            joinedload(Recipient.default_category)
+        ).order_by(Recipient.id)
 
         # Apply active filter
         if active:
@@ -198,7 +200,9 @@ class RecipientRepository:
             - For partial name searches, use get_all_active(name="partial")
             - All lookups are logged for audit purposes
         """
-        result = self.db.query(Recipient).filter(Recipient.name == name).first()
+        result = self.db.query(Recipient).options(
+            joinedload(Recipient.default_category)
+        ).filter(Recipient.name == name).first()
         logger.debug(
             "Recipient lookup by name",
             extra={

@@ -115,6 +115,10 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(CategoryBase):
     """Category response with HATEOAS links for Level 3 REST API"""
     id: int = Field(description="Category ID", ge=1)
+    category_name: str = Field(
+        description="Full category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES'). "
+                    "This is a computed field combining the 'general' and 'detail' fields."
+    )
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
@@ -174,10 +178,17 @@ class RecipientBase(BaseModel):
     notes: Optional[str] = Field(None, description="Notes")
     address: Optional[str] = Field(None, description="Address")
 
-    @field_validator("name", "address", mode="before")
+    @field_validator("name", mode="before")
     @classmethod
     def normalise_name(cls, value: str) -> str:
-        """Normalise recipient name and address to uppercase using TextNormalizationService."""
+        """Normalise recipient name to uppercase using TextNormalizationService."""
+        from services.text_normalization_service import TextNormalizationService
+        return TextNormalizationService.normalize_recipient_name(value)
+
+    @field_validator("address", mode="before")
+    @classmethod
+    def normalise_address(cls, value: Optional[str]) -> Optional[str]:
+        """Normalise recipient address to uppercase using TextNormalizationService."""
         if value is None:
             return value
         from services.text_normalization_service import TextNormalizationService
@@ -195,7 +206,7 @@ class RecipientUpdate(BaseModel):
 
     @field_validator("name", "address", mode="before")
     @classmethod
-    def normalise_name(cls, value: str) -> str:
+    def normalise_name(cls, value: Optional[str]) -> Optional[str]:
         """Normalise recipient name and address to uppercase using TextNormalizationService."""
         if value is None:
             return value
@@ -209,6 +220,12 @@ class RecipientResponse(BaseModel):
     name: str = Field(description="Recipient name")
     account_number: Optional[str] = Field(None, description="Account number")
     default_category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
+    default_category_name: Optional[str] = Field(
+        None,
+        description="Default category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES'). "
+                    "This category is automatically applied to transactions from this recipient "
+                    "when no direct category is assigned to the transaction."
+    )
     notes: Optional[str] = Field(None, description="Notes")
     address: Optional[str] = Field(None, description="Address")
     is_active: bool = Field(True, description="Whether recipient is active")
@@ -271,11 +288,18 @@ class TransactionResponse(BaseModel):
     transaction_date: date = Field(description="Transaction date", alias="date")
     bank_account: str = Field(description="Bank account name")
     recipient_id: Optional[int] = Field(None, description="Recipient ID", ge=1)
+    recipient_name: Optional[str] = Field(None, description="Recipient name (in UPPERCASE)")
     memo: Optional[str] = Field(None, description="Transaction memo/note")
     amount: float = Field(description="Transaction amount")
     currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)")
     balance: Optional[float] = Field(None, description="Account balance after transaction")
     category_id: Optional[int] = Field(None, description="Category ID", ge=1)
+    category_name: Optional[str] = Field(
+        None,
+        description="Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES'). "
+                    "Returns the transaction's direct category if assigned, otherwise falls back to "
+                    "the recipient's default category. Returns null if neither is available."
+    )
     comment: Optional[str] = Field(None, description="Additional comment")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")

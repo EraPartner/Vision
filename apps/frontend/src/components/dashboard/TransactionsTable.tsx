@@ -30,7 +30,7 @@ const categoryColors: Record<string, string> = {
     healthcare: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
     shopping: "bg-green-500/15 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
     income: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
-    other: "bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800",
+    andere: "bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800",
 };
 
 export function TransactionsTable({transactions, onTransactionDeleted}: TransactionsTableProps) {
@@ -124,7 +124,7 @@ export function TransactionsTable({transactions, onTransactionDeleted}: Transact
                                     <TableCell className="text-right">
                     <span
                         className={`text-sm font-bold ${transaction.amount < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toFixed(2)}
+                      {transaction.amount >= 0 ? '+' : ''}€{Math.abs(transaction.amount).toFixed(2)}
                     </span>
                                     </TableCell>
                                     <TableCell className="text-right">

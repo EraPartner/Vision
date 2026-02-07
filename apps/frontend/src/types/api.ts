@@ -49,6 +49,7 @@ export interface Recipient {
     name: string;
     account_number?: string;
     default_category_id?: number;
+    default_category_name?: string; // Default category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     notes?: string;
     address?: string;
     is_active: boolean;
@@ -76,10 +77,9 @@ export interface RecipientCreate {
 export interface RecipientUpdate {
     name?: string;
     account_number?: string;
-    category_id?: number;
+    default_category_id?: number;
     notes?: string;
     address?: string;
-    is_active?: boolean;
 }
 
 // ==================== Transaction Types ====================
@@ -89,11 +89,13 @@ export interface Transaction {
     transaction_date: string; // date field, aliased as "date" in API
     bank_account: string;
     recipient_id?: number;
+    recipient_name?: string; // Recipient name
     memo?: string;
     amount: number;
     currency?: string;
     balance?: number;
     category_id?: number;
+    category_name?: string; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     comment?: string;
     created_at: string;
     updated_at?: string;

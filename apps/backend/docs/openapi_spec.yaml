@@ -3135,13 +3135,20 @@ components:
       allOf:
         - $ref: '#/components/schemas/CategoryBase'
         - type: object
-          required: [ id, created_at, links ]
+          required: [ id, category_name, created_at, links ]
           properties:
             id:
               type: integer
               minimum: 1
               description: Unique category identifier
               example: 1
+            category_name:
+              type: string
+              description: |
+                Full category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+                This is a computed field combining the 'general' and 'detail' fields.
+                Always returned in UPPERCASE for consistency.
+              example: "GROCERIES:FOOD"
             created_at:
               type: string
               format: date-time
@@ -3340,6 +3347,15 @@ components:
           minimum: 1
           description: Default category ID
           example: 5
+        default_category_name:
+          type: string
+          nullable: true
+          description: |
+            Default category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+            This category is automatically applied to transactions from this recipient
+            when no direct category is assigned to the transaction.
+            Returns null if no default category is set.
+          example: "FOOD:GROCERIES"
         notes:
           type: string
           nullable: true
@@ -3566,6 +3582,11 @@ components:
           minimum: 1
           description: Recipient ID
           example: 3
+        recipient_name:
+          type: string
+          nullable: true
+          description: Recipient name (normalised to UPPERCASE)
+          example: "TESCO STORES"
         memo:
           type: string
           nullable: true
@@ -3593,6 +3614,16 @@ components:
           minimum: 1
           description: Category ID
           example: 1
+        category_name:
+          type: string
+          nullable: true
+          description: |
+            Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+            Returns the transaction's direct category if assigned, otherwise falls back to
+            the recipient's default category. Returns null if neither is available.
+            This provides automatic categorisation based on the recipient's default when
+            no explicit category is set on the transaction.
+          example: "FOOD:GROCERIES"
         comment:
           type: string
           nullable: true

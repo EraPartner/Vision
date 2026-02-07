@@ -7,6 +7,7 @@ type TableRecipient = {
     id: number;
     name: string;
     account_number: string;
+    default_category_name?: string;
     is_active: boolean;
 };
 
@@ -52,7 +53,10 @@ export default function RecipientsPage() {
         id: r.id,
         name: r.name,
         account_number: r.account_number || 'N/A',
-        is_active: r.is_active,
+        default_category_name: r.default_category_name,
+        default_category_id: r.default_category_id,
+        notes: r.notes || '',
+        address: r.address || '',
     })) || [];
 
     const columns = [
@@ -73,13 +77,53 @@ export default function RecipientsPage() {
             ),
         },
         {
-            key: "is_active",
-            header: "Status",
+            key: "default_category_name",
+            header: "Default Category",
             editable: false,
+            render: (row: TableRecipient) => {
+                // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
+                const formatCategoryName = (categoryName?: string): string => {
+                    if (!categoryName) return 'None';
+                    
+                    const parts = categoryName.split(':');
+                    if (parts.length > 1) {
+                        const detail = parts[1].trim();
+                        return detail.charAt(0) + detail.slice(1).toLowerCase();
+                    }
+                    return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
+                };
+                
+                const displayName = formatCategoryName(row.default_category_name);
+                const isNone = displayName === 'None';
+                
+                return (
+                    <Badge 
+                        variant="outline" 
+                        className={`font-medium ${isNone ? 'text-muted-foreground' : ''}`}
+                    >
+                        {displayName}
+                    </Badge>
+                );
+            },
+        },
+        {
+            key: "notes",
+            header: "Notes",
+            editable: true,
             render: (row: TableRecipient) => (
-                <Badge variant={row.is_active ? "default" : "secondary"} className="font-medium">
-                    {row.is_active ? "Active" : "Inactive"}
-                </Badge>
+                <span className="text-sm text-muted-foreground">
+                    {row.notes || '-'}
+                </span>
+            ),
+        },
+        {
+            key: "address",
+            header: "Address",
+            editable: true,
+            render: (row: TableRecipient) => (
+                <span className="text-sm text-muted-foreground">
+                    {row.address || '-'}
+                </span>
             ),
         },
     ];

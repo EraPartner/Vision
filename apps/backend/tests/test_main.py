@@ -1074,6 +1074,47 @@ class TestRouterInclusion:
             for tag in expected_tags:
                 assert tag in tags_found, f"Tag {tag} not found in OpenAPI spec"
 
+    def test_openapi_schema_category_name_fields(self, client: TestClient):
+        """Test that OpenAPI schema includes category_name fields in response models."""
+        response = client.get("/openapi.json")
+        assert response.status_code == 200
+
+        openapi_spec = response.json()
+        schemas = openapi_spec.get("components", {}).get("schemas", {})
+
+        # Test CategoryResponse includes category_name
+        category_response = schemas.get("CategoryResponse")
+        assert category_response is not None, "CategoryResponse schema not found"
+        category_props = category_response.get("properties", {})
+        assert "category_name" in category_props, "category_name field missing in CategoryResponse"
+        assert category_props["category_name"]["type"] == "string"
+        assert "General:Detail" in category_props["category_name"].get("description", "")
+
+        # Test RecipientResponse includes default_category_name
+        recipient_response = schemas.get("RecipientResponse")
+        assert recipient_response is not None, "RecipientResponse schema not found"
+        recipient_props = recipient_response.get("properties", {})
+        assert "default_category_name" in recipient_props, "default_category_name field missing in RecipientResponse"
+        # Field is optional (nullable or not required)
+        assert recipient_props["default_category_name"].get("anyOf") or \
+               recipient_props["default_category_name"].get("type") in ["string", "null"] or \
+               "default_category_name" not in recipient_response.get("required", [])
+
+        # Test TransactionResponse includes category_name
+        transaction_response = schemas.get("TransactionResponse")
+        assert transaction_response is not None, "TransactionResponse schema not found"
+        transaction_props = transaction_response.get("properties", {})
+        assert "category_name" in transaction_props, "category_name field missing in TransactionResponse"
+        # Field is optional (nullable or not required)
+        assert transaction_props["category_name"].get("anyOf") or \
+               transaction_props["category_name"].get("type") in ["string", "null"] or \
+               "category_name" not in transaction_response.get("required", [])
+
+        # Verify description mentions fallback behavior for transactions
+        txn_category_desc = transaction_props["category_name"].get("description", "")
+        assert "General:Detail" in txn_category_desc, \
+            "Transaction category_name should describe General:Detail format"
+
 
 class TestMainBlockExecution:
     """Test cases for the actual __main__ block execution."""
