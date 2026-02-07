@@ -7,6 +7,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [
     react(),
@@ -21,5 +28,9 @@ export default defineConfig(({ mode }) => ({
   publicDir: path.resolve(__dirname, "../apps/frontend/public"),
   build: {
     outDir: path.resolve(__dirname, "../dist"),
+  },
+  css: {
+    postcss: path.resolve(__dirname, "./postcss.config.js"),
+    devSourcemap: mode === 'development',
   },
 }));
