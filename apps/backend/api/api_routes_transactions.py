@@ -33,11 +33,24 @@ logger = setup_logging(__name__)
 
 @router.options("", response_model=OptionsResponse,
                 description="Discover available methods on transactions collection endpoint")
-async def transactions_collection_options(request: Request):
+async def transactions_collection_options(
+        request: Request,
+        limit: int = Query(50, ge=1, le=5000, description="Maximum number of transactions to return"),
+        offset: int = Query(0, ge=0, description="Number of transactions to skip for pagination"),
+        start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+        end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+        bank_account: Optional[str] = Query(None, description="Filter by partial bank account match"),
+        category_id: Optional[int] = Query(None, description="Filter by category ID"),
+        recipient_id: Optional[int] = Query(None, description="Filter by recipient ID"),
+        recipient_name: Optional[str] = Query(None, description="Filter by partial recipient name match"),
+        uncategorised: bool = Query(False, description="Filter for uncategorised transactions"),
+        active: bool = Query(True, description="Filter by active status")
+):
     """
     OPTIONS method for transactions collection endpoint discovery.
 
     Allows clients to discover what HTTP methods are available on the transactions collection endpoint.
+    Accepts same query parameters as GET endpoint to support CORS preflight requests with query strings.
 
     Returns:
         OptionsResponse: Available methods and HATEOAS links
