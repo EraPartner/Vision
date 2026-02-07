@@ -1,4 +1,6 @@
 import { StatCard } from "@/components/dashboard/StatCard";
+import { MonthlySpendingChart } from "@/components/dashboard/MonthlySpendingChart";
+import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Receipt, DollarSign, TrendingDown, ArrowUpRight } from "lucide-react";
@@ -65,6 +67,12 @@ export default function DashboardPage() {
         <StatCard title="Total Spending" value={`€${totalSpending.toFixed(2)}`} icon={TrendingDown} trend="down" subtitle="-12% from last month" />
         <StatCard title="Total Income" value={`€${totalIncome.toFixed(2)}`} icon={ArrowUpRight} trend="up" subtitle="+3% from last month" />
         <StatCard title="Net Balance" value={`€${netBalance.toFixed(2)}`} icon={DollarSign} trend={netBalance >= 0 ? "up" : "down"} subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"} />
+      </div>
+
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <MonthlySpendingChart />
+        <CategoryPieChart />
       </div>
 
       {/* Recent transactions */}
