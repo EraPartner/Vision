@@ -30,7 +30,7 @@ export function SpendingChart({data}: SpendingChartProps) {
                         <CardTitle className="text-xl">Spending Distribution</CardTitle>
                         <CardDescription className="text-base">
                             Total spending: <span
-                            className="font-semibold text-slate-900 dark:text-white">${totalSpending.toFixed(2)}</span>
+                            className="font-semibold text-slate-900 dark:text-white">€{totalSpending.toFixed(2)}</span>
                         </CardDescription>
                     </div>
                 </div>
@@ -60,7 +60,7 @@ export function SpendingChart({data}: SpendingChartProps) {
                         <YAxis
                             className="text-xs"
                             tick={{fill: "hsl(var(--muted-foreground))", fontSize: 12}}
-                            tickFormatter={(value) => `$${value}`}
+                            tickFormatter={(value) => `€${value}`}
                         />
                         <Tooltip
                             contentStyle={{
@@ -70,7 +70,7 @@ export function SpendingChart({data}: SpendingChartProps) {
                                 padding: "12px",
                                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                             }}
-                            formatter={(value: number) => [`$${Math.abs(value).toFixed(2)}`, "Amount"]}
+                            formatter={(value: number) => [`€${Math.abs(value).toFixed(2)}`, "Amount"]}
                             labelStyle={{fontWeight: "600", marginBottom: "4px"}}
                         />
                         <Bar dataKey="amount" radius={[12, 12, 0, 0]} maxBarSize={60}>
@@ -101,7 +101,7 @@ export function SpendingChart({data}: SpendingChartProps) {
                                     {item.category}
                                 </p>
                                 <p className="text-sm font-bold text-slate-900 dark:text-white">
-                                    ${item.amount.toFixed(2)}
+                                    €{item.amount.toFixed(2)}
                                 </p>
                             </div>
                         </div>

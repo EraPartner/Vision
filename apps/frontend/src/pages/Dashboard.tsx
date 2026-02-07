@@ -219,19 +219,19 @@ export default function Dashboard() {
                     />
                     <StatCard
                         title="Last Month Income"
-                        value={`$${monthlyIncome.toFixed(2)}`}
+                        value={`€${monthlyIncome.toFixed(2)}`}
                         icon={ArrowUpRight}
                         trend="income"
                     />
                     <StatCard
                         title="Last Month Spending"
-                        value={`$${monthlySpending.toFixed(2)}`}
+                        value={`€${monthlySpending.toFixed(2)}`}
                         icon={DollarSign}
                         trend="expense"
                     />
                     <StatCard
                         title="Last Month Net"
-                        value={`$${netBalance.toFixed(2)}`}
+                        value={`€${netBalance.toFixed(2)}`}
                         change={`${netBalance >= 0 ? 'Positive' : 'Negative'} cash flow`}
                         changeType={netBalance >= 0 ? "positive" : "negative"}
                         icon={TrendingUp}

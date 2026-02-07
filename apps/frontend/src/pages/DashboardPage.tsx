@@ -8,6 +8,8 @@ import {useTransactions} from "@/hooks/useTransactions";
 import {useDashboardStats} from "@/hooks/useDashboardStats";
 import {useQuery} from "@tanstack/react-query";
 import {apiClient} from "@/lib/api";
+import {getCategoryColor} from "@/utils/categoryColors";
+import {formatCurrency} from "@/utils/currency";
 
 export default function DashboardPage() {
     // Fetch real-time statistics from /api/info endpoints
@@ -36,11 +38,11 @@ export default function DashboardPage() {
 
     // Calculate category breakdown from transactions
     const categoryBreakdown = (() => {
-        const categoryMap = new Map<number | string, { name: string; count: number }>();
+        const categoryMap = new Map<string, { name: string; count: number }>();
         
         transactions.forEach(t => {
-            const key = t.category_id || 'uncategorized';
-            const name = t.category_id ? `Category ${t.category_id}` : 'Uncategorized';
+            const key = t.category_name || 'Uncategorized';
+            const name = t.category_name || 'Uncategorized';
             
             if (categoryMap.has(key)) {
                 categoryMap.get(key)!.count++;
@@ -52,11 +54,46 @@ export default function DashboardPage() {
         return Array.from(categoryMap.values());
     })();
 
-    // Prepare category data for pie chart
-    const categoryData = categoryBreakdown.map(cat => ({
-        name: cat.name,
-        value: cat.count
-    }));
+    // Extract detail part from category names (after the colon) and show only top categories
+    const categoryData = (() => {
+        // Sort by count descending
+        const sorted = [...categoryBreakdown].sort((a, b) => b.count - a.count);
+        
+        // Take top 5 categories
+        const topCategories = sorted.slice(0, 5);
+        
+        // Sum up the rest as "Other"
+        const otherCount = sorted.slice(5).reduce((sum, cat) => sum + cat.count, 0);
+        
+        // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
+        const extractDetail = (categoryName: string): string => {
+            if (categoryName === 'Uncategorized') return categoryName;
+            
+            const parts = categoryName.split(':');
+            if (parts.length > 1) {
+                // Get the detail part and format it nicely
+                const detail = parts[1].trim();
+                return detail.charAt(0) + detail.slice(1).toLowerCase();
+            }
+            // If no colon, just format the whole name nicely
+            return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
+        };
+        
+        const result = topCategories.map(cat => ({
+            name: extractDetail(cat.name),
+            value: cat.count
+        }));
+        
+        // Add "Other" if there are more categories
+        if (otherCount > 0) {
+            result.push({
+                name: 'Andere',
+                value: otherCount
+            });
+        }
+        
+        return result;
+    })();
 
     // Recent transactions data
     const recentTransactions = transactions.slice(0, 5).map(t => ({
@@ -64,18 +101,11 @@ export default function DashboardPage() {
         date: t.transaction_date,
         description: t.memo || 'No description',
         amount: t.amount,
-        category: t.category_id ? `Category ${t.category_id}` : 'Uncategorized',
-        recipient: t.recipient_id ? `Recipient ${t.recipient_id}` : 'Unknown',
+        currency: t.currency || 'EUR',
+        category: t.category_name || 'Uncategorized',
+        recipient: t.recipient_name || 'Unknown',
         bank: t.bank_account
     }));
-
-    const categoryColor: Record<string, string> = {
-        Groceries: "bg-primary/15 text-primary border-primary/30",
-        Income: "bg-accent/15 text-accent border-accent/30",
-        Utilities: "bg-chart-3/15 text-chart-3 border-chart-3/30",
-        Dining: "bg-chart-5/15 text-chart-5 border-chart-5/30",
-        Transportation: "bg-chart-4/15 text-chart-4 border-chart-4/30",
-    };
 
     const columns = [
         {key: "date", header: "Date"},
@@ -84,7 +114,7 @@ export default function DashboardPage() {
             key: "category",
             header: "Category",
             render: (row: (typeof recentTransactions)[0]) => (
-                <Badge variant="outline" className={`font-medium ${categoryColor[row.category] || ""}`}>
+                <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
                     {row.category}
                 </Badge>
             ),
@@ -96,8 +126,8 @@ export default function DashboardPage() {
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
-            {row.amount >= 0 ? "+" : ""}${Math.abs(row.amount).toFixed(2)}
-          </span>
+                    {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency)}
+                </span>
             ),
         },
     ];
@@ -139,11 +169,11 @@ export default function DashboardPage() {
             {/* Stats */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt}/>
-                <StatCard title="Last Month Spending" value={`$${totalSpending.toFixed(2)}`} icon={TrendingDown} trend="down"
+                <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="down"
                           subtitle="Most recent month"/>
-                <StatCard title="Last Month Income" value={`$${totalIncome.toFixed(2)}`} icon={ArrowUpRight} trend="up"
+                <StatCard title="Last Month Income" value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="up"
                           subtitle="Most recent month"/>
-                <StatCard title="Last Month Net" value={`$${netBalance.toFixed(2)}`} icon={DollarSign}
+                <StatCard title="Last Month Net" value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
                           trend={netBalance >= 0 ? "up" : "down"}
                           subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"}/>
             </div>

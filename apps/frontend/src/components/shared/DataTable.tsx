@@ -64,7 +64,8 @@ export function DataTable<T extends Record<string, any>>({
     const hasEditableColumns = columns.some((c) => c.editable);
 
     return (
-        <Card>
+        <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
                     <CardTitle className="text-lg font-semibold">{title}</CardTitle>

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
     Boolean, event
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,6 +41,47 @@ class Transaction(Base):
     recipient = relationship("Recipient", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
     import_batch = relationship("ImportBatch", back_populates="transactions")
+
+    @property
+    def category_name(self) -> Optional[str]:
+        """Get the category name in 'General:Detail' format.
+
+        Returns the full category path for the transaction's category.
+        If the transaction doesn't have a direct category assigned (category_id is None),
+        falls back to the recipient's default category.
+
+        This property provides easy access to the category name for API responses,
+        automatically resolving the effective category for the transaction.
+
+        Returns:
+            Optional[str]: Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+                          Returns the transaction's category if set, otherwise the recipient's
+                          default category. Returns None if neither is available.
+        """
+        # Priority 1: Transaction's direct category assignment
+        if self.category:
+            return self.category.full_path()
+
+        # Priority 2: Recipient's default category (fallback)
+        if self.recipient and self.recipient.default_category:
+            return self.recipient.default_category.full_path()
+
+        return None
+
+    @property
+    def recipient_name(self) -> Optional[str]:
+        """Get the recipient name for this transaction.
+
+        Returns the name of the recipient associated with this transaction.
+        This property provides easy access to the recipient name for API responses
+        without requiring explicit joins in queries.
+
+        Returns:
+            Optional[str]: Recipient name (in UPPERCASE), or None if no recipient is set.
+        """
+        if self.recipient:
+            return self.recipient.name
+        return None
 
 
 class Category(Base):
@@ -99,6 +142,18 @@ class Category(Base):
         """Get the full category path in General:Detail format (uppercase)."""
         return f"{self.general}:{self.detail}"
 
+    @property
+    def category_name(self) -> str:
+        """Property alias for full_path() to match schema field name.
+
+        Returns the full category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+        This property provides a consistent interface for API responses.
+
+        Returns:
+            str: Full category path in 'General:Detail' format (uppercase).
+        """
+        return self.full_path()
+
 
 # SQLAlchemy event listeners for automatic uppercase normalization
 @event.listens_for(Category.general, 'set')
@@ -146,6 +201,22 @@ class Recipient(Base):
         UniqueConstraint('name', name='uq_account_number'),
     )
 
+    @property
+    def default_category_name(self) -> Optional[str]:
+        """Get the default category name in 'General:Detail' format.
+
+        Returns the full category path for the recipient's default category,
+        or None if no default category is assigned. This property provides
+        easy access to the category name for API responses.
+
+        Returns:
+            Optional[str]: Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES'),
+                          or None if no default category is set.
+        """
+        if self.default_category:
+            return self.default_category.full_path()
+        return None
+
 
 class ImportBatch(Base):
     """
@@ -174,3 +245,33 @@ class ImportBatch(Base):
 
     # Relationships
     transactions = relationship("Transaction", back_populates="import_batch")
+
+
+class ExchangeRate(Base):
+    """
+    ExchangeRate model - stores currency exchange rates for EUR base currency
+
+    Caches exchange rates in the database to minimize API calls and provide
+    offline functionality. Rates are stored with their fetch date and can be
+    historical or current.
+    """
+    __tablename__ = "exchange_rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Currency information
+    currency_code = Column(String(3), nullable=False, index=True)  # ISO 4217 code (USD, GBP, etc.)
+    rate_to_eur = Column(Numeric(20, 10), nullable=False)  # Exchange rate: 1 CURRENCY = X EUR
+
+    # Rate metadata
+    rate_date = Column(Date, nullable=False, index=True)  # The date this rate is valid for
+    is_latest = Column(Boolean, default=False, index=True)  # True if this is the latest rate
+
+    # Timestamps
+    fetched_at = Column(DateTime, server_default=func.datetime('now', 'utc'), nullable=False)
+    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
+
+    # Table constraints
+    __table_args__ = (
+        UniqueConstraint('currency_code', 'rate_date', name='uq_currency_date'),
+    )

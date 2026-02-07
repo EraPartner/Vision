@@ -95,7 +95,7 @@ export function CSVImport({onImportComplete}: CSVImportProps) {
                                     {bank}
                                 </SelectItem>
                             ))}
-                            <SelectItem value="custom">Other/Custom</SelectItem>
+                            <SelectItem value="custom">Andere/Custom</SelectItem>
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground leading-relaxed">

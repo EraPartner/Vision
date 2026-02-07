@@ -15,7 +15,7 @@ Classes:
 from datetime import date, datetime
 from typing import Optional, List
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from config.logging_config import setup_logging
 from database.models import Transaction, Recipient
@@ -113,7 +113,10 @@ class TransactionRepository:
             - Bank account and recipient name filters are case-insensitive
             - Joins with Recipient table only when filtering by recipient name
         """
-        query = self.db.query(Transaction)
+        query = self.db.query(Transaction).options(
+            joinedload(Transaction.recipient),
+            joinedload(Transaction.category)
+        )
 
         if bank_account:
             query = query.filter(Transaction.bank_account.ilike(f"%{bank_account}%"))
@@ -182,7 +185,10 @@ class TransactionRepository:
             - Results are ordered by date descending
             - Always joins with Recipient table
         """
-        query = self.db.query(Transaction)
+        query = self.db.query(Transaction).options(
+            joinedload(Transaction.recipient),
+            joinedload(Transaction.category)
+        )
         query = query.join(Recipient).filter(Recipient.default_category_id == None).filter(
             Transaction.category_id == None)
 
@@ -332,7 +338,10 @@ class TransactionRepository:
             - Returns None if transaction doesn't exist
             - Does not raise exceptions on missing transactions
         """
-        return self.db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        return self.db.query(Transaction).options(
+            joinedload(Transaction.recipient),
+            joinedload(Transaction.category)
+        ).filter(Transaction.id == transaction_id).first()
 
     def get_total_count(self, active: bool = True) -> int:
         """Get total count of transactions.

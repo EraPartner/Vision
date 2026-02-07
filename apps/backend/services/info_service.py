@@ -215,9 +215,9 @@ class InfoService:
                 "year": target_year,
                 "period_start": first_day,
                 "period_end": last_day,
-                "total_spending": financial_data["total_spending"],
-                "total_income": financial_data["total_income"],
-                "net_amount": financial_data["net_amount"],
+                "total_spending": financial_data["total_spending_eur"],
+                "total_income": financial_data["total_income_eur"],
+                "net_amount": financial_data["net_amount_eur"],
                 "transaction_count": financial_data["transaction_count"]
             })
 

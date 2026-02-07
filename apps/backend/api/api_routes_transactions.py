@@ -208,13 +208,10 @@ async def get_transactions(
         )
 
         # Build response with HATEOAS links
-        transaction_responses = [
-            TransactionResponse(
-                **{k: v for k, v in txn.__dict__.items() if not k.startswith('_')},
-                links=get_resource_links(request, "transactions", txn.id)
-            )
-            for txn in transactions
-        ]
+        transaction_responses = []
+        for txn in transactions:
+            txn.links = get_resource_links(request, "transactions", txn.id)
+            transaction_responses.append(TransactionResponse.model_validate(txn))
 
         # Build query parameters for pagination links
         query_params = {}
@@ -315,10 +312,8 @@ async def get_transaction_by_id(
             }
         )
 
-        return TransactionResponse(
-            **{k: v for k, v in transaction.__dict__.items() if not k.startswith('_')},
-            links=get_resource_links(request, "transactions", transaction.id)
-        )
+        transaction.links = get_resource_links(request, "transactions", transaction.id)
+        return TransactionResponse.model_validate(transaction)
 
     except HTTPException:
         raise
@@ -406,10 +401,8 @@ async def update_transaction(
             }
         )
 
-        return TransactionResponse(
-            **{k: v for k, v in updated_transaction.__dict__.items() if not k.startswith('_')},
-            links=get_resource_links(request, "transactions", updated_transaction.id)
-        )
+        updated_transaction.links = get_resource_links(request, "transactions", updated_transaction.id)
+        return TransactionResponse.model_validate(updated_transaction)
 
     except HTTPException:
         raise

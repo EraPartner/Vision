@@ -235,13 +235,19 @@ class InfoRepository:
         """
         Calculate total spending (negative amounts) and income (positive amounts) for a date range.
 
+        All amounts are converted to EUR for accurate reporting across multiple currencies.
+
         Args:
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
 
         Returns:
-            Dictionary with spending, income, net_amount, and transaction count
+            Dictionary with spending, income, net_amount (all in EUR), transaction count,
+            and currency breakdown showing original currencies
         """
+        from decimal import Decimal
+        from services.currency_conversion_service import CurrencyConversionService
+
         query = self.db.query(Transaction).filter(
             Transaction.date >= start_date,
             Transaction.date <= end_date
@@ -251,25 +257,54 @@ class InfoRepository:
 
         if not transactions:
             return {
-                "total_spending": 0.0,
-                "total_income": 0.0,
-                "net_amount": 0.0,
-                "transaction_count": 0
+                "total_spending_eur": 0.0,
+                "total_income_eur": 0.0,
+                "net_amount_eur": 0.0,
+                "transaction_count": 0,
+                "currency_breakdown": {}
             }
 
-        spending = 0.0
-        income = 0.0
+        # Initialize currency conversion service with database session for caching
+        converter = CurrencyConversionService(db=self.db)
+
+        spending_eur = Decimal("0.0")
+        income_eur = Decimal("0.0")
+        currency_breakdown = {}
 
         for transaction in transactions:
             amount = float(transaction.amount)
+            currency = transaction.currency
+
+            # Convert amount to EUR
+            amount_eur = converter.convert_to_eur(
+                amount=amount,
+                from_currency=currency,
+                transaction_date=transaction.date
+            )
+
+            # Track currency breakdown for reporting
+            currency_key = currency if currency else "EUR"
+            if currency_key not in currency_breakdown:
+                currency_breakdown[currency_key] = {
+                    "count": 0,
+                    "total_original": 0.0,
+                    "total_eur": 0.0
+                }
+
+            currency_breakdown[currency_key]["count"] += 1
+            currency_breakdown[currency_key]["total_original"] += amount
+            currency_breakdown[currency_key]["total_eur"] += float(amount_eur)
+
+            # Categorize as spending or income
             if amount < 0:
-                spending += amount
+                spending_eur += amount_eur
             else:
-                income += amount
+                income_eur += amount_eur
 
         return {
-            "total_spending": spending,
-            "total_income": income,
-            "net_amount": income + spending,
-            "transaction_count": len(transactions)
+            "total_spending_eur": float(spending_eur),
+            "total_income_eur": float(income_eur),
+            "net_amount_eur": float(income_eur + spending_eur),
+            "transaction_count": len(transactions),
+            "currency_breakdown": currency_breakdown
         }

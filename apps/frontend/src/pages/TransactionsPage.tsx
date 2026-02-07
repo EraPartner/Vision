@@ -3,17 +3,7 @@ import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Loader2, Trash2} from "lucide-react";
 import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
-
-const categoryColor: Record<string, string> = {
-    GROCERIES: "bg-primary/15 text-primary border-primary/30",
-    INCOME: "bg-accent/15 text-accent border-accent/30",
-    UTILITIES: "bg-chart-3/15 text-chart-3 border-chart-3/30",
-    DINING: "bg-chart-5/15 text-chart-5 border-chart-5/30",
-    TRANSPORTATION: "bg-chart-4/15 text-chart-4 border-chart-4/30",
-    SHOPPING: "bg-primary/15 text-primary border-primary/30",
-    HEALTHCARE: "bg-destructive/15 text-destructive border-destructive/30",
-    ENTERTAINMENT: "bg-chart-4/15 text-chart-4 border-chart-4/30",
-};
+import {getCategoryColor} from "@/utils/categoryColors";
 
 type TableTransaction = {
     id: number;
@@ -23,6 +13,7 @@ type TableTransaction = {
     recipient: string;
     bank: string;
     amount: number;
+    currency: string;
 };
 
 export default function TransactionsPage() {
@@ -73,10 +64,15 @@ export default function TransactionsPage() {
         id: t.id,
         date: t.transaction_date,
         memo: t.memo || '',
-        category: t.category_id ? 'Category' : 'Uncategorized',
-        recipient: String(t.recipient_id || ''),
+        category: t.category_name || 'Uncategorized',
+        categoryId: t.category_id,
+        recipient: t.recipient_name || 'Unknown',
+        recipientId: t.recipient_id || 0,
         bank: t.bank_account,
         amount: t.amount,
+        currency: t.currency || 'EUR',
+        balance: t.balance,
+        comment: t.comment || '',
     })) || [];
 
     const columns = [
@@ -87,7 +83,7 @@ export default function TransactionsPage() {
             header: "Category",
             editable: false,
             render: (row: TableTransaction) => (
-                <Badge variant="outline" className={`font-medium ${categoryColor[row.category] || ""}`}>
+                <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
                     {row.category}
                 </Badge>
             ),
@@ -100,10 +96,53 @@ export default function TransactionsPage() {
             className: "text-right",
             editable: true,
             type: "number" as const,
+            render: (row: TableTransaction) => {
+                const formattedAmount = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: row.currency,
+                }).format(Math.abs(row.amount));
+                
+                return (
+                    <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
+                        {row.amount >= 0 ? "+" : ""}{formattedAmount}
+                    </span>
+                );
+            },
+        },
+        {
+            key: "currency",
+            header: "Currency",
+            editable: true,
             render: (row: TableTransaction) => (
-                <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
-          {row.amount >= 0 ? "+" : ""}€{Math.abs(row.amount).toFixed(2)}
-        </span>
+                <span className="font-mono text-sm">{row.currency}</span>
+            ),
+        },
+        {
+            key: "balance",
+            header: "Balance",
+            className: "text-right",
+            editable: true,
+            type: "number" as const,
+            render: (row: TableTransaction) => (
+                <span className="text-sm text-muted-foreground">
+                    {row.balance !== undefined && row.balance !== null 
+                        ? new Intl.NumberFormat('en-US', {
+                            style: 'currency',
+                            currency: row.currency,
+                        }).format(row.balance)
+                        : '-'
+                    }
+                </span>
+            ),
+        },
+        {
+            key: "comment",
+            header: "Comment",
+            editable: true,
+            render: (row: TableTransaction) => (
+                <span className="text-sm text-muted-foreground italic">
+                    {row.comment || '-'}
+                </span>
             ),
         },
         {
@@ -142,4 +181,3 @@ export default function TransactionsPage() {
         </div>
     );
 }
-

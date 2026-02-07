@@ -40,7 +40,7 @@ export function CategoryBreakdown({ data }: CategoryBreakdownProps) {
                     <span className="text-sm font-medium capitalize">{item.category}</span>
                     <span className="text-xs text-muted-foreground">({item.count} transactions)</span>
                   </div>
-                  <span className="text-sm font-bold">${item.amount.toFixed(2)}</span>
+                  <span className="text-sm font-bold">€{item.amount.toFixed(2)}</span>
                 </div>
                 <div className="relative h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div
