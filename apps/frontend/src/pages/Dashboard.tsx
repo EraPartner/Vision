@@ -4,8 +4,9 @@ import {StatCard} from "@/components/dashboard/StatCard";
 import {TransactionsTable} from "@/components/dashboard/TransactionsTable";
 import {CSVImport} from "@/components/dashboard/CSVImport";
 import {SpendingChart} from "@/components/dashboard/SpendingChart";
-import {DateRangeFilter} from "@/components/dashboard/DateRangeFilter.tsx";
-import {CategoryBreakdown} from "@/components/dashboard/CategoryBreakdown.tsx";
+import {MonthlyTrendsChart} from "@/components/dashboard/MonthlyTrendsChart";
+import {DateRangeFilter} from "@/components/dashboard/DateRangeFilter";
+import {CategoryBreakdown} from "@/components/dashboard/CategoryBreakdown";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {ArrowUpRight, BarChart3, Calendar, DollarSign, Sparkles, TrendingUp, Wallet} from "lucide-react";
 import {toast} from "sonner";
@@ -15,11 +16,29 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
     const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+    
+    // Dashboard stats from API
+    const [totalTransactions, setTotalTransactions] = useState<number>(0);
+    const [monthlyIncome, setMonthlyIncome] = useState<number>(0);
+    const [monthlySpending, setMonthlySpending] = useState<number>(0);
+    const [netBalance, setNetBalance] = useState<number>(0);
+    
+    // Monthly trends data for chart
+    const [monthlyTrends, setMonthlyTrends] = useState<Array<{
+        month: number;
+        year: number;
+        period_start: string;
+        period_end: string;
+        total_spending: number;
+        total_income: number;
+        net_amount: number;
+        transaction_count: number;
+    }>>([]);
 
     const fetchTransactions = async () => {
         try {
-            const data = await apiClient.getTransactions();
-            setTransactions(data);
+            const response = await apiClient.getTransactions();
+            setTransactions(response.items);
         } catch (error: any) {
             toast.error("Failed to load transactions");
         } finally {
@@ -27,8 +46,52 @@ export default function Dashboard() {
         }
     };
 
+    const fetchDashboardStats = async () => {
+        try {
+            // Fetch total transaction count
+            const countData = await apiClient.getTransactionCount();
+            setTotalTransactions(countData.total_transactions);
+
+            // Fetch monthly financial summary (last 6 months)
+            const monthlySummary = await apiClient.getMonthlyFinancialSummary();
+            
+            console.log("📊 API Response - Full monthly summary:", monthlySummary);
+            console.log("📊 Number of months received:", monthlySummary.months.length);
+            console.log("📊 All months data:", monthlySummary.months);
+            
+            // Set monthly trends data for the chart (all 6 months)
+            setMonthlyTrends(monthlySummary.months);
+            console.log("📊 Set monthlyTrends with", monthlySummary.months.length, "months");
+            
+            // Find the last month with actual transactions
+            let lastMonthWithData = monthlySummary.months[monthlySummary.months.length - 1];
+            for (let i = monthlySummary.months.length - 1; i >= 0; i--) {
+                if (monthlySummary.months[i].transaction_count > 0) {
+                    lastMonthWithData = monthlySummary.months[i];
+                    break;
+                }
+            }
+            
+            console.log("📊 Using month for stats:", lastMonthWithData.month, lastMonthWithData.year);
+            
+            const income = lastMonthWithData.total_income;
+            const spending = Math.abs(lastMonthWithData.total_spending);
+            const net = lastMonthWithData.net_amount;
+            
+            console.log("📊 Stat card values - Income:", income, "Spending:", spending, "Net:", net);
+            
+            setMonthlyIncome(income);
+            setMonthlySpending(spending);
+            setNetBalance(net);
+        } catch (error: any) {
+            toast.error("Failed to load dashboard statistics");
+            console.error("Dashboard stats error:", error);
+        }
+    };
+
     useEffect(() => {
         fetchTransactions();
+        fetchDashboardStats();
     }, []);
 
     // Filter transactions by date range
@@ -88,7 +151,7 @@ export default function Dashboard() {
         .filter((t) => t.amount > 0)
         .reduce((sum, t) => sum + t.amount, 0);
 
-    const netBalance = totalIncome - totalSpending;
+    const netBalanceCalc = totalIncome - totalSpending;
 
     return (
         <div
@@ -149,31 +212,30 @@ export default function Dashboard() {
                 {/* Enhanced Stats Grid */}
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-in">
                     <StatCard
-                        title="Total Spending"
-                        value={`$${totalSpending.toFixed(2)}`}
-                        icon={DollarSign}
-                        trend="expense"
+                        title="Total Transactions"
+                        value={totalTransactions.toString()}
+                        icon={Wallet}
+                        trend="neutral"
                     />
                     <StatCard
-                        title="Total Income"
-                        value={`$${totalIncome.toFixed(2)}`}
+                        title="Last Month Income"
+                        value={`$${monthlyIncome.toFixed(2)}`}
                         icon={ArrowUpRight}
                         trend="income"
                     />
                     <StatCard
-                        title="Net Balance"
+                        title="Last Month Spending"
+                        value={`$${monthlySpending.toFixed(2)}`}
+                        icon={DollarSign}
+                        trend="expense"
+                    />
+                    <StatCard
+                        title="Last Month Net"
                         value={`$${netBalance.toFixed(2)}`}
                         change={`${netBalance >= 0 ? 'Positive' : 'Negative'} cash flow`}
                         changeType={netBalance >= 0 ? "positive" : "negative"}
-                        icon={Wallet}
+                        icon={TrendingUp}
                         trend={netBalance >= 0 ? "income" : "expense"}
-                    />
-                    <StatCard
-                        title="This Month"
-                        value={`$${Math.abs(totalThisMonth).toFixed(2)}`}
-                        change={`${monthlyChange > 0 ? '+' : ''}${monthlyChange.toFixed(1)}% from last month`}
-                        changeType={monthlyChange > 0 ? "negative" : "positive"}
-                        icon={Calendar}
                     />
                 </div>
 
@@ -218,6 +280,11 @@ export default function Dashboard() {
                     </TabsContent>
 
                     <TabsContent value="analytics" className="space-y-8">
+                        {monthlyTrends.length > 0 && (
+                            <div className="grid gap-8 lg:grid-cols-1">
+                                <MonthlyTrendsChart data={monthlyTrends}/>
+                            </div>
+                        )}
                         <div className="grid gap-8 lg:grid-cols-2">
                             {chartData.length > 0 && <SpendingChart data={chartData}/>}
                             {categoryBreakdown.length > 0 && <CategoryBreakdown data={categoryBreakdown}/>}

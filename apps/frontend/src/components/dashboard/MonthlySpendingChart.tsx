@@ -1,16 +1,27 @@
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
 
-const monthlyData = [
-    {month: "Sep", spending: 2890, income: 4200},
-    {month: "Oct", spending: 3120, income: 4200},
-    {month: "Nov", spending: 2780, income: 4650},
-    {month: "Dec", spending: 3540, income: 5050},
-    {month: "Jan", spending: 3010, income: 4200},
-    {month: "Feb", spending: 1245, income: 4200},
-];
+interface MonthlySpendingChartProps {
+    data: Array<{ month: string; spending: number; income: number }>;
+}
 
-export function MonthlySpendingChart() {
+export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
+    if (!data || data.length === 0) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg font-semibold">Monthly Spending vs Income</CardTitle>
+                    <p className="text-sm text-muted-foreground">Last 6 months overview</p>
+                </CardHeader>
+                <CardContent>
+                    <div className="h-72 flex items-center justify-center text-muted-foreground">
+                        No monthly data available
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
     return (
         <Card>
             <CardHeader>
@@ -20,7 +31,7 @@ export function MonthlySpendingChart() {
             <CardContent>
                 <div className="h-72">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={monthlyData} barGap={4}>
+                        <BarChart data={data} barGap={4}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-border"/>
                             <XAxis
                                 dataKey="month"

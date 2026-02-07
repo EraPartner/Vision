@@ -356,6 +356,40 @@ class BankListResponse(BaseModel):
     banks: List[str]
 
 
+class TransactionCountResponse(BaseModel):
+    """Response schema for total transaction count"""
+    total_transactions: int = Field(description="Total number of transactions in the database", ge=0)
+
+
+class MonthData(BaseModel):
+    """Financial data for a single month"""
+    month: int = Field(description="Month number (1-12)", ge=1, le=12)
+    year: int = Field(description="Year", ge=2000)
+    period_start: date = Field(description="Start date of the month (ISO 8601)")
+    period_end: date = Field(description="End date of the month (ISO 8601)")
+    total_spending: float = Field(description="Total spending (negative amounts) for the month", le=0.0)
+    total_income: float = Field(description="Total income (positive amounts) for the month", ge=0.0)
+    net_amount: float = Field(description="Net amount (income + spending) for the month")
+    transaction_count: int = Field(description="Total number of transactions in the month", ge=0)
+
+
+class SixMonthSummary(BaseModel):
+    """Overall summary for the 6-month period"""
+    total_spending: float = Field(description="Total spending across all 6 months", le=0.0)
+    total_income: float = Field(description="Total income across all 6 months", ge=0.0)
+    net_amount: float = Field(description="Net amount across all 6 months")
+    transaction_count: int = Field(description="Total transactions across all 6 months", ge=0)
+    period_start: date = Field(description="Start date of the 6-month period (ISO 8601)")
+    period_end: date = Field(description="End date of the 6-month period (ISO 8601)")
+
+
+class MonthlyFinancialSummaryResponse(BaseModel):
+    """Response schema for 6-month financial summary broken down month by month"""
+    months: List[MonthData] = Field(description="Array of monthly financial data (6 months)")
+    summary: SixMonthSummary = Field(description="Overall summary for the entire 6-month period")
+    links: List[Link] = Field(description="Available actions (HATEOAS links)")
+
+
 # ==================== Import Schemas ====================
 
 class CSVImportRequest(BaseModel):
