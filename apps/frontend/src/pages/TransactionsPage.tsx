@@ -1,9 +1,12 @@
+import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Loader2, Trash2} from "lucide-react";
 import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
 import {getCategoryColor} from "@/utils/categoryColors";
+
+const PAGE_SIZE = 50;
 
 type TableTransaction = {
     id: number;
@@ -17,7 +20,8 @@ type TableTransaction = {
 };
 
 export default function TransactionsPage() {
-  const { data, isLoading, error } = useTransactions({ limit: 50, active: true });
+    const [page, setPage] = useState(0);
+    const { data, isLoading, error } = useTransactions({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
 
@@ -58,6 +62,8 @@ export default function TransactionsPage() {
             </div>
         );
     }
+
+    const totalItems = data?.total ?? data?.items?.length ?? 0;
 
     // Map backend data to table format
     const transactions: TableTransaction[] = data?.items.map((t) => ({
@@ -172,11 +178,15 @@ export default function TransactionsPage() {
 
             <DataTable
                 title="All Transactions"
-                subtitle={`${transactions.length} transactions`}
+                subtitle={`${totalItems} transactions`}
                 columns={columns}
                 data={transactions}
                 onRowUpdate={handleUpdate}
                 emptyMessage="No transactions found."
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalItems={totalItems}
+                onPageChange={setPage}
             />
         </div>
     );
