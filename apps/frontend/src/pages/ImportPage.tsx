@@ -4,11 +4,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
   CheckCircle2,
   CloudUpload,
+  Download,
   File,
   Loader2,
   Trash2,
@@ -109,13 +111,57 @@ export default function ImportPage() {
     }
   };
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await apiClient.getTransactions({ limit: 10000 });
+      const transactions = data.items || [];
+
+      if (transactions.length === 0) {
+        toast.error("No transactions to export.");
+        return;
+      }
+
+      const headers = ["Date", "Description", "Amount", "Currency", "Category", "Recipient", "Bank"];
+      const rows = transactions.map((t) => [
+        t.transaction_date,
+        `"${(t.memo || "").replace(/"/g, '""')}"`,
+        t.amount,
+        t.currency || "EUR",
+        t.category_name || "",
+        `"${(t.recipient_name || "").replace(/"/g, '""')}"`,
+        t.bank_account || "",
+      ]);
+
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${transactions.length} transactions!`, {
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to export";
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-in max-w-2xl mx-auto">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold text-foreground">Import Transactions</h2>
+        <h2 className="text-3xl font-bold text-foreground">Import & Export</h2>
         <p className="text-muted-foreground mt-1">
-          Upload a CSV file from your bank to import transactions
+          Import transactions from your bank or export your data as CSV
         </p>
       </div>
 
@@ -249,6 +295,41 @@ export default function ImportPage() {
               <>
                 <Upload className="h-4 w-4 mr-2" />
                 Import Transactions
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Export Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5 text-accent" />
+            CSV Export
+          </CardTitle>
+          <CardDescription>
+            Download all your transactions as a CSV file for backups or use in
+            spreadsheet software.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={handleExport}
+            disabled={exporting}
+            variant="outline"
+            className="w-full h-11"
+            size="lg"
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Exporting…
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Export All Transactions
               </>
             )}
           </Button>
