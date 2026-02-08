@@ -1,9 +1,9 @@
 import {useState} from "react";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table";
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
 import {Input} from "@/components/ui/input";
 import {Button} from "@/components/ui/button";
-import {Check, Pencil, X} from "lucide-react";
+import {Check, ChevronLeft, ChevronRight, Pencil, X} from "lucide-react";
 
 interface Column<T> {
     key: string;
@@ -22,17 +22,26 @@ interface DataTableProps<T> {
     emptyMessage?: string;
     actions?: React.ReactNode;
     onRowUpdate?: (index: number, updatedRow: T) => void;
+    // Pagination
+    page?: number;
+    pageSize?: number;
+    totalItems?: number;
+    onPageChange?: (page: number) => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
-                                                             title,
-                                                             subtitle,
-                                                             columns,
-                                                             data,
-                                                             emptyMessage = "No data available",
-                                                             actions,
-                                                             onRowUpdate,
-                                                         }: DataTableProps<T>) {
+    title,
+    subtitle,
+    columns,
+    data,
+    emptyMessage = "No data available",
+    actions,
+    onRowUpdate,
+    page,
+    pageSize = 50,
+    totalItems,
+    onPageChange,
+}: DataTableProps<T>) {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
 
@@ -62,6 +71,9 @@ export function DataTable<T extends Record<string, any>>({
     };
 
     const hasEditableColumns = columns.some((c) => c.editable);
+    const hasPagination = page !== undefined && totalItems !== undefined && onPageChange;
+    const totalPages = hasPagination ? Math.max(1, Math.ceil(totalItems! / pageSize)) : 1;
+    const currentPage = page ?? 0;
 
     return (
         <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
@@ -175,6 +187,38 @@ export function DataTable<T extends Record<string, any>>({
                         )}
                     </TableBody>
                 </Table>
+
+                {/* Pagination */}
+                {hasPagination && totalItems! > 0 && (
+                    <div className="flex items-center justify-between border-t px-6 py-3">
+                        <p className="text-sm text-muted-foreground">
+                            Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalItems!)} of {totalItems!}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage === 0}
+                                onClick={() => onPageChange!(currentPage - 1)}
+                            >
+                                <ChevronLeft className="h-4 w-4 mr-1" />
+                                Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground px-2">
+                                Page {currentPage + 1} of {totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages - 1}
+                                onClick={() => onPageChange!(currentPage + 1)}
+                            >
+                                Next
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

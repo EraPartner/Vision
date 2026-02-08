@@ -1,7 +1,10 @@
+import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Loader2} from "lucide-react";
 import {useCategories, useUpdateCategory} from "@/hooks/useCategories";
+
+const PAGE_SIZE = 50;
 
 type TableCategory = {
     id: number;
@@ -11,7 +14,8 @@ type TableCategory = {
 };
 
 export default function CategoriesPage() {
-  const { data, isLoading, error } = useCategories({ limit: 50, active: true });
+    const [page, setPage] = useState(0);
+    const { data, isLoading, error } = useCategories({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
     const updateMutation = useUpdateCategory();
 
     const handleUpdate = (idx: number, updated: TableCategory) => {
@@ -46,7 +50,8 @@ export default function CategoriesPage() {
         );
     }
 
-    // Map backend data to table format
+    const totalItems = data?.total ?? data?.items?.length ?? 0;
+
     const categories: TableCategory[] = data?.items.map((c) => ({
         id: c.id,
         name: `${c.general} - ${c.detail}`,
@@ -94,11 +99,15 @@ export default function CategoriesPage() {
 
             <DataTable
                 title="All Categories"
-                subtitle={`${categories.length} categories`}
+                subtitle={`${totalItems} categories`}
                 columns={columns}
                 data={categories}
                 onRowUpdate={handleUpdate}
                 emptyMessage="No categories found."
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalItems={totalItems}
+                onPageChange={setPage}
             />
         </div>
     );
