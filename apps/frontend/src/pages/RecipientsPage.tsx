@@ -1,7 +1,10 @@
+import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Loader2} from "lucide-react";
 import {useRecipients, useUpdateRecipient} from "@/hooks/useRecipients";
+
+const PAGE_SIZE = 50;
 
 type TableRecipient = {
     id: number;
@@ -12,7 +15,8 @@ type TableRecipient = {
 };
 
 export default function RecipientsPage() {
-  const { data, isLoading, error } = useRecipients({ limit: 50, active: true });
+    const [page, setPage] = useState(0);
+    const { data, isLoading, error } = useRecipients({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
     const updateMutation = useUpdateRecipient();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
@@ -48,7 +52,8 @@ export default function RecipientsPage() {
         );
     }
 
-    // Map backend data to table format
+    const totalItems = data?.total ?? data?.items?.length ?? 0;
+
     const recipients: TableRecipient[] = data?.items.map((r) => ({
         id: r.id,
         name: r.name,
@@ -81,10 +86,8 @@ export default function RecipientsPage() {
             header: "Default Category",
             editable: false,
             render: (row: TableRecipient) => {
-                // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
                 const formatCategoryName = (categoryName?: string): string => {
                     if (!categoryName) return 'None';
-                    
                     const parts = categoryName.split(':');
                     if (parts.length > 1) {
                         const detail = parts[1].trim();
@@ -137,11 +140,15 @@ export default function RecipientsPage() {
 
             <DataTable
                 title="All Recipients"
-                subtitle={`${recipients.length} recipients`}
+                subtitle={`${totalItems} recipients`}
                 columns={columns}
                 data={recipients}
                 onRowUpdate={handleUpdate}
                 emptyMessage="No recipients found."
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalItems={totalItems}
+                onPageChange={setPage}
             />
         </div>
     );
