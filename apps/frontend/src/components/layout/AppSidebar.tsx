@@ -79,10 +79,10 @@ export function AppSidebar() {
                     <SidebarGroupContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
-                                <SidebarMenuButton asChild tooltip="Import">
+                                <SidebarMenuButton asChild tooltip="Import & Export">
                                     <NavLink to="/import">
                                         <Import className="h-4 w-4"/>
-                                        <span>Import CSV</span>
+                                        <span>Import / Export</span>
                                     </NavLink>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
