@@ -2,8 +2,8 @@ import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight} from "lucide-react";
-import {useRecipients, useUpdateRecipient} from "@/hooks/useRecipients";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
+import {useRecipients, useUpdateRecipient, useDeleteRecipient} from "@/hooks/useRecipients";
 
 const PAGE_SIZE = 50;
 
@@ -26,6 +26,7 @@ export default function RecipientsPage() {
         ...(showAll ? {} : { active: true }),
     });
     const updateMutation = useUpdateRecipient();
+    const deleteMutation = useDeleteRecipient();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = data?.items[idx];
@@ -157,6 +158,23 @@ export default function RecipientsPage() {
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                     {row.is_active ? 'Active' : 'Inactive'}
+                </Button>
+            ),
+        },
+        {
+            key: "delete",
+            header: "",
+            className: "w-12",
+            editable: false,
+            render: (row: TableRecipient) => (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => deleteMutation.mutate(row.id)}
+                    disabled={deleteMutation.isPending}
+                >
+                    <Trash2 className="h-4 w-4" />
                 </Button>
             ),
         },
