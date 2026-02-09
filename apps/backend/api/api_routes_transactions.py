@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from api.api_schemas import (
     TransactionResponse, TransactionsListResponse,
     TransactionUpdate, OptionsResponse,
-    MethodInfo, Link
+    MethodInfo, Link, MessageResponse
 )
 from api.hateoas_links import (
     get_resource_links, get_collection_links
@@ -417,3 +417,104 @@ async def update_transaction(
             }
         )
         raise HTTPException(status_code=500, detail=f"Error updating transaction: {str(e)}")
+
+
+@router.delete("/{transaction_id}", response_model=MessageResponse, status_code=200,
+               description="Deletes a transaction.")
+async def delete_transaction(
+        transaction_id: int = Path(..., ge=1, description="Transaction ID"),
+        soft: bool = Query(True, description="Perform a soft delete (True) or hard delete (False)"),
+        request: Request = None,
+        db: Session = Depends(get_db)
+):
+    """Delete a transaction with HATEOAS links in response.
+
+    Performs deletion of a transaction. Note: For transactions, both soft and hard
+    delete perform permanent deletion as the Transaction model does not have an
+    is_active field. The soft parameter is maintained for API consistency.
+
+    Args:
+        transaction_id (int): The unique identifier of the transaction to delete.
+        soft (bool): Deletion type flag. Defaults to True. Note: Both soft and hard
+            delete perform permanent deletion for transactions.
+        request (Request): Request object for generating absolute URLs.
+        db (Session): Database session dependency.
+
+    Returns:
+        MessageResponse: Success message confirming deletion with HATEOAS links.
+
+    Raises:
+        HTTPException: 404 error if transaction not found.
+        HTTPException: 500 error if deletion fails.
+
+    Example:
+        DELETE /api/transactions/123
+        DELETE /api/transactions/123?soft=false
+
+    Warning:
+        Both soft and hard delete perform permanent deletion for transactions.
+        Consider archiving transactions instead for audit trail purposes.
+    """
+    try:
+        from services.transaction_service import TransactionService
+        from api.hateoas_links import get_deletion_response_links
+
+        service = TransactionService(db)
+        if soft:
+            if not service.soft_delete(transaction_id):
+                logger.warning(
+                    "Transaction not found for deletion",
+                    extra={
+                        "operation": "delete_transaction",
+                        "resource_type": "transaction",
+                        "resource_id": transaction_id,
+                        "soft_delete": soft
+                    }
+                )
+                raise HTTPException(status_code=404, detail=f"Transaction with ID {transaction_id} not found")
+        else:
+            if not service.hard_delete(transaction_id):
+                logger.warning(
+                    "Transaction not found for deletion",
+                    extra={
+                        "operation": "delete_transaction",
+                        "resource_type": "transaction",
+                        "resource_id": transaction_id,
+                        "soft_delete": soft
+                    }
+                )
+                raise HTTPException(status_code=404, detail=f"Transaction with ID {transaction_id} not found")
+
+        logger.info(
+            "Transaction deleted successfully",
+            extra={
+                "operation": "delete_transaction",
+                "resource_type": "transaction",
+                "resource_id": transaction_id,
+                "soft_delete": soft,
+                "status": "success"
+            }
+        )
+
+        return MessageResponse(
+            message="Transaction soft deleted successfully" if soft else "Transaction deleted permanently",
+            details={"method": "soft delete" if soft else "hard delete"},
+            links=get_deletion_response_links(request, "transactions")
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to delete transaction",
+            extra={
+                "operation": "delete_transaction",
+                "resource_type": "transaction",
+                "resource_id": transaction_id,
+                "soft_delete": soft,
+                "error": str(e),
+                "status": "failed"
+            },
+            exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Error deleting transaction")
