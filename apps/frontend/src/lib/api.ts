@@ -169,11 +169,30 @@ class ApiClient {
         });
     }
 
-    async importCSV(csvContent: string, bankSource?: string): Promise<{ imported: number; message: string }> {
-        return this.request('/api/import-csv', {
+    async importCSV(file: File, bankName: string): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const queryParams = new URLSearchParams();
+        queryParams.append('bank_name', bankName);
+
+        const url = `${API_BASE_URL}/api/import/csv?${queryParams.toString()}`;
+        console.log(`API Request: POST ${url}`);
+
+        const response = await fetch(url, {
             method: 'POST',
-            body: JSON.stringify({csv_content: csvContent, bank_source: bankSource}),
+            body: formData,
         });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({detail: 'Request failed'}));
+            console.error(`API Error: ${url}`, error);
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        const data = await response.json();
+        console.log(`API Response: ${url}`, data);
+        return data;
     }
 
     // ==================== Info/Statistics Methods ====================

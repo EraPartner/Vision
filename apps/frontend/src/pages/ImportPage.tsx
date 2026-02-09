@@ -4,7 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -17,41 +16,47 @@ import {
   Upload,
 } from "lucide-react";
 
-const PRESET_BANKS = [
-  "Chase",
-  "Bank of America",
-  "Wells Fargo",
-  "Capital One",
-  "Citi",
-  "Discover",
-  "American Express",
-];
-
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [bankSource, setBankSource] = useState("auto-detect");
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [supportedBanks, setSupportedBanks] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch supported banks from backend instead of hardcoding
+  const [banks, setBanks] = useState<string[]>([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [banksError, setBanksError] = useState<string | null>(null);
+
   useEffect(() => {
-    const fetchBanks = async () => {
+    let mounted = true;
+    const loadBanks = async () => {
+      setBanksLoading(true);
+      setBanksError(null);
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/supported-banks`
-        );
-        const data = await response.json();
-        if (data.banks?.length) setSupportedBanks(data.banks);
-      } catch {
-        // fallback to preset list
+        const res = await apiClient.getBanks();
+        if (mounted && res && Array.isArray(res.banks)) {
+          setBanks(res.banks);
+        }
+      } catch (err) {
+        console.error('Failed to load banks', err);
+        if (mounted) {
+          setBanksError(err instanceof Error ? err.message : String(err));
+          // Leave banks empty - we intentionally avoid hardcoding fallback values
+          setBanks([]);
+          toast.error('Could not load supported banks from server — you can still use Auto-detect or Custom');
+        }
+      } finally {
+        if (mounted) setBanksLoading(false);
       }
     };
-    fetchBanks();
-  }, []);
 
-  const banks = supportedBanks.length > 0 ? supportedBanks : PRESET_BANKS;
+    loadBanks();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleFile = useCallback((f: File | null) => {
     if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
@@ -79,8 +84,8 @@ export default function ImportPage() {
   const onDragLeave = useCallback(() => setDragOver(false), []);
 
   const resolvedBank = () => {
-    if (bankSource === "custom") return customBank || undefined;
-    if (bankSource === "auto-detect") return undefined;
+    if (bankSource === "custom") return customBank || "generic";
+    if (bankSource === "auto-detect") return "generic";
     return bankSource;
   };
 
@@ -90,13 +95,18 @@ export default function ImportPage() {
       return;
     }
 
+    const bank = resolvedBank();
+    if (!bank) {
+      toast.error("Please select a bank source.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const csvContent = await file.text();
-      const bank = resolvedBank();
-      const data = await apiClient.importCSV(csvContent, bank);
+      const data = await apiClient.importCSV(file, bank);
 
       toast.success(`Successfully imported ${data.imported} transactions!`, {
+        description: `${data.duplicates} duplicates skipped, ${data.total_processed} total processed`,
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setFile(null);
@@ -190,12 +200,22 @@ export default function ImportPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto-detect">🔍 Auto-detect</SelectItem>
-                {banks.map((bank) => (
-                  <SelectItem key={bank} value={bank}>
-                    🏦 {bank}
+                {banksLoading ? (
+                  <SelectItem value="loading" disabled>
+                    <Loader2 className="h-4 w-4 mr-2 inline" /> Loading banks...
                   </SelectItem>
-                ))}
-                <SelectItem value="custom">✏️ Custom / Other</SelectItem>
+                ) : banks.length > 0 ? (
+                  banks.map((bank) => (
+                    <SelectItem key={bank} value={bank}>
+                      🏦 {bank}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    No banks available — use Auto-detect or Custom
+                  </SelectItem>
+                )}
+                <SelectItem value="custom">✏️ Custom / Andere</SelectItem>
               </SelectContent>
             </Select>
 
@@ -343,14 +363,24 @@ export default function ImportPage() {
             Supported Banks
           </p>
           <div className="flex flex-wrap gap-2">
-            {banks.map((bank) => (
-              <span
-                key={bank}
-                className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
-              >
-                {bank}
+            {banksLoading ? (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…
               </span>
-            ))}
+            ) : banks.length > 0 ? (
+              banks.map((bank) => (
+                <span
+                  key={bank}
+                  className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                >
+                  {bank}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                No supported banks loaded. Use <strong>Auto-detect</strong> or select <strong>Custom</strong> to provide a bank name.
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-3">
             Don't see your bank? Try <strong>Auto-detect</strong> or select{" "}

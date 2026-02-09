@@ -198,8 +198,15 @@ export function DataTable<T extends Record<string, any>>({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={currentPage === 0}
-                                onClick={() => onPageChange!(currentPage - 1)}
+                                disabled={totalPages <= 1}
+                                onClick={() => {
+                                    // Wrap to last page when on the first page
+                                    if (currentPage === 0) {
+                                        onPageChange!(totalPages - 1);
+                                    } else {
+                                        onPageChange!(currentPage - 1);
+                                    }
+                                }}
                             >
                                 <ChevronLeft className="h-4 w-4 mr-1" />
                                 Previous
@@ -210,8 +217,15 @@ export function DataTable<T extends Record<string, any>>({
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={currentPage >= totalPages - 1}
-                                onClick={() => onPageChange!(currentPage + 1)}
+                                disabled={totalPages <= 1}
+                                onClick={() => {
+                                    // Wrap to first page when on the last page
+                                    if (currentPage >= totalPages - 1) {
+                                        onPageChange!(0);
+                                    } else {
+                                        onPageChange!(currentPage + 1);
+                                    }
+                                }}
                             >
                                 Next
                                 <ChevronRight className="h-4 w-4 ml-1" />

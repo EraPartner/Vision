@@ -8,9 +8,9 @@ from datetime import date
 from typing import List, Dict, Any, Optional
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from database.models import Transaction, Category
+from database.models import Transaction, Category, Recipient
 
 
 class InfoRepository:
@@ -248,9 +248,25 @@ class InfoRepository:
         from decimal import Decimal
         from services.currency_conversion_service import CurrencyConversionService
 
-        query = self.db.query(Transaction).filter(
-            Transaction.date >= start_date,
-            Transaction.date <= end_date
+        # Efficiently load transactions with recipient eager-loaded to avoid N+1 queries.
+        # Exclude only those transactions whose effective category resolves to 9 ("Intrabank").
+        # Effective category = Transaction.category_id if set, otherwise Recipient.default_category_id.
+        # Exclude when either the transaction has category_id == 9, or it has no category_id and the
+        # recipient default_category_id == 9. Keep transactions with NULL categories (they'll be
+        # included in summaries).
+        # Explicitly join Recipient so we can reference its default_category_id in filters
+        query = (
+            self.db.query(Transaction)
+            .options(joinedload(Transaction.recipient))
+            .join(Recipient)
+            .filter(
+                Transaction.date >= start_date,
+                Transaction.date <= end_date,
+                # Effective category = transaction.category_id if set, otherwise recipient.default_category_id.
+                # Use COALESCE to evaluate effective category and treat NULLs as -1 so they don't compare equal to 9.
+                func.coalesce(Transaction.category_id, Recipient.default_category_id, -1) != 9,
+                func.coalesce(Transaction.category_id, Recipient.default_category_id, -1) != 22,
+            )
         )
 
         transactions = query.all()
