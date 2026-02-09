@@ -82,7 +82,15 @@ export default function TransactionsPage() {
     })) || [];
 
     const columns = [
-        {key: "date", header: "Date", editable: true, type: "date" as const},
+        {
+            key: "date",
+            header: "Date",
+            editable: true,
+            type: "date" as const,
+            render: (row: TableTransaction) => (
+                <span className="text-foreground whitespace-nowrap">{row.date || '—'}</span>
+            ),
+        },
         {key: "memo", header: "Description", editable: true},
         {
             key: "category",
