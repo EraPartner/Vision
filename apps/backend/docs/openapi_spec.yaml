@@ -1830,6 +1830,100 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    delete:
+      tags: [ transactions ]
+      summary: Delete transaction
+      description: |
+        Deletes a transaction from the system. Note: For transactions, both soft and hard
+        delete perform permanent deletion as the Transaction model does not have an is_active
+        field. The soft parameter is maintained for API consistency with other resources.
+        
+        **Features:**
+        - Permanent transaction deletion
+        - Support for soft/hard delete parameter (both perform hard delete)
+        - HATEOAS links for next available actions
+        - Audit logging for deletion operations
+        
+        **Warning:**
+        This operation permanently removes the transaction from the database and cannot
+        be undone. Consider archiving transactions instead for audit trail purposes.
+        
+        **Security Considerations:**
+        - Ensure proper authorisation before allowing deletions
+        - All deletions are logged for audit purposes
+        - May violate financial audit requirements
+        - Consider retention policies and compliance requirements
+      operationId: deleteTransaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+        - name: soft
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Perform a soft delete (true) or hard delete (false).
+            **Note:** For transactions, both soft and hard delete perform permanent deletion.
+            **Default**: true
+          example: true
+      responses:
+        '200':
+          description: Transaction deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              examples:
+                soft_delete:
+                  summary: Soft delete response
+                  value:
+                    message: "Transaction soft deleted successfully"
+                    details:
+                      method: "soft delete"
+                    links:
+                      - rel: list
+                        href: http://localhost:3002/api/transactions
+                        method: GET
+                        title: List remaining transactions
+                      - rel: create
+                        href: http://localhost:3002/api/transactions
+                        method: POST
+                        title: Create a new transaction
+                hard_delete:
+                  summary: Hard delete response
+                  value:
+                    message: "Transaction deleted permanently"
+                    details:
+                      method: "hard delete"
+                    links:
+                      - rel: list
+                        href: http://localhost:3002/api/transactions
+                        method: GET
+                        title: List remaining transactions
+                      - rel: create
+                        href: http://localhost:3002/api/transactions
+                        method: POST
+                        title: Create a new transaction
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Transaction with ID 123 not found"
+                error_code: "TRANSACTION_NOT_FOUND"
+        '500':
+          description: Error deleting transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Error deleting transaction"
+                error_code: "INTERNAL_SERVER_ERROR"
+
   # ==================== Import Endpoints ====================
 
   /api/import/csv:
