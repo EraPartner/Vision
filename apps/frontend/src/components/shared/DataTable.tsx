@@ -10,7 +10,7 @@ interface Column<T> {
     header: string;
     editable?: boolean;
     type?: "text" | "number" | "date";
-    render?: (row: T, isEditing: boolean) => React.ReactNode;
+    render?: (row: T, isEditing: boolean, index?: number) => React.ReactNode;
     className?: string;
 }
 
@@ -175,7 +175,7 @@ export function DataTable<T extends Record<string, any>>({
                                                         className="h-8 text-sm"
                                                     />
                                                 ) : col.render ? (
-                                                    col.render(row, isEditing)
+                                                    col.render(row, isEditing, idx)
                                                 ) : (
                                                     String(row[col.key] ?? "")
                                                 )}
