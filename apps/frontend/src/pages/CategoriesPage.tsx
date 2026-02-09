@@ -2,8 +2,8 @@ import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight} from "lucide-react";
-import {useCategories, useUpdateCategory} from "@/hooks/useCategories";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
+import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 
 const PAGE_SIZE = 50;
 
@@ -24,6 +24,7 @@ export default function CategoriesPage() {
         ...(showAll ? {} : { active: true }),
     });
     const updateMutation = useUpdateCategory();
+    const deleteMutation = useDeleteCategory();
 
     const handleUpdate = (idx: number, updated: TableCategory) => {
         const originalCategory = data?.items[idx];
@@ -120,6 +121,23 @@ export default function CategoriesPage() {
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                     {row.is_active ? 'Active' : 'Inactive'}
+                </Button>
+            ),
+        },
+        {
+            key: "delete",
+            header: "",
+            className: "w-12",
+            editable: false,
+            render: (row: TableCategory) => (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => deleteMutation.mutate(row.id)}
+                    disabled={deleteMutation.isPending}
+                >
+                    <Trash2 className="h-4 w-4" />
                 </Button>
             ),
         },
