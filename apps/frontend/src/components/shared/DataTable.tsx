@@ -1,9 +1,9 @@
-import {useState} from "react";
+import {useMemo, useState} from "react";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
 import {Input} from "@/components/ui/input";
 import {Button} from "@/components/ui/button";
-import {Check, ChevronLeft, ChevronRight, Pencil, X} from "lucide-react";
+import {Check, ChevronLeft, ChevronRight, Pencil, Search, X} from "lucide-react";
 
 interface Column<T> {
     key: string;
@@ -44,6 +44,18 @@ export function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const filteredData = useMemo(() => {
+        if (!searchQuery.trim()) return data;
+        const q = searchQuery.toLowerCase();
+        return data.filter((row) =>
+            columns.some((col) => {
+                const val = row[col.key];
+                return val != null && String(val).toLowerCase().includes(q);
+            })
+        );
+    }, [data, searchQuery, columns]);
 
     const startEditing = (idx: number, row: T) => {
         setEditingRow(idx);
@@ -87,6 +99,27 @@ export function DataTable<T extends Record<string, any>>({
                 </div>
                 {actions && <div className="flex items-center gap-2">{actions}</div>}
             </CardHeader>
+            <div className="px-6 pb-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search across all columns…"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-9"
+                    />
+                    {searchQuery && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                            onClick={() => setSearchQuery("")}
+                        >
+                            <X className="h-3 w-3" />
+                        </Button>
+                    )}
+                </div>
+            </div>
             <CardContent className="p-0">
                 <Table>
                     <TableHeader>
@@ -107,17 +140,17 @@ export function DataTable<T extends Record<string, any>>({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {data.length === 0 ? (
+                        {filteredData.length === 0 ? (
                             <TableRow>
                                 <TableCell
                                     colSpan={columns.length + (hasEditableColumns ? 1 : 0)}
                                     className="text-center text-muted-foreground py-12"
                                 >
-                                    {emptyMessage}
+                                    {searchQuery ? "No results match your search." : emptyMessage}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            data.map((row, idx) => {
+                            filteredData.map((row, idx) => {
                                 const isEditing = editingRow === idx;
                                 return (
                                     <TableRow
