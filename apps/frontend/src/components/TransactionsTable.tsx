@@ -347,16 +347,34 @@ export function TransactionsTable({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => table.previousPage()}
-                        disabled={!table.getCanPreviousPage()}
+                        onClick={() => {
+                            const pageCount = table.getPageCount();
+                            const current = table.getState().pagination.pageIndex;
+                            if (pageCount <= 1) return;
+                            if (current === 0) {
+                                table.setPageIndex(pageCount - 1);
+                            } else {
+                                table.previousPage();
+                            }
+                        }}
+                        disabled={table.getPageCount() <= 1}
                     >
                         Previous
                     </Button>
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => table.nextPage()}
-                        disabled={!table.getCanNextPage()}
+                        onClick={() => {
+                            const pageCount = table.getPageCount();
+                            const current = table.getState().pagination.pageIndex;
+                            if (pageCount <= 1) return;
+                            if (current >= pageCount - 1) {
+                                table.setPageIndex(0);
+                            } else {
+                                table.nextPage();
+                            }
+                        }}
+                        disabled={table.getPageCount() <= 1}
                     >
                         Next
                     </Button>
