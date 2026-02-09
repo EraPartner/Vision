@@ -1,7 +1,8 @@
 import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
-import {Loader2} from "lucide-react";
+import {Button} from "@/components/ui/button";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight} from "lucide-react";
 import {useCategories, useUpdateCategory} from "@/hooks/useCategories";
 
 const PAGE_SIZE = 50;
@@ -11,11 +12,17 @@ type TableCategory = {
     name: string;
     general: string;
     detail: string;
+    is_active: boolean;
 };
 
 export default function CategoriesPage() {
     const [page, setPage] = useState(0);
-    const { data, isLoading, error } = useCategories({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
+    const [showAll, setShowAll] = useState(false);
+    const { data, isLoading, error } = useCategories({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        ...(showAll ? {} : { active: true }),
+    });
     const updateMutation = useUpdateCategory();
 
     const handleUpdate = (idx: number, updated: TableCategory) => {
@@ -28,6 +35,15 @@ export default function CategoriesPage() {
                 general: updated.general,
                 detail: updated.detail,
             },
+        });
+    };
+
+    const toggleActive = (idx: number) => {
+        const category = data?.items[idx];
+        if (!category) return;
+        updateMutation.mutate({
+            id: category.id,
+            data: { is_active: !(category as any).is_active },
         });
     };
 
@@ -57,6 +73,7 @@ export default function CategoriesPage() {
         name: `${c.general} - ${c.detail}`,
         general: c.general,
         detail: c.detail,
+        is_active: (c as any).is_active ?? true,
     })) || [];
 
     const columns = [
@@ -65,7 +82,9 @@ export default function CategoriesPage() {
             header: "Category",
             editable: false,
             render: (row: TableCategory) => (
-                <span className="font-medium text-foreground">{row.name}</span>
+                <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                    {row.name}
+                </span>
             ),
         },
         {
@@ -88,7 +107,35 @@ export default function CategoriesPage() {
                 </Badge>
             ),
         },
+        {
+            key: "is_active",
+            header: "Status",
+            editable: false,
+            render: (row: TableCategory, _isEditing: boolean, idx?: number) => (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => idx !== undefined && toggleActive(idx)}
+                >
+                    {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                    {row.is_active ? 'Active' : 'Inactive'}
+                </Button>
+            ),
+        },
     ];
+
+    const filterToggle = (
+        <Button
+            variant={showAll ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => { setShowAll(!showAll); setPage(0); }}
+            className="gap-1.5"
+        >
+            {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {showAll ? "Showing All" : "Active Only"}
+        </Button>
+    );
 
     return (
         <div className="space-y-8 animate-in">
@@ -108,6 +155,7 @@ export default function CategoriesPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
+                actions={filterToggle}
             />
         </div>
     );

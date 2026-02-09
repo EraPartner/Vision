@@ -40,6 +40,7 @@ export interface CategoryUpdate {
     general?: string;
     detail?: string;
     description?: string;
+    is_active?: boolean;
 }
 
 // ==================== Recipient Types ====================
@@ -80,6 +81,7 @@ export interface RecipientUpdate {
     default_category_id?: number;
     notes?: string;
     address?: string;
+    is_active?: boolean;
 }
 
 // ==================== Transaction Types ====================
