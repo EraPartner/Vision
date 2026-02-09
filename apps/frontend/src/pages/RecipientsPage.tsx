@@ -1,7 +1,8 @@
 import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
-import {Loader2} from "lucide-react";
+import {Button} from "@/components/ui/button";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight} from "lucide-react";
 import {useRecipients, useUpdateRecipient} from "@/hooks/useRecipients";
 
 const PAGE_SIZE = 50;
@@ -12,11 +13,18 @@ type TableRecipient = {
     account_number: string;
     default_category_name?: string;
     is_active: boolean;
+    notes?: string;
+    address?: string;
 };
 
 export default function RecipientsPage() {
     const [page, setPage] = useState(0);
-    const { data, isLoading, error } = useRecipients({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
+    const [showAll, setShowAll] = useState(false);
+    const { data, isLoading, error } = useRecipients({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        ...(showAll ? {} : { active: true }),
+    });
     const updateMutation = useUpdateRecipient();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
@@ -30,6 +38,15 @@ export default function RecipientsPage() {
                 account_number: updated.account_number,
                 is_active: updated.is_active,
             },
+        });
+    };
+
+    const toggleActive = (idx: number) => {
+        const recipient = data?.items[idx];
+        if (!recipient) return;
+        updateMutation.mutate({
+            id: recipient.id,
+            data: { is_active: !recipient.is_active },
         });
     };
 
@@ -59,7 +76,7 @@ export default function RecipientsPage() {
         name: r.name,
         account_number: r.account_number || 'N/A',
         default_category_name: r.default_category_name,
-        default_category_id: r.default_category_id,
+        is_active: r.is_active,
         notes: r.notes || '',
         address: r.address || '',
     })) || [];
@@ -70,7 +87,9 @@ export default function RecipientsPage() {
             header: "Recipient",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className="font-medium text-foreground">{row.name}</span>
+                <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                    {row.name}
+                </span>
             ),
         },
         {
@@ -114,9 +133,7 @@ export default function RecipientsPage() {
             header: "Notes",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className="text-sm text-muted-foreground">
-                    {row.notes || '-'}
-                </span>
+                <span className="text-sm text-muted-foreground">{row.notes || '-'}</span>
             ),
         },
         {
@@ -124,12 +141,38 @@ export default function RecipientsPage() {
             header: "Address",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className="text-sm text-muted-foreground">
-                    {row.address || '-'}
-                </span>
+                <span className="text-sm text-muted-foreground">{row.address || '-'}</span>
+            ),
+        },
+        {
+            key: "is_active",
+            header: "Status",
+            editable: false,
+            render: (row: TableRecipient, _isEditing: boolean, idx?: number) => (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => idx !== undefined && toggleActive(idx)}
+                >
+                    {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                    {row.is_active ? 'Active' : 'Inactive'}
+                </Button>
             ),
         },
     ];
+
+    const filterToggle = (
+        <Button
+            variant={showAll ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => { setShowAll(!showAll); setPage(0); }}
+            className="gap-1.5"
+        >
+            {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {showAll ? "Showing All" : "Active Only"}
+        </Button>
+    );
 
     return (
         <div className="space-y-8 animate-in">
@@ -149,6 +192,7 @@ export default function RecipientsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
+                actions={filterToggle}
             />
         </div>
     );
