@@ -173,7 +173,7 @@ export function DataTable<T extends Record<string, any>>({
                                             <span className="pr-2">{col.header}</span>
                                             {col.header && (
                                                 <div
-                                                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                                                    className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-all"
                                                     onMouseDown={(e) => {
                                                         const th = e.currentTarget.parentElement;
                                                         const currentWidth = th ? th.getBoundingClientRect().width : 120;
