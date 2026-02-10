@@ -66,9 +66,9 @@ export default function TransactionsPage() {
     const totalItems = data?.total ?? data?.items?.length ?? 0;
 
     // Map backend data to table format
-    const transactions: TableTransaction[] = data?.items.map((t) => ({
+    const transactions: TableTransaction[] = data?.items.map((t: any) => ({
         id: t.id,
-        date: t.transaction_date,
+        date: t.transaction_date || t.date || '',
         memo: t.memo || '',
         category: t.category_name || 'Uncategorized',
         categoryId: t.category_id,
