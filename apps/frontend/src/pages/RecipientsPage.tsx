@@ -42,12 +42,10 @@ export default function RecipientsPage() {
         });
     };
 
-    const toggleActive = (idx: number) => {
-        const recipient = data?.items[idx];
-        if (!recipient) return;
+    const toggleActive = (id: number, currentActive: boolean) => {
         updateMutation.mutate({
-            id: recipient.id,
-            data: { is_active: !recipient.is_active },
+            id,
+            data: { is_active: !currentActive },
         });
     };
 
@@ -149,12 +147,13 @@ export default function RecipientsPage() {
             key: "is_active",
             header: "Status",
             editable: false,
-            render: (row: TableRecipient, _isEditing: boolean, idx?: number) => (
+            render: (row: TableRecipient) => (
                 <Button
                     variant="ghost"
                     size="sm"
                     className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => idx !== undefined && toggleActive(idx)}
+                    onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
+                    disabled={updateMutation.isPending}
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                     {row.is_active ? 'Active' : 'Inactive'}
