@@ -39,12 +39,10 @@ export default function CategoriesPage() {
         });
     };
 
-    const toggleActive = (idx: number) => {
-        const category = data?.items[idx];
-        if (!category) return;
+    const toggleActive = (id: number, currentActive: boolean) => {
         updateMutation.mutate({
-            id: category.id,
-            data: { is_active: !(category as any).is_active },
+            id,
+            data: { is_active: !currentActive },
         });
     };
 
@@ -74,7 +72,7 @@ export default function CategoriesPage() {
         name: `${c.general} - ${c.detail}`,
         general: c.general,
         detail: c.detail,
-        is_active: (c as any).is_active ?? true,
+        is_active: c.is_active ?? true,
     })) || [];
 
     const columns = [
@@ -112,12 +110,13 @@ export default function CategoriesPage() {
             key: "is_active",
             header: "Status",
             editable: false,
-            render: (row: TableCategory, _isEditing: boolean, idx?: number) => (
+            render: (row: TableCategory) => (
                 <Button
                     variant="ghost"
                     size="sm"
                     className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
-                    onClick={() => idx !== undefined && toggleActive(idx)}
+                    onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
+                    disabled={updateMutation.isPending}
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
                     {row.is_active ? 'Active' : 'Inactive'}
