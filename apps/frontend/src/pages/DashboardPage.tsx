@@ -98,7 +98,7 @@ export default function DashboardPage() {
     // Recent transactions data
     const recentTransactions = transactions.slice(0, 5).map(t => ({
         id: t.id,
-        date: t.transaction_date,
+        date: (t as any).date || t.transaction_date || '',
         description: t.memo || 'No description',
         amount: t.amount,
         currency: t.currency || 'EUR',
