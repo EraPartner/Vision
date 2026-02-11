@@ -21,7 +21,7 @@ export default function CategoriesPage() {
     const { data, isLoading, error } = useCategories({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-        ...(showAll ? {} : { active: true }),
+        active: !showAll,
     });
     const updateMutation = useUpdateCategory();
     const deleteMutation = useDeleteCategory();
