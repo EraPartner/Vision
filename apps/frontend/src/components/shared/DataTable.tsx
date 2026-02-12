@@ -224,6 +224,15 @@ export function DataTable<T extends Record<string, any>>({
                                                                             : e.target.value,
                                                                 }))
                                                             }
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") {
+                                                                    e.preventDefault();
+                                                                    saveEditing(idx);
+                                                                } else if (e.key === "Escape") {
+                                                                    e.preventDefault();
+                                                                    cancelEditing();
+                                                                }
+                                                            }}
                                                             className="h-8 text-sm"
                                                         />
                                                     ) : col.render ? (
