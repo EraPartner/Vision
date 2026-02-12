@@ -5,6 +5,7 @@ import {Button} from "@/components/ui/button";
 import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
 import {useRecipients, useUpdateRecipient, useDeleteRecipient} from "@/hooks/useRecipients";
 import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
+import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 
 const PAGE_SIZE = 50;
 
@@ -104,7 +105,24 @@ export default function RecipientsPage() {
             key: "default_category_name",
             header: "Default Category",
             editable: false,
-            render: (row: TableRecipient) => {
+            render: (row: TableRecipient, isEditing: boolean) => {
+                if (isEditing) {
+                    const originalRecipient = data?.items.find((r) => r.id === row.id);
+                    return (
+                        <CategoryCombobox
+                            value={originalRecipient?.default_category_id ?? null}
+                            onSelect={(catId) => {
+                                if (!originalRecipient) return;
+                                updateMutation.mutate({
+                                    id: originalRecipient.id,
+                                    data: {default_category_id: catId ?? undefined},
+                                });
+                            }}
+                            className="w-full"
+                        />
+                    );
+                }
+
                 const formatCategoryName = (categoryName?: string): string => {
                     if (!categoryName) return 'None';
                     const parts = categoryName.split(':');
