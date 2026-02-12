@@ -4,6 +4,7 @@ import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
 import {useRecipients, useUpdateRecipient, useDeleteRecipient} from "@/hooks/useRecipients";
+import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
 
 const PAGE_SIZE = 50;
 
@@ -179,16 +180,19 @@ export default function RecipientsPage() {
         },
     ];
 
-    const filterToggle = (
-        <Button
-            variant={showAll ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => { setShowAll(!showAll); setPage(0); }}
-            className="gap-1.5"
-        >
-            {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            {showAll ? "Showing All" : "Active Only"}
-        </Button>
+    const actions = (
+        <div className="flex gap-2">
+            <Button
+                variant={showAll ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => { setShowAll(!showAll); setPage(0); }}
+                className="gap-1.5"
+            >
+                {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {showAll ? "Showing All" : "Active Only"}
+            </Button>
+            <AddRecipientDialog />
+        </div>
     );
 
     return (
@@ -209,7 +213,7 @@ export default function RecipientsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
-                actions={filterToggle}
+                actions={actions}
             />
         </div>
     );
