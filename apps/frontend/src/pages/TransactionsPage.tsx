@@ -6,6 +6,7 @@ import {Loader2, Trash2} from "lucide-react";
 import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
 import {getCategoryColor} from "@/utils/categoryColors";
 import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
+import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 
 const PAGE_SIZE = 50;
 
@@ -97,11 +98,29 @@ export default function TransactionsPage() {
             key: "category",
             header: "Category",
             editable: false,
-            render: (row: TableTransaction) => (
-                <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
-                    {row.category}
-                </Badge>
-            ),
+            render: (row: TableTransaction, isEditing: boolean) => {
+                if (isEditing) {
+                    const originalTransaction = data?.items.find((t: any) => t.id === row.id);
+                    return (
+                        <CategoryCombobox
+                            value={(row as any).categoryId ?? originalTransaction?.category_id ?? null}
+                            onSelect={(catId) => {
+                                if (!originalTransaction) return;
+                                updateMutation.mutate({
+                                    id: originalTransaction.id,
+                                    data: {category_id: catId ?? undefined},
+                                });
+                            }}
+                            className="w-full"
+                        />
+                    );
+                }
+                return (
+                    <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
+                        {row.category}
+                    </Badge>
+                );
+            },
         },
         {key: "recipient", header: "Recipient", editable: false},
         {key: "bank", header: "Bank", editable: true},
