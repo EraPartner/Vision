@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
-import type {CategoryUpdate} from '@/types/api';
+import type {CategoryCreate, CategoryUpdate} from '@/types/api';
 import {toast} from 'sonner';
 
 export function useCategories(params?: {
@@ -13,6 +13,21 @@ export function useCategories(params?: {
     return useQuery({
         queryKey: ['categories', params],
         queryFn: () => apiClient.getCategories(params),
+    });
+}
+
+export function useCreateCategory() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (category: CategoryCreate) => apiClient.createCategory(category),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ['categories']});
+            toast.success('Category created successfully');
+        },
+        onError: (error: Error) => {
+            toast.error(`Failed to create category: ${error.message}`);
+        },
     });
 }
 

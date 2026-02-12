@@ -5,6 +5,7 @@ import {Button} from "@/components/ui/button";
 import {Loader2, Trash2} from "lucide-react";
 import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
 import {getCategoryColor} from "@/utils/categoryColors";
+import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
 
 const PAGE_SIZE = 50;
 
@@ -195,6 +196,7 @@ export default function TransactionsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
+                actions={<AddTransactionDialog />}
             />
         </div>
     );

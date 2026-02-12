@@ -1,6 +1,6 @@
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
-import type {RecipientUpdate} from '@/types/api';
+import type {RecipientCreate, RecipientUpdate} from '@/types/api';
 import {toast} from 'sonner';
 
 export function useRecipients(params?: {
@@ -14,6 +14,21 @@ export function useRecipients(params?: {
     return useQuery({
         queryKey: ['recipients', params],
         queryFn: () => apiClient.getRecipients(params),
+    });
+}
+
+export function useCreateRecipient() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (recipient: RecipientCreate) => apiClient.createRecipient(recipient),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ['recipients']});
+            toast.success('Recipient created successfully');
+        },
+        onError: (error: Error) => {
+            toast.error(`Failed to create recipient: ${error.message}`);
+        },
     });
 }
 
