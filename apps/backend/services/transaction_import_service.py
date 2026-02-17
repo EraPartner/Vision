@@ -183,7 +183,7 @@ class TransactionImportService:
             extra={
                 "operation": "import_csv",
                 "batch_id": batch.id,
-                "filename": batch.filename,
+                "file_name": batch.filename,
                 "bank_name": bank_name,
                 "has_custom_config": custom_config is not None
             }
@@ -361,13 +361,15 @@ class TransactionImportService:
 
             except Exception as e:
                 logger.warning(
-                    f"Error processing individual transaction",
+                    f"Error processing individual transaction: {str(e)}",
                     extra={
                         "operation": "process_transaction",
                         "batch_id": batch_id,
                         "error": str(e),
-                        "transaction_data": str(transaction_data)[:100]  # Truncate for logging
-                    }
+                        "error_type": type(e).__name__,
+                        "transaction_data": str(transaction_data)[:200]  # Truncate for logging
+                    },
+                    exc_info=True  # Include full traceback
                 )
                 results['errors'] += 1
 

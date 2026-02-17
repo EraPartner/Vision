@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +30,7 @@ import {
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
-  const [bankSource, setBankSource] = useState("auto-detect");
+  const [bankSource, setBankSource] = useState("");
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -40,12 +52,14 @@ export default function ImportPage() {
           setBanks(res.banks);
         }
       } catch (err) {
-        console.error('Failed to load banks', err);
+        console.error("Failed to load banks", err);
         if (mounted) {
           setBanksError(err instanceof Error ? err.message : String(err));
           // Leave banks empty - we intentionally avoid hardcoding fallback values
           setBanks([]);
-          toast.error('Could not load supported banks from server — you can still use Auto-detect or Custom');
+          toast.error(
+            "Could not load supported banks from server — you can still use Custom"
+          );
         }
       } finally {
         if (mounted) setBanksLoading(false);
@@ -85,7 +99,6 @@ export default function ImportPage() {
 
   const resolvedBank = () => {
     if (bankSource === "custom") return customBank || "generic";
-    if (bankSource === "auto-detect") return "generic";
     return bankSource;
   };
 
@@ -101,17 +114,55 @@ export default function ImportPage() {
       return;
     }
 
+    // If custom bank, validate custom configuration
+    if (bankSource === "custom") {
+      if (!customConfig.dateColumn || !customConfig.recipientColumn || !customConfig.amountColumn) {
+        toast.error("Please fill in all required custom configuration fields.");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
-      const data = await apiClient.importCSV(file, bank);
+      let data;
+      
+      if (bankSource === "custom") {
+        // Call custom import endpoint with configuration
+        data = await apiClient.importCSVCustom(
+          file,
+          bank,
+          customConfig.dateFormat,
+          customConfig.dateColumn,
+          customConfig.recipientColumn,
+          customConfig.amountColumn,
+          customConfig.memoColumn || undefined,
+          customConfig.separator,
+          customConfig.encoding,
+          customConfig.skipRows
+        );
+      } else {
+        // Call standard import endpoint for predefined banks
+        data = await apiClient.importCSV(file, bank);
+      }
 
       toast.success(`Successfully imported ${data.imported} transactions!`, {
         description: `${data.duplicates} duplicates skipped, ${data.total_processed} total processed`,
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setFile(null);
-      setBankSource("auto-detect");
+      setBankSource("");
       setCustomBank("");
+      // Reset custom config
+      setCustomConfig({
+        dateColumn: "",
+        dateFormat: "%Y-%m-%d",
+        recipientColumn: "",
+        amountColumn: "",
+        memoColumn: "",
+        separator: ",",
+        encoding: "utf-8",
+        skipRows: 0,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to import CSV";
@@ -126,35 +177,45 @@ export default function ImportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const data = await apiClient.getTransactions({ limit: 10000 });
-      const transactions = data.items || [];
-
-      if (transactions.length === 0) {
-        toast.error("No transactions to export.");
-        return;
+      // Build query parameters for export with filters
+      const queryParams = new URLSearchParams();
+      
+      if (exportFilters.startDate) {
+        queryParams.append('start_date', exportFilters.startDate);
+      }
+      if (exportFilters.endDate) {
+        queryParams.append('end_date', exportFilters.endDate);
+      }
+      if (exportFilters.bankAccount) {
+        queryParams.append('bank_account', exportFilters.bankAccount);
+      }
+      if (exportFilters.categoryId) {
+        queryParams.append('category_id', exportFilters.categoryId);
       }
 
-      const headers = ["Date", "Description", "Amount", "Currency", "Category", "Recipient", "Bank"];
-      const rows = transactions.map((t) => [
-        t.transaction_date,
-        `"${(t.memo || "").replace(/"/g, '""')}"`,
-        t.amount,
-        t.currency || "EUR",
-        t.category_name || "",
-        `"${(t.recipient_name || "").replace(/"/g, '""')}"`,
-        t.bank_account || "",
-      ]);
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3002'}/api/transactions/export/csv?${queryParams.toString()}`;
+      
+      // Call the backend export endpoint
+      const response = await fetch(url, {
+        method: 'GET',
+      });
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
+      if (!response.ok) {
+        throw new Error('Failed to export transactions');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create download link
+      const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
+      link.href = downloadUrl;
       link.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(downloadUrl);
 
-      toast.success(`Exported ${transactions.length} transactions!`, {
+      toast.success('Transactions exported successfully!', {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
     } catch (error) {
@@ -164,6 +225,27 @@ export default function ImportPage() {
       setExporting(false);
     }
   };
+
+  // Custom CSV configuration state
+  const [customConfig, setCustomConfig] = useState({
+    dateColumn: "",
+    dateFormat: "%Y-%m-%d",
+    recipientColumn: "",
+    amountColumn: "",
+    memoColumn: "",
+    separator: ",",
+    encoding: "utf-8",
+    skipRows: 0,
+  });
+
+  // Export filter state
+  const [exportFilters, setExportFilters] = useState({
+    startDate: "",
+    endDate: "",
+    bankAccount: "",
+    categoryId: ""
+  });
+  const [showExportFilters, setShowExportFilters] = useState(false);
 
   return (
     <div className="space-y-8 animate-in max-w-2xl mx-auto">
@@ -184,7 +266,7 @@ export default function ImportPage() {
           </CardTitle>
           <CardDescription>
             We support most common bank CSV formats. Select your bank for the
-            best results, or let us auto-detect.
+            best results.
           </CardDescription>
         </CardHeader>
 
@@ -199,7 +281,6 @@ export default function ImportPage() {
                 <SelectValue placeholder="Select a bank…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto-detect">🔍 Auto-detect</SelectItem>
                 {banksLoading ? (
                   <SelectItem value="loading" disabled>
                     <Loader2 className="h-4 w-4 mr-2 inline" /> Loading banks...
@@ -212,7 +293,7 @@ export default function ImportPage() {
                   ))
                 ) : (
                   <SelectItem value="none" disabled>
-                    No banks available — use Auto-detect or Custom
+                    No banks available — use Custom
                   </SelectItem>
                 )}
                 <SelectItem value="custom">✏️ Custom / Andere</SelectItem>
@@ -232,6 +313,176 @@ export default function ImportPage() {
               Selecting your bank helps parse the CSV more accurately.
             </p>
           </div>
+
+          {/* Custom CSV configuration fields */}
+          {bankSource === "custom" && (
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <p className="text-sm font-semibold text-foreground">
+                Custom CSV Configuration
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date-column">Date Column *</Label>
+                  <Input
+                    id="date-column"
+                    placeholder="e.g., Date, Transaction Date"
+                    value={customConfig.dateColumn}
+                    onChange={(e) =>
+                      setCustomConfig({
+                        ...customConfig,
+                        dateColumn: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="date-format">Date Format *</Label>
+                  <Select
+                    value={customConfig.dateFormat}
+                    onValueChange={(val) =>
+                      setCustomConfig({ ...customConfig, dateFormat: val })
+                    }
+                  >
+                    <SelectTrigger id="date-format">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="%Y-%m-%d">
+                        YYYY-MM-DD (2024-12-31)
+                      </SelectItem>
+                      <SelectItem value="%d/%m/%Y">
+                        DD/MM/YYYY (31/12/2024)
+                      </SelectItem>
+                      <SelectItem value="%m/%d/%Y">
+                        MM/DD/YYYY (12/31/2024)
+                      </SelectItem>
+                      <SelectItem value="%d-%m-%Y">
+                        DD-MM-YYYY (31-12-2024)
+                      </SelectItem>
+                      <SelectItem value="%Y-%m-%d %H:%M:%S">
+                        YYYY-MM-DD HH:MM:SS
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="recipient-column">Recipient Column *</Label>
+                  <Input
+                    id="recipient-column"
+                    placeholder="e.g., Description, Payee"
+                    value={customConfig.recipientColumn}
+                    onChange={(e) =>
+                      setCustomConfig({
+                        ...customConfig,
+                        recipientColumn: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="amount-column">Amount Column *</Label>
+                  <Input
+                    id="amount-column"
+                    placeholder="e.g., Amount, Value"
+                    value={customConfig.amountColumn}
+                    onChange={(e) =>
+                      setCustomConfig({
+                        ...customConfig,
+                        amountColumn: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="memo-column">Memo Column (Optional)</Label>
+                  <Input
+                    id="memo-column"
+                    placeholder="e.g., Notes, Comments"
+                    value={customConfig.memoColumn}
+                    onChange={(e) =>
+                      setCustomConfig({
+                        ...customConfig,
+                        memoColumn: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="separator">Separator</Label>
+                  <Select
+                    value={customConfig.separator}
+                    onValueChange={(val) =>
+                      setCustomConfig({ ...customConfig, separator: val })
+                    }
+                  >
+                    <SelectTrigger id="separator">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value=",">, (Comma)</SelectItem>
+                      <SelectItem value=";">; (Semicolon)</SelectItem>
+                      <SelectItem value="\t">⇥ (Tab)</SelectItem>
+                      <SelectItem value="|">| (Pipe)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="encoding">Encoding</Label>
+                  <Select
+                    value={customConfig.encoding}
+                    onValueChange={(val) =>
+                      setCustomConfig({ ...customConfig, encoding: val })
+                    }
+                  >
+                    <SelectTrigger id="encoding">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="utf-8">UTF-8</SelectItem>
+                      <SelectItem value="latin-1">Latin-1</SelectItem>
+                      <SelectItem value="iso-8859-1">ISO-8859-1</SelectItem>
+                      <SelectItem value="windows-1252">Windows-1252</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="skip-rows">Skip Rows</Label>
+                  <Input
+                    id="skip-rows"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={customConfig.skipRows}
+                    onChange={(e) =>
+                      setCustomConfig({
+                        ...customConfig,
+                        skipRows: parseInt(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                * Required fields. Column names must match exactly as they appear
+                in your CSV header row.
+              </p>
+            </div>
+          )}
 
           {/* Drag-and-drop file picker */}
           <div className="space-y-2">
@@ -334,6 +585,97 @@ export default function ImportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Export filters toggle */}
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-foreground">
+              Export Filters
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExportFilters((prev) => !prev)}
+              className="text-foreground"
+            >
+              {showExportFilters ? "Hide Filters" : "Show Filters"}
+            </Button>
+          </div>
+
+          {/* Export filters form */}
+          {showExportFilters && (
+            <div className="space-y-4 mb-4 p-4 border rounded-lg bg-muted/30">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="start-date">Start Date</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    placeholder="YYYY-MM-DD"
+                    value={exportFilters.startDate}
+                    onChange={(e) =>
+                      setExportFilters({
+                        ...exportFilters,
+                        startDate: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="end-date">End Date</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    placeholder="YYYY-MM-DD"
+                    value={exportFilters.endDate}
+                    onChange={(e) =>
+                      setExportFilters({
+                        ...exportFilters,
+                        endDate: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bank-account">Bank Account</Label>
+                  <Input
+                    id="bank-account"
+                    placeholder="e.g., Main Account"
+                    value={exportFilters.bankAccount}
+                    onChange={(e) =>
+                      setExportFilters({
+                        ...exportFilters,
+                        bankAccount: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category-id">Category ID</Label>
+                  <Input
+                    id="category-id"
+                    placeholder="e.g., 123, Expenses"
+                    value={exportFilters.categoryId}
+                    onChange={(e) =>
+                      setExportFilters({
+                        ...exportFilters,
+                        categoryId: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Leave fields empty to include all records. Date filters are
+                inclusive.
+              </p>
+            </div>
+          )}
+
           <Button
             onClick={handleExport}
             disabled={exporting}
@@ -378,14 +720,14 @@ export default function ImportPage() {
               ))
             ) : (
               <span className="text-xs text-muted-foreground">
-                No supported banks loaded. Use <strong>Auto-detect</strong> or select <strong>Custom</strong> to provide a bank name.
+                No supported banks loaded. Select <strong>Custom</strong> to
+                provide a bank name.
               </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-3">
-            Don't see your bank? Try <strong>Auto-detect</strong> or select{" "}
-            <strong>Custom</strong> — our smart parser works with most CSV
-            formats.
+            Don't see your bank? Try{" "}
+            <strong>Custom</strong>.
           </p>
         </CardContent>
       </Card>

@@ -56,7 +56,7 @@ class DeduplicationService:
         Returns:
             True if duplicate exists, False otherwise
         """
-        existing = self.txn_repo.get_by_bank_reference(transaction_hash)
+        existing = self.txn_repo.find_duplicate_by_bank_reference(transaction_hash)
         return existing is not None
 
     def is_duplicate_by_data(self, transaction_data: TransactionData) -> bool:

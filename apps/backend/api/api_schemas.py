@@ -18,6 +18,19 @@ from typing import Optional, List, Dict
 
 from pydantic import BaseModel, Field, field_validator, HttpUrl
 
+# ==================== Currency Constants ====================
+
+# Supported currency codes (ISO 4217 standard codes)
+SUPPORTED_CURRENCIES = {
+    "EUR", "USD", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD",
+    "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN",
+    "HRK", "RSD", "TRY", "RUB", "UAH", "INR", "CNY", "KRW",
+    "SGD", "HKD", "MYR", "THB", "IDR", "PHP", "VND", "BRL",
+    "MXN", "ARS", "CLP", "COP", "PEN", "ZAR", "EGP", "NGN",
+    "KES", "GHS", "MAD", "DZD", "TND", "ILS", "SAR", "AED",
+    "QAR", "KWD", "BHD", "OMR", "JOD", "LBP", "IRR", "IQD"
+}
+
 
 # ==================== Foundation Schemas ====================
 
@@ -103,6 +116,7 @@ class CategoryUpdate(BaseModel):
     general: Optional[str] = Field(None, description="General name", min_length=1)
     detail: Optional[str] = Field(None, description="Detail name", min_length=1)
     description: Optional[str] = Field(None, description="Category description")
+    is_active: Optional[bool] = Field(None, description="Active status (use to deactivate instead of deleting)")
 
     @field_validator("general", "detail", mode="before")
     @classmethod
@@ -254,30 +268,134 @@ class TransactionBase(BaseModel):
     recipient_id: int = Field(description="Recipient ID", ge=1)
     memo: Optional[str] = Field(None, description="Transaction memo/note")
     amount: float = Field(description="Transaction amount")
-    currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)", max_length=3)
+    currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)", max_length=3, min_length=3)
     balance: Optional[float] = Field(None, description="Account balance after transaction")
     category_id: Optional[int] = Field(None, description="Category ID", ge=1)
     comment: Optional[str] = Field(None, description="Additional comment")
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        """Validate currency code against supported currencies.
+
+        Ensures only valid ISO 4217 currency codes are accepted. This prevents
+        frontend errors when trying to render currency icons for invalid codes.
+
+        Args:
+            v: The currency code to validate
+
+        Returns:
+            The uppercase currency code if valid, or None if not provided
+
+        Raises:
+            ValueError: If the currency code is not supported
+        """
+        if v is None:
+            return v
+
+        # Normalize to uppercase
+        v_upper = v.upper().strip()
+
+        # Validate length
+        if len(v_upper) != 3:
+            raise ValueError(
+                f"Invalid currency code '{v}'. Currency codes must be exactly 3 characters. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+            )
+
+        # Validate against supported currencies
+        if v_upper not in SUPPORTED_CURRENCIES:
+            raise ValueError(
+                f"Unsupported currency code '{v_upper}'. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}. "
+                f"If you need to add this currency, please contact the administrator."
+            )
+
+        return v_upper
 
     model_config = {"populate_by_name": True}
 
 
 class TransactionCreate(TransactionBase):
-    """Schema for creating a new transaction"""
-    pass
+    """Schema for creating a new transaction.
+
+    Extends TransactionBase with additional fields for duplicate detection:
+    - original_raw_data: Original CSV row for audit trail and duplicate detection
+    - bank_reference: Bank's transaction ID for duplicate detection
+    """
+    batch_id: Optional[int] = Field(None, description="Import batch ID if from bulk import", ge=1)
+    original_raw_data: Optional[str] = Field(None,
+                                             description="Original CSV row for audit trail and duplicate detection")
+    bank_reference: Optional[str] = Field(None, description="Bank's transaction ID for duplicate detection")
+    skip_duplicate_check: bool = Field(False, description="Skip duplicate checking (use with caution)")
+
+    model_config = {"populate_by_name": True}
 
 
 class TransactionUpdate(BaseModel):
-    """Schema for updating an existing transaction"""
+    """Schema for updating an existing transaction.
+
+    Supports updating by both ID and name for recipients and categories:
+    - recipient_id: Update using recipient ID
+    - recipient_name: Update using recipient name (will be resolved to ID)
+    - category_id: Update using category ID
+    - category_name: Update using category name in 'General:Detail' format (will be resolved to ID)
+
+    If both ID and name are provided for the same field, the ID takes precedence.
+    """
     transaction_date: Optional[date] = Field(None, description="Transaction date", alias="date")
     bank_account: Optional[str] = Field(None, description="Bank account name", min_length=1)
     recipient_id: Optional[int] = Field(None, description="Recipient ID", ge=1)
+    recipient_name: Optional[str] = Field(None, description="Recipient name (will be resolved to recipient_id)")
     memo: Optional[str] = Field(None, description="Transaction memo/note")
     amount: Optional[float] = Field(None, description="Transaction amount")
-    currency: Optional[str] = Field(None, description="Currency code", max_length=3)
+    currency: Optional[str] = Field(None, description="Currency code", max_length=3, min_length=3)
     balance: Optional[float] = Field(None, description="Account balance after transaction")
     category_id: Optional[int] = Field(None, description="Category ID", ge=1)
+    category_name: Optional[str] = Field(None,
+                                         description="Category name in 'General:Detail' format (will be resolved to category_id)")
     comment: Optional[str] = Field(None, description="Additional comment")
+    is_active: Optional[bool] = Field(None, description="Active status (use to deactivate instead of deleting)")
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        """Validate currency code against supported currencies.
+
+        Ensures only valid ISO 4217 currency codes are accepted. This prevents
+        frontend errors when trying to render currency icons for invalid codes.
+
+        Args:
+            v: The currency code to validate
+
+        Returns:
+            The uppercase currency code if valid, or None if not provided
+
+        Raises:
+            ValueError: If the currency code is not supported
+        """
+        if v is None:
+            return v
+
+        # Normalize to uppercase
+        v_upper = v.upper().strip()
+
+        # Validate length
+        if len(v_upper) != 3:
+            raise ValueError(
+                f"Invalid currency code '{v}'. Currency codes must be exactly 3 characters. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+            )
+
+        # Validate against supported currencies
+        if v_upper not in SUPPORTED_CURRENCIES:
+            raise ValueError(
+                f"Unsupported currency code '{v_upper}'. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}. "
+                f"If you need to add this currency, please contact the administrator."
+            )
+
+        return v_upper
 
     model_config = {"populate_by_name": True}
 
@@ -301,6 +419,7 @@ class TransactionResponse(BaseModel):
                     "the recipient's default category. Returns null if neither is available."
     )
     comment: Optional[str] = Field(None, description="Additional comment")
+    is_active: bool = Field(True, description="Whether transaction is active")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
     links: List[Link] = Field(description="Available actions (HATEOAS links)")

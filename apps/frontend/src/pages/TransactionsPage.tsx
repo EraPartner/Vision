@@ -2,11 +2,12 @@ import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Loader2, Trash2} from "lucide-react";
+import {Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight} from "lucide-react";
 import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
 import {getCategoryColor} from "@/utils/categoryColors";
 import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
+import {RecipientCombobox} from "@/components/shared/RecipientCombobox";
 
 const PAGE_SIZE = 50;
 
@@ -19,16 +20,31 @@ type TableTransaction = {
     bank: string;
     amount: number;
     currency: string;
+    balance?: number;
+    comment?: string;
+    is_active: boolean;
 };
 
 export default function TransactionsPage() {
     const [page, setPage] = useState(0);
-    const { data, isLoading, error } = useTransactions({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, active: true });
+    const [showAll, setShowAll] = useState(false);
+    const { data, isLoading, error } = useTransactions({ 
+        limit: PAGE_SIZE, 
+        offset: page * PAGE_SIZE, 
+        active: !showAll  // false = all transactions, true = active only
+    });
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
 
     const handleDelete = (id: number) => {
         deleteMutation.mutate(id);
+    };
+
+    const toggleActive = (id: number, currentActive: boolean) => {
+        updateMutation.mutate({
+            id,
+            data: { is_active: !currentActive },
+        });
     };
 
     const handleUpdate = (idx: number, updated: TableTransaction) => {
@@ -42,6 +58,9 @@ export default function TransactionsPage() {
                 memo: updated.memo,
                 amount: updated.amount,
                 bank_account: updated.bank,
+                currency: updated.currency,
+                balance: updated.balance,
+                comment: updated.comment,
             },
         });
     };
@@ -81,6 +100,7 @@ export default function TransactionsPage() {
         currency: t.currency || 'EUR',
         balance: t.balance,
         comment: t.comment || '',
+        is_active: t.is_active ?? true,
     })) || [];
 
     const columns = [
@@ -90,7 +110,9 @@ export default function TransactionsPage() {
             editable: true,
             type: "date" as const,
             render: (row: TableTransaction) => (
-                <span className="text-foreground whitespace-nowrap">{row.date || '—'}</span>
+                <span className={`whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                    {row.date || '—'}
+                </span>
             ),
         },
         {key: "memo", header: "Description", editable: true},
@@ -122,7 +144,32 @@ export default function TransactionsPage() {
                 );
             },
         },
-        {key: "recipient", header: "Recipient", editable: false},
+        {
+            key: "recipient",
+            header: "Recipient",
+            editable: false,
+            render: (row: TableTransaction, isEditing: boolean) => {
+                if (isEditing) {
+                    const originalTransaction = data?.items.find((t: any) => t.id === row.id);
+                    return (
+                        <RecipientCombobox
+                            value={(row as any).recipientId ?? originalTransaction?.recipient_id ?? null}
+                            onSelect={(recipientId) => {
+                                if (!originalTransaction) return;
+                                updateMutation.mutate({
+                                    id: originalTransaction.id,
+                                    data: {recipient_id: recipientId ?? undefined},
+                                });
+                            }}
+                            className="w-full"
+                        />
+                    );
+                }
+                return (
+                    <span className="text-foreground">{row.recipient}</span>
+                );
+            },
+        },
         {key: "bank", header: "Bank", editable: true},
         {
             key: "amount",
@@ -180,9 +227,27 @@ export default function TransactionsPage() {
             ),
         },
         {
+            key: "is_active",
+            header: "Status",
+            editable: false,
+            render: (row: TableTransaction) => (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
+                    disabled={updateMutation.isPending}
+                >
+                    {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                    {row.is_active ? 'Active' : 'Inactive'}
+                </Button>
+            ),
+        },
+        {
             key: "delete",
             header: "",
             className: "w-12",
+            editable: false,
             render: (row: TableTransaction) => (
                 <Button
                     variant="ghost"
@@ -196,6 +261,21 @@ export default function TransactionsPage() {
             ),
         },
     ];
+
+    const actions = (
+        <div className="flex gap-2">
+            <Button
+                variant={showAll ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => { setShowAll(!showAll); setPage(0); }}
+                className="gap-1.5"
+            >
+                {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {showAll ? "Showing All" : "Active Only"}
+            </Button>
+            <AddTransactionDialog />
+        </div>
+    );
 
     return (
         <div className="space-y-8 animate-in">
@@ -215,7 +295,7 @@ export default function TransactionsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
-                actions={<AddTransactionDialog />}
+                actions={actions}
             />
         </div>
     );

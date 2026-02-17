@@ -432,22 +432,18 @@ async def update_recipient(
 @router.delete("/{recipient_id}", response_model=MessageResponse, status_code=200, description="Deletes a recipient.")
 async def delete_recipient(
         recipient_id: int = Path(ge=1, description="The ID of the recipient to delete"),
-        soft: bool = Query(True, description="Perform a soft delete or not"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
-    """Delete a recipient with HATEOAS links in response.
+    """Delete a recipient permanently with HATEOAS links in response.
 
-    Performs a soft delete by marking the recipient as inactive rather than removing
-    it from the database. This is the default behaviour. Response includes HATEOAS
-    links for available next actions.
+    Performs a hard delete by permanently removing the recipient from the database.
+    To deactivate a recipient instead, use PATCH to set is_active to false.
 
     This is a Level 3 REST API endpoint that returns hypermedia links.
 
     Args:
         recipient_id (int): The ID of the recipient to delete.
-        soft (bool): Whether to perform a soft delete (True) or hard delete (False).
-            Defaults to True (soft delete).
         request (Request): Request object for generating absolute URLs.
         db (Session): Database session dependency.
 
@@ -459,20 +455,16 @@ async def delete_recipient(
         HTTPException: 500 error if deletion fails.
 
     Note:
-        Requires testing: TODO soft vs hard delete, not found scenarios, HATEOAS links
+        Use PATCH with is_active=false to deactivate instead of permanently deleting.
     """
     try:
         service = RecipientService(db)
-        if soft:
-            if not service.soft_delete(recipient_id):
-                raise HTTPException(status_code=404, detail="Recipient not found")
-        else:
-            if not service.hard_delete(recipient_id):
-                raise HTTPException(status_code=404, detail="Recipient not found")
+        if not service.hard_delete(recipient_id):
+            raise HTTPException(status_code=404, detail="Recipient not found")
 
         return MessageResponse(
-            message="Recipient soft deleted successfully" if soft else "Recipient deleted permanently",
-            details={"method": "soft delete" if soft else "hard delete"},
+            message="Recipient deleted permanently",
+            details={"method": "hard delete"},
             links=get_deletion_response_links(request, "recipients")
         )
     except HTTPException:
@@ -484,7 +476,6 @@ async def delete_recipient(
                 "operation": "delete_recipient",
                 "resource_type": "recipient",
                 "resource_id": recipient_id,
-                "soft_delete": soft,
                 "status": "failed"
             },
             exc_info=True
