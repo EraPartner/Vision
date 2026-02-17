@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useState, useEffect} from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
@@ -34,19 +34,20 @@ export function CSVImport({onImportComplete}: CSVImportProps) {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (!bankSource) {
+            toast.error("Please select a bank source first.");
+            return;
+        }
+
         setLoading(true);
         try {
-            const csvContent = await file.text();
-
-            // Use filename for auto-detect, otherwise use the selected bank
-            const bankValue = bankSource === "auto-detect" ? file.name : bankSource;
-            const data = await apiClient.importCSV(csvContent, bankValue);
+            const data = await apiClient.importCSV(file, bankSource);
 
             toast.success(`Successfully imported ${data.imported} transactions!`, {
                 icon: <CheckCircle2 className="h-4 w-4"/>,
             });
             onImportComplete();
-            setBankSource("auto-detect");
+            setBankSource("");
         } catch (error) {
             const message = error instanceof Error ? error.message : "Failed to import CSV";
             toast.error(message);
@@ -77,19 +78,13 @@ export function CSVImport({onImportComplete}: CSVImportProps) {
             </CardHeader>
             <CardContent className="space-y-5">
                 <div className="space-y-3">
-                    <Label htmlFor="bank-source" className="text-sm font-semibold">Select Your Bank (Optional)</Label>
+                    <Label htmlFor="bank-source" className="text-sm font-semibold">Select Your Bank</Label>
                     <Select value={bankSource} onValueChange={setBankSource}>
                         <SelectTrigger id="bank-source"
                                        className="h-11 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                            <SelectValue placeholder="Auto-detect from file"/>
+                            <SelectValue placeholder="Choose a bank..."/>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="auto-detect">
-                                <div className="flex items-center gap-2">
-                                    <Database className="h-4 w-4"/>
-                                    Auto-detect
-                                </div>
-                            </SelectItem>
                             {supportedBanks.map((bank) => (
                                 <SelectItem key={bank} value={bank}>
                                     {bank}
@@ -121,7 +116,7 @@ export function CSVImport({onImportComplete}: CSVImportProps) {
                         )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        📊 Expected format: Date, Description, Amount (columns auto-detected)
+                        📊 Expected format: Date, Description, Amount
                     </p>
                 </div>
 

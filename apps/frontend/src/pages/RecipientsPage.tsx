@@ -25,7 +25,7 @@ export default function RecipientsPage() {
     const { data, isLoading, error } = useRecipients({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-        ...(showAll ? {} : { active: true }),
+        active: !showAll,  // false = all recipients, true = active only
     });
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();

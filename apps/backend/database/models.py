@@ -29,6 +29,9 @@ class Transaction(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=True)
 
+    # Soft deletion support
+    is_active = Column(Boolean, default=True, nullable=False)
+
     # Import metadata
     original_raw_data = Column(Text, nullable=True)  # Store original CSV row
     bank_reference = Column(Text, nullable=True)  # Bank's transaction ID

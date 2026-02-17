@@ -129,12 +129,15 @@ export interface TransactionUpdate {
     transaction_date?: string;
     bank_account?: string;
     recipient_id?: number;
+    recipient_name?: string;
     memo?: string;
     amount?: number;
     currency?: string;
     balance?: number;
     category_id?: number;
+    category_name?: string;
     comment?: string;
+    is_active?: boolean;
 }
 
 // ==================== Other Types ====================

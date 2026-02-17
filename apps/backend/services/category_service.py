@@ -222,6 +222,7 @@ class CategoryService:
             general: Optional[str] = None,
             detail: Optional[str] = None,
             description: Optional[str] = None,
+            is_active: Optional[bool] = None,
     ) -> Optional[Category]:
         """Update a category with validation.
 
@@ -236,6 +237,7 @@ class CategoryService:
             detail (str, optional): New detail category name. If provided,
                 will be normalized to uppercase.
             description (str, optional): New category description.
+            is_active (bool, optional): Active status. Use to deactivate instead of deleting.
 
         Returns:
             Optional[Category]: The updated Category object if found and modified,
@@ -249,6 +251,9 @@ class CategoryService:
             print(updated.general)  # "NEW GENERAL"
             print(updated.detail)   # "NEW DETAIL"
 
+            # Deactivate a category instead of deleting
+            updated = service.update(5, is_active=False)
+
             # Returns None if category doesn't exist
             updated = service.update(999)
 
@@ -258,6 +263,7 @@ class CategoryService:
             - Strings are stripped of leading/trailing whitespace
             - Transaction is committed if any fields are updated
             - Returns None without raising exception if category not found
+            - Use is_active=False to deactivate instead of hard deleting
         """
         category = self.category_repo.get_by_id(category_id)
         if not category:
@@ -286,6 +292,10 @@ class CategoryService:
 
         if description is not None:
             category.description = description
+            updated = True
+
+        if is_active is not None:
+            category.is_active = is_active
             updated = True
 
         if updated:

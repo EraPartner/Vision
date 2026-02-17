@@ -249,6 +249,7 @@ class RevolutAdapter(BaseBankAdapter):
                         amount=amount,
                         currency=currency,
                         balance=balance,
+                        recipient_account=None,  # Revolut doesn't provide recipient account numbers
                         comment=description,  # For Revolut, comment is same as description
                         raw_data=raw_data
                     )
@@ -463,6 +464,8 @@ class GenericCSVAdapter(BaseBankAdapter):
                     amount=amount,
                     currency=currency,
                     balance=balance,
+                    recipient_account=None,  # Generic CSV doesn't have recipient account
+                    comment=None,  # Generic CSV doesn't have comment field
                     raw_data=raw_data
                 )
 

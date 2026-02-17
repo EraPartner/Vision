@@ -195,6 +195,51 @@ class ApiClient {
         return data;
     }
 
+    async importCSVCustom(
+        file: File,
+        bankName: string,
+        dateFormat: string,
+        dateColumn: string,
+        recipientColumn: string,
+        amountColumn: string,
+        memoColumn?: string,
+        separator: string = ',',
+        encoding: string = 'utf-8',
+        skipRows: number = 0
+    ): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const queryParams = new URLSearchParams();
+        queryParams.append('bank_name', bankName);
+        queryParams.append('date_format', dateFormat);
+        queryParams.append('date_column', dateColumn);
+        queryParams.append('recipient_column', recipientColumn);
+        queryParams.append('amount_column', amountColumn);
+        if (memoColumn) queryParams.append('memo_column', memoColumn);
+        queryParams.append('separator', separator);
+        queryParams.append('encoding', encoding);
+        queryParams.append('skip_rows', skipRows.toString());
+
+        const url = `${API_BASE_URL}/api/import/csv/custom?${queryParams.toString()}`;
+        console.log(`API Request: POST ${url}`);
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({detail: 'Request failed'}));
+            console.error(`API Error: ${url}`, error);
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        const data = await response.json();
+        console.log(`API Response: ${url}`, data);
+        return data;
+    }
+
     // ==================== Info/Statistics Methods ====================
 
     async getStatistics(): Promise<{
@@ -280,7 +325,27 @@ class ApiClient {
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
             console.error(`API Error: ${url}`, error);
-            throw new Error(error.detail || error.message || 'Request failed');
+            
+            // Handle FastAPI 422 validation errors
+            if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
+                const validationErrors = error.detail.map((err: any) => {
+                    const field = err.loc ? err.loc.join('.') : 'unknown';
+                    return `${field}: ${err.msg}`;
+                }).join('; ');
+                throw new Error(`Validation error: ${validationErrors}`);
+            }
+            
+            // Handle standard error formats
+            if (typeof error.detail === 'string') {
+                throw new Error(error.detail);
+            }
+            
+            if (error.message && typeof error.message === 'string') {
+                throw new Error(error.message);
+            }
+            
+            // Fallback for unknown error formats
+            throw new Error(`Request failed with status ${response.status}`);
         }
 
         const data = await response.json();

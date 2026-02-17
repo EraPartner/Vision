@@ -70,6 +70,7 @@ class TransactionQueryService:
             recipient_name: Optional[str] = None,
             limit: int = 100,
             offset: int = 0,
+            active: bool = True
     ) -> List[Transaction]:
         """Get transactions with optional filters.
 
@@ -85,6 +86,7 @@ class TransactionQueryService:
             recipient_name (Optional[str]): Filter by recipient name (case-insensitive).
             limit (int): Maximum results to return. Defaults to 100.
             offset (int): Pagination offset. Defaults to 0.
+            active (bool): Filter by active status. True for active only, False for all. Defaults to True.
 
         Returns:
             List[Transaction]: List of transactions matching the filters,
@@ -93,8 +95,11 @@ class TransactionQueryService:
         Example:
             service = TransactionQueryService(db)
 
-            # Get recent transactions
+            # Get recent active transactions
             recent = service.get_transactions(limit=10)
+
+            # Get all transactions including inactive
+            all_txns = service.get_transactions(active=False)
 
             # Get transactions for specific bank account
             revolut_txns = service.get_transactions(
@@ -112,6 +117,7 @@ class TransactionQueryService:
             - All filters are optional and can be combined
             - Results are ordered by date descending (newest first)
             - Supports pagination via limit and offset
+            - By default, only active transactions are returned
         """
         return self.txn_repo.get_transactions(
             bank_account=bank_account,
@@ -122,6 +128,7 @@ class TransactionQueryService:
             recipient_name=recipient_name,
             limit=limit,
             offset=offset,
+            active=active
         )
 
     def get_uncategorised_transactions(

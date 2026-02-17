@@ -353,8 +353,9 @@ async def update_category(
 ):
     """Partially update an existing category with HATEOAS links.
 
-    Updates the specified category with any provided values for general, detail and/or
-    description.
+    Updates the specified category with any provided values for general, detail,
+    description, and/or is_active. Use is_active to deactivate categories instead
+    of deleting them.
 
     Args:
         category_id (int): The ID of the category to update.
@@ -370,7 +371,7 @@ async def update_category(
         HTTPException: 500 error if update fails.
 
     Note:
-        Requires testing: TODO partial updates, not found scenarios, HATEOAS links
+        Use is_active=false to deactivate instead of deleting permanently.
     """
     try:
         service = CategoryService(db)
@@ -379,6 +380,7 @@ async def update_category(
             general=category_update.general,
             detail=category_update.detail,
             description=category_update.description,
+            is_active=category_update.is_active,
         )
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -403,22 +405,18 @@ async def update_category(
 @router.delete("/{category_id}", response_model=MessageResponse, status_code=200, description="Deletes a category.")
 async def delete_category(
         category_id: int = Path(ge=1, description="The ID of the category to delete"),
-        soft: bool = Query(True, description="Perform a soft delete or not"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
-    """Delete a category with HATEOAS links in response.
+    """Delete a category permanently with HATEOAS links in response.
 
-    Performs a soft delete by marking the category as inactive rather than removing
-    it from the database. This is the default behaviour. Response includes HATEOAS
-    links for available next actions.
+    Performs a hard delete by permanently removing the category from the database.
+    To deactivate a category instead, use PATCH to set is_active to false.
 
     This is a Level 3 REST API endpoint that returns hypermedia links.
 
     Args:
         category_id (int): The ID of the category to delete.
-        soft (bool): Whether to perform a soft delete (True) or hard delete (False).
-            Defaults to True (soft delete).
         request (Request): Request object for generating absolute URLs.
         db (Session): Database session dependency.
 
@@ -430,20 +428,16 @@ async def delete_category(
         HTTPException: 500 error if deletion fails.
 
     Note:
-        Requires testing: TODO soft vs hard delete, not found scenarios, HATEOAS links
+        Use PATCH with is_active=false to deactivate instead of permanently deleting.
     """
     try:
         service = CategoryService(db)
-        if soft:
-            if not service.soft_delete(category_id):
-                raise HTTPException(status_code=404, detail="Category not found")
-        else:
-            if not service.hard_delete(category_id):
-                raise HTTPException(status_code=404, detail="Category not found")
+        if not service.hard_delete(category_id):
+            raise HTTPException(status_code=404, detail="Category not found")
 
         return MessageResponse(
-            message="Category soft deleted successfully" if soft else "Category deleted permanently",
-            details={"method": "soft delete" if soft else "hard delete"},
+            message="Category deleted permanently",
+            details={"method": "hard delete"},
             links=get_deletion_response_links(request, "categories")
         )
     except HTTPException:
@@ -455,7 +449,6 @@ async def delete_category(
                 "operation": "delete_category",
                 "resource_type": "category",
                 "resource_id": category_id,
-                "soft_delete": soft,
                 "status": "failed"
             },
             exc_info=True
