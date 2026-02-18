@@ -36,8 +36,10 @@ export default function TransactionsPage() {
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
 
-    const handleDelete = (id: number) => {
-        deleteMutation.mutate(id);
+    const handleDelete = (id: number, description?: string) => {
+        if (confirm(`Delete transaction${description ? ` "${description}"` : ''}?`)) {
+            deleteMutation.mutate(id);
+        }
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
@@ -115,7 +117,16 @@ export default function TransactionsPage() {
                 </span>
             ),
         },
-        {key: "memo", header: "Description", editable: true},
+        {
+            key: "memo", 
+            header: "Description", 
+            editable: true,
+            render: (row: TableTransaction) => (
+                <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
+                    {row.memo}
+                </span>
+            ),
+        },
         {
             key: "category",
             header: "Category",
@@ -138,7 +149,7 @@ export default function TransactionsPage() {
                     );
                 }
                 return (
-                    <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
+                    <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)} ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                         {row.category}
                     </Badge>
                 );
@@ -166,11 +177,20 @@ export default function TransactionsPage() {
                     );
                 }
                 return (
-                    <span className="text-foreground">{row.recipient}</span>
+                    <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>{row.recipient}</span>
                 );
             },
         },
-        {key: "bank", header: "Bank", editable: true},
+        {
+            key: "bank", 
+            header: "Bank", 
+            editable: true,
+            render: (row: TableTransaction) => (
+                <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
+                    {row.bank}
+                </span>
+            ),
+        },
         {
             key: "amount",
             header: "Amount",
@@ -184,7 +204,7 @@ export default function TransactionsPage() {
                 }).format(Math.abs(row.amount));
                 
                 return (
-                    <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
+                    <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"} ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                         {row.amount >= 0 ? "+" : ""}{formattedAmount}
                     </span>
                 );
@@ -195,7 +215,7 @@ export default function TransactionsPage() {
             header: "Currency",
             editable: true,
             render: (row: TableTransaction) => (
-                <span className="font-mono text-sm">{row.currency}</span>
+                <span className={`font-mono text-sm ${!row.is_active ? 'text-muted-foreground line-through' : ''}`}>{row.currency}</span>
             ),
         },
         {
@@ -205,7 +225,7 @@ export default function TransactionsPage() {
             editable: true,
             type: "number" as const,
             render: (row: TableTransaction) => (
-                <span className="text-sm text-muted-foreground">
+                <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>
                     {row.balance !== undefined && row.balance !== null 
                         ? new Intl.NumberFormat('en-US', {
                             style: 'currency',
@@ -221,7 +241,7 @@ export default function TransactionsPage() {
             header: "Comment",
             editable: true,
             render: (row: TableTransaction) => (
-                <span className="text-sm text-muted-foreground italic">
+                <span className={`text-sm text-muted-foreground italic ${!row.is_active ? 'line-through' : ''}`}>
                     {row.comment || '-'}
                 </span>
             ),
@@ -234,7 +254,7 @@ export default function TransactionsPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
                     onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
                     disabled={updateMutation.isPending}
                 >
@@ -253,7 +273,7 @@ export default function TransactionsPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(row.id)}
+                    onClick={() => handleDelete(row.id, row.memo || row.recipient_name)}
                     disabled={deleteMutation.isPending}
                 >
                     <Trash2 className="h-4 w-4"/>
@@ -267,7 +287,7 @@ export default function TransactionsPage() {
             <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => { setShowAll(!showAll); setPage(0); }}
+                onClick={() => { setShowAll(!showAll); }}
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}

@@ -8,6 +8,7 @@ from api.api_routes_admin import router as admin_router  # ensure this file exis
 from api.api_routes_categories import router as categories_router
 from api.api_routes_import import router as import_router
 from api.api_routes_info import router as info_router
+from api.api_routes_planned_transactions import router as planned_transactions_router
 from api.api_routes_recipients import router as recipients_router
 from api.api_routes_transactions import router as transactions_router
 
@@ -18,4 +19,5 @@ __all__ = [
     "info_router",
     "import_router",
     "admin_router",
+    "planned_transactions_router",
 ]

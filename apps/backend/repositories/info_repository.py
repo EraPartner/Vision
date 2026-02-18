@@ -230,7 +230,8 @@ class InfoRepository:
     def get_spending_and_income_by_date_range(
             self,
             start_date: date,
-            end_date: date
+            end_date: date,
+            excluded_category_ids: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """
         Calculate total spending (negative amounts) and income (positive amounts) for a date range.
@@ -240,6 +241,8 @@ class InfoRepository:
         Args:
             start_date: Start date (inclusive)
             end_date: End date (inclusive)
+            excluded_category_ids: List of category IDs to exclude from calculations.
+                                   Defaults to [9, 22] (Intrabank transfers and internal transfers)
 
         Returns:
             Dictionary with spending, income, net_amount (all in EUR), transaction count,
@@ -248,12 +251,13 @@ class InfoRepository:
         from decimal import Decimal
         from services.currency_conversion_service import CurrencyConversionService
 
+        # Default to excluding Intrabank (9) and internal transfers (22)
+        if excluded_category_ids is None:
+            excluded_category_ids = [9, 22]
+
         # Efficiently load transactions with recipient eager-loaded to avoid N+1 queries.
-        # Exclude only those transactions whose effective category resolves to 9 ("Intrabank").
+        # Exclude transactions whose effective category resolves to any ID in excluded_category_ids.
         # Effective category = Transaction.category_id if set, otherwise Recipient.default_category_id.
-        # Exclude when either the transaction has category_id == 9, or it has no category_id and the
-        # recipient default_category_id == 9. Keep transactions with NULL categories (they'll be
-        # included in summaries).
         # Explicitly join Recipient so we can reference its default_category_id in filters
         query = (
             self.db.query(Transaction)
@@ -263,9 +267,8 @@ class InfoRepository:
                 Transaction.date >= start_date,
                 Transaction.date <= end_date,
                 # Effective category = transaction.category_id if set, otherwise recipient.default_category_id.
-                # Use COALESCE to evaluate effective category and treat NULLs as -1 so they don't compare equal to 9.
-                func.coalesce(Transaction.category_id, Recipient.default_category_id, -1) != 9,
-                func.coalesce(Transaction.category_id, Recipient.default_category_id, -1) != 22,
+                # Use COALESCE to evaluate effective category and treat NULLs as -1 so they don't match excluded IDs.
+                ~func.coalesce(Transaction.category_id, Recipient.default_category_id, -1).in_(excluded_category_ids)
             )
         )
 

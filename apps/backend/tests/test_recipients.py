@@ -239,15 +239,15 @@ class TestRecipientsCreateEndpoint:
         assert data["default_category_id"] == category.id
 
     def test_create_recipient_duplicate_name(self, client: TestClient, test_db: Session):
-        """Test POST /api/recipients with duplicate name."""
+        """Test POST /api/recipients with duplicate name returns 200."""
         # Create first recipient
         recipient_data = {"name": "duplicate name"}
         response1 = client.post("/api/recipients", json=recipient_data)
         assert response1.status_code == 201
 
-        # Try to create duplicate (should return existing)
+        # Try to create duplicate (should return existing with 200)
         response2 = client.post("/api/recipients", json=recipient_data)
-        assert response2.status_code == 201
+        assert response2.status_code == 200
 
         # Both should have same ID (idempotent)
         assert response1.json()["id"] == response2.json()["id"]
@@ -369,9 +369,9 @@ class TestRecipientsItemEndpoint:
         recipient = Recipient(**sample_recipient_data)
         test_db.add(recipient)
         test_db.commit()
-        test_db.refresh(recipient)
+        recipient_id = recipient.id
 
-        response = client.delete(f"/api/recipients/{recipient.id}")
+        response = client.delete(f"/api/recipients/{recipient_id}")
 
         assert response.status_code == 200
         data = response.json()
@@ -379,9 +379,9 @@ class TestRecipientsItemEndpoint:
         assert "message" in data
         assert "links" in data
 
-        # Verify soft delete - recipient should still exist but be inactive
-        test_db.refresh(recipient)
-        assert recipient.is_active is False
+        # Verify hard delete - recipient should be completely removed
+        deleted_recipient = test_db.query(Recipient).filter(Recipient.id == recipient_id).first()
+        assert deleted_recipient is None
 
     def test_delete_recipient_not_found(self, client: TestClient, test_db: Session):
         """Test DELETE /api/recipients/{id} with non-existent ID."""
@@ -681,10 +681,16 @@ class TestRecipientsExceptionHandling:
 
     def test_delete_recipient_exception(self, client: TestClient, test_db: Session):
         """Test delete_recipient handles general exceptions."""
-        with patch('services.recipient_service.RecipientService.soft_delete') as mock_delete:
+        # Create a test recipient first
+        recipient = Recipient(name="TEST RECIPIENT")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        with patch('services.recipient_service.RecipientService.hard_delete') as mock_delete:
             mock_delete.side_effect = Exception("Database error")
 
-            response = client.delete("/api/recipients/1?soft=true")
+            response = client.delete(f"/api/recipients/{recipient.id}")
 
             assert response.status_code == 500
             assert "Error deleting recipient" in response.json()["detail"]

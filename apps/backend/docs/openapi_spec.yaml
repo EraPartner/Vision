@@ -40,6 +40,8 @@ tags:
     description: Transaction recipient management
   - name: transactions
     description: Financial transaction management and retrieval
+  - name: planned-transactions
+    description: Planned transaction management and scheduling
   - name: import
     description: CSV file import and data processing operations
   - name: info
@@ -2620,10 +2622,26 @@ paths:
                     href: http://localhost:3002/api/info/banks
                     method: GET
                     title: View bank accounts
-                  - rel: summary
+                  - rel: transaction-count
+                    href: http://localhost:3002/api/info/transaction-count
+                    method: GET
+                    title: Get total transaction count
+                  - rel: transaction-summary
                     href: http://localhost:3002/api/info/transaction-summary
                     method: GET
                     title: Get filtered transaction summary
+                  - rel: monthly-summary
+                    href: http://localhost:3002/api/info/monthly-summary
+                    method: GET
+                    title: Get monthly financial summary (past 6 months)
+                  - rel: planned-expenses-forecast
+                    href: http://localhost:3002/api/info/planned-expenses-next-month
+                    method: GET
+                    title: Get planned expenses forecast for next month
+                  - rel: average-vs-current-spending
+                    href: http://localhost:3002/api/info/average-vs-current-spending
+                    method: GET
+                    title: Get average daily spending vs current month comparison
 
     get:
       tags: [ info ]
@@ -2903,6 +2921,1565 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/info/monthly-summary:
+    get:
+      tags: [ info ]
+      summary: Get 6-month financial summary
+      description: |
+        Returns financial summary for the past 6 months, broken down month by month.
+        
+        This endpoint provides comprehensive financial data for trend analysis and
+        month-over-month comparisons. It includes spending, income, net amount,
+        and transaction count for each of the last 6 months, plus an overall summary.
+        
+        **Features:**
+        - Month-by-month breakdown for the past 6 months
+        - Overall 6-month summary statistics
+        - Category filtering to exclude specific categories (e.g., transfers)
+        - HATEOAS navigation to related resources
+        - Automatic period calculation
+        
+        **Default Excluded Categories:**
+        - Category ID 9 (Intrabank transfers)
+        - Category ID 22 (Internal transfers)
+        
+        **Use Cases:**
+        - Monthly financial trend analysis
+        - Budget tracking and comparison
+        - Spending pattern identification
+        - Income vs expense analysis
+        - Financial reporting and dashboards
+        
+        **Response Structure:**
+        Each month includes:
+        - Month number and year
+        - Period start and end dates
+        - Total spending (negative amounts)
+        - Total income (positive amounts)
+        - Net amount (income + spending)
+        - Transaction count
+        
+        The summary includes aggregate totals across all 6 months.
+      operationId: getMonthlySummary
+      parameters:
+        - name: excluded_category_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+          style: form
+          explode: true
+          description: |
+            Optional list of category IDs to exclude from calculations.
+            Useful for filtering out internal transfers or specific categories
+            that shouldn't be included in financial summaries.
+            
+            **Default**: [9, 22] (Intrabank transfers and internal transfers)
+            
+            **Example**: ?excluded_category_ids=9&excluded_category_ids=22&excluded_category_ids=15
+            
+            To include all categories, explicitly pass an empty parameter or don't include this parameter.
+          example: [ 9, 22 ]
+      responses:
+        '200':
+          description: Monthly financial summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthlyFinancialSummaryResponse'
+              example:
+                months:
+                  - month: 2
+                    year: 2026
+                    period_start: "2026-02-01"
+                    period_end: "2026-02-28"
+                    total_spending: -1234.56
+                    total_income: 2500.00
+                    net_amount: 1265.44
+                    transaction_count: 45
+                  - month: 1
+                    year: 2026
+                    period_start: "2026-01-01"
+                    period_end: "2026-01-31"
+                    total_spending: -1456.78
+                    total_income: 2500.00
+                    net_amount: 1043.22
+                    transaction_count: 52
+                  - month: 12
+                    year: 2025
+                    period_start: "2025-12-01"
+                    period_end: "2025-12-31"
+                    total_spending: -2345.67
+                    total_income: 2500.00
+                    net_amount: 154.33
+                    transaction_count: 67
+                  - month: 11
+                    year: 2025
+                    period_start: "2025-11-01"
+                    period_end: "2025-11-30"
+                    total_spending: -1123.45
+                    total_income: 2500.00
+                    net_amount: 1376.55
+                    transaction_count: 38
+                  - month: 10
+                    year: 2025
+                    period_start: "2025-10-01"
+                    period_end: "2025-10-31"
+                    total_spending: -1567.89
+                    total_income: 2500.00
+                    net_amount: 932.11
+                    transaction_count: 48
+                  - month: 9
+                    year: 2025
+                    period_start: "2025-09-01"
+                    period_end: "2025-09-30"
+                    total_spending: -1890.12
+                    total_income: 2500.00
+                    net_amount: 609.88
+                    transaction_count: 55
+                summary:
+                  total_spending: -9618.47
+                  total_income: 15000.00
+                  net_amount: 5381.53
+                  transaction_count: 305
+                  period_start: "2025-09-01"
+                  period_end: "2026-02-28"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info/monthly-summary
+                    method: GET
+                    title: Get 6-month financial summary
+                  - rel: parent
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: View all info endpoints
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: View all transactions
+        '500':
+          description: Error retrieving monthly financial summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/info/planned-expenses-next-month:
+    get:
+      tags: [ info ]
+      summary: Get planned expenses forecast for next month
+      description: |
+        Returns all planned transactions scheduled for the following calendar month,
+        grouped by date to visualise expected cash flow patterns.
+        
+        This endpoint is designed for dashboard graphs showing expected in/outflows.
+        It provides a day-by-day breakdown of planned income and expenses to help
+        with budgeting and financial planning.
+        
+        **Features:**
+        - Daily breakdown of expected income and expenses
+        - List of individual planned transactions for each day
+        - Summary totals for the entire month
+        - Information about recurring transactions
+        - Only includes active planned transactions
+        - Automatic calculation of next calendar month
+        
+        **Response Structure:**
+        - Daily data showing income, expenses, and net amount per day
+        - Transaction details including amount, recipient, category, and memo
+        - Monthly summary with totals and transaction count
+        - HATEOAS links to related resources
+        
+        **Use Cases:**
+        - Budget forecasting and planning
+        - Cash flow visualisation
+        - Upcoming payment tracking
+        - Monthly expense planning
+        - Dashboard graphs for expected in/outflows
+      operationId: getPlannedExpensesNextMonth
+      responses:
+        '200':
+          description: Planned expenses forecast retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedExpensesNextMonthResponse'
+              example:
+                month: 3
+                year: 2026
+                period_start: "2026-03-01"
+                period_end: "2026-03-31"
+                daily_data:
+                  - date: "2026-03-01"
+                    income: 0.0
+                    expenses: -150.00
+                    net: -150.00
+                    transactions:
+                      - id: 1
+                        amount: -150.00
+                        recipient_name: "ELECTRICITY COMPANY"
+                        category_name: "UTILITIES:ELECTRICITY"
+                        memo: "Monthly electricity bill"
+                        is_recurring: true
+                  - date: "2026-03-05"
+                    income: 2500.00
+                    expenses: 0.0
+                    net: 2500.00
+                    transactions:
+                      - id: 2
+                        amount: 2500.00
+                        recipient_name: "EMPLOYER"
+                        category_name: "INCOME:SALARY"
+                        memo: "Monthly salary"
+                        is_recurring: true
+                  - date: "2026-03-15"
+                    income: 0.0
+                    expenses: -800.00
+                    net: -800.00
+                    transactions:
+                      - id: 3
+                        amount: -800.00
+                        recipient_name: "LANDLORD"
+                        category_name: "HOUSING:RENT"
+                        memo: "Monthly rent payment"
+                        is_recurring: true
+                summary:
+                  total_income: 2500.00
+                  total_expenses: -950.00
+                  net_amount: 1550.00
+                  transaction_count: 3
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info/planned-expenses-next-month
+                    method: GET
+                    title: Get planned expenses for next month
+                  - rel: parent
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: View all info endpoints
+                  - rel: planned-transactions
+                    href: http://localhost:3002/api/planned-transactions
+                    method: GET
+                    title: View all planned transactions
+        '500':
+          description: Error retrieving planned expenses next month
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/info/average-vs-current-spending:
+    get:
+      tags: [ info ]
+      summary: Get average daily spending vs current month comparison
+      description: |
+        Returns average daily spending over the past 6 complete months compared
+        to the current month's spending patterns.
+        
+        This endpoint provides data for dashboard graphs comparing current spending
+        against historical averages. It calculates average daily spending from the
+        past 6 complete months (excluding current month) and provides daily spending
+        breakdown for the current month with cumulative comparison.
+        
+        **Features:**
+        - Average daily spending from past 6 complete months
+        - Daily spending breakdown for current month
+        - Cumulative spending comparison (actual vs expected)
+        - Variance metrics showing over/under spending
+        - Projected month-end total based on current pace
+        - Only includes active transactions
+        - Spending calculations exclude income (positive amounts)
+        
+        **Calculations:**
+        - **Average Daily Spending**: Total spending from past 6 months / number of days
+        - **Expected to Date**: Average daily spending × days elapsed in current month
+        - **Variance**: Actual spending - Expected spending
+        - **Projected Total**: (Current spending / days elapsed) × days in month
+        
+        **Response Structure:**
+        - Past 6 months statistics with average daily spending
+        - Current month daily data with cumulative tracking
+        - Comparison metrics with variance and projections
+        - HATEOAS links to related resources
+        
+        **Use Cases:**
+        - Budget monitoring and tracking
+        - Spending trend identification
+        - Over/under budget alerts
+        - Monthly spending comparison
+        - Dashboard graphs for spending vs average
+        - Financial planning and adjustment
+      operationId: getAverageVsCurrentSpending
+      responses:
+        '200':
+          description: Average vs current spending comparison retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AverageVsCurrentSpendingResponse'
+              example:
+                past_6_months:
+                  period_start: "2025-08-01"
+                  period_end: "2026-01-31"
+                  total_spending: -9000.00
+                  days: 184
+                  average_daily_spending: -48.91
+                  transaction_count: 280
+                current_month:
+                  month: 2
+                  year: 2026
+                  period_start: "2026-02-01"
+                  period_end: "2026-02-18"
+                  days_elapsed: 18
+                  total_spending: -950.00
+                  total_income: 2500.00
+                  daily_data:
+                    - date: "2026-02-01"
+                      spending: -45.00
+                      income: 0.0
+                      transaction_count: 2
+                      cumulative_spending: -45.00
+                      cumulative_expected: -48.91
+                      variance: 3.91
+                    - date: "2026-02-02"
+                      spending: -80.00
+                      income: 0.0
+                      transaction_count: 3
+                      cumulative_spending: -125.00
+                      cumulative_expected: -97.82
+                      variance: -27.18
+                    - date: "2026-02-05"
+                      spending: 0.0
+                      income: 2500.00
+                      transaction_count: 1
+                      cumulative_spending: -125.00
+                      cumulative_expected: -244.55
+                      variance: 119.55
+                  transaction_count: 45
+                comparison:
+                  expected_to_date: -880.38
+                  actual_to_date: -950.00
+                  variance_to_date: -69.62
+                  expected_month_total: -1369.48
+                  projected_month_total: -1475.00
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/info/average-vs-current-spending
+                    method: GET
+                    title: Get average vs current spending comparison
+                  - rel: parent
+                    href: http://localhost:3002/api/info
+                    method: GET
+                    title: View all info endpoints
+                  - rel: transactions
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: View all transactions
+                  - rel: monthly-summary
+                    href: http://localhost:3002/api/info/monthly-summary
+                    method: GET
+                    title: View 6-month financial summary
+        '500':
+          description: Error retrieving average vs current spending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/transactions/export/csv:
+    options:
+      tags: [ transactions ]
+      summary: Discover CSV export endpoint capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the CSV export endpoint.
+        Use this to discover export capabilities and understand available query parameters.
+      operationId: getTransactionExportOptions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 5000
+          description: Maximum number of transactions to export
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of transactions to skip for pagination
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Start date filter (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: End date filter (YYYY-MM-DD)
+        - name: bank_account
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by partial bank account match
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Filter by category ID
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Filter by recipient ID
+        - name: recipient_name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by partial recipient name match
+        - name: uncategorised
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Filter for uncategorised transactions
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: Filter by active status
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Export transactions as CSV file with optional filters
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/transactions/export/csv
+                    method: GET
+                    title: Export transactions as CSV
+                  - rel: parent
+                    href: http://localhost:3002/api/transactions
+                    method: GET
+                    title: List transactions
+
+    get:
+      tags: [ transactions ]
+      summary: Export transactions as CSV file
+      description: |
+        Exports filtered transactions as a downloadable CSV file.
+        
+        **Features:**
+        - Flexible filtering (same as transaction list endpoint)
+        - Standard CSV format compatible with Excel and other tools
+        - Automatic filename with timestamp
+        - Includes all transaction details and relationships
+        - Pagination support for large exports
+        - British English date format (DD/MM/YYYY)
+        
+        **CSV Columns:**
+        - ID: Transaction identifier
+        - Date: Transaction date (DD/MM/YYYY format)
+        - Bank Account: Account name
+        - Recipient: Recipient name
+        - Memo: Transaction memo/description
+        - Amount: Transaction amount
+        - Currency: Currency code
+        - Balance: Account balance after transaction
+        - Category: Category name (GENERAL:DETAIL format)
+        - Comment: Additional comments
+        
+        **Filtering Options:**
+        All filters from the transaction list endpoint are supported:
+        - Date range filtering
+        - Bank account filtering
+        - Category filtering
+        - Recipient filtering
+        - Uncategorised transactions
+        - Active status filtering
+        
+        **Use Cases:**
+        - Data backup and archival
+        - External analysis in Excel/Google Sheets
+        - Importing into other financial tools
+        - Audit trail and compliance reporting
+        - Offline transaction review
+      operationId: exportTransactionsCSV
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 5000
+          description: |
+            Maximum number of transactions to export.
+            **Default**: 5000
+            **Recommendation**: Use date range filtering for very large datasets
+          example: 1000
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of transactions to skip for pagination.
+            Use with limit to export data in chunks.
+          example: 0
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Start date filter (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-01-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            End date filter (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-12-31"
+        - name: bank_account
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: |
+            Filter by partial bank account match (case-insensitive).
+            Supports wildcard matching.
+          example: "Chase"
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter by specific category ID.
+            Only transactions with this category will be exported.
+          example: 5
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter by specific recipient ID.
+            Only transactions with this recipient will be exported.
+          example: 12
+        - name: recipient_name
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+          description: |
+            Filter by partial recipient name match (case-insensitive).
+            Supports wildcard matching.
+          example: "Tesco"
+        - name: uncategorised
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            Filter for uncategorised transactions only.
+            When true, only returns transactions without a category.
+          example: false
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Filter by active status.
+            **Default**: true (only active transactions)
+          example: true
+      responses:
+        '200':
+          description: CSV file generated successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+              example: |
+                ID,Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
+                1,15/01/2026,Chase Current Account,TESCO STORES,Grocery shopping,-45.67,GBP,1254.33,FOOD:GROCERIES,
+                2,14/01/2026,Chase Current Account,SHELL UK,Fuel,-52.30,GBP,1300.00,TRANSPORT:FUEL,
+          headers:
+            Content-Disposition:
+              description: Attachment filename with timestamp
+              schema:
+                type: string
+              example: attachment; filename=transactions_20260217_103045.csv
+            Content-Type:
+              description: CSV MIME type
+              schema:
+                type: string
+              example: text/csv; charset=utf-8
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_date:
+                  summary: Invalid date format
+                  value:
+                    detail: "Invalid date format. Use YYYY-MM-DD"
+                    error_code: "INVALID_DATE_FORMAT"
+        '500':
+          description: Error exporting transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==================== Planned Transaction Endpoints ====================
+
+  /api/planned-transactions:
+    options:
+      tags: [ planned-transactions ]
+      summary: Discover planned transactions collection capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for the planned transactions collection.
+        Use this to discover what operations are available for managing planned transactions.
+      operationId: getPlannedTransactionsOptions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 50
+          description: Maximum number of planned transactions to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of planned transactions to skip for pagination
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Start date filter (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: End date filter (YYYY-MM-DD)
+        - name: bank_account
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by partial bank account match
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Filter by category ID
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Filter by recipient ID
+        - name: is_recurring
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter by recurring status
+        - name: is_executed
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter by execution status
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Filter by active status. True for active only, False for all including soft-deleted.
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve all planned transactions with pagination
+                  - method: POST
+                    description: Create a new planned transaction
+                  - method: OPTIONS
+                    description: Discover available methods on this endpoint
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions
+                    method: GET
+                    title: List all planned transactions
+
+    get:
+      tags: [ planned-transactions ]
+      summary: List all planned transactions
+      description: |
+        Retrieves a paginated and optionally filtered list of planned transactions.
+        Supports comprehensive filtering by date range, bank account, category, recipient,
+        recurring status, execution status, and active status.
+        
+        **Features:**
+        - Pagination support for large datasets
+        - Multiple filter combinations
+        - HATEOAS links for navigation
+        - Category and recipient name resolution
+        - Recurring pattern information
+        
+        **Use Cases:**
+        - View upcoming planned transactions
+        - Manage recurring payments
+        - Track executed vs pending transactions
+        - Filter by specific bank accounts or categories
+        - Financial planning and budgeting
+        
+        **Filtering:**
+        All filters can be combined for precise queries. Date filters are inclusive.
+      operationId: getPlannedTransactions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+            default: 50
+          description: |
+            Maximum number of planned transactions to return per page.
+            **Default**: 50, **Range**: 1-5000
+          example: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: |
+            Number of planned transactions to skip for pagination (zero-based).
+            Use with limit for page navigation. **Default**: 0
+          example: 0
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Filter planned transactions from this date (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-03-01"
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Filter planned transactions to this date (inclusive).
+            **Format**: YYYY-MM-DD (ISO 8601)
+          example: "2026-03-31"
+        - name: bank_account
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+          description: |
+            Filter by partial bank account match (case-insensitive).
+            Useful for viewing planned transactions for specific accounts.
+          example: "Chase"
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter by exact category ID match.
+            Use with info/categories to get category IDs.
+          example: 5
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            Filter by exact recipient ID match.
+            Use with recipients endpoint to get recipient IDs.
+          example: 12
+        - name: is_recurring
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            Filter by recurring status.
+            **true**: Only recurring transactions
+            **false**: Only one-time transactions
+          example: true
+        - name: is_executed
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            Filter by execution status.
+            **true**: Only executed transactions
+            **false**: Only pending transactions
+          example: false
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: |
+            Filter by active status.
+            **true**: Only active planned transactions (default)
+            **false**: All planned transactions including soft-deleted (is_active=false)
+            
+            Use false to include soft-deleted transactions that were deactivated via PATCH.
+          example: true
+      responses:
+        '200':
+          description: Paginated planned transactions list with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedTransactionsListResponse'
+              example:
+                items:
+                  - id: 1
+                    planned_date: "2026-03-15"
+                    bank_account: "Chase Current Account"
+                    recipient_id: 5
+                    recipient_name: "NETFLIX"
+                    memo: "Monthly subscription"
+                    amount: -12.99
+                    currency: "GBP"
+                    category_id: 3
+                    category_name: "ENTERTAINMENT:STREAMING"
+                    comment: null
+                    is_recurring: true
+                    recurrence_pattern: "monthly"
+                    is_executed: false
+                    executed_transaction_id: null
+                    is_active: true
+                    created_at: "2026-02-01T10:00:00Z"
+                    updated_at: null
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/planned-transactions/1
+                        method: GET
+                        title: Get this planned transaction
+                      - rel: update
+                        href: http://localhost:3002/api/planned-transactions/1
+                        method: PATCH
+                        title: Update this planned transaction
+                      - rel: delete
+                        href: http://localhost:3002/api/planned-transactions/1
+                        method: DELETE
+                        title: Delete this planned transaction
+                total: 25
+                limit: 50
+                offset: 0
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions?limit=50&offset=0
+                    method: GET
+                    title: Current page
+                  - rel: first
+                    href: http://localhost:3002/api/planned-transactions?limit=50&offset=0
+                    method: GET
+                    title: First page
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_date:
+                  summary: Invalid date format
+                  value:
+                    detail: "Invalid start_date format: 2026-13-01. Use YYYY-MM-DD"
+                    error_code: "INVALID_DATE_FORMAT"
+        '500':
+          description: Error retrieving planned transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [ planned-transactions ]
+      summary: Create a new planned transaction
+      description: |
+        Creates a new planned transaction with validation for all required fields.
+        Supports both one-time and recurring transactions with flexible scheduling.
+        
+        **Features:**
+        - Create one-time or recurring planned transactions
+        - Automatic currency validation (ISO 4217)
+        - Recipient and category validation
+        - Custom recurrence patterns
+        - HATEOAS links in response
+        
+        **Validation Rules:**
+        - Recipient ID must exist in the database
+        - Category ID must exist (if provided)
+        - Currency must be a valid 3-letter ISO 4217 code
+        - Bank account name is required
+        - Amount can be positive (income) or negative (expense)
+        
+        **Recurring Patterns:**
+        Supports text patterns like "monthly", "weekly", "yearly" or custom JSON patterns.
+      operationId: createPlannedTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedTransactionCreate'
+            example:
+              planned_date: "2026-03-15"
+              bank_account: "Chase Current Account"
+              recipient_id: 5
+              memo: "Monthly Netflix subscription"
+              amount: -12.99
+              currency: "GBP"
+              category_id: 3
+              comment: null
+              is_recurring: true
+              recurrence_pattern: "monthly"
+      responses:
+        '201':
+          description: Planned transaction created successfully with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedTransactionResponse'
+              example:
+                id: 15
+                planned_date: "2026-03-15"
+                bank_account: "Chase Current Account"
+                recipient_id: 5
+                recipient_name: "NETFLIX"
+                memo: "Monthly Netflix subscription"
+                amount: -12.99
+                currency: "GBP"
+                category_id: 3
+                category_name: "ENTERTAINMENT:STREAMING"
+                comment: null
+                is_recurring: true
+                recurrence_pattern: "monthly"
+                is_executed: false
+                executed_transaction_id: null
+                is_active: true
+                created_at: "2026-02-17T15:30:00Z"
+                updated_at: null
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions/15
+                    method: GET
+                    title: Get this planned transaction
+                  - rel: update
+                    href: http://localhost:3002/api/planned-transactions/15
+                    method: PATCH
+                    title: Update this planned transaction
+                  - rel: delete
+                    href: http://localhost:3002/api/planned-transactions/15
+                    method: DELETE
+                    title: Delete this planned transaction
+                  - rel: parent
+                    href: http://localhost:3002/api/planned-transactions
+                    method: GET
+                    title: List all planned transactions
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_recipient:
+                  summary: Invalid recipient ID
+                  value:
+                    detail: "Recipient with ID 999 not found"
+                    error_code: "VALIDATION_ERROR"
+                invalid_currency:
+                  summary: Invalid currency code
+                  value:
+                    detail: "Unsupported currency code 'XXX'. Supported currencies: EUR, USD, GBP, ..."
+                    error_code: "VALIDATION_ERROR"
+        '500':
+          description: Error creating planned transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/planned-transactions/{plannedTransactionId}:
+    options:
+      tags: [ planned-transactions ]
+      summary: Discover individual planned transaction capabilities
+      description: |
+        Returns available HTTP methods and HATEOAS links for a specific planned transaction.
+        Use this to discover what operations are available on an individual planned transaction.
+      operationId: getPlannedTransactionOptions
+      parameters:
+        - $ref: '#/components/parameters/PlannedTransactionId'
+      responses:
+        '200':
+          description: Available methods and navigation links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsResponse'
+              example:
+                methods:
+                  - method: GET
+                    description: Retrieve planned transaction by ID
+                  - method: PATCH
+                    description: Update planned transaction
+                  - method: DELETE
+                    description: Delete planned transaction
+                  - method: OPTIONS
+                    description: Discover available methods on this endpoint
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: GET
+                    title: Get this planned transaction
+                  - rel: parent
+                    href: http://localhost:3002/api/planned-transactions
+                    method: GET
+                    title: List all planned transactions
+
+    get:
+      tags: [ planned-transactions ]
+      summary: Get a planned transaction by ID
+      description: |
+        Retrieves a single planned transaction by its unique identifier.
+        Includes all transaction details, category and recipient information,
+        and HATEOAS links for available actions.
+        
+        **Features:**
+        - Complete planned transaction details
+        - Resolved category and recipient names
+        - Execution status and linked transaction ID
+        - Recurring pattern information
+        - HATEOAS navigation links
+        
+        **Use Cases:**
+        - View planned transaction details
+        - Check execution status
+        - Verify recurring settings
+        - Access related resources
+      operationId: getPlannedTransaction
+      parameters:
+        - $ref: '#/components/parameters/PlannedTransactionId'
+      responses:
+        '200':
+          description: Planned transaction retrieved successfully with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedTransactionResponse'
+              example:
+                id: 1
+                planned_date: "2026-03-15"
+                bank_account: "Chase Current Account"
+                recipient_id: 5
+                recipient_name: "NETFLIX"
+                memo: "Monthly subscription"
+                amount: -12.99
+                currency: "GBP"
+                category_id: 3
+                category_name: "ENTERTAINMENT:STREAMING"
+                comment: null
+                is_recurring: true
+                recurrence_pattern: "monthly"
+                is_executed: false
+                executed_transaction_id: null
+                is_active: true
+                created_at: "2026-02-01T10:00:00Z"
+                updated_at: null
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: GET
+                    title: Get this planned transaction
+                  - rel: update
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: PATCH
+                    title: Update this planned transaction
+                  - rel: delete
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: DELETE
+                    title: Delete this planned transaction
+                  - rel: category
+                    href: http://localhost:3002/api/categories/3
+                    method: GET
+                    title: View category
+                  - rel: recipient
+                    href: http://localhost:3002/api/recipients/5
+                    method: GET
+                    title: View recipient
+        '404':
+          description: Planned transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Planned transaction 999 not found"
+                error_code: "NOT_FOUND"
+        '500':
+          description: Error retrieving planned transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [ planned-transactions ]
+      summary: Update a planned transaction
+      description: |
+        Updates an existing planned transaction with partial data.
+        Only provided fields will be updated; others remain unchanged.
+        
+        **Features:**
+        - Partial update support (PATCH semantics)
+        - Recipient name resolution to recipient_id
+        - Category name resolution to category_id
+        - Currency validation
+        - HATEOAS links in response
+        
+        **Update Rules:**
+        - Only provided fields are updated
+        - Null values can clear optional fields
+        - Recipient and category can be updated by name or ID
+        - Cannot update executed transactions' core data
+        
+        **Special Fields:**
+        - `recipient_name`: Automatically resolved to `recipient_id`
+        - `category_name`: Automatically resolved to `category_id` (format: "GENERAL:DETAIL")
+      operationId: updatePlannedTransaction
+      parameters:
+        - $ref: '#/components/parameters/PlannedTransactionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedTransactionUpdate'
+            examples:
+              update_amount:
+                summary: Update amount and memo
+                value:
+                  amount: -14.99
+                  memo: "Netflix Premium subscription"
+              update_by_names:
+                summary: Update using names instead of IDs
+                value:
+                  recipient_name: "SPOTIFY"
+                  category_name: "ENTERTAINMENT:STREAMING"
+              mark_executed:
+                summary: Mark as executed
+                value:
+                  is_executed: true
+      responses:
+        '200':
+          description: Planned transaction updated successfully with HATEOAS links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedTransactionResponse'
+              example:
+                id: 1
+                planned_date: "2026-03-15"
+                bank_account: "Chase Current Account"
+                recipient_id: 5
+                recipient_name: "NETFLIX"
+                memo: "Netflix Premium subscription"
+                amount: -14.99
+                currency: "GBP"
+                category_id: 3
+                category_name: "ENTERTAINMENT:STREAMING"
+                comment: null
+                is_recurring: true
+                recurrence_pattern: "monthly"
+                is_executed: false
+                executed_transaction_id: null
+                is_active: true
+                created_at: "2026-02-01T10:00:00Z"
+                updated_at: "2026-02-17T15:45:00Z"
+                links:
+                  - rel: self
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: GET
+                    title: Get this planned transaction
+                  - rel: update
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: PATCH
+                    title: Update this planned transaction
+                  - rel: delete
+                    href: http://localhost:3002/api/planned-transactions/1
+                    method: DELETE
+                    title: Delete this planned transaction
+        '400':
+          description: Invalid update data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Planned transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Planned transaction 999 not found"
+                error_code: "NOT_FOUND"
+        '500':
+          description: Error updating planned transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [ planned-transactions ]
+      summary: Delete a planned transaction
+      description: |
+        Permanently deletes a planned transaction from the database.
+        
+        **Hard Delete:**
+        - Permanently removes the record from database
+        - Cannot be undone
+        - Cascades to execution history records
+        
+        **Soft Delete Alternative:**
+        - To soft-delete, use PATCH to set `is_active` to `false`
+        - Soft-deleted transactions can be restored by setting `is_active` back to `true`
+        - Recommended for audit trail and data integrity
+        
+        **Features:**
+        - Permanent deletion
+        - Cascades to related execution records
+        - HATEOAS links to collection endpoint
+        - Confirmation message
+        
+        **Use Cases:**
+        - Permanently remove unwanted planned transaction
+        - Clean up test data
+        - Delete cancelled recurring transactions
+        
+        **Note:** For soft deletion (preserving data), use PATCH endpoint to set `is_active=false` instead.
+      operationId: deletePlannedTransaction
+      parameters:
+        - $ref: '#/components/parameters/PlannedTransactionId'
+      responses:
+        '200':
+          description: Planned transaction deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Planned transaction 1 deleted successfully"
+                links:
+                  - rel: parent
+                    href: http://localhost:3002/api/planned-transactions
+                    method: GET
+                    title: List all planned transactions
+                    message: "Planned transaction 1 permanently deleted successfully"
+                    links:
+                      - rel: parent
+                        href: http://localhost:3002/api/planned-transactions
+                        method: GET
+                        title: List all planned transactions
+        '404':
+          description: Planned transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Planned transaction 999 not found"
+                error_code: "NOT_FOUND"
+        '500':
+          description: Error deleting planned transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/planned-transactions/{plannedTransactionId}/execute:
+    post:
+      tags: [ planned-transactions ]
+      summary: Execute a planned transaction
+      description: |
+        Executes a planned transaction by linking it to an actual transaction.
+        
+        **Behavior:**
+        - **One-time transactions**: Marks as executed permanently (`is_executed=true`)
+        - **Recurring transactions**: Creates execution record, resets `is_executed=false`, 
+          and updates `planned_date` to next occurrence based on `recurrence_pattern`
+        
+        **Execution Process:**
+        1. Validates planned transaction exists and is not already executed
+        2. Validates the actual transaction exists
+        3. Creates execution record in execution history
+        4. Updates `last_executed_date` and `executed_transaction_id`
+        5. For recurring: calculates next occurrence date and resets `is_executed`
+        6. For one-time: marks as permanently executed
+        
+        **Recurrence Patterns:**
+        - `daily`: Next day
+        - `weekly`: +7 days
+        - `biweekly`: +14 days
+        - `monthly`: Same day next month
+        - `quarterly`: +3 months
+        - `yearly`: Same day next year
+        
+        **Validation Rules:**
+        - Planned transaction must have `is_executed=false`
+        - Referenced actual transaction must exist
+        - Cannot execute same planned transaction twice without reset
+        
+        **Use Cases:**
+        - Mark monthly bill as paid
+        - Link recurring subscription to actual charge
+        - Track payment of one-time planned expense
+        - Maintain execution history for recurring transactions
+      operationId: executePlannedTransaction
+      parameters:
+        - $ref: '#/components/parameters/PlannedTransactionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedTransactionExecuteRequest'
+            examples:
+              execute_with_defaults:
+                summary: Execute with today's date
+                value:
+                  executed_transaction_id: 1234
+              execute_with_custom_date:
+                summary: Execute with specific date
+                value:
+                  executed_transaction_id: 1234
+                  execution_date: "2026-02-15"
+      responses:
+        '200':
+          description: Planned transaction executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedTransactionResponse'
+              examples:
+                one_time_executed:
+                  summary: One-time transaction executed
+                  value:
+                    id: 1
+                    planned_date: "2026-02-15"
+                    bank_account: "Chase Current Account"
+                    recipient_id: 5
+                    recipient_name: "AMAZON"
+                    memo: "One-time purchase"
+                    amount: -49.99
+                    currency: "GBP"
+                    category_id: 8
+                    category_name: "SHOPPING:ONLINE"
+                    comment: null
+                    is_recurring: false
+                    recurrence_pattern: null
+                    is_executed: true
+                    last_executed_date: "2026-02-15"
+                    executed_transaction_id: 1234
+                    execution_count: 1
+                    executions:
+                      - id: 1
+                        executed_transaction_id: 1234
+                        execution_date: "2026-02-15"
+                        created_at: "2026-02-15T10:30:00Z"
+                    is_active: true
+                    created_at: "2026-02-01T10:00:00Z"
+                    updated_at: "2026-02-15T10:30:00Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/planned-transactions/1
+                        method: GET
+                        title: Get this planned transaction
+                      - rel: executed_transaction
+                        href: http://localhost:3002/api/transactions/1234
+                        method: GET
+                        title: View executed transaction
+                recurring_reset:
+                  summary: Recurring transaction reset for next occurrence
+                  value:
+                    id: 2
+                    planned_date: "2026-03-15"
+                    bank_account: "Chase Current Account"
+                    recipient_id: 5
+                    recipient_name: "NETFLIX"
+                    memo: "Monthly subscription"
+                    amount: -12.99
+                    currency: "GBP"
+                    category_id: 3
+                    category_name: "ENTERTAINMENT:STREAMING"
+                    comment: null
+                    is_recurring: true
+                    recurrence_pattern: "monthly"
+                    is_executed: false
+                    last_executed_date: "2026-02-15"
+                    executed_transaction_id: 1235
+                    execution_count: 3
+                    executions:
+                      - id: 5
+                        executed_transaction_id: 1235
+                        execution_date: "2026-02-15"
+                        created_at: "2026-02-15T11:00:00Z"
+                      - id: 4
+                        executed_transaction_id: 1180
+                        execution_date: "2026-01-15"
+                        created_at: "2026-01-15T11:00:00Z"
+                      - id: 3
+                        executed_transaction_id: 1050
+                        execution_date: "2025-12-15"
+                        created_at: "2025-12-15T11:00:00Z"
+                    is_active: true
+                    created_at: "2025-12-01T10:00:00Z"
+                    updated_at: "2026-02-15T11:00:00Z"
+                    links:
+                      - rel: self
+                        href: http://localhost:3002/api/planned-transactions/2
+                        method: GET
+                        title: Get this planned transaction
+                      - rel: execute
+                        href: http://localhost:3002/api/planned-transactions/2/execute
+                        method: POST
+                        title: Execute again (next month)
+                      - rel: executed_transaction
+                        href: http://localhost:3002/api/transactions/1235
+                        method: GET
+                        title: View most recent executed transaction
+        '400':
+          description: Invalid execution request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                already_executed:
+                  summary: Planned transaction already executed
+                  value:
+                    detail: "Planned transaction ID 1 is already executed. Cannot execute until reset."
+                    error_code: "VALIDATION_ERROR"
+                transaction_not_found:
+                  summary: Referenced transaction doesn't exist
+                  value:
+                    detail: "Transaction ID 9999 not found. Cannot link to non-existent transaction."
+                    error_code: "VALIDATION_ERROR"
+        '404':
+          description: Planned transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "Planned transaction 999 not found"
+                error_code: "NOT_FOUND"
+        '500':
+          description: Error executing planned transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   parameters:
     # ==================== Path Parameters ====================
@@ -2955,6 +4532,16 @@ components:
         type: integer
         minimum: 1
       description: Unique identifier for the transaction
+      example: 1
+
+    PlannedTransactionId:
+      name: plannedTransactionId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique identifier for the planned transaction
       example: 1
 
     BatchId:
@@ -4138,6 +5725,529 @@ components:
           description: Total number of transactions in the database
           example: 1523
 
+    MonthData:
+      type: object
+      required: [ month, year, period_start, period_end, total_spending, total_income, net_amount, transaction_count ]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: |
+            Month number (1-12).
+            1 = January, 2 = February, ..., 12 = December
+          example: 2
+        year:
+          type: integer
+          minimum: 2000
+          description: Year (4-digit format)
+          example: 2026
+        period_start:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Start date of the month (ISO 8601 format: YYYY-MM-DD).
+            Always the first day of the month.
+          example: "2026-02-01"
+        period_end:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            End date of the month (ISO 8601 format: YYYY-MM-DD).
+            Always the last day of the month (28/29/30/31 depending on month).
+          example: "2026-02-28"
+        total_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: |
+            Total spending (negative amounts) for the month.
+            This is the sum of all negative transactions.
+            Always zero or negative.
+          example: -1234.56
+        total_income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: |
+            Total income (positive amounts) for the month.
+            This is the sum of all positive transactions.
+            Always zero or positive.
+          example: 2500.00
+        net_amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Net amount (income + spending) for the month.
+            Positive value indicates surplus, negative indicates deficit.
+            Calculated as: total_income + total_spending
+          example: 1265.44
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: |
+            Total number of transactions in the month.
+            Includes both income and expense transactions.
+          example: 45
+
+    SixMonthSummary:
+      type: object
+      required: [ total_spending, total_income, net_amount, transaction_count, period_start, period_end ]
+      properties:
+        total_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: |
+            Total spending across all 6 months.
+            Sum of all negative transactions in the period.
+            Always zero or negative.
+          example: -9618.47
+        total_income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: |
+            Total income across all 6 months.
+            Sum of all positive transactions in the period.
+            Always zero or positive.
+          example: 15000.00
+        net_amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Net amount across all 6 months.
+            Calculated as: total_income + total_spending
+            Positive value indicates overall surplus, negative indicates overall deficit.
+          example: 5381.53
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: |
+            Total transactions across all 6 months.
+            Sum of transaction counts from all monthly periods.
+          example: 305
+        period_start:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Start date of the 6-month period (ISO 8601).
+            First day of the earliest month in the analysis.
+          example: "2025-09-01"
+        period_end:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            End date of the 6-month period (ISO 8601).
+            Last day of the most recent month in the analysis.
+          example: "2026-02-28"
+
+    MonthlyFinancialSummaryResponse:
+      type: object
+      required: [ months, summary, links ]
+      properties:
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonthData'
+          minItems: 1
+          maxItems: 6
+          description: |
+            Array of monthly financial data for the past 6 months.
+            Ordered from most recent to oldest month.
+            Each entry contains complete financial statistics for one month.
+          example:
+            - month: 2
+              year: 2026
+              period_start: "2026-02-01"
+              period_end: "2026-02-28"
+              total_spending: -1234.56
+              total_income: 2500.00
+              net_amount: 1265.44
+              transaction_count: 45
+            - month: 1
+              year: 2026
+              period_start: "2026-01-01"
+              period_end: "2026-01-31"
+              total_spending: -1456.78
+              total_income: 2500.00
+              net_amount: 1043.22
+              transaction_count: 52
+        summary:
+          $ref: '#/components/schemas/SixMonthSummary'
+          description: |
+            Overall summary for the entire 6-month period.
+            Contains aggregate totals and period boundaries.
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
+    PlannedTransactionData:
+      type: object
+      required: [ id, amount, is_recurring ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Planned transaction ID
+          example: 15
+        amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Transaction amount.
+            Negative for expenses, positive for income.
+          example: -150.00
+        recipient_name:
+          type: string
+          nullable: true
+          description: Recipient name (UPPERCASE)
+          example: "ELECTRICITY COMPANY"
+        category_name:
+          type: string
+          nullable: true
+          description: Category name in 'GENERAL:DETAIL' format
+          example: "UTILITIES:ELECTRICITY"
+        memo:
+          type: string
+          nullable: true
+          description: Transaction memo or description
+          example: "Monthly electricity bill"
+        is_recurring:
+          type: boolean
+          description: Whether this is a recurring transaction
+          example: true
+
+    DailyPlannedData:
+      type: object
+      required: [ date, income, expenses, net, transactions ]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Date in ISO 8601 format (YYYY-MM-DD)
+          example: "2026-03-15"
+        income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: Total expected income for the day
+          example: 2500.00
+        expenses:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Total expected expenses for the day (negative)
+          example: -150.00
+        net:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: Net amount (income + expenses) for the day
+          example: 2350.00
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlannedTransactionData'
+          description: List of planned transactions for this day
+
+    PlannedExpensesSummary:
+      type: object
+      required: [ total_income, total_expenses, net_amount, transaction_count ]
+      properties:
+        total_income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: Total expected income for the period
+          example: 2500.00
+        total_expenses:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Total expected expenses for the period (negative)
+          example: -950.00
+        net_amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: Net amount (income + expenses)
+          example: 1550.00
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: Total number of planned transactions
+          example: 3
+
+    PlannedExpensesNextMonthResponse:
+      type: object
+      required: [ month, year, period_start, period_end, daily_data, summary, links ]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month number (1-12)
+          example: 3
+        year:
+          type: integer
+          minimum: 2000
+          description: Year (4-digit format)
+          example: 2026
+        period_start:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Start date of the forecast period (ISO 8601)
+          example: "2026-03-01"
+        period_end:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: End date of the forecast period (ISO 8601)
+          example: "2026-03-31"
+        daily_data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyPlannedData'
+          description: Daily breakdown of planned transactions
+        summary:
+          $ref: '#/components/schemas/PlannedExpensesSummary'
+          description: Summary of planned expenses for the period
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
+    DailySpendingData:
+      type: object
+      required: [ date, spending, income, transaction_count, cumulative_spending, cumulative_expected, variance ]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Date in ISO 8601 format (YYYY-MM-DD)
+          example: "2026-02-15"
+        spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Total spending for the day (negative)
+          example: -45.00
+        income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: Total income for the day (positive)
+          example: 0.0
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: Number of transactions for the day
+          example: 2
+        cumulative_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Cumulative spending up to and including this day (negative)
+          example: -125.00
+        cumulative_expected:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Cumulative expected spending based on 6-month average (negative)
+          example: -97.82
+        variance:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Variance between actual and expected cumulative spending.
+            Positive value means under-spending, negative means over-spending.
+          example: -27.18
+
+    Past6MonthsData:
+      type: object
+      required: [ period_start, period_end, total_spending, days, average_daily_spending, transaction_count ]
+      properties:
+        period_start:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Start date of the 6-month period (ISO 8601)
+          example: "2025-08-01"
+        period_end:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: End date of the 6-month period (ISO 8601)
+          example: "2026-01-31"
+        total_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Total spending over the 6-month period (negative)
+          example: -9000.00
+        days:
+          type: integer
+          minimum: 1
+          description: Total number of days in the period
+          example: 184
+        average_daily_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Average daily spending (negative)
+          example: -48.91
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: Total number of transactions
+          example: 280
+
+    CurrentMonthData:
+      type: object
+      required: [ month, year, period_start, period_end, days_elapsed, total_spending, total_income, daily_data, transaction_count ]
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month number (1-12)
+          example: 2
+        year:
+          type: integer
+          minimum: 2000
+          description: Year (4-digit format)
+          example: 2026
+        period_start:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Start date of the current month (ISO 8601)
+          example: "2026-02-01"
+        period_end:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Current date (ISO 8601)
+          example: "2026-02-18"
+        days_elapsed:
+          type: integer
+          minimum: 1
+          description: Number of days elapsed in the current month
+          example: 18
+        total_spending:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Total spending so far this month (negative)
+          example: -950.00
+        total_income:
+          type: number
+          format: float
+          minimum: 0.0
+          multipleOf: 0.01
+          description: Total income so far this month (positive)
+          example: 2500.00
+        daily_data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailySpendingData'
+          description: Daily breakdown of spending
+        transaction_count:
+          type: integer
+          minimum: 0
+          description: Total number of transactions
+          example: 45
+
+    SpendingComparison:
+      type: object
+      required: [ expected_to_date, actual_to_date, variance_to_date, expected_month_total, projected_month_total ]
+      properties:
+        expected_to_date:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Expected spending to date based on average (negative)
+          example: -880.38
+        actual_to_date:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Actual spending to date (negative)
+          example: -950.00
+        variance_to_date:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Variance between actual and expected spending to date.
+            Negative value means over-spending, positive means under-spending.
+          example: -69.62
+        expected_month_total:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Expected total for the full month based on average (negative)
+          example: -1369.48
+        projected_month_total:
+          type: number
+          format: float
+          maximum: 0.0
+          multipleOf: 0.01
+          description: Projected total for the month based on current pace (negative)
+          example: -1475.00
+
+    AverageVsCurrentSpendingResponse:
+      type: object
+      required: [ past_6_months, current_month, comparison, links ]
+      properties:
+        past_6_months:
+          $ref: '#/components/schemas/Past6MonthsData'
+          description: Statistical data from the past 6 complete months
+        current_month:
+          $ref: '#/components/schemas/CurrentMonthData'
+          description: Current month spending data
+        comparison:
+          $ref: '#/components/schemas/SpendingComparison'
+          description: Comparison metrics
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: Available actions (HATEOAS links)
+
     BankListResponseWithLinks:
       type: object
       required: [ banks, links ]
@@ -4234,6 +6344,446 @@ components:
           items:
             $ref: '#/components/schemas/Link'
           description: Available actions (HATEOAS links)
+
+    # ==================== Planned Transaction Schemas ====================
+
+    PlannedTransactionCreate:
+      type: object
+      required: [ planned_date, bank_account, recipient_id, amount ]
+      properties:
+        planned_date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Planned transaction date (ISO 8601 format: YYYY-MM-DD).
+            The date when the transaction is expected to occur.
+          example: "2026-03-15"
+        bank_account:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            Bank account name where the transaction will occur.
+            Must match existing bank account naming convention.
+          example: "Chase Current Account"
+        recipient_id:
+          type: integer
+          minimum: 1
+          description: |
+            Unique identifier for the transaction recipient.
+            Must reference an existing recipient in the database.
+          example: 5
+        memo:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Transaction memo or note.
+            Optional description of the planned transaction.
+          example: "Monthly Netflix subscription"
+        amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Transaction amount.
+            Negative for expenses, positive for income.
+          example: -12.99
+        currency:
+          type: string
+          nullable: true
+          minLength: 3
+          maxLength: 3
+          pattern: '^[A-Z]{3}$'
+          description: |
+            Currency code (ISO 4217 format).
+            Must be a supported 3-letter currency code (e.g., EUR, USD, GBP).
+          example: "GBP"
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Category ID for transaction classification.
+            Must reference an existing category. Optional.
+          example: 3
+        comment:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: |
+            Additional comment about the planned transaction.
+            Optional field for extra notes.
+          example: null
+        is_recurring:
+          type: boolean
+          default: false
+          description: |
+            Whether this is a recurring transaction.
+            If true, the transaction will repeat according to the recurrence pattern.
+          example: true
+        recurrence_pattern:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: |
+            Recurrence pattern specification.
+            Text patterns: "daily", "weekly", "monthly", "yearly"
+            Or custom JSON pattern for complex schedules.
+          example: "monthly"
+
+    PlannedTransactionExecutionResponse:
+      type: object
+      required: [ id, executed_transaction_id, execution_date, created_at ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Unique identifier for this execution record
+          example: 1
+        executed_transaction_id:
+          type: integer
+          minimum: 1
+          description: |
+            ID of the actual transaction that was created.
+            Links to the transactions table.
+          example: 1234
+        execution_date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Date when this execution was recorded (ISO 8601).
+            May differ from the actual transaction date.
+          example: "2026-02-15"
+        created_at:
+          type: string
+          format: date-time
+          description: |
+            Timestamp when the execution record was created (ISO 8601).
+          example: "2026-02-15T11:00:00Z"
+
+    PlannedTransactionExecuteRequest:
+      type: object
+      required: [ executed_transaction_id ]
+      properties:
+        executed_transaction_id:
+          type: integer
+          minimum: 1
+          description: |
+            ID of the actual transaction to link to this planned transaction.
+            Must reference an existing transaction in the database.
+          example: 1234
+        execution_date:
+          type: string
+          format: date
+          nullable: true
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Date when the execution occurred (ISO 8601 format: YYYY-MM-DD).
+            Defaults to today if not provided.
+            Used for calculating next occurrence for recurring transactions.
+          example: "2026-02-15"
+
+    PlannedTransactionUpdate:
+      type: object
+      properties:
+        planned_date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          nullable: true
+          description: Planned transaction date (YYYY-MM-DD)
+          example: "2026-03-20"
+        bank_account:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 255
+          description: Bank account name
+          example: "HSBC Savings Account"
+        recipient_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Recipient ID
+          example: 7
+        recipient_name:
+          type: string
+          nullable: true
+          minLength: 1
+          description: |
+            Recipient name (will be resolved to recipient_id).
+            Alternative to providing recipient_id directly.
+          example: "SPOTIFY"
+        memo:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Transaction memo/note
+          example: "Updated subscription note"
+        amount:
+          type: number
+          format: float
+          nullable: true
+          multipleOf: 0.01
+          description: Transaction amount
+          example: -14.99
+        currency:
+          type: string
+          nullable: true
+          minLength: 3
+          maxLength: 3
+          pattern: '^[A-Z]{3}$'
+          description: Currency code (ISO 4217)
+          example: "EUR"
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Category ID
+          example: 8
+        category_name:
+          type: string
+          nullable: true
+          description: |
+            Category name in 'GENERAL:DETAIL' format (will be resolved to category_id).
+            Alternative to providing category_id directly.
+          example: "ENTERTAINMENT:STREAMING"
+        comment:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: Additional comment
+          example: "Price increase"
+        is_recurring:
+          type: boolean
+          nullable: true
+          description: Whether this is a recurring transaction
+          example: false
+        recurrence_pattern:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: Recurrence pattern specification
+          example: null
+        is_executed:
+          type: boolean
+          nullable: true
+          description: |
+            Whether this planned transaction has been executed.
+            Marking as true indicates the transaction has occurred.
+          example: true
+        is_active:
+          type: boolean
+          nullable: true
+          description: |
+            Active status of the planned transaction.
+            False indicates soft-deleted or cancelled.
+          example: true
+
+    PlannedTransactionResponse:
+      type: object
+      required: [ id, planned_date, bank_account, amount, is_recurring, is_executed, is_active, created_at, links ]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Unique identifier for the planned transaction
+          example: 1
+        planned_date:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Planned transaction date (ISO 8601).
+            The date when the transaction is expected to occur.
+          example: "2026-03-15"
+        bank_account:
+          type: string
+          description: Bank account name
+          example: "Chase Current Account"
+        recipient_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Recipient ID
+          example: 5
+        recipient_name:
+          type: string
+          nullable: true
+          description: |
+            Recipient name (normalized to UPPERCASE).
+            Resolved from recipient_id.
+          example: "NETFLIX"
+        memo:
+          type: string
+          nullable: true
+          description: Transaction memo/note
+          example: "Monthly subscription"
+        amount:
+          type: number
+          format: float
+          multipleOf: 0.01
+          description: |
+            Transaction amount.
+            Negative for expenses, positive for income.
+          example: -12.99
+        currency:
+          type: string
+          nullable: true
+          pattern: '^[A-Z]{3}$'
+          description: Currency code (ISO 4217)
+          example: "GBP"
+        category_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Category ID
+          example: 3
+        category_name:
+          type: string
+          nullable: true
+          description: |
+            Category name in 'GENERAL:DETAIL' format.
+            Resolved from category_id.
+          example: "ENTERTAINMENT:STREAMING"
+        comment:
+          type: string
+          nullable: true
+          description: Additional comment
+          example: null
+        is_recurring:
+          type: boolean
+          default: false
+          description: Whether this is a recurring transaction
+          example: true
+        recurrence_pattern:
+          type: string
+          nullable: true
+          description: |
+            Recurrence pattern specification.
+            Text or JSON format describing the repeat schedule.
+          example: "monthly"
+        is_executed:
+          type: boolean
+          default: false
+          description: |
+            Whether currently pending execution.
+            False means the transaction can be executed now.
+            For recurring transactions, this resets to false after each execution.
+          example: false
+        last_executed_date:
+          type: string
+          format: date
+          nullable: true
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: |
+            Date of the most recent execution (for recurring transactions).
+            Null if never executed. Updates with each execution.
+          example: "2026-02-15"
+        executed_transaction_id:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            ID of the most recent actual transaction.
+            Links to the transactions table.
+          example: 1234
+        execution_count:
+          type: integer
+          minimum: 0
+          default: 0
+          description: |
+            Total number of times this planned transaction has been executed.
+            Increments with each execution. Useful for tracking recurring payments.
+          example: 3
+        executions:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/PlannedTransactionExecutionResponse'
+          description: |
+            Complete execution history for this planned transaction.
+            Most recent executions first. Includes all linked transactions.
+          example:
+            - id: 5
+              executed_transaction_id: 1235
+              execution_date: "2026-02-15"
+              created_at: "2026-02-15T11:00:00Z"
+            - id: 4
+              executed_transaction_id: 1180
+              execution_date: "2026-01-15"
+              created_at: "2026-01-15T11:00:00Z"
+        is_active:
+          type: boolean
+          default: true
+          description: |
+            Whether the planned transaction is active.
+            False indicates soft-deleted or cancelled.
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: |
+            Timestamp when the planned transaction was created (ISO 8601).
+          example: "2026-02-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Timestamp of last update (ISO 8601).
+            Null if never updated.
+          example: null
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: |
+            Available actions for this planned transaction (HATEOAS links).
+            Includes self, update, delete, and related resource links.
+
+    PlannedTransactionsListResponse:
+      type: object
+      required: [ items, total, limit, offset, links ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlannedTransactionResponse'
+          description: |
+            Array of planned transaction objects.
+            Each item includes full transaction details and HATEOAS links.
+        total:
+          type: integer
+          minimum: 0
+          description: |
+            Total count of planned transactions matching the filters.
+            Use for pagination calculations.
+          example: 25
+        limit:
+          type: integer
+          minimum: 1
+          description: |
+            Limit used for pagination.
+            Maximum number of items per page.
+          example: 50
+        offset:
+          type: integer
+          minimum: 0
+          description: |
+            Offset used for pagination.
+            Number of items skipped from the start.
+          example: 0
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+          description: |
+            Pagination and navigation links (HATEOAS).
+            Includes self, first, last, next, and prev links.
 
   # ==================== Security Schemes ====================
 

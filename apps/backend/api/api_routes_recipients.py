@@ -251,7 +251,7 @@ async def create_or_get_recipient(
     """
     try:
         service = RecipientService(db)
-        new_recipient = service.create_or_get_recipient(
+        new_recipient, created = service.create_or_get_recipient(
             name=recipient.name,
             account_number=recipient.account_number,
         )
@@ -267,7 +267,15 @@ async def create_or_get_recipient(
 
         new_recipient.links = get_resource_links(request, "recipients", new_recipient.id)
 
-        return RecipientResponse.model_validate(new_recipient)
+        response = RecipientResponse.model_validate(new_recipient)
+
+        # Use different status codes based on whether recipient was created
+        from fastapi import Response as FastAPIResponse
+        return FastAPIResponse(
+            content=response.model_dump_json(),
+            status_code=201 if created else 200,
+            media_type="application/json"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -399,15 +407,28 @@ async def update_recipient(
         Requires testing: TODO partial updates, not found scenarios, HATEOAS links
     """
     try:
+        # Get only the fields that were actually set in the request
+        update_data = recipient_update.model_dump(exclude_unset=True)
+
+        logger.info(
+            "Received recipient update request",
+            extra={
+                "operation": "update_recipient",
+                "resource_type": "recipient",
+                "resource_id": recipient_id,
+                "update_data": update_data
+            }
+        )
+
         service = RecipientService(db)
         recipient = service.update(
             recipient_id=recipient_id,
-            name=recipient_update.name,
-            account_number=recipient_update.account_number,
-            default_category_id=recipient_update.category_id,
-            notes=recipient_update.notes,
-            address=recipient_update.address,
-            is_active=recipient_update.is_active
+            name=update_data.get('name'),
+            account_number=update_data.get('account_number'),
+            default_category_id=update_data.get('default_category_id'),
+            notes=update_data.get('notes'),
+            address=update_data.get('address'),
+            is_active=update_data.get('is_active')
         )
         if not recipient:
             raise HTTPException(status_code=404, detail="Recipient not found")

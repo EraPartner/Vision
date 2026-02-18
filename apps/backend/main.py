@@ -18,7 +18,8 @@ from api import (
     recipients_router,
     info_router,
     import_router,
-    admin_router
+    admin_router,
+    planned_transactions_router
 )
 from api.api_schemas import RootOptionsResponse, APIRootResponse, MethodInfo
 from api.hateoas_links import get_root_links
@@ -271,7 +272,8 @@ _ROUTERS = [
     ("recipients", recipients_router),
     ("info", info_router),
     ("import", import_router),
-    ("admin", admin_router)
+    ("admin", admin_router),
+    ("planned-transactions", planned_transactions_router)
 ]
 
 for router_name, router in _ROUTERS:

@@ -18,13 +18,13 @@ class TestTransactionDuplicateDetection:
     """Test suite for transaction duplicate detection."""
 
     @pytest.fixture
-    def setup_test_data(self, db: Session):
+    def setup_test_data(self, test_db: Session):
         """Set up test data for duplicate detection tests."""
         # Create test recipient
         recipient = Recipient(name="TEST RECIPIENT", is_active=True)
-        db.add(recipient)
-        db.commit()
-        db.refresh(recipient)
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
 
         # Create test category
         category = Category(
@@ -33,9 +33,9 @@ class TestTransactionDuplicateDetection:
             description="Test category",
             is_active=True
         )
-        db.add(category)
-        db.commit()
-        db.refresh(category)
+        test_db.add(category)
+        test_db.commit()
+        test_db.refresh(category)
 
         yield {
             "recipient_id": recipient.id,
@@ -43,14 +43,14 @@ class TestTransactionDuplicateDetection:
         }
 
         # Cleanup
-        db.query(Transaction).filter(Transaction.recipient_id == recipient.id).delete()
-        db.query(Recipient).filter(Recipient.id == recipient.id).delete()
-        db.query(Category).filter(Category.id == category.id).delete()
-        db.commit()
+        test_db.query(Transaction).filter(Transaction.recipient_id == recipient.id).delete()
+        test_db.query(Recipient).filter(Recipient.id == recipient.id).delete()
+        test_db.query(Category).filter(Category.id == category.id).delete()
+        test_db.commit()
 
-    def test_find_duplicate_by_bank_reference(self, db: Session, setup_test_data):
+    def test_find_duplicate_by_bank_reference(self, test_db: Session, setup_test_data):
         """Test finding duplicate by bank reference."""
-        repo = TransactionRepository(db)
+        repo = TransactionRepository(test_db)
 
         # Create initial transaction with bank reference
         transaction = Transaction(
@@ -69,9 +69,9 @@ class TestTransactionDuplicateDetection:
         assert duplicate.id == created.id
         assert duplicate.bank_reference == "TXN-2026-001234"
 
-    def test_find_duplicate_by_bank_reference_with_account(self, db: Session, setup_test_data):
+    def test_find_duplicate_by_bank_reference_with_account(self, test_db: Session, setup_test_data):
         """Test finding duplicate by bank reference with bank account filter."""
-        repo = TransactionRepository(db)
+        repo = TransactionRepository(test_db)
 
         # Create transactions with same reference but different accounts
         txn1 = Transaction(
@@ -98,9 +98,9 @@ class TestTransactionDuplicateDetection:
         assert duplicate_revolut.id == created1.id
         assert duplicate_kbc.id == created2.id
 
-    def test_find_duplicate_by_raw_data(self, db: Session, setup_test_data):
+    def test_find_duplicate_by_raw_data(self, test_db: Session, setup_test_data):
         """Test finding duplicate by original raw data."""
-        repo = TransactionRepository(db)
+        repo = TransactionRepository(test_db)
 
         raw_data = "2026-02-16,Test Recipient,100.00,EUR,Test Bank"
 
@@ -121,9 +121,9 @@ class TestTransactionDuplicateDetection:
         assert duplicate.id == created.id
         assert duplicate.original_raw_data == raw_data
 
-    def test_find_duplicate_no_match(self, db: Session):
+    def test_find_duplicate_no_match(self, test_db: Session):
         """Test finding duplicate with no match."""
-        repo = TransactionRepository(db)
+        repo = TransactionRepository(test_db)
 
         duplicate = repo.find_duplicate_by_bank_reference("NON-EXISTENT")
         assert duplicate is None
@@ -131,9 +131,9 @@ class TestTransactionDuplicateDetection:
         duplicate = repo.find_duplicate_by_raw_data("non-existent-data")
         assert duplicate is None
 
-    def test_find_duplicate_priority(self, db: Session, setup_test_data):
+    def test_find_duplicate_priority(self, test_db: Session, setup_test_data):
         """Test that bank_reference takes priority over raw_data."""
-        repo = TransactionRepository(db)
+        repo = TransactionRepository(test_db)
 
         # Create two transactions
         txn1 = Transaction(
@@ -162,9 +162,9 @@ class TestTransactionDuplicateDetection:
 
         assert duplicate.id == created1.id
 
-    def test_service_create_duplicate_prevention(self, db: Session, setup_test_data):
+    def test_service_create_duplicate_prevention(self, test_db: Session, setup_test_data):
         """Test that service layer prevents duplicate creation."""
-        service = TransactionService(db)
+        service = TransactionService(test_db)
 
         # Create initial transaction
         transaction1 = service.create(
@@ -188,9 +188,9 @@ class TestTransactionDuplicateDetection:
         assert "Duplicate transaction found" in str(exc_info.value)
         assert f"ID: {transaction1.id}" in str(exc_info.value)
 
-    def test_service_create_duplicate_skip(self, db: Session, setup_test_data):
+    def test_service_create_duplicate_skip(self, test_db: Session, setup_test_data):
         """Test that duplicate check can be skipped when needed."""
-        service = TransactionService(db)
+        service = TransactionService(test_db)
 
         # Create initial transaction
         transaction1 = service.create(
@@ -214,9 +214,9 @@ class TestTransactionDuplicateDetection:
         assert transaction1.id != transaction2.id
         assert transaction1.bank_reference == transaction2.bank_reference
 
-    def test_service_create_raw_data_duplicate(self, db: Session, setup_test_data):
+    def test_service_create_raw_data_duplicate(self, test_db: Session, setup_test_data):
         """Test duplicate detection using original_raw_data."""
-        service = TransactionService(db)
+        service = TransactionService(test_db)
 
         raw_data = "2026-02-16,TEST RECIPIENT,100.00,EUR,Test Bank,memo123"
 
@@ -241,7 +241,7 @@ class TestTransactionDuplicateDetection:
 
         assert "Duplicate transaction found" in str(exc_info.value)
 
-    def test_api_create_duplicate_prevention(self, client: TestClient, db: Session, setup_test_data):
+    def test_api_create_duplicate_prevention(self, client: TestClient, test_db: Session, setup_test_data):
         """Test API endpoint duplicate prevention."""
         # Create initial transaction
         response1 = client.post(
@@ -272,7 +272,7 @@ class TestTransactionDuplicateDetection:
         assert "Duplicate transaction found" in response2.json()["detail"]
         assert f"ID: {transaction1_id}" in response2.json()["detail"]
 
-    def test_api_create_with_skip_duplicate_check(self, client: TestClient, db: Session, setup_test_data):
+    def test_api_create_with_skip_duplicate_check(self, client: TestClient, test_db: Session, setup_test_data):
         """Test API endpoint with skip_duplicate_check flag."""
         # Create initial transaction
         response1 = client.post(
@@ -302,7 +302,7 @@ class TestTransactionDuplicateDetection:
         assert response2.status_code == 201
         assert response2.json()["id"] != response1.json()["id"]
 
-    def test_api_create_with_raw_data(self, client: TestClient, db: Session, setup_test_data):
+    def test_api_create_with_raw_data(self, client: TestClient, test_db: Session, setup_test_data):
         """Test API endpoint duplicate detection with original_raw_data."""
         raw_data = "2026-02-16,TEST RECIPIENT,100.00,EUR,Test Bank"
 
@@ -333,9 +333,9 @@ class TestTransactionDuplicateDetection:
         assert response2.status_code == 400
         assert "Duplicate transaction found" in response2.json()["detail"]
 
-    def test_no_duplicate_check_without_identifiers(self, db: Session, setup_test_data):
+    def test_no_duplicate_check_without_identifiers(self, test_db: Session, setup_test_data):
         """Test that duplicate check is skipped when no identifiers provided."""
-        service = TransactionService(db)
+        service = TransactionService(test_db)
 
         # Create two transactions without bank_reference or raw_data
         # Should not trigger duplicate detection

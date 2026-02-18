@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date Logic Browser Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+        h2 { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Date Logic Browser Test</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        import { differenceInDays } from 'https://cdn.skypack.dev/date-fns';
+
+        const resultsDiv = document.getElementById('results');
+
+        function log(msg, isError = false) {
+            const div = document.createElement('div');
+            div.className = `test-result ${isError ? 'fail' : 'pass'}`;
+            div.textContent = msg;
+            resultsDiv.appendChild(div);
+        }
+
+        function testDateLogic(todayStr, dueDateStr, expectedDays) {
+            // Simulate "today" being set
+            const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
+            const normalizedToday = new Date(todayYear, todayMonth - 1, todayDay, 0, 0, 0, 0);
+            
+            // Parse the due date string (YYYY-MM-DD)
+            const [year, month, day] = dueDateStr.split('-').map(Number);
+            const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
+            
+            // Calculate the difference in days
+            const days = differenceInDays(normalizedDue, normalizedToday);
+            
+            const result = 
+                days === 0 ? 'Today' :
+                days < 0 ? 'Overdue' :
+                days === 1 ? 'Tomorrow' :
+                days <= 7 ? `In ${days}d` :
+                'Future';
+            
+            const passed = days === expectedDays;
+            log(`${todayStr} → ${dueDateStr}: ${days} days (${result}) ${passed ? '✓' : '✗ Expected: ' + expectedDays}`, !passed);
+            
+            return days;
+        }
+
+        // Test with current browser date
+        log('=== BROWSER ENVIRONMENT ===');
+        const now = new Date();
+        log(`Current browser time: ${now.toString()}`);
+        log(`Current browser date: ${now.toDateString()}`);
+        log(`Year: ${now.getFullYear()}, Month: ${now.getMonth() + 1}, Day: ${now.getDate()}`);
+        log(`Timezone offset: ${now.getTimezoneOffset()} minutes`);
+        
+        // Test with actual current date
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        log(`\n=== TESTING WITH TODAY (${todayStr}) ===`);
+        
+        // Create tomorrow's date
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        
+        // Create day after tomorrow
+        const dayAfter = new Date(now);
+        dayAfter.setDate(dayAfter.getDate() + 2);
+        const dayAfterStr = `${dayAfter.getFullYear()}-${String(dayAfter.getMonth() + 1).padStart(2, '0')}-${String(dayAfter.getDate()).padStart(2, '0')}`;
+        
+        testDateLogic(todayStr, todayStr, 0);     // Should be "Today"
+        testDateLogic(todayStr, tomorrowStr, 1);   // Should be "Tomorrow"
+        testDateLogic(todayStr, dayAfterStr, 2);   // Should be "In 2d"
+        
+        log('\n=== FIXED SCENARIO: Feb 18, 2026 ===');
+        testDateLogic('2026-02-18', '2026-02-18', 0); // Should be "Today"
+        testDateLogic('2026-02-18', '2026-02-19', 1); // Should be "Tomorrow"
+        testDateLogic('2026-02-18', '2026-02-20', 2); // Should be "In 2d"
+        testDateLogic('2026-02-18', '2026-02-21', 3); // Should be "In 3d"
+        
+        log('\n=== TESTING ACTUAL REACT COMPONENT LOGIC ===');
+        // Now test the exact logic from the React component
+        function dueBadge(dateStr) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            
+            const today = new Date();
+            const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+            
+            const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
+            
+            const days = differenceInDays(normalizedDue, normalizedToday);
+            
+            log(`Component logic: ${dateStr} → ${days} days from today`);
+            
+            return days;
+        }
+        
+        dueBadge(todayStr);
+        dueBadge(tomorrowStr);
+        dueBadge(dayAfterStr);
+    </script>
+</body>
+</html>

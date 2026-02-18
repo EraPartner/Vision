@@ -5,15 +5,18 @@ import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {ArrowUpRight, DollarSign, Receipt, TrendingDown, Loader2} from "lucide-react";
 import {useTransactions} from "@/hooks/useTransactions";
-import {useDashboardStats} from "@/hooks/useDashboardStats";
+import {useFilteredDashboardStats} from "@/hooks/useFilteredDashboardStats";
+import {useSettings} from "@/contexts/SettingsContext";
 import {useQuery} from "@tanstack/react-query";
 import {apiClient} from "@/lib/api";
 import {getCategoryColor} from "@/utils/categoryColors";
 import {formatCurrency} from "@/utils/currency";
 
 export default function DashboardPage() {
-    // Fetch real-time statistics from /api/info endpoints
-    const { data: statsData, isLoading: statsLoading, error: statsError } = useDashboardStats();
+    const { settings } = useSettings();
+    
+    // Fetch real-time statistics from /api/info endpoints with applied filters
+    const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
     
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
@@ -25,7 +28,48 @@ export default function DashboardPage() {
         staleTime: 30000,
     });
 
-    const transactions = transactionsData?.items || [];
+    // Fetch categories if we need to exclude hidden ones
+    const { data: categoriesData } = useQuery({
+        queryKey: ['categories', 'all'],
+        queryFn: () => apiClient.getCategories({ limit: 1000 }),
+        staleTime: 60000,
+    });
+
+    const allTransactions = transactionsData?.items || [];
+    
+    // Apply settings filters to transactions
+    const transactions = (() => {
+        // Build hidden category IDs list if needed
+        let hiddenCategoryIds: number[] = [];
+        if (settings.excludeHiddenCategories && categoriesData) {
+            hiddenCategoryIds = categoriesData.items
+                .filter((cat) => !cat.active)
+                .map((cat) => cat.id);
+        }
+
+        // Build complete exclusion list
+        const excludedCategoryIds = new Set([
+            ...settings.excludedCategoryIds,
+            ...hiddenCategoryIds,
+        ]);
+
+        const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+
+        // Filter transactions
+        return allTransactions.filter((t) => {
+            // Exclude if category is in exclusion list
+            if (t.category_id && excludedCategoryIds.has(t.category_id)) {
+                return false;
+            }
+            
+            // Exclude if recipient is in exclusion list
+            if (t.recipient_id && excludedRecipientIds.has(t.recipient_id)) {
+                return false;
+            }
+            
+            return true;
+        });
+    })();
     
     // Use real-time statistics from API (last month with data)
     const totalTransactions = statsData?.totalTransactions ?? 0;

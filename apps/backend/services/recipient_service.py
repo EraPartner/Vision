@@ -54,7 +54,7 @@ class RecipientService:
 
     # ==================== Basic CRUD Operations ====================
 
-    def create_or_get_recipient(self, name: str, account_number: Optional[str] = None, ) -> Recipient:
+    def create_or_get_recipient(self, name: str, account_number: Optional[str] = None, ) -> tuple[Recipient, bool]:
         """Create a new recipient or return existing one by name.
 
         Looks up a recipient by name. If it doesn't exist, creates a new recipient
@@ -68,18 +68,21 @@ class RecipientService:
             account_number (Optional[str]): Optional account number for the recipient.
 
         Returns:
-            Recipient: The found or newly created Recipient object.
+            tuple[Recipient, bool]: A tuple containing the Recipient object and a boolean
+                indicating if it was newly created (True) or already existed (False).
 
         Example:
             service = RecipientService(db)
 
             # Create new recipient (input will be normalised automatically)
-            recipient = service.create_or_get_recipient("john smith", "12345678")
+            recipient, created = service.create_or_get_recipient("john smith", "12345678")
             print(recipient.name)  # "JOHN SMITH"
+            print(created)          # True
 
             # Get same recipient again (doesn't create duplicate)
-            recipient2 = service.create_or_get_recipient("JOHN SMITH", "12345678")
+            recipient2, created2 = service.create_or_get_recipient("JOHN SMITH", "12345678")
             assert recipient.id == recipient2.id
+            print(created2)         # False
 
         Note:
             - Idempotent operation - safe to call multiple times
@@ -93,8 +96,9 @@ class RecipientService:
         if not recipient:
             recipient = Recipient(name=name, account_number=account_number, is_active=True)
             self.recipient_repo.create(recipient)
+            return recipient, True
 
-        return recipient
+        return recipient, False
 
     def get_by_id(self, recipient_id: int) -> Optional[Recipient]:
         """Get a recipient by its unique ID.
@@ -222,11 +226,11 @@ class RecipientService:
             recipient.name = name.strip() if name else recipient.name
         if account_number is not None:
             recipient.account_number = account_number
-        if default_category_id is not None or default_category_id is None:
+        if default_category_id is not None:
             recipient.default_category_id = default_category_id
-        if notes is not None or notes is None:
+        if notes is not None:
             recipient.notes = notes
-        if address is not None or address is None:
+        if address is not None:
             recipient.address = address
         if is_active is not None:
             recipient.is_active = is_active
@@ -434,7 +438,8 @@ class RecipientService:
             return recipient
 
         # Create new recipient
-        return self.create_or_get_recipient(name=name, account_number=account_number)
+        recipient, _ = self.create_or_get_recipient(name=name, account_number=account_number)
+        return recipient
 
     def update_category(self, recipient_id: int, category_id: Optional[int]) -> bool:
         """Update the default category for a recipient.

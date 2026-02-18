@@ -22,9 +22,13 @@ export function useCreateRecipient() {
 
     return useMutation({
         mutationFn: (recipient: RecipientCreate) => apiClient.createRecipient(recipient),
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
-            toast.success('Recipient created successfully');
+            if (data.wasCreated) {
+                toast.success('Recipient created successfully');
+            } else {
+                toast.info('Recipient already exists');
+            }
         },
         onError: (error: Error) => {
             toast.error(`Failed to create recipient: ${error.message}`);
@@ -54,6 +58,7 @@ export function useDeleteRecipient() {
         mutationFn: (id: number) => apiClient.deleteRecipient(id),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
+            toast.success('Recipient deleted successfully');
         },
         onError: (error: Error) => {
             toast.error(`Failed to delete recipient: ${error.message}`);
