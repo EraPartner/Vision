@@ -137,7 +137,7 @@ class CategoryService:
             general: str,
             detail: str,
             description: Optional[str] = None,
-    ) -> Category:
+    ) -> tuple[Category, bool]:
         """Get an existing category or create a new one.
 
         Looks up a category by its general and detail names. If it doesn't exist,
@@ -156,19 +156,22 @@ class CategoryService:
             description (str, optional): Optional category description.
 
         Returns:
-            Category: The found or newly created Category object.
+            tuple[Category, bool]: A tuple containing the Category object and a boolean
+                indicating if it was newly created (True) or already existed (False).
 
         Example:
             service = CategoryService(db)
 
             # Create new category (input will be normalized automatically)
-            cat = service.create_or_get_category("groceries", "food")
+            cat, created = service.create_or_get_category("groceries", "food")
             print(cat.general)  # "GROCERIES"
             print(cat.detail)   # "FOOD"
+            print(created)      # True
 
             # Get same category again (doesn't create duplicate)
-            cat2 = service.create_or_get_category("GROCERIES", "FOOD")
+            cat2, created2 = service.create_or_get_category("GROCERIES", "FOOD")
             assert cat.id == cat2.id
+            print(created2)     # False
 
         Note:
             - Idempotent operation - safe to call multiple times
@@ -202,6 +205,7 @@ class CategoryService:
                     "detail": category.detail  # Now uppercase due to events
                 }
             )
+            return category, True
         else:
             logger.debug(
                 "Category already exists",
@@ -213,8 +217,7 @@ class CategoryService:
                     "detail": category.detail
                 }
             )
-
-        return category
+            return category, False
 
     def update(
             self,

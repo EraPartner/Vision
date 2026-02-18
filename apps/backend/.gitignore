@@ -5,3 +5,7 @@ config/.env.local
 .env
 */__pycache__/
 *.db
+
+# Local PostgreSQL data directory
+postgres_data/
+

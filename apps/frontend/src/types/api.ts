@@ -140,6 +140,85 @@ export interface TransactionUpdate {
     is_active?: boolean;
 }
 
+// ==================== Planned Transaction Types ====================
+
+// ==================== Planned Transaction Types ====================
+
+export interface PlannedTransactionExecution {
+    id: number;
+    executed_transaction_id: number;
+    execution_date: string; // YYYY-MM-DD format
+    created_at: string;
+}
+
+export interface PlannedTransaction {
+    id: number;
+    planned_date: string; // YYYY-MM-DD format
+    bank_account: string;
+    recipient_id?: number;
+    recipient_name?: string;
+    memo?: string;
+    amount: number;
+    currency?: string;
+    category_id?: number;
+    category_name?: string; // Category name in 'GENERAL:DETAIL' format
+    comment?: string;
+    is_recurring: boolean;
+    recurrence_pattern?: string;
+    is_executed: boolean;
+    last_executed_date?: string; // YYYY-MM-DD format
+    executed_transaction_id?: number;
+    execution_count: number;
+    executions?: PlannedTransactionExecution[];
+    is_active: boolean;
+    created_at: string;
+    updated_at?: string;
+    links: Link[];
+}
+
+export interface PlannedTransactionsListResponse {
+    items: PlannedTransaction[];
+    total: number;
+    limit: number;
+    offset: number;
+    links: Link[];
+}
+
+export interface PlannedTransactionCreate {
+    planned_date: string; // YYYY-MM-DD format
+    bank_account: string;
+    recipient_id: number;
+    memo?: string;
+    amount: number;
+    currency?: string;
+    category_id?: number;
+    comment?: string;
+    is_recurring?: boolean;
+    recurrence_pattern?: string;
+}
+
+export interface PlannedTransactionUpdate {
+    planned_date?: string;
+    bank_account?: string;
+    recipient_id?: number;
+    recipient_name?: string;
+    memo?: string;
+    amount?: number;
+    currency?: string;
+    category_id?: number;
+    category_name?: string;
+    comment?: string;
+    is_recurring?: boolean;
+    recurrence_pattern?: string;
+    is_executed?: boolean;
+    is_active?: boolean;
+}
+
+export interface PlannedTransactionExecuteRequest {
+    executed_transaction_id: number;
+    execution_date?: string; // YYYY-MM-DD format, defaults to today
+}
+
 // ==================== Other Types ====================
 
 export interface CategoryStats {

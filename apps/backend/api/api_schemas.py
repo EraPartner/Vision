@@ -133,6 +133,7 @@ class CategoryResponse(CategoryBase):
         description="Full category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES'). "
                     "This is a computed field combining the 'general' and 'detail' fields."
     )
+    is_active: bool = Field(default=True, description="Active status of the category")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
@@ -213,7 +214,7 @@ class RecipientUpdate(BaseModel):
     """Schema for updating a recipient"""
     name: Optional[str] = Field(None, description="Recipient name", min_length=1)
     account_number: Optional[str] = Field(None, description="Account number")
-    category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
+    default_category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
     notes: Optional[str] = Field(None, description="Notes")
     address: Optional[str] = Field(None, description="Address")
     is_active: Optional[bool] = Field(None, description="Whether recipient is active")
@@ -471,6 +472,149 @@ class UncategorizedResponse(BaseModel):
     transactions: Optional[List[Dict]] = None
 
 
+# ==================== Planned Transaction Schemas ====================
+
+class PlannedTransactionBase(BaseModel):
+    """Base planned transaction schema for requests"""
+    planned_date: date = Field(description="Planned transaction date")
+    bank_account: str = Field(description="Bank account name", min_length=1)
+    recipient_id: int = Field(description="Recipient ID", ge=1)
+    memo: Optional[str] = Field(None, description="Transaction memo/note")
+    amount: float = Field(description="Transaction amount")
+    currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)", max_length=3, min_length=3)
+    category_id: Optional[int] = Field(None, description="Category ID", ge=1)
+    comment: Optional[str] = Field(None, description="Additional comment")
+    is_recurring: bool = Field(False, description="Whether this is a recurring transaction")
+    recurrence_pattern: Optional[str] = Field(None,
+                                              description="Recurrence pattern (e.g., 'monthly', 'weekly', JSON pattern)")
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        """Validate currency code against supported currencies."""
+        if v is None:
+            return v
+
+        v_upper = v.upper().strip()
+
+        if len(v_upper) != 3:
+            raise ValueError(
+                f"Invalid currency code '{v}'. Currency codes must be exactly 3 characters. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+            )
+
+        if v_upper not in SUPPORTED_CURRENCIES:
+            raise ValueError(
+                f"Unsupported currency code '{v_upper}'. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}. "
+                f"If you need to add this currency, please contact the administrator."
+            )
+
+        return v_upper
+
+
+class PlannedTransactionCreate(PlannedTransactionBase):
+    """Schema for creating a new planned transaction."""
+    pass
+
+
+class PlannedTransactionUpdate(BaseModel):
+    """Schema for updating an existing planned transaction."""
+    planned_date: Optional[date] = Field(None, description="Planned transaction date")
+    bank_account: Optional[str] = Field(None, description="Bank account name", min_length=1)
+    recipient_id: Optional[int] = Field(None, description="Recipient ID", ge=1)
+    recipient_name: Optional[str] = Field(None, description="Recipient name (will be resolved to recipient_id)")
+    memo: Optional[str] = Field(None, description="Transaction memo/note")
+    amount: Optional[float] = Field(None, description="Transaction amount")
+    currency: Optional[str] = Field(None, description="Currency code", max_length=3, min_length=3)
+    category_id: Optional[int] = Field(None, description="Category ID", ge=1)
+    category_name: Optional[str] = Field(None,
+                                         description="Category name in 'General:Detail' format (will be resolved to category_id)")
+    comment: Optional[str] = Field(None, description="Additional comment")
+    is_recurring: Optional[bool] = Field(None, description="Whether this is a recurring transaction")
+    recurrence_pattern: Optional[str] = Field(None, description="Recurrence pattern")
+    is_executed: Optional[bool] = Field(None, description="Whether this has been executed")
+    is_active: Optional[bool] = Field(None, description="Active status")
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        """Validate currency code against supported currencies."""
+        if v is None:
+            return v
+
+        v_upper = v.upper().strip()
+
+        if len(v_upper) != 3:
+            raise ValueError(
+                f"Invalid currency code '{v}'. Currency codes must be exactly 3 characters. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}"
+            )
+
+        if v_upper not in SUPPORTED_CURRENCIES:
+            raise ValueError(
+                f"Unsupported currency code '{v_upper}'. "
+                f"Supported currencies: {', '.join(sorted(SUPPORTED_CURRENCIES))}. "
+                f"If you need to add this currency, please contact the administrator."
+            )
+
+        return v_upper
+
+
+class PlannedTransactionExecutionResponse(BaseModel):
+    """Response schema for a single planned transaction execution record"""
+    id: int = Field(description="Execution record ID", ge=1)
+    executed_transaction_id: int = Field(description="ID of the actual transaction", ge=1)
+    execution_date: date = Field(description="Date when execution was recorded")
+    created_at: datetime = Field(description="Timestamp when execution was recorded")
+
+    model_config = {"from_attributes": True}
+
+
+class PlannedTransactionExecuteRequest(BaseModel):
+    """Request schema for executing a planned transaction"""
+    executed_transaction_id: int = Field(description="ID of the actual transaction to link", ge=1)
+    execution_date: Optional[date] = Field(None, description="Execution date (defaults to today)")
+
+
+class PlannedTransactionResponse(BaseModel):
+    """Planned transaction response with HATEOAS links for Level 3 REST API"""
+    id: int = Field(description="Planned transaction ID", ge=1)
+    planned_date: date = Field(description="Planned transaction date")
+    bank_account: str = Field(description="Bank account name")
+    recipient_id: Optional[int] = Field(None, description="Recipient ID", ge=1)
+    recipient_name: Optional[str] = Field(None, description="Recipient name (in UPPERCASE)")
+    memo: Optional[str] = Field(None, description="Transaction memo/note")
+    amount: float = Field(description="Transaction amount")
+    currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)")
+    category_id: Optional[int] = Field(None, description="Category ID", ge=1)
+    category_name: Optional[str] = Field(None, description="Category name in 'General:Detail' format")
+    comment: Optional[str] = Field(None, description="Additional comment")
+    is_recurring: bool = Field(False, description="Whether this is a recurring transaction")
+    recurrence_pattern: Optional[str] = Field(None, description="Recurrence pattern")
+    is_executed: bool = Field(False, description="Whether currently pending execution (False = can execute)")
+    last_executed_date: Optional[date] = Field(None, description="Date of last execution (for recurring)")
+    executed_transaction_id: Optional[int] = Field(None, description="ID of most recent executed transaction")
+    execution_count: int = Field(0, description="Total number of times this has been executed")
+    executions: Optional[List[PlannedTransactionExecutionResponse]] = Field(None,
+                                                                            description="Execution history (most recent first)")
+    is_active: bool = Field(True, description="Whether planned transaction is active")
+    created_at: datetime = Field(description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    links: List[Link] = Field(description="Available actions (HATEOAS links)")
+
+    model_config = {"from_attributes": True}
+
+
+class PlannedTransactionsListResponse(BaseModel):
+    """Paginated planned transactions list response with HATEOAS links for Level 3 REST API"""
+    items: List[PlannedTransactionResponse] = Field(description="Planned transaction items")
+    total: int = Field(description="Total count of planned transactions")
+    limit: int = Field(description="Limit used for pagination", ge=1)
+    offset: int = Field(description="Offset used for pagination", ge=0)
+    links: List[Link] = Field(description="Available actions (HATEOAS links)")
+
+
 # ==================== Statistics Schemas ====================
 
 class CategoryStats(BaseModel):
@@ -530,6 +674,95 @@ class MonthlyFinancialSummaryResponse(BaseModel):
     """Response schema for 6-month financial summary broken down month by month"""
     months: List[MonthData] = Field(description="Array of monthly financial data (6 months)")
     summary: SixMonthSummary = Field(description="Overall summary for the entire 6-month period")
+    links: List[Link] = Field(description="Available actions (HATEOAS links)")
+
+
+class PlannedTransactionData(BaseModel):
+    """Data for a single planned transaction in the forecast"""
+    id: int = Field(description="Planned transaction ID", ge=1)
+    amount: float = Field(description="Transaction amount")
+    recipient_name: Optional[str] = Field(None, description="Recipient name")
+    category_name: Optional[str] = Field(None, description="Category name in 'General:Detail' format")
+    memo: Optional[str] = Field(None, description="Transaction memo")
+    is_recurring: bool = Field(description="Whether this is a recurring transaction")
+
+
+class DailyPlannedData(BaseModel):
+    """Planned transactions data for a single day"""
+    date: str = Field(description="Date in ISO 8601 format (YYYY-MM-DD)")
+    income: float = Field(description="Total expected income for the day", ge=0.0)
+    expenses: float = Field(description="Total expected expenses for the day", le=0.0)
+    net: float = Field(description="Net amount (income + expenses) for the day")
+    transactions: List[PlannedTransactionData] = Field(description="List of planned transactions for this day")
+
+
+class PlannedExpensesSummary(BaseModel):
+    """Summary of planned expenses for the forecast period"""
+    total_income: float = Field(description="Total expected income", ge=0.0)
+    total_expenses: float = Field(description="Total expected expenses", le=0.0)
+    net_amount: float = Field(description="Net amount (income + expenses)")
+    transaction_count: int = Field(description="Total number of planned transactions", ge=0)
+
+
+class PlannedExpensesNextMonthResponse(BaseModel):
+    """Response schema for planned expenses forecast for the following month"""
+    month: int = Field(description="Month number (1-12)", ge=1, le=12)
+    year: int = Field(description="Year", ge=2000)
+    period_start: date = Field(description="Start date of the forecast period (ISO 8601)")
+    period_end: date = Field(description="End date of the forecast period (ISO 8601)")
+    daily_data: List[DailyPlannedData] = Field(description="Daily breakdown of planned transactions")
+    summary: PlannedExpensesSummary = Field(description="Summary of planned expenses for the period")
+    links: List[Link] = Field(description="Available actions (HATEOAS links)")
+
+
+class DailySpendingData(BaseModel):
+    """Spending data for a single day in the current month"""
+    date: str = Field(description="Date in ISO 8601 format (YYYY-MM-DD)")
+    spending: float = Field(description="Total spending for the day (negative)", le=0.0)
+    income: float = Field(description="Total income for the day (positive)", ge=0.0)
+    transaction_count: int = Field(description="Number of transactions for the day", ge=0)
+    cumulative_spending: float = Field(description="Cumulative spending up to and including this day", le=0.0)
+    cumulative_expected: float = Field(description="Cumulative expected spending based on 6-month average", le=0.0)
+    variance: float = Field(description="Variance between actual and expected cumulative spending")
+
+
+class Past6MonthsData(BaseModel):
+    """Statistical data from the past 6 complete months"""
+    period_start: date = Field(description="Start date of the 6-month period (ISO 8601)")
+    period_end: date = Field(description="End date of the 6-month period (ISO 8601)")
+    total_spending: float = Field(description="Total spending over the 6-month period", le=0.0)
+    days: int = Field(description="Total number of days in the period", ge=1)
+    average_daily_spending: float = Field(description="Average daily spending", le=0.0)
+    transaction_count: int = Field(description="Total number of transactions", ge=0)
+
+
+class CurrentMonthData(BaseModel):
+    """Spending data for the current month"""
+    month: int = Field(description="Month number (1-12)", ge=1, le=12)
+    year: int = Field(description="Year", ge=2000)
+    period_start: date = Field(description="Start date of the current month (ISO 8601)")
+    period_end: date = Field(description="Current date (ISO 8601)")
+    days_elapsed: int = Field(description="Number of days elapsed in the current month", ge=1)
+    total_spending: float = Field(description="Total spending so far this month", le=0.0)
+    total_income: float = Field(description="Total income so far this month", ge=0.0)
+    daily_data: List[DailySpendingData] = Field(description="Daily breakdown of spending")
+    transaction_count: int = Field(description="Total number of transactions", ge=0)
+
+
+class SpendingComparison(BaseModel):
+    """Comparison metrics between current and average spending"""
+    expected_to_date: float = Field(description="Expected spending to date based on average", le=0.0)
+    actual_to_date: float = Field(description="Actual spending to date", le=0.0)
+    variance_to_date: float = Field(description="Variance between actual and expected spending to date")
+    expected_month_total: float = Field(description="Expected total for the full month based on average", le=0.0)
+    projected_month_total: float = Field(description="Projected total for the month based on current pace", le=0.0)
+
+
+class AverageVsCurrentSpendingResponse(BaseModel):
+    """Response schema for average vs current spending comparison"""
+    past_6_months: Past6MonthsData = Field(description="Statistical data from the past 6 complete months")
+    current_month: CurrentMonthData = Field(description="Current month spending data")
+    comparison: SpendingComparison = Field(description="Comparison metrics")
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
 
 

@@ -381,9 +381,119 @@ class TestTransactionItemEndpoint:
         assert response.status_code == 422
 
 
-# NOTE: Transaction POST endpoint is not implemented yet
-# class TestTransactionCreateEndpoint:
-#     """Test cases for transaction creation endpoint - SKIPPED: endpoint not implemented."""
+class TestTransactionCreateEndpoint:
+    """Test suite for POST /api/transactions endpoint."""
+
+    def test_create_transaction_success(self, client: TestClient, test_db: Session):
+        """Test successful transaction creation."""
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction_data = {
+            "transaction_date": str(date.today()),
+            "bank_account": "Chase",
+            "recipient_id": recipient.id,
+            "amount": -50.00,
+            "memo": "Test purchase"
+        }
+
+        response = client.post("/api/transactions", json=transaction_data)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        assert data["amount"] == -50.00
+        assert data["bank_account"] == "Chase"
+        assert data["recipient_id"] == recipient.id
+        assert data["memo"] == "Test purchase"
+        assert "id" in data
+        assert "links" in data
+
+    def test_create_transaction_with_all_fields(self, client: TestClient, test_db: Session):
+        """Test transaction creation with all optional fields."""
+        recipient = Recipient(name="TEST STORE")
+        category = Category(general="GROCERIES", detail="FOOD")
+        test_db.add_all([recipient, category])
+        test_db.commit()
+        test_db.refresh(recipient)
+        test_db.refresh(category)
+
+        transaction_data = {
+            "transaction_date": str(date.today()),
+            "bank_account": "Chase",
+            "recipient_id": recipient.id,
+            "amount": -50.00,
+            "memo": "Test purchase",
+            "currency": "USD",
+            "balance": 1000.00,
+            "category_id": category.id,
+            "comment": "Monthly grocery shopping",
+            "bank_reference": "REF123456",
+            "original_raw_data": "some,csv,data"
+        }
+
+        response = client.post("/api/transactions", json=transaction_data)
+
+        assert response.status_code == 201
+        data = response.json()
+
+        assert data["currency"] == "USD"
+        assert data["balance"] == 1000.00
+        assert data["category_id"] == category.id
+        assert data["comment"] == "Monthly grocery shopping"
+
+    def test_create_transaction_validation_error(self, client: TestClient, test_db: Session):
+        """Test transaction creation with invalid recipient."""
+        transaction_data = {
+            "transaction_date": str(date.today()),
+            "bank_account": "Chase",
+            "recipient_id": 99999,
+            "amount": -50.00
+        }
+
+        response = client.post("/api/transactions", json=transaction_data)
+
+        assert response.status_code == 400
+        assert "detail" in response.json()
+
+    def test_create_transaction_missing_required_fields(self, client: TestClient):
+        """Test transaction creation with missing required fields."""
+        transaction_data = {
+            "bank_account": "Chase",
+            "amount": -50.00
+        }
+
+        response = client.post("/api/transactions", json=transaction_data)
+
+        assert response.status_code == 422
+
+    def test_create_transaction_exception(self, client: TestClient, test_db: Session, monkeypatch):
+        """Test transaction creation handles general exceptions."""
+        from services.transaction_service import TransactionService
+
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        def mock_create(*args, **kwargs):
+            raise Exception("Database connection error")
+
+        monkeypatch.setattr(TransactionService, "create", mock_create)
+
+        transaction_data = {
+            "transaction_date": str(date.today()),
+            "bank_account": "Chase",
+            "recipient_id": recipient.id,
+            "amount": -50.00
+        }
+
+        response = client.post("/api/transactions", json=transaction_data)
+
+        assert response.status_code == 500
+        assert "Error creating transaction" in response.json()["detail"]
 
 
 class TestTransactionUpdateEndpoint:
@@ -442,7 +552,7 @@ class TestTransactionUpdateEndpoint:
         response = client.patch("/api/transactions/99999", json=update_data)
 
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert "does not exist" in response.json()["detail"].lower()
 
     def test_update_transaction_partial_update(self, client: TestClient, test_db: Session,
                                                sample_category_data, sample_recipient_data):
@@ -487,9 +597,246 @@ class TestTransactionUpdateEndpoint:
         assert data["amount"] == 25.50  # Unchanged
 
 
-# NOTE: Transaction DELETE endpoint is not implemented yet
-# class TestTransactionDeleteEndpoint:
-#     """Test cases for transaction deletion endpoint - SKIPPED: endpoint not implemented."""
+class TestTransactionDeleteEndpoint:
+    """Test suite for DELETE /api/transactions/{id} endpoint."""
+
+    def test_delete_transaction_success(self, client: TestClient, test_db: Session):
+        """Test successful transaction deletion."""
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+        transaction_id = transaction.id
+
+        response = client.delete(f"/api/transactions/{transaction_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "message" in data
+        assert "permanently" in data["message"].lower()
+        assert "links" in data
+
+        deleted = test_db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        assert deleted is None
+
+    def test_delete_transaction_not_found(self, client: TestClient):
+        """Test deletion of non-existent transaction."""
+        response = client.delete("/api/transactions/99999")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_delete_transaction_exception(self, client: TestClient, test_db: Session, monkeypatch):
+        """Test delete handles general exceptions."""
+        from services.transaction_service import TransactionService
+
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+        test_db.refresh(transaction)
+
+        def mock_delete(*args, **kwargs):
+            raise Exception("Database error")
+
+        monkeypatch.setattr(TransactionService, "hard_delete", mock_delete)
+
+        response = client.delete(f"/api/transactions/{transaction.id}")
+
+        assert response.status_code == 500
+        assert "Error deleting transaction" in response.json()["detail"]
+
+
+class TestTransactionExportEndpoint:
+    """Test suite for GET /api/transactions/export/csv endpoint."""
+
+    def test_export_csv_success(self, client: TestClient, test_db: Session):
+        """Test successful CSV export."""
+        recipient = Recipient(name="TEST STORE")
+        category = Category(general="GROCERIES", detail="FOOD")
+        test_db.add_all([recipient, category])
+        test_db.commit()
+        test_db.refresh(recipient)
+        test_db.refresh(category)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            category_id=category.id,
+            amount=-50.00,
+            memo="Test transaction"
+        )
+        test_db.add(transaction)
+        test_db.commit()
+
+        response = client.get("/api/transactions/export/csv")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "attachment" in response.headers.get("content-disposition", "")
+
+    def test_export_csv_with_filters(self, client: TestClient, test_db: Session):
+        """Test CSV export with date and bank filters."""
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+
+        today_str = str(date.today())
+        response = client.get(
+            f"/api/transactions/export/csv?start_date={today_str}&end_date={today_str}&bank_account=Chase"
+        )
+
+        assert response.status_code == 200
+
+    def test_export_csv_no_transactions(self, client: TestClient, test_db: Session):
+        """Test CSV export with no matching transactions."""
+        response = client.get("/api/transactions/export/csv")
+
+        assert response.status_code == 404
+        assert "No transactions found" in response.json()["detail"]
+
+    def test_export_csv_invalid_start_date(self, client: TestClient):
+        """Test CSV export with invalid start date format."""
+        response = client.get("/api/transactions/export/csv?start_date=invalid-date")
+
+        assert response.status_code == 400
+        assert "Invalid start_date format" in response.json()["detail"]
+
+    def test_export_csv_invalid_end_date(self, client: TestClient):
+        """Test CSV export with invalid end date format."""
+        response = client.get("/api/transactions/export/csv?end_date=not-a-date")
+
+        assert response.status_code == 400
+        assert "Invalid end_date format" in response.json()["detail"]
+
+    def test_export_csv_exception(self, client: TestClient, test_db: Session, monkeypatch):
+        """Test CSV export handles general exceptions."""
+        from services.transaction_export_service import TransactionExportService
+
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+
+        def mock_export(*args, **kwargs):
+            raise Exception("Export service error")
+
+        monkeypatch.setattr(TransactionExportService, "export_to_csv", mock_export)
+
+        response = client.get("/api/transactions/export/csv")
+
+        assert response.status_code == 500
+        assert "Error exporting transactions" in response.json()["detail"]
+
+    def test_export_csv_options(self, client: TestClient):
+        """Test OPTIONS /api/transactions/export/csv."""
+        response = client.options("/api/transactions/export/csv")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "methods" in data
+        assert "links" in data
+
+        methods = [method["method"] for method in data["methods"]]
+        assert "GET" in methods
+        assert "OPTIONS" in methods
+
+
+class TestTransactionUpdateExceptionPaths:
+    """Test additional exception paths in update endpoint."""
+
+    def test_update_transaction_validation_error_invalid_recipient(self, client: TestClient, test_db: Session):
+        """Test update with invalid recipient triggers 400 error."""
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+        test_db.refresh(transaction)
+
+        update_data = {"recipient_id": 99999}
+        response = client.patch(f"/api/transactions/{transaction.id}", json=update_data)
+
+        assert response.status_code == 400
+        assert "detail" in response.json()
+
+    def test_update_transaction_general_exception(self, client: TestClient, test_db: Session, monkeypatch):
+        """Test update handles general exceptions with 500 error."""
+        from services.transaction_service import TransactionService
+
+        recipient = Recipient(name="TEST STORE")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="Chase",
+            recipient_id=recipient.id,
+            amount=-50.00
+        )
+        test_db.add(transaction)
+        test_db.commit()
+        test_db.refresh(transaction)
+
+        def mock_update(*args, **kwargs):
+            raise Exception("Unexpected database error")
+
+        monkeypatch.setattr(TransactionService, "update", mock_update)
+
+        update_data = {"amount": -75.00}
+        response = client.patch(f"/api/transactions/{transaction.id}", json=update_data)
+
+        assert response.status_code == 500
+        assert "Error updating transaction" in response.json()["detail"]
 
 
 class TestTransactionOptionsEndpoint:
@@ -506,12 +853,11 @@ class TestTransactionOptionsEndpoint:
         assert "methods" in data
         assert "links" in data
 
-        # Verify available methods (POST not implemented yet)
+        # Verify available methods
         methods = [method["method"] for method in data["methods"]]
         assert "GET" in methods
+        assert "POST" in methods
         assert "OPTIONS" in methods
-        # POST is not implemented yet
-        assert "POST" not in methods
 
     # NOTE: Individual transaction OPTIONS endpoint is not implemented yet
     # def test_transaction_item_options(self, client: TestClient, test_db: Session,

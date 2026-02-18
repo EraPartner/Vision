@@ -181,7 +181,7 @@ async def get_categories(
         raise HTTPException(status_code=500, detail="Error retrieving categories")
 
 
-@router.post("", response_model=CategoryResponse, status_code=201, description="Creates a new category.")
+@router.post("", response_model=CategoryResponse, description="Creates a new category or returns existing one.")
 async def create_or_get_category(
         category: CategoryBase = Body(...,
                                       description="Category creation data including general, detail, and optional description."),
@@ -196,6 +196,10 @@ async def create_or_get_category(
     **Category Normalization:**
     General and detail names are automatically normalized to UPPERCASE for consistency.
     Input can be provided in any case.
+
+    **HTTP Status Codes:**
+    - 201 Created: When a new category is created
+    - 200 OK: When an existing category is returned (idempotent behavior)
 
     Args:
         category (CategoryBase): Category creation data including general, detail,
@@ -219,8 +223,9 @@ async def create_or_get_category(
             "general": "groceries",      // Will be stored as "GROCERIES"
             "detail": "food",            // Will be stored as "FOOD"
             "description": "Food and grocery purchases",
+        }
 
-        Response:
+        Response (201 Created for new, 200 OK for existing):
         {
             "id": 1,
             "general": "GROCERIES",      // Always returned in UPPERCASE
@@ -234,14 +239,22 @@ async def create_or_get_category(
     """
     try:
         service = CategoryService(db)
-        new_category = service.create_or_get_category(
+        new_category, created = service.create_or_get_category(
             general=category.general,
             detail=category.detail,
             description=category.description,
         )
         new_category.links = get_resource_links(request, "categories", new_category.id)
 
-        return CategoryResponse.model_validate(new_category)
+        response = CategoryResponse.model_validate(new_category)
+
+        # Use different status codes based on whether category was created
+        from fastapi import Response as FastAPIResponse
+        return FastAPIResponse(
+            content=response.model_dump_json(),
+            status_code=201 if created else 200,
+            media_type="application/json"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -534,8 +547,8 @@ async def assign_category(
     """
     try:
         service = CategoryService(db)
-        category = service.create_or_get_category(assignment_request.category_general,
-                                                  assignment_request.category_detail)
+        category, created = service.create_or_get_category(assignment_request.category_general,
+                                                           assignment_request.category_detail)
         updated_count = service.assign_category(
             recipient_ids=assignment_request.recipient_ids,
             category=category,

@@ -37,8 +37,8 @@ class Transaction(Base):
     bank_reference = Column(Text, nullable=True)  # Bank's transaction ID
 
     # Timestamps - using UTC for consistency
-    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
-    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Relationships
     recipient = relationship("Recipient", back_populates="transactions")
@@ -106,12 +106,13 @@ class Category(Base):
     is_active = Column(Boolean, default=True)
 
     # Timestamps - using UTC for consistency
-    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
-    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Relationships
     recipients = relationship("Recipient", back_populates="default_category")
     transactions = relationship("Transaction", back_populates="category")
+    planned_transactions = relationship("PlannedTransaction", back_populates="category")
 
     # Table-level constraints
     __table_args__ = (
@@ -193,15 +194,16 @@ class Recipient(Base):
     is_active = Column(Boolean, default=True)
 
     # Timestamps - using UTC for consistency
-    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
-    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Relationships
     transactions = relationship("Transaction", back_populates="recipient")
+    planned_transactions = relationship("PlannedTransaction", back_populates="recipient")
     default_category = relationship("Category", back_populates="recipients")
 
     __table_args__ = (
-        UniqueConstraint('name', name='uq_account_number'),
+        UniqueConstraint('account_number', name='uq_account_number'),
     )
 
     @property
@@ -243,11 +245,103 @@ class ImportBatch(Base):
     error_message = Column(Text, nullable=True)
 
     # Timestamps - using UTC for consistency
-    created_at = Column(DateTime, server_default=func.datetime('now', 'utc'))
+    created_at = Column(DateTime, server_default=func.now())
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
     transactions = relationship("Transaction", back_populates="import_batch")
+
+
+class PlannedTransaction(Base):
+    """
+    PlannedTransaction model - stores future/planned financial transactions
+
+    Similar to Transaction but for transactions that haven't occurred yet.
+    Used for budgeting, forecasting, and recurring transaction management.
+
+    For recurring transactions, the same planned transaction can be executed multiple times.
+    Each execution is tracked in the PlannedTransactionExecution table.
+    """
+    __tablename__ = "planned_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Core planned transaction data
+    planned_date = Column(Date, nullable=False, index=True)  # When the transaction is expected
+    amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), nullable=True)  # Currency code (EUR, USD, etc.)
+    memo = Column(Text, nullable=True)
+    comment = Column(Text, nullable=True)  # Additional notes
+    bank_account = Column(Text, nullable=True, index=True)  # Target bank/account
+
+    # Foreign keys
+    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+
+    # Planned transaction specific fields
+    is_recurring = Column(Boolean, default=False, nullable=False)  # Whether this repeats
+    recurrence_pattern = Column(Text, nullable=True)  # e.g., "monthly", "weekly", JSON pattern
+    is_executed = Column(Boolean, default=False, nullable=False)  # Currently pending execution
+    last_executed_date = Column(Date, nullable=True)  # Date of last execution (for recurring)
+
+    # Soft deletion support
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relationships
+    recipient = relationship("Recipient", back_populates="planned_transactions")
+    category = relationship("Category", back_populates="planned_transactions")
+    executions = relationship("PlannedTransactionExecution", back_populates="planned_transaction",
+                              cascade="all, delete-orphan", order_by="desc(PlannedTransactionExecution.execution_date)")
+
+    @property
+    def executed_transaction_id(self) -> Optional[int]:
+        """Get the most recent executed transaction ID.
+
+        Returns the ID of the most recent executed transaction from the execution history.
+        This property maintains backward compatibility with code expecting executed_transaction_id.
+
+        Returns:
+            Optional[int]: Most recent transaction ID, or None if never executed.
+        """
+        if self.executions and len(self.executions) > 0:
+            return self.executions[0].executed_transaction_id
+        return None
+
+    @property
+    def category_name(self) -> Optional[str]:
+        """Get the category name in 'General:Detail' format.
+
+        Returns the full category path for the planned transaction's category.
+        If the transaction doesn't have a direct category assigned (category_id is None),
+        falls back to the recipient's default category.
+
+        Returns:
+            Optional[str]: Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
+        """
+        # Priority 1: Planned transaction's direct category assignment
+        if self.category:
+            return self.category.full_path()
+
+        # Priority 2: Recipient's default category (fallback)
+        if self.recipient and self.recipient.default_category:
+            return self.recipient.default_category.full_path()
+
+        return None
+
+    @property
+    def recipient_name(self) -> Optional[str]:
+        """Get the recipient name for this planned transaction.
+
+        Returns:
+            Optional[str]: Recipient name (in UPPERCASE), or None if no recipient is set.
+        """
+        if self.recipient:
+            return self.recipient.name
+        return None
 
 
 class ExchangeRate(Base):
@@ -271,10 +365,39 @@ class ExchangeRate(Base):
     is_latest = Column(Boolean, default=False, index=True)  # True if this is the latest rate
 
     # Timestamps
-    fetched_at = Column(DateTime, server_default=func.datetime('now', 'utc'), nullable=False)
-    updated_at = Column(DateTime, onupdate=func.datetime('now', 'utc'))
+    fetched_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, onupdate=func.now())
 
     # Table constraints
     __table_args__ = (
         UniqueConstraint('currency_code', 'rate_date', name='uq_currency_date'),
     )
+
+
+class PlannedTransactionExecution(Base):
+    """
+    PlannedTransactionExecution model - tracks execution history of planned transactions
+
+    This table maintains an audit trail of all executions of a planned transaction,
+    enabling recurring transactions to be executed multiple times while tracking
+    each individual payment.
+    """
+    __tablename__ = "planned_transaction_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Foreign keys
+    planned_transaction_id = Column(Integer, ForeignKey("planned_transactions.id", ondelete="CASCADE"),
+                                    nullable=False, index=True)
+    executed_transaction_id = Column(Integer, ForeignKey("transactions.id", ondelete="CASCADE"),
+                                     nullable=False)
+
+    # Execution metadata
+    execution_date = Column(Date, nullable=False)  # Date when the execution was recorded
+
+    # Timestamps
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Relationships
+    planned_transaction = relationship("PlannedTransaction", back_populates="executions")
+    executed_transaction = relationship("Transaction")

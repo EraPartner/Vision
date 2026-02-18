@@ -21,9 +21,13 @@ export function useCreateCategory() {
 
     return useMutation({
         mutationFn: (category: CategoryCreate) => apiClient.createCategory(category),
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({queryKey: ['categories']});
-            toast.success('Category created successfully');
+            if (data.wasCreated) {
+                toast.success('Category created successfully');
+            } else {
+                toast.info('Category already exists');
+            }
         },
         onError: (error: Error) => {
             toast.error(`Failed to create category: ${error.message}`);

@@ -4,14 +4,15 @@ API routes for statistics and reporting
 Handles all statistics and reporting endpoints.
 """
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 
 from api.api_schemas import BankListResponse, StatisticsResponse, CategoryStats, TransactionCountResponse, \
-    MonthlyFinancialSummaryResponse, Link, OptionsResponse, MethodInfo
+    MonthlyFinancialSummaryResponse, Link, OptionsResponse, MethodInfo, PlannedExpensesNextMonthResponse, \
+    AverageVsCurrentSpendingResponse
 from api.hateoas_links import get_base_url
 from config.logging_config import setup_logging
 from database.connection import get_db
@@ -64,6 +65,18 @@ def get_info_links(request: Request) -> list[Link]:
             href=HttpUrl(f"{base_url}/api/info/monthly-summary"),
             method="GET",
             title="Get monthly financial summary (past 6 months)"
+        ),
+        Link(
+            rel="planned-expenses-forecast",
+            href=HttpUrl(f"{base_url}/api/info/planned-expenses-next-month"),
+            method="GET",
+            title="Get planned expenses forecast for next month"
+        ),
+        Link(
+            rel="average-vs-current-spending",
+            href=HttpUrl(f"{base_url}/api/info/average-vs-current-spending"),
+            method="GET",
+            title="Get average daily spending vs current month comparison"
         ),
     ]
 
@@ -178,7 +191,14 @@ async def get_transaction_summary(
 
 
 @router.get("/monthly-summary", response_model=MonthlyFinancialSummaryResponse)
-async def get_monthly_financial_summary(request: Request, db: Session = Depends(get_db)):
+async def get_monthly_financial_summary(
+        request: Request,
+        excluded_category_ids: Optional[List[int]] = Query(
+            None,
+            description="Category IDs to exclude from calculations (e.g., transfers). Defaults to [9, 22]"
+        ),
+        db: Session = Depends(get_db)
+):
     """
     Get financial summary for the past 6 months, broken down month by month.
 
@@ -187,10 +207,18 @@ async def get_monthly_financial_summary(request: Request, db: Session = Depends(
     month-over-month comparisons.
 
     Each month includes spending, income, net amount, and transaction count.
+
+    Query Parameters:
+        excluded_category_ids: Optional list of category IDs to exclude from calculations.
+                               Useful for filtering out internal transfers or specific categories.
+                               Example: ?excluded_category_ids=9&excluded_category_ids=22
+                               Default: [9, 22] (Intrabank transfers and internal transfers)
     """
     try:
         service = InfoService(db)
-        data = service.get_monthly_financial_summary()
+        data = service.get_monthly_financial_summary(
+            excluded_category_ids=excluded_category_ids
+        )
 
         base_url = get_base_url(request)
         links = [
@@ -222,3 +250,126 @@ async def get_monthly_financial_summary(request: Request, db: Session = Depends(
     except Exception as e:
         logger.error(f"Error retrieving monthly financial summary: {str(e)}")
         raise HTTPException(status_code=500, detail="Error retrieving monthly financial summary")
+
+
+@router.get("/planned-expenses-next-month", response_model=PlannedExpensesNextMonthResponse)
+async def get_planned_expenses_next_month(
+        request: Request,
+        db: Session = Depends(get_db)
+):
+    """
+    Get planned expenses and income forecast for the following month.
+
+    Returns all planned transactions scheduled for the next calendar month,
+    grouped by date to visualise expected cash flow patterns. This endpoint
+    is designed for dashboard graphs showing expected in/outflows.
+
+    The response includes:
+    - Daily breakdown of expected income and expenses
+    - List of individual planned transactions for each day
+    - Summary totals for the entire month
+    - Information about recurring transactions
+    """
+    try:
+        service = InfoService(db)
+        data = service.get_planned_expenses_next_month()
+
+        base_url = get_base_url(request)
+        links = [
+            Link(
+                rel="self",
+                href=HttpUrl(f"{base_url}/api/info/planned-expenses-next-month"),
+                method="GET",
+                title="Get planned expenses for next month"
+            ),
+            Link(
+                rel="parent",
+                href=HttpUrl(f"{base_url}/api/info"),
+                method="GET",
+                title="View all info endpoints"
+            ),
+            Link(
+                rel="planned-transactions",
+                href=HttpUrl(f"{base_url}/api/planned-transactions"),
+                method="GET",
+                title="View all planned transactions"
+            ),
+        ]
+
+        return PlannedExpensesNextMonthResponse(
+            month=data["month"],
+            year=data["year"],
+            period_start=data["period_start"],
+            period_end=data["period_end"],
+            daily_data=data["daily_data"],
+            summary=data["summary"],
+            links=links
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving planned expenses next month: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving planned expenses next month")
+
+
+@router.get("/average-vs-current-spending", response_model=AverageVsCurrentSpendingResponse)
+async def get_average_vs_current_spending(
+        request: Request,
+        db: Session = Depends(get_db)
+):
+    """
+    Get average daily spending over the past 6 months compared to current month.
+
+    This endpoint provides data for dashboard graphs comparing current spending
+    patterns against historical averages. It calculates:
+    - Average daily spending from the past 6 complete months (excluding current month)
+    - Daily spending breakdown for the current month
+    - Cumulative spending comparison showing actual vs expected
+    - Variance metrics and projections
+
+    The response enables visualisation of:
+    1. How current month spending compares to the historical average
+    2. Whether spending is tracking above or below the average
+    3. Projected month-end total based on current pace
+
+    This is useful for budget monitoring and identifying spending trends.
+    """
+    try:
+        service = InfoService(db)
+        data = service.get_average_vs_current_spending()
+
+        base_url = get_base_url(request)
+        links = [
+            Link(
+                rel="self",
+                href=HttpUrl(f"{base_url}/api/info/average-vs-current-spending"),
+                method="GET",
+                title="Get average vs current spending comparison"
+            ),
+            Link(
+                rel="parent",
+                href=HttpUrl(f"{base_url}/api/info"),
+                method="GET",
+                title="View all info endpoints"
+            ),
+            Link(
+                rel="transactions",
+                href=HttpUrl(f"{base_url}/api/transactions"),
+                method="GET",
+                title="View all transactions"
+            ),
+            Link(
+                rel="monthly-summary",
+                href=HttpUrl(f"{base_url}/api/info/monthly-summary"),
+                method="GET",
+                title="View 6-month financial summary"
+            ),
+        ]
+
+        return AverageVsCurrentSpendingResponse(
+            past_6_months=data["past_6_months"],
+            current_month=data["current_month"],
+            comparison=data["comparison"],
+            links=links
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving average vs current spending: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving average vs current spending")

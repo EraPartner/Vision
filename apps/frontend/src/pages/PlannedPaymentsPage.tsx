@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
-import { format, isPast, isToday, differenceInDays } from "date-fns";
-import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
+import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/shared/DataTable";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
 
@@ -19,24 +20,58 @@ const FREQ_LABELS: Record<string, string> = {
 };
 
 function dueBadge(dateStr: string) {
-  const d = new Date(dateStr);
-  if (isToday(d)) return <Badge className="bg-chart-3/20 text-chart-3 border-chart-3/30">Today</Badge>;
-  if (isPast(d)) return <Badge variant="destructive">Overdue</Badge>;
-  const days = differenceInDays(d, new Date());
-  if (days <= 7) return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">In {days}d</Badge>;
-  return <Badge variant="secondary">{format(d, "PP")}</Badge>;
+  // Parse the date string (YYYY-MM-DD) explicitly
+  const [year, month, day] = dateStr.split('-').map(Number);
+  
+  // Get today's date at midnight in local time
+  const today = new Date();
+  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+  
+  // Create due date at midnight in local time
+  const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
+  
+  // Calculate the difference in days using normalized dates
+  const days = differenceInDays(normalizedDue, normalizedToday);
+  
+  // Calculate if it's the same day
+  if (days === 0) {
+    return <Badge className="bg-chart-3/20 text-chart-3 border-chart-3/30">Today</Badge>;
+  }
+  
+  if (days < 0) {
+    return <Badge variant="destructive">Overdue</Badge>;
+  }
+  if (days === 1) {
+    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">Tomorrow</Badge>;
+  }
+  if (days <= 7) {
+    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">In {days}d</Badge>;
+  }
+  return <Badge variant="secondary">{format(normalizedDue, "PP")}</Badge>;
 }
 
 type TableRow = PlannedPayment & { _idx: number };
 
 export default function PlannedPaymentsPage() {
-  const { payments, addPayment, updatePayment, deletePayment, toggleActive } = usePlannedPayments();
+  const [showAll, setShowAll] = useState(false);
+  const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedPayment | undefined>();
+  const [actionLoading, setActionLoading] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [paymentToLink, setPaymentToLink] = useState<PlannedPayment | null>(null);
+
+  // Filter payments based on showAll state (for client-side filtering after local updates)
+  const filteredPayments = useMemo(() => {
+    if (showAll) {
+      return payments;
+    }
+    return payments.filter((p) => p.is_active);
+  }, [payments, showAll]);
 
   const rows: TableRow[] = useMemo(
-    () => payments.map((p, i) => ({ ...p, _idx: i })),
-    [payments]
+    () => filteredPayments.map((p, i) => ({ ...p, _idx: i })),
+    [filteredPayments]
   );
 
   const totalMonthly = useMemo(() => {
@@ -56,15 +91,55 @@ export default function PlannedPaymentsPage() {
   }, [payments]);
 
   const upcoming = useMemo(() => {
+    const today = new Date();
+    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    
     return payments
       .filter((p) => p.is_active)
       .filter((p) => {
-        const d = new Date(p.due_date);
-        return differenceInDays(d, new Date()) <= 7;
+        const [year, month, day] = p.due_date.split('-').map(Number);
+        const normalizedDue = new Date(year, month - 1, day, 0, 0, 0, 0);
+        
+        const days = differenceInDays(normalizedDue, normalizedToday);
+        return days >= 0 && days <= 7; // Due within the next 7 days (including today)
       }).length;
   }, [payments]);
 
+  const executed = useMemo(() => {
+    return payments.filter((p) => p.is_executed).length;
+  }, [payments]);
+
+  const pending = useMemo(() => {
+    return payments.filter((p) => p.is_active && !p.is_executed).length;
+  }, [payments]);
+
   const columns = [
+    {
+      key: "is_executed",
+      header: "",
+      editable: false,
+      className: "w-12",
+      render: (row: TableRow) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-8 w-8 ${row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
+          onClick={async (e) => { 
+            e.stopPropagation(); 
+            
+            if (!row.is_executed) {
+              // Open dialog to select transaction
+              setPaymentToLink(row);
+              setLinkDialogOpen(true);
+            }
+          }}
+          disabled={actionLoading || !row.is_active || row.is_executed}
+          title={row.is_executed ? `Executed (linked to transaction #${row.executed_transaction_id})` : "Execute payment"}
+        >
+          {row.is_executed ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+        </Button>
+      ),
+    },
     {
       key: "name",
       header: "Payment",
@@ -72,7 +147,11 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 180,
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
-          <span className={`font-medium ${row.is_active ? "text-foreground" : "text-muted-foreground line-through"}`}>
+          <span className={`font-medium ${
+            !row.is_active ? "text-muted-foreground line-through" : 
+            row.is_executed ? "text-muted-foreground line-through" : 
+            "text-foreground"
+          }`}>
             {row.name}
           </span>
           {row.recipient && (
@@ -103,16 +182,23 @@ export default function PlannedPaymentsPage() {
       key: "is_recurring",
       header: "Recurrence",
       editable: false,
-      defaultWidth: 140,
+      defaultWidth: 160,
       render: (row: TableRow) =>
         row.is_recurring ? (
-          <div className="flex items-center gap-1.5">
-            <Repeat className="h-3.5 w-3.5 text-primary" />
-            <span className="text-sm">
-              {row.frequency === "custom" && row.custom_interval_days
-                ? `Every ${row.custom_interval_days}d`
-                : FREQ_LABELS[row.frequency ?? "monthly"]}
-            </span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <Repeat className="h-3.5 w-3.5 text-primary" />
+              <span className="text-sm">
+                {row.frequency === "custom" && row.custom_interval_days
+                  ? `Every ${row.custom_interval_days}d`
+                  : FREQ_LABELS[row.frequency ?? "monthly"]}
+              </span>
+            </div>
+            {row.execution_count > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Executed {row.execution_count}x
+              </span>
+            )}
           </div>
         ) : (
           <span className="text-sm text-muted-foreground">One-time</span>
@@ -140,7 +226,18 @@ export default function PlannedPaymentsPage() {
           variant="ghost"
           size="sm"
           className={`gap-1.5 ${row.is_active ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={(e) => { e.stopPropagation(); toggleActive(row.id); }}
+          onClick={async (e) => { 
+            e.stopPropagation(); 
+            setActionLoading(true);
+            try {
+              await toggleActive(row.id);
+            } catch (err) {
+              console.error("Failed to toggle status:", err);
+            } finally {
+              setActionLoading(false);
+            }
+          }}
+          disabled={actionLoading}
         >
           {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
           {row.is_active ? "Active" : "Paused"}
@@ -159,6 +256,7 @@ export default function PlannedPaymentsPage() {
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
             onClick={(e) => { e.stopPropagation(); setEditing(row); setFormOpen(true); }}
+            disabled={actionLoading}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -166,7 +264,20 @@ export default function PlannedPaymentsPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={(e) => { e.stopPropagation(); deletePayment(row.id); }}
+            onClick={async (e) => { 
+              e.stopPropagation(); 
+              if (confirm(`Delete planned payment "${row.name}"?`)) {
+                setActionLoading(true);
+                try {
+                  await deletePayment(row.id);
+                } catch (err) {
+                  console.error("Failed to delete payment:", err);
+                } finally {
+                  setActionLoading(false);
+                }
+              }
+            }}
+            disabled={actionLoading}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -175,14 +286,34 @@ export default function PlannedPaymentsPage() {
     },
   ];
 
-  const handleSubmit = (data: Omit<PlannedPayment, "id" | "created_at">) => {
-    if (editing) {
-      updatePayment(editing.id, data);
-      setEditing(undefined);
-    } else {
-      addPayment(data);
+  const handleSubmit = async (data: Omit<PlannedPayment, "id" | "created_at">) => {
+    try {
+      setActionLoading(true);
+      if (editing) {
+        await updatePayment(editing.id, data);
+        setEditing(undefined);
+      } else {
+        await addPayment(data);
+      }
+      setFormOpen(false);
+    } catch (err) {
+      console.error("Failed to save payment:", err);
+      alert("Failed to save payment. Please check console for details.");
+    } finally {
+      setActionLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading planned payments...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in">
@@ -191,20 +322,48 @@ export default function PlannedPaymentsPage() {
           <h2 className="text-3xl font-bold text-foreground">Planned Payments</h2>
           <p className="text-muted-foreground mt-1">Manage upcoming and recurring payments</p>
         </div>
-        <Button onClick={() => { setEditing(undefined); setFormOpen(true); }} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Payment
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant={showAll ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowAll(!showAll)}
+            className="gap-1.5"
+          >
+            {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {showAll ? "Showing All" : "Active Only"}
+          </Button>
+          <Button onClick={() => { setEditing(undefined); setFormOpen(true); }} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Payment
+          </Button>
+        </div>
       </div>
 
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-none shadow-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Planned</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{payments.length}</p>
+            <p className="text-2xl font-bold">{pending}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" /> Executed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-accent">{executed}</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-md">
@@ -244,6 +403,7 @@ export default function PlannedPaymentsPage() {
         initial={editing}
         key={editing?.id ?? "new"}
       />
+
     </div>
   );
 }

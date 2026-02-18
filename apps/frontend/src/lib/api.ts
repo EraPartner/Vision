@@ -11,6 +11,11 @@ import type {
   TransactionCreate,
   TransactionsListResponse,
   TransactionUpdate,
+  PlannedTransaction,
+  PlannedTransactionCreate,
+  PlannedTransactionsListResponse,
+  PlannedTransactionUpdate,
+  PlannedTransactionExecuteRequest,
 } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
@@ -99,11 +104,32 @@ class ApiClient {
         return this.request<Category>(`/api/categories/${id}`);
     }
 
-    async createCategory(category: CategoryCreate): Promise<Category> {
-        return this.request<Category>('/api/categories', {
+    async createCategory(category: CategoryCreate): Promise<{ category: Category; wasCreated: boolean }> {
+        const url = `${API_BASE_URL}/api/categories`;
+        console.log(`API Request: POST ${url}`);
+
+        const response = await fetch(url, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify(category),
         });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({detail: 'Request failed'}));
+            console.error(`API Error: ${url}`, error);
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        const data = await response.json();
+        console.log(`API Response: ${url}`, data);
+        
+        // 201 = created, 200 = already existed
+        return {
+            category: data,
+            wasCreated: response.status === 201
+        };
     }
 
     async updateCategory(id: number, category: CategoryUpdate): Promise<Category> {
@@ -149,11 +175,32 @@ class ApiClient {
         return this.request<Recipient>(`/api/recipients/${id}`);
     }
 
-    async createRecipient(recipient: RecipientCreate): Promise<Recipient> {
-        return this.request<Recipient>('/api/recipients', {
+    async createRecipient(recipient: RecipientCreate): Promise<{ recipient: Recipient; wasCreated: boolean }> {
+        const url = `${API_BASE_URL}/api/recipients`;
+        console.log(`API Request: POST ${url}`);
+
+        const response = await fetch(url, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify(recipient),
         });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({detail: 'Request failed'}));
+            console.error(`API Error: ${url}`, error);
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        const data = await response.json();
+        console.log(`API Response: ${url}`, data);
+        
+        // 201 = created, 200 = already existed
+        return {
+            recipient: data,
+            wasCreated: response.status === 201
+        };
     }
 
     async updateRecipient(id: number, recipient: RecipientUpdate): Promise<Recipient> {
@@ -168,6 +215,62 @@ class ApiClient {
             method: 'DELETE',
         });
     }
+
+    // ==================== Planned Transactions Methods ====================
+
+    async getPlannedTransactions(params?: {
+        limit?: number;
+        offset?: number;
+        start_date?: string;
+        end_date?: string;
+        bank_account?: string;
+        category_id?: number;
+        recipient_id?: number;
+        is_recurring?: boolean;
+        is_executed?: boolean;
+        active?: boolean;
+    }): Promise<PlannedTransactionsListResponse> {
+        const queryParams = new URLSearchParams();
+
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    queryParams.append(key, String(value));
+                }
+            });
+        }
+
+        const query = queryParams.toString();
+        return this.request<PlannedTransactionsListResponse>(
+            `/api/planned-transactions${query ? `?${query}` : ''}`
+        );
+    }
+
+    async getPlannedTransaction(id: number): Promise<PlannedTransaction> {
+        return this.request<PlannedTransaction>(`/api/planned-transactions/${id}`);
+    }
+
+    async createPlannedTransaction(transaction: PlannedTransactionCreate): Promise<PlannedTransaction> {
+        return this.request<PlannedTransaction>('/api/planned-transactions', {
+            method: 'POST',
+            body: JSON.stringify(transaction),
+        });
+    }
+
+    async updatePlannedTransaction(id: number, transaction: PlannedTransactionUpdate): Promise<PlannedTransaction> {
+        return this.request<PlannedTransaction>(`/api/planned-transactions/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(transaction),
+        });
+    }
+
+    async deletePlannedTransaction(id: number): Promise<void> {
+        await this.request<void>(`/api/planned-transactions/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    // ==================== CSV Import Methods ====================
 
     async importCSV(file: File, bankName: string): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
         const formData = new FormData();
@@ -316,6 +419,9 @@ class ApiClient {
 
         const url = `${API_BASE_URL}${endpoint}`;
         console.log(`API Request: ${options.method || 'GET'} ${url}`);
+        if (options.body) {
+            console.log(`API Request Body:`, JSON.parse(options.body as string));
+        }
 
         const response = await fetch(url, {
             ...options,
@@ -355,4 +461,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-export type {Transaction, Category, Recipient};
+export type {Transaction, Category, Recipient, PlannedTransaction};

@@ -208,7 +208,7 @@ class TestStatisticsEndpoint:
 
     def test_get_statistics_database_error(self, client: TestClient, test_db: Session):
         """Test GET /api/info handles database errors."""
-        with patch('services.statistics_service.InfoService.get_statistics') as mock_stats:
+        with patch('services.info_service.InfoService.get_statistics') as mock_stats:
             mock_stats.side_effect = Exception("Database connection error")
 
             response = client.get("/api/info")
@@ -260,7 +260,7 @@ class TestBanksEndpoint:
 
     def test_get_banks_database_error(self, client: TestClient, test_db: Session):
         """Test GET /api/info/banks handles database errors."""
-        with patch('services.statistics_service.InfoService.get_banks') as mock_banks:
+        with patch('services.info_service.InfoService.get_banks') as mock_banks:
             mock_banks.side_effect = Exception("Database connection error")
 
             response = client.get("/api/info/banks")
@@ -352,7 +352,7 @@ class TestTransactionSummaryEndpoint:
 
     def test_get_transaction_summary_database_error(self, client: TestClient, test_db: Session):
         """Test GET /api/info/transaction-summary handles database errors."""
-        with patch('services.statistics_service.InfoService.get_transaction_summary') as mock_summary:
+        with patch('services.info_service.InfoService.get_transaction_summary') as mock_summary:
             mock_summary.side_effect = Exception("Database connection error")
 
             response = client.get("/api/info/transaction-summary")
@@ -453,7 +453,7 @@ class TestTransactionCountEndpoint:
 
     def test_get_transaction_count_database_error(self, client: TestClient, test_db: Session):
         """Test GET /api/info/transaction-count handles database errors."""
-        with patch('services.statistics_service.InfoService.get_transaction_count') as mock_count:
+        with patch('services.info_service.InfoService.get_transaction_count') as mock_count:
             mock_count.side_effect = Exception("Database connection error")
 
             response = client.get("/api/info/transaction-count")
@@ -744,7 +744,7 @@ class TestMonthlyFinancialSummaryEndpoint:
 
     def test_get_monthly_summary_database_error(self, client: TestClient, test_db: Session):
         """Test GET /api/info/monthly-summary handles database errors."""
-        with patch('services.statistics_service.InfoService.get_monthly_financial_summary') as mock_summary:
+        with patch('services.info_service.InfoService.get_monthly_financial_summary') as mock_summary:
             mock_summary.side_effect = Exception("Database connection error")
 
             response = client.get("/api/info/monthly-summary")
@@ -801,32 +801,598 @@ class TestMonthlyFinancialSummaryEndpoint:
         assert "period_start" in data["summary"]
         assert "period_end" in data["summary"]
 
-        # Validate all required fields are present
-        required_fields = [
-            "period_start",
-            "period_end",
-            "total_spending",
-            "total_income",
-            "net_amount",
-            "transaction_count",
-            "links"
-        ]
-        for field in required_fields:
-            assert field in data, f"Missing required field: {field}"
+        # Validate top-level required fields
+        required_top_level_fields = ["months", "summary", "links"]
+        for field in required_top_level_fields:
+            assert field in data, f"Missing required top-level field: {field}"
 
-        # Validate field types
-        assert isinstance(data["total_spending"], (int, float))
-        assert isinstance(data["total_income"], (int, float))
-        assert isinstance(data["net_amount"], (int, float))
-        assert isinstance(data["transaction_count"], int)
+        # Validate field types in summary
+        assert isinstance(data["summary"]["total_spending"], (int, float))
+        assert isinstance(data["summary"]["total_income"], (int, float))
+        assert isinstance(data["summary"]["net_amount"], (int, float))
+        assert isinstance(data["summary"]["transaction_count"], int)
         assert isinstance(data["links"], list)
 
         # Validate spending is non-positive and income is non-negative
-        assert data["total_spending"] <= 0.0
-        assert data["total_income"] >= 0.0
+        assert data["summary"]["total_spending"] <= 0.0
+        assert data["summary"]["total_income"] >= 0.0
 
         # Validate each link has required properties
         for link in data["links"]:
             assert "rel" in link
             assert "href" in link
             assert "method" in link
+
+
+class TestPlannedExpensesNextMonthEndpoint:
+    """Test suite for GET /api/info/planned-expenses-next-month endpoint."""
+
+    def test_get_planned_expenses_next_month_success(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month returns planned transactions."""
+        from database.models import PlannedTransaction
+        from datetime import date
+
+        # Create test data
+        recipient = Recipient(name="TEST RECIPIENT")
+        category = Category(general="FOOD", detail="GROCERIES")
+        test_db.add(recipient)
+        test_db.add(category)
+        test_db.commit()
+        test_db.refresh(recipient)
+        test_db.refresh(category)
+
+        # Calculate next month
+        today = date.today()
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        # Create planned transactions for next month
+        first_day = date(next_year, next_month, 1)
+        mid_month = date(next_year, next_month, 15)
+
+        planned_expense = PlannedTransaction(
+            planned_date=first_day,
+            amount=-100.0,
+            recipient_id=recipient.id,
+            category_id=category.id,
+            memo="Test expense",
+            is_recurring=False,
+            is_active=True
+        )
+        planned_income = PlannedTransaction(
+            planned_date=mid_month,
+            amount=500.0,
+            recipient_id=recipient.id,
+            memo="Test income",
+            is_recurring=True,
+            is_active=True
+        )
+        test_db.add(planned_expense)
+        test_db.add(planned_income)
+        test_db.commit()
+
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Validate structure
+        assert "month" in data
+        assert "year" in data
+        assert "period_start" in data
+        assert "period_end" in data
+        assert "daily_data" in data
+        assert "summary" in data
+        assert "links" in data
+
+        # Validate period
+        assert data["month"] == next_month
+        assert data["year"] == next_year
+
+        # Validate summary
+        assert data["summary"]["total_income"] == 500.0
+        assert data["summary"]["total_expenses"] == -100.0
+        assert data["summary"]["net_amount"] == 400.0
+        assert data["summary"]["transaction_count"] == 2
+
+    def test_get_planned_expenses_next_month_empty(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month with no planned transactions."""
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should still return valid structure
+        assert "month" in data
+        assert "year" in data
+        assert "daily_data" in data
+        assert "summary" in data
+
+        # Summary should be zero
+        assert data["summary"]["total_income"] == 0.0
+        assert data["summary"]["total_expenses"] == 0.0
+        assert data["summary"]["net_amount"] == 0.0
+        assert data["summary"]["transaction_count"] == 0
+        assert data["daily_data"] == []
+
+    def test_get_planned_expenses_next_month_only_expenses(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month with only expenses."""
+        from database.models import PlannedTransaction
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Calculate next month
+        today = date.today()
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        first_day = date(next_year, next_month, 1)
+
+        planned = PlannedTransaction(
+            planned_date=first_day,
+            amount=-200.0,
+            recipient_id=recipient.id,
+            is_active=True
+        )
+        test_db.add(planned)
+        test_db.commit()
+
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["summary"]["total_income"] == 0.0
+        assert data["summary"]["total_expenses"] == -200.0
+        assert data["summary"]["net_amount"] == -200.0
+
+    def test_get_planned_expenses_next_month_only_income(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month with only income."""
+        from database.models import PlannedTransaction
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Calculate next month
+        today = date.today()
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        first_day = date(next_year, next_month, 1)
+
+        planned = PlannedTransaction(
+            planned_date=first_day,
+            amount=1000.0,
+            recipient_id=recipient.id,
+            is_active=True
+        )
+        test_db.add(planned)
+        test_db.commit()
+
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["summary"]["total_income"] == 1000.0
+        assert data["summary"]["total_expenses"] == 0.0
+        assert data["summary"]["net_amount"] == 1000.0
+
+    def test_get_planned_expenses_next_month_inactive_excluded(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month excludes inactive transactions."""
+        from database.models import PlannedTransaction
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Calculate next month
+        today = date.today()
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        first_day = date(next_year, next_month, 1)
+
+        # Active transaction
+        active = PlannedTransaction(
+            planned_date=first_day,
+            amount=-100.0,
+            recipient_id=recipient.id,
+            is_active=True
+        )
+        # Inactive transaction (should be excluded)
+        inactive = PlannedTransaction(
+            planned_date=first_day,
+            amount=-200.0,
+            recipient_id=recipient.id,
+            is_active=False
+        )
+        test_db.add(active)
+        test_db.add(inactive)
+        test_db.commit()
+
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only include active transaction
+        assert data["summary"]["transaction_count"] == 1
+        assert data["summary"]["total_expenses"] == -100.0
+
+    def test_get_planned_expenses_next_month_response_schema(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/planned-expenses-next-month returns valid schema."""
+        from database.models import PlannedTransaction
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Calculate next month
+        today = date.today()
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month > 12:
+            next_month = 1
+            next_year += 1
+
+        first_day = date(next_year, next_month, 1)
+
+        planned = PlannedTransaction(
+            planned_date=first_day,
+            amount=-50.0,
+            recipient_id=recipient.id,
+            memo="Test",
+            is_recurring=True,
+            is_active=True
+        )
+        test_db.add(planned)
+        test_db.commit()
+
+        response = client.get("/api/info/planned-expenses-next-month")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Validate top-level structure
+        required_fields = ["month", "year", "period_start", "period_end", "daily_data", "summary", "links"]
+        for field in required_fields:
+            assert field in data
+
+        # Validate types
+        assert isinstance(data["month"], int)
+        assert isinstance(data["year"], int)
+        assert isinstance(data["daily_data"], list)
+        assert isinstance(data["summary"], dict)
+        assert isinstance(data["links"], list)
+
+        # Validate daily_data structure if present
+        if len(data["daily_data"]) > 0:
+            daily = data["daily_data"][0]
+            assert "date" in daily
+            assert "income" in daily
+            assert "expenses" in daily
+            assert "net" in daily
+            assert "transactions" in daily
+            assert isinstance(daily["transactions"], list)
+
+            # Validate transaction structure
+            if len(daily["transactions"]) > 0:
+                txn = daily["transactions"][0]
+                assert "id" in txn
+                assert "amount" in txn
+                assert "is_recurring" in txn
+
+        # Validate summary structure
+        assert "total_income" in data["summary"]
+        assert "total_expenses" in data["summary"]
+        assert "net_amount" in data["summary"]
+        assert "transaction_count" in data["summary"]
+
+        # Validate constraints
+        assert data["summary"]["total_income"] >= 0.0
+        assert data["summary"]["total_expenses"] <= 0.0
+
+    def test_get_planned_expenses_next_month_database_error(self, client: TestClient):
+        """Test GET /api/info/planned-expenses-next-month handles database errors."""
+        with patch("services.info_service.InfoService.get_planned_expenses_next_month") as mock_service:
+            mock_service.side_effect = Exception("Database error")
+
+            response = client.get("/api/info/planned-expenses-next-month")
+
+            assert response.status_code == 500
+            assert "Error retrieving planned expenses next month" in response.json()["detail"]
+
+
+class TestAverageVsCurrentSpendingEndpoint:
+    """Test suite for GET /api/info/average-vs-current-spending endpoint."""
+
+    def test_get_average_vs_current_spending_success(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending returns comparison data."""
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Add transactions from past 6 months
+        today = date.today()
+
+        # Past month transactions
+        for month_ago in range(1, 7):
+            target_month = today.month - month_ago
+            target_year = today.year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+
+            txn_date = date(target_year, target_month, 15)
+            txn = Transaction(
+                date=txn_date,
+                bank_account="TestBank",
+                recipient_id=recipient.id,
+                amount=-100.0,
+                is_active=True
+            )
+            test_db.add(txn)
+
+        # Current month transaction
+        current_txn = Transaction(
+            date=today,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=-50.0,
+            is_active=True
+        )
+        test_db.add(current_txn)
+        test_db.commit()
+
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Validate structure
+        assert "past_6_months" in data
+        assert "current_month" in data
+        assert "comparison" in data
+        assert "links" in data
+
+        # Validate past_6_months
+        assert "period_start" in data["past_6_months"]
+        assert "period_end" in data["past_6_months"]
+        assert "total_spending" in data["past_6_months"]
+        assert "days" in data["past_6_months"]
+        assert "average_daily_spending" in data["past_6_months"]
+        assert "transaction_count" in data["past_6_months"]
+
+        # Validate current_month
+        assert "month" in data["current_month"]
+        assert "year" in data["current_month"]
+        assert "total_spending" in data["current_month"]
+        assert "total_income" in data["current_month"]
+        assert "daily_data" in data["current_month"]
+
+        # Validate comparison
+        assert "expected_to_date" in data["comparison"]
+        assert "actual_to_date" in data["comparison"]
+        assert "variance_to_date" in data["comparison"]
+        assert "expected_month_total" in data["comparison"]
+        assert "projected_month_total" in data["comparison"]
+
+    def test_get_average_vs_current_spending_empty(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending with no transactions."""
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return structure with zeros
+        assert data["past_6_months"]["total_spending"] == 0.0
+        assert data["past_6_months"]["average_daily_spending"] == 0.0
+        assert data["current_month"]["total_spending"] == 0.0
+        assert data["current_month"]["total_income"] == 0.0
+
+    def test_get_average_vs_current_spending_only_income(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending with only income transactions."""
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        today = date.today()
+
+        # Past income
+        past_date = date(today.year, today.month - 1 if today.month > 1 else 12, 15)
+        past_txn = Transaction(
+            date=past_date,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=1000.0,
+            is_active=True
+        )
+        test_db.add(past_txn)
+
+        # Current income
+        current_txn = Transaction(
+            date=today,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=500.0,
+            is_active=True
+        )
+        test_db.add(current_txn)
+        test_db.commit()
+
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Income should not affect spending calculations
+        assert data["past_6_months"]["total_spending"] == 0.0
+        assert data["current_month"]["total_spending"] == 0.0
+        assert data["current_month"]["total_income"] == 500.0
+
+    def test_get_average_vs_current_spending_inactive_excluded(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending excludes inactive transactions."""
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        today = date.today()
+
+        # Active transaction
+        active = Transaction(
+            date=today,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=-100.0,
+            is_active=True
+        )
+        # Inactive transaction (should be excluded)
+        inactive = Transaction(
+            date=today,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=-500.0,
+            is_active=False
+        )
+        test_db.add(active)
+        test_db.add(inactive)
+        test_db.commit()
+
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only include active transaction
+        assert data["current_month"]["total_spending"] == -100.0
+
+    def test_get_average_vs_current_spending_daily_data(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending daily_data structure."""
+        from datetime import date
+
+        recipient = Recipient(name="TEST")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        today = date.today()
+
+        # Add transaction for today
+        txn = Transaction(
+            date=today,
+            bank_account="TestBank",
+            recipient_id=recipient.id,
+            amount=-75.0,
+            is_active=True
+        )
+        test_db.add(txn)
+        test_db.commit()
+
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Validate daily_data
+        assert isinstance(data["current_month"]["daily_data"], list)
+        assert len(data["current_month"]["daily_data"]) == today.day
+
+        # Check today's entry
+        today_data = data["current_month"]["daily_data"][-1]
+        assert "date" in today_data
+        assert "spending" in today_data
+        assert "income" in today_data
+        assert "transaction_count" in today_data
+        assert "cumulative_spending" in today_data
+        assert "cumulative_expected" in today_data
+        assert "variance" in today_data
+
+        assert today_data["spending"] == -75.0
+        assert today_data["transaction_count"] == 1
+
+    def test_get_average_vs_current_spending_response_schema(self, client: TestClient, test_db: Session):
+        """Test GET /api/info/average-vs-current-spending returns valid schema."""
+        response = client.get("/api/info/average-vs-current-spending")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Validate top-level structure
+        required_fields = ["past_6_months", "current_month", "comparison", "links"]
+        for field in required_fields:
+            assert field in data
+
+        # Validate types
+        assert isinstance(data["past_6_months"], dict)
+        assert isinstance(data["current_month"], dict)
+        assert isinstance(data["comparison"], dict)
+        assert isinstance(data["links"], list)
+
+        # Validate past_6_months fields
+        past_fields = ["period_start", "period_end", "total_spending", "days", "average_daily_spending",
+                       "transaction_count"]
+        for field in past_fields:
+            assert field in data["past_6_months"]
+
+        # Validate current_month fields
+        current_fields = ["month", "year", "period_start", "period_end", "days_elapsed", "total_spending",
+                          "total_income", "daily_data", "transaction_count"]
+        for field in current_fields:
+            assert field in data["current_month"]
+
+        # Validate comparison fields
+        comparison_fields = ["expected_to_date", "actual_to_date", "variance_to_date", "expected_month_total",
+                             "projected_month_total"]
+        for field in comparison_fields:
+            assert field in data["comparison"]
+
+        # Validate constraints
+        assert data["past_6_months"]["total_spending"] <= 0.0
+        assert data["past_6_months"]["average_daily_spending"] <= 0.0
+        assert data["current_month"]["total_spending"] <= 0.0
+        assert data["current_month"]["total_income"] >= 0.0
+        assert data["comparison"]["expected_to_date"] <= 0.0
+        assert data["comparison"]["actual_to_date"] <= 0.0
+
+    def test_get_average_vs_current_spending_database_error(self, client: TestClient):
+        """Test GET /api/info/average-vs-current-spending handles database errors."""
+        with patch("services.info_service.InfoService.get_average_vs_current_spending") as mock_service:
+            mock_service.side_effect = Exception("Database error")
+
+            response = client.get("/api/info/average-vs-current-spending")
+
+            assert response.status_code == 500
+            assert "Error retrieving average vs current spending" in response.json()["detail"]

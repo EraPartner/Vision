@@ -82,7 +82,7 @@ export default function CategoriesPage() {
             header: "Category",
             editable: false,
             render: (row: TableCategory) => (
-                <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                <span className={`font-medium whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
                     {row.name}
                 </span>
             ),
@@ -92,7 +92,7 @@ export default function CategoriesPage() {
             header: "General",
             editable: true,
             render: (row: TableCategory) => (
-                <Badge variant="secondary" className="font-medium">
+                <Badge variant="secondary" className={`font-medium ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                     {row.general}
                 </Badge>
             ),
@@ -102,7 +102,7 @@ export default function CategoriesPage() {
             header: "Detail",
             editable: true,
             render: (row: TableCategory) => (
-                <Badge variant="outline" className="font-medium">
+                <Badge variant="outline" className={`font-medium ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                     {row.detail}
                 </Badge>
             ),
@@ -115,7 +115,7 @@ export default function CategoriesPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
                     onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
                     disabled={updateMutation.isPending}
                 >
@@ -134,7 +134,11 @@ export default function CategoriesPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteMutation.mutate(row.id)}
+                    onClick={() => {
+                        if (confirm(`Delete category "${row.general}:${row.detail}"?`)) {
+                            deleteMutation.mutate(row.id);
+                        }
+                    }}
                     disabled={deleteMutation.isPending}
                 >
                     <Trash2 className="h-4 w-4" />
@@ -148,7 +152,7 @@ export default function CategoriesPage() {
             <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => { setShowAll(!showAll); setPage(0); }}
+                onClick={() => { setShowAll(!showAll); }}
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}

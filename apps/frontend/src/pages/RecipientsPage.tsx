@@ -39,6 +39,8 @@ export default function RecipientsPage() {
             data: {
                 name: updated.name,
                 account_number: updated.account_number,
+                notes: updated.notes,
+                address: updated.address,
                 is_active: updated.is_active,
             },
         });
@@ -98,7 +100,7 @@ export default function RecipientsPage() {
             header: "Account Number",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className="text-muted-foreground font-mono text-sm">{row.account_number}</span>
+                <span className={`text-muted-foreground font-mono text-sm ${!row.is_active ? 'line-through' : ''}`}>{row.account_number}</span>
             ),
         },
         {
@@ -151,7 +153,7 @@ export default function RecipientsPage() {
             header: "Notes",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className="text-sm text-muted-foreground">{row.notes || '-'}</span>
+                <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>{row.notes || '-'}</span>
             ),
         },
         {
@@ -170,7 +172,7 @@ export default function RecipientsPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
                     onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
                     disabled={updateMutation.isPending}
                 >
@@ -189,7 +191,11 @@ export default function RecipientsPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => deleteMutation.mutate(row.id)}
+                    onClick={() => {
+                        if (confirm(`Delete recipient "${row.name}"?`)) {
+                            deleteMutation.mutate(row.id);
+                        }
+                    }}
                     disabled={deleteMutation.isPending}
                 >
                     <Trash2 className="h-4 w-4" />
@@ -203,7 +209,7 @@ export default function RecipientsPage() {
             <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => { setShowAll(!showAll); setPage(0); }}
+                onClick={() => { setShowAll(!showAll); }}
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}

@@ -183,22 +183,22 @@ class TestCategoriesCreateEndpoint:
         assert "list" in link_rels
 
     def test_create_category_duplicate_handling(self, client: TestClient, sample_category_data):
-        """Test creating duplicate category returns existing one."""
+        """Test creating duplicate category returns existing one with 200 status."""
         # Create first category
         response1 = client.post("/api/categories", json=sample_category_data)
         assert response1.status_code == 201
         first_id = response1.json()["id"]
 
-        # Create same category again
+        # Create same category again - should return 200 (existing resource)
         response2 = client.post("/api/categories", json=sample_category_data)
-        assert response2.status_code == 201
+        assert response2.status_code == 200
         second_id = response2.json()["id"]
 
         # Should return the same category (idempotent operation)
         assert first_id == second_id
 
     def test_create_category_case_insensitive_duplicate(self, client: TestClient):
-        """Test that case variations are treated as duplicates."""
+        """Test that case variations are treated as duplicates and return 200."""
         category1 = {"general": "groceries", "detail": "food", "description": "Test"}
         category2 = {"general": "GROCERIES", "detail": "FOOD", "description": "Test"}
 
@@ -209,7 +209,7 @@ class TestCategoriesCreateEndpoint:
 
         # Create same category with different case
         response2 = client.post("/api/categories", json=category2)
-        assert response2.status_code == 201
+        assert response2.status_code == 200  # Changed from 201 to 200 for existing category
         second_id = response2.json()["id"]
 
         # Should return the same category
@@ -375,37 +375,15 @@ class TestCategoryUpdateEndpoint:
 class TestCategoryDeleteEndpoint:
     """Test cases for category deletion."""
 
-    def test_delete_category_soft_delete(self, client: TestClient, test_db: Session):
-        """Test soft deletion of category."""
-        # Create test category
-        category = Category(general="GROCERIES", detail="FOOD")
-        test_db.add(category)
-        test_db.commit()
-        test_db.refresh(category)
-
-        response = client.delete(f"/api/categories/{category.id}?soft=true")
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify response
-        assert "message" in data
-        assert "soft" in data["message"].lower()
-        assert "links" in data
-
-        # Verify category is marked as inactive
-        test_db.refresh(category)
-        assert category.is_active is False
-
     def test_delete_category_hard_delete(self, client: TestClient, test_db: Session):
-        """Test hard deletion of category."""
+        """Test hard deletion of category (permanent removal)."""
         # Create test category
         category = Category(general="GROCERIES", detail="FOOD")
         test_db.add(category)
         test_db.commit()
         category_id = category.id
 
-        response = client.delete(f"/api/categories/{category_id}?soft=false")
+        response = client.delete(f"/api/categories/{category_id}")
 
         assert response.status_code == 200
         data = response.json()
@@ -423,22 +401,47 @@ class TestCategoryDeleteEndpoint:
         response = client.delete("/api/categories/99999")
         assert response.status_code == 404
 
-    def test_delete_category_default_soft_delete(self, client: TestClient, test_db: Session):
-        """Test that deletion defaults to soft delete."""
+    def test_deactivate_category_via_patch(self, client: TestClient, test_db: Session):
+        """Test deactivating a category via PATCH (soft delete alternative)."""
         # Create test category
-        category = Category(general="GROCERIES", detail="FOOD")
+        category = Category(general="GROCERIES", detail="FOOD", is_active=True)
         test_db.add(category)
         test_db.commit()
         test_db.refresh(category)
 
-        # Delete without specifying soft parameter
-        response = client.delete(f"/api/categories/{category.id}")
+        # Deactivate via PATCH
+        response = client.patch(f"/api/categories/{category.id}", json={"is_active": False})
 
         assert response.status_code == 200
+        data = response.json()
 
-        # Should default to soft delete
+        # Verify category is marked as inactive
+        assert data["is_active"] is False
+
+        # Verify in database
         test_db.refresh(category)
         assert category.is_active is False
+
+    def test_reactivate_category_via_patch(self, client: TestClient, test_db: Session):
+        """Test reactivating an inactive category via PATCH."""
+        # Create inactive test category
+        category = Category(general="GROCERIES", detail="FOOD", is_active=False)
+        test_db.add(category)
+        test_db.commit()
+        test_db.refresh(category)
+
+        # Reactivate via PATCH
+        response = client.patch(f"/api/categories/{category.id}", json={"is_active": True})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify category is marked as active
+        assert data["is_active"] is True
+
+        # Verify in database
+        test_db.refresh(category)
+        assert category.is_active is True
 
 
 class TestCategoryAssignmentEndpoint:
@@ -739,7 +742,7 @@ class TestCategoriesBusinessLogic:
         assert data["detail"] == "FOOD"
 
     def test_category_uniqueness_constraint(self, client: TestClient):
-        """Test category uniqueness is enforced."""
+        """Test category uniqueness is enforced - duplicates return 200."""
         category_data = {"general": "groceries", "detail": "food", "description": "First"}
 
         # Create first category
@@ -750,7 +753,7 @@ class TestCategoriesBusinessLogic:
         # Try to create same category with different description
         category_data["description"] = "Second"
         response2 = client.post("/api/categories", json=category_data)
-        assert response2.status_code == 201
+        assert response2.status_code == 200  # Returns existing category
         second_id = response2.json()["id"]
 
         # Should return the same category (uniqueness by general+detail)
@@ -816,15 +819,22 @@ class TestCategoriesExceptionHandling:
         assert "Error updating category" in response.json()["detail"]
 
     def test_delete_category_exception(self, client: TestClient, test_db: Session, monkeypatch):
-        """Test delete_category handles exceptions."""
+        """Test delete_category handles exceptions properly."""
         from services.category_service import CategoryService
+        from database.models import Category
 
-        def mock_soft_delete(*args, **kwargs):
+        # Create a test category first
+        category = Category(general="GROCERIES", detail="FOOD")
+        test_db.add(category)
+        test_db.commit()
+        test_db.refresh(category)
+
+        def mock_hard_delete(*args, **kwargs):
             raise Exception("Delete failed")
 
-        monkeypatch.setattr(CategoryService, "soft_delete", mock_soft_delete)
+        monkeypatch.setattr(CategoryService, "hard_delete", mock_hard_delete)
 
-        response = client.delete("/api/categories/1")
+        response = client.delete(f"/api/categories/{category.id}")
         assert response.status_code == 500
         assert "Error deleting category" in response.json()["detail"]
 
