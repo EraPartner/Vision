@@ -37,7 +37,6 @@ async def recipients_collection_options(
         limit: int = Query(50, ge=1, le=1000, description="Maximum number of recipients to return"),
         offset: int = Query(0, ge=0, description="Number of recipients to skip for pagination"),
         name: Optional[str] = Query(None, description="Filter by partial name match"),
-        account_number: Optional[str] = Query(None, description="Filter by partial account number match"),
         default_category_id: Optional[int] = Query(None, description="Filter by default category ID"),
         active: bool = Query(True, description="Filter by active status")
 ):
@@ -81,8 +80,6 @@ async def get_recipients(
         limit: int = Query(50, ge=1, le=1000, description="Maximum number of recipients to return"),
         offset: int = Query(0, ge=0, description="Number of recipients to skip for pagination"),
         name: Optional[str] = Query(None, description="Filter by partial name match (case-insensitive)"),
-        account_number: Optional[str] = Query(None,
-                                              description="Filter by partial account number match (case-insensitive)"),
         default_category_id: Optional[int] = Query(None, description="Filter by default category ID"),
         active: bool = Query(True, description="Filter by active status. True for active only, False for all"),
         request: Request = None,
@@ -91,7 +88,7 @@ async def get_recipients(
     """Get recipients with pagination, filtering, and HATEOAS links.
 
     Retrieves a paginated and optionally filtered list of recipients with links to available actions.
-    Supports filtering by name, account number, and default category for flexible recipient discovery.
+    Supports filtering by name and default category for flexible recipient discovery.
 
     **Recipient Storage and Display:**
     Recipient names are always stored and displayed in UPPERCASE for consistency. Users can input
@@ -101,7 +98,6 @@ async def get_recipients(
         limit (int): Maximum number of recipients to return (1-1000). Defaults to 50.
         offset (int): Number of recipients to skip before returning results. Defaults to 0.
         name (Optional[str]): Filter by partial name match (case-insensitive).
-        account_number (Optional[str]): Filter by partial account number match (case-insensitive).
         default_category_id (Optional[int]): Filter by exact default category ID.
         active (bool): Filter by active status. True for active only, False for all. Defaults to True.
         request (Request): Request object for generating absolute URLs.
@@ -124,9 +120,6 @@ async def get_recipients(
         # Filter by name (case-insensitive input, UPPERCASE results)
         GET /api/recipients?name=john  # Finds recipients with "JOHN"
 
-        # Filter by account number
-        GET /api/recipients?account_number=12345
-
         # Combined with pagination and active filter
         GET /api/recipients?name=smith&limit=10&offset=0&active=true
 
@@ -139,14 +132,13 @@ async def get_recipients(
             limit=limit,
             offset=offset,
             name=name,
-            account_number=account_number,
             default_category_id=default_category_id,
             active=active
         )
 
         # Use filtered count when filters are applied, otherwise use total count
-        if name or account_number or default_category_id:
-            total = service.get_filtered_count(name, account_number, default_category_id, active)
+        if name or default_category_id:
+            total = service.get_filtered_count(name, default_category_id, active)
         else:
             total = service.get_total_count(active)
 
@@ -162,7 +154,6 @@ async def get_recipients(
                 "active_filter": active,
                 "filters": {
                     "name": name,
-                    "account_number": account_number,
                     "default_category_id": default_category_id
                 }
             }
@@ -178,7 +169,7 @@ async def get_recipients(
             offset=offset,
             links=get_collection_links(
                 request, "recipients", limit, offset, total,
-                name=name, account_number=account_number,
+                name=name,
                 default_category_id=default_category_id, active=active
             )
         )
@@ -208,18 +199,17 @@ async def create_or_get_recipient(
     with the same name already exists, returns the existing recipient.
 
     **Recipient Normalisation:**
-    Recipient names and addresses are automatically normalised to UPPERCASE for consistency.
+    Recipient names are automatically normalised to UPPERCASE for consistency.
     Input can be provided in any case.
 
     Args:
-        recipient (RecipientBase): Recipient creation data including name,
-            account_number, address, and notes.
+        recipient (RecipientBase): Recipient creation data including name and notes.
         request (Request): Request object for generating absolute URLs.
         db (Session): Database session dependency.
 
     Returns:
         RecipientResponse: The created or existing recipient with HATEOAS links.
-        Recipient names and addresses will be normalised to UPPERCASE in the response.
+        Recipient names will be normalised to UPPERCASE in the response.
 
     Raises:
         HTTPException: 400 error for validation errors.
@@ -231,8 +221,6 @@ async def create_or_get_recipient(
 
         {
             "name": "john smith",         // Will be stored as "JOHN SMITH"
-            "account_number": "12345678",
-            "address": "123 main st",     // Will be stored as "123 MAIN ST"
             "notes": "Regular client"
         }
 
@@ -240,8 +228,6 @@ async def create_or_get_recipient(
         {
             "id": 1,
             "name": "JOHN SMITH",         // Always returned in UPPERCASE
-            "account_number": "12345678",
-            "address": "123 MAIN ST",     // Always returned in UPPERCASE
             "notes": "Regular client",
             ...
         }
@@ -252,9 +238,7 @@ async def create_or_get_recipient(
     try:
         service = RecipientService(db)
         new_recipient, created = service.create_or_get_recipient(
-            name=recipient.name,
-            account_number=recipient.account_number,
-            address=recipient.address
+            name=recipient.name
         )
 
         # Update additional fields if provided (category and notes)
@@ -387,8 +371,8 @@ async def update_recipient(
 ):
     """Partially update an existing recipient with HATEOAS links.
 
-    Updates the specified recipient with any provided values for name, account_number,
-    category_id, notes, and/or address.
+    Updates the specified recipient with any provided values for name,
+    category_id, notes, and/or is_active status.
 
     Args:
         recipient_id (int): The ID of the recipient to update.
@@ -424,10 +408,8 @@ async def update_recipient(
         recipient = service.update(
             recipient_id=recipient_id,
             name=update_data.get('name'),
-            account_number=update_data.get('account_number'),
             default_category_id=update_data.get('default_category_id'),
             notes=update_data.get('notes'),
-            address=update_data.get('address'),
             is_active=update_data.get('is_active')
         )
         if not recipient:

@@ -65,7 +65,6 @@ class TestRecipientsListEndpoint:
         for item in data["items"]:
             assert "id" in item
             assert "name" in item
-            assert "account_number" in item
             assert "is_active" in item
             assert "created_at" in item
             assert "updated_at" in item
@@ -127,26 +126,6 @@ class TestRecipientsListEndpoint:
         for item in data["items"]:
             assert "JOHN" in item["name"].upper()
 
-    def test_get_recipients_filter_by_account_number(self, client: TestClient, test_db: Session,
-                                                     multiple_recipients_data):
-        """Test GET /api/recipients with account number filter."""
-        # Create test recipients
-        for recipient_data in multiple_recipients_data:
-            recipient = Recipient(**recipient_data)
-            test_db.add(recipient)
-        test_db.commit()
-
-        # Filter by account number
-        response = client.get("/api/recipients?account_number=123")
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify all returned recipients contain "123" in account number
-        for item in data["items"]:
-            if item["account_number"]:
-                assert "123" in item["account_number"]
-
     def test_get_recipients_filter_inactive(self, client: TestClient, test_db: Session):
         """Test GET /api/recipients with active=false to include inactive recipients."""
         # Create active and inactive recipients
@@ -187,7 +166,6 @@ class TestRecipientsCreateEndpoint:
         # Verify response structure
         assert "id" in data
         assert "name" in data
-        assert "account_number" in data
         assert "is_active" in data
         assert "created_at" in data
         assert "updated_at" in data
@@ -195,7 +173,6 @@ class TestRecipientsCreateEndpoint:
 
         # Verify data matches input (name should be uppercase)
         assert data["name"] == sample_recipient_data["name"].upper()
-        assert data["account_number"] == sample_recipient_data.get("account_number")
         assert data["is_active"] is True
 
         # Verify HATEOAS links
@@ -216,7 +193,6 @@ class TestRecipientsCreateEndpoint:
         data = response.json()
 
         assert data["name"] == "MINIMAL RECIPIENT"
-        assert data["account_number"] is None
         assert data["is_active"] is True
 
     def test_create_recipient_with_category(self, client: TestClient, test_db: Session):
@@ -612,7 +588,7 @@ class TestRecipientsErrorHandling:
 
     def test_missing_required_fields(self, client: TestClient, test_db: Session):
         """Test handling of missing required fields."""
-        incomplete_data = {"account_number": "12345"}  # Missing name
+        incomplete_data = {"notes": "Some notes"}  # Missing name
 
         response = client.post("/api/recipients", json=incomplete_data)
 

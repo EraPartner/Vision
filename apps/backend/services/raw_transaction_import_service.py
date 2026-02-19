@@ -11,17 +11,15 @@ The new architecture:
 
 This replaces the old TransactionImportService which mixed raw and normalized data.
 """
-import json
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
 
 from config.logging_config import setup_logging
-from database.models import Transaction, ImportBatch
+from database.models import Transaction
 from database.raw_transaction_models import TransactionRawReference
-from repositories.import_batch_repository import ImportBatchRepository
 from repositories.raw_transaction_repositories import (
     BelfiusRawTransactionRepository,
     RevolutRawTransactionRepository,
@@ -43,7 +41,6 @@ class RawTransactionImportService:
     - Raw transaction storage with deduplication
     - Normalized transaction creation
     - Raw-to-normalized linking
-    - Import batch tracking
     """
 
     def __init__(self, db_session: Session):
@@ -54,7 +51,6 @@ class RawTransactionImportService:
         """
         self.db = db_session
         self.txn_repo = TransactionRepository(db_session)
-        self.batch_repo = ImportBatchRepository(db_session)
         self.belfius_raw_repo = BelfiusRawTransactionRepository(db_session)
         self.revolut_raw_repo = RevolutRawTransactionRepository(db_session)
         self.kbc_raw_repo = KBCRawTransactionRepository(db_session)
@@ -70,15 +66,14 @@ class RawTransactionImportService:
     ) -> Dict[str, Any]:
         """Import transactions from CSV with raw data preservation.
 
-        New flow:
-        1. Create import batch
-        2. Parse CSV file
-        3. For each transaction:
+        Flow:
+        1. Parse CSV file
+        2. For each transaction:
            a. Check for duplicate in raw table
            b. Store in bank-specific raw table
            c. Create normalized Transaction
            d. Link normalized to raw
-        4. Update batch results
+        3. Return results
 
         Args:
             file_path: Path to CSV file
@@ -89,23 +84,11 @@ class RawTransactionImportService:
         Returns:
             Import results dictionary with statistics
         """
-        # Create import batch record
-        batch = ImportBatch(
-            filename=file_path.split('/')[-1],
-            bank_name=bank_name,
-            config_used=json.dumps(custom_config) if custom_config else None,
-            status="processing"
-        )
-        self.db.add(batch)
-        self.db.commit()
-        self.db.refresh(batch)
-
         logger.info(
             "Starting raw transaction CSV import",
             extra={
                 "operation": "import_csv",
-                "batch_id": batch.id,
-                "file_name": batch.filename,
+                "file_name": file_path.split('/')[-1],
                 "bank_name": bank_name,
                 "account_type": account_type
             }
@@ -125,7 +108,6 @@ class RawTransactionImportService:
                 f"Parsed CSV file successfully",
                 extra={
                     "operation": "parse_csv",
-                    "batch_id": batch.id,
                     "transactions_parsed": len(transaction_data_list)
                 }
             )
@@ -136,26 +118,14 @@ class RawTransactionImportService:
             # Process transactions with new architecture
             results = self._process_transactions_with_raw_storage(
                 transaction_data_list,
-                batch.id,
                 bank_type
             )
-
-            # Update batch with results
-            batch.total_processed = results['total_processed']
-            batch.imported_count = results['imported']
-            batch.duplicate_count = results['duplicates']
-            batch.error_count = results['errors']
-            batch.status = "completed" if results['errors'] == 0 else "completed_with_errors"
-            batch.completed_at = datetime.now(timezone.utc)
-
-            self.db.commit()
 
             logger.info(
                 "CSV import completed successfully",
                 extra={
                     "operation": "import_csv",
-                    "batch_id": batch.id,
-                    "status": batch.status,
+                    "status": "completed" if results['errors'] == 0 else "completed_with_errors",
                     "imported": results['imported'],
                     "duplicates": results['duplicates'],
                     "errors": results['errors']
@@ -163,33 +133,24 @@ class RawTransactionImportService:
             )
 
             return {
-                'batch_id': batch.id,
                 'total_processed': results['total_processed'],
                 'imported': results['imported'],
                 'duplicates': results['duplicates'],
                 'errors': results['errors'],
-                'status': batch.status
+                'status': "completed" if results['errors'] == 0 else "completed_with_errors"
             }
 
         except Exception as e:
-            # Update batch with error
-            batch.status = "failed"
-            batch.error_message = str(e)
-            batch.completed_at = datetime.now(timezone.utc)
-            self.db.commit()
-
             logger.error(
                 "CSV import failed",
                 extra={
                     "operation": "import_csv",
-                    "batch_id": batch.id,
                     "error": str(e)
                 },
                 exc_info=True
             )
 
             return {
-                'batch_id': batch.id,
                 'total_processed': 0,
                 'imported': 0,
                 'duplicates': 0,
@@ -223,12 +184,11 @@ class RawTransactionImportService:
     def _process_transactions_with_raw_storage(
             self,
             transaction_data_list: List[TransactionData],
-            batch_id: int,
             bank_type: str
     ) -> Dict[str, int]:
         """Process transactions with raw table storage first.
 
-        New architecture flow:
+        Architecture flow:
         1. Check duplicate in raw table
         2. Store in bank-specific raw table
         3. Create normalized Transaction
@@ -236,7 +196,6 @@ class RawTransactionImportService:
 
         Args:
             transaction_data_list: Parsed transaction data
-            batch_id: Import batch ID
             bank_type: Bank type for routing
 
         Returns:
@@ -253,7 +212,6 @@ class RawTransactionImportService:
             f"Processing {len(transaction_data_list)} transactions with raw storage",
             extra={
                 "operation": "process_transactions",
-                "batch_id": batch_id,
                 "bank_type": bank_type
             }
         )
@@ -269,7 +227,6 @@ class RawTransactionImportService:
                 # Step 2: Store in bank-specific raw table
                 raw_txn = self._store_raw_transaction(
                     transaction_data,
-                    batch_id,
                     bank_type
                 )
 
@@ -293,8 +250,7 @@ class RawTransactionImportService:
                     memo=transaction_data.memo or '',
                     comment=transaction_data.comment,
                     bank_account=transaction_data.bank_account,
-                    recipient_id=recipient.id,
-                    batch_id=batch_id
+                    recipient_id=recipient.id
                 )
 
                 self.db.add(transaction)
@@ -315,7 +271,6 @@ class RawTransactionImportService:
                     f"Error processing transaction: {str(e)}",
                     extra={
                         "operation": "process_transaction",
-                        "batch_id": batch_id,
                         "bank_type": bank_type,
                         "error": str(e)
                     },
@@ -329,7 +284,6 @@ class RawTransactionImportService:
             "Transaction processing completed",
             extra={
                 "operation": "process_transactions",
-                "batch_id": batch_id,
                 "imported": results['imported'],
                 "duplicates": results['duplicates'],
                 "errors": results['errors']
@@ -341,14 +295,12 @@ class RawTransactionImportService:
     def _store_raw_transaction(
             self,
             transaction_data: TransactionData,
-            batch_id: int,
             bank_type: str
     ):
         """Store transaction in bank-specific raw table.
 
         Args:
             transaction_data: Parsed transaction data
-            batch_id: Import batch ID
             bank_type: Bank type for routing
 
         Returns:
@@ -360,11 +312,11 @@ class RawTransactionImportService:
 
             # Route to appropriate raw table based on bank type
             if bank_type == 'belfius':
-                return self._store_belfius_raw(transaction_data, batch_id, dedup_hash)
+                return self._store_belfius_raw(transaction_data, dedup_hash)
             elif bank_type == 'revolut':
-                return self._store_revolut_raw(transaction_data, batch_id, dedup_hash)
+                return self._store_revolut_raw(transaction_data, dedup_hash)
             elif bank_type == 'kbc':
-                return self._store_kbc_raw(transaction_data, batch_id, dedup_hash)
+                return self._store_kbc_raw(transaction_data, dedup_hash)
             else:
                 logger.error(f"Unsupported bank type for raw storage: {bank_type}")
                 return None
@@ -380,14 +332,12 @@ class RawTransactionImportService:
     def _store_belfius_raw(
             self,
             transaction_data: TransactionData,
-            batch_id: int,
             dedup_hash: str
     ):
         """Store Belfius raw transaction.
 
         Args:
             transaction_data: Parsed transaction data
-            batch_id: Import batch ID
             dedup_hash: Deduplication hash
 
         Returns:
@@ -397,7 +347,6 @@ class RawTransactionImportService:
         comment_data = self._parse_belfius_comment(transaction_data.comment)
 
         raw_data = {
-            'import_batch_id': batch_id,
             'deduplication_hash': dedup_hash,
             'account_number': comment_data.get('account_number', ''),
             'transaction_date': transaction_data.date.date() if hasattr(transaction_data.date,
@@ -424,14 +373,12 @@ class RawTransactionImportService:
     def _store_revolut_raw(
             self,
             transaction_data: TransactionData,
-            batch_id: int,
             dedup_hash: str
     ):
         """Store Revolut raw transaction.
 
         Args:
             transaction_data: Parsed transaction data
-            batch_id: Import batch ID
             dedup_hash: Deduplication hash
 
         Returns:
@@ -441,7 +388,6 @@ class RawTransactionImportService:
         comment_data = self._parse_revolut_comment(transaction_data.comment)
 
         raw_data = {
-            'import_batch_id': batch_id,
             'deduplication_hash': dedup_hash,
             'transaction_type': comment_data.get('type', ''),
             'product': comment_data.get('product', ''),
@@ -461,14 +407,12 @@ class RawTransactionImportService:
     def _store_kbc_raw(
             self,
             transaction_data: TransactionData,
-            batch_id: int,
             dedup_hash: str
     ):
         """Store KBC raw transaction.
 
         Args:
             transaction_data: Parsed transaction data
-            batch_id: Import batch ID
             dedup_hash: Deduplication hash
 
         Returns:
@@ -478,7 +422,6 @@ class RawTransactionImportService:
         comment_data = self._parse_kbc_comment(transaction_data.comment)
 
         raw_data = {
-            'import_batch_id': batch_id,
             'deduplication_hash': dedup_hash,
             'account_number': comment_data.get('account_number', ''),
             'category_name': comment_data.get('category'),

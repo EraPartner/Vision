@@ -206,7 +206,7 @@ def get_collection_links(
 
 # ==================== Import-Specific Links ====================
 
-def get_import_result_links(request: Request, batch_id: int) -> List[Link]:
+def get_import_result_links(request: Request) -> List[Link]:
     """
     Generate links after successful import operation.
 
@@ -227,14 +227,8 @@ def get_import_result_links(request: Request, batch_id: int) -> List[Link]:
     base_url = get_base_url(request)
     return [
         Link(
-            rel="batch",
-            href=HttpUrl(f"{base_url}/api/import/batches/{batch_id}"),
-            method="GET",
-            title="View import batch details"
-        ),
-        Link(
             rel="transactions",
-            href=HttpUrl(f"{base_url}/api/transactions?batch_id={batch_id}"),
+            href=HttpUrl(f"{base_url}/api/transactions"),
             method="GET",
             title="View imported transactions"
         ),
@@ -249,49 +243,5 @@ def get_import_result_links(request: Request, batch_id: int) -> List[Link]:
             href=HttpUrl(f"{base_url}/api/import/batches"),
             method="GET",
             title="View import history"
-        ),
-    ]
-
-
-def get_import_batch_links(request: Request, batch_id: int) -> List[Link]:
-    """
-    Generate links for a single import batch resource.
-
-    Args:
-        request: FastAPI Request object
-        batch_id: ID of the import batch
-
-    Returns:
-        List of links for import batch actions
-
-    Example:
-        links = get_import_batch_links(request, batch_id=123)
-        # Returns: [self, transactions, list, new_import]
-    """
-    base_url = get_base_url(request)
-    return [
-        Link(
-            rel="self",
-            href=HttpUrl(f"{base_url}/api/import/batches/{batch_id}"),
-            method="GET",
-            title="View this import batch"
-        ),
-        Link(
-            rel="transactions",
-            href=HttpUrl(f"{base_url}/api/transactions?batch_id={batch_id}"),
-            method="GET",
-            title="View transactions from this batch"
-        ),
-        Link(
-            rel="list",
-            href=HttpUrl(f"{base_url}/api/import/batches"),
-            method="GET",
-            title="View all import batches"
-        ),
-        Link(
-            rel="new_import",
-            href=HttpUrl(f"{base_url}/api/import/csv"),
-            method="POST",
-            title="Import another CSV file"
         ),
     ]

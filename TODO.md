@@ -1,5 +1,6 @@
 TODO for Frontend
 
+- View Categories hierarchically in the UI
 - Implement a way to distinct KBC Savings and Checkigns in backend
 - Add a way to see the cash flow of the month with(out) planned transactions
 - When hiding transactions/recipients/categories, remove them from stats

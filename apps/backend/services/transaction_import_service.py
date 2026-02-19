@@ -21,12 +21,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
+from repositories.import_batch_repository import ImportBatchRepository
 from sqlalchemy.orm import Session
 
 from config.logging_config import setup_logging
 from database.models import Transaction, Recipient, ImportBatch
 from repositories.category_repository import CategoryRepository
-from repositories.import_batch_repository import ImportBatchRepository
 from repositories.transaction_repository import TransactionRepository
 from services.bank_adapters import BankAdapterFactory, TransactionData
 from services.deduplication_service import DeduplicationService
@@ -125,7 +125,6 @@ class TransactionImportService:
 
         Returns:
             Dict[str, Any]: Import results containing:
-                - batch_id (str): Unique identifier for the import batch
                 - total_processed (int): Total number of transactions parsed from CSV
                 - imported (int): Number of new transactions successfully imported
                 - duplicates (int): Number of duplicate transactions skipped
@@ -186,7 +185,6 @@ class TransactionImportService:
             "Starting CSV import",
             extra={
                 "operation": "import_csv",
-                "batch_id": batch.id,
                 "file_name": batch.filename,
                 "bank_name": bank_name,
                 "has_custom_config": custom_config is not None
@@ -208,7 +206,6 @@ class TransactionImportService:
                 f"Parsed CSV file successfully",
                 extra={
                     "operation": "parse_csv",
-                    "batch_id": batch.id,
                     "transactions_parsed": len(transaction_data_list),
                     "account_type": account_type
                 }
@@ -231,7 +228,6 @@ class TransactionImportService:
                 "CSV import completed successfully",
                 extra={
                     "operation": "import_csv",
-                    "batch_id": batch.id,
                     "status": batch.status,
                     "total_processed": results['total_processed'],
                     "imported": results['imported'],
@@ -241,7 +237,6 @@ class TransactionImportService:
             )
 
             return {
-                'batch_id': batch.id,
                 'total_processed': results['total_processed'],
                 'imported': results['imported'],
                 'duplicates': results['duplicates'],
@@ -260,7 +255,6 @@ class TransactionImportService:
                 "CSV import failed",
                 extra={
                     "operation": "import_csv",
-                    "batch_id": batch.id,
                     "error": str(e),
                     "bank_name": bank_name
                 },
@@ -268,7 +262,6 @@ class TransactionImportService:
             )
 
             return {
-                'batch_id': batch.id,
                 'total_processed': 0,
                 'imported': 0,
                 'duplicates': 0,
@@ -277,7 +270,7 @@ class TransactionImportService:
                 'error_message': str(e)
             }
 
-    def _process_transactions(self, transaction_data_list: List[TransactionData], batch_id: int) -> Dict[str, int]:
+    def _process_transactions(self, transaction_data_list: List[TransactionData]) -> Dict[str, int]:
         """Process parsed transaction data into database records.
 
         Iterates through each TransactionData object, performs duplicate detection,
@@ -295,7 +288,6 @@ class TransactionImportService:
         Args:
             transaction_data_list (List[TransactionData]): List of parsed transaction data
                 objects from the CSV file.
-            batch_id (int): Import batch identifier to associate with transactions.
 
         Returns:
             Dict[str, int]: Processing statistics containing:
@@ -307,7 +299,7 @@ class TransactionImportService:
         Example:
             service = TransactionImportService(db)
             transaction_data_list = [...]  # Parsed from CSV
-            results = service._process_transactions(transaction_data_list, batch_id=1)
+            results = service._process_transactions(transaction_data_list)
             print(f"Processed {results['total_processed']}, imported {results['imported']}")
 
         Note:
@@ -328,7 +320,6 @@ class TransactionImportService:
             f"Processing {len(transaction_data_list)} transactions",
             extra={
                 "operation": "process_transactions",
-                "batch_id": batch_id,
                 "total_count": len(transaction_data_list)
             }
         )
@@ -358,7 +349,6 @@ class TransactionImportService:
                     comment=transaction_data.comment,
                     bank_account=transaction_data.bank_account,
                     recipient_id=recipient.id,
-                    batch_id=batch_id,
                     original_raw_data=transaction_data.raw_data,
                     bank_reference=self.dedup_service.get_hash_for_data(transaction_data)
                 )
@@ -371,7 +361,6 @@ class TransactionImportService:
                     f"Error processing individual transaction: {str(e)}",
                     extra={
                         "operation": "process_transaction",
-                        "batch_id": batch_id,
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "transaction_data": str(transaction_data)[:200]  # Truncate for logging
@@ -386,7 +375,6 @@ class TransactionImportService:
             "Transaction processing completed",
             extra={
                 "operation": "process_transactions",
-                "batch_id": batch_id,
                 "total_processed": results['total_processed'],
                 "imported": results['imported'],
                 "duplicates": results['duplicates'],

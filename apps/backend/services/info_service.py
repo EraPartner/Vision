@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config.logging_config import setup_logging
-from database.models import ImportBatch, Transaction, Category
+from database.models import Transaction, Category
 from repositories.info_repository import InfoRepository
 
 logger = setup_logging(__name__)
@@ -64,34 +64,6 @@ class InfoService:
         count = self.info_repo.get_transaction_count()
         logger.info(f"Retrieved transaction count: {count}")
         return count
-
-    def get_import_history(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent import batch history.
-
-        Args:
-            limit: Maximum number of batches to retrieve (1-100)
-
-        Returns:
-            List of import batch information
-        """
-        batches = self.db.query(ImportBatch) \
-            .order_by(ImportBatch.created_at.desc()) \
-            .limit(limit) \
-            .all()
-
-        return [{
-            "id": b.id,
-            "filename": b.filename,
-            "bank_name": b.bank_name,
-            "total_processed": b.total_processed,
-            "imported": b.imported_count,
-            "duplicates": b.duplicate_count,
-            "errors": b.error_count,
-            "status": b.status,
-            "created_at": b.created_at.isoformat(),
-            "completed_at": b.completed_at.isoformat() if b.completed_at else None
-        } for b in batches]
 
     def get_transaction_summary(
             self,

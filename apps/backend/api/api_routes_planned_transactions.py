@@ -106,13 +106,13 @@ async def get_planned_transactions(
         # Parse date filters
         start_date_obj = None
         end_date_obj = None
-        if start_date:
+        if start_date and start_date.strip():
             try:
                 start_date_obj = date.fromisoformat(start_date)
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid start_date format: {start_date}. Use YYYY-MM-DD")
 
-        if end_date:
+        if end_date and end_date.strip():
             try:
                 end_date_obj = date.fromisoformat(end_date)
             except ValueError:

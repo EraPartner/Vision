@@ -268,10 +268,12 @@ async def get_transactions(
             "Error retrieving transactions",
             extra={
                 "operation": "get_transactions",
-                "error": str(e)
-            }
+                "error": str(e),
+                "error_type": type(e).__name__
+            },
+            exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Error retrieving transactions")
+        raise HTTPException(status_code=500, detail=f"Error retrieving transactions: {str(e)}")
 
 
 @router.post("", response_model=TransactionResponse, status_code=201,
@@ -373,7 +375,6 @@ async def create_transaction(
             balance=transaction.balance,
             category_id=transaction.category_id,
             comment=transaction.comment,
-            batch_id=transaction.batch_id,
             original_raw_data=transaction.original_raw_data,
             bank_reference=transaction.bank_reference,
             skip_duplicate_check=transaction.skip_duplicate_check

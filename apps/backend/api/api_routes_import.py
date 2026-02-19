@@ -16,16 +16,12 @@ The import process:
 See docs/HTTP_PARAMETER_USAGE_GUIDELINES.md for comprehensive parameter usage patterns.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
-from fastapi.params import Path
 from sqlalchemy.orm import Session
 
 from api.api_schemas import (
-    ImportResultWithLinks, ImportBatchResponse,
-    ImportBatchesListResponse, OptionsResponse, MethodInfo, Link
+    ImportResultWithLinks, OptionsResponse, MethodInfo, Link
 )
-from api.hateoas_links import (
-    get_import_result_links, get_import_batch_links, get_collection_links
-)
+from api.hateoas_links import get_import_result_links
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.csv_configuration_factory import CSVConfigurationFactory, CSVConfigurationError
@@ -70,12 +66,6 @@ async def import_csv_options(request: Request):
                 href=HttpUrl(f"{str(request.base_url).rstrip('/')}/api/import/csv/custom"),
                 method="POST",
                 title="Import CSV with custom configuration"
-            ),
-            Link(
-                rel="import_history",
-                href=HttpUrl(f"{str(request.base_url).rstrip('/')}/api/import/batches"),
-                method="GET",
-                title="View import history"
             )
         ]
     )
@@ -216,7 +206,6 @@ async def import_csv_file(
             "CSV import completed",
             extra={
                 "operation": "import_csv",
-                "batch_id": result.get('batch_id'),
                 "file_name": file.filename,
                 "bank_name": bank_name,
                 "imported": result.get('imported', 0),
@@ -227,11 +216,9 @@ async def import_csv_file(
         )
 
         # Add HATEOAS links - convert batch_id to string as required by schema
-        batch_id_int = int(result['batch_id'])
-        result['batch_id'] = str(result['batch_id'])
         result_with_links = ImportResultWithLinks(
             **result,
-            links=get_import_result_links(request, batch_id_int)
+            links=get_import_result_links(request)
         )
 
         return result_with_links
@@ -470,7 +457,6 @@ async def import_csv_custom_config(
             "Custom CSV import completed",
             extra={
                 "operation": "import_csv_custom",
-                "batch_id": result.get('batch_id'),
                 "file_name": file.filename,
                 "bank_name": bank_name,
                 "imported": result.get('imported', 0),
@@ -480,11 +466,9 @@ async def import_csv_custom_config(
         )
 
         # Add HATEOAS links - convert batch_id to string as required by schema
-        batch_id_int = int(result['batch_id'])
-        result['batch_id'] = str(result['batch_id'])
         result_with_links = ImportResultWithLinks(
             **result,
-            links=get_import_result_links(request, batch_id_int)
+            links=get_import_result_links(request)
         )
 
         return result_with_links
@@ -508,300 +492,3 @@ async def import_csv_custom_config(
         if tmp_file_path:
             FileImportHandler.cleanup_temp_file(tmp_file_path)
             logger.debug(f"Cleaned up temporary file: {tmp_file_path}")
-
-
-# ==================== Import History / Batch Management ====================
-
-@router.options("/batches", response_model=OptionsResponse,
-                description="Discover available methods on import batches collection endpoint")
-async def import_batches_options(request: Request):
-    """OPTIONS method for import batches collection endpoint discovery.
-
-    Returns:
-        OptionsResponse: Available methods and HATEOAS links
-    """
-    from pydantic import HttpUrl
-    return OptionsResponse(
-        methods=[
-            MethodInfo(
-                method="GET",
-                description="Retrieve import batch history with pagination and filtering"
-            ),
-            MethodInfo(
-                method="OPTIONS",
-                description="Discover available methods on this endpoint"
-            )
-        ],
-        links=[
-            Link(
-                rel="self",
-                href=HttpUrl(f"{str(request.base_url).rstrip('/')}/api/import/batches"),
-                method="GET",
-                title="View import history"
-            ),
-            Link(
-                rel="new_import",
-                href=HttpUrl(f"{str(request.base_url).rstrip('/')}/api/import/csv"),
-                method="POST",
-                title="Import new CSV file"
-            )
-        ]
-    )
-
-
-@router.get("/batches", response_model=ImportBatchesListResponse, status_code=200,
-            description="Retrieve import batch history")
-async def get_import_batches(
-        limit: int = Query(50, ge=1, le=1000, description="Maximum number of batches to return"),
-        offset: int = Query(0, ge=0, description="Number of batches to skip for pagination"),
-        bank_name: str = Query(None, description="Filter by bank name (case-insensitive)"),
-        status: str = Query(None, description="Filter by status (e.g., 'completed', 'failed', 'processing')"),
-        request: Request = None,
-        db: Session = Depends(get_db)
-):
-    """Get import batch history with pagination, filtering, and HATEOAS links.
-
-    Retrieves a paginated list of import batches with support for filtering by
-    bank name and status. Each batch includes comprehensive statistics about the
-    import operation and links to view the imported transactions.
-
-    **Use Cases:**
-    - Audit import history
-    - Monitor import failures
-    - Track data provenance
-    - Identify duplicate import attempts
-    - Review custom import configurations
-
-    Args:
-        limit (int): Maximum number of batches to return (1-1000). Defaults to 50.
-        offset (int): Number of batches to skip before returning results. Defaults to 0.
-        bank_name (str): Filter by partial bank name match (case-insensitive).
-        status (str): Filter by exact status match.
-        request (Request): Request object for generating absolute URLs.
-        db (Session): Database session dependency.
-
-    Returns:
-        ImportBatchesListResponse: Paginated import batches list with HATEOAS links.
-
-    Raises:
-        HTTPException: 500 error if retrieval fails.
-
-    Example:
-        # Get all import batches
-        GET /api/import/batches
-
-        # Filter by bank name
-        GET /api/import/batches?bank_name=Chase
-
-        # Filter by status
-        GET /api/import/batches?status=failed
-
-        # Combined with pagination
-        GET /api/import/batches?bank_name=Revolut&limit=10&offset=0
-
-        Response (200 OK):
-        {
-            "items": [
-                {
-                    "id": 123,
-                    "filename": "transactions.csv",
-                    "bank_name": "Chase",
-                    "status": "completed",
-                    "total_processed": 150,
-                    "imported_count": 145,
-                    "duplicate_count": 5,
-                    "error_count": 0,
-                    "created_at": "2024-01-15T10:30:00Z",
-                    "completed_at": "2024-01-15T10:30:15Z",
-                    "links": [...]
-                }
-            ],
-            "total": 45,
-            "limit": 50,
-            "offset": 0,
-            "links": [...]
-        }
-    """
-    try:
-        service = RawTransactionImportService(db)
-
-        # Get batches based on filters
-        if bank_name:
-            batches = service.batch_repo.get_by_bank_name(bank_name, limit, offset)
-        elif status:
-            batches = service.batch_repo.get_by_status(status, limit, offset)
-        else:
-            batches = service.batch_repo.list_recent(limit, offset)
-
-        # Get total count
-        total = service.batch_repo.get_total_count()
-
-        logger.info(
-            "Retrieved import batches successfully",
-            extra={
-                "operation": "get_import_batches",
-                "count": len(batches),
-                "offset": offset,
-                "limit": limit,
-                "total": total,
-                "filters": {
-                    "bank_name": bank_name,
-                    "status": status
-                }
-            }
-        )
-
-        # Add HATEOAS links to each batch
-        for batch in batches:
-            batch.links = get_import_batch_links(request, batch.id)
-
-        return ImportBatchesListResponse(
-            items=[ImportBatchResponse.model_validate(b) for b in batches],
-            total=total,
-            limit=limit,
-            offset=offset,
-            links=get_collection_links(
-                request, "import/batches", limit, offset, total,
-                bank_name=bank_name, status=status
-            )
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to retrieve import batches",
-            extra={
-                "operation": "get_import_batches",
-                "status": "failed"
-            },
-            exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Error retrieving import batches")
-
-
-@router.options("/batches/{batch_id}", response_model=OptionsResponse,
-                description="Discover available methods on individual import batch endpoint")
-async def import_batch_resource_options(
-        batch_id: int = Path(ge=1, description="The ID of the import batch"),
-        request: Request = None
-):
-    """OPTIONS method for individual import batch resource endpoint discovery.
-
-    Args:
-        batch_id (int): The ID of the import batch.
-        request (Request): Request object for generating URLs.
-
-    Returns:
-        OptionsResponse: Available methods and HATEOAS links
-    """
-    return OptionsResponse(
-        methods=[
-            MethodInfo(
-                method="GET",
-                description="Retrieve a specific import batch by ID"
-            ),
-            MethodInfo(
-                method="OPTIONS",
-                description="Discover available methods on this endpoint"
-            )
-        ],
-        links=get_import_batch_links(request, batch_id)
-    )
-
-
-@router.get("/batches/{batch_id}", response_model=ImportBatchResponse, status_code=200,
-            description="Retrieve a specific import batch by ID")
-async def get_import_batch(
-        batch_id: int = Path(ge=1, description="The ID of the import batch to retrieve"),
-        request: Request = None,
-        db: Session = Depends(get_db)
-):
-    """Get a specific import batch by ID with HATEOAS links.
-
-    Retrieves detailed information about a specific import batch, including
-    all statistics, configuration used, and links to view the imported transactions.
-
-    Args:
-        batch_id (int): The unique identifier of the import batch.
-        request (Request): Request object for generating absolute URLs.
-        db (Session): Database session dependency.
-
-    Returns:
-        ImportBatchResponse: Import batch details with HATEOAS links.
-
-    Raises:
-        HTTPException: 404 error if batch not found.
-        HTTPException: 500 error if retrieval fails.
-
-    Example:
-        GET /api/import/batches/123
-
-        Response (200 OK):
-        {
-            "id": 123,
-            "filename": "transactions.csv",
-            "bank_name": "Chase",
-            "status": "completed",
-            "total_processed": 150,
-            "imported_count": 145,
-            "duplicate_count": 5,
-            "error_count": 0,
-            "error_message": null,
-            "config_used": null,
-            "created_at": "2024-01-15T10:30:00Z",
-            "completed_at": "2024-01-15T10:30:15Z",
-            "links": [
-                {
-                    "rel": "self",
-                    "href": "http://localhost:8000/api/import/batches/123",
-                    "method": "GET",
-                    "title": "View this import batch"
-                },
-                {
-                    "rel": "transactions",
-                    "href": "http://localhost:8000/api/transactions?batch_id=123",
-                    "method": "GET",
-                    "title": "View transactions from this batch"
-                },
-                ...
-            ]
-        }
-    """
-    try:
-        service = RawTransactionImportService(db)
-        batch = service.batch_repo.get_by_id(batch_id)
-
-        if not batch:
-            logger.warning(
-                "Import batch not found",
-                extra={
-                    "operation": "get_import_batch",
-                    "batch_id": batch_id
-                }
-            )
-            raise HTTPException(status_code=404, detail=f"Import batch {batch_id} not found")
-
-        logger.info(
-            "Retrieved import batch successfully",
-            extra={
-                "operation": "get_import_batch",
-                "batch_id": batch_id,
-                "status": batch.status
-            }
-        )
-
-        # Add HATEOAS links
-        batch.links = get_import_batch_links(request, batch.id)
-
-        return ImportBatchResponse.model_validate(batch)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to retrieve import batch",
-            extra={
-                "operation": "get_import_batch",
-                "batch_id": batch_id
-            },
-            exc_info=True
-        )
-        raise HTTPException(status_code=500, detail="Error retrieving import batch")

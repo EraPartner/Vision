@@ -240,10 +240,12 @@ export default function TransactionsPage() {
             key: "comment",
             header: "Comment",
             editable: true,
+            minWidth: 150,
+            defaultWidth: 200,
             render: (row: TableTransaction) => (
-                <span className={`text-sm text-muted-foreground italic ${!row.is_active ? 'line-through' : ''}`}>
+                <div className={`overflow-x-auto whitespace-nowrap text-sm text-muted-foreground italic ${!row.is_active ? 'line-through' : ''}`}>
                     {row.comment || '-'}
-                </span>
+                </div>
             ),
         },
         {

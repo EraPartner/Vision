@@ -1,24 +1,15 @@
 """
-SQLite to PostgreSQL Migration Script
+SQLite to PostgreSQL Migration Script - Categories Only
 
-This script migrates data from SQLite to PostgreSQL while preserving:
-- All table data and relationships
-- Primary key sequences
-- Foreign key integrity
-- Transaction atomicity
+This script migrates ONLY the categories table from SQLite to PostgreSQL.
 
 Usage:
     python -m utils.migrate_sqlite_to_postgres
-
-Environment Variables Required:
-    SOURCE_DATABASE_URL: SQLite database URL (e.g., sqlite:///./financial_transactions.db)
-    TARGET_DATABASE_URL: PostgreSQL database URL (e.g., postgresql://user:pass@localhost/dbname)
 """
 import os
 import sys
 from datetime import datetime
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker, Session
@@ -26,13 +17,14 @@ from sqlalchemy.orm import sessionmaker, Session
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.models import (
-    Base, Transaction, Category, Recipient, ImportBatch,
-    PlannedTransaction, ExchangeRate, PlannedTransactionExecution
-)
+from database.models import Base, Category
 from config.logging_config import setup_logging
 
 logger = setup_logging(__name__)
+
+# Hardcoded database URLs
+SOURCE_DATABASE_URL = "sqlite:///./financial_transactions.db"
+TARGET_DATABASE_URL = "postgresql://ftm_user:@localhost:5433/financial_transactions"
 
 
 class DatabaseMigrator:
@@ -63,16 +55,8 @@ class DatabaseMigrator:
         self.SourceSession = sessionmaker(bind=self.source_engine)
         self.TargetSession = sessionmaker(bind=self.target_engine)
 
-        # Define migration order (respects foreign key dependencies)
-        self.migration_order = [
-            Category,
-            Recipient,
-            ImportBatch,
-            Transaction,
-            PlannedTransaction,
-            ExchangeRate,
-            PlannedTransactionExecution,
-        ]
+        # Only migrate categories
+        self.migration_order = [Category]
 
     def validate_source_database(self) -> bool:
         """
@@ -91,16 +75,12 @@ class DatabaseMigrator:
 
             logger.info(f"Source database contains {len(tables)} tables: {', '.join(tables)}")
 
-            # Check for data
+            # Check for categories data
             with self.SourceSession() as session:
-                transaction_count = session.query(Transaction).count()
                 category_count = session.query(Category).count()
-                recipient_count = session.query(Recipient).count()
 
                 logger.info(f"Source database statistics:")
-                logger.info(f"  - Transactions: {transaction_count}")
                 logger.info(f"  - Categories: {category_count}")
-                logger.info(f"  - Recipients: {recipient_count}")
 
             return True
 
@@ -325,35 +305,15 @@ class DatabaseMigrator:
 
 def main():
     """Main entry point for the migration script."""
-    # Load environment variables from config/.env.local
-    # Get the backend directory (parent of utils directory)
-    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    env_path = os.path.join(backend_dir, "config", ".env.local")
-
-    load_dotenv(dotenv_path=env_path)
-    logger.info(f"Loading environment from: {env_path}")
-
-    # Get database URLs from environment
-    source_url = os.getenv(
-        "SOURCE_DATABASE_URL",
-        "sqlite:///./financial_transactions.db"
-    )
-    target_url = os.getenv("TARGET_DATABASE_URL")
-
-    if not target_url:
-        logger.error(
-            "TARGET_DATABASE_URL environment variable is required.\n"
-            "Example: postgresql://user:password@localhost:5432/financial_db"
-        )
-        sys.exit(1)
+    logger.info("Starting Categories-Only Migration")
 
     # Confirm migration
     print("\n" + "=" * 80)
-    print("SQLite to PostgreSQL Migration")
+    print("SQLite to PostgreSQL Migration - CATEGORIES ONLY")
     print("=" * 80)
-    print(f"Source: {source_url}")
-    print(f"Target: {target_url[:50]}...")
-    print("\nWARNING: This will create tables and migrate all data to the target database.")
+    print(f"Source: {SOURCE_DATABASE_URL}")
+    print(f"Target: {TARGET_DATABASE_URL}")
+    print("\nWARNING: This will migrate ONLY the categories table to PostgreSQL.")
     print("=" * 80)
 
     response = input("\nProceed with migration? (yes/no): ").strip().lower()
@@ -362,15 +322,14 @@ def main():
         sys.exit(0)
 
     # Run migration
-    migrator = DatabaseMigrator(source_url, target_url)
+    migrator = DatabaseMigrator(SOURCE_DATABASE_URL, TARGET_DATABASE_URL)
     success = migrator.run_migration()
 
     if success:
-        print("\n✓ Migration completed successfully!")
+        print("\n✓ Categories migration completed successfully!")
         print("\nNext steps:")
-        print("1. Update your DATABASE_URL in .env.local to point to PostgreSQL")
-        print("2. Restart your application")
-        print("3. Verify that all data is accessible")
+        print("1. Verify categories data in PostgreSQL")
+        print("2. Migrate other tables as needed")
         sys.exit(0)
     else:
         print("\n✗ Migration failed. Check the logs for details.")

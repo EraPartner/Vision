@@ -14,7 +14,7 @@ Organized by logical grouping for better maintainability:
 10. Utility schemas
 """
 from datetime import datetime, date
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 from pydantic import BaseModel, Field, field_validator, HttpUrl
 
@@ -188,10 +188,8 @@ class ApplyCategoriesRequest(BaseModel):
 class RecipientBase(BaseModel):
     """Base recipient schema for requests"""
     name: str = Field(description="Recipient name", min_length=1)
-    account_number: Optional[str] = Field(None, description="Recipient account number")
     default_category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
     notes: Optional[str] = Field(None, description="Notes")
-    address: Optional[str] = Field(None, description="Address")
 
     @field_validator("name", mode="before")
     @classmethod
@@ -200,29 +198,18 @@ class RecipientBase(BaseModel):
         from services.text_normalization_service import TextNormalizationService
         return TextNormalizationService.normalize_recipient_name(value)
 
-    @field_validator("address", mode="before")
-    @classmethod
-    def normalise_address(cls, value: Optional[str]) -> Optional[str]:
-        """Normalise recipient address to uppercase using TextNormalizationService."""
-        if value is None:
-            return value
-        from services.text_normalization_service import TextNormalizationService
-        return TextNormalizationService.normalize_recipient_name(value)
-
 
 class RecipientUpdate(BaseModel):
     """Schema for updating a recipient"""
     name: Optional[str] = Field(None, description="Recipient name", min_length=1)
-    account_number: Optional[str] = Field(None, description="Account number")
     default_category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
     notes: Optional[str] = Field(None, description="Notes")
-    address: Optional[str] = Field(None, description="Address")
     is_active: Optional[bool] = Field(None, description="Whether recipient is active")
 
-    @field_validator("name", "address", mode="before")
+    @field_validator("name", mode="before")
     @classmethod
     def normalise_name(cls, value: Optional[str]) -> Optional[str]:
-        """Normalise recipient name and address to uppercase using TextNormalizationService."""
+        """Normalise recipient name to uppercase using TextNormalizationService."""
         if value is None:
             return value
         from services.text_normalization_service import TextNormalizationService
@@ -233,7 +220,6 @@ class RecipientResponse(BaseModel):
     """Recipient response with HATEOAS links for Level 3 REST API"""
     id: int = Field(description="Recipient ID", ge=1)
     name: str = Field(description="Recipient name")
-    account_number: Optional[str] = Field(None, description="Account number")
     default_category_id: Optional[int] = Field(None, description="Default category ID", ge=1)
     default_category_name: Optional[str] = Field(
         None,
@@ -242,7 +228,6 @@ class RecipientResponse(BaseModel):
                     "when no direct category is assigned to the transaction."
     )
     notes: Optional[str] = Field(None, description="Notes")
-    address: Optional[str] = Field(None, description="Address")
     is_active: bool = Field(True, description="Whether recipient is active")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
@@ -320,11 +305,11 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     """Schema for creating a new transaction.
 
-    Extends TransactionBase with additional fields for duplicate detection:
-    - original_raw_data: Original CSV row for audit trail and duplicate detection
-    - bank_reference: Bank's transaction ID for duplicate detection
+    Supports both imported and custom transactions. Transactions are automatically
+    classified based on whether they have associated raw transaction data:
+    - Transactions with raw data (via import service) are considered imports
+    - Transactions created directly via API are considered custom entries
     """
-    batch_id: Optional[int] = Field(None, description="Import batch ID if from bulk import", ge=1)
     original_raw_data: Optional[str] = Field(None,
                                              description="Original CSV row for audit trail and duplicate detection")
     bank_reference: Optional[str] = Field(None, description="Bank's transaction ID for duplicate detection")
@@ -435,41 +420,6 @@ class TransactionsListResponse(BaseModel):
     limit: int = Field(description="Limit used for pagination", ge=1)
     offset: int = Field(description="Offset used for pagination", ge=0)
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
-
-
-# Legacy schemas for backward compatibility
-class TransactionFrontend(BaseModel):
-    """Legacy schema for frontend transaction API (deprecated)"""
-    id: Optional[int] = None
-    transaction_date: str
-    description: str
-    amount: float
-    category: str
-    bank_source: Optional[str] = None
-
-
-class ExportCSVRequest(BaseModel):
-    """Request schema for CSV export"""
-    output: str = Field(description="Output file path on server")
-    bank_account: str = Field(description="Bank account name or ID")
-    from_date: Optional[str] = Field(None, description="Start date YYYY-MM-DD")
-    to_date: Optional[str] = Field(None, description="End date YYYY-MM-DD")
-    category_id: Optional[int] = Field(None, description="Filter by category ID")
-
-
-class ExportCSVResponse(BaseModel):
-    """Response schema for CSV export"""
-    success: bool
-    count: int
-    file_path: str
-    date_range: Optional[Dict[str, str]] = None
-    message: Optional[str] = None
-
-
-class UncategorizedResponse(BaseModel):
-    """Response for retrieving uncategorized recipients and transactions"""
-    recipients: Optional[List[Dict]] = None
-    transactions: Optional[List[Dict]] = None
 
 
 # ==================== Planned Transaction Schemas ====================
@@ -784,7 +734,6 @@ class ImportResult(BaseModel):
     Used as the response model for import endpoints when HATEOAS links
     are not required or in internal service-to-service communication.
     """
-    batch_id: str = Field(description="Unique identifier for the import batch")
     total_processed: int = Field(description="Total number of transactions processed from CSV", ge=0)
     imported: int = Field(description="Number of new transactions successfully imported", ge=0)
     duplicates: int = Field(description="Number of duplicate transactions skipped", ge=0)
@@ -803,7 +752,6 @@ class ImportResultWithLinks(BaseModel):
     discovering related actions such as viewing import history, viewing
     imported transactions, or initiating another import.
     """
-    batch_id: str = Field(description="Unique identifier for the import batch")
     total_processed: int = Field(description="Total number of transactions processed from CSV", ge=0)
     imported: int = Field(description="Number of new transactions successfully imported", ge=0)
     duplicates: int = Field(description="Number of duplicate transactions skipped", ge=0)
@@ -813,45 +761,6 @@ class ImportResultWithLinks(BaseModel):
         examples=["completed", "completed_with_errors", "failed", "processing"]
     )
     error_message: Optional[str] = Field(None, description="Detailed error message if status is 'failed'")
-    links: List[Link] = Field(description="Available actions (HATEOAS links)")
-
-
-class ImportBatchResponse(BaseModel):
-    """Response schema for a single import batch with HATEOAS links.
-
-    Represents a complete import batch record including all metadata,
-    statistics, and available actions through HATEOAS links.
-    """
-    id: int = Field(description="Import batch ID", ge=1)
-    filename: str = Field(description="Name of the imported file")
-    bank_name: str = Field(description="Bank or source name")
-    status: str = Field(
-        description="Import batch status",
-        examples=["processing", "completed", "completed_with_errors", "failed"]
-    )
-    total_processed: int = Field(description="Total transactions processed", ge=0)
-    imported_count: int = Field(description="Number of transactions imported", ge=0)
-    duplicate_count: int = Field(description="Number of duplicates skipped", ge=0)
-    error_count: int = Field(description="Number of errors encountered", ge=0)
-    error_message: Optional[str] = Field(None, description="Error message if failed")
-    config_used: Optional[str] = Field(None, description="JSON configuration used for import")
-    created_at: datetime = Field(description="Import batch creation timestamp")
-    completed_at: Optional[datetime] = Field(None, description="Import completion timestamp")
-    links: List[Link] = Field(description="Available actions (HATEOAS links)")
-
-    model_config = {"from_attributes": True}
-
-
-class ImportBatchesListResponse(BaseModel):
-    """Paginated import batches list response with HATEOAS links for Level 3 REST API.
-
-    Provides a paginated list of import batch records with navigation links
-    and available actions for import history management.
-    """
-    items: List[ImportBatchResponse] = Field(description="Import batch items")
-    total: int = Field(description="Total count of import batches", ge=0)
-    limit: int = Field(description="Limit used for pagination", ge=1)
-    offset: int = Field(description="Offset used for pagination", ge=0)
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
 
 

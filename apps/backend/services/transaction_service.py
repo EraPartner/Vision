@@ -82,7 +82,6 @@ class TransactionService:
             balance: Optional[float] = None,
             category_id: Optional[int] = None,
             comment: Optional[str] = None,
-            batch_id: Optional[int] = None,
             original_raw_data: Optional[str] = None,
             bank_reference: Optional[str] = None,
             skip_duplicate_check: bool = False
@@ -92,6 +91,10 @@ class TransactionService:
         Creates a new financial transaction with all required and optional fields.
         Validates business rules, checks for duplicates using bank_reference and
         original_raw_data, and ensures data integrity before persisting.
+
+        Transactions are automatically classified:
+        - Transactions created via import service with raw data are imports
+        - Transactions created directly via API are custom entries
 
         Args:
             transaction_date (date): Transaction date (required).
@@ -103,7 +106,6 @@ class TransactionService:
             balance (Optional[float]): Account balance after transaction.
             category_id (Optional[int]): Category ID - must reference existing category if provided.
             comment (Optional[str]): Additional comment for bank-specific data.
-            batch_id (Optional[int]): Import batch ID if from bulk import.
             original_raw_data (Optional[str]): Original CSV row for audit trail and duplicate detection.
             bank_reference (Optional[str]): Bank's transaction ID for duplicate detection.
             skip_duplicate_check (bool): Skip duplicate checking (default: False). Use with caution.
@@ -117,7 +119,7 @@ class TransactionService:
         Example:
             service = TransactionService(db)
 
-            # Create a basic transaction
+            # Create a custom user transaction
             transaction = service.create(
                 transaction_date=date(2026, 2, 16),
                 bank_account="Revolut",
@@ -125,7 +127,7 @@ class TransactionService:
                 amount=25.50
             )
 
-            # Create with duplicate detection
+            # Create from bank import with duplicate detection
             transaction = service.create(
                 transaction_date=date(2026, 2, 16),
                 bank_account="Revolut",
@@ -211,10 +213,7 @@ class TransactionService:
             currency=currency,
             balance=balance,
             category_id=category_id,
-            comment=comment,
-            batch_id=batch_id,
-            original_raw_data=original_raw_data,
-            bank_reference=bank_reference
+            comment=comment
         )
 
         # Persist to database

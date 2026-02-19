@@ -4,7 +4,7 @@ Unit tests for transactions API endpoints.
 Tests Level 3 REST API compliance, HATEOAS links, CRUD operations,
 and proper error handling for financial transactions.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -53,7 +53,6 @@ class TestTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -125,7 +124,6 @@ class TestTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -171,7 +169,6 @@ class TestTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -214,7 +211,6 @@ class TestTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -258,7 +254,6 @@ class TestTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -327,7 +322,6 @@ class TestTransactionItemEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -430,8 +424,6 @@ class TestTransactionCreateEndpoint:
             "balance": 1000.00,
             "category_id": category.id,
             "comment": "Monthly grocery shopping",
-            "bank_reference": "REF123456",
-            "original_raw_data": "some,csv,data"
         }
 
         response = client.post("/api/transactions", json=transaction_data)
@@ -510,7 +502,6 @@ class TestTransactionUpdateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -565,7 +556,6 @@ class TestTransactionUpdateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -664,6 +654,90 @@ class TestTransactionDeleteEndpoint:
 
         assert response.status_code == 500
         assert "Error deleting transaction" in response.json()["detail"]
+
+    def test_delete_transaction_also_deletes_raw_transaction(self, client: TestClient, test_db: Session):
+        """Test that deleting a transaction also deletes the corresponding raw transaction."""
+        from database.raw_transaction_models import (
+            RevolutRawTransaction,
+            TransactionRawReference
+        )
+        from decimal import Decimal
+
+        # Create a recipient first
+        recipient = Recipient(name="TEST MERCHANT")
+        test_db.add(recipient)
+        test_db.commit()
+        test_db.refresh(recipient)
+
+        # Create a raw Revolut transaction
+        raw_txn = RevolutRawTransaction(
+            deduplication_hash="test_hash_123456",
+            transaction_type="Card Payment",
+            product="Current",
+            completed_date=datetime.now(),
+            description="TEST MERCHANT",
+            amount=Decimal("-25.50"),
+            currency="EUR",
+            state="COMPLETED",
+            balance=Decimal("1000.00"),
+            raw_csv_line="Card Payment,Current,2024-01-15,TEST MERCHANT,-25.50,EUR,COMPLETED,1000.00"
+        )
+        test_db.add(raw_txn)
+        test_db.commit()
+        test_db.refresh(raw_txn)
+
+        # Create a normalized transaction
+        transaction = Transaction(
+            date=date.today(),
+            bank_account="REVOLUT CURRENT",
+            recipient_id=recipient.id,
+            amount=Decimal("-25.50"),
+            currency="EUR",
+            balance=Decimal("1000.00"),
+            memo="TEST MERCHANT",
+        )
+        test_db.add(transaction)
+        test_db.commit()
+        test_db.refresh(transaction)
+
+        # Create the reference link
+        raw_ref = TransactionRawReference(
+            transaction_id=transaction.id,
+            raw_source_type="revolut",
+            raw_source_id=raw_txn.id
+        )
+        test_db.add(raw_ref)
+        test_db.commit()
+
+        # Verify the raw transaction and reference exist
+        assert test_db.query(RevolutRawTransaction).filter(
+            RevolutRawTransaction.id == raw_txn.id
+        ).first() is not None
+        assert test_db.query(TransactionRawReference).filter(
+            TransactionRawReference.transaction_id == transaction.id
+        ).first() is not None
+
+        # Delete the transaction via API
+        response = client.delete(f"/api/transactions/{transaction.id}")
+        assert response.status_code == 200
+
+        # Verify the transaction is deleted
+        deleted_txn = test_db.query(Transaction).filter(
+            Transaction.id == transaction.id
+        ).first()
+        assert deleted_txn is None
+
+        # Verify the raw transaction is also deleted
+        deleted_raw = test_db.query(RevolutRawTransaction).filter(
+            RevolutRawTransaction.id == raw_txn.id
+        ).first()
+        assert deleted_raw is None, "Raw transaction should be deleted when transaction is deleted"
+
+        # Verify the reference is also deleted (CASCADE or explicit delete)
+        deleted_ref = test_db.query(TransactionRawReference).filter(
+            TransactionRawReference.transaction_id == transaction.id
+        ).first()
+        assert deleted_ref is None, "Raw reference should be deleted when transaction is deleted"
 
 
 class TestTransactionExportEndpoint:
@@ -1010,7 +1084,6 @@ class TestTransactionsQueryParameters:
         # Create recipient WITHOUT default category
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"],
             default_category_id=None  # No default category
         )
         test_db.add(recipient)

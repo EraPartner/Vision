@@ -136,21 +136,20 @@ class RecipientService:
             if bank_account:
                 recipient = bank_account.recipient
 
-                # Update the display name if it differs (keeps most recent format)
-                if recipient.name != name:
-                    logger.info(
-                        "Updating recipient display name based on account number match",
-                        extra={
-                            "operation": "enrich_recipient",
-                            "resource_type": "recipient",
-                            "resource_id": recipient.id,
-                            "old_name": recipient.name,
-                            "new_name": name,
-                            "account_number": account_number
-                        }
-                    )
-                    recipient.name = name
-                    self.recipient_repo.update(recipient)
+                # Keep the original recipient name - do not update it
+                # This ensures consistency across imports where the same recipient
+                # may appear with different name formats
+                logger.debug(
+                    "Found existing recipient by account number",
+                    extra={
+                        "operation": "find_recipient",
+                        "resource_type": "recipient",
+                        "resource_id": recipient.id,
+                        "recipient_name": recipient.name,
+                        "incoming_name": name,
+                        "account_number": account_number
+                    }
+                )
 
                 # Update bank account address if provided and different
                 if address:
@@ -201,20 +200,18 @@ class RecipientService:
                         }
                     )
 
-            # Update display name if it's more complete or recent
-            if recipient.name != name:
-                logger.info(
-                    "Updating recipient display name based on normalized name match",
-                    extra={
-                        "operation": "enrich_recipient",
-                        "resource_type": "recipient",
-                        "resource_id": recipient.id,
-                        "old_name": recipient.name,
-                        "new_name": name
-                    }
-                )
-                recipient.name = name
-                self.recipient_repo.update(recipient)
+            # Keep the original recipient name - do not update it
+            # This ensures the first imported name format is retained consistently
+            logger.debug(
+                "Found existing recipient by normalized name match",
+                extra={
+                    "operation": "find_recipient",
+                    "resource_type": "recipient",
+                    "resource_id": recipient.id,
+                    "recipient_name": recipient.name,
+                    "incoming_name": name
+                }
+            )
 
             return recipient, False
 
