@@ -4,7 +4,7 @@ Unit tests for main.py - FastAPI application entry point.
 Tests application startup, configuration validation, middleware setup,
 and core API endpoints.
 """
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 from fastapi import FastAPI, Request, HTTPException
@@ -15,6 +15,8 @@ from main import (
     app,
     _validate_startup_configuration,
     _initialise_database_with_retry,
+    _ensure_postgres_server,
+    _stop_postgres_server,
     lifespan,
     global_exception_handler,
     root,
@@ -59,12 +61,17 @@ class TestMainApplication:
         with pytest.raises(ValueError, match="API version configuration is required"):
             _validate_startup_configuration()
 
+    @patch('main._ensure_postgres_server')
+    @patch('main.ensure_postgresql_database_exists')
     @patch('main.init_db')
     @patch('main.logger')
     @pytest.mark.asyncio
-    async def test_database_initialisation_success(self, mock_logger, mock_init_db):
+    async def test_database_initialisation_success(self, mock_logger, mock_init_db, mock_ensure_db,
+                                                   mock_ensure_postgres):
         """Test successful database initialisation."""
         mock_init_db.return_value = None
+        mock_ensure_db.return_value = None
+        mock_ensure_postgres.return_value = None
 
         # Should not raise any exceptions
         await _initialise_database_with_retry()
@@ -75,25 +82,35 @@ class TestMainApplication:
         # Verify success logging
         mock_logger.info.assert_called()
 
+    @patch('main._ensure_postgres_server')
+    @patch('main.ensure_postgresql_database_exists')
     @patch('main.init_db')
     @patch('main.logger')
     @pytest.mark.asyncio
-    async def test_database_initialisation_with_retry(self, mock_logger, mock_init_db):
+    async def test_database_initialisation_with_retry(self, mock_logger, mock_init_db, mock_ensure_db,
+                                                      mock_ensure_postgres):
         """Test database initialisation with retry logic."""
         # Simulate failure on first attempt, success on second
         mock_init_db.side_effect = [Exception("Connection failed"), None]
+        mock_ensure_db.return_value = None
+        mock_ensure_postgres.return_value = None
 
         await _initialise_database_with_retry(max_retries=3)
 
         # Verify init_db was called twice
         assert mock_init_db.call_count == 2
 
+    @patch('main._ensure_postgres_server')
+    @patch('main.ensure_postgresql_database_exists')
     @patch('main.init_db')
     @patch('main.logger')
     @pytest.mark.asyncio
-    async def test_database_initialisation_max_retries_exceeded(self, mock_logger, mock_init_db):
+    async def test_database_initialisation_max_retries_exceeded(self, mock_logger, mock_init_db, mock_ensure_db,
+                                                                mock_ensure_postgres):
         """Test database initialisation failure after max retries."""
         mock_init_db.side_effect = Exception("Persistent connection failed")
+        mock_ensure_db.return_value = None
+        mock_ensure_postgres.return_value = None
 
         with pytest.raises(Exception, match="Persistent connection failed"):
             await _initialise_database_with_retry(max_retries=2)
@@ -102,17 +119,93 @@ class TestMainApplication:
         assert mock_init_db.call_count == 2
 
 
+class TestPostgresServerManagement:
+    """Test cases for PostgreSQL server management functions."""
+
+    @patch('main.postgres_manager')
+    @patch('main.logger')
+    @pytest.mark.asyncio
+    async def test_ensure_postgres_server_success(self, mock_logger, mock_postgres_manager):
+        """Test successful PostgreSQL server startup."""
+        mock_postgres_manager.ensure_running = AsyncMock()
+
+        # Should not raise any exceptions
+        await _ensure_postgres_server()
+
+        # Verify postgres_manager.ensure_running was called
+        mock_postgres_manager.ensure_running.assert_called_once()
+
+        # Verify success logging
+        assert any(
+            "PostgreSQL server is running and ready" in str(call)
+            for call in mock_logger.info.call_args_list
+        )
+
+    @patch('main.postgres_manager')
+    @patch('main.logger')
+    @pytest.mark.asyncio
+    async def test_ensure_postgres_server_failure(self, mock_logger, mock_postgres_manager):
+        """Test PostgreSQL server startup failure handling."""
+        mock_postgres_manager.ensure_running = AsyncMock(side_effect=Exception("PostgreSQL startup failed"))
+
+        with pytest.raises(RuntimeError, match="PostgreSQL server initialization failed"):
+            await _ensure_postgres_server()
+
+        # Verify error logging
+        mock_logger.error.assert_called()
+
+        # Verify the error message contains the expected information
+        error_call_args = mock_logger.error.call_args
+        assert "Failed to ensure PostgreSQL server is running" in error_call_args[0][0]
+
+    @patch('main.postgres_manager')
+    @patch('main.logger')
+    @pytest.mark.asyncio
+    async def test_stop_postgres_server_success(self, mock_logger, mock_postgres_manager):
+        """Test successful PostgreSQL server shutdown."""
+        mock_postgres_manager.stop = AsyncMock()
+
+        # Should not raise any exceptions
+        await _stop_postgres_server()
+
+        # Verify postgres_manager.stop was called
+        mock_postgres_manager.stop.assert_called_once()
+
+        # Verify success logging
+        assert any(
+            "PostgreSQL server stopped successfully" in str(call)
+            for call in mock_logger.info.call_args_list
+        )
+
+    @patch('main.postgres_manager')
+    @patch('main.logger')
+    @pytest.mark.asyncio
+    async def test_stop_postgres_server_failure(self, mock_logger, mock_postgres_manager):
+        """Test PostgreSQL server shutdown failure handling (should not raise exception)."""
+        mock_postgres_manager.stop = AsyncMock(side_effect=Exception("PostgreSQL stop failed"))
+
+        # Should not raise exception even on failure
+        await _stop_postgres_server()
+
+        # Verify error logging occurred
+        mock_logger.error.assert_called()
+
+        # Verify the error message contains the expected information
+        error_call_args = mock_logger.error.call_args
+        assert "Failed to stop PostgreSQL server gracefully" in error_call_args[0][0]
+
+
 class TestLifespanFunction:
     """Test cases for the application lifespan function."""
 
+    @patch('main._ensure_postgres_server', new_callable=AsyncMock)
     @patch('main.logger')
     @patch('main._validate_startup_configuration')
-    @patch('main._initialise_database_with_retry')
+    @patch('main._initialise_database_with_retry', new_callable=AsyncMock)
     @pytest.mark.asyncio
-    async def test_lifespan_startup_success(self, mock_init_db, mock_validate, mock_logger):
+    async def test_lifespan_startup_success(self, mock_init_db, mock_validate, mock_logger, mock_ensure_postgres):
         """Test successful lifespan startup."""
         mock_validate.return_value = None
-        mock_init_db.return_value = None
 
         test_app = FastAPI()
 
@@ -123,11 +216,12 @@ class TestLifespanFunction:
             # Verify startup and completion logging
             assert mock_logger.info.call_count >= 2
 
+    @patch('main._ensure_postgres_server', new_callable=AsyncMock)
     @patch('main.logger')
     @patch('main._validate_startup_configuration')
-    @patch('main._initialise_database_with_retry')
+    @patch('main._initialise_database_with_retry', new_callable=AsyncMock)
     @pytest.mark.asyncio
-    async def test_lifespan_startup_failure(self, mock_init_db, mock_validate, mock_logger):
+    async def test_lifespan_startup_failure(self, mock_init_db, mock_validate, mock_logger, mock_ensure_postgres):
         """Test lifespan startup failure handling."""
         mock_validate.side_effect = Exception("Configuration error")
 
@@ -140,11 +234,12 @@ class TestLifespanFunction:
         # Verify error logging
         mock_logger.error.assert_called()
 
+    @patch('main._ensure_postgres_server', new_callable=AsyncMock)
     @patch('main.logger')
     @patch('main._validate_startup_configuration')
-    @patch('main._initialise_database_with_retry')
+    @patch('main._initialise_database_with_retry', new_callable=AsyncMock)
     @pytest.mark.asyncio
-    async def test_lifespan_database_failure(self, mock_init_db, mock_validate, mock_logger):
+    async def test_lifespan_database_failure(self, mock_init_db, mock_validate, mock_logger, mock_ensure_postgres):
         """Test lifespan database initialisation failure."""
         mock_validate.return_value = None
         mock_init_db.side_effect = Exception("Database error")
@@ -158,14 +253,16 @@ class TestLifespanFunction:
         # Verify error logging
         mock_logger.error.assert_called()
 
+    @patch('main._stop_postgres_server', new_callable=AsyncMock)
+    @patch('main._ensure_postgres_server', new_callable=AsyncMock)
     @patch('main.logger')
     @patch('main._validate_startup_configuration')
-    @patch('main._initialise_database_with_retry')
+    @patch('main._initialise_database_with_retry', new_callable=AsyncMock)
     @pytest.mark.asyncio
-    async def test_lifespan_shutdown_logging(self, mock_init_db, mock_validate, mock_logger):
+    async def test_lifespan_shutdown_logging(self, mock_init_db, mock_validate, mock_logger,
+                                             mock_ensure_postgres, mock_stop_postgres):
         """Test that shutdown is properly logged."""
         mock_validate.return_value = None
-        mock_init_db.return_value = None
 
         test_app = FastAPI()
 
@@ -179,6 +276,9 @@ class TestLifespanFunction:
             for call in mock_logger.info.call_args_list
         )
         assert shutdown_logged
+
+        # Verify _stop_postgres_server was called during shutdown
+        mock_stop_postgres.assert_called_once()
 
 
 class TestGlobalExceptionHandler:

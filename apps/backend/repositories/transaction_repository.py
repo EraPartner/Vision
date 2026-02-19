@@ -19,6 +19,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from config.logging_config import setup_logging
 from database.models import Transaction, Recipient
+from database.raw_transaction_models import (
+    TransactionRawReference,
+    BelfiusRawTransaction,
+    RevolutRawTransaction,
+    KBCRawTransaction
+)
 
 logger = setup_logging(__name__)
 
@@ -95,21 +101,11 @@ class TransactionRepository:
                 limit=50
             )
 
-            # Get all transactions including inactive ones
-            transactions = repo.get_transactions(active=False)
-
             # Get transactions for a specific recipient
             transactions = repo.get_transactions(
                 recipient_id=5,
                 limit=100,
                 offset=0
-            )
-
-            # Get transactions with date range and category
-            transactions = repo.get_transactions(
-                start_date=date(2024, 1, 1),
-                end_date=date(2024, 12, 31),
-                category_id=3
             )
 
         Note:
@@ -494,8 +490,13 @@ class TransactionRepository:
     def hard_delete(self, txn: Transaction) -> None:
         """Permanently delete a transaction from the database.
 
-        Removes a transaction entity completely from the database. This operation
-        is irreversible and should be used with caution.
+        Removes a transaction entity completely from the database, along with its
+        corresponding raw transaction data. This operation is irreversible and
+        should be used with caution.
+
+        This method also deletes:
+        - The raw transaction from the bank-specific table (Belfius, Revolut, or KBC)
+        - The TransactionRawReference linking them
 
         Args:
             txn (Transaction): Transaction entity to delete permanently.
@@ -511,9 +512,52 @@ class TransactionRepository:
 
         Note:
             - Permanently removes the record from the database
+            - Also removes the associated raw transaction data
             - Cannot be undone
             - May fail if foreign key constraints prevent deletion
         """
+        # Find and delete the associated raw transaction reference
+        raw_ref = self.db.query(TransactionRawReference).filter(
+            TransactionRawReference.transaction_id == txn.id
+        ).first()
+
+        if raw_ref:
+            # Determine which raw transaction table to delete from based on the source type
+            raw_table_map = {
+                'belfius': BelfiusRawTransaction,
+                'revolut': RevolutRawTransaction,
+                'kbc': KBCRawTransaction
+            }
+
+            raw_table = raw_table_map.get(raw_ref.raw_source_type.lower())
+            if raw_table:
+                # Delete the raw transaction from the bank-specific table
+                raw_txn = self.db.query(raw_table).filter(
+                    raw_table.id == raw_ref.raw_source_id
+                ).first()
+
+                if raw_txn:
+                    self.db.delete(raw_txn)
+                    logger.debug(
+                        f"Deleted raw transaction",
+                        extra={
+                            "operation": "hard_delete_raw_transaction",
+                            "raw_source_type": raw_ref.raw_source_type,
+                            "raw_source_id": raw_ref.raw_source_id
+                        }
+                    )
+
+            # Delete the reference (CASCADE will handle this, but explicit is better)
+            self.db.delete(raw_ref)
+            logger.debug(
+                f"Deleted transaction raw reference",
+                extra={
+                    "operation": "hard_delete_raw_reference",
+                    "transaction_id": txn.id
+                }
+            )
+
+        # Delete the transaction itself
         self.db.delete(txn)
         self.db.commit()
 

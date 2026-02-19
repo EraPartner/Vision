@@ -120,9 +120,7 @@ def sample_recipient_data():
     """Sample recipient data for testing."""
     return {
         "name": "john smith",
-        "account_number": "12345678",
         "notes": "Test recipient",
-        "address": "123 Main St",
         "is_active": True
     }
 
@@ -132,9 +130,7 @@ def sample_recipient_update_data():
     """Sample recipient update data for testing."""
     return {
         "name": "updated recipient",
-        "account_number": "87654321",
-        "notes": "Updated notes",
-        "address": "456 Oak Ave"
+        "notes": "Updated notes"
     }
 
 
@@ -142,9 +138,9 @@ def sample_recipient_update_data():
 def multiple_recipients_data():
     """Multiple sample recipients for testing."""
     return [
-        {"name": "JOHN SMITH", "account_number": "12345678", "is_active": True},
-        {"name": "JANE DOE", "account_number": "23456789", "is_active": True},
-        {"name": "BOB JOHNSON", "account_number": "34567890", "is_active": True},
-        {"name": "ALICE WILLIAMS", "account_number": "45678901", "is_active": True},
-        {"name": "CHARLIE BROWN", "account_number": None, "is_active": True}
+        {"name": "JOHN SMITH", "is_active": True},
+        {"name": "JANE DOE", "is_active": True},
+        {"name": "BOB JOHNSON", "is_active": True},
+        {"name": "ALICE WILLIAMS", "is_active": True},
+        {"name": "CHARLIE BROWN", "is_active": True}
     ]

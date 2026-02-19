@@ -83,7 +83,6 @@ class TransactionExportService:
                     'Date',
                     'Bank Account',
                     'Recipient',
-                    'Recipient Account',
                     'Memo',
                     'Amount',
                     'Currency',
@@ -107,13 +106,11 @@ class TransactionExportService:
 
                     # Get recipient info
                     recipient_name = transaction.recipient.name if transaction.recipient else ''
-                    recipient_account = transaction.recipient.account_number if transaction.recipient else ''
 
                     writer.writerow({
                         'Date': transaction.date.isoformat(),
                         'Bank Account': transaction.bank_account or '',
                         'Recipient': recipient_name,
-                        'Recipient Account': recipient_account or '',
                         'Memo': transaction.memo or '',
                         'Amount': float(transaction.amount),
                         'Currency': transaction.currency or '',

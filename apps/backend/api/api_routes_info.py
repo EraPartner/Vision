@@ -165,13 +165,13 @@ async def get_transaction_summary(
         start = None
         end = None
 
-        if start_date:
+        if start_date and start_date.strip():
             try:
                 start = date.fromisoformat(start_date)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid start_date format")
 
-        if end_date:
+        if end_date and end_date.strip():
             try:
                 end = date.fromisoformat(end_date)
             except ValueError:

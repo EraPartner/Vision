@@ -790,7 +790,7 @@ class TestCategoriesExceptionHandling:
 
         response = client.get("/api/categories")
         assert response.status_code == 500
-        assert "Error retrieving categories" in response.json()["detail"]
+        assert "Failed to retrieve categories" in response.json()["detail"]
 
     def test_get_category_by_id_exception(self, client: TestClient, test_db: Session, monkeypatch):
         """Test get_category handles exceptions."""
@@ -803,7 +803,7 @@ class TestCategoriesExceptionHandling:
 
         response = client.get("/api/categories/1")
         assert response.status_code == 500
-        assert "Error retrieving category" in response.json()["detail"]
+        assert "Failed to retrieve category" in response.json()["detail"]
 
     def test_update_category_exception(self, client: TestClient, test_db: Session, monkeypatch):
         """Test update_category handles exceptions."""
@@ -816,7 +816,7 @@ class TestCategoriesExceptionHandling:
 
         response = client.patch("/api/categories/1", json={"general": "UPDATED"})
         assert response.status_code == 500
-        assert "Error updating category" in response.json()["detail"]
+        assert "Failed to update category" in response.json()["detail"]
 
     def test_delete_category_exception(self, client: TestClient, test_db: Session, monkeypatch):
         """Test delete_category handles exceptions properly."""
@@ -836,13 +836,13 @@ class TestCategoriesExceptionHandling:
 
         response = client.delete(f"/api/categories/{category.id}")
         assert response.status_code == 500
-        assert "Error deleting category" in response.json()["detail"]
+        assert "Failed to delete category" in response.json()["detail"]
 
     def test_delete_category_hard_delete_not_found(self, client: TestClient, test_db: Session):
         """Test hard delete returns 404 when category not found."""
         response = client.delete("/api/categories/999?soft=false")
         assert response.status_code == 404
-        assert "Category not found" in response.json()["detail"]
+        assert "Category 999 not found" == response.json()["detail"]
 
     def test_assign_category_exception(self, client: TestClient, test_db: Session, monkeypatch):
         """Test assign_category handles exceptions."""
@@ -859,7 +859,7 @@ class TestCategoriesExceptionHandling:
             "recipient_ids": [1]
         })
         assert response.status_code == 500
-        assert "Error assigning category" in response.json()["detail"]
+        assert "Failed to assign category" in response.json()["detail"]
 
     def test_assign_category_http_exception_reraise(self, client: TestClient, test_db: Session, monkeypatch):
         """Test assign_category re-raises HTTPException."""

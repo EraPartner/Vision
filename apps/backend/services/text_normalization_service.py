@@ -282,45 +282,50 @@ class TextNormalizationService:
     @staticmethod
     def normalize_name_for_matching(name: str) -> str:
         """
-        Normalize a name for uniqueness matching, handling word order and middle names/initials.
+        Normalize a name for uniqueness matching by sorting all non-initial tokens.
 
-        This creates a canonical form that handles:
-        - Different word orderings: "JOHN SMITH" vs "SMITH JOHN"
-        - Middle names/initials: "JOHN F KENNEDY" vs "JOHN KENNEDY"
-        - Extra spaces and formatting variations
+        This creates a canonical form that:
+        - Filters out single-letter tokens (middle initials like "F", "J")
+        - Keeps all other tokens including numbers (e.g., "STORE 1" vs "STORE 2")
+        - Sorts all remaining tokens alphabetically for consistent ordering
+        - Removes punctuation
 
         Algorithm:
         1. Normalize to uppercase and strip whitespace
-        2. Split into tokens (words)
-        3. Identify and expand single-letter tokens (initials)
-        4. Remove initials that are redundant (already have full middle name)
-        5. Sort tokens alphabetically
+        2. Remove punctuation (periods, commas)
+        3. Split into tokens (words)
+        4. Filter out single-letter tokens that are alphabetic (initials)
+        5. Sort remaining tokens alphabetically
         6. Join with a single space
 
-        Middle Name Handling:
-        - "JOHN F KENNEDY" and "JOHN KENNEDY" both normalize to "JOHN KENNEDY"
-        - "JOHN FITZGERALD KENNEDY" and "JOHN F KENNEDY" both normalize to "FITZGERALD JOHN KENNEDY"
-        - This matches people with/without middle names or with initials only
+        Examples:
+        - "John Smith" → "JOHN SMITH"
+        - "Smith John" → "JOHN SMITH" (sorted)
+        - "John F Doe" → "DOE JOHN" (F filtered out as initial)
+        - "Doe John" → "DOE JOHN"
+        - "John Fitzgerald Kennedy" → "FITZGERALD JOHN KENNEDY" (all tokens sorted)
+        - "Kennedy John Fitzgerald" → "FITZGERALD JOHN KENNEDY" (same after sort)
+        - "John F Kennedy" → "JOHN KENNEDY" (F filtered)
+        - "Test Recipient 1" → "1 RECIPIENT TEST" (1 kept, sorted)
+        - "Test Recipient 2" → "2 RECIPIENT TEST" (different from 1)
 
         This ensures:
-        - "JOHN SMITH" and "SMITH JOHN" → same
-        - "JOHN F KENNEDY" and "JOHN KENNEDY" → same
-        - "JOHN FITZGERALD KENNEDY" and "JOHN F KENNEDY" → same
-        - "JANE SMITH" and "JOHN SMITH" → different
+        - Different orderings of the same person match
+        - Different people remain distinct
+        - Middle names and initials are handled consistently
+        - Numbers and special identifiers are preserved
 
         Args:
             name: The recipient name to normalize for matching
 
         Returns:
-            The normalized name in canonical form (sorted tokens, uppercase, initials removed)
+            The normalized name with all substantial tokens sorted alphabetically (uppercase)
 
-        Example:
-            normalize_name_for_matching("JOHN SMITH") -> "JOHN SMITH"
-            normalize_name_for_matching("SMITH JOHN") -> "JOHN SMITH"
-            normalize_name_for_matching("JOHN F KENNEDY") -> "JOHN KENNEDY"
-            normalize_name_for_matching("JOHN FITZGERALD KENNEDY") -> "FITZGERALD JOHN KENNEDY"
-            normalize_name_for_matching("John F. Kennedy") -> "JOHN KENNEDY"
-            normalize_name_for_matching("Kennedy, John F.") -> "JOHN KENNEDY"
+        Note:
+            - Single-word names return that word normalized
+            - Empty names return empty string
+            - Only single-letter alphabetic tokens are filtered (initials)
+            - Numbers, symbols, and multi-character tokens are preserved
         """
         if not name:
             return name
@@ -337,34 +342,21 @@ class TextNormalizationService:
         if not tokens:
             return ""
 
-        # Separate single-letter tokens (initials) from full words
-        initials = set()
-        full_words = []
+        # Single word name - just return it
+        if len(tokens) == 1:
+            return tokens[0]
 
-        for token in tokens:
-            if len(token) == 1 and token.isalpha():
-                # Single letter = initial
-                initials.add(token)
-            else:
-                full_words.append(token)
+        # Filter out single-LETTER tokens (initials like "F", "J")
+        # Keep single-digit tokens as they're meaningful (e.g., "STORE 1" vs "STORE 2")
+        # Keep any multi-character tokens
+        substantial_tokens = [t for t in tokens if len(t) > 1 or not t.isalpha()]
 
-        # Remove initials that match the first letter of any full word
-        # This handles cases like "JOHN F KENNEDY" where F might be for a middle name
-        # If we have the full middle name, we don't need the initial
-        filtered_initials = []
-        for initial in initials:
-            # Check if any full word starts with this initial
-            has_matching_word = any(word.startswith(initial) for word in full_words)
-            if not has_matching_word:
-                # Keep the initial only if there's no matching full word
-                # This means we DON'T have the full middle name
-                filtered_initials.append(initial)
+        # If we have no substantial tokens (all were initials), return the original
+        if not substantial_tokens:
+            return " ".join(sorted(tokens))
 
-        # Combine full words and remaining initials
-        all_tokens = full_words + filtered_initials
-
-        # Sort alphabetically for consistent ordering
-        all_tokens.sort()
+        # Sort all substantial tokens alphabetically for consistent ordering
+        sorted_tokens = sorted(substantial_tokens)
 
         # Join with single space
-        return " ".join(all_tokens)
+        return " ".join(sorted_tokens)

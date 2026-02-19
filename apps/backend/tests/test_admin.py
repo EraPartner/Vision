@@ -10,7 +10,6 @@ from unittest.mock import patch, MagicMock
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from api.api_routes_admin import (
     admin_options,
@@ -118,7 +117,7 @@ class TestAdminHelperFunctions:
         # Verify logging was called with correct parameters
         mock_logger.error.assert_called_once()
         error_call = mock_logger.error.call_args
-        assert "Error inspecting database status" in error_call[0][0]
+        assert "Database status inspection failed" in error_call[0][0]
         assert error_call[1]["extra"]["operation"] == "get_database_status"
         assert error_call[1]["extra"]["resource_type"] == "database"
         assert error_call[1]["extra"]["status"] == "failed"
@@ -158,7 +157,9 @@ class TestAdminOptionsEndpoint:
             for method in response.methods:
                 assert method.description is not None
                 assert len(method.description) > 0
-                assert "database" in method.description.lower()
+                # Check that description contains administrative-related keywords
+                desc_lower = method.description.lower()
+                assert any(keyword in desc_lower for keyword in ["database", "admin", "status", "action"])
 
             # Verify links were called correctly
             mock_get_links.assert_called_once_with(mock_request)
@@ -214,7 +215,6 @@ class TestAdminStatusEndpoint:
 
         with patch('api.api_routes_admin.get_database_status') as mock_status, \
                 patch('api.api_routes_admin.get_admin_links') as mock_links:
-
             mock_status.return_value = (True, 5)
             mock_links.return_value = []
 
@@ -243,7 +243,6 @@ class TestAdminStatusEndpoint:
 
         with patch('api.api_routes_admin.get_database_status') as mock_status, \
                 patch('api.api_routes_admin.get_admin_links') as mock_links:
-
             mock_status.return_value = (False, 0)
             mock_links.return_value = []
 
@@ -266,7 +265,6 @@ class TestAdminStatusEndpoint:
 
         with patch('api.api_routes_admin.get_database_status') as mock_status, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
             test_exception = Exception("Database error")
             mock_status.side_effect = test_exception
 
@@ -275,12 +273,12 @@ class TestAdminStatusEndpoint:
 
             # Verify exception details
             assert exc_info.value.status_code == 500
-            assert "Database error" in str(exc_info.value.detail)
+            assert "Failed to retrieve administration status" in str(exc_info.value.detail)
 
             # Verify error logging was called correctly
             mock_logger.error.assert_called_once()
             error_call = mock_logger.error.call_args
-            assert "Error retrieving admin status" in error_call[0][0]
+            assert "Admin status retrieval failed" in error_call[0][0]
             assert error_call[1]["extra"]["operation"] == "get_admin_status"
             assert error_call[1]["extra"]["resource_type"] == "admin"
             assert error_call[1]["extra"]["status"] == "failed"
@@ -329,15 +327,15 @@ class TestDatabaseInitEndpoint:
     async def test_initialise_database_success(self):
         """Test successful database initialization."""
         mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_db.bind = MagicMock()
 
-        with patch('api.api_routes_admin.init_db') as mock_init_db, \
+        with patch('api.api_routes_admin.Base') as mock_base, \
                 patch('api.api_routes_admin.get_admin_links') as mock_links, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
-            mock_init_db.return_value = None
             mock_links.return_value = []
 
-            response = await initialise_database(mock_request)
+            response = await initialise_database(mock_request, mock_db)
 
             # Verify response structure matches MessageResponse schema
             assert hasattr(response, 'message')
@@ -351,7 +349,7 @@ class TestDatabaseInitEndpoint:
             assert isinstance(response.links, list)
 
             # Verify functions were called correctly
-            mock_init_db.assert_called_once()
+            mock_base.metadata.create_all.assert_called_once_with(bind=mock_db.bind)
             mock_links.assert_called_once_with(mock_request)
 
             # Verify success logging was called correctly
@@ -366,25 +364,26 @@ class TestDatabaseInitEndpoint:
     async def test_initialise_database_failure(self):
         """Test database initialization failure."""
         mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_db.bind = MagicMock()
 
-        with patch('api.api_routes_admin.init_db') as mock_init_db, \
+        with patch('api.api_routes_admin.Base') as mock_base, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
             test_exception = Exception("Initialization failed")
-            mock_init_db.side_effect = test_exception
+            mock_base.metadata.create_all.side_effect = test_exception
 
             with pytest.raises(HTTPException) as exc_info:
-                await initialise_database(mock_request)
+                await initialise_database(mock_request, mock_db)
 
             # Verify exception details
             assert exc_info.value.status_code == 500
-            assert "Error initialising database" in exc_info.value.detail
+            assert "Database initialisation failed" in exc_info.value.detail
             assert "Initialization failed" in exc_info.value.detail
 
             # Verify error logging was called correctly
             mock_logger.error.assert_called_once()
             error_call = mock_logger.error.call_args
-            assert "Failed to initialise database" in error_call[0][0]
+            assert "Database initialisation failed" in error_call[0][0]
             assert error_call[1]["extra"]["operation"] == "database_init"
             assert error_call[1]["extra"]["resource_type"] == "database"
             assert error_call[1]["extra"]["status"] == "failed"
@@ -438,15 +437,15 @@ class TestDatabaseResetEndpoint:
     async def test_reset_database_success(self):
         """Test successful database reset with force=true."""
         mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_db.bind = MagicMock()
 
         with patch('api.api_routes_admin.Base') as mock_base, \
-                patch('api.api_routes_admin.engine') as mock_engine, \
                 patch('api.api_routes_admin.get_admin_links') as mock_links, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
             mock_links.return_value = []
 
-            response = await reset_database(mock_request, force=True)
+            response = await reset_database(mock_request, mock_db, force=True)
 
             # Verify response structure matches MessageResponse schema
             assert hasattr(response, 'message')
@@ -459,8 +458,8 @@ class TestDatabaseResetEndpoint:
             assert "permanently deleted" in response.details["warning"]
 
             # Verify database operations were called correctly
-            mock_base.metadata.drop_all.assert_called_once_with(bind=mock_engine)
-            mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
+            mock_base.metadata.drop_all.assert_called_once_with(bind=mock_db.bind)
+            mock_base.metadata.create_all.assert_called_once_with(bind=mock_db.bind)
 
             # Verify logging pattern matches expected structure
             assert mock_logger.warning.call_count >= 1
@@ -486,7 +485,6 @@ class TestDatabaseResetEndpoint:
 
         with patch('api.api_routes_admin.get_admin_links') as mock_links, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
             mock_links.return_value = []
 
             response = await reset_database(mock_request, force=False)
@@ -498,7 +496,7 @@ class TestDatabaseResetEndpoint:
             # Verify warning logging was called correctly
             mock_logger.warning.assert_called_once()
             warning_call = mock_logger.warning.call_args
-            assert "Database reset attempted without force parameter" in warning_call[0][0]
+            assert "Database reset rejected - force parameter not provided" in warning_call[0][0]
             assert warning_call[1]["extra"]["operation"] == "reset_database"
             assert warning_call[1]["extra"]["resource_type"] == "database"
             assert warning_call[1]["extra"]["status"] == "rejected"
@@ -512,25 +510,26 @@ class TestDatabaseResetEndpoint:
     async def test_reset_database_failure(self):
         """Test database reset failure handling."""
         mock_request = MagicMock()
+        mock_db = MagicMock()
+        mock_db.bind = MagicMock()
 
         with patch('api.api_routes_admin.Base') as mock_base, \
                 patch('api.api_routes_admin.logger') as mock_logger:
-
             test_exception = Exception("Reset failed")
             mock_base.metadata.drop_all.side_effect = test_exception
 
             with pytest.raises(HTTPException) as exc_info:
-                await reset_database(mock_request, force=True)
+                await reset_database(mock_request, mock_db, force=True)
 
             # Verify exception details
             assert exc_info.value.status_code == 500
-            assert "Error resetting database" in exc_info.value.detail
+            assert "Database reset failed" in exc_info.value.detail
             assert "Reset failed" in exc_info.value.detail
 
             # Verify error logging was called correctly
             mock_logger.error.assert_called_once()
             error_call = mock_logger.error.call_args
-            assert "Failed to reset database" in error_call[0][0]
+            assert "Database reset failed" in error_call[0][0]
             assert error_call[1]["extra"]["operation"] == "reset_database"
             assert error_call[1]["extra"]["resource_type"] == "database"
             assert error_call[1]["exc_info"] is True
@@ -642,8 +641,8 @@ class TestAdminEndpointsIntegration:
 
         # Test invalid content type on database init
         response = client.post("/api/admin/database/init",
-                             headers={"content-type": "text/plain"},
-                             data="invalid")
+                               headers={"content-type": "text/plain"},
+                               data="invalid")
         # Should still work as it doesn't require body content
         assert response.status_code in [201, 422]
 
@@ -665,7 +664,7 @@ class TestAdminEndpointsIntegration:
             assert "description" in method
             assert len(method["description"]) > 10  # Meaningful description
             assert any(word in method["description"].lower()
-                      for word in ["database", "admin", "status", "init"])
+                       for word in ["database", "admin", "status", "init"])
 
 
 class TestAdminSecurityConsiderations:

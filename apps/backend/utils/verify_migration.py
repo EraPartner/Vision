@@ -28,7 +28,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.models import (
-    Transaction, Category, Recipient, ImportBatch,
+    Transaction, Category, Recipient,
     PlannedTransaction, ExchangeRate, PlannedTransactionExecution
 )
 from config.logging_config import setup_logging
@@ -59,7 +59,6 @@ class MigrationVerifier:
         self.models = [
             Category,
             Recipient,
-            ImportBatch,
             Transaction,
             PlannedTransaction,
             ExchangeRate,

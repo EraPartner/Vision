@@ -210,7 +210,7 @@ export function DataTable<T extends Record<string, any>>({
                                             className={`transition-colors ${isEditing ? "bg-primary/5" : ""}`}
                                         >
                                             {columns.map((col) => (
-                                                <TableCell key={col.key} className={`overflow-hidden text-ellipsis ${col.className || ""}`}>
+                                                <TableCell key={col.key} className={col.className || ""}>
                                                     {isEditing && col.editable ? (
                                                         <Input
                                                             type={col.type || "text"}

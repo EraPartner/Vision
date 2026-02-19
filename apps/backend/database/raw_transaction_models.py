@@ -42,7 +42,6 @@ class BelfiusRawTransaction(Base):
 
     # Primary key and audit fields
     id = Column(Integer, primary_key=True, index=True)
-    import_batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=False, index=True)
     deduplication_hash = Column(String(64), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
@@ -74,13 +73,9 @@ class BelfiusRawTransaction(Base):
     # Original raw CSV line for complete preservation
     raw_csv_line = Column(Text, nullable=False)
 
-    # Relationships
-    import_batch = relationship("ImportBatch", foreign_keys=[import_batch_id])
-
     # Table constraints and indexes
     __table_args__ = (
         Index('idx_belfius_account_date', 'account_number', 'transaction_date'),
-        Index('idx_belfius_batch_hash', 'import_batch_id', 'deduplication_hash'),
     )
 
 
@@ -102,7 +97,6 @@ class RevolutRawTransaction(Base):
 
     # Primary key and audit fields
     id = Column(Integer, primary_key=True, index=True)
-    import_batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=False, index=True)
     deduplication_hash = Column(String(64), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
@@ -128,13 +122,9 @@ class RevolutRawTransaction(Base):
     # Original raw CSV line for complete preservation
     raw_csv_line = Column(Text, nullable=False)
 
-    # Relationships
-    import_batch = relationship("ImportBatch", foreign_keys=[import_batch_id])
-
     # Table constraints and indexes
     __table_args__ = (
         Index('idx_revolut_product_date', 'product', 'completed_date'),
-        Index('idx_revolut_batch_hash', 'import_batch_id', 'deduplication_hash'),
         Index('idx_revolut_state', 'state'),
     )
 
@@ -157,7 +147,6 @@ class KBCRawTransaction(Base):
 
     # Primary key and audit fields
     id = Column(Integer, primary_key=True, index=True)
-    import_batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=False, index=True)
     deduplication_hash = Column(String(64), nullable=False, unique=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
@@ -195,13 +184,9 @@ class KBCRawTransaction(Base):
     # Original raw CSV line for complete preservation
     raw_csv_line = Column(Text, nullable=False)
 
-    # Relationships
-    import_batch = relationship("ImportBatch", foreign_keys=[import_batch_id])
-
     # Table constraints and indexes
     __table_args__ = (
         Index('idx_kbc_account_date', 'account_number', 'transaction_date'),
-        Index('idx_kbc_batch_hash', 'import_batch_id', 'deduplication_hash'),
         Index('idx_kbc_statement', 'statement_number'),
     )
 

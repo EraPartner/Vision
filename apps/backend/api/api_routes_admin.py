@@ -16,16 +16,17 @@ Security Considerations:
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import HttpUrl
 from sqlalchemy import inspect
+from sqlalchemy.orm import Session
 
 from api.api_schemas import MessageResponse, AdminStatusResponse, Link, OptionsResponse, MethodInfo
 from api.hateoas_links import get_base_url
 from config.config import get_settings
 from config.logging_config import setup_logging
-from database.connection import init_db, engine
+from database.connection import get_db, engine
 from database.models import Base
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -78,15 +79,20 @@ def get_admin_links(request: Request) -> List[Link]:
     return links
 
 
-def get_database_status() -> tuple[bool, int]:
+def get_database_status(db: Session = None) -> tuple[bool, int]:
     """Determine database initialisation status by inspecting table count.
+
+    Args:
+        db: Optional database session. If not provided, uses the global engine.
 
     Returns:
         Tuple of (is_initialised, table_count) where is_initialised indicates
         whether any tables exist
     """
     try:
-        inspector = inspect(engine)
+        # Use the provided session's bind (engine) if available, otherwise use global engine
+        engine_to_inspect = db.bind if db else engine
+        inspector = inspect(engine_to_inspect)
         tables = inspector.get_table_names()
         return len(tables) > 0, len(tables)
     except Exception as e:
@@ -131,12 +137,16 @@ async def admin_options(request: Request):
 
 
 @router.get("", response_model=AdminStatusResponse, description="Retrieve database administration status")
-async def get_admin_status(request: Request):
+async def get_admin_status(request: Request, db: Session = Depends(get_db)):
     """Retrieve current database administration status with available actions.
 
     Provides database initialisation state and dynamically generated links to
     available administrative operations. Implements Level 3 REST (HATEOAS) for
     client-driven navigation.
+
+    Args:
+        request: FastAPI request for URL construction
+        db: Database session (injected)
 
     Returns:
         AdminStatusResponse: Database status with HATEOAS links
@@ -169,7 +179,7 @@ async def get_admin_status(request: Request):
         Lightweight operation - only inspects table metadata without querying data.
     """
     try:
-        is_initialised, table_count = get_database_status()
+        is_initialised, table_count = get_database_status(db)
         return AdminStatusResponse(
             is_initialised=is_initialised,
             table_count=table_count,
@@ -194,7 +204,7 @@ async def get_admin_status(request: Request):
 
 @router.post("/database/init", response_model=MessageResponse, status_code=201,
              description="Initialise database tables")
-async def initialise_database(request: Request):
+async def initialise_database(request: Request, db: Session = Depends(get_db)):
     """Initialise database tables (idempotent, safe operation).
 
     Creates all tables defined in SQLAlchemy models if they don't exist.
@@ -204,6 +214,10 @@ async def initialise_database(request: Request):
     - Initial application setup
     - Adding tables after model updates
     - Recovery after accidental table deletion
+
+    Args:
+        request: FastAPI request for URL construction
+        db: Database session (injected)
 
     Returns:
         MessageResponse: Success confirmation with HATEOAS links
@@ -232,7 +246,8 @@ async def initialise_database(request: Request):
         Should require elevated privileges in production environments.
     """
     try:
-        init_db()
+        # Create all tables using the session's engine
+        Base.metadata.create_all(bind=db.bind)
         logger.info(
             "Database initialised successfully",
             extra={
@@ -264,6 +279,7 @@ async def initialise_database(request: Request):
 
 async def reset_database(
         request: Request,
+        db: Session = Depends(get_db),
         force: bool = Query(
             False,
             description="Must be true to confirm destructive operation"
@@ -283,6 +299,7 @@ async def reset_database(
 
     Args:
         request: FastAPI Request for generating URLs
+        db: Database session (injected)
         force: Must be explicitly true to execute (safety measure)
 
     Returns:
@@ -346,8 +363,9 @@ async def reset_database(
                 "status": "in_progress"
             }
         )
-        Base.metadata.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
+        # Use the session's engine for reset
+        Base.metadata.drop_all(bind=db.bind)
+        Base.metadata.create_all(bind=db.bind)
         logger.info(
             "Database reset completed successfully",
             extra={

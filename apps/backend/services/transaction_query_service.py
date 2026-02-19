@@ -98,11 +98,8 @@ class TransactionQueryService:
             # Get recent active transactions
             recent = service.get_transactions(limit=10)
 
-            # Get all transactions including inactive
-            all_txns = service.get_transactions(active=False)
-
-            # Get transactions for specific bank account
-            revolut_txns = service.get_transactions(
+            # Get imported transactions for specific bank account
+            revolut_imports = service.get_transactions(
                 bank_account="Revolut",
                 start_date=datetime(2024, 1, 1)
             )
@@ -118,6 +115,7 @@ class TransactionQueryService:
             - Results are ordered by date descending (newest first)
             - Supports pagination via limit and offset
             - By default, only active transactions are returned
+            - source_type allows filtering between imported and custom transactions
         """
         return self.txn_repo.get_transactions(
             bank_account=bank_account,
@@ -259,6 +257,7 @@ class TransactionQueryService:
             category_id (Optional[int]): Filter by category ID.
             recipient_id (Optional[int]): Filter by recipient ID.
             recipient_name (Optional[str]): Filter by recipient name.
+            source_type (Optional[str]): Filter by source type ('import' or 'custom').
             active (bool): Filter by active status.
 
         Returns:

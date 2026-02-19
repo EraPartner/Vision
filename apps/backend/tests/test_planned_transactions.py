@@ -54,7 +54,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -132,7 +131,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -181,7 +179,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -256,7 +253,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -298,7 +294,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -344,8 +339,8 @@ class TestPlannedTransactionsListEndpoint:
         test_db.refresh(category)
 
         # Create two recipients
-        recipient1 = Recipient(name="Recipient 1", account_number="ACC001")
-        recipient2 = Recipient(name="Recipient 2", account_number="ACC002")
+        recipient1 = Recipient(name="Recipient 1")
+        recipient2 = Recipient(name="Recipient 2")
         test_db.add_all([recipient1, recipient2])
         test_db.commit()
         test_db.refresh(recipient1)
@@ -392,7 +387,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -447,7 +441,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -501,7 +494,6 @@ class TestPlannedTransactionsListEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -584,7 +576,6 @@ class TestPlannedTransactionsCreateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -629,7 +620,6 @@ class TestPlannedTransactionsCreateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -708,7 +698,6 @@ class TestPlannedTransactionsResourceEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -766,7 +755,6 @@ class TestPlannedTransactionsResourceEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -823,7 +811,6 @@ class TestPlannedTransactionsUpdateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -870,7 +857,6 @@ class TestPlannedTransactionsUpdateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -926,8 +912,8 @@ class TestPlannedTransactionsUpdateEndpoint:
         test_db.commit()
         test_db.refresh(category)
 
-        recipient1 = Recipient(name="Original Recipient", account_number="ACC001")
-        recipient2 = Recipient(name="New Recipient", account_number="ACC002")
+        recipient1 = Recipient(name="Original Recipient")
+        recipient2 = Recipient(name="New Recipient")
         test_db.add_all([recipient1, recipient2])
         test_db.commit()
         test_db.refresh(recipient1)
@@ -972,7 +958,6 @@ class TestPlannedTransactionsUpdateEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1018,7 +1003,6 @@ class TestPlannedTransactionsDeleteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1065,7 +1049,6 @@ class TestPlannedTransactionsDeleteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1131,7 +1114,6 @@ class TestPlannedTransactionService:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1186,7 +1168,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1245,7 +1226,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1307,7 +1287,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1375,7 +1354,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1428,7 +1406,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1482,7 +1459,6 @@ class TestPlannedTransactionExecution:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1658,7 +1634,6 @@ class TestPlannedTransactionExecuteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1714,7 +1689,6 @@ class TestPlannedTransactionExecuteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1784,7 +1758,6 @@ class TestPlannedTransactionExecuteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1837,7 +1810,6 @@ class TestPlannedTransactionExecuteEndpoint:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1882,7 +1854,6 @@ class TestPlannedTransactionEdgeCases:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1924,7 +1895,6 @@ class TestPlannedTransactionEdgeCases:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -1993,7 +1963,6 @@ class TestPlannedTransactionsExceptionHandling:
         # Create recipient
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -2028,7 +1997,6 @@ class TestPlannedTransactionsExceptionHandling:
         # Create recipient
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -2085,7 +2053,6 @@ class TestPlannedTransactionsExceptionHandling:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -2131,7 +2098,6 @@ class TestPlannedTransactionsExceptionHandling:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()
@@ -2181,7 +2147,6 @@ class TestPlannedTransactionsExceptionHandling:
 
         recipient = Recipient(
             name=sample_recipient_data["name"],
-            account_number=sample_recipient_data["account_number"]
         )
         test_db.add(recipient)
         test_db.commit()

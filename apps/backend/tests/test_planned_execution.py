@@ -14,7 +14,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from database.connection import get_db
 from database.models import Transaction, Category, Recipient
 from services.planned_transaction_service import PlannedTransactionService
 from services.recurrence_service import RecurrenceService
@@ -38,13 +37,13 @@ def test_recurrence_service():
     print(f"Is 'invalid' valid? {RecurrenceService.is_valid_pattern('invalid')}")
 
 
-def test_one_time_execution():
+def test_one_time_execution(test_db):
     """Test executing a one-time planned transaction."""
     print("\n" + "=" * 60)
     print("Testing One-Time Planned Transaction Execution")
     print("=" * 60)
 
-    db = next(get_db())
+    db = test_db
     service = PlannedTransactionService(db)
 
     # Get or create test data
@@ -119,13 +118,13 @@ def test_one_time_execution():
     print("\n✓ One-time execution test completed")
 
 
-def test_recurring_execution():
+def test_recurring_execution(test_db):
     """Test executing a recurring planned transaction."""
     print("\n" + "=" * 60)
     print("Testing Recurring Planned Transaction Execution")
     print("=" * 60)
 
-    db = next(get_db())
+    db = test_db
     service = PlannedTransactionService(db)
 
     # Get or create test data

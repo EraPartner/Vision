@@ -27,7 +27,6 @@ class Transaction(Base):
     recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
     recipient_bank_account_id = Column(Integer, ForeignKey("recipient_bank_accounts.id"), nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
-    batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=True)
 
     # Soft deletion support
     is_active = Column(Boolean, default=True, nullable=False)
@@ -40,7 +39,6 @@ class Transaction(Base):
     recipient = relationship("Recipient", back_populates="transactions")
     recipient_bank_account = relationship("RecipientBankAccount", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
-    import_batch = relationship("ImportBatch", back_populates="transactions")
 
     @property
     def category_name(self) -> Optional[str]:
@@ -219,9 +217,6 @@ class Recipient(Base):
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    # Deprecated field - kept for backward compatibility during transition
-    account_number = Column(Text, nullable=True)
-    address = Column(Text, nullable=True)
     # Timestamps - using UTC for consistency
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
@@ -286,15 +281,6 @@ def normalize_recipient_name(target, value, oldvalue, initiator):
 
             return normalized
 
-        return TextNormalizationService.normalize_recipient_name(value)
-    return value
-
-
-@event.listens_for(Recipient.address, 'set')
-def normalize_recipient_address(target, value, oldvalue, initiator):
-    """Automatically normalize recipient address to uppercase using TextNormalizationService."""
-    from services.text_normalization_service import TextNormalizationService
-    if value and isinstance(value, str):
         return TextNormalizationService.normalize_recipient_name(value)
     return value
 
@@ -367,35 +353,6 @@ def normalize_bank_account_address(target, value, oldvalue, initiator):
     if value and isinstance(value, str):
         return TextNormalizationService.normalize_recipient_name(value)
     return value
-
-
-class ImportBatch(Base):
-    """
-    ImportBatch model - tracks CSV import operations
-    """
-    __tablename__ = "import_batches"
-
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(255), nullable=False)
-    bank_name = Column(String(100), nullable=False)
-
-    # Import statistics
-    total_processed = Column(Integer, default=0)
-    imported_count = Column(Integer, default=0)
-    duplicate_count = Column(Integer, default=0)
-    error_count = Column(Integer, default=0)
-
-    # Import metadata
-    config_used = Column(Text, nullable=True)  # JSON config for reproducibility
-    status = Column(String(20), default="processing")  # processing, completed, failed
-    error_message = Column(Text, nullable=True)
-
-    # Timestamps - using UTC for consistency
-    created_at = Column(DateTime, server_default=func.now())
-    completed_at = Column(DateTime, nullable=True)
-
-    # Relationships
-    transactions = relationship("Transaction", back_populates="import_batch")
 
 
 class PlannedTransaction(Base):
