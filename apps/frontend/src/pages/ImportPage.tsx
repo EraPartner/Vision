@@ -36,37 +36,42 @@ export default function ImportPage() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch supported banks from backend instead of hardcoding
-  const [banks, setBanks] = useState<string[]>([]);
-  const [banksLoading, setBanksLoading] = useState(false);
-  const [banksError, setBanksError] = useState<string | null>(null);
+  // Fetch supported parsers from backend
+  interface BankAdapter {
+    key: string;
+    name: string;
+    adapter_class: string;
+  }
+  
+  const [adapters, setAdapters] = useState<BankAdapter[]>([]);
+  const [adaptersLoading, setAdaptersLoading] = useState(false);
+  const [adaptersError, setAdaptersError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    const loadBanks = async () => {
-      setBanksLoading(true);
-      setBanksError(null);
+    const loadAdapters = async () => {
+      setAdaptersLoading(true);
+      setAdaptersError(null);
       try {
-        const res = await apiClient.getBanks();
-        if (mounted && res && Array.isArray(res.banks)) {
-          setBanks(res.banks);
+        const res = await apiClient.getSupportedParsers();
+        if (mounted && res && Array.isArray(res.adapters)) {
+          setAdapters(res.adapters);
         }
       } catch (err) {
-        console.error("Failed to load banks", err);
+        console.error("Failed to load supported parsers", err);
         if (mounted) {
-          setBanksError(err instanceof Error ? err.message : String(err));
-          // Leave banks empty - we intentionally avoid hardcoding fallback values
-          setBanks([]);
+          setAdaptersError(err instanceof Error ? err.message : String(err));
+          setAdapters([]);
           toast.error(
-            "Could not load supported banks from server — you can still use Custom"
+            "Could not load supported parsers from server — you can still use Custom"
           );
         }
       } finally {
-        if (mounted) setBanksLoading(false);
+        if (mounted) setAdaptersLoading(false);
       }
     };
 
-    loadBanks();
+    loadAdapters();
     return () => {
       mounted = false;
     };
@@ -281,19 +286,19 @@ export default function ImportPage() {
                 <SelectValue placeholder="Select a bank…" />
               </SelectTrigger>
               <SelectContent>
-                {banksLoading ? (
+                {adaptersLoading ? (
                   <SelectItem value="loading" disabled>
-                    <Loader2 className="h-4 w-4 mr-2 inline" /> Loading banks...
+                    <Loader2 className="h-4 w-4 mr-2 inline" /> Loading parsers...
                   </SelectItem>
-                ) : banks.length > 0 ? (
-                  banks.map((bank) => (
-                    <SelectItem key={bank} value={bank}>
-                      🏦 {bank}
+                ) : adapters.length > 0 ? (
+                  adapters.map((adapter) => (
+                    <SelectItem key={adapter.key} value={adapter.key}>
+                      🏦 {adapter.name}
                     </SelectItem>
                   ))
                 ) : (
                   <SelectItem value="none" disabled>
-                    No banks available — use Custom
+                    No parsers available — use Custom
                   </SelectItem>
                 )}
                 <SelectItem value="custom">✏️ Custom / Andere</SelectItem>
@@ -705,22 +710,22 @@ export default function ImportPage() {
             Supported Banks
           </p>
           <div className="flex flex-wrap gap-2">
-            {banksLoading ? (
+            {adaptersLoading ? (
               <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…
               </span>
-            ) : banks.length > 0 ? (
-              banks.map((bank) => (
+            ) : adapters.length > 0 ? (
+              adapters.map((adapter) => (
                 <span
-                  key={bank}
+                  key={adapter.key}
                   className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
                 >
-                  {bank}
+                  {adapter.name}
                 </span>
               ))
             ) : (
               <span className="text-xs text-muted-foreground">
-                No supported banks loaded. Select <strong>Custom</strong> to
+                No supported parsers loaded. Select <strong>Custom</strong> to
                 provide a bank name.
               </span>
             )}

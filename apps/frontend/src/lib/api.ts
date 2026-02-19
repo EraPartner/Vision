@@ -353,8 +353,22 @@ class ApiClient {
         return this.request('/api/info');
     }
 
+    async getSupportedParsers(): Promise<{
+        adapters: Array<{
+            key: string;
+            name: string;
+            adapter_class: string;
+        }>;
+        total_count: number;
+    }> {
+        return this.request('/api/info/supported-adapters');
+    }
+
+    /** @deprecated Use getSupportedParsers instead */
     async getBanks(): Promise<{ banks: string[] }> {
-        return this.request('/api/info/banks');
+        // Fallback for compatibility - converts new format to old
+        const data = await this.getSupportedParsers();
+        return { banks: data.adapters.map(a => a.key) };
     }
 
     async getTransactionSummary(params?: {

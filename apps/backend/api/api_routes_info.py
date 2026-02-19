@@ -10,12 +10,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import HttpUrl
 from sqlalchemy.orm import Session
 
-from api.api_schemas import BankListResponse, StatisticsResponse, CategoryStats, TransactionCountResponse, \
-    MonthlyFinancialSummaryResponse, Link, OptionsResponse, MethodInfo, PlannedExpensesNextMonthResponse, \
-    AverageVsCurrentSpendingResponse
+from api.api_schemas import (
+    BankListResponse,
+    StatisticsResponse,
+    CategoryStats,
+    TransactionCountResponse,
+    MonthlyFinancialSummaryResponse,
+    Link,
+    OptionsResponse,
+    MethodInfo,
+    PlannedExpensesNextMonthResponse,
+    AverageVsCurrentSpendingResponse,
+    SupportedAdaptersResponse,
+    BankAdapterInfo
+)
 from api.hateoas_links import get_base_url
 from config.logging_config import setup_logging
 from database.connection import get_db
+from services.bank_adapters import BANK_CONFIGURATIONS
 from services.info_service import InfoService
 
 router = APIRouter(prefix="/api/info", tags=["info"])
@@ -47,6 +59,12 @@ def get_info_links(request: Request) -> list[Link]:
             href=HttpUrl(f"{base_url}/api/info/banks"),
             method="GET",
             title="List all bank accounts"
+        ),
+        Link(
+            rel="supported-adapters",
+            href=HttpUrl(f"{base_url}/api/info/supported-adapters"),
+            method="GET",
+            title="List all supported bank CSV parsers/adapters"
         ),
         Link(
             rel="transaction-count",
@@ -138,6 +156,56 @@ async def get_banks(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error retrieving banks: {str(e)}")
         raise HTTPException(status_code=500, detail="Error retrieving banks")
+
+
+@router.get("/supported-adapters", response_model=SupportedAdaptersResponse)
+async def get_supported_adapters():
+    """
+    Get list of all supported bank CSV parsers/adapters.
+
+    Returns information about all bank adapters configured in the system,
+    including their internal keys, human-readable names, and implementation
+    class names. This endpoint does not require database access as it returns
+    static configuration data.
+
+    Returns:
+        SupportedAdaptersResponse: List of supported adapters with metadata
+    """
+    try:
+        # Build adapter info list from BANK_CONFIGURATIONS
+        adapters = [
+            BankAdapterInfo(
+                key=key,
+                name=config["bank_name"],
+                adapter_class=config["adapter_class"]
+            )
+            for key, config in BANK_CONFIGURATIONS.items()
+        ]
+
+        logger.info(
+            "Retrieved supported bank adapters",
+            extra={
+                "operation": "get_supported_adapters",
+                "resource_type": "adapter_configuration",
+                "adapter_count": len(adapters)
+            }
+        )
+
+        return SupportedAdaptersResponse(
+            adapters=adapters,
+            total_count=len(adapters)
+        )
+    except Exception as e:
+        logger.error(
+            "Error retrieving supported adapters",
+            extra={
+                "operation": "get_supported_adapters",
+                "resource_type": "adapter_configuration",
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Error retrieving supported adapters")
 
 
 @router.get("/transaction-count", response_model=TransactionCountResponse)
