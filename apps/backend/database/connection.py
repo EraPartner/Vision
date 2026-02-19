@@ -7,18 +7,21 @@ This module handles:
 - Session factory configuration
 - Dependency injection for database sessions in FastAPI
 - Database initialization
+- Automatic PostgreSQL database creation
 
 The module automatically configures the database connection based on the
 DATABASE_URL setting and handles environment-specific configurations
 (SQLite for development, PostgreSQL for production).
 """
 import os
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.exc import OperationalError
 
 from config.config import get_settings
 from config.logging_config import setup_logging
@@ -98,6 +101,129 @@ def get_db():
         db.close()
 
 
+def ensure_postgresql_database_exists(database_url: str) -> None:
+    """
+    Ensure that the PostgreSQL database exists, creating it if necessary.
+
+    This function connects to the PostgreSQL server using the 'postgres' database
+    (which always exists) and creates the target database if it doesn't exist.
+
+    Only applicable for PostgreSQL databases. SQLite databases are created
+    automatically by SQLAlchemy.
+
+    Args:
+        database_url: Full database connection URL
+
+    Raises:
+        OperationalError: If connection to PostgreSQL server fails
+        Exception: For other database-related errors
+
+    Note:
+        - This function is idempotent - safe to call multiple times
+        - Requires PostgreSQL user to have CREATE DATABASE privilege
+        - Uses 'postgres' database for initial connection
+    """
+    if not database_url.startswith("postgresql"):
+        logger.debug("Database is not PostgreSQL, skipping database creation check")
+        return
+
+    # Parse the database URL to extract connection details
+    parsed_url = urlparse(database_url)
+    database_name = parsed_url.path.lstrip('/')
+
+    if not database_name:
+        logger.warning("No database name found in DATABASE_URL")
+        return
+
+    # Build connection URL to the 'postgres' database (which always exists)
+    # This allows us to check/create the target database
+    postgres_url = database_url.replace(f"/{database_name}", "/postgres")
+
+    logger.info(
+        f"Checking if PostgreSQL database '{database_name}' exists",
+        extra={
+            "operation": "database_check",
+            "resource_type": "database",
+            "database_name": database_name
+        }
+    )
+
+    try:
+        # Connect to postgres database to check if target database exists
+        temp_engine = create_engine(postgres_url, isolation_level="AUTOCOMMIT")
+
+        with temp_engine.connect() as conn:
+            # Check if database exists
+            result = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": database_name}
+            )
+            exists = result.fetchone() is not None
+
+            if exists:
+                logger.info(
+                    f"PostgreSQL database '{database_name}' already exists",
+                    extra={
+                        "operation": "database_check",
+                        "resource_type": "database",
+                        "database_name": database_name,
+                        "status": "exists"
+                    }
+                )
+            else:
+                # Create the database
+                logger.info(
+                    f"Creating PostgreSQL database '{database_name}'",
+                    extra={
+                        "operation": "database_create",
+                        "resource_type": "database",
+                        "database_name": database_name,
+                        "status": "creating"
+                    }
+                )
+
+                # Create database (cannot use parameterized query for database name)
+                # Using text() with properly quoted identifier
+                conn.execute(text(f'CREATE DATABASE "{database_name}"'))
+
+                logger.info(
+                    f"PostgreSQL database '{database_name}' created successfully",
+                    extra={
+                        "operation": "database_create",
+                        "resource_type": "database",
+                        "database_name": database_name,
+                        "status": "success"
+                    }
+                )
+
+        temp_engine.dispose()
+
+    except OperationalError as e:
+        logger.error(
+            f"Failed to connect to PostgreSQL server: {str(e)}",
+            extra={
+                "operation": "database_check",
+                "resource_type": "database",
+                "status": "connection_failed",
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+        raise
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during database creation: {str(e)}",
+            extra={
+                "operation": "database_create",
+                "resource_type": "database",
+                "status": "failed",
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+        raise
+
+
 def init_db():
     """Initialize database tables based on SQLAlchemy models.
 
@@ -120,6 +246,7 @@ def init_db():
         - Does not drop existing tables
         - Should be called once on application startup
         - Use database migrations (Alembic) for schema changes in production
+        - For PostgreSQL, ensure_postgresql_database_exists() should be called first
 
     Raises:
         SQLAlchemy exceptions if table creation fails (e.g., permission issues).

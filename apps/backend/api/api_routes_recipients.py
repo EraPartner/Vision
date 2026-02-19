@@ -254,15 +254,15 @@ async def create_or_get_recipient(
         new_recipient, created = service.create_or_get_recipient(
             name=recipient.name,
             account_number=recipient.account_number,
+            address=recipient.address
         )
 
-        # Update additional fields if provided
-        if recipient.default_category_id is not None or recipient.notes is not None or recipient.address is not None:
+        # Update additional fields if provided (category and notes)
+        if recipient.default_category_id is not None or recipient.notes is not None:
             new_recipient = service.update(
                 recipient_id=new_recipient.id,
                 default_category_id=recipient.default_category_id,
-                notes=recipient.notes,
-                address=recipient.address
+                notes=recipient.notes
             )
 
         new_recipient.links = get_resource_links(request, "recipients", new_recipient.id)

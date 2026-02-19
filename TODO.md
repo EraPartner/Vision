@@ -1,5 +1,6 @@
 TODO for Frontend
 
+- Implement a way to distinct KBC Savings and Checkigns in backend
 - Add a way to see the cash flow of the month with(out) planned transactions
 - When hiding transactions/recipients/categories, remove them from stats
 - Allow excluding categories/recipients/transactions from stats without hiding them (e.g. for planned expenditures)

@@ -2,8 +2,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
     Boolean, event
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -26,15 +25,12 @@ class Transaction(Base):
 
     # Foreign keys
     recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
+    recipient_bank_account_id = Column(Integer, ForeignKey("recipient_bank_accounts.id"), nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     batch_id = Column(Integer, ForeignKey("import_batches.id"), nullable=True)
 
     # Soft deletion support
     is_active = Column(Boolean, default=True, nullable=False)
-
-    # Import metadata
-    original_raw_data = Column(Text, nullable=True)  # Store original CSV row
-    bank_reference = Column(Text, nullable=True)  # Bank's transaction ID
 
     # Timestamps - using UTC for consistency
     created_at = Column(DateTime, server_default=func.now())
@@ -42,6 +38,7 @@ class Transaction(Base):
 
     # Relationships
     recipient = relationship("Recipient", back_populates="transactions")
+    recipient_bank_account = relationship("RecipientBankAccount", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
     import_batch = relationship("ImportBatch", back_populates="transactions")
 
@@ -85,6 +82,33 @@ class Transaction(Base):
         if self.recipient:
             return self.recipient.name
         return None
+
+
+# SQLAlchemy event listeners for automatic uppercase normalization of Transaction fields
+@event.listens_for(Transaction.memo, 'set')
+def normalize_transaction_memo(target, value, oldvalue, initiator):
+    """Automatically normalize transaction memo to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
+
+
+@event.listens_for(Transaction.currency, 'set')
+def normalize_transaction_currency(target, value, oldvalue, initiator):
+    """Automatically normalize transaction currency to uppercase."""
+    if value and isinstance(value, str):
+        return value.strip().upper()
+    return value
+
+
+@event.listens_for(Transaction.bank_account, 'set')
+def normalize_transaction_bank_account(target, value, oldvalue, initiator):
+    """Automatically normalize transaction bank_account to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
 
 
 class Category(Base):
@@ -181,30 +205,32 @@ def normalize_detail(target, value, oldvalue, initiator):
 class Recipient(Base):
     """
     Recipient model - stores information about transaction recipients/payees
+
+    Represents a unique person or entity. Each recipient can have multiple bank accounts
+    through the RecipientBankAccount junction table.
     """
     __tablename__ = "recipients"
 
     id = Column(Integer, primary_key=True, index=True)
 
     name = Column(Text, nullable=False, index=True)
-    account_number = Column(Text, nullable=True)
+    normalized_name = Column(Text, nullable=False, unique=True, index=True)
     default_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     notes = Column(Text, nullable=True)
-    address = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
+    # Deprecated field - kept for backward compatibility during transition
+    account_number = Column(Text, nullable=True)
+    address = Column(Text, nullable=True)
     # Timestamps - using UTC for consistency
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
     # Relationships
+    bank_accounts = relationship("RecipientBankAccount", back_populates="recipient", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="recipient")
     planned_transactions = relationship("PlannedTransaction", back_populates="recipient")
     default_category = relationship("Category", back_populates="recipients")
-
-    __table_args__ = (
-        UniqueConstraint('account_number', name='uq_account_number'),
-    )
 
     @property
     def default_category_name(self) -> Optional[str]:
@@ -221,6 +247,126 @@ class Recipient(Base):
         if self.default_category:
             return self.default_category.full_path()
         return None
+
+
+# SQLAlchemy event listeners for automatic uppercase normalization of Recipient fields
+@event.listens_for(Recipient.name, 'set')
+def normalize_recipient_name(target, value, oldvalue, initiator):
+    """Automatically normalize recipient name to uppercase, preserving URLs."""
+    if value and isinstance(value, str):
+        from services.text_normalization_service import TextNormalizationService
+        import re
+
+        # Check if entire string is a URL
+        value_lower = value.lower()
+        if (value_lower.startswith('http://') or
+                value_lower.startswith('https://') or
+                value_lower.startswith('www.') or
+                '://' in value or
+                re.match(r'^[a-z0-9-]+\.[a-z]{2,}', value_lower)):
+            return value
+
+        # Check for URLs within the text and preserve them
+        url_pattern = r'((?:https?://)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}(?:/[^\s]*)?)'
+        urls = re.findall(url_pattern, value, re.IGNORECASE)
+
+        if urls:
+            # Replace URLs with placeholders, normalize, then restore
+            placeholder_map = {}
+            modified_value = value
+            for i, url in enumerate(urls):
+                placeholder = f"__URL_PLACEHOLDER_{i}__"
+                placeholder_map[placeholder] = url
+                modified_value = modified_value.replace(url, placeholder)
+
+            normalized = TextNormalizationService.normalize_recipient_name(modified_value)
+
+            for placeholder, url in placeholder_map.items():
+                normalized = normalized.replace(placeholder, url)
+
+            return normalized
+
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
+
+
+@event.listens_for(Recipient.address, 'set')
+def normalize_recipient_address(target, value, oldvalue, initiator):
+    """Automatically normalize recipient address to uppercase using TextNormalizationService."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
+
+
+@event.listens_for(Recipient, 'before_insert')
+@event.listens_for(Recipient, 'before_update')
+def set_normalized_name(mapper, connection, target):
+    """Automatically set normalized_name from name before insert/update."""
+    if target.name:
+        from services.text_normalization_service import TextNormalizationService
+        target.normalized_name = TextNormalizationService.normalize_name_for_matching(target.name)
+
+
+class RecipientBankAccount(Base):
+    """
+    RecipientBankAccount model - junction table linking recipients to their bank accounts
+
+    Allows a single recipient (person/entity) to have multiple bank accounts across different banks.
+    This prevents duplicate recipients when banks format names differently.
+    """
+    __tablename__ = "recipient_bank_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
+    account_number = Column(Text, nullable=False, unique=True, index=True)
+    bank_name = Column(Text, nullable=True)
+    account_label = Column(Text, nullable=True)
+    address = Column(Text, nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps - using UTC for consistency
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    # Relationships
+    recipient = relationship("Recipient", back_populates="bank_accounts")
+    transactions = relationship("Transaction", back_populates="recipient_bank_account")
+
+    @property
+    def recipient_name(self) -> Optional[str]:
+        """Get the recipient name for this bank account."""
+        if self.recipient:
+            return self.recipient.name
+        return None
+
+
+# SQLAlchemy event listeners for automatic uppercase normalization of RecipientBankAccount fields
+@event.listens_for(RecipientBankAccount.account_number, 'set')
+def normalize_bank_account_number(target, value, oldvalue, initiator):
+    """Automatically normalize bank account number to uppercase."""
+    if value and isinstance(value, str):
+        return value.strip().upper()
+    return value
+
+
+@event.listens_for(RecipientBankAccount.bank_name, 'set')
+def normalize_bank_name(target, value, oldvalue, initiator):
+    """Automatically normalize bank name to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
+
+
+@event.listens_for(RecipientBankAccount.address, 'set')
+def normalize_bank_account_address(target, value, oldvalue, initiator):
+    """Automatically normalize bank account address to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
 
 
 class ImportBatch(Base):
@@ -342,6 +488,33 @@ class PlannedTransaction(Base):
         if self.recipient:
             return self.recipient.name
         return None
+
+
+# SQLAlchemy event listeners for automatic uppercase normalization of PlannedTransaction fields
+@event.listens_for(PlannedTransaction.memo, 'set')
+def normalize_planned_transaction_memo(target, value, oldvalue, initiator):
+    """Automatically normalize planned transaction memo to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
+
+
+@event.listens_for(PlannedTransaction.currency, 'set')
+def normalize_planned_transaction_currency(target, value, oldvalue, initiator):
+    """Automatically normalize planned transaction currency to uppercase."""
+    if value and isinstance(value, str):
+        return value.strip().upper()
+    return value
+
+
+@event.listens_for(PlannedTransaction.bank_account, 'set')
+def normalize_planned_transaction_bank_account(target, value, oldvalue, initiator):
+    """Automatically normalize planned transaction bank_account to uppercase."""
+    from services.text_normalization_service import TextNormalizationService
+    if value and isinstance(value, str):
+        return TextNormalizationService.normalize_recipient_name(value)
+    return value
 
 
 class ExchangeRate(Base):

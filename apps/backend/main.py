@@ -25,13 +25,17 @@ from api.api_schemas import RootOptionsResponse, APIRootResponse, MethodInfo
 from api.hateoas_links import get_root_links
 from config.config import get_settings
 from config.logging_config import setup_logging
-from database.connection import init_db
+from database.connection import init_db, ensure_postgresql_database_exists
+from utils.postgres_manager import PostgresManager
 
 # Setup logging
 logger = setup_logging(__name__)
 
 # Get configuration
 settings = get_settings()
+
+# Initialize PostgreSQL manager for local development
+postgres_manager = PostgresManager()
 
 
 @asynccontextmanager
@@ -68,6 +72,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         # Validate critical configuration
         _validate_startup_configuration()
+
+        # Ensure PostgreSQL server is running (setup if needed)
+        await _ensure_postgres_server()
 
         # Initialise database with retry logic
         await _initialise_database_with_retry()
@@ -106,6 +113,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         }
     )
 
+    # Stop PostgreSQL server
+    await _stop_postgres_server()
+
 
 def _validate_startup_configuration() -> None:
     """
@@ -130,9 +140,101 @@ def _validate_startup_configuration() -> None:
     )
 
 
+async def _ensure_postgres_server() -> None:
+    """
+    Ensure PostgreSQL server is running, setting up if necessary.
+
+    This function:
+    1. Checks if PostgreSQL data directory is initialized
+    2. Runs setup script if not initialized
+    3. Starts the PostgreSQL server
+
+    Raises:
+        RuntimeError: If PostgreSQL setup or start fails
+    """
+    try:
+        logger.info(
+            "Ensuring PostgreSQL server is running",
+            extra={
+                "operation": "postgres_ensure_running",
+                "resource_type": "database",
+                "status": "starting"
+            }
+        )
+
+        await postgres_manager.ensure_running()
+
+        logger.info(
+            "PostgreSQL server is running and ready",
+            extra={
+                "operation": "postgres_ensure_running",
+                "resource_type": "database",
+                "status": "success"
+            }
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to ensure PostgreSQL server is running",
+            extra={
+                "operation": "postgres_ensure_running",
+                "resource_type": "database",
+                "status": "failed",
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+        raise RuntimeError(f"PostgreSQL server initialization failed: {str(e)}") from e
+
+
+async def _stop_postgres_server() -> None:
+    """
+    Stop PostgreSQL server gracefully during application shutdown.
+
+    Logs errors but does not raise exceptions to allow graceful shutdown
+    even if PostgreSQL stop fails.
+    """
+    try:
+        logger.info(
+            "Stopping PostgreSQL server",
+            extra={
+                "operation": "postgres_stop",
+                "resource_type": "database",
+                "status": "stopping"
+            }
+        )
+
+        await postgres_manager.stop()
+
+        logger.info(
+            "PostgreSQL server stopped successfully",
+            extra={
+                "operation": "postgres_stop",
+                "resource_type": "database",
+                "status": "success"
+            }
+        )
+
+    except Exception as e:
+        # Log error but don't raise to allow graceful shutdown
+        logger.error(
+            "Failed to stop PostgreSQL server gracefully",
+            extra={
+                "operation": "postgres_stop",
+                "resource_type": "database",
+                "status": "failed",
+                "error_type": type(e).__name__
+            },
+            exc_info=True
+        )
+
+
 async def _initialise_database_with_retry(max_retries: int = 3) -> None:
     """
     Initialise database with retry logic for robustness.
+
+    For PostgreSQL databases, ensures the database exists before creating tables.
+    For SQLite databases, the file is created automatically.
 
     Args:
         max_retries: Maximum number of retry attempts
@@ -142,7 +244,12 @@ async def _initialise_database_with_retry(max_retries: int = 3) -> None:
     """
     for attempt in range(1, max_retries + 1):
         try:
+            # Step 1: Ensure PostgreSQL database exists (no-op for SQLite)
+            ensure_postgresql_database_exists(settings.database.url)
+
+            # Step 2: Initialize database tables
             init_db()
+
             logger.info(
                 "Database initialised successfully",
                 extra={

@@ -20,6 +20,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker, Session
 
 # Add parent directory to path for imports
@@ -127,6 +128,9 @@ class DatabaseMigrator:
         """
         Migrate data from one table to another.
 
+        Uses PostgreSQL's INSERT ... ON CONFLICT DO NOTHING to safely skip
+        existing records without raising errors.
+
         Args:
             model_class: SQLAlchemy model class to migrate
             source_session: Source database session
@@ -157,10 +161,20 @@ class DatabaseMigrator:
                     record_dict[column.name] = value
                 records_data.append(record_dict)
 
-            # Bulk insert into target
-            target_session.bulk_insert_mappings(model_class, records_data)
+            # Use PostgreSQL INSERT ... ON CONFLICT to skip duplicates
+            # This safely handles cases where records already exist
+            inserted_count = 0
+            for record_dict in records_data:
+                stmt = insert(model_class.__table__).values(**record_dict)
+                # Skip if primary key (id) already exists
+                stmt = stmt.on_conflict_do_nothing(index_elements=['id'])
+                result = target_session.execute(stmt)
+                # Track how many were actually inserted (not skipped)
+                if result.rowcount > 0:
+                    inserted_count += 1
 
-            logger.info(f"  ✓ Migrated {count} records from {table_name}")
+            logger.info(
+                f"  ✓ Migrated {inserted_count} records from {table_name} ({count - inserted_count} skipped as duplicates)")
             return count
 
         except Exception as e:
@@ -172,7 +186,8 @@ class DatabaseMigrator:
         Reset PostgreSQL sequences to match the maximum ID values.
 
         This ensures that new records will have IDs that don't conflict
-        with migrated data.
+        with migrated data. Uses pg_get_serial_sequence for robust
+        sequence detection.
 
         Args:
             target_session: Target database session
@@ -187,15 +202,23 @@ class DatabaseMigrator:
                 max_id_result = target_session.query(func.max(model_class.id)).scalar()
 
                 if max_id_result:
-                    sequence_name = f"{table_name}_id_seq"
-                    next_val = max_id_result + 1
-
-                    # Reset sequence
-                    target_session.execute(
-                        text(f"SELECT setval('{sequence_name}', :next_val, false)"),
-                        {"next_val": next_val}
+                    # Use pg_get_serial_sequence to get the actual sequence name
+                    # This is more robust than assuming the sequence name format
+                    seq_query = text(
+                        "SELECT setval(pg_get_serial_sequence(:table, :column), "
+                        ":max_val, true)"
                     )
-                    logger.info(f"  ✓ Reset sequence {sequence_name} to {next_val}")
+                    target_session.execute(
+                        seq_query,
+                        {
+                            "table": table_name,
+                            "column": "id",
+                            "max_val": max_id_result
+                        }
+                    )
+                    logger.info(f"  ✓ Reset sequence for {table_name} to {max_id_result}")
+                else:
+                    logger.info(f"  ℹ No records in {table_name}, skipping sequence reset")
 
             except Exception as e:
                 logger.warning(f"  ⚠ Could not reset sequence for {table_name}: {e}")
