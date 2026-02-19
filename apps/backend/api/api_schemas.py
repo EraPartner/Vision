@@ -565,7 +565,7 @@ class PlannedTransactionsListResponse(BaseModel):
     links: List[Link] = Field(description="Available actions (HATEOAS links)")
 
 
-# ==================== Statistics Schemas ====================
+# ==================== Info Schemas ====================
 
 class CategoryStats(BaseModel):
     """Category statistics"""
@@ -596,6 +596,19 @@ class BankListResponse(BaseModel):
 class TransactionCountResponse(BaseModel):
     """Response schema for total transaction count"""
     total_transactions: int = Field(description="Total number of transactions in the database", ge=0)
+
+
+class BankAdapterInfo(BaseModel):
+    """Information about a supported bank adapter"""
+    key: str = Field(description="Internal key/identifier for the adapter (lowercase)")
+    name: str = Field(description="Human-readable bank name")
+    adapter_class: str = Field(description="Implementation class name for the adapter")
+
+
+class SupportedAdaptersResponse(BaseModel):
+    """Response schema for supported bank adapters/parsers"""
+    adapters: List[BankAdapterInfo] = Field(description="List of supported bank CSV parsers")
+    total_count: int = Field(description="Total number of supported adapters", ge=0)
 
 
 class MonthData(BaseModel):

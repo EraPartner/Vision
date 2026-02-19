@@ -15,6 +15,15 @@ export const useStatistics = () => {
     });
 };
 
+export const useSupportedParsers = () => {
+    return useQuery({
+        queryKey: ['supported-parsers'],
+        queryFn: () => apiClient.getSupportedParsers(),
+        staleTime: 300000, // 5 minutes (this is static configuration data)
+    });
+};
+
+/** @deprecated Use useSupportedParsers instead */
 export const useBanks = () => {
     return useQuery({
         queryKey: ['banks'],
