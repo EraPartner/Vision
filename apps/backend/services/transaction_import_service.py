@@ -93,7 +93,8 @@ class TransactionImportService:
             self,
             file_path: str,
             bank_name: str,
-            custom_config: Optional[Dict] = None
+            custom_config: Optional[Dict] = None,
+            account_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """Import transactions from a CSV file with bank-specific or custom configuration.
 
@@ -118,6 +119,9 @@ class TransactionImportService:
                 If provided, creates a custom adapter instead of using predefined ones.
                 Should include keys like: date_format, date_column, recipient_column,
                 amount_column, memo_column, separator, encoding, skip_rows.
+            account_type (Optional[str]): Account type override (e.g., 'Checking', 'Savings').
+                If provided, this will be used instead of auto-detection by the adapter.
+                Allows frontend to specify the account type explicitly.
 
         Returns:
             Dict[str, Any]: Import results containing:
@@ -198,14 +202,15 @@ class TransactionImportService:
                 adapter = BankAdapterFactory.create_adapter(bank_name)
                 logger.debug(f"Using predefined adapter for {bank_name}")
 
-            # Parse CSV file using the adapter
-            transaction_data_list = adapter.parse_csv(file_path)
+            # Parse CSV file using the adapter, passing account_type if provided
+            transaction_data_list = adapter.parse_csv(file_path, account_type=account_type)
             logger.info(
                 f"Parsed CSV file successfully",
                 extra={
                     "operation": "parse_csv",
                     "batch_id": batch.id,
-                    "transactions_parsed": len(transaction_data_list)
+                    "transactions_parsed": len(transaction_data_list),
+                    "account_type": account_type
                 }
             )
 
@@ -336,9 +341,11 @@ class TransactionImportService:
                     continue
 
                 # Get or create recipient using dedicated recipient service
-                recipient = self.recipient_service.get_or_create_recipient(
+                recipient, _ = self.recipient_service.create_or_get_recipient(
                     transaction_data.recipient,
-                    transaction_data.recipient_account
+                    transaction_data.recipient_account,
+                    transaction_data.recipient_address,
+                    transaction_data.recipient_bank_name
                 )
 
                 # Create transaction

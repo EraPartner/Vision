@@ -214,6 +214,109 @@ class RecipientRepository:
         )
         return result
 
+    def get_by_normalized_name(self, normalized_name: str) -> Optional[Recipient]:
+        """Get a recipient by normalized name.
+
+        Retrieves a recipient using the normalized name field, which handles
+        word order variations (e.g., "JOHN SMITH" vs "SMITH JOHN"). This enables
+        intelligent recipient matching that prevents duplicates when banks format
+        names differently.
+
+        Args:
+            normalized_name (str): The normalized name (canonical form with sorted tokens).
+
+        Returns:
+            Optional[Recipient]: The Recipient object if found, None otherwise.
+
+        Example:
+            from services.text_normalization_service import TextNormalizationService
+
+            # Both of these will find the same recipient
+            normalized1 = TextNormalizationService.normalize_name_for_matching("JOHN SMITH")
+            recipient1 = repo.get_by_normalized_name(normalized1)
+
+            normalized2 = TextNormalizationService.normalize_name_for_matching("SMITH JOHN")
+            recipient2 = repo.get_by_normalized_name(normalized2)
+
+            assert recipient1.id == recipient2.id  # Same recipient!
+
+        Note:
+            - Handles word order variations in names
+            - Prevents duplicate recipients with different name formats
+            - Family members with same last name remain separate (different full names)
+            - Returns both active and inactive recipients
+            - All lookups are logged for audit purposes
+        """
+        if not normalized_name or not normalized_name.strip():
+            return None
+
+        result = self.db.query(Recipient).options(
+            joinedload(Recipient.default_category)
+        ).filter(Recipient.normalized_name == normalized_name.strip()).first()
+
+        logger.debug(
+            "Recipient lookup by normalized name",
+            extra={
+                "operation": "get_by_normalized_name",
+                "resource_type": "recipient",
+                "normalized_name": normalized_name,
+                "found": result is not None
+            }
+        )
+        return result
+
+    def get_by_account_number(self, account_number: str) -> Optional[Recipient]:
+        """Get a recipient by exact account number match.
+
+        DEPRECATED: This method is kept for backward compatibility but should not be used
+        for new code. Use RecipientBankAccountService.get_by_account_number() instead,
+        which properly handles the many-to-many relationship between recipients and accounts.
+
+        Retrieves a single recipient by its exact account number. This method performs
+        an exact match lookup, which is highly reliable for identifying recipients
+        since account numbers are unique and don't change over time.
+
+        Account numbers are the most reliable way to identify recipients because:
+        - They are unique (enforced by database constraint)
+        - They don't change over time (unlike names which may have variations)
+        - They are standardized (bank-issued identifiers)
+
+        Args:
+            account_number (str): The exact account number of the recipient to retrieve.
+
+        Returns:
+            Optional[Recipient]: The Recipient object if found, None otherwise.
+
+        Example:
+            recipient = repo.get_by_account_number("BE61734041478017")
+            if recipient:
+                print(f"Found: {recipient.name} (ID: {recipient.id})")
+
+        Note:
+            - Search is exact match on account number field
+            - Returns both active and inactive recipients
+            - Returns None if no recipient has the account number
+            - Most reliable method for recipient identification
+            - All lookups are logged for audit purposes
+        """
+        if not account_number or not account_number.strip():
+            return None
+
+        result = self.db.query(Recipient).options(
+            joinedload(Recipient.default_category)
+        ).filter(Recipient.account_number == account_number.strip()).first()
+
+        logger.debug(
+            "Recipient lookup by account number",
+            extra={
+                "operation": "get_by_account_number",
+                "resource_type": "recipient",
+                "account_number": account_number,
+                "found": result is not None
+            }
+        )
+        return result
+
     def create(self, recipient: Recipient) -> Recipient:
         """Create a new recipient in the database.
 

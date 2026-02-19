@@ -51,54 +51,205 @@ class RecipientService:
 
     def __init__(self, db_session: Session):
         self.recipient_repo = RecipientRepository(db_session)
+        self.db_session = db_session
 
     # ==================== Basic CRUD Operations ====================
 
-    def create_or_get_recipient(self, name: str, account_number: Optional[str] = None, ) -> tuple[Recipient, bool]:
-        """Create a new recipient or return existing one by name.
+    def create_or_get_recipient(
+            self,
+            name: str,
+            account_number: Optional[str] = None,
+            address: Optional[str] = None,
+            bank_name: Optional[str] = None
+    ) -> tuple[Recipient, bool]:
+        """Create a new recipient or return existing one using normalized name matching.
 
-        Looks up a recipient by name. If it doesn't exist, creates a new recipient
-        with the provided name and account number. This is an idempotent operation.
+        This method implements intelligent recipient matching to prevent duplicates when
+        banks format names differently (e.g., "JOHN SMITH" vs "SMITH JOHN"):
 
-        Recipient names are automatically normalised to uppercase by SQLAlchemy
-        event handlers for consistent storage and display.
+        Priority:
+        1. **Account Number Match** (if provided): Look up existing bank account, return linked recipient
+        2. **Normalized Name Match**: Use canonical name form to find recipient despite word order variations
+        3. **Create New**: If no matches found, create new recipient with bank account
+
+        Key Features:
+        - Prevents duplicates: "JOHN SMITH" and "SMITH JOHN" map to same recipient
+        - Family-safe: "JOHN SMITH" and "JANE SMITH" remain separate (different full names)
+        - Multi-account support: Same recipient can have multiple bank accounts
+        - Address tracking: Each bank account can have its own address
 
         Args:
-            name (str): Recipient name (will be normalised to uppercase automatically).
-            account_number (Optional[str]): Optional account number for the recipient.
+            name (str): Recipient name (will be normalized automatically).
+            account_number (Optional[str]): Bank account number. If provided, creates/links bank account.
+            address (Optional[str]): Physical address (stored with bank account, not recipient).
+            bank_name (Optional[str]): Name of the bank (e.g., "BELFIUS", "KBC").
 
         Returns:
-            tuple[Recipient, bool]: A tuple containing the Recipient object and a boolean
-                indicating if it was newly created (True) or already existed (False).
+            tuple[Recipient, bool]: A tuple containing:
+                - Recipient object (found or created)
+                - Boolean indicating if newly created (True) or already existed (False)
 
         Example:
             service = RecipientService(db)
 
-            # Create new recipient (input will be normalised automatically)
-            recipient, created = service.create_or_get_recipient("john smith", "12345678")
-            print(recipient.name)  # "JOHN SMITH"
-            print(created)          # True
+            # Create new recipient with bank account
+            recipient, created = service.create_or_get_recipient(
+                "john smith",
+                "BE61734041478017",
+                "123 Main St",
+                "BELFIUS"
+            )
+            print(recipient.name)           # "JOHN SMITH"
+            print(recipient.normalized_name) # "JOHN SMITH" (sorted tokens)
+            print(created)                  # True
 
-            # Get same recipient again (doesn't create duplicate)
-            recipient2, created2 = service.create_or_get_recipient("JOHN SMITH", "12345678")
-            assert recipient.id == recipient2.id
-            print(created2)         # False
+            # Same person, name in different order - finds existing!
+            recipient2, created2 = service.create_or_get_recipient(
+                "SMITH JOHN",  # Different order
+                "NL91ABNA0417164300",  # Different account
+                bank_name="ING"
+            )
+            assert recipient.id == recipient2.id  # Same recipient found!
+            print(created2)                       # False
+            print(len(recipient2.bank_accounts))  # 2 accounts now
+
+            # Different person with same last name - creates separate recipient
+            recipient3, created3 = service.create_or_get_recipient("JANE SMITH")
+            assert recipient3.id != recipient.id  # Different recipient!
 
         Note:
-            - Idempotent operation - safe to call multiple times
-            - Names are automatically converted to uppercase
-            - Case-insensitive matching for lookups
-            - New recipients are created as active (is_active=True)
-            - Useful for transaction imports and batch operations
+            - Normalized name matching prevents duplicates from word order variations
+            - Account numbers are stored in separate bank_accounts table
+            - Each bank account can have its own address
+            - First bank account for a recipient is automatically set as primary
+            - Idempotent: safe to call multiple times with same data
         """
-        recipient = self.recipient_repo.get_by_name(name)
+        from services.recipient_bank_account_service import RecipientBankAccountService
+        from services.text_normalization_service import TextNormalizationService
 
+        bank_account_service = RecipientBankAccountService(self.db_session)
+        recipient = None
+
+        # PRIORITY 1: Try account number lookup first (most reliable)
+        if account_number:
+            bank_account = bank_account_service.get_by_account_number(account_number)
+            if bank_account:
+                recipient = bank_account.recipient
+
+                # Update the display name if it differs (keeps most recent format)
+                if recipient.name != name:
+                    logger.info(
+                        "Updating recipient display name based on account number match",
+                        extra={
+                            "operation": "enrich_recipient",
+                            "resource_type": "recipient",
+                            "resource_id": recipient.id,
+                            "old_name": recipient.name,
+                            "new_name": name,
+                            "account_number": account_number
+                        }
+                    )
+                    recipient.name = name
+                    self.recipient_repo.update(recipient)
+
+                # Update bank account address if provided and different
+                if address:
+                    normalized_new = TextNormalizationService.normalize_recipient_name(address)
+                    normalized_current = bank_account.address if bank_account.address else None
+
+                    if normalized_current != normalized_new:
+                        logger.info(
+                            "Updating bank account address",
+                            extra={
+                                "operation": "enrich_bank_account",
+                                "resource_type": "recipient_bank_account",
+                                "resource_id": bank_account.id,
+                                "old_address": bank_account.address,
+                                "new_address": address
+                            }
+                        )
+                        bank_account.address = address
+                        bank_account_service.bank_account_repo.update(bank_account)
+
+                return recipient, False
+
+        # PRIORITY 2: Try normalized name lookup (handles word order variations)
         if not recipient:
-            recipient = Recipient(name=name, account_number=account_number, is_active=True)
-            self.recipient_repo.create(recipient)
-            return recipient, True
+            normalized_name = TextNormalizationService.normalize_name_for_matching(name)
+            recipient = self.recipient_repo.get_by_normalized_name(normalized_name)
 
-        return recipient, False
+        # Found by normalized name - link the new bank account if provided
+        if recipient:
+            if account_number:
+                # Create/link the bank account to this recipient
+                bank_account, bank_created = bank_account_service.create_or_get_bank_account(
+                    recipient_id=recipient.id,
+                    account_number=account_number,
+                    bank_name=bank_name,
+                    address=address
+                )
+
+                if bank_created:
+                    logger.info(
+                        "Linked new bank account to existing recipient",
+                        extra={
+                            "operation": "link_bank_account",
+                            "resource_type": "recipient",
+                            "resource_id": recipient.id,
+                            "account_number": account_number,
+                            "bank_name": bank_name
+                        }
+                    )
+
+            # Update display name if it's more complete or recent
+            if recipient.name != name:
+                logger.info(
+                    "Updating recipient display name based on normalized name match",
+                    extra={
+                        "operation": "enrich_recipient",
+                        "resource_type": "recipient",
+                        "resource_id": recipient.id,
+                        "old_name": recipient.name,
+                        "new_name": name
+                    }
+                )
+                recipient.name = name
+                self.recipient_repo.update(recipient)
+
+            return recipient, False
+
+        # PRIORITY 3: Create new recipient (no matches found)
+        recipient = Recipient(
+            name=name,
+            # normalized_name is set automatically by SQLAlchemy event listener
+            is_active=True
+        )
+        self.recipient_repo.create(recipient)
+
+        # Create associated bank account if account number provided
+        if account_number:
+            bank_account_service.create_or_get_bank_account(
+                recipient_id=recipient.id,
+                account_number=account_number,
+                bank_name=bank_name,
+                address=address,
+                set_as_primary=True
+            )
+
+        logger.info(
+            "Created new recipient with normalized name matching",
+            extra={
+                "operation": "create_recipient",
+                "resource_type": "recipient",
+                "resource_id": recipient.id,
+                "recipient_name": name,
+                "normalized_name": recipient.normalized_name,
+                "has_account_number": account_number is not None,
+                "bank_name": bank_name
+            }
+        )
+
+        return recipient, True
 
     def get_by_id(self, recipient_id: int) -> Optional[Recipient]:
         """Get a recipient by its unique ID.
@@ -159,6 +310,47 @@ class RecipientService:
         if not name:
             return None
         return self.recipient_repo.get_by_name(name)
+
+    def get_by_account_number(self, account_number: str) -> Optional[Recipient]:
+        """Get a recipient by exact account number match.
+
+        Retrieves a single recipient by its exact account number. This is the most
+        reliable way to identify recipients since account numbers are unique and
+        don't change over time, unlike names which may have variations.
+
+        Account numbers provide the best recipient matching because:
+        - They are unique (enforced by database constraint)
+        - They are immutable (don't change over time)
+        - They are standardized (bank-issued identifiers)
+        - They avoid name variation issues (e.g., "John Smith" vs "SMITH JOHN")
+
+        Args:
+            account_number (str): The exact account number of the recipient to retrieve.
+
+        Returns:
+            Optional[Recipient]: The Recipient object if found, None if not found or account number is empty.
+
+        Example:
+            service = RecipientService(db)
+
+            # Find by account number
+            recipient = service.get_by_account_number("BE61734041478017")
+            if recipient:
+                print(f"Found: {recipient.name} (ID: {recipient.id})")
+
+            # Empty account number returns None
+            recipient = service.get_by_account_number("")  # Returns None
+
+        Note:
+            - Search is exact match on account number
+            - Returns both active and inactive recipients
+            - Returns None if account_number is empty or None
+            - Most reliable method for recipient identification during imports
+            - Preferred over name-based lookups when account number is available
+        """
+        if not account_number:
+            return None
+        return self.recipient_repo.get_by_account_number(account_number)
 
     def update(
             self,

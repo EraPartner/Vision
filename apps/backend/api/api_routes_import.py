@@ -30,7 +30,7 @@ from config.logging_config import setup_logging
 from database.connection import get_db
 from services.csv_configuration_factory import CSVConfigurationFactory, CSVConfigurationError
 from services.file_import_handler import FileImportHandler
-from services.transaction_import_service import TransactionImportService
+from services.raw_transaction_import_service import RawTransactionImportService
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 logger = setup_logging(__name__)
@@ -86,6 +86,8 @@ async def import_csv_options(request: Request):
 async def import_csv_file(
         file: UploadFile = File(..., description="CSV file to import"),
         bank_name: str = Query(..., description="Name of the bank (e.g., 'Chase', 'Belfius', 'Revolut')"),
+        account_type: str = Query(None,
+                                  description="Optional: Specify account type (e.g., 'Checking', 'Savings'). If not provided, will be auto-detected."),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
@@ -207,8 +209,8 @@ async def import_csv_file(
         logger.debug(f"Saved upload to temporary file: {tmp_file_path}")
 
         # Perform import using service
-        service = TransactionImportService(db)
-        result = service.import_csv(tmp_file_path, bank_name)
+        service = RawTransactionImportService(db)
+        result = service.import_csv(tmp_file_path, bank_name, account_type=account_type)
 
         logger.info(
             "CSV import completed",
@@ -461,7 +463,7 @@ async def import_csv_custom_config(
         logger.debug(f"Saved custom import to temporary file: {tmp_file_path}")
 
         # Perform import using service
-        service = TransactionImportService(db)
+        service = RawTransactionImportService(db)
         result = service.import_csv(tmp_file_path, bank_name, custom_config)
 
         logger.info(
@@ -621,7 +623,7 @@ async def get_import_batches(
         }
     """
     try:
-        service = TransactionImportService(db)
+        service = RawTransactionImportService(db)
 
         # Get batches based on filters
         if bank_name:
@@ -764,7 +766,7 @@ async def get_import_batch(
         }
     """
     try:
-        service = TransactionImportService(db)
+        service = RawTransactionImportService(db)
         batch = service.batch_repo.get_by_id(batch_id)
 
         if not batch:

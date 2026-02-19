@@ -1,12 +1,17 @@
-"""
-Admin API routes for database lifecycle operations
+"""Administrative API routes for database lifecycle operations.
 
-This module provides administrative endpoints for managing the database lifecycle,
-including initialisation and reset operations. These endpoints should be used with
-caution, especially in production environments.
+Provides administrative endpoints for managing database lifecycle operations,
+including initialisation and reset. These endpoints require elevated privileges
+and should be restricted in production environments.
 
-Level 3 REST API Implementation (HATEOAS - Hypermedia As The Engine Of Application State)
-Responses include hypermedia links that guide clients on available actions.
+Level 3 REST API (HATEOAS) implementation where responses include hypermedia
+links guiding clients to available actions.
+
+Security Considerations:
+    - All endpoints should be protected with authentication/authorisation
+    - Reset operations are destructive and must be explicitly enabled
+    - Rate limiting recommended to prevent abuse
+    - Audit logging enabled for all operations
 """
 from datetime import datetime, timezone
 from typing import List
@@ -27,17 +32,21 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = setup_logging(__name__)
 
 
-# ==================== Helper Functions ====================
-
 def get_admin_links(request: Request) -> List[Link]:
-    """
-    Generate HATEOAS links for admin resources based on current state.
+    """Generate HATEOAS links for admin resources based on current configuration.
+
+    Links are dynamically generated based on enabled features. The reset link
+    is only included when explicitly enabled in configuration for safety.
 
     Args:
-        request: FastAPI Request object for constructing absolute URLs
+        request: FastAPI Request for constructing absolute URLs
 
     Returns:
-        List of Link objects describing available actions
+        List of Link objects describing available administrative actions
+
+    Security Note:
+        Reset operations are only exposed when explicitly enabled via configuration.
+        Always restrict admin endpoints with proper authentication in production.
     """
     base_url = get_base_url(request)
     links = [
@@ -55,7 +64,6 @@ def get_admin_links(request: Request) -> List[Link]:
         ),
     ]
 
-    # Add reset link only if enabled in configuration
     settings = get_settings()
     if settings.admin.enable_reset_db:
         links.append(
@@ -63,7 +71,7 @@ def get_admin_links(request: Request) -> List[Link]:
                 rel="reset",
                 href=HttpUrl(f"{base_url}/api/admin/database/reset?force=true"),
                 method="POST",
-                title="Reset the database (DESTRUCTIVE - use with caution)"
+                title="Reset the database (DESTRUCTIVE - requires force parameter)"
             )
         )
 
@@ -71,11 +79,11 @@ def get_admin_links(request: Request) -> List[Link]:
 
 
 def get_database_status() -> tuple[bool, int]:
-    """
-    Get the current database initialisation status.
+    """Determine database initialisation status by inspecting table count.
 
     Returns:
-        Tuple of (is_initialised: bool, table_count: int)
+        Tuple of (is_initialised, table_count) where is_initialised indicates
+        whether any tables exist
     """
     try:
         inspector = inspect(engine)
@@ -83,7 +91,7 @@ def get_database_status() -> tuple[bool, int]:
         return len(tables) > 0, len(tables)
     except Exception as e:
         logger.error(
-            "Error inspecting database status",
+            "Database status inspection failed",
             extra={
                 "operation": "get_database_status",
                 "resource_type": "database",
@@ -94,54 +102,57 @@ def get_database_status() -> tuple[bool, int]:
         return False, 0
 
 
-# ==================== Level 3 REST API Endpoints (HATEOAS) ====================
-
-@router.options("", response_model=OptionsResponse, description="Discover available methods on admin endpoint")
+@router.options("", response_model=OptionsResponse, description="Discover available admin operations")
 async def admin_options(request: Request):
-    """
-    OPTIONS method for admin endpoint discovery.
+    """Discover available HTTP methods on admin endpoint (CORS preflight support).
 
-    Allows clients to discover what HTTP methods are available on the admin endpoint.
+    Enables clients to discover available administrative operations before
+    making actual requests. Essential for CORS preflight requests in browsers.
 
     Returns:
-        OptionsResponse: Available methods and HATEOAS links
+        OptionsResponse: Available methods with descriptions and HATEOAS links
+
+    Security Note:
+        Should be protected with same authorisation as other admin endpoints.
     """
     return OptionsResponse(
         methods=[
             MethodInfo(
                 method="GET",
-                description="Get current database administration status"
+                description="Retrieve current database administration status"
             ),
             MethodInfo(
                 method="POST",
-                description="Initialise database or reset (see links for actions)"
+                description="Perform administrative actions (init or reset)"
             )
         ],
         links=get_admin_links(request)
     )
 
 
-@router.get("", response_model=AdminStatusResponse, description="Get database administration status")
+@router.get("", response_model=AdminStatusResponse, description="Retrieve database administration status")
 async def get_admin_status(request: Request):
-    """
-    Get current database administration status with available actions.
+    """Retrieve current database administration status with available actions.
 
-    Returns current database state and available administrative actions as HATEOAS links.
-    This is a Level 3 REST API endpoint that allows clients to discover available actions.
+    Provides database initialisation state and dynamically generated links to
+    available administrative operations. Implements Level 3 REST (HATEOAS) for
+    client-driven navigation.
 
     Returns:
-        AdminStatusResponse: Current database status with links to available actions
+        AdminStatusResponse: Database status with HATEOAS links
 
-    Example:
-        >>> # GET /api/admin/status
+    Raises:
+        HTTPException: 500 if status retrieval fails
+
+    Example Response:
         {
             "is_initialised": true,
             "table_count": 8,
-            "timestamp": "2026-01-29T10:30:00.000000",
+            "timestamp": "2026-02-19T10:30:00.000000",
             "links": [
                 {
                     "rel": "self",
-                    "href": "http://localhost:3002/api/admin/status",
+                    "href": "http://localhost:3002/api/admin",
                     "method": "GET",
                     "title": "Get current database administration status"
                 },
@@ -153,6 +164,9 @@ async def get_admin_status(request: Request):
                 }
             ]
         }
+
+    Performance Note:
+        Lightweight operation - only inspects table metadata without querying data.
     """
     try:
         is_initialised, table_count = get_database_status()
@@ -164,7 +178,7 @@ async def get_admin_status(request: Request):
         )
     except Exception as e:
         logger.error(
-            "Error retrieving admin status",
+            "Admin status retrieval failed",
             extra={
                 "operation": "get_admin_status",
                 "resource_type": "admin",
@@ -172,51 +186,50 @@ async def get_admin_status(request: Request):
             },
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve administration status"
+        )
 
 
-@router.post("/database/init", response_model=MessageResponse, status_code=201, description="Initialise the database")
+@router.post("/database/init", response_model=MessageResponse, status_code=201,
+             description="Initialise database tables")
 async def initialise_database(request: Request):
-    """
-    Initialise database tables (idempotent operation) with HATEOAS links.
+    """Initialise database tables (idempotent, safe operation).
 
-    Creates all tables defined in the SQLAlchemy models if they don't already exist.
-    This operation is safe to run multiple times - it will not drop or modify existing
-    tables or data. Response includes links to available next actions.
+    Creates all tables defined in SQLAlchemy models if they don't exist.
+    Preserves existing tables and data - safe to run multiple times.
 
-    This is a Level 3 REST API endpoint that returns hypermedia links.
+    Idempotent operation suitable for:
+    - Initial application setup
+    - Adding tables after model updates
+    - Recovery after accidental table deletion
 
     Returns:
-        MessageResponse: Success message with HATEOAS links to available actions.
+        MessageResponse: Success confirmation with HATEOAS links
 
     Raises:
-        HTTPException: 500 error if database initialisation fails.
+        HTTPException: 500 if initialisation fails
 
-    Example:
-        >>> # POST /api/admin/database/init
+    Example Response:
         {
             "message": "Database initialised successfully",
             "details": {"note": "All tables created or verified"},
             "links": [
                 {
                     "rel": "self",
-                    "href": "http://localhost:3002/api/admin/status",
+                    "href": "http://localhost:3002/api/admin",
                     "method": "GET",
                     "title": "Get current database administration status"
                 }
             ]
         }
 
-    Note:
-        - This operation is idempotent and safe to run multiple times
-        - Existing tables and data are preserved
-        - Only missing tables are created
-        - Clients should follow the links in the response to discover available actions
+    Performance Note:
+        Fast operation - only creates missing tables, doesn't modify existing data.
 
-    Use Cases:
-        - First-time setup of the database
-        - Creating missing tables after adding new models
-        - Recovery after accidental table deletion
+    Security Note:
+        Should require elevated privileges in production environments.
     """
     try:
         init_db()
@@ -228,12 +241,14 @@ async def initialise_database(request: Request):
                 "status": "success"
             }
         )
-        return MessageResponse(message="Database initialised successfully",
-                               details={"note": "All tables created or verified"},
-                               links=get_admin_links(request))
+        return MessageResponse(
+            message="Database initialised successfully",
+            details={"note": "All tables created or verified"},
+            links=get_admin_links(request)
+        )
     except Exception as e:
         logger.error(
-            "Failed to initialise database",
+            "Database initialisation failed",
             extra={
                 "operation": "database_init",
                 "resource_type": "database",
@@ -243,7 +258,7 @@ async def initialise_database(request: Request):
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Error initialising database: {str(e)}"
+            detail=f"Database initialisation failed: {str(e)}"
         )
 
 
@@ -251,70 +266,60 @@ async def reset_database(
         request: Request,
         force: bool = Query(
             False,
-            description="Must be set to true to confirm the destructive operation"
+            description="Must be true to confirm destructive operation"
         )
 ):
-    """
-    Reset database by dropping and recreating all tables (DESTRUCTIVE) with HATEOAS links.
+    """Reset database by dropping and recreating all tables (DESTRUCTIVE).
 
-    WARNING: This operation will permanently delete ALL data in the database!
+    ⚠️ WARNING: Permanently deletes ALL data - cannot be undone!
 
-    Drops all existing tables and recreates them from scratch. This operation cannot
-    be undone and will result in complete data loss. Always ensure you have a backup
-    before running this endpoint. Response includes HATEOAS links to available actions.
+    Drops all tables and recreates them from schema. Requires explicit confirmation
+    via force=true parameter to prevent accidental data loss.
 
-    This is a Level 3 REST API endpoint that returns hypermedia links.
+    Recommended for:
+    - Development environment resets
+    - Test data cleanup
+    - Schema migrations when starting fresh
 
     Args:
-        request: FastAPI Request object for generating absolute URLs
-        force (bool): Must be explicitly set to True to confirm the destructive operation.
-            Defaults to False.
+        request: FastAPI Request for generating URLs
+        force: Must be explicitly true to execute (safety measure)
 
     Returns:
-        MessageResponse: Success message with HATEOAS links and reset confirmation.
+        MessageResponse: Confirmation with HATEOAS links
 
     Raises:
-        HTTPException: 400 error if force parameter is not True.
-        HTTPException: 500 error if database reset fails.
+        HTTPException: 400 if force parameter not true
+        HTTPException: 500 if reset fails
 
-    Example:
-        >>> # POST /api/admin/database/reset?force=true
+    Example Response (Success):
         {
             "message": "Database reset successfully",
-            "details": {"warning": "All previous data has been permanently deleted"},
-            "links": [
-                {
-                    "rel": "init",
-                    "href": "http://localhost:3002/api/admin/database/init",
-                    "method": "POST",
-                    "title": "Initialise the database"
-                }
-            ]
+            "details": {"warning": "All previous data permanently deleted"},
+            "links": [...]
         }
 
-    Warning:
-        This is a DESTRUCTIVE operation that cannot be undone. All data will be
-        permanently deleted. Always backup your database before using this endpoint.
+    Example Response (Safety Check):
+        HTTP 400 Bad Request
+        {
+            "message": "Database reset requires force=true parameter",
+            "details": {"error": "Set force=true to confirm reset"},
+            ...
+        }
 
-    Note:
-        - Requires explicit force=true query parameter
-        - Should be disabled or restricted in production environments
-        - Consider implementing additional authentication/authorisation checks
-        - Clients should follow the links in the response to discover next actions
+    Security Notes:
+        - Should be disabled in production (configurable)
+        - Requires elevated authorisation
+        - Always backup before using
+        - Consider implementing additional confirmation mechanisms
+        - Rate limit to prevent abuse
 
-    Use Cases:
-        - Development environment resets
-        - Test data cleanup
-        - Schema migration when starting fresh
-
-    Recommendations:
-        - Always backup your database before using this endpoint
-        - Use database migrations (e.g., Alembic) for production schema changes
-        - Restrict access to this endpoint in production
+    Performance Note:
+        Potentially slow operation depending on database size and constraints.
     """
     if not force:
         logger.warning(
-            "Database reset attempted without force parameter",
+            "Database reset rejected - force parameter not provided",
             extra={
                 "operation": "reset_database",
                 "resource_type": "database",
@@ -324,7 +329,7 @@ async def reset_database(
         )
         error_response = MessageResponse(
             message="Database reset requires force=true parameter",
-            details={"error": "Set force=true query parameter to confirm reset (DESTRUCTIVE OPERATION)"},
+            details={"error": "Set force=true query parameter to confirm reset (DESTRUCTIVE)"},
             links=get_admin_links(request)
         )
         return JSONResponse(
@@ -354,28 +359,31 @@ async def reset_database(
 
         return MessageResponse(
             message="Database reset successfully",
-            details={"warning": "All previous data has been permanently deleted"},
+            details={"warning": "All previous data permanently deleted"},
             links=get_admin_links(request)
         )
     except Exception as e:
         logger.error(
-            "Failed to reset database",
-            extra={"operation": "reset_database", "resource_type": "database"},
+            "Database reset failed",
+            extra={
+                "operation": "reset_database",
+                "resource_type": "database",
+                "status": "failed"
+            },
             exc_info=True
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Error resetting database: {str(e)}"
+            detail=f"Database reset failed: {str(e)}"
         )
 
 
-# Conditionally register endpoints based on config
 _settings = get_settings()
 if _settings.admin.enable_reset_db:
-    # Register Level 3 HATEOAS endpoint
+    # Register reset endpoint only when explicitly enabled for safety
     router.post(
         "/database/reset",
         response_model=MessageResponse,
         status_code=200,
-        description="Reset the Database (DESTRUCTIVE)"
+        description="Reset Database (DESTRUCTIVE)"
     )(reset_database)
