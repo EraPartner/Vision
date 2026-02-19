@@ -75,9 +75,7 @@ async def import_csv_options(request: Request):
              description="Import transactions from CSV file using predefined bank adapter")
 async def import_csv_file(
         file: UploadFile = File(..., description="CSV file to import"),
-        bank_name: str = Query(..., description="Name of the bank (e.g., 'Chase', 'Belfius', 'Revolut')"),
-        account_type: str = Query(None,
-                                  description="Optional: Specify account type (e.g., 'Checking', 'Savings'). If not provided, will be auto-detected."),
+        bank_name: str = Query(..., description="Name of the bank (e.g., 'KBC', 'Belfius', 'Revolut')"),
         request: Request = None,
         db: Session = Depends(get_db)
 ):
@@ -88,7 +86,7 @@ async def import_csv_file(
     deduplication, automatic recipient creation, and comprehensive result tracking.
 
     **Supported Banks:**
-    - Chase
+    - KBC
     - Belfius
     - Revolut
     - (Add more as adapters are created)
@@ -200,7 +198,7 @@ async def import_csv_file(
 
         # Perform import using service
         service = RawTransactionImportService(db)
-        result = service.import_csv(tmp_file_path, bank_name, account_type=account_type)
+        result = service.import_csv(tmp_file_path, bank_name)
 
         logger.info(
             "CSV import completed",

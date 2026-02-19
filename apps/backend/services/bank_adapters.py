@@ -37,13 +37,11 @@ class BaseBankAdapter(ABC):
         self.bank_name = config.get("bank_name", "Unknown")
 
     @abstractmethod
-    def parse_csv(self, file_path: str, account_type: Optional[str] = None) -> List[TransactionData]:
+    def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse CSV file and return list of standardized transactions
 
         Args:
             file_path: Path to CSV file
-            account_type: Optional account type override (e.g., 'Checking', 'Savings')
-                        If provided, this will be used instead of auto-detection
         """
         pass
 
@@ -66,7 +64,7 @@ class BelfiusAdapter(BaseBankAdapter):
     - Line 14+: Transaction data rows
     """
 
-    def parse_csv(self, file_path: str, account_type: Optional[str] = None) -> List[TransactionData]:
+    def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse Belfius CSV format with maximal information extraction
 
         Extracts all available fields including:
@@ -166,12 +164,7 @@ class BelfiusAdapter(BaseBankAdapter):
                         logger.error(f"Error parsing Belfius amount '{amount_str}' on line {line_num}: {e}")
                         continue
 
-                    # Determine bank account type: use provided override or auto-detect
-                    if account_type:
-                        bank_account_type = f"BELFIUS {account_type.upper()}"
-                        logger.debug(f"Using provided account type: {bank_account_type}")
-                    else:
-                        bank_account_type = self._determine_account_type(account_number)
+                    bank_account_type = self._determine_account_type(account_number)
 
                     # Build comprehensive recipient name
                     # Priority: explicit recipient name > transaction description
@@ -268,7 +261,7 @@ class BelfiusAdapter(BaseBankAdapter):
         # Default to generic checking account
         # This can be extended with specific patterns if Belfius uses
         # different account number ranges for savings, credit cards, etc.
-        account_type = "BELFIUS CHECKING ACCOUNT"
+        account_type = "BELFIUS"
 
         # Add pattern matching here if specific account types can be identified
         # Example (hypothetical):
@@ -309,7 +302,7 @@ class RevolutAdapter(BaseBankAdapter):
     Note: Revolut does not provide recipient account numbers or addresses.
     """
 
-    def parse_csv(self, file_path: str, account_type: Optional[str] = None) -> List[TransactionData]:
+    def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse Revolut CSV format with maximal information extraction
 
         Extracts all available fields including:
@@ -577,7 +570,7 @@ class KBCAdapter(BaseBankAdapter):
     17: Vrije mededeling (Free communication)
     """
 
-    def parse_csv(self, file_path: str, account_type: Optional[str] = None) -> List[TransactionData]:
+    def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse KBC CSV format with maximal information extraction
 
         Extracts all available fields including:
@@ -715,12 +708,7 @@ class KBCAdapter(BaseBankAdapter):
                         except ValueError:
                             pass
 
-                    # Determine bank account type: use provided override or auto-detect from IBAN pattern
-                    if account_type:
-                        bank_account_type = f"KBC {account_type.upper()}"
-                        logger.debug(f"Using provided account type: {bank_account_type}")
-                    else:
-                        bank_account_type = self._determine_account_type(account_number)
+                    bank_account_type = self._determine_account_type(account_number)
 
                     # Build comprehensive recipient name
                     # Priority: counterparty name > account holder > description
@@ -805,14 +793,7 @@ class KBCAdapter(BaseBankAdapter):
         # Remove spaces for pattern matching
         clean_number = account_number.replace(" ", "")
 
-        # Detect account type based on IBAN prefix pattern
-        if clean_number.startswith("BE61"):
-            account_type = "KBC CHECKING ACCOUNT"
-        elif clean_number.startswith("BE34"):
-            account_type = "KBC SAVINGS ACCOUNT"
-        else:
-            # Generic fallback for other KBC account types
-            account_type = "KBC ACCOUNT"
+        account_type = "KBC"
 
         return account_type
 
@@ -832,7 +813,7 @@ def _parse_amount(amount_str: str) -> float:
 class GenericCSVAdapter(BaseBankAdapter):
     """Generic adapter that can be configured for most CSV formats"""
 
-    def parse_csv(self, file_path: str, account_type: Optional[str] = None) -> List[TransactionData]:
+    def parse_csv(self, file_path: str) -> List[TransactionData]:
         """Parse CSV using configuration mapping
 
         Args:

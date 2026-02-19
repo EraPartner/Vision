@@ -62,7 +62,6 @@ class RawTransactionImportService:
             file_path: str,
             bank_name: str,
             custom_config: Optional[Dict] = None,
-            account_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """Import transactions from CSV with raw data preservation.
 
@@ -79,7 +78,6 @@ class RawTransactionImportService:
             file_path: Path to CSV file
             bank_name: Bank identifier
             custom_config: Optional custom CSV configuration
-            account_type: Optional account type override
 
         Returns:
             Import results dictionary with statistics
@@ -90,7 +88,6 @@ class RawTransactionImportService:
                 "operation": "import_csv",
                 "file_name": file_path.split('/')[-1],
                 "bank_name": bank_name,
-                "account_type": account_type
             }
         )
 
@@ -102,7 +99,7 @@ class RawTransactionImportService:
                 adapter = BankAdapterFactory.create_adapter(bank_name)
 
             # Parse CSV file
-            transaction_data_list = adapter.parse_csv(file_path, account_type=account_type)
+            transaction_data_list = adapter.parse_csv(file_path)
 
             logger.info(
                 f"Parsed CSV file successfully",
