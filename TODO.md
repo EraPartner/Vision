@@ -8,6 +8,7 @@ TODO for Frontend
 - global search for transactions/recipients/categories
 - general stats page with filters (time, category, recipient) with things like spending per month, spending per category, spending per recipient, etc. (maybe with a graph?)
 - Add link for planned expenditures
+- Deduplication for manually added transactions does not work yet (no raw table of manually added transactions)
 - Test
 - Code design/style
 - Performance

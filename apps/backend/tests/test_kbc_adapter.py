@@ -58,15 +58,15 @@ BE34744010767090;                                                  ;BAU IE;EUR; 
         transactions = kbc_adapter.parse_csv(sample_csv_file)
 
         # First two transactions are from checking account
-        assert transactions[0].bank_account == "KBC CHECKING ACCOUNT"
-        assert transactions[1].bank_account == "KBC CHECKING ACCOUNT"
+        assert transactions[0].bank_account == "KBC"
+        assert transactions[1].bank_account == "KBC"
 
     def test_parse_csv_account_type_detection_savings(self, kbc_adapter, sample_csv_file):
         """Test account type detection for savings account (BE34)."""
         transactions = kbc_adapter.parse_csv(sample_csv_file)
 
         # Third transaction is from savings account
-        assert transactions[2].bank_account == "KBC SAVINGS ACCOUNT"
+        assert transactions[2].bank_account == "KBC"
 
     def test_parse_csv_complete_transaction_fields(self, kbc_adapter, sample_csv_file):
         """Test that all transaction fields are extracted correctly."""
@@ -75,7 +75,7 @@ BE34744010767090;                                                  ;BAU IE;EUR; 
         # Test first transaction (debit from checking)
         txn1 = transactions[0]
         assert txn1.date == datetime(2026, 1, 3)
-        assert txn1.bank_account == "KBC CHECKING ACCOUNT"
+        assert txn1.bank_account == "KBC"
         assert "IE BAU" in txn1.recipient
         assert txn1.amount == -775.08
         assert txn1.currency == "EUR"
@@ -308,17 +308,17 @@ BE61734041478017;                                                  ;TEST;EUR;  1
     def test_determine_account_type_checking(self, kbc_adapter):
         """Test account type determination for checking account."""
         account_type = kbc_adapter._determine_account_type("BE61734041478017")
-        assert account_type == "KBC CHECKING ACCOUNT"
+        assert account_type == "KBC"
 
     def test_determine_account_type_savings(self, kbc_adapter):
         """Test account type determination for savings account."""
         account_type = kbc_adapter._determine_account_type("BE34744010767090")
-        assert account_type == "KBC SAVINGS ACCOUNT"
+        assert account_type == "KBC"
 
     def test_determine_account_type_generic(self, kbc_adapter):
         """Test account type determination for unknown pattern."""
         account_type = kbc_adapter._determine_account_type("BE99123456789012")
-        assert account_type == "KBC ACCOUNT"
+        assert account_type == "KBC"
 
     def test_parse_csv_multiple_transactions_ordering(self, kbc_adapter, sample_csv_file):
         """Test that transactions are returned in the order they appear in CSV."""

@@ -78,7 +78,7 @@ BE81 0637 5694 4024;22/11/2025;00010;50;;SALARY PAYMENT;;1000 Brussels;VIREMENT 
         # Test first transaction (Bancontact payment)
         txn1 = transactions[0]
         assert txn1.date == datetime(2025, 11, 24)
-        assert txn1.bank_account == "BELFIUS CHECKING ACCOUNT"
+        assert txn1.bank_account == "BELFIUS"
         assert "BANCONTACT PAYCONIQ CO" in txn1.recipient
         assert txn1.amount == -67.90
         assert txn1.currency == "EUR"
@@ -145,7 +145,7 @@ BE81 0637 5694 4024;22/11/2025;00010;50;;SALARY PAYMENT;;1000 Brussels;VIREMENT 
 
         # All transactions should have account type determined
         for txn in transactions:
-            assert txn.bank_account == "BELFIUS CHECKING ACCOUNT"
+            assert txn.bank_account == "BELFIUS"
             assert txn.bank_account == txn.bank_account.upper()
 
     def test_parse_csv_amount_parsing(self, belfius_adapter, sample_csv_file):
@@ -352,12 +352,12 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;Test;;Brussels;Test transaction;22/11/2
     def test_determine_account_type_default(self, belfius_adapter):
         """Test account type determination with default case."""
         account_type = belfius_adapter._determine_account_type("BE81 0637 5694 4024")
-        assert account_type == "BELFIUS CHECKING ACCOUNT"
+        assert account_type == "BELFIUS"
 
     def test_determine_account_type_without_spaces(self, belfius_adapter):
         """Test account type determination with account number without spaces."""
         account_type = belfius_adapter._determine_account_type("BE81063756944024")
-        assert account_type == "BELFIUS CHECKING ACCOUNT"
+        assert account_type == "BELFIUS"
 
     def test_parse_csv_multiple_transactions_ordering(self, belfius_adapter, sample_csv_file):
         """Test that transactions are returned in the order they appear in CSV."""

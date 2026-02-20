@@ -1,7 +1,7 @@
 from typing import Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
-    Boolean, event
+    Boolean, event, Index, CheckConstraint
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 
@@ -10,23 +10,28 @@ Base = declarative_base()
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        Index('idx_transaction_date_recipient', 'date', 'recipient_id'),
+        CheckConstraint("length(currency) = 3 OR currency IS NULL", name='ck_transactions_currency_len'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Core transaction data
     date = Column(Date, nullable=False, index=True)  # Changed from DateTime to Date
-    amount = Column(Numeric(10, 2), nullable=False)
+    # Use Numeric(15, 2) to match raw tables and allow sufficiently large amounts while keeping 2 decimal places
+    amount = Column(Numeric(15, 2), nullable=False)
     currency = Column(String(3), nullable=True)  # Currency code (EUR, USD, etc.)
-    balance = Column(Numeric(12, 2), nullable=True)  # Account balance after transaction
+    balance = Column(Numeric(15, 2), nullable=True)  # Account balance after transaction
     memo = Column(Text, nullable=True)
     comment = Column(Text, nullable=True)  # Additional comment field for bank-specific data
     bank_account = Column(Text, nullable=True,
                           index=True)  # Which bank/account (e.g., "Revolut", "KBC Checking Account")
 
     # Foreign keys
-    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
-    recipient_bank_account_id = Column(Integer, ForeignKey("recipient_bank_accounts.id"), nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False, index=True)
+    recipient_bank_account_id = Column(Integer, ForeignKey("recipient_bank_accounts.id"), nullable=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
 
     # Soft deletion support
     is_active = Column(Boolean, default=True, nullable=False)
@@ -39,6 +44,14 @@ class Transaction(Base):
     recipient = relationship("Recipient", back_populates="transactions")
     recipient_bank_account = relationship("RecipientBankAccount", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
+    # One-to-one link to raw reference. Use passive_deletes so DB ON DELETE CASCADE is relied on
+    # (avoids SQLAlchemy loading/deleting the child explicitly).
+    raw_reference = relationship(
+        "TransactionRawReference",
+        back_populates="transaction",
+        uselist=False,
+        passive_deletes=True,
+    )
 
     @property
     def category_name(self) -> Optional[str]:
@@ -81,6 +94,9 @@ class Transaction(Base):
             return self.recipient.name
         return None
 
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<Transaction id={self.id} date={self.date} amount={self.amount}>"
+
 
 # SQLAlchemy event listeners for automatic uppercase normalization of Transaction fields
 @event.listens_for(Transaction.memo, 'set')
@@ -94,9 +110,12 @@ def normalize_transaction_memo(target, value, oldvalue, initiator):
 
 @event.listens_for(Transaction.currency, 'set')
 def normalize_transaction_currency(target, value, oldvalue, initiator):
-    """Automatically normalize transaction currency to uppercase."""
+    """Automatically normalize transaction currency to uppercase and validate ISO 4217 length (3)."""
     if value and isinstance(value, str):
-        return value.strip().upper()
+        v = value.strip().upper()
+        if len(v) != 3 or not v.isalpha():
+            raise ValueError(f"Invalid currency code: {value!r}. Expected 3-letter ISO 4217 code.")
+        return v
     return value
 
 
@@ -170,15 +189,17 @@ class Category(Base):
 
     @property
     def category_name(self) -> str:
-        """Property alias for full_path() to match schema field name.
+        """Compatibility property for API schemas.
 
-        Returns the full category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES').
-        This property provides a consistent interface for API responses.
-
-        Returns:
-            str: Full category path in 'General:Detail' format (uppercase).
+        Pydantic response models use `from_attributes=True` and expect an attribute
+        named `category_name` on the SQLAlchemy model. Expose the computed
+        full path via this property so serialization succeeds without extra
+        transformation in the API layer.
         """
         return self.full_path()
+
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<Category id={self.id} name={self.full_path()!r}>"
 
 
 # SQLAlchemy event listeners for automatic uppercase normalization
@@ -243,6 +264,9 @@ class Recipient(Base):
             return self.default_category.full_path()
         return None
 
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<Recipient id={self.id} name={self.name!r}>"
+
 
 # SQLAlchemy event listeners for automatic uppercase normalization of Recipient fields
 @event.listens_for(Recipient.name, 'set')
@@ -305,7 +329,8 @@ class RecipientBankAccount(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
-    account_number = Column(Text, nullable=False, unique=True, index=True)
+    # Use a bounded String(34) for IBAN/account numbers to match raw tables and ISO IBAN max length
+    account_number = Column(String(34), nullable=False, unique=True, index=True)
     bank_name = Column(Text, nullable=True)
     account_label = Column(Text, nullable=True)
     address = Column(Text, nullable=True)
@@ -327,13 +352,38 @@ class RecipientBankAccount(Base):
             return self.recipient.name
         return None
 
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<RecipientBankAccount id={self.id} account={self.account_number!r} recipient_id={self.recipient_id}>"
+
 
 # SQLAlchemy event listeners for automatic uppercase normalization of RecipientBankAccount fields
 @event.listens_for(RecipientBankAccount.account_number, 'set')
 def normalize_bank_account_number(target, value, oldvalue, initiator):
-    """Automatically normalize bank account number to uppercase."""
+    """Automatically normalize bank account number to uppercase and validate IBAN-like format.
+
+    Basic validation: uppercased, at most 34 characters, and contains only alphanumeric characters.
+    This is intentionally lightweight — full IBAN validation (checksum) can be added via a util
+    or external library if desired.
+    """
     if value and isinstance(value, str):
-        return value.strip().upper()
+        v = value.strip().upper()
+        # Basic checks
+        if len(v) > 34:
+            raise ValueError(f"Account number too long (>{34}): {v!r}")
+        # Allow characters A-Z and 0-9 and spaces (spaces removed earlier), but reject other punctuation
+        if not all(c.isalnum() for c in v):
+            raise ValueError(f"Account number contains invalid characters: {v!r}")
+        # Full IBAN checksum validation if looks like IBAN (starts with 2 letters then digits)
+        try:
+            from services.iban import is_valid_iban
+        except Exception:
+            # If the validator isn't available for any reason, fallback to basic checks only
+            return v
+
+        # Run validator and raise if invalid
+        if not is_valid_iban(v):
+            raise ValueError(f"Invalid IBAN/account number checksum: {v!r}")
+        return v
     return value
 
 
@@ -366,12 +416,15 @@ class PlannedTransaction(Base):
     Each execution is tracked in the PlannedTransactionExecution table.
     """
     __tablename__ = "planned_transactions"
+    __table_args__ = (
+        CheckConstraint("length(currency) = 3 OR currency IS NULL", name='ck_planned_transactions_currency_len'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Core planned transaction data
     planned_date = Column(Date, nullable=False, index=True)  # When the transaction is expected
-    amount = Column(Numeric(10, 2), nullable=False)
+    amount = Column(Numeric(15, 2), nullable=False)
     currency = Column(String(3), nullable=True)  # Currency code (EUR, USD, etc.)
     memo = Column(Text, nullable=True)
     comment = Column(Text, nullable=True)  # Additional notes
@@ -446,32 +499,8 @@ class PlannedTransaction(Base):
             return self.recipient.name
         return None
 
-
-# SQLAlchemy event listeners for automatic uppercase normalization of PlannedTransaction fields
-@event.listens_for(PlannedTransaction.memo, 'set')
-def normalize_planned_transaction_memo(target, value, oldvalue, initiator):
-    """Automatically normalize planned transaction memo to uppercase."""
-    from services.text_normalization_service import TextNormalizationService
-    if value and isinstance(value, str):
-        return TextNormalizationService.normalize_recipient_name(value)
-    return value
-
-
-@event.listens_for(PlannedTransaction.currency, 'set')
-def normalize_planned_transaction_currency(target, value, oldvalue, initiator):
-    """Automatically normalize planned transaction currency to uppercase."""
-    if value and isinstance(value, str):
-        return value.strip().upper()
-    return value
-
-
-@event.listens_for(PlannedTransaction.bank_account, 'set')
-def normalize_planned_transaction_bank_account(target, value, oldvalue, initiator):
-    """Automatically normalize planned transaction bank_account to uppercase."""
-    from services.text_normalization_service import TextNormalizationService
-    if value and isinstance(value, str):
-        return TextNormalizationService.normalize_recipient_name(value)
-    return value
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<PlannedTransaction id={self.id} date={self.planned_date} amount={self.amount}>"
 
 
 class ExchangeRate(Base):
@@ -501,7 +530,11 @@ class ExchangeRate(Base):
     # Table constraints
     __table_args__ = (
         UniqueConstraint('currency_code', 'rate_date', name='uq_currency_date'),
+        CheckConstraint('rate_to_eur > 0', name='ck_exchange_rate_positive'),
     )
+
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<ExchangeRate {self.currency_code} @ {self.rate_date} = {self.rate_to_eur}>"
 
 
 class PlannedTransactionExecution(Base):
@@ -531,3 +564,6 @@ class PlannedTransactionExecution(Base):
     # Relationships
     planned_transaction = relationship("PlannedTransaction", back_populates="executions")
     executed_transaction = relationship("Transaction")
+
+    def __repr__(self) -> str:  # pragma: no cover - convenience
+        return f"<PlannedTransactionExecution id={self.id} planned_tx_id={self.planned_transaction_id} executed_tx_id={self.executed_transaction_id} date={self.execution_date}>"

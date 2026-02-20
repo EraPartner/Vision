@@ -1,23 +1,42 @@
+import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
+# Add the parent directory to path to import application modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import application configuration and models
+from config.config import get_settings
+from database.models import Base
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Get database URL from application settings
+settings = get_settings()
+database_url = settings.database.url
+
+# Handle SQLite path resolution
+if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///"):
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    default_db_path = os.path.join(backend_dir, "financial_transactions.db")
+    database_url = f"sqlite:///{default_db_path}"
+
+# Override sqlalchemy.url with the application's configured database URL
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+# Set target metadata for autogenerate support
+target_metadata = Base.metadata
 
 
 # other values from the config, defined by the needs of env.py,
