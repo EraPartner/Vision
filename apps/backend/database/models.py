@@ -567,3 +567,24 @@ class PlannedTransactionExecution(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - convenience
         return f"<PlannedTransactionExecution id={self.id} planned_tx_id={self.planned_transaction_id} executed_tx_id={self.executed_transaction_id} date={self.execution_date}>"
+
+
+# Ensure dependent raw transaction models are imported so their mapped classes
+# (e.g., TransactionRawReference) are registered with SQLAlchemy before any
+# mapper configuration occurs. This avoids "failed to locate a name"
+# errors when a relationship references a class defined in a separate module.
+# Importing here is a no-op if the module was already imported elsewhere.
+try:
+    # Import using package-relative name to ensure module is loaded in all contexts
+    from database import raw_transaction_models  # noqa: F401  (register models)
+except Exception:
+    # Import failure should not break module import; raise in debug/test contexts
+    # but keep the application resilient in environments where raw models
+    # may not be available (e.g., lightweight scripts). Log if available.
+    try:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            'Could not import raw_transaction_models; some relationships may be unresolved until imported.')
+    except Exception:
+        pass
