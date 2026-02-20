@@ -11,7 +11,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import application configuration and models
 from config.config import get_settings
+# Import Base and ensure all model modules are loaded so their Table objects
+# are registered on Base.metadata. Importing raw_transaction_models explicitly
+# makes sure TransactionRawReference and other cross-module classes are
+# present when Alembic inspects target_metadata.
 from database.models import Base
+
+try:
+    # Explicit import to register models declared in a separate module
+    from database import raw_transaction_models  # noqa: F401
+except Exception:
+    # Log in case the import fails but continue; Alembic will still attempt autogenerate
+    import logging
+
+    logging.getLogger(__name__).warning('Could not import database.raw_transaction_models during Alembic env setup')
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -39,10 +52,18 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+# Helper to determine render_as_batch for SQLite (required for certain ALTER ops)
+def _render_as_batch_for_sqlite(connectable_or_url):
+    try:
+        name = None
+        if hasattr(connectable_or_url, 'dialect'):
+            name = connectable_or_url.dialect.name
+        elif isinstance(connectable_or_url, str):
+            # URL string like sqlite:////path
+            name = connectable_or_url.split(':', 1)[0]
+        return name == 'sqlite'
+    except Exception:
+        return False
 
 
 def run_migrations_offline() -> None:
@@ -63,6 +84,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        compare_server_default=True,
     )
 
     with context.begin_transaction():
@@ -84,7 +107,11 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
+            render_as_batch=_render_as_batch_for_sqlite(connection),
         )
 
         with context.begin_transaction():

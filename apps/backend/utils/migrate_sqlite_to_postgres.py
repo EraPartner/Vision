@@ -17,14 +17,76 @@ from sqlalchemy.orm import sessionmaker, Session
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.models import Base, Category
+# Import logging setup first so diagnostics can log useful info
 from config.logging_config import setup_logging
 
 logger = setup_logging(__name__)
 
-# Hardcoded database URLs
-SOURCE_DATABASE_URL = "sqlite:///./financial_transactions.db"
-TARGET_DATABASE_URL = "postgresql://ftm_user:@localhost:5433/financial_transactions"
+# Resolve SQLite source path explicitly (allow override via env var)
+DEFAULT_SQLITE_PATH = os.environ.get(
+    "SOURCE_DATABASE_PATH",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "financial_transactions.db")),
+)
+SOURCE_DATABASE_PATH = os.path.abspath(DEFAULT_SQLITE_PATH)
+SOURCE_DATABASE_URL = f"sqlite:///{SOURCE_DATABASE_PATH}"
+
+# Target URL remains as configured (adjust via env if you like)
+TARGET_DATABASE_URL = os.environ.get(
+    "TARGET_DATABASE_URL",
+    "postgresql://ftm_user:@localhost:5433/financial_transactions",
+)
+
+
+def diagnose_source(path: str) -> bool:
+    """
+    Diagnose the SQLite source file and report useful information to logs.
+
+    Returns True if the file exists and the inspector finds tables (not a guaranteed proof
+    that the ORM mappings will import correctly, but it's a helpful early check).
+    """
+    logger.info(f"Diagnosing source SQLite at: {path}")
+
+    if not os.path.exists(path):
+        logger.error(f"SQLite file not found at: {path}")
+        return False
+
+    try:
+        size = os.path.getsize(path)
+        logger.info(f"  ✓ File exists, size={size} bytes")
+    except Exception as e:
+        logger.warning(f"  ⚠ Could not stat file: {e}")
+
+    try:
+        engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        logger.info(f"  ✓ Inspector found tables: {tables}")
+    except Exception as e:
+        logger.error(f"  ✗ Inspector failed: {e}")
+        return False
+
+    # Try a lightweight query against categories table using reflection (no ORM imports yet)
+    if "categories" in [t.lower() for t in tables]:
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT count(1) as c FROM categories LIMIT 1"))
+                row = result.fetchone()
+                if row is not None:
+                    logger.info(f"  ✓ Categories table row count (quick check): {row[0]}")
+        except Exception as e:
+            logger.warning(f"  ⚠ Could not run quick categories count: {e}")
+
+    return True
+
+
+# Run diagnostics before importing ORM models to avoid early mapper configuration issues
+if not diagnose_source(SOURCE_DATABASE_PATH):
+    logger.warning(
+        "Source diagnosis failed or reported issues. Please verify SOURCE_DATABASE_PATH and the SQLite file."
+    )
+
+# Now import ORM models (after diagnostics) to avoid triggering mappers before we've checked the DB file
+from database.models import Base, Category
 
 
 class DatabaseMigrator:
@@ -150,7 +212,8 @@ class DatabaseMigrator:
                 stmt = stmt.on_conflict_do_nothing(index_elements=['id'])
                 result = target_session.execute(stmt)
                 # Track how many were actually inserted (not skipped)
-                if result.rowcount > 0:
+                rc = getattr(result, 'rowcount', None)
+                if rc is not None and rc > 0:
                     inserted_count += 1
 
             logger.info(
