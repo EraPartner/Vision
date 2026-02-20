@@ -145,9 +145,10 @@ def test_recipient_creation_with_bank_accounts(test_db):
 
     # Test 4: Different person with same last name
     print("\nTest 4: Create different person 'JANE SMITH'")
+    # Use a valid Belgian IBAN for the new recipient to satisfy strict IBAN validation
     recipient3, created3 = recipient_service.create_or_get_recipient(
         name="JANE SMITH",
-        account_number="BE71734041478018",
+        account_number="BE68539007547034",
         bank_name="BELFIUS"
     )
     print(f"  Recipient ID: {recipient3.id}")
@@ -174,6 +175,15 @@ def test_duplicate_prevention(test_db):
     db = test_db
     recipient_service = RecipientService(db)
 
+    # Use a small set of valid example IBANs (one per variant) to avoid IBAN checksum failures
+    valid_ibans = [
+        "GB82WEST12345698765432",
+        "DE89370400440532013000",
+        "FR1420041010050500013M02606",
+        "NL91ABNA0417164300",
+        "BE68539007547034",
+    ]
+
     # Try various name formats that should all match
     name_variations = [
         "JOHN DOE",
@@ -188,7 +198,7 @@ def test_duplicate_prevention(test_db):
         print(f"\n  Variant {i + 1}: '{name_variant}'")
         recipient, created = recipient_service.create_or_get_recipient(
             name=name_variant,
-            account_number=f"TEST{i:05d}",
+            account_number=valid_ibans[i % len(valid_ibans)],
             bank_name="TEST BANK"
         )
         recipient_ids.append(recipient.id)

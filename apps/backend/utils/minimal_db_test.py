@@ -1,51 +1,69 @@
 #!/usr/bin/env python3
-"""Minimal test to check database connection and recipient count."""
+"""Minimal test to check database connection and recipient count.
+
+This script is intended to be executed manually, not imported by test runners.
+When imported (for collection) we must avoid running the DB connection code.
+"""
 
 from database.connection import SessionLocal, DATABASE_URL
 from database.models import Recipient
 
-print("=" * 80)
-print(f"Database: {DATABASE_URL}")
-print("=" * 80)
 
-db = SessionLocal()
+def main() -> None:
+    """Run a minimal database inspection when executed directly.
 
-try:
-    # Count all recipients
-    total_count = db.query(Recipient).count()
-    print(f"Total recipients in database: {total_count}")
+    This function connects to the configured database and prints a few
+    diagnostic counts. It is intentionally not executed on import so that
+    pytest (which imports modules during collection) doesn't attempt to
+    connect to the configured Postgres instance.
+    """
 
-    # Count active recipients
-    active_count = db.query(Recipient).filter(Recipient.is_active == True).count()
-    print(f"Active recipients: {active_count}")
+    print("=" * 80)
+    print(f"Database: {DATABASE_URL}")
+    print("=" * 80)
 
-    # Get first 5 recipients
-    first_5 = db.query(Recipient).limit(5).all()
-    print(f"\nFirst 5 recipients:")
-    for r in first_5:
-        print(f"  ID {r.id}: {r.name}, active={r.is_active}")
+    db = SessionLocal()
 
-    # Query with the same pattern as merge_recipients
-    from sqlalchemy import func
-    from database.models import Transaction
+    try:
+        # Count all recipients
+        total_count = db.query(Recipient).count()
+        print(f"Total recipients in database: {total_count}")
 
-    query_result = db.query(
-        Recipient.id,
-        Recipient.name,
-        func.count(Transaction.id.distinct()).label('transaction_count')
-    ).filter(
-        Recipient.is_active == True
-    ).outerjoin(
-        Transaction, Recipient.id == Transaction.recipient_id
-    ).group_by(
-        Recipient.id
-    ).all()
+        # Count active recipients
+        active_count = db.query(Recipient).filter(Recipient.is_active == True).count()
+        print(f"Active recipients: {active_count}")
 
-    print(f"\nQuery with group_by returned: {len(query_result)} results")
+        # Get first 5 recipients
+        first_5 = db.query(Recipient).limit(5).all()
+        print(f"\nFirst 5 recipients:")
+        for r in first_5:
+            print(f"  ID {r.id}: {r.name}, active={r.is_active}")
 
-    if len(query_result) > 0:
-        print(
-            f"First result: ID={query_result[0].id}, name={query_result[0].name}, count={query_result[0].transaction_count}")
+        # Query with the same pattern as merge_recipients
+        from sqlalchemy import func
+        from database.models import Transaction
 
-finally:
-    db.close()
+        query_result = db.query(
+            Recipient.id,
+            Recipient.name,
+            func.count(Transaction.id.distinct()).label('transaction_count')
+        ).filter(
+            Recipient.is_active == True
+        ).outerjoin(
+            Transaction, Recipient.id == Transaction.recipient_id
+        ).group_by(
+            Recipient.id
+        ).all()
+
+        print(f"\nQuery with group_by returned: {len(query_result)} results")
+
+        if len(query_result) > 0:
+            print(
+                f"First result: ID={query_result[0].id}, name={query_result[0].name}, count={query_result[0].transaction_count}")
+
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
