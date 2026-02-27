@@ -1,8 +1,6 @@
 TODO for Frontend
 
 - Fix Category Pie Chart to use monthly api endpoint for information
-- Make the import atomic
-- FIX Recipient Account number in UI
 - Add info field for transactions to declutter main view with comment, currency, bank,...
 - When filtering, remove the empty transaction tables
 - View Categories hierarchically in the UI

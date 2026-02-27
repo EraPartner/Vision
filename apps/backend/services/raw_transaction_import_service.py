@@ -317,8 +317,7 @@ class RawTransactionImportService:
             elif bank_type == 'kbc':
                 return self._store_kbc_raw(transaction_data, dedup_hash)
             else:
-                logger.error(f"Unsupported bank type for raw storage: {bank_type}")
-                return None
+                raise ValueError(f"Unsupported bank type for raw storage: {bank_type}")
 
         except Exception as e:
             logger.error(

@@ -12,7 +12,7 @@ const PAGE_SIZE = 50;
 type TableRecipient = {
     id: number;
     name: string;
-    account_number: string;
+    primary_bank_account: string;
     default_category_name?: string;
     is_active: boolean;
     notes?: string;
@@ -38,7 +38,6 @@ export default function RecipientsPage() {
             id: originalRecipient.id,
             data: {
                 name: updated.name,
-                account_number: updated.account_number,
                 notes: updated.notes,
                 address: updated.address,
                 is_active: updated.is_active,
@@ -77,7 +76,7 @@ export default function RecipientsPage() {
     const recipients: TableRecipient[] = data?.items.map((r) => ({
         id: r.id,
         name: r.name,
-        account_number: r.account_number || 'N/A',
+        primary_bank_account: r.primary_bank_account || 'N/A',
         default_category_name: r.default_category_name,
         is_active: r.is_active,
         notes: r.notes || '',
@@ -96,11 +95,11 @@ export default function RecipientsPage() {
             ),
         },
         {
-            key: "account_number",
-            header: "Account Number",
-            editable: true,
+            key: "primary_bank_account",
+            header: "Primary Account",
+            editable: false,
             render: (row: TableRecipient) => (
-                <span className={`text-muted-foreground font-mono text-sm ${!row.is_active ? 'line-through' : ''}`}>{row.account_number}</span>
+                <span className={`text-muted-foreground font-mono text-sm ${!row.is_active ? 'line-through' : ''}`}>{row.primary_bank_account}</span>
             ),
         },
         {

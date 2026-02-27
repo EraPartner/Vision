@@ -401,7 +401,7 @@ class RecipientRepository:
             - SQLAlchemy session must still be active
             - All update operations are logged for audit purposes
         """
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(recipient)
         logger.debug(
             "Recipient updated in database",
