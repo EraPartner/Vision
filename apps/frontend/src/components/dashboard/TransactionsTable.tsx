@@ -6,6 +6,7 @@ import {format} from "date-fns";
 import {Calendar, CreditCard, Trash2} from "lucide-react";
 import {apiClient} from "@/lib/api";
 import {toast} from "sonner";
+import { getCategoryColor } from "@/utils/categoryColors";
 
 interface Transaction {
     id: number;
@@ -20,18 +21,6 @@ interface TransactionsTableProps {
     transactions: Transaction[];
     onTransactionDeleted?: () => void;
 }
-
-const categoryColors: Record<string, string> = {
-    groceries: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
-    dining: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800",
-    transportation: "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800",
-    utilities: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
-    entertainment: "bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800",
-    healthcare: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
-    shopping: "bg-green-500/15 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
-    income: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
-    andere: "bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800",
-};
 
 export function TransactionsTable({transactions, onTransactionDeleted}: TransactionsTableProps) {
     const handleDelete = async (id: number) => {
@@ -111,7 +100,7 @@ export function TransactionsTable({transactions, onTransactionDeleted}: Transact
                                     <TableCell>
                                         <Badge
                                             variant="secondary"
-                                            className={`${categoryColors[transaction.category]} font-medium border capitalize`}
+                                            className={`${getCategoryColor(transaction.category)} font-medium border capitalize`}
                                         >
                                             {transaction.category}
                                         </Badge>

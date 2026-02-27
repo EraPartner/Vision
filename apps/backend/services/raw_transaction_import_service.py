@@ -11,6 +11,8 @@ The new architecture:
 
 This replaces the old TransactionImportService which mixed raw and normalized data.
 """
+import csv
+import io
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
@@ -340,28 +342,56 @@ class RawTransactionImportService:
         Returns:
             Created BelfiusRawTransaction instance
         """
-        # Parse comment field for Belfius-specific data
-        comment_data = self._parse_belfius_comment(transaction_data.comment)
+
+        # Parse the original CSV row using csv module to obtain literal fields (handles quoted fields)
+        parsed = self._parse_raw_csv_line(transaction_data.raw_data, delimiter=';')
+
+        account_number = parsed[0].strip()
+        transaction_date_str = parsed[1].strip()
+        statement_number = parsed[2].strip()
+        transaction_number = parsed[3].strip()
+        recipient_account = parsed[4].strip()
+        recipient_name = parsed[5].strip()
+        street = parsed[6].strip()
+        location = parsed[7].strip()
+        transaction_description = parsed[8].strip()
+        value_date_str = parsed[9].strip()
+        amount_str = parsed[10].strip() if len(parsed) > 10 else ''
+        currency = parsed[11].strip() if len(parsed) > 11 else (transaction_data.currency or 'EUR')
+        bic_code = parsed[12].strip() if len(parsed) > 12 else ""
+        country_code = parsed[13].strip() if len(parsed) > 13 else ""
+        additional_message = parsed[14].strip() if len(parsed) > 14 else ""
+
+        # Parse numeric/date fields into DB types
+        amount_val = self._parse_decimal(amount_str) if amount_str else (
+            Decimal(str(transaction_data.amount)) if transaction_data.amount is not None else Decimal('0.00'))
+        value_date_val = None
+        if value_date_str:
+            value_date_val = self._parse_date_or_datetime(value_date_str, date_only=True)
+
+        transaction_date_val = None
+        if transaction_date_str:
+            transaction_date_val = self._parse_date_or_datetime(transaction_date_str, date_only=True)
 
         raw_data = {
             'deduplication_hash': dedup_hash,
-            'account_number': comment_data.get('account_number', ''),
-            'transaction_date': transaction_data.date.date() if hasattr(transaction_data.date,
-                                                                        'date') else transaction_data.date,
-            'statement_number': comment_data.get('statement'),
-            'transaction_number': comment_data.get('transaction'),
-            'recipient_account': transaction_data.recipient_account,
-            'recipient_name': transaction_data.recipient,
-            'recipient_street': comment_data.get('street'),
-            'recipient_location': comment_data.get('location'),
-            'recipient_bic': comment_data.get('bic'),
-            'recipient_country': comment_data.get('country'),
-            'transaction_description': transaction_data.memo,
-            'value_date': comment_data.get('value_date'),
-            'amount': float(transaction_data.amount),
-            'currency': transaction_data.currency or 'EUR',
-            'balance': float(transaction_data.balance) if transaction_data.balance is not None else None,
-            'additional_message': comment_data.get('additional'),
+            'account_number': account_number,
+            'transaction_date': transaction_date_val or transaction_data.date.date() if hasattr(transaction_data.date,
+                                                                                                'date') else transaction_data.date,
+            'statement_number': statement_number,
+            'transaction_number': transaction_number,
+            'recipient_account': recipient_account,
+            'recipient_name': recipient_name,
+            'recipient_street': street,
+            'recipient_location': location,
+            'recipient_bic': bic_code,
+            'recipient_country': country_code,
+            'transaction_description': transaction_description,
+            'value_date': value_date_val,
+            'amount': amount_val,
+            'currency': currency,
+            'balance': Decimal(str(transaction_data.balance)) if transaction_data.balance is not None else None,
+            'additional_message': additional_message,
             'raw_csv_line': transaction_data.raw_data
         }
 
@@ -381,21 +411,45 @@ class RawTransactionImportService:
         Returns:
             Created RevolutRawTransaction instance
         """
-        # Parse comment field for Revolut-specific data
-        comment_data = self._parse_revolut_comment(transaction_data.comment)
+        # Parse literal CSV cells according to Revolut format (10 columns)
+        parsed = self._parse_raw_csv_line(transaction_data.raw_data, delimiter=',')
+
+        transaction_type = parsed[0].strip() if len(parsed) > 0 else ''
+        product = parsed[1].strip() if len(parsed) > 1 else ''
+        started_date_str = parsed[2].strip() if len(parsed) > 2 else ''
+        completed_date_str = parsed[3].strip() if len(parsed) > 3 else ''
+        description = parsed[4].strip() if len(parsed) > 4 else ''
+        amount_str = parsed[5].strip() if len(parsed) > 5 else ''
+        fee_str = parsed[6].strip() if len(parsed) > 6 else ''
+        currency_str = parsed[7].strip() if len(parsed) > 7 else ''
+        state_str = parsed[8].strip() if len(parsed) > 8 else ''
+        balance_str = parsed[9].strip() if len(parsed) > 9 else ''
+
+        # Parse dates and numbers to DB types
+        started_date_val = None
+        if started_date_str:
+            started_date_val = self._parse_date_or_datetime(started_date_str, date_only=False)
+        completed_date_val = None
+        if completed_date_str:
+            completed_date_val = self._parse_date_or_datetime(completed_date_str, date_only=False)
+
+        amount_val = self._parse_decimal(amount_str) if amount_str else (
+            Decimal(str(transaction_data.amount)) if transaction_data.amount is not None else Decimal('0.00'))
+        balance_val = self._parse_decimal(balance_str) if balance_str else (
+            Decimal(str(transaction_data.balance)) if transaction_data.balance is not None else None)
 
         raw_data = {
             'deduplication_hash': dedup_hash,
-            'transaction_type': comment_data.get('type', ''),
-            'product': comment_data.get('product', ''),
-            'started_date': comment_data.get('started_date'),
-            'completed_date': transaction_data.date,
-            'description': transaction_data.recipient,
-            'amount': float(transaction_data.amount),
-            'fee': comment_data.get('fee', 0.0),
-            'currency': transaction_data.currency or 'EUR',
-            'state': comment_data.get('state', 'COMPLETED'),
-            'balance': float(transaction_data.balance) if transaction_data.balance is not None else None,
+            'transaction_type': transaction_type,
+            'product': product,
+            'started_date': started_date_val,
+            'completed_date': completed_date_val or transaction_data.date,
+            'description': description or transaction_data.recipient,
+            'amount': amount_val,
+            'fee': fee_str,
+            'currency': currency_str or (transaction_data.currency),
+            'state': state_str,
+            'balance': balance_val,
             'raw_csv_line': transaction_data.raw_data
         }
 
@@ -415,34 +469,87 @@ class RawTransactionImportService:
         Returns:
             Created KBCRawTransaction instance
         """
-        # Parse comment field for KBC-specific data
-        comment_data = self._parse_kbc_comment(transaction_data.comment)
+        # Parse literal CSV cells according to KBC format (18 columns expected)
+        parsed = self._parse_raw_csv_line(transaction_data.raw_data, delimiter=';')
+
+        account_number = parsed[0].strip() if len(parsed) > 0 else ''
+        category_name = parsed[1].strip() if len(parsed) > 1 else ''
+        account_holder = parsed[2].strip() if len(parsed) > 2 else ''
+        currency_str = parsed[3].strip() if len(parsed) > 3 else (transaction_data.currency or '')
+        statement_number = parsed[4].strip() if len(parsed) > 4 else ''
+        transaction_date_str = parsed[5].strip() if len(parsed) > 5 else ''
+        description = parsed[6].strip() if len(parsed) > 6 else ''
+        value_date_str = parsed[7].strip() if len(parsed) > 7 else ''
+        amount_str = parsed[8].strip() if len(parsed) > 8 else ''
+        balance_str = parsed[9].strip() if len(parsed) > 9 else ''
+        credit_str = parsed[10].strip() if len(parsed) > 10 else ''
+        debit_str = parsed[11].strip() if len(parsed) > 11 else ''
+        counterparty_account = parsed[12].strip() if len(parsed) > 12 else ''
+        counterparty_bic = parsed[13].strip() if len(parsed) > 13 else ''
+        counterparty_name = parsed[14].strip() if len(parsed) > 14 else ''
+        counterparty_address = parsed[15].strip() if len(parsed) > 15 else ''
+        structured_comm = parsed[16].strip() if len(parsed) > 16 else ''
+        free_comm = parsed[17].strip() if len(parsed) > 17 else ''
+
+        # Parse date and numeric fields into proper DB types
+        transaction_date_val = None
+        if transaction_date_str:
+            transaction_date_val = self._parse_date_or_datetime(transaction_date_str, date_only=True)
+        value_date_val = None
+        if value_date_str:
+            value_date_val = self._parse_date_or_datetime(value_date_str, date_only=True)
+
+        amount_val = self._parse_decimal(amount_str) if amount_str else (
+            Decimal(str(transaction_data.amount)) if transaction_data.amount is not None else Decimal('0.00'))
+        balance_val = self._parse_decimal(balance_str) if balance_str else (
+            Decimal(str(transaction_data.balance)) if transaction_data.balance is not None else None)
+        credit_val = self._parse_decimal(credit_str) if credit_str else None
+        debit_val = self._parse_decimal(debit_str) if debit_str else None
 
         raw_data = {
             'deduplication_hash': dedup_hash,
-            'account_number': comment_data.get('account_number', ''),
-            'category_name': comment_data.get('category'),
-            'account_holder_name': comment_data.get('holder'),
-            'currency': transaction_data.currency or 'EUR',
-            'statement_number': comment_data.get('statement'),
-            'transaction_date': transaction_data.date.date() if hasattr(transaction_data.date,
-                                                                        'date') else transaction_data.date,
-            'value_date': comment_data.get('value_date'),
-            'description': transaction_data.memo,
-            'amount': float(transaction_data.amount),
-            'balance': float(transaction_data.balance) if transaction_data.balance is not None else None,
-            'credit_amount': comment_data.get('credit_amount'),
-            'debit_amount': comment_data.get('debit_amount'),
-            'counterparty_account': transaction_data.recipient_account,
-            'counterparty_bic': comment_data.get('bic'),
-            'counterparty_name': transaction_data.recipient,
-            'counterparty_address': transaction_data.recipient_address,
-            'structured_communication': comment_data.get('structured'),
-            'free_communication': comment_data.get('free'),
+            'account_number': account_number,
+            'category_name': category_name,
+            'account_holder_name': account_holder,
+            'currency': currency_str or (transaction_data.currency or 'EUR'),
+            'statement_number': statement_number,
+            'transaction_date': transaction_date_val or (
+                transaction_data.date.date() if hasattr(transaction_data.date, 'date') else transaction_data.date),
+            'value_date': value_date_val or None,
+            'description': description,
+            'amount': amount_val,
+            'balance': balance_val,
+            'credit_amount': credit_val,
+            'debit_amount': debit_val,
+            'counterparty_account': counterparty_account,
+            'counterparty_bic': counterparty_bic,
+            'counterparty_name': counterparty_name,
+            'counterparty_address': counterparty_address,
+            'structured_communication': structured_comm,
+            'free_communication': free_comm,
             'raw_csv_line': transaction_data.raw_data
         }
 
         return self.kbc_raw_repo.create(raw_data)
+
+    def _parse_raw_csv_line(self, raw_line: str, delimiter: str = ',') -> list:
+        """Parse a single CSV row string into fields using the csv module.
+
+        Uses io.StringIO to feed the single raw line to csv.reader so quoted fields
+        and embedded delimiters are handled correctly.
+        Returns a list of strings (empty list on parse failure).
+        """
+        if not raw_line:
+            return []
+        try:
+            # Ensure we feed a single-line string to the csv reader
+            sio = io.StringIO(raw_line)
+            reader = csv.reader(sio, delimiter=delimiter)
+            for row in reader:
+                return row
+            return []
+        except Exception:
+            return []
 
     def _parse_belfius_comment(self, comment: Optional[str]) -> Dict[str, Any]:
         """Parse Belfius comment field for structured data.
@@ -551,3 +658,62 @@ class RawTransactionImportService:
                     result['free'] = value
 
         return result
+
+    def _parse_decimal(self, value: str) -> Decimal:
+        """Parse numeric strings from CSV into Decimal.
+
+        Handles common CSV formats: comma as decimal separator, parentheses for negatives,
+        spaces and thousands separators. Returns Decimal with two decimal places.
+        """
+        if value is None:
+            return Decimal('0.00')
+        v = str(value).strip()
+        if v == '':
+            return Decimal('0.00')
+        # Handle parentheses for negative values: (1.23) -> -1.23
+        negative = False
+        if v.startswith('(') and v.endswith(')'):
+            negative = True
+            v = v[1:-1]
+        # Replace comma decimal separator with dot, and remove spaces
+        v = v.replace('.', '') if v.count('.') > 1 and ',' in v else v
+        v = v.replace(',', '.')
+        v = v.replace(' ', '')
+        try:
+            d = Decimal(v)
+        except Exception:
+            # Fallback: try parsing as float then Decimal
+            try:
+                d = Decimal(str(float(v)))
+            except Exception:
+                return Decimal('0.00')
+        if negative:
+            d = -d
+        # Quantize to 2 decimal places
+        return d.quantize(Decimal('0.01'))
+
+    def _parse_date_or_datetime(self, value: str, date_only: bool = True):
+        """Parse date or datetime strings commonly found in the CSVs.
+
+        If date_only=True returns a datetime.date, otherwise a datetime.
+        Tries multiple formats robustly.
+        """
+        if not value:
+            return None
+        s = value.strip()
+        # Try common date formats
+        date_formats = ['%d/%m/%Y', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M',
+                        '%d/%m/%Y %H:%M:%S']
+        for fmt in date_formats:
+            try:
+                dt = datetime.strptime(s, fmt)
+                return dt.date() if date_only else dt
+            except Exception:
+                continue
+        # As a last resort, if only day/month/year in other separators
+        try:
+            parts = s.replace('-', '/').split()
+            d = parts[0]
+            return datetime.strptime(d, '%d/%m/%Y').date() if date_only else datetime.strptime(d, '%d/%m/%Y')
+        except Exception:
+            return None

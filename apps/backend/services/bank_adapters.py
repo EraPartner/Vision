@@ -215,7 +215,7 @@ class BelfiusAdapter(BaseBankAdapter):
                         memo=memo,
                         amount=amount,
                         currency=currency,
-                        balance=last_balance,  # Use the last balance from header
+                        balance=None,  # Will calculate per-transaction balances from header last_balance later
                         recipient_account=recipient_account if recipient_account else None,
                         recipient_address=recipient_full_address,
                         recipient_bank_name="BELFIUS" if recipient_account else None,
@@ -229,6 +229,46 @@ class BelfiusAdapter(BaseBankAdapter):
                     logger.error(f"Error parsing Belfius line {line_num}: {e}")
                     logger.debug(f"Line content: {line}")
                     continue
+
+        # After parsing all transactions, if we have a header last_balance, compute each transaction's balance
+        if last_balance is not None and len(transactions) > 0:
+            from decimal import Decimal, ROUND_HALF_UP, getcontext
+            getcontext().prec = 28
+
+            # Use Decimal for precise financial arithmetic
+            bal = Decimal(str(last_balance))
+
+            # Determine ordering: if file lists most recent transactions first (descending dates),
+            # then transactions[0] is the newest and corresponds to last_balance. If the file is
+            # chronological (oldest first), transactions[-1] corresponds to last_balance.
+            try:
+                if transactions[0].date >= transactions[-1].date:
+                    # newest first: iterate forwards
+                    idx_sequence = range(len(transactions))
+                else:
+                    # oldest first: iterate backwards (from last to first)
+                    idx_sequence = range(len(transactions) - 1, -1, -1)
+            except Exception:
+                # Fallback: assume newest-first
+                idx_sequence = range(len(transactions))
+
+            for i in idx_sequence:
+                tx = transactions[i]
+                try:
+                    amt = Decimal(str(tx.amount))
+                except Exception:
+                    # If amount cannot be parsed precisely, fallback to float arithmetic
+                    try:
+                        amt = Decimal(tx.amount)
+                    except Exception:
+                        amt = Decimal('0')
+
+                # Balance at this transaction is the current bal (which represents balance after this transaction)
+                # Round to 2 decimal places for storage/display
+                tx.balance = float(bal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+                # Move balance to the previous transaction by subtracting the transaction amount
+                bal = bal - amt
 
         logger.info(
             f"Belfius CSV parsing completed",
@@ -473,7 +513,7 @@ class RevolutAdapter(BaseBankAdapter):
                     normalized_date = date.strftime("%Y-%m-%d")
                     normalized_parts[2] = normalized_date  # Replace started_date
                     normalized_parts[3] = normalized_date  # Replace completed_date
-                    raw_data = ','.join(normalized_parts)
+                    raw_data = ','.join([f'"{field}"' if ',' in field else field for field in normalized_parts])
 
                     # Create transaction with comprehensive data
                     transaction = TransactionData(
@@ -716,13 +756,13 @@ class KBCAdapter(BaseBankAdapter):
                     if not full_recipient:
                         full_recipient = description
 
-                    # Clean the recipient name using KBC-specific logic
-                    full_recipient = TextNormalizationService.clean_kbc_recipient_name(full_recipient)
+                        # Clean the recipient name using KBC-specific logic
+                        full_recipient = TextNormalizationService.clean_kbc_recipient_name(full_recipient)
 
-                    # Normalize to uppercase for consistency with database storage
+                    # Normalize to uppercase for consistency with database storage # TODO Necessary?
                     full_recipient = TextNormalizationService.normalize_recipient_name(full_recipient)
 
-                    # Normalize description/memo to uppercase
+                    # Normalize description/memo to uppercase TODO Necessary?
                     memo = TextNormalizationService.normalize_recipient_name(description) if description else ""
 
                     # Build comprehensive comment field combining all additional info
@@ -829,6 +869,8 @@ class GenericCSVAdapter(BaseBankAdapter):
 
         transactions = []
         column_mapping = self.config["column_mapping"]
+        # Optional account_type override (e.g., 'Checking', 'Savings')
+        account_type = self.config.get("account_type")
 
         for _, row in df.iterrows():
             try:

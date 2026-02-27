@@ -6,6 +6,10 @@ This is the single Information Expert for text processing rules.
 """
 from typing import Optional
 
+from config.logging_config import setup_logging
+
+logger = setup_logging(__name__)
+
 
 class TextNormalizationService:
     """Service for normalizing and processing text data"""
