@@ -44,9 +44,15 @@ class ApiClient {
         }
 
         const query = queryParams.toString();
-        return this.request<TransactionsListResponse>(
+        const res = await this.request<TransactionsListResponse>(
             `/api/transactions${query ? `?${query}` : ''}`
         );
+        // Backend serialises the date field as "date" (alias), remap to transaction_date
+        res.items = res.items.map((tx: any) => ({
+            ...tx,
+            transaction_date: tx.transaction_date ?? tx.date,
+        }));
+        return res;
     }
 
     // ==================== Transaction Methods ====================
@@ -267,6 +273,15 @@ class ApiClient {
     async deletePlannedTransaction(id: number): Promise<void> {
         await this.request<void>(`/api/planned-transactions/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    // Execute a planned transaction by linking an existing transaction to it.
+    // Calls POST /api/planned-transactions/{id}/execute with body { executed_transaction_id, execution_date? }
+    async executePlannedTransaction(id: number, executeRequest: PlannedTransactionExecuteRequest): Promise<PlannedTransaction> {
+        return this.request<PlannedTransaction>(`/api/planned-transactions/${id}/execute`, {
+            method: 'POST',
+            body: JSON.stringify(executeRequest),
         });
     }
 

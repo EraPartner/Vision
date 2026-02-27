@@ -35,16 +35,6 @@ logger = setup_logging(__name__)
                 description="Discover available methods on planned transactions collection endpoint")
 async def planned_transactions_collection_options(
         request: Request,
-        limit: int = Query(50, ge=1, le=5000, description="Maximum number of planned transactions to return"),
-        offset: int = Query(0, ge=0, description="Number of planned transactions to skip for pagination"),
-        start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
-        end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
-        bank_account: Optional[str] = Query(None, description="Filter by partial bank account match"),
-        category_id: Optional[int] = Query(None, description="Filter by category ID"),
-        recipient_id: Optional[int] = Query(None, description="Filter by recipient ID"),
-        is_recurring: Optional[bool] = Query(None, description="Filter by recurring status"),
-        is_executed: Optional[bool] = Query(None, description="Filter by execution status"),
-        active: bool = Query(True, description="Filter by active status")
 ):
     """
     OPTIONS method for planned transactions collection endpoint discovery.

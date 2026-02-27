@@ -80,11 +80,17 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     const month = String(dueDate.getMonth() + 1).padStart(2, '0');
     const day = String(dueDate.getDate()).padStart(2, '0');
     const dueDateStr = `${year}-${month}-${day}`;
+
+    // Compute endDateStr only if an end date was selected (optional)
+    let endDateStr: string | undefined = undefined;
+    if (endDate) {
+      const eYear = endDate.getFullYear();
+      const eMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+      const eDay = String(endDate.getDate()).padStart(2, '0');
+      endDateStr = `${eYear}-${eMonth}-${eDay}`;
+    }
     
-    // DEBUG: Log what date we're saving
-    console.log(`[FORM DEBUG] Selected date object:`, dueDate);
-    console.log(`[FORM DEBUG] Converted to string: ${dueDateStr}`);
-    
+
     onSubmit({
       name: name.trim(),
       amount: parseFloat(amount),

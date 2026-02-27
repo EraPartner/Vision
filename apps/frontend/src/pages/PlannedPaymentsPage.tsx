@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,12 @@ import { DataTable } from "@/components/shared/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { apiClient } from "@/lib/api";
+import type { Transaction } from "@/types/api";
 
 const FREQ_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -60,6 +66,21 @@ export default function PlannedPaymentsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [paymentToLink, setPaymentToLink] = useState<PlannedPayment | null>(null);
+  const [txSearchQuery, setTxSearchQuery] = useState("");
+  const [candidateTxs, setCandidateTxs] = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+  const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
+  const [executionDate, setExecutionDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
+  const [txFilters, setTxFilters] = useState({
+    start_date: "",
+    end_date: "",
+    bank_account: "",
+    recipient_name: "",
+    uncategorised: false,
+    active: true,
+    matchAmount: true,
+    amountTolerancePct: 5,
+  });
 
   // Filter payments based on showAll state (for client-side filtering after local updates)
   const filteredPayments = useMemo(() => {
@@ -130,6 +151,11 @@ export default function PlannedPaymentsPage() {
             if (!row.is_executed) {
               // Open dialog to select transaction
               setPaymentToLink(row);
+              // reset dialog state
+              setSelectedTxId(null);
+              setTxSearchQuery("");
+              setExecutionDate(format(new Date(), 'yyyy-MM-dd'));
+              setCandidateTxs([]);
               setLinkDialogOpen(true);
             }
           }}
@@ -304,6 +330,65 @@ export default function PlannedPaymentsPage() {
     }
   };
 
+  // Fetch transactions when dialog opens or filters/search change (debounced)
+  useEffect(() => {
+    let isMounted = true;
+    let timer: any = null;
+
+    const fetchTransactions = async () => {
+      if (!linkDialogOpen || !paymentToLink) return;
+      setTxLoading(true);
+      try {
+        const params: any = { limit: 50 };
+        if (txFilters.start_date) params.start_date = txFilters.start_date;
+        if (txFilters.end_date) params.end_date = txFilters.end_date;
+        if (txFilters.bank_account) params.bank_account = txFilters.bank_account;
+        // If recipient filter empty, but paymentToLink has recipient, default to that
+        if (txFilters.recipient_name) params.recipient_name = txFilters.recipient_name;
+        else if (paymentToLink.recipient) params.recipient_name = paymentToLink.recipient;
+        if (txFilters.uncategorised) params.uncategorised = true;
+        // active defaults to true unless explicitly set false
+        params.active = txFilters.active;
+
+        // Include bank_account if user filled it
+        if (txFilters.bank_account) params.bank_account = txFilters.bank_account;
+        const res = await apiClient.getTransactions(params);
+        if (isMounted) {
+          setCandidateTxs(res.items || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch transactions:", err);
+        if (isMounted) setCandidateTxs([]);
+      } finally {
+        if (isMounted) setTxLoading(false);
+      }
+    };
+
+    // Debounce requests when filters/search change
+    if (linkDialogOpen && paymentToLink) {
+      timer = setTimeout(fetchTransactions, 250);
+    }
+
+    return () => {
+      isMounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [linkDialogOpen, paymentToLink, txFilters, txSearchQuery]);
+
+  // Keep recipient_name filter synced to selected payment by default
+  useEffect(() => {
+    if (paymentToLink) {
+      setTxFilters((prev) => ({
+        ...prev,
+        recipient_name: paymentToLink.recipient || prev.recipient_name,
+        // default the start_date to the projected due date of the planned payment
+        start_date: paymentToLink.due_date || prev.start_date,
+        // default the visible bank_account input to the payment's bank account
+        bank_account: paymentToLink.bank_account || prev.bank_account,
+      }));
+    }
+  }, [paymentToLink]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -403,6 +488,150 @@ export default function PlannedPaymentsPage() {
         initial={editing}
         key={editing?.id ?? "new"}
       />
+
+      {/* Link Transaction Dialog: choose an existing transaction to link as execution */}
+      <Dialog open={linkDialogOpen} onOpenChange={(open) => { setLinkDialogOpen(open); if (!open) setPaymentToLink(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Link Transaction for "{paymentToLink?.name}"</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="Search memo, recipient, amount..." value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
+              <div>
+                <input type="date" className="input" value={executionDate} onChange={(e) => setExecutionDate(e.target.value)} />
+                {/* Show the selected transaction's date for clarity when a tx is selected */}
+                {selectedTxId && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Transaction date: {candidateTxs.find(t => t.id === selectedTxId)?.transaction_date || '—'}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Transaction filters (mirrors export filters) */}
+            <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="tx-start-date">Start Date</Label>
+                  <Input id="tx-start-date" type="date" value={txFilters.start_date} onChange={(e) => setTxFilters({...txFilters, start_date: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tx-end-date">End Date</Label>
+                  <Input id="tx-end-date" type="date" value={txFilters.end_date} onChange={(e) => setTxFilters({...txFilters, end_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="tx-bank-account">Bank Account</Label>
+                  <Input id="tx-bank-account" placeholder="e.g., Main Account" value={txFilters.bank_account} onChange={(e) => setTxFilters({...txFilters, bank_account: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tx-recipient">Recipient</Label>
+                  <Input id="tx-recipient" placeholder="Partial recipient name" value={txFilters.recipient_name} onChange={(e) => setTxFilters({...txFilters, recipient_name: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="tx-uncategorised" checked={txFilters.uncategorised} onCheckedChange={(v: boolean) => setTxFilters({...txFilters, uncategorised: v})} />
+                  <Label htmlFor="tx-uncategorised">Uncategorised</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="tx-active" checked={txFilters.active} onCheckedChange={(v: boolean) => setTxFilters({...txFilters, active: v})} />
+                  <Label htmlFor="tx-active">Active only</Label>
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                  <Checkbox id="tx-match-amount" checked={txFilters.matchAmount} onCheckedChange={(v: boolean) => setTxFilters({...txFilters, matchAmount: v})} />
+                  <Label htmlFor="tx-match-amount">Match amount</Label>
+                  <Input
+                    id="tx-amount-tolerance"
+                    type="number"
+                    className="w-16"
+                    value={txFilters.amountTolerancePct}
+                    onChange={(e) => setTxFilters({...txFilters, amountTolerancePct: Number(e.target.value)})}
+                    min={0}
+                    step={1}
+                    disabled={!txFilters.matchAmount}
+                    aria-label="Amount tolerance percent"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto border rounded-md p-2">
+              {txLoading ? (
+                <div className="text-center py-6">Loading transactions…</div>
+              ) : (
+                (candidateTxs.length === 0) ? (
+                  <div className="text-sm text-muted-foreground">No recent transactions found.</div>
+                ) : (
+                  candidateTxs
+                    .filter(tx => {
+                      if (txSearchQuery) {
+                        const q = txSearchQuery.toLowerCase();
+                        if (!((tx.memo || "").toLowerCase().includes(q) || (tx.recipient_name || "").toLowerCase().includes(q) || String(tx.amount).includes(q))) {
+                          return false;
+                        }
+                      }
+                      if (txFilters.matchAmount && paymentToLink && typeof paymentToLink.amount === 'number') {
+                        const planned = Math.abs(paymentToLink.amount);
+                        const txAmt = Math.abs(tx.amount);
+                        const tol = Math.max(1, planned * (txFilters.amountTolerancePct / 100));
+                        if (Math.abs(txAmt - planned) > tol) return false;
+                      }
+                      return true;
+                    })
+                    .map((tx) => (
+                       <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                         <div className="flex items-center gap-3">
+                           <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); setExecutionDate(tx.transaction_date); }} />
+                           <div className="flex flex-col">
+                             <span className="font-medium">{tx.memo || 'Transaction #' + tx.id}</span>
+                             <span className="text-xs text-muted-foreground">
+                               {[tx.recipient_name, tx.transaction_date ? format(new Date(tx.transaction_date), 'yyyy-MM-dd') : null].filter(Boolean).join(' • ')}
+                             </span>
+                           </div>
+                         </div>
+                         <div className="text-right">
+                           <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}€{Math.abs(tx.amount).toFixed(2)}</div>
+                           <div className="text-xs text-muted-foreground">#{tx.id}</div>
+                         </div>
+                       </label>
+                     ))
+                 )
+               )}
+             </div>
+           </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLinkDialogOpen(false); setPaymentToLink(null); }}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!paymentToLink) return;
+                if (!selectedTxId) { alert('Please select a transaction to link.'); return; }
+                setActionLoading(true);
+                try {
+                  await executePayment(paymentToLink.id, selectedTxId, executionDate || undefined);
+                  setLinkDialogOpen(false);
+                  setPaymentToLink(null);
+                } catch (err) {
+                  console.error('Failed to link/execute planned payment:', err);
+                  alert('Failed to execute planned payment. Check console for details.');
+                } finally {
+                  setActionLoading(false);
+                }
+              }}
+              disabled={actionLoading || !selectedTxId}
+            >
+              Link & Execute
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
