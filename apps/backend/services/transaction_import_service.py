@@ -16,16 +16,13 @@ The service layer is responsible for:
 Classes:
     TransactionImportService: Main service class for transaction import operations.
 """
-import json
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
-from repositories.import_batch_repository import ImportBatchRepository
 from sqlalchemy.orm import Session
 
 from config.logging_config import setup_logging
-from database.models import Transaction, Recipient, ImportBatch
+from database.models import Transaction, Recipient
 from repositories.category_repository import CategoryRepository
 from repositories.transaction_repository import TransactionRepository
 from services.bank_adapters import BankAdapterFactory, TransactionData
@@ -83,7 +80,6 @@ class TransactionImportService:
         """
         self.db = db_session
         self.txn_repo = TransactionRepository(db_session)
-        self.batch_repo = ImportBatchRepository(db_session)
         self.category_repo = CategoryRepository(db_session)
         # Inject dependencies for separated concerns
         self.dedup_service = DeduplicationService(db_session)
@@ -170,22 +166,10 @@ class TransactionImportService:
             - File path should be absolute and file must exist and be readable
         """
 
-        # Create import batch record
-        batch = ImportBatch(
-            filename=file_path.split('/')[-1],
-            bank_name=bank_name,
-            config_used=json.dumps(custom_config) if custom_config else None,
-            status="processing"
-        )
-        self.db.add(batch)
-        self.db.commit()
-        self.db.refresh(batch)
-
         logger.info(
             "Starting CSV import",
             extra={
                 "operation": "import_csv",
-                "file_name": batch.filename,
                 "bank_name": bank_name,
                 "has_custom_config": custom_config is not None
             }
@@ -201,7 +185,7 @@ class TransactionImportService:
                 logger.debug(f"Using predefined adapter for {bank_name}")
 
             # Parse CSV file using the adapter, passing account_type if provided
-            transaction_data_list = adapter.parse_csv(file_path, account_type=account_type)
+            transaction_data_list = adapter.parse_csv(file_path)
             logger.info(
                 f"Parsed CSV file successfully",
                 extra={
@@ -212,15 +196,7 @@ class TransactionImportService:
             )
 
             # Process transactions
-            results = self._process_transactions(transaction_data_list, batch.id)
-
-            # Update batch with results
-            batch.total_processed = results['total_processed']
-            batch.imported_count = results['imported']
-            batch.duplicate_count = results['duplicates']
-            batch.error_count = results['errors']
-            batch.status = "completed" if results['errors'] == 0 else "completed_with_errors"
-            batch.completed_at = datetime.now(timezone.utc)
+            results = self._process_transactions(transaction_data_list)
 
             self.db.commit()
 
@@ -228,7 +204,6 @@ class TransactionImportService:
                 "CSV import completed successfully",
                 extra={
                     "operation": "import_csv",
-                    "status": batch.status,
                     "total_processed": results['total_processed'],
                     "imported": results['imported'],
                     "duplicates": results['duplicates'],
@@ -241,14 +216,10 @@ class TransactionImportService:
                 'imported': results['imported'],
                 'duplicates': results['duplicates'],
                 'errors': results['errors'],
-                'status': batch.status
             }
 
         except Exception as e:
             # Update batch with error
-            batch.status = "failed"
-            batch.error_message = str(e)
-            batch.completed_at = datetime.now(timezone.utc)
             self.db.commit()
 
             logger.error(
@@ -348,9 +319,7 @@ class TransactionImportService:
                     memo=transaction_data.memo or '',
                     comment=transaction_data.comment,
                     bank_account=transaction_data.bank_account,
-                    recipient_id=recipient.id,
-                    original_raw_data=transaction_data.raw_data,
-                    bank_reference=self.dedup_service.get_hash_for_data(transaction_data)
+                    recipient_id=recipient.id
                 )
 
                 self.db.add(transaction)

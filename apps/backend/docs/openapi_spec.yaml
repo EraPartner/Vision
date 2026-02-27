@@ -1993,10 +1993,10 @@ paths:
                   description: Name of the bank (e.g., 'chase', 'belfius')
                   example: "chase"
             examples:
-              chase_upload:
-                summary: Upload Chase bank CSV
+              revolut_upload:
+                summary: Upload Revolut bank CSV
                 value:
-                  bank_name: "chase"
+                  bank_name: "revolut"
               belfius_upload:
                 summary: Upload Belfius bank CSV
                 value:
@@ -2007,7 +2007,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [ "chase", "belfius", "hsbc", "barclays", "lloyds" ]
+            enum: [ "revolut", "belfius", "kbc" ]
           description: |
             Name of the bank configuration to use for CSV parsing.
             Each bank has predefined column mappings and formats.
@@ -2020,7 +2020,7 @@ paths:
             - lloyds: Lloyds Bank format
             
             For unsupported banks, use `/api/import/csv/custom` endpoint.
-          example: "chase"
+          example: "Revolut"
       responses:
         '200':
           description: Import completed successfully

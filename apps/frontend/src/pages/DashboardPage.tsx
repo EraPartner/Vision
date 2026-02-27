@@ -107,7 +107,7 @@ export default function DashboardPage() {
         const topCategories = sorted.slice(0, 5);
         
         // Sum up the rest as "Other"
-        const otherCount = sorted.slice(5).reduce((sum, cat) => sum + cat.count, 0);
+        const otherCount = sorted.slice(7).reduce((sum, cat) => sum + cat.count, 0);
         
         // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
         const extractDetail = (categoryName: string): string => {

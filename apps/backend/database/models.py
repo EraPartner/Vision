@@ -366,13 +366,20 @@ def normalize_bank_account_number(target, value, oldvalue, initiator):
     or external library if desired.
     """
     if value and isinstance(value, str):
-        v = value.strip().upper()
+        import re
+        original = value
+        # Remove common human-friendly formatting characters (spaces, hyphens) used in IBANs
+        cleaned = re.sub(r"[\s\-]+", "", value)
+        v = cleaned.strip().upper()
+
         # Basic checks
+        if not v:
+            raise ValueError(f"Account number is empty after removing formatting characters: {original!r}")
         if len(v) > 34:
-            raise ValueError(f"Account number too long (>{34}): {v!r}")
-        # Allow characters A-Z and 0-9 and spaces (spaces removed earlier), but reject other punctuation
-        if not all(c.isalnum() for c in v):
-            raise ValueError(f"Account number contains invalid characters: {v!r}")
+            raise ValueError(f"Account number too long (>{34}): {original!r}")
+        # Allow only alphanumeric characters after removing formatting; reject other punctuation
+        if not v.isalnum():
+            raise ValueError(f"Account number contains invalid characters: {original!r}")
         # Full IBAN checksum validation if looks like IBAN (starts with 2 letters then digits)
         try:
             from services.iban import is_valid_iban
@@ -382,7 +389,7 @@ def normalize_bank_account_number(target, value, oldvalue, initiator):
 
         # Run validator and raise if invalid
         if not is_valid_iban(v):
-            raise ValueError(f"Invalid IBAN/account number checksum: {v!r}")
+            raise ValueError(f"Invalid IBAN/account number checksum: {original!r}")
         return v
     return value
 
