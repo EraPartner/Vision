@@ -264,6 +264,33 @@ class Recipient(Base):
             return self.default_category.full_path()
         return None
 
+    @property
+    def primary_bank_account(self) -> Optional[str]:
+        """Get the primary bank account number for this recipient.
+
+        Returns the account number marked as primary, or the first bank account
+        if no primary is set. This property is used by the RecipientResponse schema
+        to expose the primary account number in API responses.
+
+        Returns:
+            Optional[str]: The primary bank account number, or None if no accounts exist.
+        """
+        if not self.bank_accounts:
+            return None
+        
+        # Find the account marked as primary
+        primary = next((acc for acc in self.bank_accounts if acc.is_primary and acc.is_active), None)
+        
+        # Fall back to the first active account if no primary is set
+        if not primary:
+            primary = next((acc for acc in self.bank_accounts if acc.is_active), None)
+        
+        # Last resort: return first account regardless of active status
+        if not primary and self.bank_accounts:
+            primary = self.bank_accounts[0]
+        
+        return primary.account_number if primary else None
+
     def __repr__(self) -> str:  # pragma: no cover - convenience
         return f"<Recipient id={self.id} name={self.name!r}>"
 

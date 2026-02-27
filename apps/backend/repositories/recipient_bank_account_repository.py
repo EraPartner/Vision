@@ -188,7 +188,7 @@ class RecipientBankAccountRepository:
         Returns:
             RecipientBankAccount: The updated bank account.
         """
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(bank_account)
 
         logger.info(

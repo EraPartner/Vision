@@ -49,7 +49,8 @@ export interface CategoryUpdate {
 export interface Recipient {
     id: number;
     name: string;
-    account_number?: string;
+    account_number?: string; // Deprecated: use primary_bank_account instead
+    primary_bank_account?: string; // Primary bank account associated with this recipient
     default_category_id?: number;
     default_category_name?: string; // Default category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     notes?: string;

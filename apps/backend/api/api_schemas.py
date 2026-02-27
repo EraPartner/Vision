@@ -227,6 +227,8 @@ class RecipientResponse(BaseModel):
                     "This category is automatically applied to transactions from this recipient "
                     "when no direct category is assigned to the transaction."
     )
+    primary_bank_account: Optional[str] = Field(None,
+                                                description="Primary bank account associated with this recipient (most common account from transactions)")
     notes: Optional[str] = Field(None, description="Notes")
     is_active: bool = Field(True, description="Whether recipient is active")
     created_at: datetime = Field(description="Creation timestamp")

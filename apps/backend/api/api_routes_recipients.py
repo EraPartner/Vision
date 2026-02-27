@@ -414,6 +414,7 @@ async def update_recipient(
         )
         if not recipient:
             raise HTTPException(status_code=404, detail="Recipient not found")
+        db.commit()
         recipient.links = get_resource_links(request, "recipients", recipient.id)
         return RecipientResponse.model_validate(recipient)
     except HTTPException:
