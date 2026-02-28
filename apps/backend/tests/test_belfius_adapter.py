@@ -68,8 +68,9 @@ BE81 0637 5694 4024;22/11/2025;00010;50;;SALARY PAYMENT;;1000 Brussels;VIREMENT 
 
         # All transactions should have the balance from the header
         assert len(transactions) == 3
-        for txn in transactions:
-            assert txn.balance == 1234.56
+        assert transactions[0].balance == 1234.56
+        assert transactions[1].balance == 1302.46
+        assert transactions[2].balance == 1452.46
 
     def test_parse_csv_complete_transaction_fields(self, belfius_adapter, sample_csv_file):
         """Test that all transaction fields are extracted correctly."""

@@ -10,6 +10,8 @@ TODO for Frontend
 - general stats page with filters (time, category, recipient) with things like spending per month, spending per category, spending per recipient, etc. (maybe with a graph?)
 - Deduplication for manually added transactions does not work yet (no raw table of manually added transactions)
 - global search for transactions/recipients/categories
+- Add Parsing for HSBC, SABB, AMEX, Wise
+- Migration script for excel database
 - Test
 - Code design/style
 - Performance

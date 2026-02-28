@@ -430,7 +430,7 @@ class PlannedTransactionBase(BaseModel):
     """Base planned transaction schema for requests"""
     planned_date: date = Field(description="Planned transaction date")
     bank_account: str = Field(description="Bank account name", min_length=1)
-    recipient_id: int = Field(description="Recipient ID", ge=1)
+    recipient_id: Optional[int] = Field(None, description="Recipient ID", ge=1)
     memo: Optional[str] = Field(None, description="Transaction memo/note")
     amount: float = Field(description="Transaction amount")
     currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)", max_length=3, min_length=3)

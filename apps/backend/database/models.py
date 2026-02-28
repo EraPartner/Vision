@@ -356,7 +356,7 @@ class RecipientBankAccount(Base):
     __tablename__ = "recipient_bank_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
-    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=True)
     # Use a bounded String(34) for IBAN/account numbers to match raw tables and ISO IBAN max length
     account_number = Column(String(34), nullable=False, unique=True, index=True)
     bank_name = Column(Text, nullable=True)

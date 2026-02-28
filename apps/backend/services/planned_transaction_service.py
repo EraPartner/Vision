@@ -46,18 +46,18 @@ class PlannedTransactionService:
         self.planned_txn_repo = PlannedTransactionRepository(db)
 
     def create(
-            self,
-            planned_date: date,
-            bank_account: str,
-            recipient_id: int,
-            amount: float,
-            memo: Optional[str] = None,
-            currency: Optional[str] = None,
-            category_id: Optional[int] = None,
-            comment: Optional[str] = None,
-            url: Optional[str] = None,
-            is_recurring: bool = False,
-            recurrence_pattern: Optional[str] = None
+        self,
+        planned_date: date,
+        bank_account: str,
+        recipient_id: Optional[int],
+        amount: float,
+        memo: Optional[str] = None,
+        currency: Optional[str] = None,
+        category_id: Optional[int] = None,
+        comment: Optional[str] = None,
+        url: Optional[str] = None,
+        is_recurring: bool = False,
+        recurrence_pattern: Optional[str] = None
     ) -> PlannedTransaction:
         """Create a new planned transaction with validation.
 
@@ -108,6 +108,14 @@ class PlannedTransactionService:
             f"Creating planned transaction: planned_date={planned_date}, "
             f"recipient_id={recipient_id}, amount={amount}, recurring={is_recurring}"
         )
+
+        # Validate recipient if provided
+        if recipient_id is not None:
+            from repositories.recipient_repository import RecipientRepository
+            recipient_repo = RecipientRepository(self.db)
+            recipient = recipient_repo.get_by_id(recipient_id)
+            if not recipient:
+                raise ValueError(f"Recipient ID {recipient_id} not found")
 
         # Create planned transaction model
         planned_transaction = PlannedTransaction(
