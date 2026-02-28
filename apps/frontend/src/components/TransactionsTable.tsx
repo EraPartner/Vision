@@ -162,12 +162,24 @@ export function TransactionsTable({
                         className="max-w-[120px]"
                     />
                 ) : (
-                    <div className={`font-medium ${amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: currency,
-                        }).format(amount)}
-                    </div>
+                    // Use inline CSS variable to guarantee contrast for negative amounts
+                    amount < 0 ? (
+                        <div className="font-medium">
+                            <span style={{ color: 'hsl(var(--expense))' }}>
+                                {new Intl.NumberFormat('en-US', {
+                                    style: 'currency',
+                                    currency: currency,
+                                }).format(amount)}
+                            </span>
+                        </div>
+                    ) : (
+                        <div className={`font-medium ${'text-green-600 dark:text-green-300'}`}>
+                            {new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: currency,
+                            }).format(amount)}
+                        </div>
+                    )
                 );
             },
         },
@@ -212,7 +224,7 @@ export function TransactionsTable({
                                     variant="ghost"
                                     size="icon"
                                     onClick={saveEditing}
-                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    className="h-8 w-8 text-green-600 dark:text-green-300 hover:text-green-700 dark:hover:text-green-200 hover:bg-green-50"
                                 >
                                     <Check className="h-4 w-4"/>
                                 </Button>
@@ -220,7 +232,7 @@ export function TransactionsTable({
                                     variant="ghost"
                                     size="icon"
                                     onClick={cancelEditing}
-                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="h-8 w-8 text-red-600 dark:text-red-200 hover:text-red-700 dark:hover:text-red-100 hover:bg-red-50"
                                 >
                                     <X className="h-4 w-4"/>
                                 </Button>
@@ -239,7 +251,7 @@ export function TransactionsTable({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setDeleteId(row.original.id)}
-                                    className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                                    className="h-8 w-8 text-red-600 dark:text-red-200 hover:bg-red-50 hover:text-red-700 dark:hover:text-red-100"
                                 >
                                     <Trash2 className="h-4 w-4"/>
                                 </Button>
@@ -398,7 +410,8 @@ export function TransactionsTable({
                                     setDeleteId(null);
                                 }
                             }}
-                            className="bg-red-600 hover:bg-red-700"
+                            // Use slightly brighter red for dark mode confirmation button
+                            className="bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-400"
                         >
                             Delete
                         </AlertDialogAction>

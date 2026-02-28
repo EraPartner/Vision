@@ -111,17 +111,24 @@ export function TransactionsTable({transactions, onTransactionDeleted}: Transact
                     </span>
                                     </TableCell>
                                     <TableCell className="text-right">
-                    <span
-                        className={`text-sm font-bold ${transaction.amount < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {transaction.amount >= 0 ? '+' : ''}€{Math.abs(transaction.amount).toFixed(2)}
-                    </span>
+                    {/* Use inline CSS variable to guarantee contrast for negative amounts in dark mode */}
+                    {transaction.amount < 0 ? (
+                      <span className="text-sm font-bold negative-amount">
+                        {transaction.amount >= 0 ? '+' : ''}€{Math.abs(transaction.amount).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                        {transaction.amount >= 0 ? '+' : ''}€{Math.abs(transaction.amount).toFixed(2)}
+                      </span>
+                    )}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             onClick={() => handleDelete(transaction.id)}
-                                            className="h-8 w-8 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-400 transition-colors"
+                                            // Ensure delete hover/text is visible in dark mode
+                                            className="h-8 w-8 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-100 transition-colors"
                                         >
                                             <Trash2 className="h-4 w-4"/>
                                         </Button>

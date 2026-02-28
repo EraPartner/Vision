@@ -52,6 +52,9 @@ All colors MUST be HSL.
         --sidebar-accent-foreground: 240 5.9% 10%;
         --sidebar-border: 220 13% 91%;
         --sidebar-ring: 217.2 91.2% 59.8%;
+
+        /* Expense text color (H S% L%) -- used by amount spans to ensure contrast */
+        --expense: 0 84% 50%; /* default (light theme) */
     }
 
     .dark {
@@ -76,7 +79,7 @@ All colors MUST be HSL.
         --accent: 142 76% 36%;
         --accent-foreground: 0 0% 100%;
 
-        --destructive: 0 63% 31%;
+        --destructive: 0 100% 65%; /* bright red for negative amounts in dark mode */
         --destructive-foreground: 0 0% 100%;
 
         --border: 217 33% 20%;
@@ -97,6 +100,10 @@ All colors MUST be HSL.
         --sidebar-accent-foreground: 220 20% 97%;
         --sidebar-border: 217 33% 20%;
         --sidebar-ring: 217 91% 60%;
+
+        /* Brighter expense color for dark theme to improve visibility */
+        /* Make expense (negative amount) color extremely bright and saturated for dark backgrounds. */
+        --expense: 0 100% 65%;
     }
 
     * {
@@ -140,5 +147,16 @@ All colors MUST be HSL.
         background: rgba(0, 0, 0, 0.3);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Guarantee negative amount color is always correct, even if Tailwind or other classes interfere */
+    .negative-amount {
+      color: hsl(var(--expense)) !important;
+    }
+    :root .negative-amount {
+      color: hsl(var(--expense)) !important;
+    }
+    :root.dark .negative-amount {
+      color: #ff3333 !important; /* Global override: very bright red in dark mode */
     }
 }

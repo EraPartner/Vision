@@ -4,6 +4,8 @@ import {AppSidebar} from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+import {Sun, Moon} from "lucide-react";
+import {useTheme} from "@/contexts/ThemeContext";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -11,6 +13,7 @@ interface AppLayoutProps {
 
 export function AppLayout({children}: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     return (
         <SidebarProvider>
@@ -24,8 +27,17 @@ export function AppLayout({children}: AppLayoutProps) {
                         <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => toggleTheme()}
+                            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                            className="ml-auto mr-2"
+                        >
+                            {theme === 'dark' ? <Sun className="h-5 w-5"/> : <Moon className="h-5 w-5"/>}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setSettingsOpen(true)}
-                            className="ml-auto"
+                            className="ml-2"
                             title="Dashboard Settings"
                         >
                             <Settings className="h-5 w-5" />
