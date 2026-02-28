@@ -13,7 +13,8 @@ interface StatCardProps {
 export function StatCard({title, value, change, changeType = "neutral", icon: Icon, trend = "neutral"}: StatCardProps) {
     const changeColor = {
         positive: "text-emerald-600 dark:text-emerald-400",
-        negative: "text-rose-600 dark:text-rose-400",
+        // Use brighter rose in dark mode for better contrast
+        negative: "text-rose-600 dark:text-rose-300",
         neutral: "text-muted-foreground",
     }[changeType];
 
@@ -25,7 +26,8 @@ export function StatCard({title, value, change, changeType = "neutral", icon: Ic
 
     const iconBg = {
         income: "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400",
-        expense: "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-400",
+        // brighten the text/icon in dark mode
+        expense: "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300",
         neutral: "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400",
     }[trend];
 

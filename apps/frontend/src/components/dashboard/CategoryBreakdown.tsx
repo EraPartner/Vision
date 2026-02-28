@@ -17,7 +17,7 @@ export function CategoryBreakdown({ data }: CategoryBreakdownProps) {
     <Card className="border-none shadow-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 hover:shadow-2xl transition-shadow duration-300">
       <CardHeader className="space-y-3">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 dark:from-orange-400 dark:to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
             <BarChart3 className="h-6 w-6 text-white" />
           </div>
           <div className="flex-1">
@@ -44,7 +44,7 @@ export function CategoryBreakdown({ data }: CategoryBreakdownProps) {
                 </div>
                 <div className="relative h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-red-600 transition-all duration-500"
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-red-600 dark:from-orange-400 dark:to-red-500 transition-all duration-500"
                     style={{ width: `${percentage}%` }}
                   />
                 </div>

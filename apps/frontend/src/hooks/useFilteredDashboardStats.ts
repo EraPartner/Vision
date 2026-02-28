@@ -19,7 +19,7 @@ export function useFilteredDashboardStats() {
   return useQuery<FilteredDashboardStats>({
     queryKey: ['filteredDashboardStats', settings],
     queryFn: async () => {
-      // Fetch total transaction count
+      // Fetch total transaction count from the transaction-count endpoint
       const countData = await apiClient.getTransactionCount();
       
       // Fetch monthly financial summary (6 months)

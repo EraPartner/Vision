@@ -102,7 +102,8 @@ export function StatisticsCards({statistics}: StatisticsCardsProps) {
                 className="relative overflow-hidden border-none bg-gradient-to-br from-red-500 to-red-600 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"/>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-red-100">Total Expenses</CardTitle>
+                    {/* Use a slightly brighter red in dark mode for better contrast */}
+                    <CardTitle className="text-sm font-medium text-red-100 dark:text-red-200">Total Expenses</CardTitle>
                     <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                         <TrendingDown className="h-5 w-5 text-white"/>
                     </div>
@@ -111,8 +112,8 @@ export function StatisticsCards({statistics}: StatisticsCardsProps) {
                     <div className="text-3xl font-bold mb-1">
                         {formatCurrency(totalExpenses)}
                     </div>
-                    <p className="text-xs text-red-100 flex items-center gap-1">
-                        <span className="inline-block w-1 h-1 bg-red-200 rounded-full"/>
+                    <p className="text-xs text-red-100 dark:text-red-200 flex items-center gap-1">
+                        <span className="inline-block w-1 h-1 bg-red-200 dark:bg-red-400 rounded-full"/>
                         Outgoing transactions
                     </p>
                 </CardContent>

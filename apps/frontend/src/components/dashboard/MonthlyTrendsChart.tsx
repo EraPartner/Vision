@@ -122,10 +122,11 @@ export function MonthlyTrendsChart({ data }: MonthlyTrendsChartProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <div className="w-3 h-3 rounded-full flex-shrink-0 bg-red-500"></div>
+            <div className="w-3 h-3 rounded-full flex-shrink-0 bg-red-500 dark:bg-red-400"></div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-red-700 dark:text-red-300">Total Spending</p>
-              <p className="text-sm font-bold text-red-900 dark:text-red-100">€{totalSpending.toFixed(2)}</p>
+              {/* Brighter red text in dark mode for visibility */}
+              <p className="text-xs font-medium text-red-700 dark:text-red-200">Total Spending</p>
+              <p className="text-sm font-bold text-red-900 dark:text-red-50">€{totalSpending.toFixed(2)}</p>
             </div>
           </div>
         </div>
