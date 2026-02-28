@@ -55,6 +55,7 @@ class PlannedTransactionService:
             currency: Optional[str] = None,
             category_id: Optional[int] = None,
             comment: Optional[str] = None,
+            url: Optional[str] = None,
             is_recurring: bool = False,
             recurrence_pattern: Optional[str] = None
     ) -> PlannedTransaction:
@@ -72,6 +73,7 @@ class PlannedTransactionService:
             currency (Optional[str]): Currency code (EUR, USD, etc.), max 3 characters.
             category_id (Optional[int]): Category ID - must reference existing category if provided.
             comment (Optional[str]): Additional comment.
+            url (Optional[str]): URL associated with the transaction.
             is_recurring (bool): Whether this is a recurring transaction (default: False).
             recurrence_pattern (Optional[str]): Recurrence pattern (e.g., 'monthly', 'weekly').
 
@@ -117,6 +119,7 @@ class PlannedTransactionService:
             currency=currency,
             category_id=category_id,
             comment=comment,
+            url=url,
             is_recurring=is_recurring,
             recurrence_pattern=recurrence_pattern,
             is_executed=False,

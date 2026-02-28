@@ -44,6 +44,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [categoryId, setCategoryId] = useState<number | undefined>(initial?.category_id);
   const [bankAccount, setBankAccount] = useState(initial?.bank_account ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [url, setUrl] = useState(initial?.url ?? "");
   
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -96,6 +97,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       amount: parseFloat(amount),
       currency,
       due_date: dueDateStr,
+      url: url?.trim() || undefined,
       is_recurring: isRecurring,
       recipient_id: recipientId,
       category_id: categoryId,
@@ -266,6 +268,13 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             <div className="grid gap-1.5">
               <Label htmlFor="pp-notes">Notes</Label>
               <Textarea id="pp-notes" placeholder="Any additional details…" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+            </div>
+
+            {/* Optional Link */}
+            <div className="grid gap-1.5">
+              <Label htmlFor="pp-url">Link (optional)</Label>
+              <Input id="pp-url" placeholder="https://example.com/invoice/123" value={url} onChange={(e) => setUrl(e.target.value)} />
+              <p className="text-xs text-muted-foreground">An optional https:// or http:// URL related to this planned expense.</p>
             </div>
           </div>
         )}

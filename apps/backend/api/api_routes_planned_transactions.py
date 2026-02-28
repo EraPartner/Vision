@@ -184,6 +184,7 @@ async def create_planned_transaction(
             currency=planned_transaction_data.currency,
             category_id=planned_transaction_data.category_id,
             comment=planned_transaction_data.comment,
+            url=planned_transaction_data.url,
             is_recurring=planned_transaction_data.is_recurring,
             recurrence_pattern=planned_transaction_data.recurrence_pattern
         )

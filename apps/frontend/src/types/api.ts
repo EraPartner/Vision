@@ -164,6 +164,7 @@ export interface PlannedTransaction {
     category_id?: number;
     category_name?: string; // Category name in 'GENERAL:DETAIL' format
     comment?: string;
+    url?: string; // Optional URL associated with planned expense
     is_recurring: boolean;
     recurrence_pattern?: string;
     is_executed: boolean;
@@ -194,6 +195,7 @@ export interface PlannedTransactionCreate {
     currency?: string;
     category_id?: number;
     comment?: string;
+    url?: string;
     is_recurring?: boolean;
     recurrence_pattern?: string;
 }
@@ -209,6 +211,7 @@ export interface PlannedTransactionUpdate {
     category_id?: number;
     category_name?: string;
     comment?: string;
+    url?: string;
     is_recurring?: boolean;
     recurrence_pattern?: string;
     is_executed?: boolean;
