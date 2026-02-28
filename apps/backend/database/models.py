@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, Text, UniqueConstraint, ForeignKey, \
     Boolean, event, Index, CheckConstraint
+from sqlalchemy_utils import URLType
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 
@@ -450,6 +451,9 @@ class PlannedTransaction(Base):
     Each execution is tracked in the PlannedTransactionExecution table.
     """
     __tablename__ = "planned_transactions"
+    # Validate currency length and (defensive) URL prefix.
+    # URL validation is primarily handled by Pydantic (HttpUrl). This DB-level CHECK is a
+    # lightweight, portable guard to prevent obvious non-HTTP values from being stored.
     __table_args__ = (
         CheckConstraint("length(currency) = 3 OR currency IS NULL", name='ck_planned_transactions_currency_len'),
     )
@@ -463,6 +467,7 @@ class PlannedTransaction(Base):
     memo = Column(Text, nullable=True)
     comment = Column(Text, nullable=True)  # Additional notes
     bank_account = Column(Text, nullable=True, index=True)  # Target bank/account
+    url = Column(URLType, nullable=True)  # Optional hyperlink for planned expense (SQLAlchemy-Utils URLType)
 
     # Foreign keys
     recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=False)

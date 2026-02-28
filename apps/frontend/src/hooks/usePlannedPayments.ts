@@ -19,6 +19,7 @@ export interface PlannedPayment {
   category_id?: number;
   bank_account?: string;
   notes?: string;
+  url?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -53,6 +54,7 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     amount: pt.amount,
     currency: pt.currency || "EUR",
     due_date: pt.planned_date,
+    url: pt.url,
     is_recurring: pt.is_recurring,
     frequency: pt.is_recurring ? frequency : undefined,
     custom_interval_days,
@@ -92,6 +94,7 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     currency: payment.currency,
     category_id: payment.category_id,
     comment: payment.notes,
+    url: payment.url,
     is_recurring: payment.is_recurring,
     recurrence_pattern,
   };
@@ -109,6 +112,7 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
   if (updates.currency !== undefined) result.currency = updates.currency;
   if (updates.category_id !== undefined) result.category_id = updates.category_id;
   if (updates.notes !== undefined) result.comment = updates.notes;
+  if (updates.url !== undefined) result.url = updates.url;
   if (updates.is_recurring !== undefined) result.is_recurring = updates.is_recurring;
   if (updates.is_active !== undefined) result.is_active = updates.is_active;
   

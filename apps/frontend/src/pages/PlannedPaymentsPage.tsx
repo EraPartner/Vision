@@ -178,7 +178,19 @@ export default function PlannedPaymentsPage() {
             row.is_executed ? "text-muted-foreground line-through" : 
             "text-foreground"
           }`}>
-            {row.name}
+            <div className="flex items-center gap-2">
+              <span>{row.name}</span>
+              {row.url && (
+                <a href={row.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open related link" className="text-muted-foreground hover:text-primary">
+                  {/* small link icon */}
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-1.414 1.414a4 4 0 01-5.656-5.656l1.414-1.414" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7h6v6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 3l-6 6" />
+                  </svg>
+                </a>
+              )}
+            </div>
           </span>
           {row.recipient && (
             <span className="text-xs text-muted-foreground">→ {row.recipient}</span>

@@ -436,6 +436,7 @@ class PlannedTransactionBase(BaseModel):
     currency: Optional[str] = Field(None, description="Currency code (EUR, USD, etc.)", max_length=3, min_length=3)
     category_id: Optional[int] = Field(None, description="Category ID", ge=1)
     comment: Optional[str] = Field(None, description="Additional comment")
+    url: Optional[HttpUrl] = Field(None, description="Optional URL/link related to this planned expense (validated as an HTTP(S) URL)")
     is_recurring: bool = Field(False, description="Whether this is a recurring transaction")
     recurrence_pattern: Optional[str] = Field(None,
                                               description="Recurrence pattern (e.g., 'monthly', 'weekly', JSON pattern)")
@@ -483,6 +484,7 @@ class PlannedTransactionUpdate(BaseModel):
     category_name: Optional[str] = Field(None,
                                          description="Category name in 'General:Detail' format (will be resolved to category_id)")
     comment: Optional[str] = Field(None, description="Additional comment")
+    url: Optional[HttpUrl] = Field(None, description="Optional URL/link related to this planned expense (validated as an HTTP(S) URL)")
     is_recurring: Optional[bool] = Field(None, description="Whether this is a recurring transaction")
     recurrence_pattern: Optional[str] = Field(None, description="Recurrence pattern")
     is_executed: Optional[bool] = Field(None, description="Whether this has been executed")
@@ -542,6 +544,7 @@ class PlannedTransactionResponse(BaseModel):
     category_id: Optional[int] = Field(None, description="Category ID", ge=1)
     category_name: Optional[str] = Field(None, description="Category name in 'General:Detail' format")
     comment: Optional[str] = Field(None, description="Additional comment")
+    url: Optional[HttpUrl] = Field(None, description="Optional URL/link related to this planned expense")
     is_recurring: bool = Field(False, description="Whether this is a recurring transaction")
     recurrence_pattern: Optional[str] = Field(None, description="Recurrence pattern")
     is_executed: bool = Field(False, description="Whether currently pending execution (False = can execute)")
@@ -649,6 +652,7 @@ class PlannedTransactionData(BaseModel):
     recipient_name: Optional[str] = Field(None, description="Recipient name")
     category_name: Optional[str] = Field(None, description="Category name in 'General:Detail' format")
     memo: Optional[str] = Field(None, description="Transaction memo")
+    url: Optional[HttpUrl] = Field(None, description="Optional related URL for the planned transaction")
     is_recurring: bool = Field(description="Whether this is a recurring transaction")
 
 
