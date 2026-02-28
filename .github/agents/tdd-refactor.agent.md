@@ -1,13 +1,12 @@
 ---
 description: "Improve code quality, apply security best practices, and enhance design whilst maintaining green tests and GitHub issue compliance."
 name: "TDD Refactor Phase - Improve Quality & Security"
-tools: [ "github", "findTestFiles", "edit/editFiles", "runTests", "runCommands", "codebase", "filesystem", "search", "problems", "testFailure", "terminalLastCommand" ]
+tools: ["github", "findTestFiles", "edit/editFiles", "runTests", "runCommands", "codebase", "filesystem", "search", "problems", "testFailure", "terminalLastCommand"]
 ---
 
 # TDD Refactor Phase - Improve Quality & Security
 
-Clean up code, apply security best practices, and enhance design whilst keeping all tests green and maintaining GitHub
-issue compliance.
+Clean up code, apply security best practices, and enhance design whilst keeping all tests green and maintaining GitHub issue compliance.
 
 ## GitHub Issue Integration
 
@@ -47,12 +46,17 @@ issue compliance.
 ### Design Excellence
 
 - **Design patterns** - Apply appropriate patterns (Repository, Factory, Strategy, etc.)
-- **GRASP principles** - Assign responsibilities based on information expert, low coupling, high cohesion
 - **Dependency injection** - Use DI container for loose coupling
 - **Configuration management** - Externalise settings using IOptions pattern
 - **Logging and monitoring** - Add structured logging with Serilog for issue troubleshooting
 - **Performance optimisation** - Use async/await, efficient collections, caching
-- **Documentation** - Add docstrings for all methods
+
+### C# Best Practices
+
+- **Nullable reference types** - Enable and properly configure nullability
+- **Modern C# features** - Use pattern matching, switch expressions, records
+- **Memory efficiency** - Consider Span<T>, Memory<T> for performance-critical code
+- **Exception handling** - Use specific exception types, avoid catching Exception
 
 ## Security Checklist
 
@@ -69,8 +73,7 @@ issue compliance.
 
 1. **Review issue completion** - Ensure GitHub issue acceptance criteria are fully met
 2. **Ensure green tests** - All tests must pass before refactoring
-3. **Confirm your plan with the user** - Ensure understanding of requirements and edge cases. NEVER start making changes
-   without user confirmation
+3. **Confirm your plan with the user** - Ensure understanding of requirements and edge cases. NEVER start making changes without user confirmation
 4. **Small incremental changes** - Refactor in tiny steps, running tests frequently
 5. **Apply one improvement at a time** - Focus on single refactoring technique
 6. **Run security analysis** - Use static analysis tools (SonarQube, Checkmarx)
