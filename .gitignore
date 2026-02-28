@@ -16,6 +16,7 @@ dist/
 # Environment
 .env.local
 .env.production
+.env
 
 # IDE
 .vscode/
@@ -32,4 +33,7 @@ Thumbs.db
 build/
 *.log
 
-Data/
+apps/backend/Data/
+apps/backend/financial_transactions.db
+apps/backend/postgres_data/
+apps/backend/Backups/
