@@ -29,7 +29,7 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
   // Parse recurrence_pattern to extract frequency
   let frequency: PlannedPayment["frequency"] = "monthly";
   let custom_interval_days: number | undefined;
-  
+
   if (pt.recurrence_pattern) {
     const pattern = pt.recurrence_pattern.toLowerCase();
     if (pattern === "daily") frequency = "daily";
@@ -87,8 +87,8 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
 
   return {
     planned_date: payment.due_date,
-    bank_account: payment.bank_account || "Default Account",
-    recipient_id: payment.recipient_id || 1, // Backend requires recipient_id
+    bank_account: payment.bank_account || undefined,
+    recipient_id: payment.recipient_id || undefined,
     memo: payment.name,
     amount: payment.amount,
     currency: payment.currency,
@@ -103,7 +103,7 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
 // Map frontend PlannedPayment partial updates to backend format
 function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpdate {
   const result: PlannedTransactionUpdate = {};
-  
+
   if (updates.due_date !== undefined) result.planned_date = updates.due_date;
   if (updates.bank_account !== undefined) result.bank_account = updates.bank_account;
   if (updates.recipient_id !== undefined) result.recipient_id = updates.recipient_id;
@@ -115,7 +115,7 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
   if (updates.url !== undefined) result.url = updates.url;
   if (updates.is_recurring !== undefined) result.is_recurring = updates.is_recurring;
   if (updates.is_active !== undefined) result.is_active = updates.is_active;
-  
+
   // Handle recurrence_pattern
   if (updates.frequency !== undefined || updates.custom_interval_days !== undefined) {
     const freq = updates.frequency;
@@ -125,7 +125,7 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
       result.recurrence_pattern = freq;
     }
   }
-  
+
   return result;
 }
 
@@ -138,9 +138,9 @@ export function usePlannedPayments(showInactive: boolean = false) {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.getPlannedTransactions({ 
+      const response = await apiClient.getPlannedTransactions({
         active: !showInactive, // If showInactive is true, fetch all (active: false means fetch all including inactive)
-        limit: 1000 
+        limit: 1000
       });
       setPayments(response.items.map(mapFromAPI));
     } catch (err) {
@@ -191,9 +191,9 @@ export function usePlannedPayments(showInactive: boolean = false) {
     try {
       const payment = payments.find((p) => p.id === id);
       if (!payment) return;
-      
-      const updated = await apiClient.updatePlannedTransaction(id, { 
-        is_active: !payment.is_active 
+
+      const updated = await apiClient.updatePlannedTransaction(id, {
+        is_active: !payment.is_active
       });
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
     } catch (err) {
@@ -216,15 +216,15 @@ export function usePlannedPayments(showInactive: boolean = false) {
     }
   }, []);
 
-  return { 
-    payments, 
-    addPayment, 
-    updatePayment, 
-    deletePayment, 
-    toggleActive, 
+  return {
+    payments,
+    addPayment,
+    updatePayment,
+    deletePayment,
+    toggleActive,
     executePayment,
-    loading, 
-    error, 
-    refetch: fetchPayments 
+    loading,
+    error,
+    refetch: fetchPayments
   };
 }

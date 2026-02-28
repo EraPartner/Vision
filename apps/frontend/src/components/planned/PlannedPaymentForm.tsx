@@ -45,7 +45,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [bankAccount, setBankAccount] = useState(initial?.bank_account ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
-  
+
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,11 +72,11 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   }, [open]);
 
   const handleSubmit = () => {
-    if (!name.trim() || !amount || !dueDate || !recipientId) {
-      alert("Please fill in all required fields (Name, Amount, Due Date, and Recipient)");
+    if (!name.trim() || !amount || !dueDate) {
+      alert("Please fill in all required fields (Name, Amount, Due Date)");
       return;
     }
-    
+
     const year = dueDate.getFullYear();
     const month = String(dueDate.getMonth() + 1).padStart(2, '0');
     const day = String(dueDate.getDate()).padStart(2, '0');
@@ -90,7 +90,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       const eDay = String(endDate.getDate()).padStart(2, '0');
       endDateStr = `${eYear}-${eMonth}-${eDay}`;
     }
-    
+
 
     onSubmit({
       name: name.trim(),
@@ -99,7 +99,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       due_date: dueDateStr,
       url: url?.trim() || undefined,
       is_recurring: isRecurring,
-      recipient_id: recipientId,
+      recipient_id: recipientId || undefined,
       category_id: categoryId,
       bank_account: bankAccount || undefined,
       notes: notes || undefined,
@@ -167,14 +167,15 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
               </Popover>
             </div>
 
-            {/* Recipient (Required) */}
+            {/* Recipient (Optional) */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-recipient">Recipient *</Label>
-              <Select value={recipientId?.toString()} onValueChange={(v) => setRecipientId(parseInt(v))}>
+              <Label htmlFor="pp-recipient">Recipient</Label>
+              <Select value={recipientId != null ? String(recipientId) : "none"} onValueChange={(v) => setRecipientId(v === "none" ? undefined : parseInt(v))}>
                 <SelectTrigger id="pp-recipient">
-                  <SelectValue placeholder="Select a recipient" />
+                  <SelectValue placeholder="Select a recipient (optional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
                   {recipients.map((r) => (
                     <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
                   ))}
@@ -281,7 +282,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !amount || !dueDate || !recipientId}>
+          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !amount || !dueDate}>
             {initial ? "Save Changes" : "Create Payment"}
           </Button>
         </DialogFooter>
