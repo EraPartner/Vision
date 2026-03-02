@@ -22,7 +22,7 @@ from api import (
     planned_transactions_router
 )
 from api.api_schemas import RootOptionsResponse, APIRootResponse, MethodInfo
-from api.hateoas_links import get_root_links
+from apps.backend.services.hateoas_links import hateoas_service
 from config.config import get_settings
 from config.logging_config import setup_logging
 from database.connection import init_db, ensure_postgresql_database_exists
@@ -475,7 +475,7 @@ async def root_options(request: Request) -> RootOptionsResponse:
                 )
             ],
             description="API root discovery endpoint for Level 3 REST API (HATEOAS)",
-            links=get_root_links(request)
+            links=hateoas_service.get_root_links(request)
         )
     except Exception as e:
         logger.error(
@@ -548,7 +548,7 @@ async def root(request: Request) -> APIRootResponse:
             version=settings.api.version,
             title=settings.api.title,
             description=settings.api.description,
-            links=get_root_links(request),
+            links=hateoas_service.get_root_links(request),
         )
     except Exception as e:
         logger.error(

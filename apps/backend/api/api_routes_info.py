@@ -24,7 +24,7 @@ from api.api_schemas import (
     SupportedAdaptersResponse,
     BankAdapterInfo
 )
-from api.hateoas_links import get_base_url
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.bank_adapters import BANK_CONFIGURATIONS
@@ -46,7 +46,7 @@ def get_info_links(request: Request) -> list[Link]:
     Returns:
         List of Link objects describing available info endpoints
     """
-    base_url = get_base_url(request)
+    base_url = hateoas_service._get_base_url(request)
     return [
         Link(
             rel="self",

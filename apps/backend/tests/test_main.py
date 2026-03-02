@@ -337,7 +337,7 @@ class TestGlobalExceptionHandler:
 class TestRootEndpointErrorHandling:
     """Test error handling in root endpoints."""
 
-    @patch('main.get_root_links')
+    @patch('main.hateoas_service.get_root_links')
     @patch('main.logger')
     @pytest.mark.asyncio
     async def test_root_options_exception(self, mock_logger, mock_get_links):
@@ -360,7 +360,7 @@ class TestRootEndpointErrorHandling:
         # Verify error logging
         mock_logger.error.assert_called()
 
-    @patch('main.get_root_links')
+    @patch('main.hateoas_service.get_root_links')
     @patch('main.logger')
     @pytest.mark.asyncio
     async def test_root_get_exception(self, mock_logger, mock_get_links):
@@ -392,7 +392,7 @@ class TestRootEndpointErrorHandling:
         mock_request.headers.get.return_value = "test-agent"
 
         # This should work without raising an exception
-        with patch('main.get_root_links') as mock_get_links:
+        with patch('main.hateoas_service.get_root_links') as mock_get_links:
             mock_get_links.return_value = []
             response = await root_options(mock_request)
             assert response is not None
@@ -406,7 +406,7 @@ class TestRootEndpointErrorHandling:
         mock_request.headers.get.return_value = "test-agent"
 
         # This should work without raising an exception
-        with patch('main.get_root_links') as mock_get_links, \
+        with patch('main.hateoas_service.get_root_links') as mock_get_links, \
                 patch('main.settings') as mock_settings:
             mock_get_links.return_value = []
             mock_settings.api.version = "1.0.0"
@@ -1059,7 +1059,7 @@ class TestErrorHandling:
         # Should return 422 for validation error
         assert response.status_code == 422
 
-    @patch('main.get_root_links')
+    @patch('main.hateoas_service.get_root_links')
     def test_global_exception_handler_integration(self, mock_get_links, client: TestClient):
         """Test global exception handler through actual API call."""
         # Make get_root_links raise an exception to trigger global handler

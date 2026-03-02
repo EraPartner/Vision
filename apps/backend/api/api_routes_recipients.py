@@ -19,9 +19,7 @@ from api.api_schemas import (
     RecipientBase, RecipientUpdate, MessageResponse, OptionsResponse,
     MethodInfo, Link
 )
-from api.hateoas_links import (
-    get_resource_links, get_deletion_response_links, get_collection_links
-)
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.recipient_service import RecipientService
@@ -160,14 +158,14 @@ async def get_recipients(
         )
 
         for recipient in recipients:
-            recipient.links = get_resource_links(request, "recipients", recipient.id)
+            recipient.links = hateoas_service.get_resource_links(request, "recipients", recipient.id)
 
         return RecipientsListResponse(
             items=[RecipientResponse.model_validate(r) for r in recipients],
             total=total,
             limit=limit,
             offset=offset,
-            links=get_collection_links(
+            links=hateoas_service.get_collection_links(
                 request, "recipients", limit, offset, total,
                 name=name,
                 default_category_id=default_category_id, active=active
@@ -249,7 +247,7 @@ async def create_or_get_recipient(
                 notes=recipient.notes
             )
 
-        new_recipient.links = get_resource_links(request, "recipients", new_recipient.id)
+        new_recipient.links = hateoas_service.get_resource_links(request, "recipients", new_recipient.id)
 
         response = RecipientResponse.model_validate(new_recipient)
 
@@ -312,7 +310,7 @@ async def recipient_resource_options(
                 description="Discover available methods on this endpoint"
             )
         ],
-        links=get_resource_links(request, "recipients", recipient_id)
+        links=hateoas_service.get_resource_links(request, "recipients", recipient_id)
     )
 
 
@@ -344,7 +342,7 @@ async def get_recipient(
         recipient = service.get_by_id(recipient_id)
         if not recipient:
             raise HTTPException(status_code=404, detail="Recipient not found")
-        recipient.links = get_resource_links(request, "recipients", recipient.id)
+        recipient.links = hateoas_service.get_resource_links(request, "recipients", recipient.id)
         return RecipientResponse.model_validate(recipient)
     except HTTPException:
         raise
@@ -415,7 +413,7 @@ async def update_recipient(
         if not recipient:
             raise HTTPException(status_code=404, detail="Recipient not found")
         db.commit()
-        recipient.links = get_resource_links(request, "recipients", recipient.id)
+        recipient.links = hateoas_service.get_resource_links(request, "recipients", recipient.id)
         return RecipientResponse.model_validate(recipient)
     except HTTPException:
         raise
@@ -469,7 +467,7 @@ async def delete_recipient(
         return MessageResponse(
             message="Recipient deleted permanently",
             details={"method": "hard delete"},
-            links=get_deletion_response_links(request, "recipients")
+            links=hateoas_service.get_deletion_response_links(request, "recipients")
         )
     except HTTPException:
         raise

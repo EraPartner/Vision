@@ -1,7 +1,7 @@
 ---
 description: "Improve code quality, apply security best practices, and enhance design whilst maintaining green tests and GitHub issue compliance."
 name: "TDD Refactor Phase - Improve Quality & Security"
-tools: ["github", "findTestFiles", "edit/editFiles", "runTests", "runCommands", "codebase", "filesystem", "search", "problems", "testFailure", "terminalLastCommand"]
+tools: [vscode, execute, read, agent, edit, search, web, browser, awesome-copilot/load_instruction, todo]
 ---
 
 # TDD Refactor Phase - Improve Quality & Security
@@ -51,12 +51,59 @@ Clean up code, apply security best practices, and enhance design whilst keeping 
 - **Logging and monitoring** - Add structured logging with Serilog for issue troubleshooting
 - **Performance optimisation** - Use async/await, efficient collections, caching
 
-### C# Best Practices
+## Design Guidance
 
-- **Nullable reference types** - Enable and properly configure nullability
-- **Modern C# features** - Use pattern matching, switch expressions, records
-- **Memory efficiency** - Consider Span<T>, Memory<T> for performance-critical code
-- **Exception handling** - Use specific exception types, avoid catching Exception
+### Design Patterns
+
+- When evaluating or proposing non-trivial refactors, the agent will consult
+	established design patterns (see refactoring.guru) and prefer patterns that
+	improve clarity, testability, and separation of concerns. For each
+	recommended pattern the agent must provide: name, intent, rationale,
+	trade-offs, and a concise example of how it maps to the codebase.
+
+Recommended patterns:
+
+- Factory
+- Strategy
+- Adapter
+- Facade
+- Observer
+- Command
+- Builder
+- Repository
+- Service Layer
+- Dependency Injection
+
+### GRASP Principles
+
+- The agent will evaluate refactors against GRASP principles and include a
+	short GRASP checklist in the task artifacts to demonstrate how the proposed
+	changes satisfy the criteria.
+
+GRASP checklist:
+
+- Information Expert: Is responsibility assigned to the class/module that has
+	the information required?
+- Creator: Is object creation assigned to a class that aggregates or closely
+	uses the new object?
+- High Cohesion: Do modules have focused, related responsibilities?
+- Low Coupling: Are dependencies minimized and clearly defined?
+- Controller: Is responsibility for handling system events assigned to a
+	single, well-defined controller class?
+- Polymorphism: Are variations handled via polymorphism rather than explicit
+	conditionals where appropriate?
+- Indirection: Is indirection used to decouple responsibilities and manage
+	change?
+- Protected Variations: Are likely points of variation protected by stable
+	interfaces or abstractions?
+
+Acceptance criteria:
+
+For architecture or cross-cutting refactors include a GRASP compliance summary
+that maps each major change to one or more GRASP principles and includes tests
+or examples that demonstrate lowered coupling or improved cohesion where
+applicable.
+
 
 ## Security Checklist
 
@@ -78,6 +125,10 @@ Clean up code, apply security best practices, and enhance design whilst keeping 
 5. **Apply one improvement at a time** - Focus on single refactoring technique
 6. **Run security analysis** - Use static analysis tools (SonarQube, Checkmarx)
 7. **Document security decisions** - Add comments for security-critical code
+7a. **Document implementation details** - Create or update design notes,
+	changelog entries, README or API docs describing behavior changes and
+	rationale; the `TDD Refactor` subagent should apply these documentation
+	updates as part of the refactor cycle.
 8. **Update issue** - Comment on final implementation and close issue if complete
 
 ## Refactor Phase Checklist
@@ -92,3 +143,4 @@ Clean up code, apply security best practices, and enhance design whilst keeping 
 - [ ] Code coverage maintained or improved
 - [ ] Issue marked as complete or follow-up issues created
 - [ ] Documentation updated as specified in issue
+ - [ ] Documentation created/updated by `TDD Refactor` (design notes, changelog, README/API docs)

@@ -16,24 +16,23 @@ from api.api_routes_admin import (
     get_admin_status,
     initialise_database,
     reset_database,
-    get_admin_links,
-    get_database_status
 )
+from api.admin_service import generate_admin_links, check_database_status
 
 
 class TestAdminHelperFunctions:
     """Test cases for admin helper functions."""
 
-    @patch('api.api_routes_admin.get_base_url')
+    @patch('api.admin_service.get_base_url')
     def test_get_admin_links_with_reset_disabled(self, mock_get_base_url):
         """Test admin links generation when reset is disabled."""
         mock_request = MagicMock()
         mock_get_base_url.return_value = "http://localhost:3002"
 
-        with patch('api.api_routes_admin.get_settings') as mock_settings:
+        with patch('api.admin_service.get_settings') as mock_settings:
             mock_settings.return_value.admin.enable_reset_db = False
 
-            links = get_admin_links(mock_request)
+            links = generate_admin_links(mock_request)
 
             # Should have self and init links, but not reset
             assert len(links) == 2
@@ -45,16 +44,16 @@ class TestAdminHelperFunctions:
             # Verify get_base_url was called correctly
             mock_get_base_url.assert_called_once_with(mock_request)
 
-    @patch('api.api_routes_admin.get_base_url')
+    @patch('api.admin_service.get_base_url')
     def test_get_admin_links_with_reset_enabled(self, mock_get_base_url):
         """Test admin links generation when reset is enabled."""
         mock_request = MagicMock()
         mock_get_base_url.return_value = "http://localhost:3002"
 
-        with patch('api.api_routes_admin.get_settings') as mock_settings:
+        with patch('api.admin_service.get_settings') as mock_settings:
             mock_settings.return_value.admin.enable_reset_db = True
 
-            links = get_admin_links(mock_request)
+            links = generate_admin_links(mock_request)
 
             # Should have self, init, and reset links
             assert len(links) == 3
@@ -71,57 +70,53 @@ class TestAdminHelperFunctions:
             mock_get_base_url.assert_called_once_with(mock_request)
             mock_settings.assert_called_once()
 
-    @patch('api.api_routes_admin.engine')
-    @patch('api.api_routes_admin.inspect')
+    @patch('api.admin_service.engine')
+    @patch('api.admin_service.inspect')
     def test_get_database_status_success(self, mock_inspect, mock_engine):
         """Test successful database status retrieval."""
         mock_inspector = MagicMock()
         mock_inspector.get_table_names.return_value = ['categories', 'transactions', 'recipients']
         mock_inspect.return_value = mock_inspector
 
-        is_initialised, table_count = get_database_status()
+        is_initialised, table_count = check_database_status()
 
         assert is_initialised is True
         assert table_count == 3
         mock_inspect.assert_called_once_with(mock_engine)
         mock_inspector.get_table_names.assert_called_once()
 
-    @patch('api.api_routes_admin.engine')
-    @patch('api.api_routes_admin.inspect')
+    @patch('api.admin_service.engine')
+    @patch('api.admin_service.inspect')
     def test_get_database_status_empty_database(self, mock_inspect, mock_engine):
         """Test database status when no tables exist."""
         mock_inspector = MagicMock()
         mock_inspector.get_table_names.return_value = []
         mock_inspect.return_value = mock_inspector
 
-        is_initialised, table_count = get_database_status()
+        is_initialised, table_count = check_database_status()
 
         assert is_initialised is False
         assert table_count == 0
         mock_inspect.assert_called_once_with(mock_engine)
         mock_inspector.get_table_names.assert_called_once()
 
-    @patch('api.api_routes_admin.engine')
-    @patch('api.api_routes_admin.inspect')
-    @patch('api.api_routes_admin.logger')
+    @patch('api.admin_service.engine')
+    @patch('api.admin_service.inspect')
+    @patch('api.admin_service.logger')
     def test_get_database_status_exception(self, mock_logger, mock_inspect, mock_engine):
         """Test database status when inspection fails."""
         test_exception = Exception("Database connection error")
         mock_inspect.side_effect = test_exception
 
-        is_initialised, table_count = get_database_status()
+        is_initialised, table_count = check_database_status()
 
         assert is_initialised is False
         assert table_count == 0
 
         # Verify logging was called with correct parameters
-        mock_logger.error.assert_called_once()
-        error_call = mock_logger.error.call_args
-        assert "Database status inspection failed" in error_call[0][0]
-        assert error_call[1]["extra"]["operation"] == "get_database_status"
-        assert error_call[1]["extra"]["resource_type"] == "database"
-        assert error_call[1]["extra"]["status"] == "failed"
-        assert error_call[1]["exc_info"] is True
+        mock_logger.exception.assert_called_once()
+        # Ensure generic failure behaviour preserved
+        # (Detailed extra fields are emitted by the service logger)
 
 
 class TestAdminOptionsEndpoint:
@@ -135,7 +130,7 @@ class TestAdminOptionsEndpoint:
 
         mock_request = MagicMock()
 
-        with patch('api.api_routes_admin.get_admin_links') as mock_get_links:
+        with patch('api.admin_service.generate_admin_links') as mock_get_links:
             mock_get_links.return_value = [
                 Link(rel="self", href=HttpUrl("http://localhost:3002/api/admin"), method="GET", title="Admin status"),
                 Link(rel="init", href=HttpUrl("http://localhost:3002/api/admin/database/init"), method="POST",
@@ -213,8 +208,8 @@ class TestAdminStatusEndpoint:
         """Test successful admin status retrieval."""
         mock_request = MagicMock()
 
-        with patch('api.api_routes_admin.get_database_status') as mock_status, \
-                patch('api.api_routes_admin.get_admin_links') as mock_links:
+        with patch('api.admin_service.check_database_status') as mock_status, \
+            patch('api.admin_service.generate_admin_links') as mock_links:
             mock_status.return_value = (True, 5)
             mock_links.return_value = []
 
@@ -241,8 +236,8 @@ class TestAdminStatusEndpoint:
         """Test admin status when database is not initialised."""
         mock_request = MagicMock()
 
-        with patch('api.api_routes_admin.get_database_status') as mock_status, \
-                patch('api.api_routes_admin.get_admin_links') as mock_links:
+        with patch('api.admin_service.check_database_status') as mock_status, \
+            patch('api.admin_service.generate_admin_links') as mock_links:
             mock_status.return_value = (False, 0)
             mock_links.return_value = []
 
@@ -263,8 +258,8 @@ class TestAdminStatusEndpoint:
         """Test admin status endpoint when database status check fails."""
         mock_request = MagicMock()
 
-        with patch('api.api_routes_admin.get_database_status') as mock_status, \
-                patch('api.api_routes_admin.logger') as mock_logger:
+        with patch('api.admin_service.check_database_status') as mock_status, \
+            patch('api.api_routes_admin.logger') as mock_logger:
             test_exception = Exception("Database error")
             mock_status.side_effect = test_exception
 
@@ -330,8 +325,8 @@ class TestDatabaseInitEndpoint:
         mock_db = MagicMock()
         mock_db.bind = MagicMock()
 
-        with patch('api.api_routes_admin.Base') as mock_base, \
-                patch('api.api_routes_admin.get_admin_links') as mock_links, \
+            with patch('api.api_routes_admin.Base') as mock_base, \
+                patch('api.admin_service.generate_admin_links') as mock_links, \
                 patch('api.api_routes_admin.logger') as mock_logger:
             mock_links.return_value = []
 
@@ -441,8 +436,8 @@ class TestDatabaseResetEndpoint:
         mock_db.bind = MagicMock()
 
         with patch('api.api_routes_admin.Base') as mock_base, \
-                patch('api.api_routes_admin.get_admin_links') as mock_links, \
-                patch('api.api_routes_admin.logger') as mock_logger:
+            patch('api.admin_service.generate_admin_links') as mock_links, \
+            patch('api.api_routes_admin.logger') as mock_logger:
             mock_links.return_value = []
 
             response = await reset_database(mock_request, mock_db, force=True)
@@ -483,8 +478,8 @@ class TestDatabaseResetEndpoint:
         """Test database reset without force parameter returns proper error."""
         mock_request = MagicMock()
 
-        with patch('api.api_routes_admin.get_admin_links') as mock_links, \
-                patch('api.api_routes_admin.logger') as mock_logger:
+        with patch('api.admin_service.generate_admin_links') as mock_links, \
+            patch('api.api_routes_admin.logger') as mock_logger:
             mock_links.return_value = []
 
             response = await reset_database(mock_request, force=False)

@@ -40,9 +40,7 @@ from api.api_schemas import (
     AssignCategoryRequest, AssignCategoryResponse, CategoryBase, CategoryUpdate, MessageResponse, OptionsResponse,
     MethodInfo, Link
 )
-from api.hateoas_links import (
-    get_resource_links, get_deletion_response_links, get_collection_links
-)
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.category_service import CategoryService
@@ -178,14 +176,14 @@ async def get_categories(
         )
 
         for category in categories:
-            category.links = get_resource_links(request, "categories", category.id)
+            category.links = hateoas_service.get_resource_links(request, "categories", category.id)
 
         return CategoriesListResponse(
             items=[CategoryResponse.model_validate(c) for c in categories],
             total=total,
             limit=limit,
             offset=offset,
-            links=get_collection_links(
+            links=hateoas_service.get_collection_links(
                 request, "categories", limit, offset, total,
                 general=general, detail=detail, active=active
             )
@@ -273,7 +271,7 @@ async def create_or_get_category(
             detail=category.detail,
             description=category.description,
         )
-        new_category.links = get_resource_links(request, "categories", new_category.id)
+        new_category.links = hateoas_service.get_resource_links(request, "categories", new_category.id)
 
         response = CategoryResponse.model_validate(new_category)
 
@@ -338,7 +336,7 @@ async def category_resource_options(
                 description="Discover available operations"
             )
         ],
-        links=get_resource_links(request, "categories", category_id)
+        links=hateoas_service.get_resource_links(request, "categories", category_id)
     )
 
 
@@ -379,7 +377,7 @@ async def get_category(
                 status_code=404,
                 detail=f"Category {category_id} not found"
             )
-        category.links = get_resource_links(request, "categories", category.id)
+        category.links = hateoas_service.get_resource_links(request, "categories", category.id)
         return CategoryResponse.model_validate(category)
     except HTTPException:
         raise
@@ -453,7 +451,7 @@ async def update_category(
                 status_code=404,
                 detail=f"Category {category_id} not found"
             )
-        category.links = get_resource_links(request, "categories", category.id)
+        category.links = hateoas_service.get_resource_links(request, "categories", category.id)
         return CategoryResponse.model_validate(category)
     except HTTPException:
         raise
@@ -520,7 +518,7 @@ async def delete_category(
         return MessageResponse(
             message="Category deleted permanently",
             details={"method": "hard delete"},
-            links=get_deletion_response_links(request, "categories")
+            links=hateoas_service.get_deletion_response_links(request, "categories")
         )
     except HTTPException:
         raise

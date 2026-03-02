@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from api.api_schemas import (
     ImportResultWithLinks, OptionsResponse, MethodInfo, Link
 )
-from api.hateoas_links import get_import_result_links
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.csv_configuration_factory import CSVConfigurationFactory, CSVConfigurationError
@@ -216,7 +216,7 @@ async def import_csv_file(
         # Add HATEOAS links - convert batch_id to string as required by schema
         result_with_links = ImportResultWithLinks(
             **result,
-            links=get_import_result_links(request)
+            links=hateoas_service.get_import_result_links(request)
         )
 
         return result_with_links

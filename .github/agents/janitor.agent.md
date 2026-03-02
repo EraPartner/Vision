@@ -1,7 +1,7 @@
 ---
 description: 'Perform janitorial tasks on any codebase including cleanup, simplification, and tech debt remediation.'
 name: 'Universal Janitor'
-tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'vscode/extensions', 'web/fetch', 'findTestFiles', 'web/githubRepo', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'vscode/openSimpleBrowser', 'read/problems', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/getTaskOutput', 'execute/runTask', 'execute/runTests', 'search', 'search/searchResults', 'execute/testFailure', 'search/usages', 'vscode/vscodeAPI', 'microsoft.docs.mcp', 'github']
+tools: [vscode, execute, read, agent, edit, search, web, browser, github/delete_file, github/get_file_contents, github/search_code, awesome-copilot/load_instruction, todo]
 ---
 # Universal Janitor
 
@@ -61,15 +61,6 @@ Clean any codebase by eliminating tech debt. Every line of code is potential deb
 - Clean up environment-specific hardcoding
 - Consolidate similar infrastructure patterns
 
-## Research Tools
-
-Use `microsoft.docs.mcp` for:
-
-- Language-specific best practices
-- Modern syntax patterns
-- Performance optimization guides
-- Security recommendations
-- Migration strategies
 
 ## Execution Strategy
 
