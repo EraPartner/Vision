@@ -14,98 +14,24 @@ Security Considerations:
     - Audit logging enabled for all operations
 """
 from datetime import datetime, timezone
-from typing import List
-
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from fastapi.responses import JSONResponse
-from pydantic import HttpUrl
-from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-from api.api_schemas import MessageResponse, AdminStatusResponse, Link, OptionsResponse, MethodInfo
-from api.hateoas_links import get_base_url
+from api.api_schemas import MessageResponse, AdminStatusResponse, OptionsResponse, MethodInfo
 from config.config import get_settings
 from config.logging_config import setup_logging
-from database.connection import get_db, engine
-from database.models import Base
+from database.connection import get_db
+from services.admin_service import (
+    check_database_status,
+    perform_initialise,
+    perform_reset,
+)
+from services.hateoas_links import generate_admin_links
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = setup_logging(__name__)
 
-
-def get_admin_links(request: Request) -> List[Link]:
-    """Generate HATEOAS links for admin resources based on current configuration.
-
-    Links are dynamically generated based on enabled features. The reset link
-    is only included when explicitly enabled in configuration for safety.
-
-    Args:
-        request: FastAPI Request for constructing absolute URLs
-
-    Returns:
-        List of Link objects describing available administrative actions
-
-    Security Note:
-        Reset operations are only exposed when explicitly enabled via configuration.
-        Always restrict admin endpoints with proper authentication in production.
-    """
-    base_url = get_base_url(request)
-    links = [
-        Link(
-            rel="self",
-            href=HttpUrl(f"{base_url}/api/admin"),
-            method="GET",
-            title="Get current database administration status"
-        ),
-        Link(
-            rel="init",
-            href=HttpUrl(f"{base_url}/api/admin/database/init"),
-            method="POST",
-            title="Initialise the database"
-        ),
-    ]
-
-    settings = get_settings()
-    if settings.admin.enable_reset_db:
-        links.append(
-            Link(
-                rel="reset",
-                href=HttpUrl(f"{base_url}/api/admin/database/reset?force=true"),
-                method="POST",
-                title="Reset the database (DESTRUCTIVE - requires force parameter)"
-            )
-        )
-
-    return links
-
-
-def get_database_status(db: Session = None) -> tuple[bool, int]:
-    """Determine database initialisation status by inspecting table count.
-
-    Args:
-        db: Optional database session. If not provided, uses the global engine.
-
-    Returns:
-        Tuple of (is_initialised, table_count) where is_initialised indicates
-        whether any tables exist
-    """
-    try:
-        # Use the provided session's bind (engine) if available, otherwise use global engine
-        engine_to_inspect = db.bind if db else engine
-        inspector = inspect(engine_to_inspect)
-        tables = inspector.get_table_names()
-        return len(tables) > 0, len(tables)
-    except Exception as e:
-        logger.error(
-            "Database status inspection failed",
-            extra={
-                "operation": "get_database_status",
-                "resource_type": "database",
-                "status": "failed"
-            },
-            exc_info=True
-        )
-        return False, 0
 
 
 @router.options("", response_model=OptionsResponse, description="Discover available admin operations")
@@ -132,7 +58,7 @@ async def admin_options(request: Request):
                 description="Perform administrative actions (init or reset)"
             )
         ],
-        links=get_admin_links(request)
+        links=generate_admin_links(request)
     )
 
 
@@ -179,12 +105,12 @@ async def get_admin_status(request: Request, db: Session = Depends(get_db)):
         Lightweight operation - only inspects table metadata without querying data.
     """
     try:
-        is_initialised, table_count = get_database_status(db)
+        is_initialised, table_count = check_database_status(db)
         return AdminStatusResponse(
             is_initialised=is_initialised,
             table_count=table_count,
             timestamp=datetime.now(timezone.utc),
-            links=get_admin_links(request)
+            links=generate_admin_links(request)
         )
     except Exception as e:
         logger.error(
@@ -246,8 +172,7 @@ async def initialise_database(request: Request, db: Session = Depends(get_db)):
         Should require elevated privileges in production environments.
     """
     try:
-        # Create all tables using the session's engine
-        Base.metadata.create_all(bind=db.bind)
+        perform_initialise(db)
         logger.info(
             "Database initialised successfully",
             extra={
@@ -259,7 +184,7 @@ async def initialise_database(request: Request, db: Session = Depends(get_db)):
         return MessageResponse(
             message="Database initialised successfully",
             details={"note": "All tables created or verified"},
-            links=get_admin_links(request)
+            links=generate_admin_links(request)
         )
     except Exception as e:
         logger.error(
@@ -277,13 +202,19 @@ async def initialise_database(request: Request, db: Session = Depends(get_db)):
         )
 
 
+@router.post(
+    "/database/reset",
+    response_model=MessageResponse,
+    status_code=200,
+    description="Reset Database (DESTRUCTIVE)"
+)
 async def reset_database(
-        request: Request,
-        db: Session = Depends(get_db),
-        force: bool = Query(
-            False,
-            description="Must be true to confirm destructive operation"
-        )
+    request: Request,
+    db: Session = Depends(get_db),
+    force: bool = Query(
+        False,
+        description="Must be true to confirm destructive operation"
+    )
 ):
     """Reset database by dropping and recreating all tables (DESTRUCTIVE).
 
@@ -334,6 +265,11 @@ async def reset_database(
     Performance Note:
         Potentially slow operation depending on database size and constraints.
     """
+    settings = get_settings()
+
+    if not settings.admin.enable_reset_db:
+        raise HTTPException(status_code=404, detail="Database reset endpoint disabled")
+
     if not force:
         logger.warning(
             "Database reset rejected - force parameter not provided",
@@ -347,7 +283,7 @@ async def reset_database(
         error_response = MessageResponse(
             message="Database reset requires force=true parameter",
             details={"error": "Set force=true query parameter to confirm reset (DESTRUCTIVE)"},
-            links=get_admin_links(request)
+            links=generate_admin_links(request)
         )
         return JSONResponse(
             content=error_response.model_dump(),
@@ -363,9 +299,7 @@ async def reset_database(
                 "status": "in_progress"
             }
         )
-        # Use the session's engine for reset
-        Base.metadata.drop_all(bind=db.bind)
-        Base.metadata.create_all(bind=db.bind)
+        perform_reset(db)
         logger.info(
             "Database reset completed successfully",
             extra={
@@ -378,7 +312,7 @@ async def reset_database(
         return MessageResponse(
             message="Database reset successfully",
             details={"warning": "All previous data permanently deleted"},
-            links=get_admin_links(request)
+            links=generate_admin_links(request)
         )
     except Exception as e:
         logger.error(
@@ -394,14 +328,3 @@ async def reset_database(
             status_code=500,
             detail=f"Database reset failed: {str(e)}"
         )
-
-
-_settings = get_settings()
-if _settings.admin.enable_reset_db:
-    # Register reset endpoint only when explicitly enabled for safety
-    router.post(
-        "/database/reset",
-        response_model=MessageResponse,
-        status_code=200,
-        description="Reset Database (DESTRUCTIVE)"
-    )(reset_database)

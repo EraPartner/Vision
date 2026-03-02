@@ -19,9 +19,7 @@ from api.api_schemas import (
     PlannedTransactionExecuteRequest, OptionsResponse,
     MethodInfo, Link, MessageResponse
 )
-from api.hateoas_links import (
-    get_resource_links, get_collection_links
-)
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from repositories.planned_transaction_repository import PlannedTransactionRepository
@@ -126,7 +124,7 @@ async def get_planned_transactions(
         # Convert to response models
         items = []
         for pt in planned_transactions:
-            pt.links = get_resource_links(
+            pt.links = hateoas_service.get_resource_links(
                 request=request,
                 resource_type="planned-transactions",
                 resource_id=pt.id
@@ -136,7 +134,7 @@ async def get_planned_transactions(
             items.append(response)
 
         # Collection links
-        collection_links = get_collection_links(
+        collection_links = hateoas_service.get_collection_links(
             request=request,
             resource_type="planned-transactions",
             limit=limit,
@@ -190,7 +188,7 @@ async def create_planned_transaction(
         )
 
         # Generate HATEOAS links
-        planned_transaction.links = get_resource_links(
+        planned_transaction.links = hateoas_service.get_resource_links(
             request=request,
             resource_type="planned-transactions",
             resource_id=planned_transaction.id
@@ -347,7 +345,7 @@ async def update_planned_transaction(
         updated = repo.update(planned_transaction)
 
         # Generate HATEOAS links
-        updated.links = get_resource_links(
+        updated.links = hateoas_service.get_resource_links(
             request=request,
             resource_type="planned-transactions",
             resource_id=updated.id
@@ -396,7 +394,7 @@ async def execute_planned_transaction(
         db.refresh(updated)
 
         # Generate HATEOAS links
-        updated.links = get_resource_links(
+        updated.links = hateoas_service.get_resource_links(
             request=request,
             resource_type="planned-transactions",
             resource_id=updated.id
@@ -438,7 +436,7 @@ async def delete_planned_transaction(
             raise HTTPException(status_code=404, detail=f"Planned transaction {plannedTransactionId} not found")
 
         # Generate HATEOAS links
-        links = get_collection_links(
+        links = hateoas_service.get_collection_links(
             request=request,
             resource_type="planned-transactions",
             limit=50,

@@ -32,7 +32,6 @@ build/
 
 # Data
 
-Data/
 postgres_data/
 Backups/
 *.csv

@@ -21,9 +21,7 @@ from api.api_schemas import (
     TransactionCreate, TransactionUpdate, OptionsResponse,
     MethodInfo, Link, MessageResponse
 )
-from api.hateoas_links import (
-    get_resource_links, get_collection_links
-)
+from apps.backend.services.hateoas_links import hateoas_service
 from config.logging_config import setup_logging
 from database.connection import get_db
 from services.transaction_query_service import TransactionQueryService
@@ -222,7 +220,7 @@ async def get_transactions(
         # Build response with HATEOAS links
         transaction_responses = []
         for txn in transactions:
-            txn.links = get_resource_links(request, "transactions", txn.id)
+            txn.links = hateoas_service.get_resource_links(request, "transactions", txn.id)
             transaction_responses.append(TransactionResponse.model_validate(txn))
 
         # Build query parameters for pagination links
@@ -249,7 +247,7 @@ async def get_transactions(
             total=total,
             limit=limit,
             offset=offset,
-            links=get_collection_links(request, "transactions", limit, offset, total, **query_params)
+            links=hateoas_service.get_collection_links(request, "transactions", limit, offset, total, **query_params)
         )
 
     except ValueError as e:
@@ -394,7 +392,7 @@ async def create_transaction(
             }
         )
 
-        new_transaction.links = get_resource_links(request, "transactions", new_transaction.id)
+        new_transaction.links = hateoas_service.get_resource_links(request, "transactions", new_transaction.id)
         return TransactionResponse.model_validate(new_transaction)
 
     except ValueError as e:
@@ -471,7 +469,7 @@ async def get_transaction_by_id(
             }
         )
 
-        transaction.links = get_resource_links(request, "transactions", transaction.id)
+        transaction.links = hateoas_service.get_resource_links(request, "transactions", transaction.id)
         return TransactionResponse.model_validate(transaction)
 
     except HTTPException:
@@ -579,7 +577,7 @@ async def update_transaction(
             }
         )
 
-        updated_transaction.links = get_resource_links(request, "transactions", updated_transaction.id)
+        updated_transaction.links = hateoas_service.get_resource_links(request, "transactions", updated_transaction.id)
         return TransactionResponse.model_validate(updated_transaction)
 
     except ValueError as e:
@@ -646,7 +644,7 @@ async def delete_transaction(
     """
     try:
         from services.transaction_service import TransactionService
-        from api.hateoas_links import get_deletion_response_links
+        from apps.backend.services.hateoas_links import hateoas_service as _hateoas_service
 
         service = TransactionService(db)
         if not service.hard_delete(transaction_id):
@@ -672,7 +670,7 @@ async def delete_transaction(
         return MessageResponse(
             message="Transaction deleted permanently",
             details={"method": "hard delete"},
-            links=get_deletion_response_links(request, "transactions")
+            links=_hateoas_service.get_deletion_response_links(request, "transactions")
         )
 
     except HTTPException:
