@@ -922,6 +922,95 @@ export const infoRepository = {
       snapshots,
     };
   },
+
+  /**
+   * Recipient / Merchant Insights
+   *
+   * Returns:
+   * - top merchants by total spend (top 10)
+   * - spending frequency & average per recipient
+   * - month-over-month comparison alerts ("You spent X% more at …")
+   */
+  async getRecipientInsights() {
+    // Top recipients by absolute spending (negative amounts only)
+    const topResult = await query(`
+      SELECT
+        COALESCE(pr.name, r.name) AS recipient_name,
+        COALESCE(pr.id, r.id)     AS recipient_id,
+        COUNT(*)::int              AS transaction_count,
+        SUM(ABS(t.amount))        AS total_spend,
+        AVG(ABS(t.amount))        AS avg_amount,
+        MIN(t.date)               AS first_seen,
+        MAX(t.date)               AS last_seen
+      FROM transactions t
+      JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      WHERE t.amount < 0
+        AND t.is_active = true
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name)
+      ORDER BY total_spend DESC
+      LIMIT 20
+    `);
+
+    const topMerchants = topResult.rows.map(r => ({
+      recipientId: r.recipient_id,
+      name: r.recipient_name,
+      totalSpend: Math.round(parseFloat(r.total_spend) * 100) / 100,
+      transactionCount: r.transaction_count,
+      avgAmount: Math.round(parseFloat(r.avg_amount) * 100) / 100,
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+    }));
+
+    // Month-over-month comparison for top recipients (current vs previous month)
+    const momResult = await query(`
+      WITH months AS (
+        SELECT
+          COALESCE(pr.id, r.id) AS rid,
+          COALESCE(pr.name, r.name) AS rname,
+          TO_CHAR(t.date, 'YYYY-MM') AS period,
+          SUM(ABS(t.amount)) AS spend
+        FROM transactions t
+        JOIN recipients r ON t.recipient_id = r.id
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+        WHERE t.amount < 0
+          AND t.is_active = true
+          AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+        GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM')
+      ),
+      current_month AS (
+        SELECT * FROM months WHERE period = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+      ),
+      previous_month AS (
+        SELECT * FROM months WHERE period = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
+      )
+      SELECT
+        c.rid AS recipient_id,
+        c.rname AS recipient_name,
+        c.spend AS current_spend,
+        COALESCE(p.spend, 0) AS previous_spend,
+        CASE WHEN COALESCE(p.spend, 0) > 0
+          THEN ROUND(((c.spend - p.spend) / p.spend * 100)::numeric, 1)
+          ELSE NULL
+        END AS change_percent
+      FROM current_month c
+      LEFT JOIN previous_month p ON c.rid = p.rid
+      ORDER BY c.spend DESC
+      LIMIT 10
+    `);
+
+    const monthOverMonth = momResult.rows
+      .filter(r => r.change_percent !== null)
+      .map(r => ({
+        recipientId: r.recipient_id,
+        name: r.recipient_name,
+        currentSpend: Math.round(parseFloat(r.current_spend) * 100) / 100,
+        previousSpend: Math.round(parseFloat(r.previous_spend) * 100) / 100,
+        changePercent: parseFloat(r.change_percent),
+      }));
+
+    return { topMerchants, monthOverMonth };
+  },
 };
 
 export default infoRepository;
