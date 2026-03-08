@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock,
+  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
@@ -16,6 +16,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+
+interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string;
+  publishedAt: number | null;
+  thumbnail: string | null;
+  relatedSymbols: string[];
+}
 
 const RANGES = [
   { label: "1D", range: "1d", interval: "5m" },
