@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +7,10 @@ import {
 } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { useSettings } from "@/contexts/SettingsContext";
+import { Badge } from "@/components/ui/badge";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -32,11 +35,27 @@ function formatCurrency(val: number) {
 }
 
 export default function RecipientInsightsPage() {
+  const { settings } = useSettings();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights"],
     queryFn: () => apiClient.getRecipientInsights(),
     staleTime: 60000,
   });
+
+  // Check if exclusions apply
+  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
+  const excludedRecipientIds = new Set(exclusionsApply ? settings.excludedRecipientIds : []);
+
+  // Filter data based on excluded recipients
+  const filteredData = useMemo(() => {
+    if (!data) return null;
+    if (excludedRecipientIds.size === 0) return data;
+
+    return {
+      topMerchants: data.topMerchants.filter(m => !excludedRecipientIds.has(m.recipientId)),
+      monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
+    };
+  }, [data, excludedRecipientIds]);
 
   if (isLoading) {
     return (
@@ -52,7 +71,7 @@ export default function RecipientInsightsPage() {
     );
   }
 
-  if (isError || !data) {
+  if (isError || !filteredData) {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
@@ -61,7 +80,7 @@ export default function RecipientInsightsPage() {
     );
   }
 
-  const top10 = data.topMerchants.slice(0, 10);
+  const top10 = filteredData.topMerchants.slice(0, 10);
   const chartData = top10.map(m => ({
     name: m.name.length > 18 ? m.name.slice(0, 16) + "…" : m.name,
     fullName: m.name,
@@ -72,21 +91,29 @@ export default function RecipientInsightsPage() {
   const totalTopTx = top10.reduce((s, m) => s + m.transactionCount, 0);
   const avgTopAmount = totalTopTx > 0 ? totalTopSpend / totalTopTx : 0;
 
-  const increases = data.monthOverMonth.filter(m => m.changePercent > 0);
-  const decreases = data.monthOverMonth.filter(m => m.changePercent < 0);
+  const increases = filteredData.monthOverMonth.filter(m => m.changePercent > 0);
+  const decreases = filteredData.monthOverMonth.filter(m => m.changePercent < 0);
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
-        <p className="text-muted-foreground mt-1">Understand where your money goes by merchant</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
+          <p className="text-muted-foreground mt-1">Understand where your money goes by recipient</p>
+        </div>
+        {excludedRecipientIds.size > 0 && (
+          <Badge variant="secondary" className="gap-1.5">
+            <Filter className="h-3 w-3" />
+            {excludedRecipientIds.size} excluded
+          </Badge>
+        )}
       </div>
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Top Merchant</CardTitle>
+            <CardTitle className="text-sm font-medium">Top Recipient</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -113,7 +140,7 @@ export default function RecipientInsightsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(avgTopAmount)}</div>
-            <p className="text-xs text-muted-foreground">across top 10 merchants</p>
+            <p className="text-xs text-muted-foreground">across top 10 recipients</p>
           </CardContent>
         </Card>
       </div>
@@ -121,8 +148,8 @@ export default function RecipientInsightsPage() {
       {/* Top 10 Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Top 10 Merchants by Spend</CardTitle>
-          <CardDescription>Total spending per merchant across all time</CardDescription>
+          <CardTitle>Top 10 Recipients by Spend</CardTitle>
+          <CardDescription>Total spending per recipient across all time</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>
@@ -147,11 +174,11 @@ export default function RecipientInsightsPage() {
       </Card>
 
       {/* Month over month alerts */}
-      {data.monthOverMonth.length > 0 && (
+      {filteredData.monthOverMonth.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Month-over-Month Changes</CardTitle>
-            <CardDescription>How your spending at top merchants changed vs. last month</CardDescription>
+            <CardDescription>How your spending at top recipients changed vs. last month</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {increases.length > 0 && (
@@ -197,7 +224,7 @@ export default function RecipientInsightsPage() {
       {/* Detailed table */}
       <Card>
         <CardHeader>
-          <CardTitle>Merchant Details</CardTitle>
+          <CardTitle>Recipient Details</CardTitle>
           <CardDescription>Spending frequency and average transaction size</CardDescription>
         </CardHeader>
         <CardContent>
@@ -205,7 +232,7 @@ export default function RecipientInsightsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8">#</TableHead>
-                <TableHead>Merchant</TableHead>
+                <TableHead>Recipient</TableHead>
                 <TableHead className="text-right">Total Spend</TableHead>
                 <TableHead className="text-right">Transactions</TableHead>
                 <TableHead className="text-right">Avg Amount</TableHead>
@@ -214,7 +241,7 @@ export default function RecipientInsightsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.topMerchants.map((m, i) => (
+              {filteredData.topMerchants.map((m, i) => (
                 <TableRow key={m.recipientId}>
                   <TableCell className="font-medium text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{m.name}</TableCell>
