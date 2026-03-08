@@ -13,6 +13,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function SavingsPage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
   const totalBalance = accounts.reduce((s, a) => s + a.currentValue, 0);
