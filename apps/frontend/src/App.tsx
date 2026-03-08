@@ -75,6 +75,7 @@ const App = () => {
                                                 <Route path="/import" element={<ImportPage/>}/>
                                                 {/* Portfolio */}
                                                 <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
+                                                <Route path="/portfolio/market" element={<MarketLookupPage/>}/>
                                                 <Route path="/portfolio/stocks" element={<StocksPage/>}/>
                                                 <Route path="/portfolio/crypto" element={<CryptoPage/>}/>
                                                 <Route path="/portfolio/real-estate" element={<RealEstatePage/>}/>
