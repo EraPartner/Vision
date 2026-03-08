@@ -111,5 +111,7 @@ export default function RealEstatePage() {
         ))}
       </div>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

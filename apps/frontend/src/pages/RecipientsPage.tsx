@@ -289,5 +289,7 @@ export default function RecipientsPage() {
                 recipients={data?.items ?? []}
             />
         </div>
+        <ConfirmDialog />
+    </>
     );
 }

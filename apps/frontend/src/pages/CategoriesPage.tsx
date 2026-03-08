@@ -216,5 +216,7 @@ export default function CategoriesPage() {
                 </CardContent>
             </Card>
         </div>
+        <ConfirmDialog />
+    </>
     );
 }

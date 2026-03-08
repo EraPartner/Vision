@@ -102,5 +102,7 @@ export default function SavingsPage() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

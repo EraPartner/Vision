@@ -162,5 +162,7 @@ export default function PortfolioOverviewPage() {
         </>
       )}
     </div>
+    <ConfirmDialog />
+    </>
   );
 }
