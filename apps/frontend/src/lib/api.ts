@@ -155,7 +155,6 @@ class ApiClient {
         limit?: number;
         offset?: number;
         name?: string;
-        account_number?: string;
         default_category_id?: number;
         active?: boolean;
     }): Promise<RecipientsListResponse> {
