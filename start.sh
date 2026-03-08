@@ -2,7 +2,8 @@
 
 ###############################################################################
 # Finance Tracker - Full Startup Script
-# Starts: PostgreSQL → Node.js Backend → Vite Frontend
+# Starts: PostgreSQL → Backend → Vite Frontend
+# Uses bun as the runtime
 ###############################################################################
 
 set -e
@@ -22,6 +23,12 @@ NC='\033[0m'
 cleanup() {
     echo ""
     echo "${BLUE}🛑 Shutting down...${NC}"
+
+    # Stop frontend
+    if [ -n "$FRONTEND_PID" ] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        kill "$FRONTEND_PID" 2>/dev/null
+        echo "${GREEN}✓${NC} Frontend stopped"
+    fi
 
     # Stop backend
     if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
@@ -67,18 +74,18 @@ else
     fi
 fi
 
-# ==================== 2. Node.js Backend ====================
+# ==================== 2. Backend ====================
 
-echo "${BLUE}[2/3]${NC} Starting Node.js backend API..."
+echo "${BLUE}[2/3]${NC} Starting backend API..."
 cd "$PROJECT_ROOT/apps/node-backend"
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
     echo "  Installing backend dependencies..."
-    npm install --silent
+    bun install
 fi
 
-node src/main.js > /tmp/backend.log 2>&1 &
+bun run src/main.js > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 cd "$PROJECT_ROOT"
 
@@ -100,7 +107,7 @@ done
 # ==================== 3. Vite Frontend ====================
 
 echo "${BLUE}[3/3]${NC} Starting frontend..."
-echo "${GREEN}✓${NC} All services starting. Frontend at http://localhost:5174"
+echo "${GREEN}✓${NC} All services starting. Frontend at http://localhost:8080"
 echo ""
 
-npx vite --config config/vite.config.ts
+bunx vite --config config/vite.config.ts
