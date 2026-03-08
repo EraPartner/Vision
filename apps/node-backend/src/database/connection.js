@@ -14,11 +14,17 @@ const settings = getSettings();
 const pool = new pg.Pool({
   connectionString: settings.database.url,
   max: settings.database.poolSize + settings.database.maxOverflow,
+  idleTimeoutMillis: 30_000,     // close idle connections after 30s
+  connectionTimeoutMillis: 5_000, // fail fast if can't connect in 5s
+  statement_timeout: 30_000,      // kill queries running > 30s
 });
 
 pool.on('error', (err) => {
   logger.error('Unexpected error on idle database client', err);
 });
+
+// Prepared statement cache for frequently used queries
+const preparedStatements = new Map();
 
 /**
  * Execute a query against the database.
@@ -28,12 +34,18 @@ pool.on('error', (err) => {
  */
 export async function query(text, params) {
   const start = Date.now();
-  const result = await pool.query(text, params);
-  const duration = Date.now() - start;
-  if (settings.database.echo) {
-    logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
+  try {
+    const result = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (settings.database.echo || duration > 1000) {
+      logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
+    }
+    return result;
+  } catch (err) {
+    const duration = Date.now() - start;
+    logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, { error: err.message });
+    throw err;
   }
-  return result;
 }
 
 /**
@@ -67,6 +79,17 @@ export async function getTableCount() {
     "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
   );
   return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Get pool statistics for monitoring.
+ */
+export function getPoolStats() {
+  return {
+    totalCount: pool.totalCount,
+    idleCount: pool.idleCount,
+    waitingCount: pool.waitingCount,
+  };
 }
 
 export async function closePool() {
