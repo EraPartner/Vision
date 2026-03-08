@@ -431,57 +431,61 @@ export function VirtualDataTable<T extends Record<string, any>>({
                         </div>
                     ) : (
                         <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
-                            <Table style={{ tableLayout: "fixed" }}>
-                                <TableBody>
                                     {virtualizer.getVirtualItems().map((virtualRow) => {
                                         const row = processedData[virtualRow.index];
                                         const idx = virtualRow.index;
                                         const isEditing = editingRow === idx;
 
                                         return (
-                                            <TableRow
+                                            <div
                                                 key={virtualRow.key}
                                                 data-index={virtualRow.index}
                                                 ref={virtualizer.measureElement}
-                                                className={`transition-colors ${isEditing ? "bg-primary/5" : ""}`}
+                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""}`}
                                                 style={{
                                                     position: "absolute",
                                                     top: 0,
                                                     left: 0,
                                                     width: "100%",
                                                     transform: `translateY(${virtualRow.start}px)`,
-                                                    display: "table-row",
                                                 }}
                                             >
-                                                {columns.map((col) => (
-                                                    <TableCell key={col.key} className={col.className || ""}>
-                                                        {isEditing && col.editable ? (
-                                                            <Input
-                                                                type={col.type || "text"}
-                                                                value={editValues[col.key] ?? ""}
-                                                                onChange={(e) =>
-                                                                    setEditValues((prev) => ({
-                                                                        ...prev,
-                                                                        [col.key]: col.type === "number"
-                                                                            ? parseFloat(e.target.value) || 0
-                                                                            : e.target.value,
-                                                                    }))
-                                                                }
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === "Enter") { e.preventDefault(); saveEditing(idx); }
-                                                                    else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
-                                                                }}
-                                                                className="h-8 text-sm"
-                                                            />
-                                                        ) : col.render ? (
-                                                            col.render(row, isEditing, idx)
-                                                        ) : (
-                                                            String(row[col.key] ?? "")
-                                                        )}
-                                                    </TableCell>
-                                                ))}
+                                                {columns.map((col) => {
+                                                    const width = columnWidths[col.key];
+                                                    return (
+                                                        <div
+                                                            key={col.key}
+                                                            className={`px-4 py-2 text-sm flex-1 min-w-0 ${col.className || ""}`}
+                                                            style={width ? { width: `${width}px`, flex: "none" } : undefined}
+                                                        >
+                                                            {isEditing && col.editable ? (
+                                                                <Input
+                                                                    type={col.type || "text"}
+                                                                    value={editValues[col.key] ?? ""}
+                                                                    onChange={(e) =>
+                                                                        setEditValues((prev) => ({
+                                                                            ...prev,
+                                                                            [col.key]: col.type === "number"
+                                                                                ? parseFloat(e.target.value) || 0
+                                                                                : e.target.value,
+                                                                        }))
+                                                                    }
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === "Enter") { e.preventDefault(); saveEditing(idx); }
+                                                                        else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
+                                                                    }}
+                                                                    className="h-8 text-sm"
+                                                                />
+                                                            ) : col.render ? (
+                                                                col.render(row, isEditing, idx)
+                                                            ) : (
+                                                                String(row[col.key] ?? "")
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                                 {hasEditableColumns && (
-                                                    <TableCell className="text-right">
+                                                    <div className="px-4 py-2 text-right" style={{ width: "96px", flex: "none" }}>
                                                         {isEditing ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <Button variant="ghost" size="icon"
@@ -502,13 +506,11 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
                                                         )}
-                                                    </TableCell>
+                                                    </div>
                                                 )}
-                                            </TableRow>
+                                            </div>
                                         );
                                     })}
-                                </TableBody>
-                            </Table>
                         </div>
                     )}
 
