@@ -249,7 +249,9 @@ export const infoRepository = {
       LEFT JOIN recipients r ON t.recipient_id = r.id
       ORDER BY m.month_start, t.date
     `;
+    logger.debug('Monthly summary SQL executing', { excludeClause: excludeClause || '(none)', paramCount: validIds.length });
     const result = await query(sql, validIds);
+    logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
     // Group by month and convert amounts
     const monthMap = {};
