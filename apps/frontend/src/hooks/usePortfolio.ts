@@ -117,6 +117,19 @@ export function usePortfolio() {
     deleteTxnMutation.mutate(id);
   }, [deleteTxnMutation]);
 
+  const refreshPricesMutation = useMutation({
+    mutationFn: () => apiClient.refreshInvestmentPrices(),
+    onSuccess: (data) => {
+      invalidateAll();
+      toast.success(`Updated prices for ${data.updated} investment(s)`);
+    },
+    onError: (err: Error) => toast.error(`Failed to refresh prices: ${err.message}`),
+  });
+
+  const refreshPrices = useCallback(() => {
+    refreshPricesMutation.mutate();
+  }, [refreshPricesMutation]);
+
   // ---- computed summaries ----
 
   const summaries: InvestmentSummary[] = useMemo(() => {
