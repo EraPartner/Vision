@@ -49,7 +49,7 @@ export function AddCategoryDialog() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="description">Description (optional)</Label>
-                        <Textarea id="description" placeholder="Category description..." value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
+                        <Textarea id="description" placeholder="Category description..." maxLength={500} value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
                     </div>
                     <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

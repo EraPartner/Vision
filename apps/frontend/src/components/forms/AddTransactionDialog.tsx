@@ -125,7 +125,7 @@ export function AddTransactionDialog() {
 
                     <div className="space-y-2">
                         <Label htmlFor="tx_comment">Comment (optional)</Label>
-                        <Textarea id="tx_comment" placeholder="Additional notes..." value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
+                        <Textarea id="tx_comment" placeholder="Additional notes..." maxLength={1000} value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
                     </div>
 
                     <div className="flex justify-end gap-2">

@@ -48,7 +48,7 @@ export function AddRecipientDialog() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="notes">Notes (optional)</Label>
-                        <Textarea id="notes" placeholder="Additional notes..." value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
+                        <Textarea id="notes" placeholder="Additional notes..." maxLength={1000} value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
                     </div>
                     <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
