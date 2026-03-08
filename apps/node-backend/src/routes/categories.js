@@ -86,7 +86,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 });
 
 // DELETE /api/categories/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const deleted = await categoryRepository.hardDelete(id);
