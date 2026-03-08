@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, TrendingUp } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("en-US", {
