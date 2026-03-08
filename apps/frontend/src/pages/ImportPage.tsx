@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -26,7 +27,18 @@ import {
   Loader2,
   Trash2,
   Upload,
+  XCircle,
 } from "lucide-react";
+
+interface ImportProgress {
+  phase: string;
+  current: number;
+  total: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  percent: number;
+}
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +46,8 @@ export default function ImportPage() {
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const abortRef = useRef<(() => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch supported parsers from backend
@@ -128,11 +142,13 @@ export default function ImportPage() {
     }
 
     setLoading(true);
+    setProgress({ phase: 'connecting', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 0 });
+
     try {
       let data;
       
       if (bankSource === "custom") {
-        // Call custom import endpoint with configuration
+        // Custom config uses the non-streaming endpoint (no raw table)
         data = await apiClient.importCSVCustom(
           file,
           bank,
@@ -145,9 +161,17 @@ export default function ImportPage() {
           customConfig.encoding,
           customConfig.skipRows
         );
+        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: data.errors || 0, percent: 100 });
       } else {
-        // Call standard import endpoint for predefined banks
-        data = await apiClient.importCSV(file, bank);
+        // Use streaming import with SSE progress
+        const { abort, result } = apiClient.importCSVWithProgress(
+          file,
+          bank,
+          (p) => setProgress(p),
+        );
+        abortRef.current = abort;
+        data = await result;
+        abortRef.current = null;
       }
 
       toast.success(`Successfully imported ${data.imported} transactions!`, {
@@ -157,7 +181,6 @@ export default function ImportPage() {
       setFile(null);
       setBankSource("");
       setCustomBank("");
-      // Reset custom config
       setCustomConfig({
         dateColumn: "",
         dateFormat: "%Y-%m-%d",
@@ -172,8 +195,19 @@ export default function ImportPage() {
       const message =
         error instanceof Error ? error.message : "Failed to import CSV";
       toast.error(message);
+      setProgress((p) => p ? { ...p, phase: 'error' } : null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelImport = () => {
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+      setLoading(false);
+      setProgress(null);
+      toast.info("Import cancelled.");
     }
   };
 
@@ -555,25 +589,83 @@ export default function ImportPage() {
             </div>
           </div>
 
-          {/* Import button */}
-          <Button
-            onClick={handleImport}
-            disabled={!file || loading}
-            className="w-full h-11"
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Importing…
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Import Transactions
-              </>
+          {/* Progress indicator */}
+          {progress && loading && (
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground font-medium capitalize">
+                  {progress.phase === 'counting' && 'Analyzing file…'}
+                  {progress.phase === 'parsing' && 'Parsing CSV…'}
+                  {progress.phase === 'importing' && `Importing transactions…`}
+                  {progress.phase === 'connecting' && 'Connecting…'}
+                </span>
+                <span className="text-foreground font-semibold">{progress.percent}%</span>
+              </div>
+              <Progress value={progress.percent} className="h-2" />
+              {progress.phase === 'importing' && progress.total > 0 && (
+                <div className="flex gap-4 text-xs text-muted-foreground">
+                  <span>{progress.current} / {progress.total} rows</span>
+                  <span className="text-green-600 dark:text-green-400">✓ {progress.imported} imported</span>
+                  <span className="text-amber-600 dark:text-amber-400">⊘ {progress.duplicates} duplicates</span>
+                  {progress.errors > 0 && (
+                    <span className="text-destructive">✗ {progress.errors} errors</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Import complete summary */}
+          {progress && !loading && progress.phase === 'complete' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-green-800 dark:text-green-300">Import complete</p>
+                <p className="text-green-700 dark:text-green-400">
+                  {progress.imported} imported, {progress.duplicates} duplicates, {progress.errors} errors
+                </p>
+              </div>
+            </div>
+          )}
+
+          {progress && !loading && progress.phase === 'error' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+              <XCircle className="h-5 w-5 text-destructive shrink-0" />
+              <p className="text-sm font-medium text-destructive">Import failed. Please try again.</p>
+            </div>
+          )}
+
+          {/* Import / Cancel button */}
+          <div className="flex gap-2">
+            <Button
+              onClick={handleImport}
+              disabled={!file || loading}
+              className="flex-1 h-11"
+              size="lg"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import Transactions
+                </>
+              )}
+            </Button>
+            {loading && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-11"
+                onClick={handleCancelImport}
+              >
+                Cancel
+              </Button>
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
 

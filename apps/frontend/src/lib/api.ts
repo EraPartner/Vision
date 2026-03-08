@@ -27,6 +27,25 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
+export interface ImportProgress {
+  phase: string;
+  current: number;
+  total: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  percent: number;
+}
+
+export interface ImportResult {
+  total_processed: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  status?: string;
+  error_message?: string;
+}
+
 /** Default request timeout in milliseconds */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -285,6 +304,86 @@ class ApiClient {
         }
 
         return response.json();
+    }
+
+    /**
+     * Import CSV with Server-Sent Events for real-time progress.
+     * Returns an object with an abort function and a promise for the final result.
+     */
+    importCSVWithProgress(
+        file: File,
+        bankName: string,
+        onProgress: (progress: ImportProgress) => void,
+    ): { abort: () => void; result: Promise<ImportResult> } {
+        const controller = new AbortController();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const queryParams = new URLSearchParams();
+        queryParams.append('bank_name', bankName);
+
+        const url = `${API_BASE_URL}/api/import/csv/stream?${queryParams.toString()}`;
+
+        const result = new Promise<ImportResult>(async (resolve, reject) => {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                    throw new Error(error.detail || error.message || 'Request failed');
+                }
+
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error('No response body');
+
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let finalResult: ImportResult | null = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    let currentEvent = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            currentEvent = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            if (currentEvent === 'progress') {
+                                onProgress(data);
+                            } else if (currentEvent === 'complete') {
+                                finalResult = data;
+                                onProgress({ ...data, phase: 'complete', percent: 100 });
+                            } else if (currentEvent === 'error') {
+                                throw new Error(data.detail || 'Import failed');
+                            }
+                        }
+                    }
+                }
+
+                resolve(finalResult || { total_processed: 0, imported: 0, duplicates: 0, errors: 0, status: 'completed' });
+            } catch (err) {
+                if ((err as Error).name === 'AbortError') {
+                    reject(new Error('Import cancelled'));
+                } else {
+                    reject(err);
+                }
+            }
+        });
+
+        return {
+            abort: () => controller.abort(),
+            result,
+        };
     }
 
     async importCSVCustom(

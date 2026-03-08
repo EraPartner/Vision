@@ -10,6 +10,7 @@ import os from 'os';
 import path from 'path';
 import { importCSV } from '../services/importService.js';
 import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
+import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { logger } from '../config/logger.js';
 
@@ -120,6 +121,65 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
     cleanup(req.file.path);
     logger.error('Custom CSV import error', { error: err.message });
     res.status(500).json({ detail: `Import failed: ${err.message}` });
+  }
+});
+
+// POST /api/import/csv/stream - SSE streaming import with progress
+router.post('/csv/stream', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ detail: 'No file uploaded.' });
+  }
+
+  const bankName = req.query.bank_name || req.body.bank_name;
+  if (!bankName) {
+    cleanup(req.file.path);
+    return res.status(400).json({ detail: 'Missing required parameter: bank_name' });
+  }
+
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no', // Disable nginx buffering
+  });
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Handle client disconnect
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+
+  try {
+    const result = await importCSVStreaming(
+      req.file.path,
+      bankName,
+      null,
+      (progress) => {
+        if (!aborted) {
+          sendEvent('progress', progress);
+        }
+      }
+    );
+
+    cleanup(req.file.path);
+
+    if (!aborted) {
+      sendEvent('complete', {
+        ...result,
+        status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
+      });
+      res.end();
+    }
+  } catch (err) {
+    cleanup(req.file.path);
+    logger.error('Streaming CSV import error', { error: err.message });
+    if (!aborted) {
+      sendEvent('error', { detail: err.message });
+      res.end();
+    }
   }
 });
 
