@@ -3,9 +3,6 @@
  *
  * Main application entry point.
  * Mirrors: apps/backend/main.py (Python/FastAPI backend)
- *
- * This is a Node.js/Express port of the Python backend.
- * It connects to the SAME PostgreSQL database and provides the SAME API.
  */
 
 import express from 'express';
@@ -36,8 +33,27 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// JSON body parser
-app.use(express.json());
+// JSON body parser with size limit
+app.use(express.json({ limit: '1mb' }));
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (settings.isProduction()) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Response compression (gzip)
+import('compression').then(({ default: compression }) => {
+  app.use(compression());
+}).catch(() => {
+  logger.warn('compression package not installed, responses will not be compressed');
+});
 
 // Request logging (development only)
 if (settings.isDevelopment()) {
@@ -106,8 +122,14 @@ app.use((err, req, res, _next) => {
     path: req.path,
     method: req.method,
   });
+
+  // Don't leak error details in production
+  const detail = settings.isProduction()
+    ? 'An internal server error occurred. Please try again later.'
+    : err.message;
+
   res.status(500).json({
-    detail: 'An internal server error occurred. Please try again later.',
+    detail,
     error_code: 'INTERNAL_SERVER_ERROR',
   });
 });

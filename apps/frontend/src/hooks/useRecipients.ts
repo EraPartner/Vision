@@ -7,13 +7,14 @@ export function useRecipients(params?: {
     limit?: number;
     offset?: number;
     name?: string;
-    account_number?: string;
     default_category_id?: number;
     active?: boolean;
 }) {
     return useQuery({
         queryKey: ['recipients', params],
         queryFn: () => apiClient.getRecipients(params),
+        staleTime: 2 * 60_000, // recipients rarely change - 2min stale
+        placeholderData: (prev) => prev,
     });
 }
 
