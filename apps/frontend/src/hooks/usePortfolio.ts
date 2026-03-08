@@ -195,6 +195,7 @@ export function usePortfolio() {
     investments, transactions, summaries,
     addInvestment, updateInvestment, deleteInvestment,
     addTransaction, deleteTransaction,
+    refreshPrices, isRefreshingPrices: refreshPricesMutation.isPending,
     byAssetClass, totalPortfolioValue, totalGainLoss,
   };
 }
