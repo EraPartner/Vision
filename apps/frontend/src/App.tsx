@@ -89,6 +89,7 @@ const App = () => {
                                                 <Route path="/portfolio/savings" element={<SavingsPage/>}/>
                                                 <Route path="/portfolio/performance" element={<PerformancePage/>}/>
                                                 <Route path="/portfolio/net-worth" element={<NetWorthPage/>}/>
+                                                <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage/>}/>
                                                 <Route path="*" element={<NotFound/>}/>
                                             </Routes>
                                         </Suspense>
