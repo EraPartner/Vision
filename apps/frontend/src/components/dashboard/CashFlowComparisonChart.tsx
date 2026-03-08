@@ -16,10 +16,10 @@ interface CashFlowComparisonProps {
   currentDay: number;
   month: number;
   year: number;
+  embedded?: boolean;
 }
 
 function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: number }) {
-  // Find the last current value for comparison
   const lastCurrent = data.filter(d => d.current !== null).at(-1);
   const lastAvgAtSameDay = data.find(d => d.day === currentDay);
   const isAboveAverage = lastCurrent && lastAvgAtSameDay ? lastCurrent.current! > lastAvgAtSameDay.average : null;
@@ -81,7 +81,6 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
         </LineChart>
       </ResponsiveContainer>
 
-      {/* Status indicator */}
       {isAboveAverage !== null && lastCurrent && lastAvgAtSameDay && (
         <div className={`mt-4 flex items-center gap-2 p-3 rounded-lg border ${
           isAboveAverage
@@ -102,8 +101,27 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
   );
 }
 
-export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDay, month, year }: CashFlowComparisonProps) {
+export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDay, month, year, embedded = false }: CashFlowComparisonProps) {
   const monthName = new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const chartContent = (
+    <Tabs defaultValue="without" className="w-full">
+      <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsTrigger value="without">Without Planned</TabsTrigger>
+        <TabsTrigger value="with">With Planned</TabsTrigger>
+      </TabsList>
+      <TabsContent value="without">
+        <CashFlowLineChart data={withoutPlanned} currentDay={currentDay} />
+      </TabsContent>
+      <TabsContent value="with">
+        <CashFlowLineChart data={withPlanned} currentDay={currentDay} />
+      </TabsContent>
+    </Tabs>
+  );
+
+  if (embedded) {
+    return chartContent;
+  }
 
   return (
     <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm lg:col-span-2">
@@ -122,18 +140,7 @@ export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDa
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="without" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="without">Without Planned</TabsTrigger>
-            <TabsTrigger value="with">With Planned</TabsTrigger>
-          </TabsList>
-          <TabsContent value="without">
-            <CashFlowLineChart data={withoutPlanned} currentDay={currentDay} />
-          </TabsContent>
-          <TabsContent value="with">
-            <CashFlowLineChart data={withPlanned} currentDay={currentDay} />
-          </TabsContent>
-        </Tabs>
+        {chartContent}
       </CardContent>
     </Card>
   );
