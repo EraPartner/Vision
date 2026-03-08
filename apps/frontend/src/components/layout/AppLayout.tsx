@@ -15,7 +15,7 @@ interface AppLayoutProps {
 export function AppLayout({children}: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
-    const { isComplete: onboardingComplete, complete: completeOnboarding } = useOnboarding();
+    const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
     return (
         <SidebarProvider>
