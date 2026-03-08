@@ -51,7 +51,7 @@ export const investmentRepository = {
   },
 
   async update(id, fields) {
-    const allowed = ['name', 'symbol', 'asset_class', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'notes', 'is_active'];
+    const allowed = ['name', 'symbol', 'asset_class', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'notes', 'is_active', 'price_provider', 'price_provider_id', 'price_provider_url', 'price_updated_at'];
     const setClauses = [];
     const params = [];
     let idx = 1;
