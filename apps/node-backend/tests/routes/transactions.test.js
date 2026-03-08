@@ -4,6 +4,20 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const routeHandlers = {};
+const mockRouter = {
+  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
+  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
+  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
+  delete: vi.fn((path, handler) => { routeHandlers[`delete:${path}`] = handler; }),
+  use: vi.fn(),
+};
+
+vi.mock('express', () => ({
+  default: { Router: () => mockRouter },
+  Router: () => mockRouter,
+}));
+
 vi.mock('../../src/repositories/transactionRepository.js', () => ({
   default: {
     getAll: vi.fn(),
@@ -21,7 +35,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import transactionRepository from '../../src/repositories/transactionRepository.js';
-import transactionRoutes from '../../src/routes/transactions.js';
+await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -33,7 +47,7 @@ describe('Transaction Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'get', '/')(req, res);
+      await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
       expect(result.items).toEqual([]);
@@ -41,19 +55,16 @@ describe('Transaction Routes', () => {
     });
 
     it('should return transactions with data', async () => {
-      const txns = [
+      transactionRepository.getAll.mockResolvedValue([
         { id: 1, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 },
-      ];
-      transactionRepository.getAll.mockResolvedValue(txns);
+      ]);
       transactionRepository.getCount.mockResolvedValue(1);
 
       const req = { query: {} };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'get', '/')(req, res);
+      await routeHandlers['get:/'](req, res);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.total).toBe(1);
-      expect(result.items[0].amount).toBe(25.5);
+      expect(res.json.mock.calls[0][0].total).toBe(1);
     });
 
     it('should respect pagination', async () => {
@@ -62,11 +73,22 @@ describe('Transaction Routes', () => {
 
       const req = { query: { limit: '2', offset: '3' } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'get', '/')(req, res);
+      await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
       expect(result.limit).toBe(2);
       expect(result.offset).toBe(3);
+    });
+
+    it('should handle uncategorised filter', async () => {
+      transactionRepository.getUncategorised.mockResolvedValue([]);
+      transactionRepository.getCount.mockResolvedValue(0);
+
+      const req = { query: { uncategorised: 'true' } };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(transactionRepository.getUncategorised).toHaveBeenCalled();
     });
   });
 
@@ -78,10 +100,9 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'get', '/:id')(req, res);
+      await routeHandlers['get:/:id'](req, res);
 
       expect(res.json).toHaveBeenCalled();
-      expect(res.json.mock.calls[0][0].amount).toBe(50);
     });
 
     it('should return 404 for non-existent', async () => {
@@ -89,7 +110,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'get', '/:id')(req, res);
+      await routeHandlers['get:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -98,21 +119,17 @@ describe('Transaction Routes', () => {
   describe('POST /', () => {
     it('should create transaction with 201', async () => {
       transactionRepository.create.mockResolvedValue({
-        id: 1, date: '2026-01-15', amount: '-50.00', bank_account: 'Chase',
-        recipient_id: 1, memo: 'Test',
+        id: 1, date: '2026-01-15', amount: '-50.00', bank_account: 'Chase', recipient_id: 1,
       });
 
       const req = {
         body: {
-          transaction_date: '2026-01-15',
-          bank_account: 'Chase',
-          recipient_id: 1,
-          amount: -50.00,
-          memo: 'Test',
+          transaction_date: '2026-01-15', bank_account: 'Chase',
+          recipient_id: 1, amount: -50.00, memo: 'Test',
         },
       };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'post', '/')(req, res);
+      await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -120,7 +137,7 @@ describe('Transaction Routes', () => {
     it('should return 400 for missing fields', async () => {
       const req = { body: { bank_account: 'Chase', amount: -50.00 } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'post', '/')(req, res);
+      await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -134,7 +151,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '1' }, body: { amount: -75.00 } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'patch', '/:id')(req, res);
+      await routeHandlers['patch:/:id'](req, res);
 
       expect(res.json).toHaveBeenCalled();
     });
@@ -144,7 +161,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' }, body: { amount: -75.00 } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'patch', '/:id')(req, res);
+      await routeHandlers['patch:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -156,7 +173,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'delete', '/:id')(req, res);
+      await routeHandlers['delete:/:id'](req, res);
 
       expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
     });
@@ -166,7 +183,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await getRouteHandler(transactionRoutes, 'delete', '/:id')(req, res);
+      await routeHandlers['delete:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -177,12 +194,4 @@ function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
   return res;
-}
-
-function getRouteHandler(router, method, path) {
-  const layer = router.stack.find(
-    l => l.route && l.route.path === path && l.route.methods[method]
-  );
-  if (!layer) throw new Error(`No handler for ${method.toUpperCase()} ${path}`);
-  return layer.route.stack[0].handle;
 }

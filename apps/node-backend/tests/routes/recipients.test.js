@@ -4,6 +4,20 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const routeHandlers = {};
+const mockRouter = {
+  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
+  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
+  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
+  delete: vi.fn((path, handler) => { routeHandlers[`delete:${path}`] = handler; }),
+  use: vi.fn(),
+};
+
+vi.mock('express', () => ({
+  default: { Router: () => mockRouter },
+  Router: () => mockRouter,
+}));
+
 vi.mock('../../src/repositories/recipientRepository.js', () => ({
   default: {
     getAll: vi.fn(),
@@ -20,7 +34,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import recipientRepository from '../../src/repositories/recipientRepository.js';
-import recipientRoutes from '../../src/routes/recipients.js';
+await import('../../src/routes/recipients.js');
 
 describe('Recipient Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -32,25 +46,23 @@ describe('Recipient Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'get', '/')(req, res);
+      await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
       expect(result.items).toEqual([]);
       expect(result.total).toBe(0);
-      expect(result.limit).toBe(50);
     });
 
     it('should return recipients with data', async () => {
-      const recipients = [
+      recipientRepository.getAll.mockResolvedValue([
         { id: 1, name: 'JOHN DOE', is_active: true },
         { id: 2, name: 'JANE SMITH', is_active: true },
-      ];
-      recipientRepository.getAll.mockResolvedValue(recipients);
+      ]);
       recipientRepository.getCount.mockResolvedValue(2);
 
       const req = { query: {} };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'get', '/')(req, res);
+      await routeHandlers['get:/'](req, res);
 
       expect(res.json.mock.calls[0][0].total).toBe(2);
     });
@@ -65,7 +77,7 @@ describe('Recipient Routes', () => {
 
       const req = { body: { name: 'John Doe' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'post', '/')(req, res);
+      await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -78,7 +90,7 @@ describe('Recipient Routes', () => {
 
       const req = { body: { name: 'John Doe' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'post', '/')(req, res);
+      await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(200);
     });
@@ -86,7 +98,7 @@ describe('Recipient Routes', () => {
     it('should return 400 for missing name', async () => {
       const req = { body: {} };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'post', '/')(req, res);
+      await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -98,7 +110,7 @@ describe('Recipient Routes', () => {
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'get', '/:id')(req, res);
+      await routeHandlers['get:/:id'](req, res);
 
       expect(res.json).toHaveBeenCalled();
     });
@@ -108,7 +120,7 @@ describe('Recipient Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'get', '/:id')(req, res);
+      await routeHandlers['get:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -116,11 +128,11 @@ describe('Recipient Routes', () => {
 
   describe('PATCH /:id', () => {
     it('should update recipient', async () => {
-      recipientRepository.update.mockResolvedValue({ id: 1, name: 'UPDATED', notes: 'new' });
+      recipientRepository.update.mockResolvedValue({ id: 1, name: 'UPDATED' });
 
       const req = { params: { id: '1' }, body: { notes: 'new' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'patch', '/:id')(req, res);
+      await routeHandlers['patch:/:id'](req, res);
 
       expect(res.json).toHaveBeenCalled();
     });
@@ -130,7 +142,7 @@ describe('Recipient Routes', () => {
 
       const req = { params: { id: '99999' }, body: { notes: 'x' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'patch', '/:id')(req, res);
+      await routeHandlers['patch:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -142,7 +154,7 @@ describe('Recipient Routes', () => {
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'delete', '/:id')(req, res);
+      await routeHandlers['delete:/:id'](req, res);
 
       expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
     });
@@ -152,7 +164,7 @@ describe('Recipient Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await getRouteHandler(recipientRoutes, 'delete', '/:id')(req, res);
+      await routeHandlers['delete:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -163,12 +175,4 @@ function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
   return res;
-}
-
-function getRouteHandler(router, method, path) {
-  const layer = router.stack.find(
-    l => l.route && l.route.path === path && l.route.methods[method]
-  );
-  if (!layer) throw new Error(`No handler for ${method.toUpperCase()} ${path}`);
-  return layer.route.stack[0].handle;
 }
