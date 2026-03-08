@@ -331,6 +331,10 @@ export default function TransactionsPage() {
         </div>
     );
 
+    const clearFilters = () => {
+        setSearchParams({});
+    };
+
     return (
         <>
             <div className="space-y-8 animate-in">
@@ -338,6 +342,17 @@ export default function TransactionsPage() {
                     <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
                     <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
                 </div>
+
+                {(recipientIdFilter || categoryIdFilter) && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
+                        <span className="text-sm text-foreground">
+                            Filtered by {filterLabel || (recipientIdFilter ? `recipient #${recipientIdFilter}` : `category #${categoryIdFilter}`)}
+                        </span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={clearFilters}>
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
 
                 <VirtualDataTable
                     title="All Transactions"
