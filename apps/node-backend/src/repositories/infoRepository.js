@@ -81,25 +81,33 @@ export const infoRepository = {
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
-             count(*) AS count,
-             SUM(t.amount) AS total
+             t.amount,
+             t.currency,
+             t.date
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
       WHERE t.is_active = true
-      GROUP BY category_id, name
-      ORDER BY count DESC
     `);
 
     const categories = [];
+    const catMap = {};
     for (const row of categoryAmountResult.rows) {
-      categories.push({
-        id: row.category_id === -1 ? null : parseInt(row.category_id, 10),
-        name: row.name,
-        count: parseInt(row.count, 10),
-        total: Math.round(parseFloat(row.total || 0) * 100) / 100,
-      });
+      const catId = row.category_id === -1 ? null : parseInt(row.category_id, 10);
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const key = catId ?? 'null';
+      if (!catMap[key]) {
+        catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
+      }
+      catMap[key].count++;
+      catMap[key].total += eur;
     }
+    for (const cat of Object.values(catMap)) {
+      categories.push({ ...cat, total: Math.round(cat.total * 100) / 100 });
+    }
+    categories.sort((a, b) => b.count - a.count);
 
     return {
       total_transactions: parseInt(countResult.rows[0].count, 10),
