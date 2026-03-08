@@ -123,7 +123,7 @@ router.get('/export/csv', async (req, res) => {
 });
 
 // GET /api/transactions/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const transaction = await transactionRepository.getById(parseInt(req.params.id, 10));
     if (!transaction) {
