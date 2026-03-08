@@ -53,8 +53,8 @@ export function useFilteredDashboardStats() {
         }
       }
 
-      // If no recipient exclusions, we can use the API data directly
-      if (settings.excludedRecipientIds.length === 0) {
+      // If no recipient exclusions (or exclusions don't apply), we can use the API data directly
+      if (!exclusionsApply || settings.excludedRecipientIds.length === 0) {
         return {
           totalTransactions: countData.total_transactions,
           monthlyIncome: lastMonthWithData.total_income,
