@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -226,6 +227,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onComplete(); }}>
             <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0 [&>button]:hidden">
+                <VisuallyHidden><DialogTitle>Setup Wizard</DialogTitle></VisuallyHidden>
                 {/* Progress header */}
                 <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
                     <div className="flex items-center justify-between mb-4">
