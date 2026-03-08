@@ -746,12 +746,11 @@ export const infoRepository = {
         SELECT
           a.bank_account,
           m.month_start,
-          t.currency,
+          COALESCE(t.currency, 'EUR') AS currency,
           t.balance,
-          t.amount,
           t.date,
           ROW_NUMBER() OVER (
-            PARTITION BY a.bank_account, m.month_start, t.currency
+            PARTITION BY a.bank_account, m.month_start, COALESCE(t.currency, 'EUR')
             ORDER BY t.date DESC, t.id DESC
           ) AS rn
         FROM months m
@@ -759,17 +758,11 @@ export const infoRepository = {
         LEFT JOIN transactions t ON t.bank_account = a.bank_account
           AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
           AND t.is_active = true
+          AND t.balance IS NOT NULL
       )
-      SELECT bank_account, month_start, currency, balance, date,
-             (SELECT COALESCE(SUM(t2.amount), 0)
-              FROM transactions t2
-              WHERE t2.bank_account = ranked.bank_account
-                AND t2.is_active = true
-                AND COALESCE(t2.currency, 'EUR') = COALESCE(ranked.currency, 'EUR')
-                AND t2.date <= (ranked.month_start + interval '1 month' - interval '1 day')::date
-             ) AS sum_fallback
+      SELECT bank_account, month_start, currency, balance, date
       FROM ranked
-      WHERE rn = 1
+      WHERE rn = 1 AND balance IS NOT NULL
       ORDER BY bank_account, month_start
     `);
 
@@ -786,9 +779,7 @@ export const infoRepository = {
         : row.month_start;
       const dateForRate = row.date instanceof Date ? row.date.toISOString().split('T')[0] : (row.date || monthStr);
 
-      // Use balance field if available, otherwise fall back to cumulative sum
-      const rawAmount = row.balance != null ? parseFloat(row.balance) : parseFloat(row.sum_fallback);
-      const eur = await convertToEur(rawAmount, currency, dateForRate);
+      const eur = await convertToEur(parseFloat(row.balance), currency, dateForRate);
 
       const monthKey = monthStr.substring(0, 7);
       let existing = historyMap[key].find(h => h.month === monthKey);
