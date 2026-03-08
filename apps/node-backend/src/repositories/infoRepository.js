@@ -741,7 +741,7 @@ export const infoRepository = {
       accounts.push(acct);
     }
 
-    // Historical monthly balances (running sum up to end of each month, last 12 months)
+    // Historical monthly balances — use the latest balance per account+currency at end of each month
     const historyResult = await query(`
       WITH months AS (
         SELECT generate_series(
@@ -754,35 +754,56 @@ export const infoRepository = {
         SELECT DISTINCT bank_account
         FROM transactions
         WHERE is_active = true AND bank_account IS NOT NULL
+      ),
+      ranked AS (
+        SELECT
+          a.bank_account,
+          m.month_start,
+          t.currency,
+          t.balance,
+          t.amount,
+          t.date,
+          ROW_NUMBER() OVER (
+            PARTITION BY a.bank_account, m.month_start, t.currency
+            ORDER BY t.date DESC, t.id DESC
+          ) AS rn
+        FROM months m
+        CROSS JOIN account_list a
+        LEFT JOIN transactions t ON t.bank_account = a.bank_account
+          AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
+          AND t.is_active = true
       )
-      SELECT a.bank_account,
-             m.month_start,
-             (m.month_start + interval '1 month' - interval '1 day')::date AS month_end,
-             COALESCE(SUM(t.amount), 0) AS cumulative_amount,
-             t.currency
-      FROM months m
-      CROSS JOIN account_list a
-      LEFT JOIN transactions t ON t.bank_account = a.bank_account
-        AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
-        AND t.is_active = true
-      GROUP BY a.bank_account, m.month_start, t.currency
-      ORDER BY a.bank_account, m.month_start
+      SELECT bank_account, month_start, currency, balance, date,
+             (SELECT COALESCE(SUM(t2.amount), 0)
+              FROM transactions t2
+              WHERE t2.bank_account = ranked.bank_account
+                AND t2.is_active = true
+                AND COALESCE(t2.currency, 'EUR') = COALESCE(ranked.currency, 'EUR')
+                AND t2.date <= (ranked.month_start + interval '1 month' - interval '1 day')::date
+             ) AS sum_fallback
+      FROM ranked
+      WHERE rn = 1
+      ORDER BY bank_account, month_start
     `);
 
-    // Group monthly history by account
+    // Group monthly history by account, converting to EUR
     const historyMap = {};
     for (const row of historyResult.rows) {
+      if (!row.bank_account) continue;
       const key = row.bank_account;
       if (!historyMap[key]) historyMap[key] = [];
 
-      const amt = parseFloat(row.cumulative_amount);
+      const currency = row.currency || 'EUR';
       const monthStr = row.month_start instanceof Date
         ? row.month_start.toISOString().split('T')[0]
         : row.month_start;
-      const eur = await convertToEur(amt, row.currency || 'EUR', monthStr);
+      const dateForRate = row.date instanceof Date ? row.date.toISOString().split('T')[0] : (row.date || monthStr);
 
-      // Find existing month entry or create
-      const monthKey = monthStr.substring(0, 7); // YYYY-MM
+      // Use balance field if available, otherwise fall back to cumulative sum
+      const rawAmount = row.balance != null ? parseFloat(row.balance) : parseFloat(row.sum_fallback);
+      const eur = await convertToEur(rawAmount, currency, dateForRate);
+
+      const monthKey = monthStr.substring(0, 7);
       let existing = historyMap[key].find(h => h.month === monthKey);
       if (!existing) {
         existing = { month: monthKey, balance: 0 };
