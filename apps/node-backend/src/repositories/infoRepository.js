@@ -1,7 +1,8 @@
 /**
  * Info/Statistics Repository - data access for statistics and reporting.
  *
- * Mirrors: apps/backend/repositories/info_repository.py
+ * Uses materialized views (mv_*) for pre-computed aggregates when possible,
+ * falling back to live queries for filtered / parameterised requests.
  *
  * All monetary aggregations convert amounts to EUR using the currency
  * conversion service, matching the Python backend behaviour.
@@ -10,11 +11,59 @@
 import { query } from '../database/connection.js';
 import { convertToEur } from '../services/currencyConversionService.js';
 
+/**
+ * Helper: check if a materialized view exists and has rows.
+ * Returns false if the view doesn't exist (first startup before schema init).
+ */
+async function mvAvailable(viewName) {
+  try {
+    const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
+    return r.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export const infoRepository = {
   async getStatistics() {
+    // ── Fast path: read from materialized views ──
+    if (await mvAvailable('mv_category_totals')) {
+      const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
+
+      // Category totals from MV (already grouped)
+      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const categories = [];
+      let totalEur = 0;
+
+      for (const row of catResult.rows) {
+        const total = parseFloat(row.total || 0);
+        const eur = await convertToEur(total, row.currency, new Date().toISOString().split('T')[0]);
+        totalEur += eur;
+        // Merge same category across currencies
+        const existing = categories.find(c => c.id === (row.category_id === -1 ? null : row.category_id));
+        if (existing) {
+          existing.count += parseInt(row.count, 10);
+          existing.total += Math.round(eur * 100) / 100;
+        } else {
+          categories.push({
+            id: row.category_id === -1 ? null : parseInt(row.category_id, 10),
+            name: row.name,
+            count: parseInt(row.count, 10),
+            total: Math.round(eur * 100) / 100,
+          });
+        }
+      }
+
+      return {
+        total_transactions: parseInt(countResult.rows[0].count, 10),
+        total_amount: Math.round(totalEur * 100) / 100,
+        categories,
+      };
+    }
+
+    // ── Fallback: live query ──
     const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
 
-    // Sum amounts converted to EUR
     const txResult = await query(`
       SELECT t.amount, t.currency, t.date
       FROM transactions t
@@ -28,17 +77,6 @@ export const infoRepository = {
       totalEur += await convertToEur(amt, row.currency, dateStr);
     }
 
-    const categoryResult = await query(`
-      SELECT COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name, count(*) AS count
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-      WHERE t.is_active = true
-      GROUP BY name
-      ORDER BY count DESC
-    `);
-
-    // Category breakdown with amounts (mirrors Python get_category_breakdown)
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
@@ -52,7 +90,6 @@ export const infoRepository = {
       ORDER BY count DESC
     `);
 
-    // Convert category totals to EUR
     const categories = [];
     for (const row of categoryAmountResult.rows) {
       categories.push({
