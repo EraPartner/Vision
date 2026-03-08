@@ -168,16 +168,6 @@ export default function TransactionsPage() {
             ),
         },
         {
-            key: "memo",
-            header: "Description",
-            editable: true,
-            render: (row: TableTransaction) => (
-                <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
-                    {row.memo}
-                </span>
-            ),
-        },
-        {
             key: "category",
             header: "Category",
             editable: false,
