@@ -279,6 +279,7 @@ export default function TransactionsPage() {
     );
 
     return (
+        <>
         <div className="space-y-8 animate-in">
             <div>
                 <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
