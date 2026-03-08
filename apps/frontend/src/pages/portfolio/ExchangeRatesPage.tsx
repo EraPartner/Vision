@@ -86,8 +86,8 @@ export default function ExchangeRatesPage() {
                     <h1 className="text-3xl font-bold text-foreground">Exchange Rates</h1>
                     <p className="text-muted-foreground mt-1">ECB rates cached in database &amp; fallback values</p>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refetch()} disabled={isFetching}>
-                    <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                     Refresh
                 </Button>
             </div>
