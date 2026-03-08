@@ -796,6 +796,132 @@ export const infoRepository = {
       total_history: totalHistory,
     };
   },
+
+  /**
+   * Net Worth — combines liquid assets (bank balances) + investments (portfolio)
+   * into monthly snapshots over time.
+   */
+  async getNetWorth() {
+    // 1. Get bank balance history (reuse existing method)
+    const bankData = await this.getBankBalances();
+    const bankHistory = bankData.total_history || []; // [{month, balance}]
+
+    // 2. Compute portfolio value history from portfolio transactions
+    // For each month, calculate the cumulative invested + income value
+    const portfolioSql = `
+      WITH months AS (
+        SELECT generate_series(
+          LEAST(
+            (SELECT MIN(date_trunc('month', date)) FROM portfolio_transactions),
+            date_trunc('month', CURRENT_DATE) - interval '11 months'
+          ),
+          date_trunc('month', CURRENT_DATE),
+          interval '1 month'
+        )::date AS month_start
+      )
+      SELECT
+        to_char(m.month_start, 'YYYY-MM') AS month,
+        COALESCE(SUM(CASE WHEN pt.type = 'buy' THEN pt.amount ELSE 0 END), 0) AS cum_buys,
+        COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN pt.amount ELSE 0 END), 0) AS cum_sells,
+        COALESCE(SUM(CASE WHEN pt.type IN ('dividend','interest','rent_income') THEN pt.amount ELSE 0 END), 0) AS cum_income,
+        COALESCE(SUM(CASE WHEN pt.type = 'appreciation' THEN pt.amount ELSE 0 END), 0) AS cum_appreciation,
+        COALESCE(SUM(CASE WHEN pt.type = 'fee' THEN pt.amount ELSE 0 END), 0) AS cum_fees,
+        COALESCE(SUM(CASE WHEN pt.type = 'tax' THEN pt.amount ELSE 0 END), 0) AS cum_taxes
+      FROM months m
+      LEFT JOIN portfolio_transactions pt ON pt.date <= (m.month_start + interval '1 month' - interval '1 day')::date
+      GROUP BY m.month_start
+      ORDER BY m.month_start
+    `;
+
+    const portfolioResult = await query(portfolioSql);
+
+    // Build portfolio value per month (invested - sells + income + appreciation - fees - taxes)
+    const portfolioByMonth = {};
+    for (const row of portfolioResult.rows) {
+      const invested = parseFloat(row.cum_buys) - parseFloat(row.cum_sells);
+      const income = parseFloat(row.cum_income);
+      const appreciation = parseFloat(row.cum_appreciation);
+      const costs = parseFloat(row.cum_fees) + parseFloat(row.cum_taxes);
+      portfolioByMonth[row.month] = Math.round((invested + income + appreciation - costs) * 100) / 100;
+    }
+
+    // 3. Get current portfolio market value for the latest month
+    // (uses current_price * units for market-priced assets)
+    const currentValueSql = `
+      SELECT
+        i.id, i.asset_class, i.current_price,
+        COALESCE(SUM(CASE WHEN pt.type = 'buy' THEN pt.units ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN pt.units ELSE 0 END), 0) AS total_units,
+        COALESCE(SUM(CASE WHEN pt.type = 'buy' THEN pt.amount ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN pt.amount ELSE 0 END), 0) AS net_invested,
+        COALESCE(SUM(CASE WHEN pt.type IN ('interest','dividend','rent_income') THEN pt.amount ELSE 0 END), 0) AS total_income,
+        COALESCE(SUM(CASE WHEN pt.type = 'appreciation' THEN pt.amount ELSE 0 END), 0) AS total_appreciation
+      FROM investments i
+      LEFT JOIN portfolio_transactions pt ON pt.investment_id = i.id
+      WHERE i.is_active = true
+      GROUP BY i.id
+    `;
+    const currentValueResult = await query(currentValueSql);
+
+    let currentPortfolioValue = 0;
+    for (const row of currentValueResult.rows) {
+      const units = parseFloat(row.total_units);
+      const price = parseFloat(row.current_price || 0);
+      const invested = parseFloat(row.net_invested);
+      const income = parseFloat(row.total_income);
+      const appreciation = parseFloat(row.total_appreciation);
+
+      if (['stock', 'etf', 'crypto'].includes(row.asset_class) && price > 0) {
+        currentPortfolioValue += price * units;
+      } else if (row.asset_class === 'real_estate') {
+        currentPortfolioValue += invested + appreciation;
+      } else {
+        currentPortfolioValue += invested + income;
+      }
+    }
+    currentPortfolioValue = Math.round(currentPortfolioValue * 100) / 100;
+
+    // 4. Merge into net worth snapshots
+    const allMonths = new Set([
+      ...bankHistory.map(h => h.month),
+      ...Object.keys(portfolioByMonth),
+    ]);
+    const sortedMonths = [...allMonths].sort();
+
+    const currentMonth = new Date().toISOString().substring(0, 7);
+
+    const snapshots = sortedMonths.map(month => {
+      const bankEntry = bankHistory.find(h => h.month === month);
+      const liquid = bankEntry ? bankEntry.balance : 0;
+      // For current month, use market-value-based portfolio; for past months use cost-basis
+      const portfolio = month === currentMonth ? currentPortfolioValue : (portfolioByMonth[month] || 0);
+
+      return {
+        month,
+        liquid: Math.round(liquid * 100) / 100,
+        investments: Math.round(portfolio * 100) / 100,
+        netWorth: Math.round((liquid + portfolio) * 100) / 100,
+      };
+    });
+
+    // Current totals
+    const latest = snapshots[snapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
+    const previous = snapshots.length >= 2 ? snapshots[snapshots.length - 2] : null;
+    const monthlyChange = previous ? latest.netWorth - previous.netWorth : 0;
+    const monthlyChangePercent = previous && previous.netWorth !== 0
+      ? (monthlyChange / Math.abs(previous.netWorth)) * 100 : 0;
+
+    return {
+      current: {
+        liquid: latest.liquid,
+        investments: currentPortfolioValue,
+        netWorth: Math.round((latest.liquid + currentPortfolioValue) * 100) / 100,
+      },
+      monthlyChange: Math.round(monthlyChange * 100) / 100,
+      monthlyChangePercent: Math.round(monthlyChangePercent * 100) / 100,
+      snapshots,
+    };
+  },
 };
 
 export default infoRepository;

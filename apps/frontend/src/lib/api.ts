@@ -642,6 +642,12 @@ class ApiClient {
         return this.request(`/api/market/news${query ? `?${query}` : ''}`);
     }
 
+    // ==================== Net Worth ====================
+
+    async getNetWorth(): Promise<NetWorthResponse> {
+        return this.request('/api/info/net-worth');
+    }
+
     // ==================== Admin / Maintenance ====================
 
     async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
@@ -782,6 +788,24 @@ export interface MarketNewsArticle {
     publishedAt: number | null;
     thumbnail: string | null;
     relatedSymbols: string[];
+}
+
+export interface NetWorthSnapshot {
+    month: string;
+    liquid: number;
+    investments: number;
+    netWorth: number;
+}
+
+export interface NetWorthResponse {
+    current: {
+        liquid: number;
+        investments: number;
+        netWorth: number;
+    };
+    monthlyChange: number;
+    monthlyChangePercent: number;
+    snapshots: NetWorthSnapshot[];
 }
 
 export const apiClient = new ApiClient();
