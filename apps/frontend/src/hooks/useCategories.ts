@@ -13,6 +13,8 @@ export function useCategories(params?: {
     return useQuery({
         queryKey: ['categories', params],
         queryFn: () => apiClient.getCategories(params),
+        staleTime: 2 * 60_000, // categories rarely change - 2min stale
+        placeholderData: (prev) => prev,
     });
 }
 

@@ -35,7 +35,7 @@ const settings = {
   server: {
     host: process.env.HOSTNAME || 'localhost',
     port: parseInt(process.env.PORT || '3002', 10),
-    environment: process.env.ENVIRONMENT || 'development',
+    environment: process.env.ENVIRONMENT || process.env.NODE_ENV || 'development',
   },
 
   database: {
@@ -49,7 +49,7 @@ const settings = {
     title: 'Financial Transaction Manager',
     version: '1.0.0',
     description: 'Import and manage financial transactions from various banks',
-    corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5174').split(',').map(s => s.trim()),
+    corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5174,http://localhost:8080').split(',').map(s => s.trim()),
   },
 
   admin: {
