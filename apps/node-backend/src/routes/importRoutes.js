@@ -41,7 +41,8 @@ router.post('/csv', upload.single('file'), async (req, res) => {
   }
 
   try {
-    const result = await importCSV(req.file.path, bankName);
+    // Use raw transaction storage (falls back to legacy for unsupported banks)
+    const result = await importCSVWithRawStorage(req.file.path, bankName);
     cleanup(req.file.path);
 
     logger.info('CSV import completed', {
