@@ -22,6 +22,7 @@ import adminRouter from './routes/admin.js';
 import importRouter from './routes/importRoutes.js';
 import investmentsRouter from './routes/investments.js';
 import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
+import settingsRouter from './routes/settings.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
@@ -114,6 +115,7 @@ app.use('/api/info', infoRouter);
 app.use('/api/admin', adminRateLimiter, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
+app.use('/api/settings', settingsRouter);
 
 logger.info('All route modules registered successfully');
 
