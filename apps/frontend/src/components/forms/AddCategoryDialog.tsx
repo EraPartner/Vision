@@ -41,15 +41,15 @@ export function AddCategoryDialog() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="general">General</Label>
-                        <Input id="general" placeholder="e.g. FOOD" value={form.general} onChange={(e) => setForm(f => ({...f, general: e.target.value}))} required />
+                        <Input id="general" placeholder="e.g. FOOD" maxLength={100} value={form.general} onChange={(e) => setForm(f => ({...f, general: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="detail">Detail</Label>
-                        <Input id="detail" placeholder="e.g. GROCERIES" value={form.detail} onChange={(e) => setForm(f => ({...f, detail: e.target.value}))} required />
+                        <Input id="detail" placeholder="e.g. GROCERIES" maxLength={100} value={form.detail} onChange={(e) => setForm(f => ({...f, detail: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="description">Description (optional)</Label>
-                        <Textarea id="description" placeholder="Category description..." value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
+                        <Textarea id="description" placeholder="Category description..." maxLength={500} value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
                     </div>
                     <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

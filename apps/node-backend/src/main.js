@@ -19,6 +19,7 @@ import plannedTransactionsRouter from './routes/plannedTransactions.js';
 import infoRouter from './routes/info.js';
 import adminRouter from './routes/admin.js';
 import importRouter from './routes/importRoutes.js';
+import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
 const app = express();
@@ -36,14 +37,16 @@ app.use(cors({
 // JSON body parser with size limit
 app.use(express.json({ limit: '1mb' }));
 
-// Security headers
+// Security headers (production-ready)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-XSS-Protection', '0'); // Deprecated; rely on CSP instead
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   if (settings.isProduction()) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
   next();
 });
@@ -96,13 +99,16 @@ app.get('/', (req, res) => {
 
 // ==================== Route Registration ====================
 
+// Global rate limiter
+app.use(rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' }));
+
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/recipients', recipientsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
-app.use('/api/admin', adminRouter);
-app.use('/api/import', importRouter);
+app.use('/api/admin', adminRateLimiter, adminRouter);
+app.use('/api/import', importRateLimiter, importRouter);
 
 logger.info('All route modules registered successfully');
 

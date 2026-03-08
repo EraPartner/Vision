@@ -68,8 +68,10 @@ export const infoRepository = {
   },
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
-    const excludeClause = excludedCategoryIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${excludedCategoryIds.join(',')})`
+    // Use parameterized query instead of string interpolation to prevent SQL injection
+    const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const excludeClause = validIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((_, i) => `$${i + 1}`).join(',')})`
       : '';
 
     const sql = `
@@ -98,7 +100,7 @@ export const infoRepository = {
       GROUP BY m.month_start
       ORDER BY m.month_start
     `;
-    const result = await query(sql);
+    const result = await query(sql, validIds);
 
     const months = result.rows.map(r => ({
       month: r.month,

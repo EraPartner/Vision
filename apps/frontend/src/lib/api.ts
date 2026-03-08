@@ -112,7 +112,6 @@ class ApiClient {
 
     async createCategory(category: CategoryCreate): Promise<{ category: Category; wasCreated: boolean }> {
         const url = `${API_BASE_URL}/api/categories`;
-        console.log(`API Request: POST ${url}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -124,14 +123,11 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
         const data = await response.json();
-        console.log(`API Response: ${url}`, data);
         
-        // 201 = created, 200 = already existed
         return {
             category: data,
             wasCreated: response.status === 201
@@ -182,7 +178,6 @@ class ApiClient {
 
     async createRecipient(recipient: RecipientCreate): Promise<{ recipient: Recipient; wasCreated: boolean }> {
         const url = `${API_BASE_URL}/api/recipients`;
-        console.log(`API Request: POST ${url}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -194,14 +189,11 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
         const data = await response.json();
-        console.log(`API Response: ${url}`, data);
         
-        // 201 = created, 200 = already existed
         return {
             recipient: data,
             wasCreated: response.status === 201
@@ -294,7 +286,6 @@ class ApiClient {
         queryParams.append('bank_name', bankName);
 
         const url = `${API_BASE_URL}/api/import/csv?${queryParams.toString()}`;
-        console.log(`API Request: POST ${url}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -303,13 +294,10 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
-        const data = await response.json();
-        console.log(`API Response: ${url}`, data);
-        return data;
+        return response.json();
     }
 
     async importCSVCustom(
@@ -339,7 +327,6 @@ class ApiClient {
         queryParams.append('skip_rows', skipRows.toString());
 
         const url = `${API_BASE_URL}/api/import/csv/custom?${queryParams.toString()}`;
-        console.log(`API Request: POST ${url}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -348,13 +335,10 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
-        const data = await response.json();
-        console.log(`API Response: ${url}`, data);
-        return data;
+        return response.json();
     }
 
     // ==================== Info/Statistics Methods ====================
@@ -446,10 +430,6 @@ class ApiClient {
         };
 
         const url = `${API_BASE_URL}${endpoint}`;
-        console.log(`API Request: ${options.method || 'GET'} ${url}`);
-        if (options.body) {
-            console.log(`API Request Body:`, JSON.parse(options.body as string));
-        }
 
         const response = await fetch(url, {
             ...options,
@@ -458,7 +438,6 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             
             // Handle FastAPI 422 validation errors
             if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
@@ -469,7 +448,6 @@ class ApiClient {
                 throw new Error(`Validation error: ${validationErrors}`);
             }
             
-            // Handle standard error formats
             if (typeof error.detail === 'string') {
                 throw new Error(error.detail);
             }
@@ -478,13 +456,10 @@ class ApiClient {
                 throw new Error(error.message);
             }
             
-            // Fallback for unknown error formats
             throw new Error(`Request failed with status ${response.status}`);
         }
 
-        const data = await response.json();
-        console.log(`API Response: ${url}`, data);
-        return data;
+        return response.json();
     }
 }
 

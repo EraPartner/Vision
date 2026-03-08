@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
 import { logger } from '../config/logger.js';
+import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/planned-transactions/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const pt = await plannedTransactionRepository.getById(parseInt(req.params.id, 10));
     if (!pt) {
@@ -79,7 +80,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // PATCH /api/planned-transactions/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const existing = await plannedTransactionRepository.getById(id);
@@ -103,7 +104,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // POST /api/planned-transactions/:id/execute
-router.post('/:id/execute', async (req, res) => {
+router.post('/:id/execute', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { executed_transaction_id, execution_date } = req.body;
@@ -148,7 +149,7 @@ router.post('/:id/execute', async (req, res) => {
 });
 
 // DELETE /api/planned-transactions/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const deleted = await plannedTransactionRepository.hardDelete(id);

@@ -5,6 +5,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { sanitizeUpdateFields } from '../middleware/validation.js';
 
 export const plannedTransactionRepository = {
   async getAll({
@@ -113,13 +114,15 @@ export const plannedTransactionRepository = {
   },
 
   async update(id, fields) {
+    // Sanitize field names to prevent SQL injection via column names
+    const sanitized = sanitizeUpdateFields('planned_transactions', fields);
     const setClauses = [];
     const params = [];
     let paramIdx = 1;
 
-    for (const [key, value] of Object.entries(fields)) {
+    for (const [key, value] of Object.entries(sanitized)) {
       if (value === undefined) continue;
-      setClauses.push(`${key} = $${paramIdx++}`);
+      setClauses.push(`"${key}" = $${paramIdx++}`);
       params.push(value);
     }
 

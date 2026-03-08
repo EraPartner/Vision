@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import recipientRepository from '../repositories/recipientRepository.js';
 import { logger } from '../config/logger.js';
+import { validateIdParam, sanitizeString } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -63,7 +64,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/recipients/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const recipient = await recipientRepository.getById(parseInt(req.params.id, 10));
     if (!recipient) {
@@ -77,7 +78,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // PATCH /api/recipients/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updated = await recipientRepository.update(id, req.body);
@@ -92,7 +93,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/recipients/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const deleted = await recipientRepository.hardDelete(id);
