@@ -67,3 +67,36 @@ export function useDeleteRecipient() {
         },
     });
 }
+
+export function useMergeRecipients() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({primaryId, aliasIds}: { primaryId: number; aliasIds: number[] }) =>
+            apiClient.mergeRecipients(primaryId, aliasIds),
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({queryKey: ['recipients']});
+            queryClient.invalidateQueries({queryKey: ['transactions']});
+            toast.success(`Merged ${data.merged_ids.length} recipient(s) into "${data.primary.name}"`);
+        },
+        onError: (error: Error) => {
+            toast.error(`Failed to merge recipients: ${error.message}`);
+        },
+    });
+}
+
+export function useUnmergeRecipient() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (id: number) => apiClient.unmergeRecipient(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({queryKey: ['recipients']});
+            queryClient.invalidateQueries({queryKey: ['transactions']});
+            toast.success('Recipient unmerged successfully');
+        },
+        onError: (error: Error) => {
+            toast.error(`Failed to unmerge recipient: ${error.message}`);
+        },
+    });
+}

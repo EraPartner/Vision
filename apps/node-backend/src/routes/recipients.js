@@ -108,4 +108,67 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   }
 });
 
+// POST /api/recipients/:id/merge - Merge alias recipients into a primary
+router.post('/:id/merge', validateIdParam, async (req, res) => {
+  try {
+    const primaryId = parseInt(req.params.id, 10);
+    const { alias_ids } = req.body;
+    if (!alias_ids || !Array.isArray(alias_ids) || alias_ids.length === 0) {
+      return res.status(400).json({ detail: 'Missing required field: alias_ids (array of recipient IDs)' });
+    }
+
+    // Verify primary exists
+    const primary = await recipientRepository.getById(primaryId);
+    if (!primary) {
+      return res.status(404).json({ detail: 'Primary recipient not found' });
+    }
+
+    // Cannot merge a recipient that is itself an alias
+    if (primary.primary_recipient_id) {
+      return res.status(400).json({ detail: 'Cannot merge into a recipient that is itself an alias. Use its primary instead.' });
+    }
+
+    const mergedIds = await recipientRepository.mergeRecipients(primaryId, alias_ids.map(Number));
+    const updatedPrimary = await recipientRepository.getById(primaryId);
+    const aliases = await recipientRepository.getAliases(primaryId);
+
+    res.json({
+      primary: { ...updatedPrimary, links: [] },
+      merged_ids: mergedIds,
+      aliases: aliases.map(a => ({ id: a.id, name: a.name })),
+    });
+  } catch (err) {
+    logger.error('Error merging recipients', { error: err.message });
+    res.status(500).json({ detail: 'Error merging recipients' });
+  }
+});
+
+// POST /api/recipients/:id/unmerge - Remove a recipient from its primary group
+router.post('/:id/unmerge', validateIdParam, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const success = await recipientRepository.unmergeRecipient(id);
+    if (!success) {
+      return res.status(404).json({ detail: 'Recipient not found' });
+    }
+    const recipient = await recipientRepository.getById(id);
+    res.json({ ...recipient, links: [] });
+  } catch (err) {
+    logger.error('Error unmerging recipient', { error: err.message });
+    res.status(500).json({ detail: 'Error unmerging recipient' });
+  }
+});
+
+// GET /api/recipients/:id/aliases - Get all aliases for a primary recipient
+router.get('/:id/aliases', validateIdParam, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const aliases = await recipientRepository.getAliases(id);
+    res.json({ items: aliases.map(a => ({ ...a, links: [] })), total: aliases.length });
+  } catch (err) {
+    logger.error('Error getting aliases', { error: err.message });
+    res.status(500).json({ detail: 'Error getting aliases' });
+  }
+});
+
 export default router;
