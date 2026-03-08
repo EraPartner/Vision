@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock,
+  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
@@ -16,6 +16,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+
+interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string;
+  publishedAt: number | null;
+  thumbnail: string | null;
+  relatedSymbols: string[];
+}
 
 const RANGES = [
   { label: "1D", range: "1d", interval: "5m" },
@@ -145,6 +154,18 @@ export default function MarketLookupPage() {
     },
     enabled: !!selectedSymbol,
     staleTime: 60_000,
+  });
+
+  // News
+  const { data: newsData, isFetching: isNewsLoading } = useQuery({
+    queryKey: ["market-news", selectedSymbol],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(selectedSymbol!)}&count=10`);
+      if (!res.ok) throw new Error("News fetch failed");
+      return res.json() as Promise<{ articles: NewsArticle[] }>;
+    },
+    enabled: !!selectedSymbol,
+    staleTime: 120_000,
   });
 
   const handleSelect = useCallback((symbol: string) => {
@@ -418,6 +439,68 @@ export default function MarketLookupPage() {
               </Card>
             </div>
           )}
+
+          {/* News */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Newspaper className="h-4 w-4" /> Latest News
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isNewsLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex gap-3">
+                      <Skeleton className="h-16 w-24 rounded shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-3 w-2/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : newsData?.articles && newsData.articles.length > 0 ? (
+                <div className="space-y-3">
+                  {newsData.articles.map((article, i) => (
+                    <a
+                      key={i}
+                      href={article.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"
+                    >
+                      {article.thumbnail && (
+                        <img
+                          src={article.thumbnail}
+                          alt=""
+                          className="h-16 w-24 object-cover rounded shrink-0"
+                          loading="lazy"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+                          {article.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          <span>{article.publisher}</span>
+                          {article.publishedAt && (
+                            <>
+                              <span>·</span>
+                              <span>{new Date(article.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                            </>
+                          )}
+                          <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No news available</p>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

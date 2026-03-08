@@ -52,12 +52,71 @@ router.get('/quote', async (req, res) => {
     const { symbols } = req.query;
     if (!symbols) return res.status(400).json({ detail: 'symbols parameter required' });
 
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,regularMarketPreviousClose,regularMarketOpen,fiftyTwoWeekHigh,fiftyTwoWeekLow,marketCap,shortName,longName,currency,quoteType,exchange,fullExchangeName,averageDailyVolume3Month,trailingPE,forwardPE,dividendYield,epsTrailingTwelveMonths`;
-    const response = await fetch(url, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
-    if (!response.ok) throw new Error(`Yahoo quote error: ${response.status}`);
-    const data = await response.json();
+    // Try v6 endpoint first (more reliable), fall back to v7
+    let quotes = [];
+    const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
 
-    const quotes = (data?.quoteResponse?.result || []).map(q => ({
+    for (const sym of symbolList) {
+      try {
+        // v6 per-symbol endpoint
+        const url6 = `https://query2.finance.yahoo.com/v6/finance/quote?symbols=${encodeURIComponent(sym)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,regularMarketPreviousClose,regularMarketOpen,fiftyTwoWeekHigh,fiftyTwoWeekLow,marketCap,shortName,longName,currency,quoteType,exchange,fullExchangeName,averageDailyVolume3Month,trailingPE,forwardPE,dividendYield,epsTrailingTwelveMonths`;
+        const r6 = await fetch(url6, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
+        if (r6.ok) {
+          const d6 = await r6.json();
+          const results = d6?.quoteResponse?.result || [];
+          if (results.length > 0) {
+            quotes.push(...results);
+            continue;
+          }
+        }
+      } catch (_) { /* fall through */ }
+
+      try {
+        // v7 fallback
+        const url7 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(sym)}`;
+        const r7 = await fetch(url7, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
+        if (r7.ok) {
+          const d7 = await r7.json();
+          const results = d7?.quoteResponse?.result || [];
+          if (results.length > 0) {
+            quotes.push(...results);
+            continue;
+          }
+        }
+      } catch (_) { /* fall through */ }
+
+      // v8 chart endpoint as last resort for basic price data
+      try {
+        const url8 = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`;
+        const r8 = await fetch(url8, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
+        if (r8.ok) {
+          const d8 = await r8.json();
+          const meta = d8?.chart?.result?.[0]?.meta;
+          if (meta) {
+            quotes.push({
+              symbol: meta.symbol || sym,
+              shortName: meta.shortName || sym,
+              regularMarketPrice: meta.regularMarketPrice,
+              regularMarketChange: meta.regularMarketPrice - (meta.chartPreviousClose || meta.previousClose || 0),
+              regularMarketChangePercent: meta.chartPreviousClose ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100 : 0,
+              currency: meta.currency || 'USD',
+              exchange: meta.exchangeName || meta.exchange || '',
+              fullExchangeName: meta.fullExchangeName || meta.exchangeName || '',
+              quoteType: meta.instrumentType || 'UNKNOWN',
+              regularMarketDayHigh: meta.regularMarketDayHigh,
+              regularMarketDayLow: meta.regularMarketDayLow,
+              regularMarketPreviousClose: meta.chartPreviousClose || meta.previousClose,
+              regularMarketOpen: meta.regularMarketOpen,
+              regularMarketVolume: meta.regularMarketVolume,
+              fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+              fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+            });
+          }
+        }
+      } catch (_) { /* give up on this symbol */ }
+    }
+
+    const mapped = quotes.map(q => ({
       symbol: q.symbol,
       name: q.shortName || q.longName || q.symbol,
       price: q.regularMarketPrice,
@@ -81,7 +140,7 @@ router.get('/quote', async (req, res) => {
       eps: q.epsTrailingTwelveMonths,
     }));
 
-    res.json({ quotes });
+    res.json({ quotes: mapped });
   } catch (err) {
     logger.error('Market quote failed', { error: err.message });
     res.status(502).json({ detail: 'Market quote unavailable' });
