@@ -163,17 +163,7 @@ export default function TransactionsPage() {
             type: "date" as const,
             render: (row: TableTransaction) => (
                 <span className={`whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
-                    {row.date || '—'}
-                </span>
-            ),
-        },
-        {
-            key: "memo",
-            header: "Description",
-            editable: true,
-            render: (row: TableTransaction) => (
-                <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
-                    {row.memo}
+                    {row.date ? row.date.split('T')[0] : '—'}
                 </span>
             ),
         },
