@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/recipients/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const recipient = await recipientRepository.getById(parseInt(req.params.id, 10));
     if (!recipient) {
