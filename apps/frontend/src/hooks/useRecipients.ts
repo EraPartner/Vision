@@ -9,6 +9,7 @@ export function useRecipients(params?: {
     name?: string;
     default_category_id?: number;
     active?: boolean;
+    search?: string;
 }) {
     return useQuery({
         queryKey: ['recipients', params],

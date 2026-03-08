@@ -33,6 +33,10 @@ interface DataTableProps<T> {
     pageSize?: number;
     totalItems?: number;
     onPageChange?: (page: number) => void;
+    /** When provided, search is delegated to the server. The DataTable will call this with the debounced search string instead of filtering locally. */
+    onSearchChange?: (query: string) => void;
+    /** Controlled search value (for server-side search) */
+    searchValue?: string;
 }
 
 function getSortValue(val: any): string | number {
@@ -54,10 +58,32 @@ export function DataTable<T extends Record<string, any>>({
     pageSize = 50,
     totalItems,
     onPageChange,
+    onSearchChange,
+    searchValue,
 }: DataTableProps<T>) {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
-    const [searchQuery, setSearchQuery] = useState("");
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
+    const isServerSearch = !!onSearchChange;
+    const searchQuery = isServerSearch ? (searchValue ?? "") : localSearchQuery;
+
+    // Debounced server-side search
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleSearchInput = useCallback((value: string) => {
+        if (isServerSearch) {
+            // Update local display immediately
+            setLocalSearchQuery(value);
+            // Debounce the server call
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => {
+                onSearchChange!(value);
+                // Reset to page 0 on new search
+                if (onPageChange) onPageChange(0);
+            }, 350);
+        } else {
+            setLocalSearchQuery(value);
+        }
+    }, [isServerSearch, onSearchChange, onPageChange]);
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDirection>(null);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -152,9 +178,9 @@ export function DataTable<T extends Record<string, any>>({
             });
         }
 
-        // Apply global search
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
+        // Apply global search (only for client-side search)
+        if (!isServerSearch && localSearchQuery.trim()) {
+            const q = localSearchQuery.toLowerCase();
             result = result.filter((row) =>
                 columns.some((col) => {
                     const val = row[col.key];
@@ -179,7 +205,7 @@ export function DataTable<T extends Record<string, any>>({
         }
 
         return result;
-    }, [data, columnFilters, searchQuery, sortKey, sortDir, columns]);
+    }, [data, columnFilters, localSearchQuery, isServerSearch, sortKey, sortDir, columns]);
 
     const startEditing = (idx: number, row: T) => {
         setEditingRow(idx);
@@ -208,7 +234,8 @@ export function DataTable<T extends Record<string, any>>({
 
     const clearAllFilters = () => {
         setColumnFilters({});
-        setSearchQuery("");
+        setLocalSearchQuery("");
+        if (isServerSearch) onSearchChange!("");
         setSortKey(null);
         setSortDir(null);
     };
@@ -242,23 +269,23 @@ export function DataTable<T extends Record<string, any>>({
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search across all columns…"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={isServerSearch ? "Search database…" : "Search across all columns…"}
+                        value={isServerSearch ? localSearchQuery : localSearchQuery}
+                        onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
                     />
-                    {searchQuery && (
+                    {localSearchQuery && (
                         <Button
                             variant="ghost"
                             size="icon"
                             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                            onClick={() => setSearchQuery("")}
+                            onClick={() => { setLocalSearchQuery(""); if (isServerSearch) onSearchChange!(""); }}
                         >
                             <X className="h-3 w-3" />
                         </Button>
                     )}
                 </div>
-                {(activeFilterCount > 0 || searchQuery || sortKey) && (
+                {(activeFilterCount > 0 || localSearchQuery || sortKey) && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -390,7 +417,7 @@ export function DataTable<T extends Record<string, any>>({
                                         colSpan={columns.length + (hasEditableColumns ? 1 : 0)}
                                         className="text-center text-muted-foreground py-12"
                                     >
-                                        {searchQuery || activeFilterCount > 0
+                                        {localSearchQuery || activeFilterCount > 0
                                             ? "No results match your filters."
                                             : emptyMessage}
                                     </TableCell>

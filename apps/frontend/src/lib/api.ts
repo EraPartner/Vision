@@ -39,6 +39,7 @@ class ApiClient {
         recipient_name?: string;
         uncategorised?: boolean;
         active?: boolean;
+        search?: string;
     }): Promise<TransactionsListResponse> {
         const queryParams = new URLSearchParams();
 
@@ -94,6 +95,7 @@ class ApiClient {
         general?: string;
         detail?: string;
         active?: boolean;
+        search?: string;
     }): Promise<CategoriesListResponse> {
         const queryParams = new URLSearchParams();
 
@@ -160,6 +162,7 @@ class ApiClient {
         name?: string;
         default_category_id?: number;
         active?: boolean;
+        search?: string;
     }): Promise<RecipientsListResponse> {
         const queryParams = new URLSearchParams();
 
@@ -233,6 +236,7 @@ class ApiClient {
         is_recurring?: boolean;
         is_executed?: boolean;
         active?: boolean;
+        search?: string;
     }): Promise<PlannedTransactionsListResponse> {
         const queryParams = new URLSearchParams();
 

@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
       limit = 50, offset = 0,
       start_date, end_date, bank_account,
       category_id, recipient_id, recipient_name,
-      uncategorised, active = 'true',
+      uncategorised, active = 'true', search,
     } = req.query;
 
     const opts = {
@@ -30,6 +30,7 @@ router.get('/', async (req, res) => {
       categoryId: category_id ? parseInt(category_id, 10) : null,
       recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
       recipientName: recipient_name || null,
+      search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
     };
 

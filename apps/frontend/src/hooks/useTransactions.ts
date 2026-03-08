@@ -15,6 +15,7 @@ interface UseTransactionsParams {
     recipient_name?: string;
     uncategorised?: boolean;
     active?: boolean;
+    search?: string;
 }
 
 export function useTransactions(params?: UseTransactionsParams) {
