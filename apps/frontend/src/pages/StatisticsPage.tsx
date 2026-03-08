@@ -81,14 +81,14 @@ function ExclusionToggle({
           <Button
             variant={isFiltered && exclusionsApply ? "default" : "outline"}
             size="sm"
-            className="h-7 gap-1.5 text-xs"
+            className={`h-8 gap-2 text-xs ml-4 font-medium transition-colors ${isFiltered && exclusionsApply ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'hover:bg-muted'}`}
             onClick={() => onToggle(graphKey)}
             disabled={!exclusionsApply}
           >
-            {isFiltered ? <Filter className="h-3.5 w-3.5" /> : <FilterX className="h-3.5 w-3.5" />}
+            {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
             {exclusionsApply
-              ? (isFiltered ? "Filtered" : "Unfiltered")
-              : "No exclusions"}
+              ? (isFiltered ? "Filters Active" : "Filters Ignored")
+              : "No exclusions set"}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -286,7 +286,19 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
 }
 
 // ─── Category Pivot Table ─────────────────────────────────
-function CategoryPivotTable({ data }: { data: StatisticsData }) {
+function CategoryPivotTable({ 
+  data, 
+  graphKey, 
+  isFiltered, 
+  onToggle, 
+  exclusionsApply 
+}: { 
+  data: StatisticsData;
+  graphKey: string;
+  isFiltered: boolean;
+  onToggle: (key: string) => void;
+  exclusionsApply: boolean;
+}) {
   const [yearFilter, setYearFilter] = useState<string>("all");
 
   const filteredPeriods = useMemo(() => {
@@ -314,22 +326,30 @@ function CategoryPivotTable({ data }: { data: StatisticsData }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
         <div>
           <CardTitle>Category Pivot Table</CardTitle>
           <CardDescription>Category spending broken down by month</CardDescription>
         </div>
-        <Select value={yearFilter} onValueChange={setYearFilter}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Year" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Years</SelectItem>
-            {data.allYears.map((y) => (
-              <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {data.allYears.map((y) => (
+                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ExclusionToggle
+            graphKey={graphKey}
+            isFiltered={isFiltered}
+            onToggle={onToggle}
+            exclusionsApply={exclusionsApply}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="w-full">
@@ -542,7 +562,13 @@ export default function StatisticsPage() {
               {(d) => <CategoryTrendChart data={d} />}
             </ChartCard>
           </div>
-          <CategoryPivotTable data={getGraphData("pivotTable") || data} />
+          <CategoryPivotTable 
+            data={getGraphData("pivotTable") || data} 
+            graphKey="pivotTable"
+            isFiltered={graphExclusions["pivotTable"] ?? true}
+            onToggle={toggleGraphExclusion}
+            exclusionsApply={exclusionsApply}
+          />
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
