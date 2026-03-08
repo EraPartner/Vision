@@ -45,6 +45,7 @@ const budgetingActions = [
 
 const portfolioNav = [
   { title: "Overview", url: "/portfolio", icon: LayoutDashboard },
+  { title: "Market Lookup", url: "/portfolio/market", icon: LineChart },
   { title: "Stocks & ETFs", url: "/portfolio/stocks", icon: TrendingUp },
   { title: "Crypto", url: "/portfolio/crypto", icon: Coins },
   { title: "Real Estate", url: "/portfolio/real-estate", icon: Building2 },
