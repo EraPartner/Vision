@@ -93,6 +93,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             setLocalExclusionScope(settings.exclusionScope);
             setLocalAppSettings(appSettings);
             setRecipientSearch('');
+            setCategorySearch('');
         }
     }, [open, settings, appSettings]);
 
