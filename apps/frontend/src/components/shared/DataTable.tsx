@@ -279,7 +279,7 @@ export function DataTable<T extends Record<string, any>>({
                             variant="ghost"
                             size="icon"
                             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                            onClick={() => setSearchQuery("")}
+                            onClick={() => { setLocalSearchQuery(""); if (isServerSearch) onSearchChange!(""); }}
                         >
                             <X className="h-3 w-3" />
                         </Button>
