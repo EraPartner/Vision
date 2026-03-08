@@ -1,7 +1,8 @@
 /**
  * Info/Statistics Repository - data access for statistics and reporting.
  *
- * Mirrors: apps/backend/repositories/info_repository.py
+ * Uses materialized views (mv_*) for pre-computed aggregates when possible,
+ * falling back to live queries for filtered / parameterised requests.
  *
  * All monetary aggregations convert amounts to EUR using the currency
  * conversion service, matching the Python backend behaviour.
@@ -10,11 +11,59 @@
 import { query } from '../database/connection.js';
 import { convertToEur } from '../services/currencyConversionService.js';
 
+/**
+ * Helper: check if a materialized view exists and has rows.
+ * Returns false if the view doesn't exist (first startup before schema init).
+ */
+async function mvAvailable(viewName) {
+  try {
+    const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
+    return r.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export const infoRepository = {
   async getStatistics() {
+    // ── Fast path: read from materialized views ──
+    if (await mvAvailable('mv_category_totals')) {
+      const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
+
+      // Category totals from MV (already grouped)
+      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const categories = [];
+      let totalEur = 0;
+
+      for (const row of catResult.rows) {
+        const total = parseFloat(row.total || 0);
+        const eur = await convertToEur(total, row.currency, new Date().toISOString().split('T')[0]);
+        totalEur += eur;
+        // Merge same category across currencies
+        const existing = categories.find(c => c.id === (row.category_id === -1 ? null : row.category_id));
+        if (existing) {
+          existing.count += parseInt(row.count, 10);
+          existing.total += Math.round(eur * 100) / 100;
+        } else {
+          categories.push({
+            id: row.category_id === -1 ? null : parseInt(row.category_id, 10),
+            name: row.name,
+            count: parseInt(row.count, 10),
+            total: Math.round(eur * 100) / 100,
+          });
+        }
+      }
+
+      return {
+        total_transactions: parseInt(countResult.rows[0].count, 10),
+        total_amount: Math.round(totalEur * 100) / 100,
+        categories,
+      };
+    }
+
+    // ── Fallback: live query ──
     const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
 
-    // Sum amounts converted to EUR
     const txResult = await query(`
       SELECT t.amount, t.currency, t.date
       FROM transactions t
@@ -28,17 +77,6 @@ export const infoRepository = {
       totalEur += await convertToEur(amt, row.currency, dateStr);
     }
 
-    const categoryResult = await query(`
-      SELECT COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name, count(*) AS count
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-      WHERE t.is_active = true
-      GROUP BY name
-      ORDER BY count DESC
-    `);
-
-    // Category breakdown with amounts (mirrors Python get_category_breakdown)
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
@@ -52,7 +90,6 @@ export const infoRepository = {
       ORDER BY count DESC
     `);
 
-    // Convert category totals to EUR
     const categories = [];
     for (const row of categoryAmountResult.rows) {
       categories.push({
@@ -125,6 +162,65 @@ export const infoRepository = {
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    // ── Fast path: read from mv_monthly_summary ──
+    if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
+      const mvResult = await query(`
+        SELECT month_start, month, year, currency, category_id,
+               SUM(transaction_count) AS transaction_count,
+               SUM(total_income) AS total_income,
+               SUM(total_spending) AS total_spending,
+               SUM(net_amount) AS net_amount
+        FROM mv_monthly_summary
+        WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')
+        GROUP BY month_start, month, year, currency
+        ORDER BY month_start
+      `);
+
+      const monthMap = {};
+      for (const row of mvResult.rows) {
+        const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+        if (!monthMap[key]) {
+          monthMap[key] = {
+            month: row.month, year: row.year,
+            period_start: row.month_start,
+            period_end: null,
+            total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
+          };
+        }
+        const dateStr = row.month_start instanceof Date ? row.month_start.toISOString().split('T')[0] : String(row.month_start);
+        const income = await convertToEur(parseFloat(row.total_income), row.currency, dateStr);
+        const spending = await convertToEur(parseFloat(row.total_spending), row.currency, dateStr);
+
+        monthMap[key].total_income += income;
+        monthMap[key].total_spending += spending;
+        monthMap[key].net_amount += income + spending;
+        monthMap[key].transaction_count += parseInt(row.transaction_count, 10);
+      }
+
+      const months = Object.values(monthMap)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+        .map(m => ({
+          ...m,
+          period_end: new Date(m.year, m.month, 0).toISOString().split('T')[0],
+          total_spending: Math.round(m.total_spending * 100) / 100,
+          total_income: Math.round(m.total_income * 100) / 100,
+          net_amount: Math.round(m.net_amount * 100) / 100,
+        }));
+
+      const summary = {
+        total_spending: months.reduce((s, m) => s + m.total_spending, 0),
+        total_income: months.reduce((s, m) => s + m.total_income, 0),
+        net_amount: months.reduce((s, m) => s + m.net_amount, 0),
+        transaction_count: months.reduce((s, m) => s + m.transaction_count, 0),
+        period_start: months[0]?.period_start,
+        period_end: months[months.length - 1]?.period_end,
+      };
+
+      return { months, summary };
+    }
+
+    // ── Fallback: live query with exclusions ──
     const excludeClause = validIds.length > 0
       ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((_, i) => `$${i + 1}`).join(',')})`
       : '';
@@ -169,7 +265,7 @@ export const infoRepository = {
           transaction_count: 0,
         };
       }
-      if (row.txn_id == null) continue; // LEFT JOIN produced null row
+      if (row.txn_id == null) continue;
 
       const amt = parseFloat(row.amount);
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
@@ -556,45 +652,74 @@ export const infoRepository = {
    * Balance is computed as the running sum of all transaction amounts per account.
    */
   async getBankBalances() {
-    // Current balance per account (sum of all active transaction amounts)
-    const currentResult = await query(`
-      SELECT bank_account,
-             COUNT(*) AS transaction_count,
-             MIN(date) AS first_transaction,
-             MAX(date) AS last_transaction
-      FROM transactions
-      WHERE is_active = true AND bank_account IS NOT NULL
-      GROUP BY bank_account
-      ORDER BY bank_account
-    `);
+    // ── Fast path: use mv_bank_balances for current balances ──
+    const useMv = await mvAvailable('mv_bank_balances');
 
     const accounts = [];
     let totalNetPosition = 0;
 
-    for (const row of currentResult.rows) {
-      // Sum amounts converted to EUR for this account
-      const txResult = await query(
-        `SELECT amount, currency, date FROM transactions
-         WHERE is_active = true AND bank_account = $1`,
-        [row.bank_account]
-      );
-
-      let balanceEur = 0;
-      for (const tx of txResult.rows) {
-        const amt = parseFloat(tx.amount);
-        const dateStr = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : tx.date;
-        balanceEur += await convertToEur(amt, tx.currency, dateStr);
+    if (useMv) {
+      const mvResult = await query('SELECT * FROM mv_bank_balances ORDER BY bank_account');
+      // Group by bank_account (may have multiple currencies)
+      const byAccount = {};
+      for (const row of mvResult.rows) {
+        if (!byAccount[row.bank_account]) {
+          byAccount[row.bank_account] = {
+            bank_account: row.bank_account,
+            balance: 0,
+            transaction_count: 0,
+            first_transaction: row.first_transaction,
+            last_transaction: row.last_transaction,
+          };
+        }
+        const dateStr = row.last_transaction instanceof Date ? row.last_transaction.toISOString().split('T')[0] : String(row.last_transaction);
+        const eur = await convertToEur(parseFloat(row.balance), row.currency, dateStr);
+        byAccount[row.bank_account].balance += Math.round(eur * 100) / 100;
+        byAccount[row.bank_account].transaction_count += parseInt(row.transaction_count, 10);
+        if (row.first_transaction < byAccount[row.bank_account].first_transaction) byAccount[row.bank_account].first_transaction = row.first_transaction;
+        if (row.last_transaction > byAccount[row.bank_account].last_transaction) byAccount[row.bank_account].last_transaction = row.last_transaction;
       }
-      balanceEur = Math.round(balanceEur * 100) / 100;
-      totalNetPosition += balanceEur;
+      for (const acct of Object.values(byAccount)) {
+        totalNetPosition += acct.balance;
+        accounts.push(acct);
+      }
+    } else {
+      // Fallback: live query
+      const currentResult = await query(`
+        SELECT bank_account,
+               COUNT(*) AS transaction_count,
+               MIN(date) AS first_transaction,
+               MAX(date) AS last_transaction
+        FROM transactions
+        WHERE is_active = true AND bank_account IS NOT NULL
+        GROUP BY bank_account
+        ORDER BY bank_account
+      `);
 
-      accounts.push({
-        bank_account: row.bank_account,
-        balance: balanceEur,
-        transaction_count: parseInt(row.transaction_count, 10),
-        first_transaction: row.first_transaction,
-        last_transaction: row.last_transaction,
-      });
+      for (const row of currentResult.rows) {
+        const txResult = await query(
+          `SELECT amount, currency, date FROM transactions
+           WHERE is_active = true AND bank_account = $1`,
+          [row.bank_account]
+        );
+
+        let balanceEur = 0;
+        for (const tx of txResult.rows) {
+          const amt = parseFloat(tx.amount);
+          const dateStr = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : tx.date;
+          balanceEur += await convertToEur(amt, tx.currency, dateStr);
+        }
+        balanceEur = Math.round(balanceEur * 100) / 100;
+        totalNetPosition += balanceEur;
+
+        accounts.push({
+          bank_account: row.bank_account,
+          balance: balanceEur,
+          transaction_count: parseInt(row.transaction_count, 10),
+          first_transaction: row.first_transaction,
+          last_transaction: row.last_transaction,
+        });
+      }
     }
 
     // Historical monthly balances (running sum up to end of each month, last 12 months)

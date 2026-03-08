@@ -1,7 +1,8 @@
 /**
  * Database Schema Initializer
  *
- * Ensures all required tables, indexes, enums, and triggers exist on startup.
+ * Ensures all required tables, indexes, enums, triggers, and
+ * materialized views exist on startup.
  * Uses IF NOT EXISTS / DO $$ blocks so it's safe to run repeatedly (idempotent).
  *
  * Table creation order respects foreign key dependencies:
@@ -21,6 +22,7 @@
 
 import { query } from './connection.js';
 import { logger } from '../config/logger.js';
+import { createMaterializedViews, refreshMaterializedViews } from '../services/materializedViewService.js';
 
 /**
  * Run the full schema initialisation. Safe to call on every startup.
@@ -61,6 +63,11 @@ export async function initializeSchema() {
     await createInvestments();
     await createPortfolioTransactions();
     await createUserSettings();
+
+    // --- Materialized views ---
+    await createMaterializedViews();
+    // Initial population
+    await refreshMaterializedViews();
 
     const duration = Date.now() - start;
     logger.info(`Schema initialisation complete in ${duration}ms`);

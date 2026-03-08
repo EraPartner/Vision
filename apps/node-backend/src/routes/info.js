@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import infoRepository from '../repositories/infoRepository.js';
 import { detectRecurringPatterns } from '../services/recurringDetectionService.js';
+import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
@@ -159,6 +160,18 @@ router.get('/recurring-patterns', async (req, res) => {
   } catch (err) {
     logger.error('Error detecting recurring patterns', { error: err.message });
     res.status(500).json({ detail: 'Error detecting recurring patterns' });
+  }
+});
+
+// POST /api/info/refresh-views - Manually refresh materialized views
+router.post('/refresh-views', async (req, res) => {
+  try {
+    const start = Date.now();
+    await refreshMaterializedViews();
+    res.json({ message: 'Materialized views refreshed', duration_ms: Date.now() - start });
+  } catch (err) {
+    logger.error('Error refreshing materialized views', { error: err.message });
+    res.status(500).json({ detail: 'Error refreshing materialized views' });
   }
 });
 
