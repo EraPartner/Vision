@@ -446,10 +446,6 @@ class ApiClient {
         };
 
         const url = `${API_BASE_URL}${endpoint}`;
-        console.log(`API Request: ${options.method || 'GET'} ${url}`);
-        if (options.body) {
-            console.log(`API Request Body:`, JSON.parse(options.body as string));
-        }
 
         const response = await fetch(url, {
             ...options,
@@ -458,7 +454,6 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             
             // Handle FastAPI 422 validation errors
             if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
@@ -469,7 +464,6 @@ class ApiClient {
                 throw new Error(`Validation error: ${validationErrors}`);
             }
             
-            // Handle standard error formats
             if (typeof error.detail === 'string') {
                 throw new Error(error.detail);
             }
@@ -478,13 +472,10 @@ class ApiClient {
                 throw new Error(error.message);
             }
             
-            // Fallback for unknown error formats
             throw new Error(`Request failed with status ${response.status}`);
         }
 
-        const data = await response.json();
-        console.log(`API Response: ${url}`, data);
-        return data;
+        return response.json();
     }
 }
 
