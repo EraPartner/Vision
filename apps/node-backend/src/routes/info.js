@@ -111,4 +111,15 @@ router.get('/average-vs-current-spending', async (req, res) => {
   }
 });
 
+// GET /api/info/cashflow-comparison
+router.get('/cashflow-comparison', async (req, res) => {
+  try {
+    const data = await infoRepository.getCashflowComparison();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error retrieving cashflow comparison', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving cashflow comparison' });
+  }
+});
+
 export default router;

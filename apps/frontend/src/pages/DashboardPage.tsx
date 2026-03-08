@@ -1,5 +1,6 @@
 import {StatCard} from "@/components/dashboard/StatCard";
 import {MonthlyTrendsChart} from "@/components/dashboard/MonthlyTrendsChart";
+import {CashFlowComparisonChart} from "@/components/dashboard/CashFlowComparisonChart";
 import {CategoryPieChart} from "@/components/dashboard/CategoryPieChart";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
@@ -25,6 +26,13 @@ export default function DashboardPage() {
     const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
         queryKey: ['monthlySummary'],
         queryFn: () => apiClient.getMonthlyFinancialSummary(),
+        staleTime: 30000,
+    });
+
+    // Fetch cashflow comparison data
+    const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
+        queryKey: ['cashflowComparison'],
+        queryFn: () => apiClient.getCashflowComparison(),
         staleTime: 30000,
     });
 
@@ -176,7 +184,7 @@ export default function DashboardPage() {
         },
     ];
 
-    if (statsLoading || transactionsLoading || monthlyLoading) {
+    if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading) {
         return (
             <div className="space-y-8 animate-in">
                 <div>
@@ -227,6 +235,17 @@ export default function DashboardPage() {
                 {monthlyData.length > 0 && <MonthlyTrendsChart data={monthlyData}/>}
                 <CategoryPieChart data={categoryData}/>
             </div>
+
+            {/* Cash Flow Comparison */}
+            {cashflowData && (
+                <CashFlowComparisonChart
+                    withoutPlanned={cashflowData.without_planned}
+                    withPlanned={cashflowData.with_planned}
+                    currentDay={cashflowData.current_day}
+                    month={cashflowData.month}
+                    year={cashflowData.year}
+                />
+            )}
 
             {/* Recent transactions */}
             <DataTable
