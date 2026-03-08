@@ -22,10 +22,19 @@ export default function DashboardPage() {
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
     
-    // Fetch monthly summary for chart (6 months)
+    // Build excluded category IDs list for API calls
+    const excludedCategoryIdsForApi = (() => {
+        const ids = [...settings.excludedCategoryIds];
+        // Note: hidden categories are resolved after categoriesData loads below
+        return ids;
+    })();
+
+    // Fetch monthly summary for chart (6 months) — pass excluded categories
     const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
-        queryKey: ['monthlySummary'],
-        queryFn: () => apiClient.getMonthlyFinancialSummary(),
+        queryKey: ['monthlySummary', excludedCategoryIdsForApi],
+        queryFn: () => apiClient.getMonthlyFinancialSummary({
+            excluded_category_ids: excludedCategoryIdsForApi.length > 0 ? excludedCategoryIdsForApi : undefined,
+        }),
         staleTime: 30000,
     });
 
