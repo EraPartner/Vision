@@ -3,39 +3,27 @@
 echo "🚀 Starting Finance Tracker..."
 echo ""
 
-# Start backend API
-echo "📦 Starting Python backend API..."
-cd apps/backend
+# Start Node.js backend API
+echo "📦 Starting Node.js backend API..."
+cd apps/node-backend
 
-# Check if virtual environment exists
-if [ ! -d "venv" ]; then
-    echo "❌ Error: Virtual environment not found at apps/backend/venv"
-    echo "Please create it first:"
-    echo "  cd apps/backend"
-    echo "  python3 -m venv venv"
-    echo "  ./venv/bin/pip install -r requirements.txt"
-    exit 1
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "Installing Node.js backend dependencies..."
+    npm install
 fi
 
-echo "✓ Using virtual environment at apps/backend/venv"
-
-# Install/update dependencies using venv's pip directly (no activation needed)
-echo "Installing/updating dependencies..."
-./venv/bin/pip install --upgrade pip > /dev/null 2>&1
-./venv/bin/pip install -r requirements.txt > /dev/null 2>&1
-
-# Start the backend API server using venv's python directly
-echo "✓ Starting FastAPI server on http://localhost:3002"
-./venv/bin/python main.py > /tmp/backend.log 2>&1 &
+echo "✓ Starting Express server on http://localhost:3002"
+node src/main.js > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 cd ../..
 
 # Wait for backend to start
 echo "Waiting for backend to be ready..."
-sleep 3
+sleep 2
 
 # Check if backend is running
-if curl -s http://localhost:3002/ > /dev/null 2>&1; then
+if curl -s http://localhost:3002/health > /dev/null 2>&1; then
     echo "✓ Backend API is running"
 else
     echo "⚠ Backend may not have started correctly. Check /tmp/backend.log"
@@ -44,7 +32,7 @@ fi
 
 echo ""
 echo "📱 Starting frontend..."
-npm run dev
+npm run dev -- --config config/vite.config.ts
 
 # Cleanup on exit
 trap "kill $BACKEND_PID 2>/dev/null" EXIT
