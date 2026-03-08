@@ -196,6 +196,52 @@ router.get('/recipient-insights', async (req, res) => {
   }
 });
 
+// GET /api/info/exchange-rates - View cached exchange rates from database
+router.get('/exchange-rates', async (req, res) => {
+  try {
+    const { query: dbQuery } = await import('../database/connection.js');
+
+    // Get all stored exchange rates, grouped by rate_date
+    const result = await dbQuery(`
+      SELECT currency_code, rate_to_eur, rate_date, is_latest, fetched_at
+      FROM exchange_rates
+      ORDER BY rate_date DESC, currency_code ASC
+    `);
+
+    // Also get the fallback rates for comparison
+    const { FALLBACK_RATES } = await import('../services/currencyConversionService.js');
+
+    // Group by date
+    const byDate = {};
+    for (const row of result.rows) {
+      const dateKey = row.rate_date instanceof Date ? row.rate_date.toISOString().split('T')[0] : String(row.rate_date);
+      if (!byDate[dateKey]) byDate[dateKey] = [];
+      byDate[dateKey].push({
+        currency: row.currency_code,
+        rate_to_eur: parseFloat(row.rate_to_eur),
+        is_latest: row.is_latest,
+        fetched_at: row.fetched_at,
+      });
+    }
+
+    const dates = Object.entries(byDate).map(([date, rates]) => ({
+      date,
+      currency_count: rates.length,
+      rates,
+    }));
+
+    res.json({
+      total_rates: result.rows.length,
+      dates_stored: dates.length,
+      dates,
+      fallback_rates: FALLBACK_RATES || {},
+    });
+  } catch (err) {
+    logger.error('Error retrieving exchange rates', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving exchange rates' });
+  }
+});
+
 // POST /api/info/refresh-views - Manually refresh materialized views
 router.post('/refresh-views', async (req, res) => {
   try {
