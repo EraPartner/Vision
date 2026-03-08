@@ -217,10 +217,14 @@ export default function RecipientsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                            if (confirm(`Delete recipient "${row.name}"?`)) {
-                                deleteMutation.mutate(row.id);
-                            }
+                        onClick={async () => {
+                            const ok = await confirm({
+                                title: "Delete Recipient",
+                                description: `Are you sure you want to delete recipient "${row.name}"? This action cannot be undone.`,
+                                confirmLabel: "Delete",
+                                variant: "destructive",
+                            });
+                            if (ok) deleteMutation.mutate(row.id);
                         }}
                         disabled={deleteMutation.isPending}
                     >

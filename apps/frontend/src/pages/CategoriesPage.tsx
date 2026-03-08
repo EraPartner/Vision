@@ -189,10 +189,14 @@ export default function CategoriesPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => {
-                                                                if (confirm(`Delete "${general}:${cat.detail}"?`)) {
-                                                                    deleteMutation.mutate(cat.id);
-                                                                }
+                                                            onClick={async () => {
+                                                                const ok = await confirm({
+                                                                    title: "Delete Category",
+                                                                    description: `Are you sure you want to delete "${general}:${cat.detail}"? This action cannot be undone.`,
+                                                                    confirmLabel: "Delete",
+                                                                    variant: "destructive",
+                                                                });
+                                                                if (ok) deleteMutation.mutate(cat.id);
                                                             }}
                                                             disabled={deleteMutation.isPending}
                                                         >

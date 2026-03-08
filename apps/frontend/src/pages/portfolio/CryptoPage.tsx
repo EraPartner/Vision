@@ -96,7 +96,7 @@ export default function CryptoPage() {
                         <div className="flex items-center gap-1 justify-end">
                           <AddPortfolioTxnDialog investment={h} />
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => { if (confirm(`Delete "${h.name}"?`)) deleteInvestment(h.id); }}>
+                            onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${h.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(h.id); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

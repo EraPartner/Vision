@@ -148,7 +148,7 @@ export default function PortfolioOverviewPage() {
                     <div className="flex items-center gap-1 shrink-0">
                       <AddPortfolioTxnDialog investment={inv} />
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => { if (confirm(`Delete "${inv.name}" and all its transactions?`)) deleteInvestment(inv.id); }}>
+                        onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

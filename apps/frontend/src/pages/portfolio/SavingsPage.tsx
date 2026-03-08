@@ -90,7 +90,7 @@ export default function SavingsPage() {
                   </div>
                   <AddPortfolioTxnDialog investment={a} />
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => { if (confirm(`Delete "${a.name}"?`)) deleteInvestment(a.id); }}>
+                    onClick={async () => { const ok = await confirm({ title: "Delete Account", description: `Are you sure you want to delete "${a.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(a.id); }}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

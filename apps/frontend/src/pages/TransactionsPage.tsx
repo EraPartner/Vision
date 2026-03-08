@@ -39,11 +39,16 @@ export default function TransactionsPage() {
     });
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const handleDelete = (id: number, description?: string) => {
-        if (confirm(`Delete transaction${description ? ` "${description}"` : ''}?`)) {
-            deleteMutation.mutate(id);
-        }
+    const handleDelete = async (id: number, description?: string) => {
+        const ok = await confirm({
+            title: "Delete Transaction",
+            description: `Are you sure you want to delete${description ? ` "${description}"` : " this transaction"}? This action cannot be undone.`,
+            confirmLabel: "Delete",
+            variant: "destructive",
+        });
+        if (ok) deleteMutation.mutate(id);
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
