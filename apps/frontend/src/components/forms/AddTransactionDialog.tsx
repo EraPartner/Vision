@@ -57,6 +57,11 @@ export function AddTransactionDialog() {
                     });
                     setOpen(false);
                 },
+                onError: (error: Error) => {
+                    if (error.message.includes('Duplicate')) {
+                        toast.error('Duplicate transaction detected — a matching transaction already exists.');
+                    }
+                },
             }
         );
     };
