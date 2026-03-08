@@ -125,4 +125,18 @@ router.get('/cashflow-comparison', async (req, res) => {
   }
 });
 
+// GET /api/info/category-breakdown - Detailed category breakdown with amounts
+router.get('/category-breakdown', async (req, res) => {
+  try {
+    const stats = await infoRepository.getStatistics();
+    res.json({
+      categories: stats.categories,
+      links: [],
+    });
+  } catch (err) {
+    logger.error('Error retrieving category breakdown', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving category breakdown' });
+  }
+});
+
 export default router;

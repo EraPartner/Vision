@@ -107,7 +107,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   };
 
   try {
-    const result = await importCSV(req.file.path, bank_name, customConfig);
+    const result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
     cleanup(req.file.path);
 
     res.status(201).json({
