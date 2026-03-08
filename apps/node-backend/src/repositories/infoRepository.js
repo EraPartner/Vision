@@ -652,46 +652,74 @@ export const infoRepository = {
    * Balance is computed as the running sum of all transaction amounts per account.
    */
   async getBankBalances() {
-    // Current balance per account (sum of all active transaction amounts)
-    const currentResult = await query(`
-      SELECT bank_account,
-             COUNT(*) AS transaction_count,
-             MIN(date) AS first_transaction,
-             MAX(date) AS last_transaction
-      FROM transactions
-      WHERE is_active = true AND bank_account IS NOT NULL
-      GROUP BY bank_account
-      ORDER BY bank_account
-    `);
+    // ── Fast path: use mv_bank_balances for current balances ──
+    const useMv = await mvAvailable('mv_bank_balances');
 
     const accounts = [];
     let totalNetPosition = 0;
 
-    for (const row of currentResult.rows) {
-      // Sum amounts converted to EUR for this account
-      const txResult = await query(
-        `SELECT amount, currency, date FROM transactions
-         WHERE is_active = true AND bank_account = $1`,
-        [row.bank_account]
-      );
-
-      let balanceEur = 0;
-      for (const tx of txResult.rows) {
-        const amt = parseFloat(tx.amount);
-        const dateStr = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : tx.date;
-        balanceEur += await convertToEur(amt, tx.currency, dateStr);
+    if (useMv) {
+      const mvResult = await query('SELECT * FROM mv_bank_balances ORDER BY bank_account');
+      // Group by bank_account (may have multiple currencies)
+      const byAccount = {};
+      for (const row of mvResult.rows) {
+        if (!byAccount[row.bank_account]) {
+          byAccount[row.bank_account] = {
+            bank_account: row.bank_account,
+            balance: 0,
+            transaction_count: 0,
+            first_transaction: row.first_transaction,
+            last_transaction: row.last_transaction,
+          };
+        }
+        const dateStr = row.last_transaction instanceof Date ? row.last_transaction.toISOString().split('T')[0] : String(row.last_transaction);
+        const eur = await convertToEur(parseFloat(row.balance), row.currency, dateStr);
+        byAccount[row.bank_account].balance += Math.round(eur * 100) / 100;
+        byAccount[row.bank_account].transaction_count += parseInt(row.transaction_count, 10);
+        if (row.first_transaction < byAccount[row.bank_account].first_transaction) byAccount[row.bank_account].first_transaction = row.first_transaction;
+        if (row.last_transaction > byAccount[row.bank_account].last_transaction) byAccount[row.bank_account].last_transaction = row.last_transaction;
       }
-      balanceEur = Math.round(balanceEur * 100) / 100;
-      totalNetPosition += balanceEur;
+      for (const acct of Object.values(byAccount)) {
+        totalNetPosition += acct.balance;
+        accounts.push(acct);
+      }
+    } else {
+      // Fallback: live query
+      const currentResult = await query(`
+        SELECT bank_account,
+               COUNT(*) AS transaction_count,
+               MIN(date) AS first_transaction,
+               MAX(date) AS last_transaction
+        FROM transactions
+        WHERE is_active = true AND bank_account IS NOT NULL
+        GROUP BY bank_account
+        ORDER BY bank_account
+      `);
 
-      accounts.push({
-        bank_account: row.bank_account,
-        balance: balanceEur,
-        transaction_count: parseInt(row.transaction_count, 10),
-        first_transaction: row.first_transaction,
-        last_transaction: row.last_transaction,
-      });
-    }
+      for (const row of currentResult.rows) {
+        const txResult = await query(
+          `SELECT amount, currency, date FROM transactions
+           WHERE is_active = true AND bank_account = $1`,
+          [row.bank_account]
+        );
+
+        let balanceEur = 0;
+        for (const tx of txResult.rows) {
+          const amt = parseFloat(tx.amount);
+          const dateStr = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : tx.date;
+          balanceEur += await convertToEur(amt, tx.currency, dateStr);
+        }
+        balanceEur = Math.round(balanceEur * 100) / 100;
+        totalNetPosition += balanceEur;
+
+        accounts.push({
+          bank_account: row.bank_account,
+          balance: balanceEur,
+          transaction_count: parseInt(row.transaction_count, 10),
+          first_transaction: row.first_transaction,
+          last_transaction: row.last_transaction,
+        });
+      }
 
     // Historical monthly balances (running sum up to end of each month, last 12 months)
     const historyResult = await query(`
