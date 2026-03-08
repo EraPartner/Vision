@@ -1,50 +1,54 @@
-import {useState} from "react";
-import {DataTable} from "@/components/shared/DataTable";
+import {useMemo, useState} from "react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder} from "lucide-react";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
-
-const PAGE_SIZE = 50;
-
-type TableCategory = {
-    id: number;
-    name: string;
-    general: string;
-    detail: string;
-    is_active: boolean;
-};
+import {cn} from "@/lib/utils";
 
 export default function CategoriesPage() {
-    const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
-    const { data, isLoading, error } = useCategories({
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+    const {data, isLoading, error} = useCategories({
+        limit: 500,
         active: !showAll,
     });
     const updateMutation = useUpdateCategory();
     const deleteMutation = useDeleteCategory();
 
-    const handleUpdate = (idx: number, updated: TableCategory) => {
-        const originalCategory = data?.items[idx];
-        if (!originalCategory) return;
+    const grouped = useMemo(() => {
+        if (!data?.items) return [];
+        const map = new Map<string, typeof data.items>();
+        for (const cat of data.items) {
+            const g = cat.general;
+            if (!map.has(g)) map.set(g, []);
+            map.get(g)!.push(cat);
+        }
+        return Array.from(map.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([general, items]) => ({
+                general,
+                items: items.sort((a, b) => a.detail.localeCompare(b.detail)),
+                activeCount: items.filter(i => i.is_active !== false).length,
+            }));
+    }, [data?.items]);
 
-        updateMutation.mutate({
-            id: originalCategory.id,
-            data: {
-                general: updated.general,
-                detail: updated.detail,
-            },
+    const toggleGroup = (general: string) => {
+        setExpandedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(general)) next.delete(general);
+            else next.add(general);
+            return next;
         });
     };
 
+    const expandAll = () => setExpandedGroups(new Set(grouped.map(g => g.general)));
+    const collapseAll = () => setExpandedGroups(new Set());
+
     const toggleActive = (id: number, currentActive: boolean) => {
-        updateMutation.mutate({
-            id,
-            data: { is_active: !currentActive },
-        });
+        updateMutation.mutate({id, data: {is_active: !currentActive}});
     };
 
     if (isLoading) {
@@ -67,121 +71,144 @@ export default function CategoriesPage() {
     }
 
     const totalItems = data?.total ?? data?.items?.length ?? 0;
-
-    const categories: TableCategory[] = data?.items.map((c) => ({
-        id: c.id,
-        name: `${c.general} - ${c.detail}`,
-        general: c.general,
-        detail: c.detail,
-        is_active: c.is_active ?? true,
-    })) || [];
-
-    const columns = [
-        {
-            key: "name",
-            header: "Category",
-            editable: false,
-            render: (row: TableCategory) => (
-                <span className={`font-medium whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
-                    {row.name}
-                </span>
-            ),
-        },
-        {
-            key: "general",
-            header: "General",
-            editable: true,
-            render: (row: TableCategory) => (
-                <Badge variant="secondary" className={`font-medium ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                    {row.general}
-                </Badge>
-            ),
-        },
-        {
-            key: "detail",
-            header: "Detail",
-            editable: true,
-            render: (row: TableCategory) => (
-                <Badge variant="outline" className={`font-medium ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                    {row.detail}
-                </Badge>
-            ),
-        },
-        {
-            key: "is_active",
-            header: "Status",
-            editable: false,
-            render: (row: TableCategory) => (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`gap-1.5 ${row.is_active ? 'text-accent hover:text-accent' : 'text-muted-foreground hover:text-muted-foreground opacity-50'}`}
-                    onClick={(e) => { e.stopPropagation(); toggleActive(row.id, row.is_active); }}
-                    disabled={updateMutation.isPending}
-                >
-                    {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                    {row.is_active ? 'Active' : 'Inactive'}
-                </Button>
-            ),
-        },
-        {
-            key: "delete",
-            header: "",
-            className: "w-12",
-            editable: false,
-            render: (row: TableCategory) => (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                        if (confirm(`Delete category "${row.general}:${row.detail}"?`)) {
-                            deleteMutation.mutate(row.id);
-                        }
-                    }}
-                    disabled={deleteMutation.isPending}
-                >
-                    <Trash2 className="h-4 w-4" />
-                </Button>
-            ),
-        },
-    ];
-
-    const actions = (
-        <div className="flex gap-2">
-            <Button
-                variant={showAll ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => { setShowAll(!showAll); }}
-                className="gap-1.5"
-            >
-                {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                {showAll ? "Showing All" : "Active Only"}
-            </Button>
-            <AddCategoryDialog />
-        </div>
-    );
+    const allExpanded = expandedGroups.size === grouped.length && grouped.length > 0;
 
     return (
-        <div className="space-y-8 animate-in">
-            <div>
-                <h2 className="text-3xl font-bold text-foreground">Categories</h2>
-                <p className="text-muted-foreground mt-1">Manage your transaction categories</p>
+        <div className="space-y-6 animate-in">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold text-foreground">Categories</h2>
+                    <p className="text-muted-foreground mt-1">
+                        {totalItems} categories in {grouped.length} groups
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={allExpanded ? collapseAll : expandAll}
+                        className="gap-1.5"
+                    >
+                        {allExpanded ? <Folder className="h-4 w-4"/> : <FolderOpen className="h-4 w-4"/>}
+                        {allExpanded ? "Collapse All" : "Expand All"}
+                    </Button>
+                    <Button
+                        variant={showAll ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => setShowAll(!showAll)}
+                        className="gap-1.5"
+                    >
+                        {showAll ? <Eye className="h-4 w-4"/> : <EyeOff className="h-4 w-4"/>}
+                        {showAll ? "Showing All" : "Active Only"}
+                    </Button>
+                    <AddCategoryDialog/>
+                </div>
             </div>
 
-            <DataTable
-                title="All Categories"
-                subtitle={`${totalItems} categories`}
-                columns={columns}
-                data={categories}
-                onRowUpdate={handleUpdate}
-                emptyMessage="No categories found."
-                page={page}
-                pageSize={PAGE_SIZE}
-                totalItems={totalItems}
-                onPageChange={setPage}
-                actions={actions}
-            />
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Category Tree</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="divide-y divide-border">
+                        {grouped.length === 0 && (
+                            <p className="text-muted-foreground text-center py-8">No categories found.</p>
+                        )}
+                        {grouped.map(({general, items, activeCount}) => {
+                            const isExpanded = expandedGroups.has(general);
+                            return (
+                                <div key={general}>
+                                    {/* Group header */}
+                                    <button
+                                        onClick={() => toggleGroup(general)}
+                                        className={cn(
+                                            "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+                                            "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        )}
+                                    >
+                                        {isExpanded
+                                            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/>
+                                            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>
+                                        }
+                                        <span className="font-semibold text-foreground text-sm tracking-wide">
+                                            {general}
+                                        </span>
+                                        <Badge variant="secondary" className="ml-auto text-xs font-normal">
+                                            {activeCount}{showAll && activeCount !== items.length ? `/${items.length}` : ""} {items.length === 1 ? "category" : "categories"}
+                                        </Badge>
+                                    </button>
+
+                                    {/* Detail rows */}
+                                    {isExpanded && (
+                                        <div className="bg-muted/30">
+                                            {items.map((cat) => (
+                                                <div
+                                                    key={cat.id}
+                                                    className={cn(
+                                                        "flex items-center gap-3 pl-11 pr-4 py-2.5 border-t border-border/50",
+                                                        "transition-colors hover:bg-muted/50",
+                                                        cat.is_active === false && "opacity-60"
+                                                    )}
+                                                >
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "font-medium text-xs",
+                                                            cat.is_active === false && "line-through"
+                                                        )}
+                                                    >
+                                                        {cat.detail}
+                                                    </Badge>
+
+                                                    {cat.description && (
+                                                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                                            {cat.description}
+                                                        </span>
+                                                    )}
+
+                                                    <div className="ml-auto flex items-center gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className={cn(
+                                                                "gap-1 h-7 text-xs",
+                                                                cat.is_active !== false
+                                                                    ? "text-accent hover:text-accent"
+                                                                    : "text-muted-foreground"
+                                                            )}
+                                                            onClick={() => toggleActive(cat.id, cat.is_active !== false)}
+                                                            disabled={updateMutation.isPending}
+                                                        >
+                                                            {cat.is_active !== false
+                                                                ? <ToggleRight className="h-3.5 w-3.5"/>
+                                                                : <ToggleLeft className="h-3.5 w-3.5"/>
+                                                            }
+                                                            {cat.is_active !== false ? "Active" : "Inactive"}
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => {
+                                                                if (confirm(`Delete "${general}:${cat.detail}"?`)) {
+                                                                    deleteMutation.mutate(cat.id);
+                                                                }
+                                                            }}
+                                                            disabled={deleteMutation.isPending}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }
