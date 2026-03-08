@@ -167,7 +167,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/transactions/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const fields = { ...req.body };
