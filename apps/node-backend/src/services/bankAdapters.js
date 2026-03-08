@@ -459,6 +459,83 @@ function parseVaultVoyager(filePath) {
   return transactions;
 }
 
+// ─── SABB Adapter ───
+
+function parseSABB(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const records = parse(content, {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    trim: true,
+  });
+
+  const transactions = [];
+
+  for (const row of records) {
+    try {
+      // "Transaction date" column — format: "25 Feb 2026"
+      const dateStr = (row['Transaction date'] || '').trim();
+      if (!dateStr) continue;
+
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) continue;
+
+      // "Amount(SAR)" column — format: "-153.01 SAR"
+      const amountRaw = (row['Amount(SAR)'] || '').trim();
+      if (!amountRaw) continue;
+      const amountStr = amountRaw.replace(/[A-Za-z\s]/g, '').trim();
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount)) continue;
+
+      // Description contains card number prefix + merchant name
+      const descriptionRaw = (row['Description'] || '').trim();
+      // Strip leading card number (16 digits) if present
+      const descCleaned = descriptionRaw.replace(/^\d{16}/, '').trim();
+      const recipient = descCleaned ? normalizeToUppercase(cleanRecipientName(descCleaned)) : 'UNKNOWN';
+
+      const memo = descriptionRaw ? normalizeToUppercase(descriptionRaw) : '';
+
+      // Status and posting date for comment
+      const status = (row['Status'] || '').trim();
+      const postingDate = (row['Posting date'] || '').trim();
+      const otherCurrency = (row['Amount(Other Currency)'] || '').trim();
+
+      const commentParts = [];
+      if (status) commentParts.push(`Status: ${status}`);
+      if (postingDate) commentParts.push(`Posting Date: ${postingDate}`);
+      if (otherCurrency) commentParts.push(`Other Currency: ${otherCurrency}`);
+      const comment = commentParts.length ? commentParts.join(' | ') : null;
+
+      // Currency extracted from Amount(SAR) field
+      const currencyMatch = amountRaw.match(/[A-Z]{3}/);
+      const currency = currencyMatch ? currencyMatch[0] : 'SAR';
+
+      const rawData = Object.values(row).join('|');
+
+      transactions.push({
+        date,
+        bankAccount: 'SABB',
+        recipient,
+        memo,
+        amount,
+        currency,
+        balance: null,
+        recipientAccount: null,
+        recipientAddress: null,
+        recipientBankName: null,
+        comment,
+        rawData,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  logger.info(`SABB CSV parsed: ${transactions.length} transactions`);
+  return transactions;
+}
+
 // ─── Factory ───
 
 const BANK_CONFIGURATIONS = {
@@ -466,6 +543,7 @@ const BANK_CONFIGURATIONS = {
   revolut: { bankName: 'Revolut', parser: parseRevolut },
   kbc: { bankName: 'KBC', parser: parseKBC },
   vault_voyager: { bankName: 'Vault Voyager', parser: parseVaultVoyager },
+  sabb: { bankName: 'SABB', parser: parseSABB },
 };
 
 export function createAdapter(bankName, customConfig = null) {

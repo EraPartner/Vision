@@ -40,6 +40,7 @@ router.get('/supported-adapters', async (req, res) => {
     { key: 'belfius', name: 'Belfius', adapter_class: 'BelfiusAdapter' },
     { key: 'revolut', name: 'Revolut', adapter_class: 'RevolutAdapter' },
     { key: 'vault_voyager', name: 'Vault Voyager', adapter_class: 'VaultVoyagerAdapter' },
+    { key: 'sabb', name: 'SABB', adapter_class: 'SABBAdapter' },
   ];
   res.json({ adapters, total_count: adapters.length });
 });
