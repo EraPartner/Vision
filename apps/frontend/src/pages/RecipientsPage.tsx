@@ -312,6 +312,9 @@ export default function RecipientsPage() {
                     columns={columns}
                     data={recipients}
                     onRowUpdate={handleUpdate}
+                    onRowDoubleClick={(row) => {
+                        navigate(`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`);
+                    }}
                     emptyMessage="No recipients found."
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}
