@@ -120,7 +120,7 @@ export function AddTransactionDialog() {
 
                     <div className="space-y-2">
                         <Label htmlFor="tx_memo">Description / Memo</Label>
-                        <Input id="tx_memo" placeholder="Transaction description" value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
+                        <Input id="tx_memo" placeholder="Transaction description" maxLength={500} value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
                     </div>
 
                     <div className="space-y-2">
