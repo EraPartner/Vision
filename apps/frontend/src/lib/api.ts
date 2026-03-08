@@ -446,6 +446,38 @@ class ApiClient {
         return this.request('/api/info/bank-balances');
     }
 
+    async getRecurringPatterns(): Promise<{
+        patterns: Array<{
+            recipientId: number;
+            recipientName: string;
+            detectedPattern: string;
+            intervalDays: number;
+            consistency: number;
+            occurrences: number;
+            averageAmount: number;
+            latestAmount: number;
+            currency: string;
+            categoryId: number | null;
+            categoryName: string | null;
+            bankAccount: string | null;
+            firstSeen: string;
+            lastSeen: string;
+            predictedNext: string;
+            amountChanges: Array<{
+                date: string;
+                previousAmount: number;
+                newAmount: number;
+                percentChange: number;
+                direction: string;
+            }>;
+            isAlreadyPlanned: boolean;
+            confidence: number;
+        }>;
+        total: number;
+    }> {
+        return this.request('/api/info/recurring-patterns');
+    }
+
     // ==================== Portfolio / Investments ====================
 
     async getInvestments(params?: {

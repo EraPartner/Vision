@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
+import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -493,6 +494,9 @@ export default function PlannedPaymentsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recurring Pattern Detection */}
+      <RecurringDetectionPanel />
 
       <DataTable
         title="All Payments"
