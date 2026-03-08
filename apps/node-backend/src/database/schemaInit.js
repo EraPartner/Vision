@@ -22,6 +22,7 @@
 
 import { query } from './connection.js';
 import { logger } from '../config/logger.js';
+import { createMaterializedViews, refreshMaterializedViews } from '../services/materializedViewService.js';
 
 /**
  * Run the full schema initialisation. Safe to call on every startup.
