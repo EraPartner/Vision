@@ -222,6 +222,7 @@ export interface PlannedTransactionExecuteRequest {
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
 export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation';
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type PriceProvider = 'manual' | 'coingecko' | 'yahoo' | 'kraken' | 'custom';
 
 export interface Investment {
     id: number;
@@ -234,6 +235,10 @@ export interface Investment {
     maturity_date?: string;
     location?: string;
     notes?: string;
+    price_provider: PriceProvider;
+    price_provider_id?: string;
+    price_provider_url?: string;
+    price_updated_at?: string;
     is_active: boolean;
     created_at: string;
     updated_at: string;
@@ -257,6 +262,9 @@ export interface InvestmentCreate {
     maturity_date?: string;
     location?: string;
     notes?: string;
+    price_provider?: PriceProvider;
+    price_provider_id?: string;
+    price_provider_url?: string;
 }
 
 export interface InvestmentUpdate {
@@ -270,6 +278,9 @@ export interface InvestmentUpdate {
     location?: string;
     notes?: string;
     is_active?: boolean;
+    price_provider?: PriceProvider;
+    price_provider_id?: string;
+    price_provider_url?: string;
 }
 
 export interface PortfolioTransaction {

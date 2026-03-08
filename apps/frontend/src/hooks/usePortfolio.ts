@@ -94,6 +94,9 @@ export function usePortfolio() {
       maturity_date: data.maturity_date,
       location: data.location,
       notes: data.notes,
+      price_provider: data.price_provider,
+      price_provider_id: data.price_provider_id,
+      price_provider_url: data.price_provider_url,
     });
   }, [addInvestmentMutation]);
 
@@ -113,6 +116,19 @@ export function usePortfolio() {
   const deleteTransaction = useCallback((id: number) => {
     deleteTxnMutation.mutate(id);
   }, [deleteTxnMutation]);
+
+  const refreshPricesMutation = useMutation({
+    mutationFn: () => apiClient.refreshInvestmentPrices(),
+    onSuccess: (data) => {
+      invalidateAll();
+      toast.success(`Updated prices for ${data.updated} investment(s)`);
+    },
+    onError: (err: Error) => toast.error(`Failed to refresh prices: ${err.message}`),
+  });
+
+  const refreshPrices = useCallback(() => {
+    refreshPricesMutation.mutate();
+  }, [refreshPricesMutation]);
 
   // ---- computed summaries ----
 
@@ -179,6 +195,7 @@ export function usePortfolio() {
     investments, transactions, summaries,
     addInvestment, updateInvestment, deleteInvestment,
     addTransaction, deleteTransaction,
+    refreshPrices, isRefreshingPrices: refreshPricesMutation.isPending,
     byAssetClass, totalPortfolioValue, totalGainLoss,
   };
 }
