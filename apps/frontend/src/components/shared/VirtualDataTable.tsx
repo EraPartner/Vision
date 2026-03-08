@@ -331,84 +331,80 @@ export function VirtualDataTable<T extends Record<string, any>>({
 
             <CardContent className="p-0">
                 {/* Sticky header */}
-                <div className="overflow-x-auto">
-                    <Table style={{ tableLayout: "fixed" }}>
-                        <TableHeader>
-                            <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                {columns.map((col) => {
-                                    const width = columnWidths[col.key];
-                                    const isSortable = col.sortable !== false && !!col.header;
-                                    const isFilterable = col.filterable !== false && !!col.header;
-                                    const hasFilter = !!columnFilters[col.key];
+                <div className="overflow-x-auto border-b border-border">
+                    <div className="flex items-center bg-muted/50 min-h-[40px]">
+                        {columns.map((col) => {
+                            const width = columnWidths[col.key];
+                            const isSortable = col.sortable !== false && !!col.header;
+                            const isFilterable = col.filterable !== false && !!col.header;
+                            const hasFilter = !!columnFilters[col.key];
 
-                                    return (
-                                        <TableHead
-                                            key={col.key}
-                                            className={`font-semibold text-muted-foreground relative select-none group ${col.className || ""}`}
-                                            style={width ? { width: `${width}px` } : undefined}
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                {isSortable ? (
-                                                    <button
-                                                        onClick={() => handleSort(col.key)}
-                                                        className="flex items-center gap-1 hover:text-foreground transition-colors text-left"
-                                                    >
-                                                        <span className="pr-0.5">{col.header}</span>
-                                                        <SortIcon colKey={col.key} />
+                            return (
+                                <div
+                                    key={col.key}
+                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 ${col.className || ""}`}
+                                    style={width ? { width: `${width}px`, flex: "none" } : undefined}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        {isSortable ? (
+                                            <button
+                                                onClick={() => handleSort(col.key)}
+                                                className="flex items-center gap-1 hover:text-foreground transition-colors text-left"
+                                            >
+                                                <span className="pr-0.5">{col.header}</span>
+                                                <SortIcon colKey={col.key} />
+                                            </button>
+                                        ) : (
+                                            <span className="pr-2">{col.header}</span>
+                                        )}
+
+                                        {isFilterable && col.header && (
+                                            <Popover
+                                                open={openFilter === col.key}
+                                                onOpenChange={(open) => setOpenFilter(open ? col.key : null)}
+                                            >
+                                                <PopoverTrigger asChild>
+                                                    <button className={`p-0.5 rounded transition-colors ${
+                                                        hasFilter
+                                                            ? "text-primary"
+                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
+                                                    }`}>
+                                                        <Filter className="h-3 w-3" />
                                                     </button>
-                                                ) : (
-                                                    <span className="pr-2">{col.header}</span>
-                                                )}
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-56 p-2" align="start">
+                                                    <ColumnFilter
+                                                        columnKey={col.key}
+                                                        header={col.header}
+                                                        value={columnFilters[col.key] || ""}
+                                                        onChange={(v) => setColumnFilter(col.key, v)}
+                                                        uniqueValues={uniqueValues[col.key] || []}
+                                                        onClose={() => setOpenFilter(null)}
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        )}
+                                    </div>
 
-                                                {isFilterable && col.header && (
-                                                    <Popover
-                                                        open={openFilter === col.key}
-                                                        onOpenChange={(open) => setOpenFilter(open ? col.key : null)}
-                                                    >
-                                                        <PopoverTrigger asChild>
-                                                            <button className={`p-0.5 rounded transition-colors ${
-                                                                hasFilter
-                                                                    ? "text-primary"
-                                                                    : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
-                                                            }`}>
-                                                                <Filter className="h-3 w-3" />
-                                                            </button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-56 p-2" align="start">
-                                                            <ColumnFilter
-                                                                columnKey={col.key}
-                                                                header={col.header}
-                                                                value={columnFilters[col.key] || ""}
-                                                                onChange={(v) => setColumnFilter(col.key, v)}
-                                                                uniqueValues={uniqueValues[col.key] || []}
-                                                                onClose={() => setOpenFilter(null)}
-                                                            />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                )}
-                                            </div>
-
-                                            {col.header && (
-                                                <div
-                                                    className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-all"
-                                                    onMouseDown={(e) => {
-                                                        const th = e.currentTarget.parentElement;
-                                                        const currentWidth = th ? th.getBoundingClientRect().width : 120;
-                                                        handleResizeStart(e, col.key, currentWidth);
-                                                    }}
-                                                />
-                                            )}
-                                        </TableHead>
-                                    );
-                                })}
-                                {hasEditableColumns && (
-                                    <TableHead className="w-24 text-right font-semibold text-muted-foreground">
-                                        Edit
-                                    </TableHead>
-                                )}
-                            </TableRow>
-                        </TableHeader>
-                    </Table>
+                                    {col.header && (
+                                        <div
+                                            className="absolute right-0 top-2 bottom-2 w-px bg-border cursor-col-resize hover:w-0.5 hover:bg-primary/50 active:bg-primary transition-all"
+                                            onMouseDown={(e) => {
+                                                const el = e.currentTarget.parentElement;
+                                                const currentWidth = el ? el.getBoundingClientRect().width : 120;
+                                                handleResizeStart(e, col.key, currentWidth);
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {hasEditableColumns && (
+                            <div className="px-4 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "96px", flex: "none" }}>
+                                Edit
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Virtualised scrollable body */}
