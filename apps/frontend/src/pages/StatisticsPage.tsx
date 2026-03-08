@@ -428,7 +428,7 @@ function ChartCard({
   graphExclusions: Record<string, boolean>;
   toggleGraphExclusion: (key: string) => void;
   exclusionsApply: boolean;
-  children: (data: StatisticsData) => React.ReactNode;
+  children: (data: StatisticsData) => ReactNode;
 }) {
   const data = getGraphData(graphKey);
   if (!data) return null;
