@@ -162,6 +162,65 @@ export const infoRepository = {
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    // ── Fast path: read from mv_monthly_summary ──
+    if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
+      const mvResult = await query(`
+        SELECT month_start, month, year, currency, category_id,
+               SUM(transaction_count) AS transaction_count,
+               SUM(total_income) AS total_income,
+               SUM(total_spending) AS total_spending,
+               SUM(net_amount) AS net_amount
+        FROM mv_monthly_summary
+        WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')
+        GROUP BY month_start, month, year, currency
+        ORDER BY month_start
+      `);
+
+      const monthMap = {};
+      for (const row of mvResult.rows) {
+        const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+        if (!monthMap[key]) {
+          monthMap[key] = {
+            month: row.month, year: row.year,
+            period_start: row.month_start,
+            period_end: null,
+            total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
+          };
+        }
+        const dateStr = row.month_start instanceof Date ? row.month_start.toISOString().split('T')[0] : String(row.month_start);
+        const income = await convertToEur(parseFloat(row.total_income), row.currency, dateStr);
+        const spending = await convertToEur(parseFloat(row.total_spending), row.currency, dateStr);
+
+        monthMap[key].total_income += income;
+        monthMap[key].total_spending += spending;
+        monthMap[key].net_amount += income + spending;
+        monthMap[key].transaction_count += parseInt(row.transaction_count, 10);
+      }
+
+      const months = Object.values(monthMap)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+        .map(m => ({
+          ...m,
+          period_end: new Date(m.year, m.month, 0).toISOString().split('T')[0],
+          total_spending: Math.round(m.total_spending * 100) / 100,
+          total_income: Math.round(m.total_income * 100) / 100,
+          net_amount: Math.round(m.net_amount * 100) / 100,
+        }));
+
+      const summary = {
+        total_spending: months.reduce((s, m) => s + m.total_spending, 0),
+        total_income: months.reduce((s, m) => s + m.total_income, 0),
+        net_amount: months.reduce((s, m) => s + m.net_amount, 0),
+        transaction_count: months.reduce((s, m) => s + m.transaction_count, 0),
+        period_start: months[0]?.period_start,
+        period_end: months[months.length - 1]?.period_end,
+      };
+
+      return { months, summary };
+    }
+
+    // ── Fallback: live query with exclusions ──
     const excludeClause = validIds.length > 0
       ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((_, i) => `$${i + 1}`).join(',')})`
       : '';
@@ -206,7 +265,7 @@ export const infoRepository = {
           transaction_count: 0,
         };
       }
-      if (row.txn_id == null) continue; // LEFT JOIN produced null row
+      if (row.txn_id == null) continue;
 
       const amt = parseFloat(row.amount);
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
