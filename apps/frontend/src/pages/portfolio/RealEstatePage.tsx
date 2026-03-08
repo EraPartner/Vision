@@ -14,6 +14,7 @@ function fmt(val: number, currency = 'EUR', decimals = 0) {
 
 export default function RealEstatePage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
 
   const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
