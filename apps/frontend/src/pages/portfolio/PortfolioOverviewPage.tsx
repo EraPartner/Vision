@@ -21,6 +21,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function PortfolioOverviewPage() {
   const { summaries, totalPortfolioValue, totalGainLoss, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const totalInvested = summaries.reduce((s, i) => s + i.totalInvested, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
