@@ -52,6 +52,9 @@ export interface Recipient {
     primary_bank_account?: string;
     default_category_id?: number;
     default_category_name?: string;
+    primary_recipient_id?: number | null;
+    primary_recipient_name?: string | null;
+    alias_count?: number;
     notes?: string;
     is_active: boolean;
     created_at: string;
