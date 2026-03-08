@@ -589,25 +589,83 @@ export default function ImportPage() {
             </div>
           </div>
 
-          {/* Import button */}
-          <Button
-            onClick={handleImport}
-            disabled={!file || loading}
-            className="w-full h-11"
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Importing…
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Import Transactions
-              </>
+          {/* Progress indicator */}
+          {progress && loading && (
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground font-medium capitalize">
+                  {progress.phase === 'counting' && 'Analyzing file…'}
+                  {progress.phase === 'parsing' && 'Parsing CSV…'}
+                  {progress.phase === 'importing' && `Importing transactions…`}
+                  {progress.phase === 'connecting' && 'Connecting…'}
+                </span>
+                <span className="text-foreground font-semibold">{progress.percent}%</span>
+              </div>
+              <Progress value={progress.percent} className="h-2" />
+              {progress.phase === 'importing' && progress.total > 0 && (
+                <div className="flex gap-4 text-xs text-muted-foreground">
+                  <span>{progress.current} / {progress.total} rows</span>
+                  <span className="text-green-600 dark:text-green-400">✓ {progress.imported} imported</span>
+                  <span className="text-amber-600 dark:text-amber-400">⊘ {progress.duplicates} duplicates</span>
+                  {progress.errors > 0 && (
+                    <span className="text-destructive">✗ {progress.errors} errors</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Import complete summary */}
+          {progress && !loading && progress.phase === 'complete' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-green-800 dark:text-green-300">Import complete</p>
+                <p className="text-green-700 dark:text-green-400">
+                  {progress.imported} imported, {progress.duplicates} duplicates, {progress.errors} errors
+                </p>
+              </div>
+            </div>
+          )}
+
+          {progress && !loading && progress.phase === 'error' && (
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+              <XCircle className="h-5 w-5 text-destructive shrink-0" />
+              <p className="text-sm font-medium text-destructive">Import failed. Please try again.</p>
+            </div>
+          )}
+
+          {/* Import / Cancel button */}
+          <div className="flex gap-2">
+            <Button
+              onClick={handleImport}
+              disabled={!file || loading}
+              className="flex-1 h-11"
+              size="lg"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import Transactions
+                </>
+              )}
+            </Button>
+            {loading && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-11"
+                onClick={handleCancelImport}
+              >
+                Cancel
+              </Button>
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
 
