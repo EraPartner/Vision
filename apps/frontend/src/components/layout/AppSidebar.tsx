@@ -37,6 +37,7 @@ const budgetingNav = [
   { title: "Recipients", url: "/recipients", icon: Users },
   { title: "Planned", url: "/planned", icon: CalendarClock },
   { title: "Statistics", url: "/statistics", icon: BarChart3 },
+  { title: "Recipient Insights", url: "/recipient-insights", icon: Briefcase },
 ];
 
 const budgetingActions = [
