@@ -81,6 +81,42 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   }
 });
 
+// GET /api/investments/providers
+router.get('/providers', (req, res) => {
+  res.json({ providers: SUPPORTED_PROVIDERS });
+});
+
+// POST /api/investments/refresh-prices
+router.post('/refresh-prices', async (req, res) => {
+  try {
+    const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
+    const toRefresh = allInvestments.filter(i => i.price_provider && i.price_provider !== 'manual' && i.price_provider_id);
+
+    if (toRefresh.length === 0) {
+      return res.json({ updated: 0, message: 'No investments with live price providers' });
+    }
+
+    const prices = await fetchLivePrices(toRefresh);
+    let updated = 0;
+
+    for (const [investmentId, price] of Object.entries(prices)) {
+      if (price != null && !isNaN(price)) {
+        await investmentRepository.update(parseInt(investmentId, 10), {
+          current_price: price,
+          price_updated_at: new Date().toISOString(),
+        });
+        updated++;
+      }
+    }
+
+    logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
+    res.json({ updated, total: toRefresh.length, prices });
+  } catch (err) {
+    logger.error('Failed to refresh prices', { error: err.message });
+    res.status(500).json({ detail: 'Failed to refresh investment prices' });
+  }
+});
+
 // ==================== Portfolio Transactions ====================
 
 // GET /api/investments/:id/transactions
