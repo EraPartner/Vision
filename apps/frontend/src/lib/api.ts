@@ -223,6 +223,23 @@ class ApiClient {
         });
     }
 
+    async mergeRecipients(primaryId: number, aliasIds: number[]): Promise<{ primary: Recipient; merged_ids: number[]; aliases: Array<{ id: number; name: string }> }> {
+        return this.request(`/api/recipients/${primaryId}/merge`, {
+            method: 'POST',
+            body: JSON.stringify({ alias_ids: aliasIds }),
+        });
+    }
+
+    async unmergeRecipient(id: number): Promise<Recipient> {
+        return this.request<Recipient>(`/api/recipients/${id}/unmerge`, {
+            method: 'POST',
+        });
+    }
+
+    async getRecipientAliases(id: number): Promise<{ items: Recipient[]; total: number }> {
+        return this.request(`/api/recipients/${id}/aliases`);
+    }
+
     // ==================== Planned Transactions Methods ====================
 
     async getPlannedTransactions(params?: {

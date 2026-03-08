@@ -13,9 +13,12 @@ export const recipientRepository = {
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
              (SELECT rba.account_number FROM recipient_bank_accounts rba
               WHERE rba.recipient_id = r.id AND rba.is_active = true
-              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account
+              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account,
+             pr.name AS primary_recipient_name,
+             (SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id) AS alias_count
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE 1=1
     `;
     const params = [];
@@ -79,9 +82,12 @@ export const recipientRepository = {
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
              (SELECT rba.account_number FROM recipient_bank_accounts rba
               WHERE rba.recipient_id = r.id AND rba.is_active = true
-              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account
+              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account,
+             pr.name AS primary_recipient_name,
+             (SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id) AS alias_count
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE r.id = $1
     `;
     const result = await query(sql, [id]);
@@ -144,6 +150,44 @@ export const recipientRepository = {
   async hardDelete(id) {
     const result = await query('DELETE FROM recipients WHERE id = $1', [id]);
     return result.rowCount > 0;
+  },
+
+  /**
+   * Merge: set primary_recipient_id on alias recipients pointing to a primary.
+   * @param {number} primaryId - The primary recipient ID
+   * @param {number[]} aliasIds - Array of recipient IDs to merge into the primary
+   */
+  async mergeRecipients(primaryId, aliasIds) {
+    if (!aliasIds.length) return [];
+    const placeholders = aliasIds.map((_, i) => `$${i + 2}`).join(',');
+    const sql = `UPDATE recipients SET primary_recipient_id = $1, updated_at = NOW() WHERE id IN (${placeholders}) AND id != $1 RETURNING id`;
+    const result = await query(sql, [primaryId, ...aliasIds]);
+    return result.rows.map(r => r.id);
+  },
+
+  /**
+   * Unmerge: remove primary_recipient_id from a recipient.
+   */
+  async unmergeRecipient(id) {
+    const sql = `UPDATE recipients SET primary_recipient_id = NULL, updated_at = NOW() WHERE id = $1 RETURNING id`;
+    const result = await query(sql, [id]);
+    return result.rows.length > 0;
+  },
+
+  /**
+   * Get all aliases for a primary recipient.
+   */
+  async getAliases(primaryId) {
+    const sql = `
+      SELECT r.*, 
+             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name
+      FROM recipients r
+      LEFT JOIN categories c ON r.default_category_id = c.id
+      WHERE r.primary_recipient_id = $1
+      ORDER BY r.name
+    `;
+    const result = await query(sql, [primaryId]);
+    return result.rows;
   },
 };
 
