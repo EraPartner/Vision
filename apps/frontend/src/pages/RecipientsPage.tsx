@@ -16,7 +16,6 @@ type TableRecipient = {
     default_category_name?: string;
     is_active: boolean;
     notes?: string;
-    address?: string;
 };
 
 export default function RecipientsPage() {
