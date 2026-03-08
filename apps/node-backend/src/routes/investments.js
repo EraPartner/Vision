@@ -57,24 +57,12 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   }
 });
 
-// DELETE /api/investments/:id
-router.delete('/:id', validateIdParam, async (req, res) => {
-  try {
-    const ok = await investmentRepository.hardDelete(parseInt(req.params.id, 10));
-    if (!ok) return res.status(404).json({ detail: 'Investment not found' });
-    res.status(204).end();
-  } catch (err) {
-    logger.error('Failed to delete investment', { error: err.message });
-    res.status(500).json({ detail: 'Failed to delete investment' });
-  }
-});
-
-// GET /api/investments/providers
+// GET /api/investments/providers (must be before /:id)
 router.get('/providers', (req, res) => {
   res.json({ providers: SUPPORTED_PROVIDERS });
 });
 
-// POST /api/investments/refresh-prices
+// POST /api/investments/refresh-prices (must be before /:id)
 router.post('/refresh-prices', async (req, res) => {
   try {
     const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
@@ -102,6 +90,18 @@ router.post('/refresh-prices', async (req, res) => {
   } catch (err) {
     logger.error('Failed to refresh prices', { error: err.message });
     res.status(500).json({ detail: 'Failed to refresh investment prices' });
+  }
+});
+
+// GET /api/investments/:id
+router.get('/:id', validateIdParam, async (req, res) => {
+  try {
+    const inv = await investmentRepository.getById(parseInt(req.params.id, 10));
+    if (!inv) return res.status(404).json({ detail: 'Investment not found' });
+    res.json(inv);
+  } catch (err) {
+    logger.error('Failed to get investment', { error: err.message });
+    res.status(500).json({ detail: 'Failed to retrieve investment' });
   }
 });
 
