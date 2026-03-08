@@ -115,6 +115,7 @@ app.use('/api/info', infoRouter);
 app.use('/api/admin', adminRateLimiter, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
+app.use('/api/settings', settingsRouter);
 
 logger.info('All route modules registered successfully');
 
