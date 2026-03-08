@@ -1,5 +1,5 @@
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip,} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 const COLORS = [
     "hsl(var(--primary))",
@@ -13,10 +13,63 @@ const COLORS = [
 
 interface CategoryPieChartProps {
     data: Array<{ name: string; value: number }>;
+    embedded?: boolean;
 }
 
-export function CategoryPieChart({ data }: CategoryPieChartProps) {
+export function CategoryPieChart({ data, embedded = false }: CategoryPieChartProps) {
+    const chartContent = (
+        <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={data}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={3}
+                        dataKey="value"
+                        stroke="none"
+                    >
+                        {data.map((_, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        contentStyle={{
+                            borderRadius: "var(--radius)",
+                            border: "1px solid hsl(var(--border))",
+                            background: "hsl(var(--card))",
+                            color: "hsl(var(--card-foreground))",
+                        }}
+                        formatter={(value: number) => [`€${value.toLocaleString()}`, "Amount"]}
+                    />
+                    <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        iconSize={8}
+                        formatter={(value) => (
+                            <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 12 }}>
+                                {value}
+                            </span>
+                        )}
+                    />
+                </PieChart>
+            </ResponsiveContainer>
+        </div>
+    );
+
     if (!data || data.length === 0) {
+        const emptyContent = (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+                No category data available
+            </div>
+        );
+        
+        if (embedded) {
+            return emptyContent;
+        }
+        
         return (
             <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
@@ -25,13 +78,16 @@ export function CategoryPieChart({ data }: CategoryPieChartProps) {
                     <p className="text-sm text-muted-foreground">This month's breakdown</p>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-72 flex items-center justify-center text-muted-foreground">
-                        No category data available
-                    </div>
+                    {emptyContent}
                 </CardContent>
             </Card>
         );
     }
+
+    if (embedded) {
+        return chartContent;
+    }
+
     return (
         <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
@@ -40,45 +96,7 @@ export function CategoryPieChart({ data }: CategoryPieChartProps) {
                 <p className="text-sm text-muted-foreground">This month's breakdown</p>
             </CardHeader>
             <CardContent>
-                <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={data}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={100}
-                                paddingAngle={3}
-                                dataKey="value"
-                                stroke="none"
-                            >
-                                {data.map((_, index) => (
-                                    <Cell key={index} fill={COLORS[index % COLORS.length]}/>
-                                ))}
-                            </Pie>
-                            <Tooltip
-                                contentStyle={{
-                                    borderRadius: "var(--radius)",
-                                    border: "1px solid hsl(var(--border))",
-                                    background: "hsl(var(--card))",
-                                    color: "hsl(var(--card-foreground))",
-                                }}
-                                formatter={(value: number) => [`€${value.toLocaleString()}`, "Amount"]}
-                            />
-                            <Legend
-                                verticalAlign="bottom"
-                                iconType="circle"
-                                iconSize={8}
-                                formatter={(value) => (
-                                    <span style={{color: "hsl(var(--muted-foreground))", fontSize: 12}}>
-                    {value}
-                  </span>
-                                )}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
+                {chartContent}
             </CardContent>
         </Card>
     );
