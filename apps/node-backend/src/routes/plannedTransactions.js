@@ -66,7 +66,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/planned-transactions/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const pt = await plannedTransactionRepository.getById(parseInt(req.params.id, 10));
     if (!pt) {
