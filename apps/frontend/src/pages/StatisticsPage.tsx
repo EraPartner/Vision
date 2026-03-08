@@ -562,7 +562,13 @@ export default function StatisticsPage() {
               {(d) => <CategoryTrendChart data={d} />}
             </ChartCard>
           </div>
-          <CategoryPivotTable data={getGraphData("pivotTable") || data} />
+          <CategoryPivotTable 
+            data={getGraphData("pivotTable") || data} 
+            graphKey="pivotTable"
+            isFiltered={graphExclusions["pivotTable"] ?? true}
+            onToggle={toggleGraphExclusion}
+            exclusionsApply={exclusionsApply}
+          />
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
