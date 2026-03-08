@@ -80,10 +80,13 @@ export const transactionRepository = {
         t.currency ILIKE $${paramIdx} OR
         CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
         r.name ILIKE $${paramIdx} OR
+        pr.name ILIKE $${paramIdx} OR
         c.general ILIKE $${paramIdx} OR
         c.detail ILIKE $${paramIdx} OR
         rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx}
+        rc.detail ILIKE $${paramIdx} OR
+        pc.general ILIKE $${paramIdx} OR
+        pc.detail ILIKE $${paramIdx}
       )`;
       paramIdx++;
       params.push(searchParam);
