@@ -278,6 +278,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ detail: `Transaction with ID ${id} not found` });
     }
+    scheduleRefresh();
     res.json({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
   } catch (err) {
     logger.error('Error deleting transaction', { error: err.message });
