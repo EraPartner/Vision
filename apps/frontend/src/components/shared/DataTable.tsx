@@ -178,9 +178,9 @@ export function DataTable<T extends Record<string, any>>({
             });
         }
 
-        // Apply global search
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
+        // Apply global search (only for client-side search)
+        if (!isServerSearch && localSearchQuery.trim()) {
+            const q = localSearchQuery.toLowerCase();
             result = result.filter((row) =>
                 columns.some((col) => {
                     const val = row[col.key];
