@@ -41,7 +41,7 @@ export function AddCategoryDialog() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="general">General</Label>
-                        <Input id="general" placeholder="e.g. FOOD" value={form.general} onChange={(e) => setForm(f => ({...f, general: e.target.value}))} required />
+                        <Input id="general" placeholder="e.g. FOOD" maxLength={100} value={form.general} onChange={(e) => setForm(f => ({...f, general: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="detail">Detail</Label>
