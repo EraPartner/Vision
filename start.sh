@@ -8,7 +8,7 @@
 set -e
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
-POSTGRES_DATA_DIR="$PROJECT_ROOT/apps/backend/postgres_data"
+POSTGRES_DATA_DIR="$PROJECT_ROOT/postgres_data"
 POSTGRES_LOG="$POSTGRES_DATA_DIR/postgres.log"
 
 # Colors
