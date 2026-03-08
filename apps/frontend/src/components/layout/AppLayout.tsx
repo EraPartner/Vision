@@ -52,7 +52,9 @@ export function AppLayout({children}: AppLayoutProps) {
                 </div>
             </div>
             <DashboardSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-            <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} />
+            {!onboardingLoading && (
+                <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} />
+            )}
         </SidebarProvider>
     );
 }
