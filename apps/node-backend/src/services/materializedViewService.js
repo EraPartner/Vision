@@ -66,7 +66,10 @@ export async function createMaterializedViews() {
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
     WHERE t.is_active = true
-    GROUP BY category_id, name, t.currency
+    GROUP BY
+      COALESCE(c.id, -1),
+      COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
+      t.currency
     ORDER BY count DESC
   `);
 

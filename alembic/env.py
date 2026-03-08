@@ -1,55 +1,60 @@
 import os
 import sys
 from logging.config import fileConfig
+from dotenv import load_dotenv
 
 from alembic import context
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
-# Add the parent directory to path to import application modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Load environment variables from .env.local if present
+config_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_local_path = os.path.join(config_dir, "config", ".env.local")
+if os.path.exists(env_local_path):
+    load_dotenv(env_local_path, override=True)
 
-# Import application configuration and models
-from config.config import get_settings
-# Import Base and ensure all model modules are loaded so their Table objects
-# are registered on Base.metadata. Importing raw_transaction_models explicitly
-# makes sure TransactionRawReference and other cross-module classes are
-# present when Alembic inspects target_metadata.
-from database.models import Base
+# Get database URL from environment variable
+database_url = os.getenv(
+    "DATABASE_URL",
+    "postgresql://ftm_user@localhost:5433/financial_transactions"
+)
 
+# Handle SQLite path resolution if using SQLite
+if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///"):
+    default_db_path = os.path.join(config_dir, "financial_transactions.db")
+    database_url = f"sqlite:///{default_db_path}"
+
+# Try to load models for autogenerate support (optional - continues if fails)
+target_metadata = None
 try:
-    # Explicit import to register models declared in a separate module
-    from database import raw_transaction_models  # noqa: F401
-except Exception:
-    # Log in case the import fails but continue; Alembic will still attempt autogenerate
+    sys.path.insert(0, os.path.join(config_dir, "apps", "backend"))
+    from database.models import Base
+    target_metadata = Base.metadata
+    
+    try:
+        from database import raw_transaction_models  # noqa: F401
+    except Exception:
+        pass  # Continue even if raw_transaction_models can't be imported
+except Exception as e:
+    # If models can't be imported, Alembic will still work for migrations
+    # but autogenerate functionality will be limited
     import logging
-
-    logging.getLogger(__name__).warning('Could not import database.raw_transaction_models during Alembic env setup')
+    logging.getLogger(__name__).warning(
+        f'Could not import database models for autogenerate support: {e}\n'
+        'Alembic will still work for manual migrations.'
+    )
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Get database URL from application settings
-settings = get_settings()
-database_url = settings.database.url
-
-# Handle SQLite path resolution
-if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///"):
-    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_db_path = os.path.join(backend_dir, "financial_transactions.db")
-    database_url = f"sqlite:///{default_db_path}"
-
-# Override sqlalchemy.url with the application's configured database URL
+# Override sqlalchemy.url with the configured database URL
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# Set target metadata for autogenerate support
-target_metadata = Base.metadata
 
 
 # Helper to determine render_as_batch for SQLite (required for certain ALTER ops)
