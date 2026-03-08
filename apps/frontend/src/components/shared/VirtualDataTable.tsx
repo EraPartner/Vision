@@ -403,7 +403,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                             );
                         })}
                         {hasEditableColumns && (
-                            <div className="px-4 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "96px", flex: "none" }}>
+                            <div className="px-2 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "40px", flex: "none" }}>
                                 Edit
                             </div>
                         )}
@@ -485,7 +485,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     );
                                                 })}
                                                 {hasEditableColumns && (
-                                                    <div className="px-4 py-2 text-right" style={{ width: "96px", flex: "none" }}>
+                                                    <div className="px-1 py-2 text-right" style={{ width: "40px", flex: "none" }}>
                                                         {isEditing ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <Button variant="ghost" size="icon"

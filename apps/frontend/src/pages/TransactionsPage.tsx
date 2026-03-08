@@ -247,6 +247,8 @@ export default function TransactionsPage() {
             editable: false,
             sortable: false,
             filterable: false,
+            defaultWidth: 48,
+            minWidth: 40,
             render: (row: TableTransaction) => {
                 const items = [
                     { label: "Bank Account", value: row.bank },
