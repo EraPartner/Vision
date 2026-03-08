@@ -16,6 +16,13 @@ import type {
   PlannedTransactionsListResponse,
   PlannedTransactionUpdate,
   PlannedTransactionExecuteRequest,
+  Investment,
+  InvestmentCreate,
+  InvestmentUpdate,
+  InvestmentsListResponse,
+  PortfolioTransaction,
+  PortfolioTransactionCreate,
+  PortfolioTransactionsListResponse,
 } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
@@ -421,7 +428,66 @@ class ApiClient {
         return this.request('/api/info/monthly-summary');
     }
 
-    // ==================== CSV Import ====================
+    // ==================== Portfolio / Investments ====================
+
+    async getInvestments(params?: {
+        limit?: number;
+        offset?: number;
+        asset_class?: string;
+        active?: boolean;
+    }): Promise<InvestmentsListResponse> {
+        const queryParams = new URLSearchParams();
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) queryParams.append(key, String(value));
+            });
+        }
+        const q = queryParams.toString();
+        return this.request<InvestmentsListResponse>(`/api/investments${q ? `?${q}` : ''}`);
+    }
+
+    async getInvestment(id: number): Promise<Investment> {
+        return this.request<Investment>(`/api/investments/${id}`);
+    }
+
+    async createInvestment(data: InvestmentCreate): Promise<Investment> {
+        return this.request<Investment>('/api/investments', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    async updateInvestment(id: number, data: InvestmentUpdate): Promise<Investment> {
+        return this.request<Investment>(`/api/investments/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    }
+
+    async deleteInvestment(id: number): Promise<void> {
+        await this.request<void>(`/api/investments/${id}`, { method: 'DELETE' });
+    }
+
+    async getPortfolioTransactions(investmentId: number, params?: {
+        type?: string;
+        limit?: number;
+        offset?: number;
+    }): Promise<PortfolioTransactionsListResponse> {
+        const queryParams = new URLSearchParams();
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) queryParams.append(key, String(value));
+            });
+        }
+        const q = queryParams.toString();
+        return this.request<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions${q ? `?${q}` : ''}`);
+    }
+
+    async createPortfolioTransaction(investmentId: number, data: PortfolioTransactionCreate): Promise<PortfolioTransaction> {
+        return this.request<PortfolioTransaction>(`/api/investments/${investmentId}/transactions`, {
+            method: 'POST', body: JSON.stringify(data),
+        });
+    }
+
+    async deletePortfolioTransaction(txnId: number): Promise<void> {
+        await this.request<void>(`/api/investments/transactions/${txnId}`, { method: 'DELETE' });
+    }
+
+    // ==================== Private Helpers ====================
 
     private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         const headers: HeadersInit = {
@@ -439,7 +505,6 @@ class ApiClient {
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
             
-            // Handle FastAPI 422 validation errors
             if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
                 const validationErrors = error.detail.map((err: any) => {
                     const field = err.loc ? err.loc.join('.') : 'unknown';
@@ -448,14 +513,8 @@ class ApiClient {
                 throw new Error(`Validation error: ${validationErrors}`);
             }
             
-            if (typeof error.detail === 'string') {
-                throw new Error(error.detail);
-            }
-            
-            if (error.message && typeof error.message === 'string') {
-                throw new Error(error.message);
-            }
-            
+            if (typeof error.detail === 'string') throw new Error(error.detail);
+            if (error.message && typeof error.message === 'string') throw new Error(error.message);
             throw new Error(`Request failed with status ${response.status}`);
         }
 
@@ -464,4 +523,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-export type {Transaction, Category, Recipient, PlannedTransaction};
+export type {Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction};
