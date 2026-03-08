@@ -12,7 +12,7 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@/components/ui/sidebar";
-import {CalendarClock, Import, LayoutDashboard, Receipt, Tags, Users, Wallet} from "lucide-react";
+import {BarChart3, CalendarClock, Import, LayoutDashboard, Receipt, Tags, Users, Wallet} from "lucide-react";
 
 const navItems = [
     {title: "Dashboard", url: "/", icon: LayoutDashboard},
