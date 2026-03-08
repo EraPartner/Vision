@@ -117,6 +117,7 @@ export default function MarketLookupPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
   const debouncedSearch = useDebounce(searchText, 300);
+  const { summaries } = usePortfolio();
 
   // Search
   const { data: searchResults, isFetching: isSearching } = useQuery({
