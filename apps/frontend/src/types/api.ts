@@ -49,12 +49,10 @@ export interface CategoryUpdate {
 export interface Recipient {
     id: number;
     name: string;
-    account_number?: string; // Deprecated: use primary_bank_account instead
-    primary_bank_account?: string; // Primary bank account associated with this recipient
+    primary_bank_account?: string;
     default_category_id?: number;
-    default_category_name?: string; // Default category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
+    default_category_name?: string;
     notes?: string;
-    address?: string;
     is_active: boolean;
     created_at: string;
     updated_at?: string;
@@ -71,18 +69,14 @@ export interface RecipientsListResponse {
 
 export interface RecipientCreate {
     name: string;
-    account_number?: string;
     default_category_id?: number;
     notes?: string;
-    address?: string;
 }
 
 export interface RecipientUpdate {
     name?: string;
-    account_number?: string;
     default_category_id?: number;
     notes?: string;
-    address?: string;
     is_active?: boolean;
 }
 

@@ -16,7 +16,6 @@ type TableRecipient = {
     default_category_name?: string;
     is_active: boolean;
     notes?: string;
-    address?: string;
 };
 
 export default function RecipientsPage() {
@@ -39,7 +38,6 @@ export default function RecipientsPage() {
             data: {
                 name: updated.name,
                 notes: updated.notes,
-                address: updated.address,
                 is_active: updated.is_active,
             },
         });
@@ -80,7 +78,6 @@ export default function RecipientsPage() {
         default_category_name: r.default_category_name,
         is_active: r.is_active,
         notes: r.notes || '',
-        address: r.address || '',
     })) || [];
 
     const columns = [
@@ -153,14 +150,6 @@ export default function RecipientsPage() {
             editable: true,
             render: (row: TableRecipient) => (
                 <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>{row.notes || '-'}</span>
-            ),
-        },
-        {
-            key: "address",
-            header: "Address",
-            editable: true,
-            render: (row: TableRecipient) => (
-                <span className="text-sm text-muted-foreground">{row.address || '-'}</span>
             ),
         },
         {

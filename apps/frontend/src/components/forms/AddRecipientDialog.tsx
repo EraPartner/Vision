@@ -10,7 +10,7 @@ import {useCreateRecipient} from "@/hooks/useRecipients";
 export function AddRecipientDialog() {
     const [open, setOpen] = useState(false);
     const createMutation = useCreateRecipient();
-    const [form, setForm] = useState({name: "", account_number: "", notes: "", address: ""});
+    const [form, setForm] = useState({name: "", notes: ""});
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,13 +19,11 @@ export function AddRecipientDialog() {
         createMutation.mutate(
             {
                 name: form.name.trim(),
-                account_number: form.account_number.trim() || undefined,
                 notes: form.notes.trim() || undefined,
-                address: form.address.trim() || undefined,
             },
             {
                 onSuccess: () => {
-                    setForm({name: "", account_number: "", notes: "", address: ""});
+                    setForm({name: "", notes: ""});
                     setOpen(false);
                 },
             }
@@ -47,14 +45,6 @@ export function AddRecipientDialog() {
                     <div className="space-y-2">
                         <Label htmlFor="name">Name</Label>
                         <Input id="name" placeholder="Recipient name" value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="account_number">Account Number (optional)</Label>
-                        <Input id="account_number" placeholder="e.g. DE89370400440532013000" value={form.account_number} onChange={(e) => setForm(f => ({...f, account_number: e.target.value}))} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="address">Address (optional)</Label>
-                        <Input id="address" placeholder="Recipient address" value={form.address} onChange={(e) => setForm(f => ({...f, address: e.target.value}))} />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="notes">Notes (optional)</Label>
