@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \" apps/backend/venv/bin/python apps/backend/main.py\" \" vite --config config/vite.config.ts \"",
+    "dev": "concurrently \"cd apps/node-backend && node src/main.js\" \"vite --config config/vite.config.ts\"",
+    "dev:python": "concurrently \"apps/backend/venv/bin/python apps/backend/main.py\" \"vite --config config/vite.config.ts\"",
     "build": "vite build --config config/vite.config.ts",
     "build:dev": "vite build --mode development --config config/vite.config.ts",
     "lint": "eslint . --config config/eslint.config.js",
     "preview": "vite preview --config config/vite.config.ts",
-    "backend": "cd apps/backend && python main.py",
-    "backend:install": "cd apps/backend && pip install -r requirements.txt"
+    "backend": "cd apps/node-backend && node src/main.js",
+    "backend:python": "cd apps/backend && python main.py",
+    "backend:install": "cd apps/node-backend && npm install"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
