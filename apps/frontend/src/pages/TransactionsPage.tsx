@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info } from "lucide-react";
+import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X } from "lucide-react";
 import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
