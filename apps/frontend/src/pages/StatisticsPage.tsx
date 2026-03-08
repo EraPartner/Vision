@@ -286,7 +286,19 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
 }
 
 // ─── Category Pivot Table ─────────────────────────────────
-function CategoryPivotTable({ data }: { data: StatisticsData }) {
+function CategoryPivotTable({ 
+  data, 
+  graphKey, 
+  isFiltered, 
+  onToggle, 
+  exclusionsApply 
+}: { 
+  data: StatisticsData;
+  graphKey: string;
+  isFiltered: boolean;
+  onToggle: (key: string) => void;
+  exclusionsApply: boolean;
+}) {
   const [yearFilter, setYearFilter] = useState<string>("all");
 
   const filteredPeriods = useMemo(() => {
@@ -314,22 +326,30 @@ function CategoryPivotTable({ data }: { data: StatisticsData }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
         <div>
           <CardTitle>Category Pivot Table</CardTitle>
           <CardDescription>Category spending broken down by month</CardDescription>
         </div>
-        <Select value={yearFilter} onValueChange={setYearFilter}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Year" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Years</SelectItem>
-            {data.allYears.map((y) => (
-              <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {data.allYears.map((y) => (
+                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ExclusionToggle
+            graphKey={graphKey}
+            isFiltered={isFiltered}
+            onToggle={onToggle}
+            exclusionsApply={exclusionsApply}
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="w-full">
