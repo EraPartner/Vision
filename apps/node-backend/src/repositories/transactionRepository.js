@@ -20,6 +20,7 @@ export const transactionRepository = {
     categoryId = null,
     recipientId = null,
     recipientName = null,
+    search = null,
     active = true,
   } = {}) {
     let sql = `
@@ -66,6 +67,23 @@ export const transactionRepository = {
       sql += ` AND r.name ILIKE $${paramIdx++}`;
       params.push(`%${recipientName}%`);
     }
+    if (search) {
+      const searchParam = `%${search}%`;
+      sql += ` AND (
+        t.memo ILIKE $${paramIdx} OR
+        t.comment ILIKE $${paramIdx} OR
+        t.bank_account ILIKE $${paramIdx} OR
+        t.currency ILIKE $${paramIdx} OR
+        CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
+        r.name ILIKE $${paramIdx} OR
+        c.general ILIKE $${paramIdx} OR
+        c.detail ILIKE $${paramIdx} OR
+        rc.general ILIKE $${paramIdx} OR
+        rc.detail ILIKE $${paramIdx}
+      )`;
+      paramIdx++;
+      params.push(searchParam);
+    }
 
     sql += ` ORDER BY t.date DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(limit, offset);
@@ -84,11 +102,14 @@ export const transactionRepository = {
     categoryId = null,
     recipientId = null,
     recipientName = null,
+    search = null,
     active = true,
   } = {}) {
     let sql = `
       SELECT count(*) FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
       WHERE 1=1
     `;
     const params = [];
@@ -120,6 +141,23 @@ export const transactionRepository = {
     if (recipientName) {
       sql += ` AND r.name ILIKE $${paramIdx++}`;
       params.push(`%${recipientName}%`);
+    }
+    if (search) {
+      const searchParam = `%${search}%`;
+      sql += ` AND (
+        t.memo ILIKE $${paramIdx} OR
+        t.comment ILIKE $${paramIdx} OR
+        t.bank_account ILIKE $${paramIdx} OR
+        t.currency ILIKE $${paramIdx} OR
+        CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
+        r.name ILIKE $${paramIdx} OR
+        c.general ILIKE $${paramIdx} OR
+        c.detail ILIKE $${paramIdx} OR
+        rc.general ILIKE $${paramIdx} OR
+        rc.detail ILIKE $${paramIdx}
+      )`;
+      paramIdx++;
+      params.push(searchParam);
     }
 
     const result = await query(sql, params);

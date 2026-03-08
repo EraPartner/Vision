@@ -14,13 +14,14 @@ const router = Router();
 // GET /api/categories
 router.get('/', async (req, res) => {
   try {
-    const { limit = 50, offset = 0, general, detail, active = 'true' } = req.query;
+    const { limit = 50, offset = 0, general, detail, active = 'true', search } = req.query;
 
     const opts = {
       limit: Math.min(parseInt(limit, 10) || 50, 1000),
       offset: parseInt(offset, 10) || 0,
       general: general || null,
       detail: detail || null,
+      search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
     };
 

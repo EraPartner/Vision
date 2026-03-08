@@ -29,10 +29,12 @@ type TableTransaction = {
 export default function TransactionsPage() {
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
+    const [search, setSearch] = useState("");
     const { data, isLoading, error } = useTransactions({ 
         limit: PAGE_SIZE, 
         offset: page * PAGE_SIZE, 
-        active: !showAll  // false = all transactions, true = active only
+        active: !showAll,
+        search: search || undefined,
     });
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
@@ -288,6 +290,7 @@ export default function TransactionsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
+                onSearchChange={setSearch}
                 actions={actions}
             />
         </div>

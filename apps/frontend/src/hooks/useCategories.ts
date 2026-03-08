@@ -9,6 +9,7 @@ export function useCategories(params?: {
     general?: string;
     detail?: string;
     active?: boolean;
+    search?: string;
 }) {
     return useQuery({
         queryKey: ['categories', params],

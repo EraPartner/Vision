@@ -7,7 +7,7 @@
 import { query } from '../database/connection.js';
 
 export const recipientRepository = {
-  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, active = true } = {}) {
+  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true } = {}) {
     let sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
@@ -24,6 +24,18 @@ export const recipientRepository = {
     if (active) sql += ` AND r.is_active = true`;
     if (name) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${name}%`); }
     if (defaultCategoryId != null) { sql += ` AND r.default_category_id = $${paramIdx++}`; params.push(defaultCategoryId); }
+    if (search) {
+      const sp = `%${search}%`;
+      sql += ` AND (
+        r.name ILIKE $${paramIdx} OR
+        r.notes ILIKE $${paramIdx} OR
+        c.general ILIKE $${paramIdx} OR
+        c.detail ILIKE $${paramIdx} OR
+        EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number ILIKE $${paramIdx})
+      )`;
+      paramIdx++;
+      params.push(sp);
+    }
 
     sql += ` ORDER BY r.name LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(limit, offset);
@@ -32,14 +44,30 @@ export const recipientRepository = {
     return result.rows;
   },
 
-  async getCount({ name = null, defaultCategoryId = null, active = true } = {}) {
-    let sql = `SELECT count(*) FROM recipients r WHERE 1=1`;
+  async getCount({ name = null, defaultCategoryId = null, search = null, active = true } = {}) {
+    let sql = `
+      SELECT count(*) FROM recipients r
+      LEFT JOIN categories c ON r.default_category_id = c.id
+      WHERE 1=1
+    `;
     const params = [];
     let paramIdx = 1;
 
     if (active) sql += ` AND r.is_active = true`;
     if (name) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${name}%`); }
     if (defaultCategoryId != null) { sql += ` AND r.default_category_id = $${paramIdx++}`; params.push(defaultCategoryId); }
+    if (search) {
+      const sp = `%${search}%`;
+      sql += ` AND (
+        r.name ILIKE $${paramIdx} OR
+        r.notes ILIKE $${paramIdx} OR
+        c.general ILIKE $${paramIdx} OR
+        c.detail ILIKE $${paramIdx} OR
+        EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number ILIKE $${paramIdx})
+      )`;
+      paramIdx++;
+      params.push(sp);
+    }
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);
