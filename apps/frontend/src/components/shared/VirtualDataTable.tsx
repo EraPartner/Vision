@@ -442,7 +442,13 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     width: "100%",
                                                     transform: `translateY(${virtualRow.start}px)`,
                                                 }}
-                                                onDoubleClick={() => onRowDoubleClick?.(row, idx)}
+                                                onDoubleClick={() => {
+                                                    if (onRowDoubleClick) {
+                                                        onRowDoubleClick(row, idx);
+                                                    } else if (hasEditableColumns && !isEditing) {
+                                                        startEditing(idx, row);
+                                                    }
+                                                }}
                                             >
                                             >
                                                 {columns.map((col) => {
