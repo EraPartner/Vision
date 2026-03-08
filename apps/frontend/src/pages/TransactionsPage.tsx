@@ -163,7 +163,7 @@ export default function TransactionsPage() {
             type: "date" as const,
             render: (row: TableTransaction) => (
                 <span className={`whitespace-nowrap ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
-                    {row.date || '—'}
+                    {row.date ? row.date.split('T')[0] : '—'}
                 </span>
             ),
         },
