@@ -268,9 +268,9 @@ export function DataTable<T extends Record<string, any>>({
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search across all columns…"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={isServerSearch ? "Search database…" : "Search across all columns…"}
+                        value={isServerSearch ? localSearchQuery : localSearchQuery}
+                        onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
                     />
                     {searchQuery && (
