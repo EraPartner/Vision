@@ -71,7 +71,7 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 
 // PATCH /api/categories/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const updated = await categoryRepository.update(id, req.body);
