@@ -285,7 +285,7 @@ export function DataTable<T extends Record<string, any>>({
                         </Button>
                     )}
                 </div>
-                {(activeFilterCount > 0 || searchQuery || sortKey) && (
+                {(activeFilterCount > 0 || localSearchQuery || sortKey) && (
                     <Button
                         variant="ghost"
                         size="sm"
