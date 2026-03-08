@@ -2,9 +2,8 @@ import { useState } from 'react';
 import {SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
 import {AppSidebar} from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, Sun, Moon } from "lucide-react";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
-import {Sun, Moon} from "lucide-react";
 import {useTheme} from "@/contexts/ThemeContext";
 
 interface AppLayoutProps {
