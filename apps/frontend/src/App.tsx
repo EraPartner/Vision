@@ -27,6 +27,7 @@ const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
 const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
 const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
 const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
+const NetWorthPage = lazy(() => import("./pages/portfolio/NetWorthPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
