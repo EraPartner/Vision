@@ -94,6 +94,9 @@ export function usePortfolio() {
       maturity_date: data.maturity_date,
       location: data.location,
       notes: data.notes,
+      price_provider: data.price_provider,
+      price_provider_id: data.price_provider_id,
+      price_provider_url: data.price_provider_url,
     });
   }, [addInvestmentMutation]);
 
