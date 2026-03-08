@@ -10,6 +10,7 @@ import os from 'os';
 import path from 'path';
 import { importCSV } from '../services/importService.js';
 import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
+import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { logger } from '../config/logger.js';
 
