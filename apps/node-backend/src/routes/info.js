@@ -242,6 +242,18 @@ router.get('/exchange-rates', async (req, res) => {
   }
 });
 
+// POST /api/info/exchange-rates/refresh - Fetch fresh rates from ECB and save to database
+router.post('/exchange-rates/refresh', async (req, res) => {
+  try {
+    const { warmCache } = await import('../services/currencyConversionService.js');
+    await warmCache();
+    res.json({ message: 'Exchange rates refreshed from ECB' });
+  } catch (err) {
+    logger.error('Error refreshing exchange rates', { error: err.message });
+    res.status(500).json({ detail: 'Error refreshing exchange rates' });
+  }
+});
+
 // POST /api/info/refresh-views - Manually refresh materialized views
 router.post('/refresh-views', async (req, res) => {
   try {
