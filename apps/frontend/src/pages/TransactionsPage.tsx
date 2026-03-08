@@ -9,6 +9,7 @@ import {getCategoryColor} from "@/utils/categoryColors";
 import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 import {RecipientCombobox} from "@/components/shared/RecipientCombobox";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 const PAGE_SIZE = 50;
 
