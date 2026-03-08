@@ -495,6 +495,9 @@ export default function PlannedPaymentsPage() {
         </Card>
       </div>
 
+      {/* Recurring Pattern Detection */}
+      <RecurringDetectionPanel />
+
       <DataTable
         title="All Payments"
         subtitle={`${payments.length} planned payments`}
