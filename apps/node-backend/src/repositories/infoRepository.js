@@ -489,134 +489,139 @@ export const infoRepository = {
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const currentDay = now.getDate();
 
-    // --- 1. Average daily cumulative from last 6 complete months ---
-    const sqlAvg = `
-      WITH past_months AS (
-        SELECT generate_series(
-          date_trunc('month', CURRENT_DATE) - interval '6 months',
-          date_trunc('month', CURRENT_DATE) - interval '1 month',
-          interval '1 month'
-        )::date AS month_start
-      ),
-      daily_net AS (
-        SELECT
-          pm.month_start,
-          EXTRACT(DAY FROM t.date)::int AS day_of_month,
-          SUM(t.amount) AS net
-        FROM past_months pm
-        JOIN transactions t ON t.date >= pm.month_start
-          AND t.date < pm.month_start + interval '1 month'
-          AND t.is_active = true
-        GROUP BY pm.month_start, EXTRACT(DAY FROM t.date)
-      ),
-      cumulative AS (
-        SELECT
-          month_start,
-          day_of_month,
-          SUM(net) OVER (PARTITION BY month_start ORDER BY day_of_month) AS cumulative_net
-        FROM daily_net
-      )
-      SELECT
-        day_of_month,
-        AVG(cumulative_net) AS avg_cumulative
-      FROM cumulative
-      GROUP BY day_of_month
-      ORDER BY day_of_month
+    // --- 1. Average daily cumulative from last 6 complete months (with EUR conversion) ---
+    const sqlPast = `
+      SELECT t.amount, t.currency, t.date,
+             EXTRACT(DAY FROM t.date)::int AS day_of_month,
+             TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
+      FROM transactions t
+      WHERE t.is_active = true
+        AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
+        AND t.date < date_trunc('month', CURRENT_DATE)
     `;
-    const avgResult = await query(sqlAvg);
+    const pastResult = await query(sqlPast);
 
-    // --- 2. Current month daily cumulative ---
+    // Convert each row and group by month+day
+    const monthDayNet = {}; // { monthKey: { day: netEur } }
+    for (const row of pastResult.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const mk = row.month_key;
+      if (!monthDayNet[mk]) monthDayNet[mk] = {};
+      monthDayNet[mk][row.day_of_month] = (monthDayNet[mk][row.day_of_month] || 0) + eur;
+    }
+
+    // Build cumulative per month, then average across months
+    const monthKeys = Object.keys(monthDayNet);
+    const monthCount = monthKeys.length || 1;
+    const avgCumulativeByDay = {};
+    for (const mk of monthKeys) {
+      const dayNet = monthDayNet[mk];
+      const days = Object.keys(dayNet).map(Number).sort((a, b) => a - b);
+      let cum = 0;
+      const cumByDay = {};
+      for (const d of days) {
+        cum += dayNet[d];
+        cumByDay[d] = cum;
+      }
+      // Fill forward for missing days
+      let last = 0;
+      for (let d = 1; d <= 31; d++) {
+        if (cumByDay[d] !== undefined) last = cumByDay[d];
+        else cumByDay[d] = last;
+        avgCumulativeByDay[d] = (avgCumulativeByDay[d] || 0) + cumByDay[d];
+      }
+    }
+    for (const d of Object.keys(avgCumulativeByDay)) {
+      avgCumulativeByDay[d] /= monthCount;
+    }
+
+    // --- 2. Current month daily cumulative (with EUR conversion) ---
     const sqlCurrent = `
-      SELECT
-        EXTRACT(DAY FROM t.date)::int AS day_of_month,
-        SUM(t.amount) AS net
+      SELECT t.amount, t.currency, t.date,
+             EXTRACT(DAY FROM t.date)::int AS day_of_month
       FROM transactions t
       WHERE t.is_active = true
         AND t.date >= date_trunc('month', CURRENT_DATE)
         AND t.date <= CURRENT_DATE
-      GROUP BY EXTRACT(DAY FROM t.date)
-      ORDER BY day_of_month
     `;
     const currentResult = await query(sqlCurrent);
 
-    // Build cumulative for current month
-    let currentCumulative = 0;
-    const currentDays = currentResult.rows.map(r => {
-      currentCumulative += parseFloat(r.net);
-      return { day: r.day_of_month, cumulative: currentCumulative };
-    });
+    const currentDayNet = {};
+    for (const row of currentResult.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const d = row.day_of_month;
+      currentDayNet[d] = (currentDayNet[d] || 0) + eur;
+    }
 
-    // --- 3. Planned expenses for current month ---
+    let currentCumulative = 0;
+    const currentByDay = {};
+    for (let d = 1; d <= currentDay; d++) {
+      currentCumulative += (currentDayNet[d] || 0);
+      currentByDay[d] = currentCumulative;
+    }
+
+    // --- 3. Planned expenses for current month (with EUR conversion) ---
     const sqlPlanned = `
-      SELECT
-        EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
-        SUM(pt.amount) AS net
+      SELECT pt.amount, pt.currency, pt.planned_date,
+             EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
       FROM planned_transactions pt
       WHERE pt.is_active = true
         AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
         AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
-      GROUP BY EXTRACT(DAY FROM pt.planned_date)
-      ORDER BY day_of_month
     `;
     const plannedResult = await query(sqlPlanned);
 
-    // Build planned daily map
     const plannedByDay = {};
     for (const row of plannedResult.rows) {
-      plannedByDay[row.day_of_month] = parseFloat(row.net);
+      const amt = parseFloat(row.amount);
+      const dateStr = row.planned_date instanceof Date ? row.planned_date.toISOString().split('T')[0] : String(row.planned_date);
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const d = row.day_of_month;
+      plannedByDay[d] = (plannedByDay[d] || 0) + eur;
     }
 
-    // --- 4. Historical planned impact on past 6 months (average) ---
-    const sqlPlannedHistorical = `
-      WITH past_months AS (
-        SELECT generate_series(
-          date_trunc('month', CURRENT_DATE) - interval '6 months',
-          date_trunc('month', CURRENT_DATE) - interval '1 month',
-          interval '1 month'
-        )::date AS month_start
-      ),
-      planned_daily AS (
-        SELECT
-          pm.month_start,
-          EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
-          SUM(pt.amount) AS net
-        FROM past_months pm
-        JOIN planned_transactions pt ON pt.planned_date >= pm.month_start
-          AND pt.planned_date < pm.month_start + interval '1 month'
-          AND pt.is_active = true
-        GROUP BY pm.month_start, EXTRACT(DAY FROM pt.planned_date)
-      ),
-      cumulative AS (
-        SELECT
-          month_start,
-          day_of_month,
-          SUM(net) OVER (PARTITION BY month_start ORDER BY day_of_month) AS cumulative_net
-        FROM planned_daily
-      )
-      SELECT
-        day_of_month,
-        AVG(cumulative_net) AS avg_cumulative_planned
-      FROM cumulative
-      GROUP BY day_of_month
-      ORDER BY day_of_month
+    // --- 4. Historical planned impact on past 6 months (with EUR conversion) ---
+    const sqlPlannedHist = `
+      SELECT pt.amount, pt.currency, pt.planned_date,
+             EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
+             TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
+      FROM planned_transactions pt
+      WHERE pt.is_active = true
+        AND pt.planned_date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
+        AND pt.planned_date < date_trunc('month', CURRENT_DATE)
     `;
-    const plannedHistResult = await query(sqlPlannedHistorical);
-    const plannedHistByDay = {};
+    const plannedHistResult = await query(sqlPlannedHist);
+
+    const plannedHistMonthDay = {};
     for (const row of plannedHistResult.rows) {
-      plannedHistByDay[row.day_of_month] = parseFloat(row.avg_cumulative_planned);
+      const amt = parseFloat(row.amount);
+      const dateStr = row.planned_date instanceof Date ? row.planned_date.toISOString().split('T')[0] : String(row.planned_date);
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const mk = row.month_key;
+      if (!plannedHistMonthDay[mk]) plannedHistMonthDay[mk] = {};
+      plannedHistMonthDay[mk][row.day_of_month] = (plannedHistMonthDay[mk][row.day_of_month] || 0) + eur;
+    }
+
+    const plannedHistMonthCount = Object.keys(plannedHistMonthDay).length || 1;
+    const avgPlannedCumByDay = {};
+    for (const mk of Object.keys(plannedHistMonthDay)) {
+      const dayNet = plannedHistMonthDay[mk];
+      const days = Object.keys(dayNet).map(Number).sort((a, b) => a - b);
+      let cum = 0;
+      for (const d of days) {
+        cum += dayNet[d];
+        avgPlannedCumByDay[d] = (avgPlannedCumByDay[d] || 0) + cum;
+      }
+    }
+    for (const d of Object.keys(avgPlannedCumByDay)) {
+      avgPlannedCumByDay[d] /= plannedHistMonthCount;
     }
 
     // --- Build response ---
-    const avgByDay = {};
-    for (const row of avgResult.rows) {
-      avgByDay[row.day_of_month] = parseFloat(row.avg_cumulative);
-    }
-
-    const currentByDay = {};
-    for (const d of currentDays) {
-      currentByDay[d.day] = d.cumulative;
-    }
-
     const withoutPlanned = [];
     const withPlanned = [];
     let lastAvg = 0;
@@ -624,7 +629,7 @@ export const infoRepository = {
     let plannedCumulative = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const avgVal = avgByDay[day] !== undefined ? avgByDay[day] : lastAvg;
+      const avgVal = avgCumulativeByDay[day] !== undefined ? avgCumulativeByDay[day] : lastAvg;
       lastAvg = avgVal;
 
       const currentVal = day <= currentDay ? (currentByDay[day] !== undefined ? currentByDay[day] : (lastCurrent !== null ? lastCurrent : 0)) : null;
@@ -637,7 +642,7 @@ export const infoRepository = {
       });
 
       // With planned
-      const plannedHistVal = plannedHistByDay[day] !== undefined ? plannedHistByDay[day] : 0;
+      const plannedHistVal = avgPlannedCumByDay[day] || 0;
       const avgWithPlanned = avgVal + plannedHistVal;
 
       plannedCumulative += (plannedByDay[day] || 0);
