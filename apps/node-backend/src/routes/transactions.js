@@ -311,7 +311,7 @@ function formatTransaction(row) {
     amount_eur: amountEur,
     currency: row.currency,
     balance: row.balance != null ? parseFloat(row.balance) : null,
-    category_id: row.category_id,
+    category_id: row.effective_category_id ?? row.category_id,
     category_name: row.category_name || null,
     comment: row.comment,
     is_active: row.is_active,

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type { Transaction, Category } from '@/types/api';
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useSettings } from '@/contexts/SettingsContext';
 
@@ -147,8 +147,24 @@ function processTransactions(
   };
 }
 
+/**
+ * Per-graph exclusion override state.
+ * Each graph can independently toggle exclusions on/off.
+ */
+export type GraphExclusions = Record<string, boolean>; // graphKey -> useExclusions (true = apply exclusions)
+
 export function useStatistics() {
   const { settings } = useSettings();
+
+  // Per-graph override state: defaults to true (apply exclusions) for all graphs
+  const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
+
+  const toggleGraphExclusion = useCallback((graphKey: string) => {
+    setGraphExclusions(prev => ({
+      ...prev,
+      [graphKey]: !(prev[graphKey] ?? true),
+    }));
+  }, []);
 
   const transactionsQuery = useQuery({
     queryKey: ['transactions', 'all-for-stats'],
@@ -183,10 +199,13 @@ export function useStatistics() {
     staleTime: 60000,
   });
 
+  // Check if exclusions should apply to statistics
+  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
+
+  // Compute full (with exclusions) and unfiltered stats
   const stats = useMemo(() => {
     if (!transactionsQuery.data || !categoriesQuery.data) return null;
 
-    // Build exclusion sets from settings
     let hiddenCategoryIds: number[] = [];
     if (settings.excludeHiddenCategories) {
       hiddenCategoryIds = categoriesQuery.data
@@ -200,16 +219,33 @@ export function useStatistics() {
     ]);
     const excludedRecipientIds = new Set(settings.excludedRecipientIds);
 
-    return processTransactions(
-      transactionsQuery.data,
-      categoriesQuery.data,
-      excludedCategoryIds,
-      excludedRecipientIds,
-    );
-  }, [transactionsQuery.data, categoriesQuery.data, settings]);
+    // Filtered stats (with exclusions)
+    const filtered = exclusionsApply
+      ? processTransactions(transactionsQuery.data, categoriesQuery.data, excludedCategoryIds, excludedRecipientIds)
+      : processTransactions(transactionsQuery.data, categoriesQuery.data, new Set(), new Set());
+
+    // Unfiltered stats (no exclusions) - needed for per-graph toggle
+    const unfiltered = exclusionsApply
+      ? processTransactions(transactionsQuery.data, categoriesQuery.data, new Set(), new Set())
+      : filtered;
+
+    return { filtered, unfiltered };
+  }, [transactionsQuery.data, categoriesQuery.data, settings, exclusionsApply]);
+
+  // Helper to get data for a specific graph
+  const getGraphData = useCallback((graphKey: string): StatisticsData | null => {
+    if (!stats) return null;
+    const useExclusions = graphExclusions[graphKey] ?? true;
+    return useExclusions ? stats.filtered : stats.unfiltered;
+  }, [stats, graphExclusions]);
 
   return {
-    data: stats,
+    data: stats?.filtered ?? null,
+    unfilteredData: stats?.unfiltered ?? null,
+    getGraphData,
+    graphExclusions,
+    toggleGraphExclusion,
+    exclusionsApply,
     isLoading: transactionsQuery.isLoading || categoriesQuery.isLoading,
     isError: transactionsQuery.isError || categoriesQuery.isError,
     error: transactionsQuery.error || categoriesQuery.error,

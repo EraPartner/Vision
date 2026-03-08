@@ -16,6 +16,9 @@ interface FilteredDashboardStats {
 export function useFilteredDashboardStats() {
   const { settings } = useSettings();
 
+  // Check if exclusions should apply to dashboard
+  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard';
+
   return useQuery<FilteredDashboardStats>({
     queryKey: ['filteredDashboardStats', settings],
     queryFn: async () => {
@@ -24,17 +27,17 @@ export function useFilteredDashboardStats() {
 
       // Resolve hidden category IDs if needed
       let hiddenCategoryIds: number[] = [];
-      if (settings.excludeHiddenCategories) {
+      if (exclusionsApply && settings.excludeHiddenCategories) {
         const categoriesData = await apiClient.getCategories({ limit: 1000 });
         hiddenCategoryIds = categoriesData.items
           .filter((cat) => !cat.active)
           .map((cat) => cat.id);
       }
 
-      const allExcludedCategoryIds = [
+      const allExcludedCategoryIds = exclusionsApply ? [
         ...settings.excludedCategoryIds,
         ...hiddenCategoryIds,
-      ];
+      ] : [];
 
       // Fetch monthly financial summary (6 months) with excluded categories
       const monthlySummary = await apiClient.getMonthlyFinancialSummary({
@@ -50,8 +53,8 @@ export function useFilteredDashboardStats() {
         }
       }
 
-      // If no recipient exclusions, we can use the API data directly
-      if (settings.excludedRecipientIds.length === 0) {
+      // If no recipient exclusions (or exclusions don't apply), we can use the API data directly
+      if (!exclusionsApply || settings.excludedRecipientIds.length === 0) {
         return {
           totalTransactions: countData.total_transactions,
           monthlyIncome: lastMonthWithData.total_income,
