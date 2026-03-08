@@ -183,71 +183,41 @@ export default function TransactionsPage() {
             },
         },
         {
-            key: "bank", 
-            header: "Bank", 
-            editable: true,
-            render: (row: TableTransaction) => (
-                <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
-                    {row.bank}
-                </span>
-            ),
-        },
-        {
-            key: "amount",
-            header: "Amount",
-            className: "text-right",
-            editable: true,
-            type: "number" as const,
+            key: "info",
+            header: "Info",
+            editable: false,
+            sortable: false,
+            filterable: false,
             render: (row: TableTransaction) => {
-                const formattedAmount = new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: row.currency,
-                }).format(Math.abs(row.amount));
-                
+                const items = [
+                    {label: "Bank Account", value: row.bank},
+                    {label: "Currency", value: row.currency},
+                    {label: "Balance", value: row.balance != null
+                        ? new Intl.NumberFormat('en-US', {style: 'currency', currency: row.currency}).format(row.balance)
+                        : undefined},
+                    {label: "Description", value: row.memo},
+                    {label: "Comment", value: row.comment},
+                ].filter(i => i.value);
+
                 return (
-                    <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"} ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                        {row.amount >= 0 ? "+" : ""}{formattedAmount}
-                    </span>
+                    <HoverCard openDelay={150} closeDelay={100}>
+                        <HoverCardTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                <Info className="h-4 w-4"/>
+                            </Button>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="left" className="w-64 text-sm space-y-1.5 p-3">
+                            {items.map(({label, value}) => (
+                                <div key={label} className="flex justify-between gap-2">
+                                    <span className="text-muted-foreground text-xs">{label}</span>
+                                    <span className="text-foreground text-xs font-medium text-right truncate max-w-[160px]">{value}</span>
+                                </div>
+                            ))}
+                            {items.length === 0 && <span className="text-muted-foreground text-xs italic">No additional info</span>}
+                        </HoverCardContent>
+                    </HoverCard>
                 );
             },
-        },
-        {
-            key: "currency",
-            header: "Currency",
-            editable: true,
-            render: (row: TableTransaction) => (
-                <span className={`font-mono text-sm ${!row.is_active ? 'text-muted-foreground line-through' : ''}`}>{row.currency}</span>
-            ),
-        },
-        {
-            key: "balance",
-            header: "Balance",
-            className: "text-right",
-            editable: true,
-            type: "number" as const,
-            render: (row: TableTransaction) => (
-                <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>
-                    {row.balance !== undefined && row.balance !== null 
-                        ? new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: row.currency,
-                        }).format(row.balance)
-                        : '-'
-                    }
-                </span>
-            ),
-        },
-        {
-            key: "comment",
-            header: "Comment",
-            editable: true,
-            minWidth: 150,
-            defaultWidth: 200,
-            render: (row: TableTransaction) => (
-                <div className={`overflow-x-auto whitespace-nowrap text-sm text-muted-foreground italic ${!row.is_active ? 'line-through' : ''}`}>
-                    {row.comment || '-'}
-                </div>
-            ),
         },
         {
             key: "is_active",
