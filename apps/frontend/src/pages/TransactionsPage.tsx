@@ -83,6 +83,8 @@ export default function TransactionsPage() {
                 offset: offsetRef.current,
                 active: !showAll,
                 search: search || undefined,
+                recipient_id: recipientIdFilter,
+                category_id: categoryIdFilter,
             });
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t: any) => t.id));
