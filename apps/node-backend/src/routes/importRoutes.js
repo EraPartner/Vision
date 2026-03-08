@@ -113,6 +113,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
     const result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
     cleanup(req.file.path);
 
+    scheduleRefresh();
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
