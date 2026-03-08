@@ -62,6 +62,11 @@ export async function initializeSchema() {
     await createPortfolioTransactions();
     await createUserSettings();
 
+    // --- Materialized views ---
+    await createMaterializedViews();
+    // Initial population
+    await refreshMaterializedViews();
+
     const duration = Date.now() - start;
     logger.info(`Schema initialisation complete in ${duration}ms`);
   } catch (err) {
