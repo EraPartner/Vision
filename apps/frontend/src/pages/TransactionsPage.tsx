@@ -33,6 +33,7 @@ type TableTransaction = {
 };
 
 export default function TransactionsPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
     const [allItems, setAllItems] = useState<any[]>([]);
@@ -42,14 +43,23 @@ export default function TransactionsPage() {
     const hasMoreRef = useRef(true);
     const loadingRef = useRef(false);
 
+    // URL-based filters
+    const recipientIdFilter = searchParams.get('recipient_id') ? Number(searchParams.get('recipient_id')) : undefined;
+    const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
+    const filterLabel = searchParams.get('filter_label') || undefined;
+
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // Initial load
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined }],
-        queryFn: () => apiClient.getTransactions({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined }),
+        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined, recipientIdFilter, categoryIdFilter }],
+        queryFn: () => apiClient.getTransactions({
+            limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined,
+            recipient_id: recipientIdFilter,
+            category_id: categoryIdFilter,
+        }),
         staleTime: 30_000,
     });
 
