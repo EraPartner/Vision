@@ -434,7 +434,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                 key={virtualRow.key}
                                                 data-index={virtualRow.index}
                                                 ref={virtualizer.measureElement}
-                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""}`}
+                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                                 style={{
                                                     position: "absolute",
                                                     top: 0,
@@ -442,6 +442,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     width: "100%",
                                                     transform: `translateY(${virtualRow.start}px)`,
                                                 }}
+                                                onDoubleClick={() => onRowDoubleClick?.(row, idx)}
+                                            >
                                             >
                                                 {columns.map((col) => {
                                                     const width = columnWidths[col.key];
