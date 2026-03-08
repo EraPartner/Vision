@@ -25,6 +25,7 @@ const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
 const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
 const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
 const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
+const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -80,6 +81,7 @@ const App = () => {
                                                 <Route path="/portfolio/crypto" element={<CryptoPage/>}/>
                                                 <Route path="/portfolio/real-estate" element={<RealEstatePage/>}/>
                                                 <Route path="/portfolio/savings" element={<SavingsPage/>}/>
+                                                <Route path="/portfolio/performance" element={<PerformancePage/>}/>
                                                 <Route path="*" element={<NotFound/>}/>
                                             </Routes>
                                         </Suspense>
