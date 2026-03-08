@@ -6,6 +6,7 @@ import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, Che
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
 import {cn} from "@/lib/utils";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 export default function CategoriesPage() {
     const [showAll, setShowAll] = useState(false);
@@ -17,6 +18,7 @@ export default function CategoriesPage() {
     });
     const updateMutation = useUpdateCategory();
     const deleteMutation = useDeleteCategory();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const grouped = useMemo(() => {
         if (!data?.items) return [];
@@ -74,6 +76,7 @@ export default function CategoriesPage() {
     const allExpanded = expandedGroups.size === grouped.length && grouped.length > 0;
 
     return (
+        <>
         <div className="space-y-6 animate-in">
             <div className="flex items-center justify-between">
                 <div>
@@ -189,10 +192,14 @@ export default function CategoriesPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => {
-                                                                if (confirm(`Delete "${general}:${cat.detail}"?`)) {
-                                                                    deleteMutation.mutate(cat.id);
-                                                                }
+                                                            onClick={async () => {
+                                                                const ok = await confirm({
+                                                                    title: "Delete Category",
+                                                                    description: `Are you sure you want to delete "${general}:${cat.detail}"? This action cannot be undone.`,
+                                                                    confirmLabel: "Delete",
+                                                                    variant: "destructive",
+                                                                });
+                                                                if (ok) deleteMutation.mutate(cat.id);
                                                             }}
                                                             disabled={deleteMutation.isPending}
                                                         >
@@ -210,5 +217,7 @@ export default function CategoriesPage() {
                 </CardContent>
             </Card>
         </div>
+        <ConfirmDialog />
+    </>
     );
 }

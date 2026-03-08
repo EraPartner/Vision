@@ -9,6 +9,7 @@ import {getCategoryColor} from "@/utils/categoryColors";
 import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 import {RecipientCombobox} from "@/components/shared/RecipientCombobox";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 const PAGE_SIZE = 50;
 
@@ -38,11 +39,16 @@ export default function TransactionsPage() {
     });
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const handleDelete = (id: number, description?: string) => {
-        if (confirm(`Delete transaction${description ? ` "${description}"` : ''}?`)) {
-            deleteMutation.mutate(id);
-        }
+    const handleDelete = async (id: number, description?: string) => {
+        const ok = await confirm({
+            title: "Delete Transaction",
+            description: `Are you sure you want to delete${description ? ` "${description}"` : " this transaction"}? This action cannot be undone.`,
+            confirmLabel: "Delete",
+            variant: "destructive",
+        });
+        if (ok) deleteMutation.mutate(id);
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
@@ -273,6 +279,7 @@ export default function TransactionsPage() {
     );
 
     return (
+        <>
         <div className="space-y-8 animate-in">
             <div>
                 <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
@@ -294,5 +301,7 @@ export default function TransactionsPage() {
                 actions={actions}
             />
         </div>
+        <ConfirmDialog />
+    </>
     );
 }

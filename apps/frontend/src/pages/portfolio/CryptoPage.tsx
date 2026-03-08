@@ -6,6 +6,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { cn } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 function fmt(val: number, currency = 'EUR') {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(val);
@@ -13,6 +14,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function CryptoPage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
   const totalValue = holdings.reduce((s, h) => s + h.currentValue, 0);
@@ -39,6 +41,7 @@ export default function CryptoPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Cryptocurrency</h1>
@@ -96,7 +99,7 @@ export default function CryptoPage() {
                         <div className="flex items-center gap-1 justify-end">
                           <AddPortfolioTxnDialog investment={h} />
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => { if (confirm(`Delete "${h.name}"?`)) deleteInvestment(h.id); }}>
+                            onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${h.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(h.id); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -110,5 +113,7 @@ export default function CryptoPage() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

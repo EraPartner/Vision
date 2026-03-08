@@ -5,6 +5,7 @@ import { PiggyBank, Shield, Trash2 } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 function fmt(val: number, currency = 'EUR') {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(val);
@@ -12,6 +13,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function SavingsPage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
   const totalBalance = accounts.reduce((s, a) => s + a.currentValue, 0);
@@ -40,6 +42,7 @@ export default function SavingsPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Savings & Bonds</h1>
@@ -90,7 +93,7 @@ export default function SavingsPage() {
                   </div>
                   <AddPortfolioTxnDialog investment={a} />
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => { if (confirm(`Delete "${a.name}"?`)) deleteInvestment(a.id); }}>
+                    onClick={async () => { const ok = await confirm({ title: "Delete Account", description: `Are you sure you want to delete "${a.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(a.id); }}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -100,5 +103,7 @@ export default function SavingsPage() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }
