@@ -301,9 +301,32 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                         ) : (
                             <ScrollArea className="h-full pr-4">
                                 <div className="space-y-6 py-4">
+                                    {/* Exclusion Scope */}
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-semibold text-foreground">Exclusion Scope</h3>
+                                        <p className="text-xs text-muted-foreground">
+                                            Choose where category and recipient exclusions are applied
+                                        </p>
+                                        <Select
+                                            value={localExclusionScope}
+                                            onValueChange={(v) => setLocalExclusionScope(v as ExclusionScope)}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="everywhere">Everywhere (Dashboard + Statistics)</SelectItem>
+                                                <SelectItem value="dashboard">Dashboard only</SelectItem>
+                                                <SelectItem value="statistics">Statistics only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <Separator />
+
                                     {/* General Settings */}
                                     <div className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-foreground">Statistics Settings</h3>
+                                        <h3 className="text-sm font-semibold text-foreground">Exclusion Settings</h3>
                                         <div className="flex items-center space-x-3 rounded-lg border p-4">
                                             <Checkbox
                                                 id="exclude-hidden"
@@ -315,10 +338,10 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     htmlFor="exclude-hidden"
                                                     className="text-sm font-medium cursor-pointer"
                                                 >
-                                                    Exclude hidden categories from statistics
+                                                    Exclude hidden categories
                                                 </Label>
                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                    Categories marked as inactive will not be included in dashboard calculations
+                                                    Categories marked as inactive will be excluded based on the scope above
                                                 </p>
                                             </div>
                                         </div>
