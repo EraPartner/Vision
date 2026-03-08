@@ -278,9 +278,17 @@ export default function MarketLookupPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>Auto-refreshes every 60s</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>Auto-refreshes every 60s</span>
+                    </div>
+                    {quote && (
+                      <AddInvestmentFromMarketDialog 
+                        quote={quote} 
+                        existingInvestment={existingInvestment}
+                      />
+                    )}
                   </div>
                 </div>
               </CardContent>
