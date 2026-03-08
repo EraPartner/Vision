@@ -95,6 +95,7 @@ class ApiClient {
         general?: string;
         detail?: string;
         active?: boolean;
+        search?: string;
     }): Promise<CategoriesListResponse> {
         const queryParams = new URLSearchParams();
 
