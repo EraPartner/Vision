@@ -38,10 +38,35 @@ export const infoRepository = {
       ORDER BY count DESC
     `);
 
+    // Category breakdown with amounts (mirrors Python get_category_breakdown)
+    const categoryAmountResult = await query(`
+      SELECT COALESCE(c.id, -1) AS category_id,
+             COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
+             count(*) AS count,
+             SUM(t.amount) AS total
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      WHERE t.is_active = true
+      GROUP BY category_id, name
+      ORDER BY count DESC
+    `);
+
+    // Convert category totals to EUR
+    const categories = [];
+    for (const row of categoryAmountResult.rows) {
+      categories.push({
+        id: row.category_id === -1 ? null : parseInt(row.category_id, 10),
+        name: row.name,
+        count: parseInt(row.count, 10),
+        total: Math.round(parseFloat(row.total || 0) * 100) / 100,
+      });
+    }
+
     return {
       total_transactions: parseInt(countResult.rows[0].count, 10),
       total_amount: Math.round(totalEur * 100) / 100,
-      categories: categoryResult.rows.map(r => ({ name: r.name, count: parseInt(r.count, 10) })),
+      categories,
     };
   },
 
