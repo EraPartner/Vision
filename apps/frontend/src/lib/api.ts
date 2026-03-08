@@ -476,6 +476,14 @@ class ApiClient {
         return this.request<Investment>('/api/investments', { method: 'POST', body: JSON.stringify(data) });
     }
 
+    async refreshInvestmentPrices(): Promise<{ updated: number; total: number; prices: Record<string, number> }> {
+        return this.request('/api/investments/refresh-prices', { method: 'POST' });
+    }
+
+    async getPriceProviders(): Promise<{ providers: Array<{ key: string; name: string; description: string }> }> {
+        return this.request('/api/investments/providers');
+    }
+
     async updateInvestment(id: number, data: InvestmentUpdate): Promise<Investment> {
         return this.request<Investment>(`/api/investments/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
     }
