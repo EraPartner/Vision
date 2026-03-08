@@ -2,6 +2,7 @@ import {StatCard} from "@/components/dashboard/StatCard";
 import {MonthlyTrendsChart} from "@/components/dashboard/MonthlyTrendsChart";
 import {CashFlowComparisonChart} from "@/components/dashboard/CashFlowComparisonChart";
 import {CategoryPieChart} from "@/components/dashboard/CategoryPieChart";
+import {BankBalancesWidget} from "@/components/dashboard/BankBalancesWidget";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {ArrowUpRight, DollarSign, Receipt, TrendingDown, Loader2} from "lucide-react";
