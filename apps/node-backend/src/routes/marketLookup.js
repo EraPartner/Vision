@@ -130,4 +130,49 @@ router.get('/chart', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/market/news?symbols=AAPL,MSFT&count=20
+ * Get news articles for one or more symbols.
+ */
+router.get('/news', async (req, res) => {
+  try {
+    const { symbols, count = '20' } = req.query;
+
+    // If symbols provided, fetch news for those; otherwise general market news
+    const querySymbols = symbols || 'SPY,QQQ,DIA';
+    const newsCount = Math.min(parseInt(count, 10) || 20, 50);
+
+    // Use Yahoo Finance v1 search endpoint which returns news for symbols
+    const newsPromises = querySymbols.split(',').slice(0, 10).map(async (sym) => {
+      const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(sym.trim())}&quotesCount=0&newsCount=${newsCount}&listsCount=0`;
+      const response = await fetch(url, { headers: YAHOO_HEADERS, signal: AbortSignal.timeout(8000) });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return (data.news || []).map(n => ({
+        title: n.title,
+        link: n.link,
+        publisher: n.publisher,
+        publishedAt: n.providerPublishTime ? n.providerPublishTime * 1000 : null,
+        thumbnail: n.thumbnail?.resolutions?.[0]?.url || null,
+        relatedSymbols: [sym.trim()],
+      }));
+    });
+
+    const allNews = (await Promise.all(newsPromises)).flat();
+
+    // Deduplicate by title and sort by date
+    const seen = new Set();
+    const unique = allNews.filter(n => {
+      if (seen.has(n.title)) return false;
+      seen.add(n.title);
+      return true;
+    }).sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0)).slice(0, newsCount);
+
+    res.json({ articles: unique });
+  } catch (err) {
+    logger.error('Market news failed', { error: err.message });
+    res.status(502).json({ detail: 'Market news unavailable' });
+  }
+});
+
 export default router;

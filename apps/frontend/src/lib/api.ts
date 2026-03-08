@@ -769,5 +769,14 @@ class ApiClient {
     }
 }
 
+export interface MarketNewsArticle {
+    title: string;
+    link: string;
+    publisher: string;
+    publishedAt: number | null;
+    thumbnail: string | null;
+    relatedSymbols: string[];
+}
+
 export const apiClient = new ApiClient();
 export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction };
