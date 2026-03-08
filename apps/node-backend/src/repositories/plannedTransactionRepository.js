@@ -55,8 +55,8 @@ export const plannedTransactionRepository = {
       params.push(sp);
     }
 
-    // Count query
-    let countSql = sql.replace(/SELECT pt\.\*[\s\S]*?FROM/, 'SELECT count(*) FROM');
+    // Count query — wrap the filtered query and count its rows
+    const countSql = `SELECT count(*) FROM (${sql}) AS _counted`;
     const countResult = await query(countSql, params);
     const total = parseInt(countResult.rows[0].count, 10);
 
