@@ -33,6 +33,8 @@ interface VirtualDataTableProps<T> {
     emptyMessage?: string;
     actions?: React.ReactNode;
     onRowUpdate?: (index: number, updatedRow: T) => void;
+    /** Called when a row is double-clicked */
+    onRowDoubleClick?: (row: T, index: number) => void;
     /** Total items available on server */
     totalItems?: number;
     /** Whether more data is currently being fetched */
