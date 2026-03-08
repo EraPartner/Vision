@@ -89,6 +89,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             setLocalExcludedRecipients(settings.excludedRecipientIds);
             setLocalExcludeHidden(settings.excludeHiddenCategories);
             setLocalAppSettings(appSettings);
+            setRecipientSearch('');
         }
     }, [open, settings, appSettings]);
 
