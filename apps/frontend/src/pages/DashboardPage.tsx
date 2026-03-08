@@ -184,7 +184,7 @@ export default function DashboardPage() {
         },
     ];
 
-    if (statsLoading || transactionsLoading || monthlyLoading) {
+    if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading) {
         return (
             <div className="space-y-8 animate-in">
                 <div>
