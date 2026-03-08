@@ -9,6 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { importCSV } from '../services/importService.js';
+import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { logger } from '../config/logger.js';
 
@@ -40,7 +41,8 @@ router.post('/csv', upload.single('file'), async (req, res) => {
   }
 
   try {
-    const result = await importCSV(req.file.path, bankName);
+    // Use raw transaction storage (falls back to legacy for unsupported banks)
+    const result = await importCSVWithRawStorage(req.file.path, bankName);
     cleanup(req.file.path);
 
     logger.info('CSV import completed', {
@@ -105,7 +107,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   };
 
   try {
-    const result = await importCSV(req.file.path, bank_name, customConfig);
+    const result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
     cleanup(req.file.path);
 
     res.status(201).json({
