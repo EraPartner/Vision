@@ -153,14 +153,6 @@ export default function RecipientsPage() {
             ),
         },
         {
-            key: "address",
-            header: "Address",
-            editable: true,
-            render: (row: TableRecipient) => (
-                <span className="text-sm text-muted-foreground">{row.address || '-'}</span>
-            ),
-        },
-        {
             key: "is_active",
             header: "Status",
             editable: false,
