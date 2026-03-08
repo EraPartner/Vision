@@ -7,6 +7,7 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { cn } from "@/lib/utils";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 function fmt(val: number, currency = 'EUR') {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(val);
