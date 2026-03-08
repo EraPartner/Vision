@@ -227,6 +227,7 @@ export default function RecipientsPage() {
                 pageSize={PAGE_SIZE}
                 totalItems={totalItems}
                 onPageChange={setPage}
+                onSearchChange={setSearch}
                 actions={actions}
             />
         </div>
