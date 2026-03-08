@@ -58,7 +58,7 @@ if [ ! -d "$POSTGRES_DATA_DIR/base" ]; then
     echo "  $POSTGRES_DATA_DIR"
     echo ""
     echo "Run the setup script first:"
-    echo "  cd apps/backend && ./utils/setup_local_postgres.sh"
+    echo "  ./scripts/db/setup_postgres.sh"
     exit 1
 fi
 
@@ -85,7 +85,7 @@ if [ ! -d "node_modules" ]; then
     bun install
 fi
 
-bun run src/main.js > /tmp/backend.log 2>&1 &
+PROJECT_ROOT="$PROJECT_ROOT" bun run src/main.js > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 cd "$PROJECT_ROOT"
 

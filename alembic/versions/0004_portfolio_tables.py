@@ -26,30 +26,45 @@ def upgrade() -> None:
         $$ LANGUAGE plpgsql;
     """)
 
-    # Asset class enum
+    # Asset class enum (with error handling for existing type)
     op.execute("""
-        CREATE TYPE asset_class AS ENUM (
-            'stock', 'etf', 'crypto', 'real_estate', 'savings', 'bond'
-        );
+        DO $$
+        BEGIN
+            CREATE TYPE asset_class AS ENUM (
+                'stock', 'etf', 'crypto', 'real_estate', 'savings', 'bond'
+            );
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
     """)
 
-    # Portfolio transaction type enum
+    # Portfolio transaction type enum (with error handling)
     op.execute("""
-        CREATE TYPE portfolio_txn_type AS ENUM (
-            'buy', 'sell', 'dividend', 'fee', 'tax', 'interest', 'rent_income', 'appreciation'
-        );
+        DO $$
+        BEGIN
+            CREATE TYPE portfolio_txn_type AS ENUM (
+                'buy', 'sell', 'dividend', 'fee', 'tax', 'interest', 'rent_income', 'appreciation'
+            );
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
     """)
 
-    # Recurrence interval enum
+    # Recurrence interval enum (with error handling)
     op.execute("""
-        CREATE TYPE recurrence_interval AS ENUM (
-            'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly'
-        );
+        DO $$
+        BEGIN
+            CREATE TYPE recurrence_interval AS ENUM (
+                'daily', 'weekly', 'bi-weekly', 'monthly', 'quarterly', 'yearly'
+            );
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
     """)
 
     # Investments table
     op.execute("""
-        CREATE TABLE investments (
+        CREATE TABLE IF NOT EXISTS investments (
             id SERIAL PRIMARY KEY,
             name VARCHAR(200) NOT NULL,
             symbol VARCHAR(20),
@@ -68,7 +83,7 @@ def upgrade() -> None:
 
     # Portfolio transactions table
     op.execute("""
-        CREATE TABLE portfolio_transactions (
+        CREATE TABLE IF NOT EXISTS portfolio_transactions (
             id SERIAL PRIMARY KEY,
             investment_id INTEGER NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
             type portfolio_txn_type NOT NULL,
@@ -88,23 +103,43 @@ def upgrade() -> None:
         );
     """)
 
-    # Indexes
-    op.execute("CREATE INDEX idx_investments_asset_class ON investments(asset_class);")
-    op.execute("CREATE INDEX idx_investments_is_active ON investments(is_active);")
-    op.execute("CREATE INDEX idx_portfolio_txn_investment_id ON portfolio_transactions(investment_id);")
-    op.execute("CREATE INDEX idx_portfolio_txn_date ON portfolio_transactions(date);")
-    op.execute("CREATE INDEX idx_portfolio_txn_type ON portfolio_transactions(type);")
-
-    # Updated_at triggers
+    # Indexes (create if not exists)
     op.execute("""
-        CREATE TRIGGER update_investments_updated_at
-            BEFORE UPDATE ON investments
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE INDEX IF NOT EXISTS idx_investments_asset_class ON investments(asset_class);
     """)
     op.execute("""
-        CREATE TRIGGER update_portfolio_transactions_updated_at
-            BEFORE UPDATE ON portfolio_transactions
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        CREATE INDEX IF NOT EXISTS idx_investments_is_active ON investments(is_active);
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_portfolio_txn_investment_id ON portfolio_transactions(investment_id);
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_portfolio_txn_date ON portfolio_transactions(date);
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_portfolio_txn_type ON portfolio_transactions(type);
+    """)
+
+    # Updated_at triggers (with error handling)
+    op.execute("""
+        DO $$
+        BEGIN
+            CREATE TRIGGER update_investments_updated_at
+                BEFORE UPDATE ON investments
+                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            CREATE TRIGGER update_portfolio_transactions_updated_at
+                BEFORE UPDATE ON portfolio_transactions
+                FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
     """)
 
 

@@ -19,14 +19,31 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.execute("""
-        CREATE TYPE price_provider AS ENUM (
-            'manual', 'coingecko', 'yahoo', 'kraken', 'custom'
-        );
+        DO $$
+        BEGIN
+            CREATE TYPE price_provider AS ENUM (
+                'manual', 'coingecko', 'yahoo', 'kraken', 'custom'
+            );
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END$$;
     """)
-    op.add_column('investments', sa.Column('price_provider', sa.Enum('manual', 'coingecko', 'yahoo', 'kraken', 'custom', name='price_provider'), server_default='manual', nullable=False))
-    op.add_column('investments', sa.Column('price_provider_id', sa.String(200), nullable=True))
-    op.add_column('investments', sa.Column('price_provider_url', sa.String(500), nullable=True))
-    op.add_column('investments', sa.Column('price_updated_at', sa.DateTime(timezone=True), nullable=True))
+    op.execute("""
+        ALTER TABLE investments
+        ADD COLUMN IF NOT EXISTS price_provider price_provider NOT NULL DEFAULT 'manual';
+    """)
+    op.execute("""
+        ALTER TABLE investments
+        ADD COLUMN IF NOT EXISTS price_provider_id VARCHAR(200);
+    """)
+    op.execute("""
+        ALTER TABLE investments
+        ADD COLUMN IF NOT EXISTS price_provider_url VARCHAR(500);
+    """)
+    op.execute("""
+        ALTER TABLE investments
+        ADD COLUMN IF NOT EXISTS price_updated_at TIMESTAMPTZ;
+    """)
 
 
 def downgrade() -> None:

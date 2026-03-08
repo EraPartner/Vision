@@ -1,6 +1,6 @@
 """Make recipient_id nullable on planned_transactions
 
-Revision ID: 0003_recipient_nullable
+Revision ID: 0003_make_recipient_nullable
 Revises: 0002_add_url
 Create Date: 2026-02-28 13:30:00.000000
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '0003_recipient_nullable'
+revision: str = '0003_make_recipient_nullable'
 down_revision: Union[str, Sequence[str], None] = '0002_add_url'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

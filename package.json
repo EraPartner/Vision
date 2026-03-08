@@ -12,7 +12,11 @@
     "preview": "vite preview --config config/vite.config.ts",
     "backend": "cd apps/node-backend && node src/main.js",
     "backend:python": "cd apps/backend && python main.py",
-    "backend:install": "cd apps/node-backend && npm install"
+    "backend:install": "cd apps/node-backend && npm install",
+    "db:setup": "bash scripts/db/setup_postgres.sh",
+    "db:upgrade": "alembic -c config/alembic.ini upgrade head",
+    "db:current": "alembic -c config/alembic.ini current",
+    "db:history": "alembic -c config/alembic.ini history"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -7,11 +7,14 @@
 
 import express from 'express';
 import cors from 'cors';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
 import { initializeSchema } from './database/schemaInit.js';
 import { warmCache as warmExchangeRateCache } from './services/currencyConversionService.js';
+import PostgresManager from './database/postgresManager.js';
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -154,42 +157,113 @@ app.use((err, req, res, _next) => {
 
 const PORT = settings.server.port;
 const HOST = settings.server.host;
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const defaultProjectRoot = resolve(moduleDir, '..', '..', '..');
+
+// PostgreSQL manager instance
+let postgresManager = null;
 
 async function start() {
-  // Verify database connection
-  const isConnected = await checkConnection();
-  if (isConnected) {
-    logger.info('Database connection verified successfully');
-    // Ensure all tables exist (idempotent)
-    await initializeSchema();
-    // Pre-warm exchange rate cache (non-blocking)
-    warmExchangeRateCache().catch(() => {});
-  } else {
-    logger.error('Failed to connect to database. Check DATABASE_URL configuration.');
-    logger.info(`DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ':***@')}`);
-  }
+  try {
+    // Initialize PostgreSQL manager with project root
+    const projectRoot = process.env.PROJECT_ROOT || defaultProjectRoot;
+    postgresManager = new PostgresManager(projectRoot);
 
-  app.listen(PORT, HOST, () => {
-    logger.info(`Financial Transaction Manager API (Node.js) started`, {
-      host: HOST,
-      port: PORT,
-      environment: settings.server.environment,
-      version: settings.api.version,
+    // Start PostgreSQL server (initialize if needed)
+    logger.info('PostgreSQL initialization and startup...');
+    try {
+      await postgresManager.start();
+      logger.info('PostgreSQL server is ready');
+    } catch (error) {
+      logger.error('Failed to start PostgreSQL', {
+        error: error.message,
+        dataDir: postgresManager.postgresDataDir,
+      });
+      logger.error('Make sure PostgreSQL is installed: brew install postgresql@15');
+      throw error;
+    }
+
+    // Wait for PostgreSQL to be fully ready
+    let dbReady = false;
+    let attemptCount = 0;
+    const maxAttempts = 20; // 20 seconds max wait
+
+    while (!dbReady && attemptCount < maxAttempts) {
+      const isConnected = await checkConnection();
+      if (isConnected) {
+        dbReady = true;
+        logger.info('Database connection verified successfully');
+        // Ensure all tables exist (idempotent)
+        await initializeSchema();
+        // Pre-warm exchange rate cache (non-blocking)
+        warmExchangeRateCache().catch(() => { });
+      } else {
+        attemptCount++;
+        logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    if (!dbReady) {
+      logger.error('Database connection failed after multiple attempts');
+      logger.info(`DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ':***@')}`);
+      throw new Error('Failed to connect to database');
+    }
+
+    // Start Express server
+    app.listen(PORT, HOST, () => {
+      logger.info(`Financial Transaction Manager API (Node.js) started`, {
+        host: HOST,
+        port: PORT,
+        environment: settings.server.environment,
+        version: settings.api.version,
+      });
+      logger.info(`API documentation: http://${HOST}:${PORT}/api/`);
     });
-    logger.info(`API documentation: http://${HOST}:${PORT}/api/`);
-  });
+  } catch (err) {
+    logger.error('Failed to start application', { error: err.message });
+    // Stop PostgreSQL if it was started
+    if (postgresManager) {
+      try {
+        await postgresManager.stop();
+      } catch (stopError) {
+        logger.error('Error stopping PostgreSQL during startup failure', {
+          error: stopError.message,
+        });
+      }
+    }
+    process.exit(1);
+  }
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
   logger.info('Shutting down...');
   await closePool();
+  if (postgresManager) {
+    try {
+      await postgresManager.stop();
+    } catch (error) {
+      logger.warn('Error stopping PostgreSQL during shutdown', {
+        error: error.message,
+      });
+    }
+  }
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   logger.info('Shutting down...');
   await closePool();
+  if (postgresManager) {
+    try {
+      await postgresManager.stop();
+    } catch (error) {
+      logger.warn('Error stopping PostgreSQL during shutdown', {
+        error: error.message,
+      });
+    }
+  }
   process.exit(0);
 });
 
