@@ -22,6 +22,13 @@ export default function DashboardPage() {
     
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
+
+    // Fetch categories (needed to resolve hidden category exclusions)
+    const { data: categoriesData } = useQuery({
+        queryKey: ['categories', 'all'],
+        queryFn: () => apiClient.getCategories({ limit: 1000 }),
+        staleTime: 60000,
+    });
     
     // Build complete excluded category IDs list (including hidden categories)
     const allExcludedCategoryIds = (() => {
@@ -51,13 +58,6 @@ export default function DashboardPage() {
             excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
         }),
         staleTime: 30000,
-    });
-
-    // Fetch categories if we need to exclude hidden ones
-    const { data: categoriesData } = useQuery({
-        queryKey: ['categories', 'all'],
-        queryFn: () => apiClient.getCategories({ limit: 1000 }),
-        staleTime: 60000,
     });
 
     const allTransactions = transactionsData?.items || [];
