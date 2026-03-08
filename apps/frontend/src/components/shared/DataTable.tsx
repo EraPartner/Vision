@@ -63,7 +63,27 @@ export function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
-    const [searchQuery, setSearchQuery] = useState("");
+    const [localSearchQuery, setLocalSearchQuery] = useState("");
+    const isServerSearch = !!onSearchChange;
+    const searchQuery = isServerSearch ? (searchValue ?? "") : localSearchQuery;
+
+    // Debounced server-side search
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleSearchInput = useCallback((value: string) => {
+        if (isServerSearch) {
+            // Update local display immediately
+            setLocalSearchQuery(value);
+            // Debounce the server call
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => {
+                onSearchChange!(value);
+                // Reset to page 0 on new search
+                if (onPageChange) onPageChange(0);
+            }, 350);
+        } else {
+            setLocalSearchQuery(value);
+        }
+    }, [isServerSearch, onSearchChange, onPageChange]);
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDirection>(null);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
