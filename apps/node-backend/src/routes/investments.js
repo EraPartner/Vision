@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import investmentRepository from '../repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
+import { fetchLivePrices, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 
