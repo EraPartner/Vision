@@ -21,9 +21,25 @@ export function useFilteredDashboardStats() {
     queryFn: async () => {
       // Fetch total transaction count from the transaction-count endpoint
       const countData = await apiClient.getTransactionCount();
-      
-      // Fetch monthly financial summary (6 months)
-      const monthlySummary = await apiClient.getMonthlyFinancialSummary();
+
+      // Resolve hidden category IDs if needed
+      let hiddenCategoryIds: number[] = [];
+      if (settings.excludeHiddenCategories) {
+        const categoriesData = await apiClient.getCategories({ limit: 1000 });
+        hiddenCategoryIds = categoriesData.items
+          .filter((cat) => !cat.active)
+          .map((cat) => cat.id);
+      }
+
+      const allExcludedCategoryIds = [
+        ...settings.excludedCategoryIds,
+        ...hiddenCategoryIds,
+      ];
+
+      // Fetch monthly financial summary (6 months) with excluded categories
+      const monthlySummary = await apiClient.getMonthlyFinancialSummary({
+        excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
+      });
       
       // Find the last month with actual transactions
       let lastMonthWithData = monthlySummary.months[monthlySummary.months.length - 1];
@@ -34,12 +50,8 @@ export function useFilteredDashboardStats() {
         }
       }
 
-      // If no settings filters are active, return unfiltered data
-      if (
-        settings.excludedCategoryIds.length === 0 &&
-        settings.excludedRecipientIds.length === 0 &&
-        !settings.excludeHiddenCategories
-      ) {
+      // If no recipient exclusions, we can use the API data directly
+      if (settings.excludedRecipientIds.length === 0) {
         return {
           totalTransactions: countData.total_transactions,
           monthlyIncome: lastMonthWithData.total_income,
@@ -48,28 +60,14 @@ export function useFilteredDashboardStats() {
         };
       }
 
-      // Fetch transactions for filtering (get a large sample for accurate stats)
+      // Recipient exclusions require client-side filtering of transactions
       const transactionsData = await apiClient.getTransactions({ 
         limit: 5000,
         active: true 
       });
 
-      // Fetch categories if we need to exclude hidden ones
-      let hiddenCategoryIds: number[] = [];
-      if (settings.excludeHiddenCategories) {
-        const categoriesData = await apiClient.getCategories({ limit: 1000 });
-        hiddenCategoryIds = categoriesData.items
-          .filter((cat) => !cat.active)
-          .map((cat) => cat.id);
-      }
-
-      // Build complete exclusion list
-      const excludedCategoryIds = new Set([
-        ...settings.excludedCategoryIds,
-        ...hiddenCategoryIds,
-      ]);
-
       const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+      const excludedCategoryIds = new Set(allExcludedCategoryIds);
 
       // Filter transactions based on settings
       const filteredTransactions = transactionsData.items.filter((t) => {

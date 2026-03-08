@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api';
 import type { Transaction, Category } from '@/types/api';
 import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface MonthlyData {
   period: string; // "YYYY-MM"
@@ -48,7 +49,12 @@ export interface StatisticsData {
   averageMonthlyIncome: number;
 }
 
-function processTransactions(transactions: Transaction[], categories: Category[]): StatisticsData {
+function processTransactions(
+  transactions: Transaction[],
+  categories: Category[],
+  excludedCategoryIds: Set<number>,
+  excludedRecipientIds: Set<number>,
+): StatisticsData {
   const categoryMap = new Map(categories.map(c => [c.id, `${c.general}: ${c.detail}`]));
 
   const monthlyMap = new Map<string, MonthlyData>();
@@ -57,6 +63,10 @@ function processTransactions(transactions: Transaction[], categories: Category[]
   const yearlyMap = new Map<number, YearlyComparison>();
 
   for (const tx of transactions) {
+    // Apply exclusion filters
+    if (tx.category_id && excludedCategoryIds.has(tx.category_id)) continue;
+    if (tx.recipient_id && excludedRecipientIds.has(tx.recipient_id)) continue;
+
     const date = parseISO(tx.transaction_date);
     const period = format(date, 'yyyy-MM');
     const year = date.getFullYear();
@@ -138,10 +148,11 @@ function processTransactions(transactions: Transaction[], categories: Category[]
 }
 
 export function useStatistics() {
+  const { settings } = useSettings();
+
   const transactionsQuery = useQuery({
     queryKey: ['transactions', 'all-for-stats'],
     queryFn: async () => {
-      // Fetch all transactions (paginated)
       const allItems: Transaction[] = [];
       let offset = 0;
       const limit = 1000;
@@ -169,8 +180,28 @@ export function useStatistics() {
 
   const stats = useMemo(() => {
     if (!transactionsQuery.data || !categoriesQuery.data) return null;
-    return processTransactions(transactionsQuery.data, categoriesQuery.data);
-  }, [transactionsQuery.data, categoriesQuery.data]);
+
+    // Build exclusion sets from settings
+    let hiddenCategoryIds: number[] = [];
+    if (settings.excludeHiddenCategories) {
+      hiddenCategoryIds = categoriesQuery.data
+        .filter((cat) => !cat.active)
+        .map((cat) => cat.id);
+    }
+
+    const excludedCategoryIds = new Set([
+      ...settings.excludedCategoryIds,
+      ...hiddenCategoryIds,
+    ]);
+    const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+
+    return processTransactions(
+      transactionsQuery.data,
+      categoriesQuery.data,
+      excludedCategoryIds,
+      excludedRecipientIds,
+    );
+  }, [transactionsQuery.data, categoriesQuery.data, settings]);
 
   return {
     data: stats,
