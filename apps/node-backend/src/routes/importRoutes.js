@@ -53,6 +53,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
       ...result,
     });
 
+    scheduleRefresh();
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
