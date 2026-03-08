@@ -417,7 +417,7 @@ export function DataTable<T extends Record<string, any>>({
                                         colSpan={columns.length + (hasEditableColumns ? 1 : 0)}
                                         className="text-center text-muted-foreground py-12"
                                     >
-                                        {searchQuery || activeFilterCount > 0
+                                        {localSearchQuery || activeFilterCount > 0
                                             ? "No results match your filters."
                                             : emptyMessage}
                                     </TableCell>
