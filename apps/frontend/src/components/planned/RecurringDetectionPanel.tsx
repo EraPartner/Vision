@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { formatCurrency } from "@/utils/currency";
@@ -12,6 +12,8 @@ import {
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 
+const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
+
 const PATTERN_LABELS: Record<string, string> = {
     weekly: "Weekly",
     biweekly: "Bi-weekly",
@@ -20,6 +22,13 @@ const PATTERN_LABELS: Record<string, string> = {
     yearly: "Yearly",
     custom: "Custom",
 };
+
+function safeDateLabel(value: string): string {
+    if (!value || typeof value !== "string") return "Unknown date";
+    const parsed = parseISO(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return format(parsed, "PP");
+}
 
 type RecurringPattern = Awaited<ReturnType<typeof apiClient.getRecurringPatterns>>["patterns"][number];
 
@@ -33,29 +42,50 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
     const [dismissedLoaded, setDismissedLoaded] = useState(false);
 
+    const loadDismissedFromLocalStorage = () => {
+        try {
+            const raw = localStorage.getItem(DISMISSED_PATTERNS_STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                const values = parsed
+                    .map((v) => Number(v))
+                    .filter((v) => Number.isInteger(v) && v > 0);
+                setDismissedIds(new Set(values));
+            }
+        } catch {
+            // Ignore invalid localStorage payloads.
+        }
+    };
+
+    const persistDismissedToLocalStorage = (values: Set<number>) => {
+        try {
+            localStorage.setItem(DISMISSED_PATTERNS_STORAGE_KEY, JSON.stringify([...values]));
+        } catch {
+            // Ignore storage write failures.
+        }
+    };
+
     // Load dismissed IDs from database settings
     useEffect(() => {
-        apiClient.getSetting("dismissed_recurring_patterns")
-            .then((result) => {
-                if (result?.value && Array.isArray(result.value)) {
-                    setDismissedIds(new Set(result.value));
-                }
-            })
-            .catch(() => {})
-            .finally(() => setDismissedLoaded(true));
+        loadDismissedFromLocalStorage();
+        setDismissedLoaded(true);
     }, []);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["recurringPatterns"],
         queryFn: () => apiClient.getRecurringPatterns(),
         staleTime: 5 * 60_000,
+        retry: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
     });
 
     const dismiss = (recipientId: number) => {
         const next = new Set(dismissedIds);
         next.add(recipientId);
         setDismissedIds(next);
-        apiClient.saveSetting("dismissed_recurring_patterns", [...next]).catch(() => {});
+        persistDismissedToLocalStorage(next);
     };
 
     const handleCreatePlanned = async (pattern: RecurringPattern) => {
@@ -171,7 +201,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                Changed on {format(parseISO(lastChange.date), "PP")}
+                                                Changed on {safeDateLabel(lastChange.date)}
                                             </p>
                                         </div>
                                         <Button
@@ -251,7 +281,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             </div>
                                             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                                                 <Calendar className="h-3 w-3" />
-                                                Next expected: {format(parseISO(pattern.predictedNext), "PP")}
+                                                Next expected: {safeDateLabel(pattern.predictedNext)}
                                             </div>
                                         </div>
 

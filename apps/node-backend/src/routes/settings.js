@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
 // Default values for known settings keys
 const SETTING_DEFAULTS = {
   onboarding_complete: false,
+  dismissed_recurring_patterns: [],
   app_settings: {
     defaultCurrency: 'EUR',
     dateFormat: 'DD/MM/YYYY',

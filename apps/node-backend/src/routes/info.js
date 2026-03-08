@@ -162,8 +162,8 @@ router.get('/recurring-patterns', async (req, res) => {
     const data = await detectRecurringPatterns();
     res.json(data);
   } catch (err) {
-    logger.error('Error detecting recurring patterns', { error: err.message });
-    res.status(500).json({ detail: 'Error detecting recurring patterns' });
+    logger.error('Error detecting recurring patterns; returning empty result', { error: err.message });
+    res.json({ patterns: [], total: 0 });
   }
 });
 

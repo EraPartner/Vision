@@ -93,6 +93,7 @@ export interface Transaction {
     recipient_name?: string; // Recipient name
     memo?: string;
     amount: number;
+    amount_eur?: number;
     currency?: string;
     balance?: number;
     category_id?: number;

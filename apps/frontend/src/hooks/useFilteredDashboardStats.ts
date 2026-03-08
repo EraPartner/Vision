@@ -40,7 +40,7 @@ export function useFilteredDashboardStats() {
       const monthlySummary = await apiClient.getMonthlyFinancialSummary({
         excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
       });
-      
+
       // Find the last month with actual transactions
       let lastMonthWithData = monthlySummary.months[monthlySummary.months.length - 1];
       for (let i = monthlySummary.months.length - 1; i >= 0; i--) {
@@ -61,9 +61,10 @@ export function useFilteredDashboardStats() {
       }
 
       // Recipient exclusions require client-side filtering of transactions
-      const transactionsData = await apiClient.getTransactions({ 
+      const transactionsData = await apiClient.getTransactions({
         limit: 5000,
-        active: true 
+        active: true,
+        normalize_to_eur: true,
       });
 
       const excludedRecipientIds = new Set(settings.excludedRecipientIds);
@@ -75,12 +76,12 @@ export function useFilteredDashboardStats() {
         if (t.category_id && excludedCategoryIds.has(t.category_id)) {
           return false;
         }
-        
+
         // Exclude if recipient is in exclusion list
         if (t.recipient_id && excludedRecipientIds.has(t.recipient_id)) {
           return false;
         }
-        
+
         return true;
       });
 
@@ -95,14 +96,18 @@ export function useFilteredDashboardStats() {
       });
 
       // Calculate statistics from filtered transactions
+      const amountInEur = (tx: { amount: number; amount_eur?: number }) => (
+        tx.amount_eur ?? tx.amount
+      );
+
       const monthlyIncome = lastMonthTransactions
-        .filter((t) => t.amount > 0)
-        .reduce((sum, t) => sum + t.amount, 0);
+        .filter((t) => amountInEur(t) > 0)
+        .reduce((sum, t) => sum + amountInEur(t), 0);
 
       const monthlySpending = Math.abs(
         lastMonthTransactions
-          .filter((t) => t.amount < 0)
-          .reduce((sum, t) => sum + t.amount, 0)
+          .filter((t) => amountInEur(t) < 0)
+          .reduce((sum, t) => sum + amountInEur(t), 0)
       );
 
       const netBalance = monthlyIncome - monthlySpending;

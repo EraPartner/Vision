@@ -1,49 +1,49 @@
 import type {
-  CategoriesListResponse,
-  Category,
-  CategoryCreate,
-  CategoryUpdate,
-  Recipient,
-  RecipientCreate,
-  RecipientsListResponse,
-  RecipientUpdate,
-  Transaction,
-  TransactionCreate,
-  TransactionsListResponse,
-  TransactionUpdate,
-  PlannedTransaction,
-  PlannedTransactionCreate,
-  PlannedTransactionsListResponse,
-  PlannedTransactionUpdate,
-  PlannedTransactionExecuteRequest,
-  Investment,
-  InvestmentCreate,
-  InvestmentUpdate,
-  InvestmentsListResponse,
-  PortfolioTransaction,
-  PortfolioTransactionCreate,
-  PortfolioTransactionsListResponse,
+    CategoriesListResponse,
+    Category,
+    CategoryCreate,
+    CategoryUpdate,
+    Recipient,
+    RecipientCreate,
+    RecipientsListResponse,
+    RecipientUpdate,
+    Transaction,
+    TransactionCreate,
+    TransactionsListResponse,
+    TransactionUpdate,
+    PlannedTransaction,
+    PlannedTransactionCreate,
+    PlannedTransactionsListResponse,
+    PlannedTransactionUpdate,
+    PlannedTransactionExecuteRequest,
+    Investment,
+    InvestmentCreate,
+    InvestmentUpdate,
+    InvestmentsListResponse,
+    PortfolioTransaction,
+    PortfolioTransactionCreate,
+    PortfolioTransactionsListResponse,
 } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
 export interface ImportProgress {
-  phase: string;
-  current: number;
-  total: number;
-  imported: number;
-  duplicates: number;
-  errors: number;
-  percent: number;
+    phase: string;
+    current: number;
+    total: number;
+    imported: number;
+    duplicates: number;
+    errors: number;
+    percent: number;
 }
 
 export interface ImportResult {
-  total_processed: number;
-  imported: number;
-  duplicates: number;
-  errors: number;
-  status?: string;
-  error_message?: string;
+    total_processed: number;
+    imported: number;
+    duplicates: number;
+    errors: number;
+    status?: string;
+    error_message?: string;
 }
 
 /** Default request timeout in milliseconds */
@@ -59,8 +59,8 @@ const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
  * Sleep for exponential backoff: base * 2^attempt (with jitter).
  */
 function backoffDelay(attempt: number, baseMs: number = 500): Promise<void> {
-  const delay = baseMs * Math.pow(2, attempt) + Math.random() * 200;
-  return new Promise((resolve) => setTimeout(resolve, delay));
+    const delay = baseMs * Math.pow(2, attempt) + Math.random() * 200;
+    return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 class ApiClient {
@@ -91,6 +91,7 @@ class ApiClient {
         uncategorised?: boolean;
         active?: boolean;
         search?: string;
+        normalize_to_eur?: boolean;
     }): Promise<TransactionsListResponse> {
         const query = this.buildQuery(params);
         const res = await this.request<TransactionsListResponse>(
@@ -574,7 +575,14 @@ class ApiClient {
         }>;
         total: number;
     }> {
-        return this.request('/api/info/recurring-patterns');
+        try {
+            return await this.request('/api/info/recurring-patterns');
+        } catch (err) {
+            // Fail-soft: recurrence detection is optional UI enrichment.
+            // Returning an empty payload avoids repeated query retries/noise.
+            console.warn('Recurring patterns unavailable; using empty result', err);
+            return { patterns: [], total: 0 };
+        }
     }
 
     // ==================== Portfolio / Investments ====================
