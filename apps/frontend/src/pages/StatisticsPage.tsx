@@ -74,23 +74,29 @@ function ExclusionToggle({
   onToggle: (key: string) => void;
   exclusionsApply: boolean;
 }) {
-  if (!exclusionsApply) return null;
-
   return (
     <TooltipProvider>
       <UITooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={isFiltered ? "default" : "outline"}
-            size="icon"
-            className="h-7 w-7"
+            variant={isFiltered && exclusionsApply ? "default" : "outline"}
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
             onClick={() => onToggle(graphKey)}
+            disabled={!exclusionsApply}
           >
             {isFiltered ? <Filter className="h-3.5 w-3.5" /> : <FilterX className="h-3.5 w-3.5" />}
+            {exclusionsApply
+              ? (isFiltered ? "Filtered" : "Unfiltered")
+              : "No exclusions"}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {isFiltered ? "Exclusions applied — click to show all data" : "Showing all data — click to apply exclusions"}
+          {!exclusionsApply
+            ? "No exclusions configured in settings"
+            : isFiltered
+              ? "Exclusions applied — click to show all data"
+              : "Showing all data — click to apply exclusions"}
         </TooltipContent>
       </UITooltip>
     </TooltipProvider>
