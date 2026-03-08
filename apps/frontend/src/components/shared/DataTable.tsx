@@ -274,7 +274,7 @@ export function DataTable<T extends Record<string, any>>({
                         onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
                     />
-                    {searchQuery && (
+                    {localSearchQuery && (
                         <Button
                             variant="ghost"
                             size="icon"
