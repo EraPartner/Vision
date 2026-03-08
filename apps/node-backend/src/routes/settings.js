@@ -25,12 +25,38 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/settings/:key — single setting
+// Default values for known settings keys
+const SETTING_DEFAULTS = {
+  onboarding_complete: false,
+  app_settings: {
+    defaultCurrency: 'EUR',
+    dateFormat: 'DD/MM/YYYY',
+    numberFormat: 'eu',
+    defaultPageSize: 50,
+    startOfWeek: 'monday',
+    showDecimalPlaces: 2,
+    defaultBankAccount: '',
+  },
+  dashboard_settings: {
+    excludedCategoryIds: [],
+    excludedRecipientIds: [],
+    excludeHiddenCategories: true,
+  },
+  theme_settings: {
+    theme: 'system',
+    accentColor: 'default',
+  },
+};
+
+// GET /api/settings/:key — single setting (returns default if not found)
 router.get('/:key', async (req, res) => {
   try {
     const { key } = req.params;
     const value = await settingsRepository.get(key);
     if (value === null) {
+      if (key in SETTING_DEFAULTS) {
+        return res.json({ key, value: SETTING_DEFAULTS[key] });
+      }
       return res.status(404).json({ detail: `Setting '${key}' not found` });
     }
     res.json({ key, value });
