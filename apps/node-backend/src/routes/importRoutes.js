@@ -170,6 +170,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
     cleanup(req.file.path);
 
     if (!aborted) {
+      scheduleRefresh();
       sendEvent('complete', {
         ...result,
         status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
