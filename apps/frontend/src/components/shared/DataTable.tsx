@@ -33,6 +33,10 @@ interface DataTableProps<T> {
     pageSize?: number;
     totalItems?: number;
     onPageChange?: (page: number) => void;
+    /** When provided, search is delegated to the server. The DataTable will call this with the debounced search string instead of filtering locally. */
+    onSearchChange?: (query: string) => void;
+    /** Controlled search value (for server-side search) */
+    searchValue?: string;
 }
 
 function getSortValue(val: any): string | number {
@@ -54,6 +58,8 @@ export function DataTable<T extends Record<string, any>>({
     pageSize = 50,
     totalItems,
     onPageChange,
+    onSearchChange,
+    searchValue,
 }: DataTableProps<T>) {
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
