@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Sun, Moon } from "lucide-react";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
 import {useTheme} from "@/contexts/ThemeContext";
+import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -43,6 +44,7 @@ export function AppLayout({children}: AppLayoutProps) {
                         </Button>
                     </header>
                     <main className="flex-1 p-6">
+                        <UpcomingPaymentsNotification />
                         {children}
                     </main>
                 </div>
