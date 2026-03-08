@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import infoRepository from '../repositories/infoRepository.js';
 import { detectRecurringPatterns } from '../services/recurringDetectionService.js';
+import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
