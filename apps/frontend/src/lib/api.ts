@@ -420,7 +420,9 @@ class ApiClient {
         return this.request('/api/info/cashflow-comparison');
     }
 
-    async getMonthlyFinancialSummary(): Promise<{
+    async getMonthlyFinancialSummary(params?: {
+        excluded_category_ids?: number[];
+    }): Promise<{
         months: Array<{
             month: number;
             year: number;
@@ -440,7 +442,12 @@ class ApiClient {
             period_end: string;
         };
     }> {
-        return this.request('/api/info/monthly-summary');
+        const queryParams = new URLSearchParams();
+        if (params?.excluded_category_ids?.length) {
+            params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
+        }
+        const q = queryParams.toString();
+        return this.request(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
     }
 
     // ==================== Portfolio / Investments ====================
