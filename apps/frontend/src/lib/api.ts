@@ -162,6 +162,7 @@ class ApiClient {
         name?: string;
         default_category_id?: number;
         active?: boolean;
+        search?: string;
     }): Promise<RecipientsListResponse> {
         const queryParams = new URLSearchParams();
 
