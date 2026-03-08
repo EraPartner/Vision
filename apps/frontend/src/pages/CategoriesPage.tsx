@@ -6,6 +6,7 @@ import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, Che
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
 import {cn} from "@/lib/utils";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 export default function CategoriesPage() {
     const [showAll, setShowAll] = useState(false);
