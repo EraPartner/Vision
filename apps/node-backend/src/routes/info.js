@@ -123,7 +123,14 @@ router.get('/average-vs-current-spending', async (req, res) => {
 // GET /api/info/cashflow-comparison
 router.get('/cashflow-comparison', async (req, res) => {
   try {
-    const data = await infoRepository.getCashflowComparison();
+    let excludedCategoryIds = req.query.excluded_category_ids;
+    if (excludedCategoryIds) {
+      if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
+      excludedCategoryIds = excludedCategoryIds.map(Number);
+    } else {
+      excludedCategoryIds = [];
+    }
+    const data = await infoRepository.getCashflowComparison(excludedCategoryIds);
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving cashflow comparison', { error: err.message });

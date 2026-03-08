@@ -23,26 +23,33 @@ export default function DashboardPage() {
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
     
-    // Build excluded category IDs list for API calls
-    const excludedCategoryIdsForApi = (() => {
+    // Build complete excluded category IDs list (including hidden categories)
+    const allExcludedCategoryIds = (() => {
         const ids = [...settings.excludedCategoryIds];
-        // Note: hidden categories are resolved after categoriesData loads below
-        return ids;
+        if (settings.excludeHiddenCategories && categoriesData) {
+            const hiddenIds = categoriesData.items
+                .filter((cat) => !cat.active)
+                .map((cat) => cat.id);
+            ids.push(...hiddenIds);
+        }
+        return [...new Set(ids)];
     })();
 
     // Fetch monthly summary for chart (6 months) — pass excluded categories
     const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
-        queryKey: ['monthlySummary', excludedCategoryIdsForApi],
+        queryKey: ['monthlySummary', allExcludedCategoryIds],
         queryFn: () => apiClient.getMonthlyFinancialSummary({
-            excluded_category_ids: excludedCategoryIdsForApi.length > 0 ? excludedCategoryIdsForApi : undefined,
+            excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
         }),
         staleTime: 30000,
     });
 
-    // Fetch cashflow comparison data
+    // Fetch cashflow comparison data with excluded categories
     const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
-        queryKey: ['cashflowComparison'],
-        queryFn: () => apiClient.getCashflowComparison(),
+        queryKey: ['cashflowComparison', allExcludedCategoryIds],
+        queryFn: () => apiClient.getCashflowComparison({
+            excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
+        }),
         staleTime: 30000,
     });
 
