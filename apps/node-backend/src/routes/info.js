@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import infoRepository from '../repositories/infoRepository.js';
+import { detectRecurringPatterns } from '../services/recurringDetectionService.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
@@ -147,6 +148,17 @@ router.get('/bank-balances', async (req, res) => {
   } catch (err) {
     logger.error('Error retrieving bank balances', { error: err.message });
     res.status(500).json({ detail: 'Error retrieving bank balances' });
+  }
+});
+
+// GET /api/info/recurring-patterns - Detect recurring transaction patterns
+router.get('/recurring-patterns', async (req, res) => {
+  try {
+    const data = await detectRecurringPatterns();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error detecting recurring patterns', { error: err.message });
+    res.status(500).json({ detail: 'Error detecting recurring patterns' });
   }
 });
 
