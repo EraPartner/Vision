@@ -360,44 +360,107 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                         <p className="text-xs text-muted-foreground">
                                             Select categories to exclude from statistics
                                         </p>
-                                        <div className="space-y-2">
+                                        <Input
+                                            placeholder="Search categories…"
+                                            value={categorySearch}
+                                            onChange={(e) => setCategorySearch(e.target.value)}
+                                            className="h-8 text-sm"
+                                        />
+                                        <ScrollArea className="h-[250px]">
+                                        <div className="space-y-1">
                                             {categories.length === 0 ? (
                                                 <p className="text-sm text-muted-foreground text-center py-4">
                                                     No categories found
                                                 </p>
-                                            ) : (
-                                                categories.map((category) => (
-                                                    <div
-                                                        key={category.id}
-                                                        className="flex items-center space-x-3 rounded-md border px-3 py-2.5 hover:bg-accent/50 transition-colors"
-                                                    >
-                                                        <Checkbox
-                                                            id={`category-${category.id}`}
-                                                            checked={localExcludedCategories.includes(category.id)}
-                                                            onCheckedChange={() => toggleCategory(category.id)}
-                                                        />
-                                                        <Label
-                                                            htmlFor={`category-${category.id}`}
-                                                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
-                                                        >
-                                                            <span>
-                                                                {category.general}
-                                                                {category.detail && (
-                                                                    <span className="text-muted-foreground ml-1">
-                                                                        : {category.detail}
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                            {!category.active && (
-                                                                <Badge variant="outline" className="ml-2 text-xs">
-                                                                    Hidden
-                                                                </Badge>
-                                                            )}
-                                                        </Label>
-                                                    </div>
-                                                ))
-                                            )}
+                                            ) : (() => {
+                                                // Group by general, filter by search
+                                                const searchLower = categorySearch.toLowerCase();
+                                                const grouped = new Map<string, typeof categories>();
+                                                for (const cat of categories) {
+                                                    const matchesSearch = !categorySearch ||
+                                                        cat.general.toLowerCase().includes(searchLower) ||
+                                                        cat.detail.toLowerCase().includes(searchLower);
+                                                    if (!matchesSearch) continue;
+                                                    const group = grouped.get(cat.general) || [];
+                                                    group.push(cat);
+                                                    grouped.set(cat.general, group);
+                                                }
+
+                                                if (grouped.size === 0) {
+                                                    return (
+                                                        <p className="text-sm text-muted-foreground text-center py-4">
+                                                            No matching categories
+                                                        </p>
+                                                    );
+                                                }
+
+                                                return Array.from(grouped.entries())
+                                                    .sort(([a], [b]) => a.localeCompare(b))
+                                                    .map(([general, items]) => {
+                                                        const allExcluded = items.every(c => localExcludedCategories.includes(c.id));
+                                                        const someExcluded = items.some(c => localExcludedCategories.includes(c.id));
+
+                                                        const toggleGroup = () => {
+                                                            if (allExcluded) {
+                                                                // Remove all in group
+                                                                setLocalExcludedCategories(prev =>
+                                                                    prev.filter(id => !items.some(c => c.id === id))
+                                                                );
+                                                            } else {
+                                                                // Add all in group
+                                                                setLocalExcludedCategories(prev => {
+                                                                    const newIds = items.map(c => c.id).filter(id => !prev.includes(id));
+                                                                    return [...prev, ...newIds];
+                                                                });
+                                                            }
+                                                        };
+
+                                                        return (
+                                                            <div key={general} className="space-y-0.5">
+                                                                {/* Group header */}
+                                                                <div
+                                                                    className="flex items-center space-x-3 rounded-md bg-muted/50 px-3 py-2 cursor-pointer hover:bg-muted transition-colors"
+                                                                    onClick={toggleGroup}
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={allExcluded ? true : someExcluded ? 'indeterminate' : false}
+                                                                        onCheckedChange={toggleGroup}
+                                                                    />
+                                                                    <span className="text-sm font-semibold text-foreground flex-1">{general}</span>
+                                                                    <span className="text-xs text-muted-foreground">{items.length}</span>
+                                                                </div>
+                                                                {/* Detail items */}
+                                                                {items
+                                                                    .sort((a, b) => a.detail.localeCompare(b.detail))
+                                                                    .map((category) => (
+                                                                    <div
+                                                                        key={category.id}
+                                                                        className="flex items-center space-x-3 rounded-md border px-3 py-2 ml-6 hover:bg-accent/50 transition-colors"
+                                                                    >
+                                                                        <Checkbox
+                                                                            id={`category-${category.id}`}
+                                                                            checked={localExcludedCategories.includes(category.id)}
+                                                                            onCheckedChange={() => toggleCategory(category.id)}
+                                                                        />
+                                                                        <Label
+                                                                            htmlFor={`category-${category.id}`}
+                                                                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                                                                        >
+                                                                            <span>{category.detail}</span>
+                                                                            {!category.active && (
+                                                                                <Badge variant="outline" className="ml-2 text-xs">
+                                                                                    Hidden
+                                                                                </Badge>
+                                                                            )}
+                                                                        </Label>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    });
+                                            })()}
                                         </div>
+                                        </ScrollArea>
                                     </div>
 
                                     <Separator />
