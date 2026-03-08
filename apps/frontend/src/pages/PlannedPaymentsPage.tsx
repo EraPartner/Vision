@@ -62,6 +62,7 @@ type TableRow = PlannedPayment & { _idx: number };
 export default function PlannedPaymentsPage() {
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedPayment | undefined>();
   const [actionLoading, setActionLoading] = useState(false);
