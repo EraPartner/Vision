@@ -5,6 +5,7 @@ import { PiggyBank, Shield, Trash2 } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 function fmt(val: number, currency = 'EUR') {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(val);
