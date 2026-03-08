@@ -42,6 +42,18 @@ const FALLBACK_RATES = {
   CNY: 1 / 7.90,
   INR: 1 / 91.0,
   BRL: 1 / 5.40,
+  IDR: 1 / 17600.0,
+  KRW: 1 / 1450.0,
+  MXN: 1 / 18.50,
+  MYR: 1 / 4.80,
+  NZD: 1 / 1.78,
+  PHP: 1 / 61.0,
+  SGD: 1 / 1.46,
+  THB: 1 / 37.5,
+  ZAR: 1 / 19.5,
+  HKD: 1 / 8.50,
+  ISK: 1 / 150.0,
+  ILS: 1 / 3.95,
 };
 
 // In-memory cache: { [cacheKey]: { rates: {...}, timestamp: Date } }
