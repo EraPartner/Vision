@@ -32,18 +32,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/investments/:id
-router.get('/:id', validateIdParam, async (req, res) => {
-  try {
-    const inv = await investmentRepository.getById(parseInt(req.params.id, 10));
-    if (!inv) return res.status(404).json({ detail: 'Investment not found' });
-    res.json(inv);
-  } catch (err) {
-    logger.error('Failed to get investment', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve investment' });
-  }
-});
-
 // POST /api/investments
 router.post('/', async (req, res) => {
   try {
