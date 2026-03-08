@@ -49,11 +49,11 @@ export function AddInvestmentDialog() {
     addInvestment({
       name: form.name.trim(),
       symbol: form.symbol.trim() || undefined,
-      assetClass: form.assetClass,
+      asset_class: form.assetClass,
       currency: form.currency || 'EUR',
-      currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
-      interestRate: form.interestRate ? parseFloat(form.interestRate) : undefined,
-      maturityDate: form.maturityDate || undefined,
+      current_price: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
+      interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
+      maturity_date: form.maturityDate || undefined,
       location: form.location.trim() || undefined,
       notes: form.notes.trim() || undefined,
     });
