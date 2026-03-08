@@ -163,4 +163,16 @@ router.get('/recurring-patterns', async (req, res) => {
   }
 });
 
+// POST /api/info/refresh-views - Manually refresh materialized views
+router.post('/refresh-views', async (req, res) => {
+  try {
+    const start = Date.now();
+    await refreshMaterializedViews();
+    res.json({ message: 'Materialized views refreshed', duration_ms: Date.now() - start });
+  } catch (err) {
+    logger.error('Error refreshing materialized views', { error: err.message });
+    res.status(500).json({ detail: 'Error refreshing materialized views' });
+  }
+});
+
 export default router;
