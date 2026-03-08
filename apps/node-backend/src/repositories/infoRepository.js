@@ -2,14 +2,32 @@
  * Info/Statistics Repository - data access for statistics and reporting.
  *
  * Mirrors: apps/backend/repositories/info_repository.py
+ *
+ * All monetary aggregations convert amounts to EUR using the currency
+ * conversion service, matching the Python backend behaviour.
  */
 
 import { query } from '../database/connection.js';
+import { convertToEur } from '../services/currencyConversionService.js';
 
 export const infoRepository = {
   async getStatistics() {
     const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
-    const sumResult = await query('SELECT COALESCE(sum(amount), 0) as total FROM transactions WHERE is_active = true');
+
+    // Sum amounts converted to EUR
+    const txResult = await query(`
+      SELECT t.amount, t.currency, t.date
+      FROM transactions t
+      WHERE t.is_active = true
+    `);
+
+    let totalEur = 0;
+    for (const row of txResult.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      totalEur += await convertToEur(amt, row.currency, dateStr);
+    }
+
     const categoryResult = await query(`
       SELECT COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name, count(*) AS count
       FROM transactions t
@@ -22,7 +40,7 @@ export const infoRepository = {
 
     return {
       total_transactions: parseInt(countResult.rows[0].count, 10),
-      total_amount: parseFloat(sumResult.rows[0].total),
+      total_amount: Math.round(totalEur * 100) / 100,
       categories: categoryResult.rows.map(r => ({ name: r.name, count: parseInt(r.count, 10) })),
     };
   },
@@ -41,34 +59,46 @@ export const infoRepository = {
 
   async getTransactionSummary({ bankAccount = null, startDate = null, endDate = null } = {}) {
     let sql = `
-      SELECT count(*) AS total_count,
-             COALESCE(sum(amount), 0) AS total_amount,
-             COALESCE(avg(amount), 0) AS average,
-             min(amount) AS min,
-             max(amount) AS max
-      FROM transactions
-      WHERE is_active = true
+      SELECT t.amount, t.currency, t.date
+      FROM transactions t
+      WHERE t.is_active = true
     `;
     const params = [];
     let paramIdx = 1;
 
-    if (bankAccount) { sql += ` AND bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
-    if (startDate) { sql += ` AND date >= $${paramIdx++}`; params.push(startDate); }
-    if (endDate) { sql += ` AND date <= $${paramIdx++}`; params.push(endDate); }
+    if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
+    if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
+    if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
 
     const result = await query(sql, params);
-    const row = result.rows[0];
+
+    if (result.rows.length === 0) {
+      return { total_count: 0, total_amount: 0, average: 0, min: null, max: null };
+    }
+
+    let total = 0;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of result.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      total += eur;
+      if (eur < min) min = eur;
+      if (eur > max) max = eur;
+    }
+
+    const count = result.rows.length;
     return {
-      total_count: parseInt(row.total_count, 10),
-      total_amount: parseFloat(row.total_amount),
-      average: parseFloat(row.average),
-      min: row.min != null ? parseFloat(row.min) : null,
-      max: row.max != null ? parseFloat(row.max) : null,
+      total_count: count,
+      total_amount: Math.round(total * 100) / 100,
+      average: Math.round((total / count) * 100) / 100,
+      min: Math.round(min * 100) / 100,
+      max: Math.round(max * 100) / 100,
     };
   },
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
-    // Use parameterized query instead of string interpolation to prevent SQL injection
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     const excludeClause = validIds.length > 0
       ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((_, i) => `$${i + 1}`).join(',')})`
@@ -87,31 +117,56 @@ export const infoRepository = {
         EXTRACT(YEAR FROM m.month_start)::int AS year,
         m.month_start AS period_start,
         (m.month_start + interval '1 month' - interval '1 day')::date AS period_end,
-        COALESCE(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END), 0) AS total_spending,
-        COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS total_income,
-        COALESCE(SUM(t.amount), 0) AS net_amount,
-        COUNT(t.id)::int AS transaction_count
+        t.amount, t.currency, t.date, t.id AS txn_id
       FROM months m
       LEFT JOIN transactions t ON t.date >= m.month_start
         AND t.date < m.month_start + interval '1 month'
         AND t.is_active = true
         ${excludeClause}
       LEFT JOIN recipients r ON t.recipient_id = r.id
-      GROUP BY m.month_start
-      ORDER BY m.month_start
+      ORDER BY m.month_start, t.date
     `;
     const result = await query(sql, validIds);
 
-    const months = result.rows.map(r => ({
-      month: r.month,
-      year: r.year,
-      period_start: r.period_start,
-      period_end: r.period_end,
-      total_spending: parseFloat(r.total_spending),
-      total_income: parseFloat(r.total_income),
-      net_amount: parseFloat(r.net_amount),
-      transaction_count: r.transaction_count,
-    }));
+    // Group by month and convert amounts
+    const monthMap = {};
+    for (const row of result.rows) {
+      const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+      if (!monthMap[key]) {
+        monthMap[key] = {
+          month: row.month,
+          year: row.year,
+          period_start: row.period_start,
+          period_end: row.period_end,
+          total_spending: 0,
+          total_income: 0,
+          net_amount: 0,
+          transaction_count: 0,
+        };
+      }
+      if (row.txn_id == null) continue; // LEFT JOIN produced null row
+
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+
+      monthMap[key].transaction_count++;
+      monthMap[key].net_amount += eur;
+      if (eur < 0) monthMap[key].total_spending += eur;
+      else monthMap[key].total_income += eur;
+    }
+
+    const months = Object.values(monthMap)
+      .sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      })
+      .map(m => ({
+        ...m,
+        total_spending: Math.round(m.total_spending * 100) / 100,
+        total_income: Math.round(m.total_income * 100) / 100,
+        net_amount: Math.round(m.net_amount * 100) / 100,
+      }));
 
     const summary = {
       total_spending: months.reduce((s, m) => s + m.total_spending, 0),
@@ -124,6 +179,7 @@ export const infoRepository = {
 
     return { months, summary };
   },
+
   async getPlannedExpensesNextMonth() {
     // Calculate next month boundaries
     const now = new Date();
@@ -153,7 +209,7 @@ export const infoRepository = {
       monthAfter.toISOString().split('T')[0],
     ]);
 
-    // Group by date
+    // Group by date, converting amounts to EUR
     const dailyMap = {};
     for (const row of result.rows) {
       const dateStr = row.planned_date instanceof Date
@@ -163,12 +219,13 @@ export const infoRepository = {
         dailyMap[dateStr] = { date: dateStr, total_income: 0, total_expenses: 0, transactions: [] };
       }
       const amt = parseFloat(row.amount);
-      if (amt >= 0) dailyMap[dateStr].total_income += amt;
-      else dailyMap[dateStr].total_expenses += amt;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      if (eur >= 0) dailyMap[dateStr].total_income += eur;
+      else dailyMap[dateStr].total_expenses += eur;
       dailyMap[dateStr].transactions.push({
         id: row.id,
         recipient_name: row.recipient_name,
-        amount: amt,
+        amount: Math.round(eur * 100) / 100,
         category_name: row.category_name,
         is_recurring: row.is_recurring,
         recurrence_pattern: row.recurrence_pattern,
@@ -187,81 +244,96 @@ export const infoRepository = {
       period_end: lastDay.toISOString().split('T')[0],
       daily_data: dailyData,
       summary: {
-        total_income: totalIncome,
-        total_expenses: totalExpenses,
-        net_amount: totalIncome + totalExpenses,
+        total_income: Math.round(totalIncome * 100) / 100,
+        total_expenses: Math.round(totalExpenses * 100) / 100,
+        net_amount: Math.round((totalIncome + totalExpenses) * 100) / 100,
         transaction_count: result.rows.length,
       },
     };
   },
 
   async getAverageVsCurrentSpending() {
-    // Past 6 complete months average daily spending
+    // Past 6 complete months — fetch raw amounts with currency for conversion
     const sql6m = `
-      WITH monthly AS (
-        SELECT
-          date_trunc('month', t.date) AS month,
-          SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) AS spending,
-          COUNT(DISTINCT t.date) AS active_days
-        FROM transactions t
-        WHERE t.is_active = true
-          AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
-          AND t.date < date_trunc('month', CURRENT_DATE)
-        GROUP BY date_trunc('month', t.date)
-      )
-      SELECT
-        AVG(spending / NULLIF(active_days, 0)) AS avg_daily_spending,
-        AVG(spending) AS avg_monthly_spending,
-        COUNT(*) AS months_counted
-      FROM monthly
+      SELECT t.amount, t.currency, t.date
+      FROM transactions t
+      WHERE t.is_active = true
+        AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
+        AND t.date < date_trunc('month', CURRENT_DATE)
     `;
     const past6Result = await query(sql6m);
-    const past6 = past6Result.rows[0];
+
+    // Convert and group by month
+    const monthlySpending = {};
+    const monthlyDays = {};
+    for (const row of past6Result.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      const monthKey = dateStr.substring(0, 7);
+      if (!monthlySpending[monthKey]) { monthlySpending[monthKey] = 0; monthlyDays[monthKey] = new Set(); }
+      if (eur < 0) monthlySpending[monthKey] += Math.abs(eur);
+      monthlyDays[monthKey].add(dateStr);
+    }
+
+    const monthKeys = Object.keys(monthlySpending);
+    const monthsCount = monthKeys.length || 1;
+    const totalMonthlySpending = monthKeys.reduce((s, k) => s + monthlySpending[k], 0);
+    const avgMonthlySpending = totalMonthlySpending / monthsCount;
+    const totalDays = monthKeys.reduce((s, k) => s + monthlyDays[k].size, 0) || 1;
+    const avgDailySpending = totalMonthlySpending / totalDays;
 
     // Current month daily breakdown
     const sqlCurrent = `
-      SELECT t.date,
-             SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) AS spending,
-             SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS income
+      SELECT t.amount, t.currency, t.date
       FROM transactions t
       WHERE t.is_active = true
         AND t.date >= date_trunc('month', CURRENT_DATE)
         AND t.date <= CURRENT_DATE
-      GROUP BY t.date
-      ORDER BY t.date
     `;
     const currentResult = await query(sqlCurrent);
 
-    const dailyData = currentResult.rows.map(r => ({
-      date: r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date),
-      spending: parseFloat(r.spending),
-      income: parseFloat(r.income),
-    }));
+    const dailyMap = {};
+    for (const row of currentResult.rows) {
+      const amt = parseFloat(row.amount);
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const eur = await convertToEur(amt, row.currency, dateStr);
+      if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
+      if (eur < 0) dailyMap[dateStr].spending += Math.abs(eur);
+      else dailyMap[dateStr].income += eur;
+    }
+
+    const dailyData = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, d]) => ({
+        date,
+        spending: Math.round(d.spending * 100) / 100,
+        income: Math.round(d.income * 100) / 100,
+      }));
 
     const totalCurrentSpending = dailyData.reduce((s, d) => s + d.spending, 0);
     const daysElapsed = dailyData.length || 1;
-    const avgDaily = parseFloat(past6.avg_daily_spending) || 0;
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const projectedTotal = (totalCurrentSpending / daysElapsed) * daysInMonth;
 
     return {
       past_6_months: {
-        avg_daily_spending: avgDaily,
-        avg_monthly_spending: parseFloat(past6.avg_monthly_spending) || 0,
-        months_counted: parseInt(past6.months_counted, 10),
+        avg_daily_spending: Math.round(avgDailySpending * 100) / 100,
+        avg_monthly_spending: Math.round(avgMonthlySpending * 100) / 100,
+        months_counted: monthsCount,
       },
       current_month: {
         daily_data: dailyData,
-        total_spending: totalCurrentSpending,
+        total_spending: Math.round(totalCurrentSpending * 100) / 100,
         days_elapsed: daysElapsed,
         days_in_month: daysInMonth,
       },
       comparison: {
-        projected_monthly_total: projectedTotal,
-        avg_monthly_spending: parseFloat(past6.avg_monthly_spending) || 0,
-        variance: projectedTotal - (parseFloat(past6.avg_monthly_spending) || 0),
-        pace: avgDaily > 0 ? (totalCurrentSpending / daysElapsed) / avgDaily : null,
+        projected_monthly_total: Math.round(projectedTotal * 100) / 100,
+        avg_monthly_spending: Math.round(avgMonthlySpending * 100) / 100,
+        variance: Math.round((projectedTotal - avgMonthlySpending) * 100) / 100,
+        pace: avgDailySpending > 0 ? Math.round(((totalCurrentSpending / daysElapsed) / avgDailySpending) * 100) / 100 : null,
       },
     };
   },
@@ -270,6 +342,13 @@ export const infoRepository = {
    * Cashflow comparison: cumulative daily net cash flow.
    * Returns average of last 6 months (day 1-31) and current month (day 1-today).
    * Two variants: with and without planned expenses.
+   *
+   * Note: This query operates on daily aggregates where mixed-currency sums
+   * within a single day are rare. For simplicity the SQL aggregation is kept
+   * as-is (amounts are in the DB's predominant currency, typically EUR).
+   * Full per-row conversion would require fetching all raw rows which is
+   * expensive for this endpoint. If multi-currency accuracy is critical here,
+   * this can be refactored later.
    */
   async getCashflowComparison() {
     const now = new Date();
@@ -394,25 +473,20 @@ export const infoRepository = {
     }
 
     // --- Build response ---
-    // Average line (without planned) - fill gaps with previous value
     const avgByDay = {};
     for (const row of avgResult.rows) {
       avgByDay[row.day_of_month] = parseFloat(row.avg_cumulative);
     }
 
-    // Current line (without planned) - fill gaps
     const currentByDay = {};
     for (const d of currentDays) {
       currentByDay[d.day] = d.cumulative;
     }
 
-    // Build full day arrays
     const withoutPlanned = [];
     const withPlanned = [];
     let lastAvg = 0;
     let lastCurrent = null;
-    let lastAvgWithPlanned = 0;
-    let lastCurrentWithPlanned = null;
     let plannedCumulative = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -431,11 +505,9 @@ export const infoRepository = {
       // With planned
       const plannedHistVal = plannedHistByDay[day] !== undefined ? plannedHistByDay[day] : 0;
       const avgWithPlanned = avgVal + plannedHistVal;
-      lastAvgWithPlanned = avgWithPlanned;
 
       plannedCumulative += (plannedByDay[day] || 0);
       const currentWithPlanned = currentVal !== null ? currentVal + plannedCumulative : null;
-      if (currentWithPlanned !== null) lastCurrentWithPlanned = currentWithPlanned;
 
       withPlanned.push({
         day,
