@@ -265,6 +265,194 @@ export const infoRepository = {
       },
     };
   },
+
+  /**
+   * Cashflow comparison: cumulative daily net cash flow.
+   * Returns average of last 6 months (day 1-31) and current month (day 1-today).
+   * Two variants: with and without planned expenses.
+   */
+  async getCashflowComparison() {
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+
+    // --- 1. Average daily cumulative from last 6 complete months ---
+    const sqlAvg = `
+      WITH past_months AS (
+        SELECT generate_series(
+          date_trunc('month', CURRENT_DATE) - interval '6 months',
+          date_trunc('month', CURRENT_DATE) - interval '1 month',
+          interval '1 month'
+        )::date AS month_start
+      ),
+      daily_net AS (
+        SELECT
+          pm.month_start,
+          EXTRACT(DAY FROM t.date)::int AS day_of_month,
+          SUM(t.amount) AS net
+        FROM past_months pm
+        JOIN transactions t ON t.date >= pm.month_start
+          AND t.date < pm.month_start + interval '1 month'
+          AND t.is_active = true
+        GROUP BY pm.month_start, EXTRACT(DAY FROM t.date)
+      ),
+      cumulative AS (
+        SELECT
+          month_start,
+          day_of_month,
+          SUM(net) OVER (PARTITION BY month_start ORDER BY day_of_month) AS cumulative_net
+        FROM daily_net
+      )
+      SELECT
+        day_of_month,
+        AVG(cumulative_net) AS avg_cumulative
+      FROM cumulative
+      GROUP BY day_of_month
+      ORDER BY day_of_month
+    `;
+    const avgResult = await query(sqlAvg);
+
+    // --- 2. Current month daily cumulative ---
+    const sqlCurrent = `
+      SELECT
+        EXTRACT(DAY FROM t.date)::int AS day_of_month,
+        SUM(t.amount) AS net
+      FROM transactions t
+      WHERE t.is_active = true
+        AND t.date >= date_trunc('month', CURRENT_DATE)
+        AND t.date <= CURRENT_DATE
+      GROUP BY EXTRACT(DAY FROM t.date)
+      ORDER BY day_of_month
+    `;
+    const currentResult = await query(sqlCurrent);
+
+    // Build cumulative for current month
+    let currentCumulative = 0;
+    const currentDays = currentResult.rows.map(r => {
+      currentCumulative += parseFloat(r.net);
+      return { day: r.day_of_month, cumulative: currentCumulative };
+    });
+
+    // --- 3. Planned expenses for current month ---
+    const sqlPlanned = `
+      SELECT
+        EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
+        SUM(pt.amount) AS net
+      FROM planned_transactions pt
+      WHERE pt.is_active = true
+        AND pt.planned_date >= date_trunc('month', CURRENT_DATE)
+        AND pt.planned_date <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')
+      GROUP BY EXTRACT(DAY FROM pt.planned_date)
+      ORDER BY day_of_month
+    `;
+    const plannedResult = await query(sqlPlanned);
+
+    // Build planned daily map
+    const plannedByDay = {};
+    for (const row of plannedResult.rows) {
+      plannedByDay[row.day_of_month] = parseFloat(row.net);
+    }
+
+    // --- 4. Historical planned impact on past 6 months (average) ---
+    const sqlPlannedHistorical = `
+      WITH past_months AS (
+        SELECT generate_series(
+          date_trunc('month', CURRENT_DATE) - interval '6 months',
+          date_trunc('month', CURRENT_DATE) - interval '1 month',
+          interval '1 month'
+        )::date AS month_start
+      ),
+      planned_daily AS (
+        SELECT
+          pm.month_start,
+          EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
+          SUM(pt.amount) AS net
+        FROM past_months pm
+        JOIN planned_transactions pt ON pt.planned_date >= pm.month_start
+          AND pt.planned_date < pm.month_start + interval '1 month'
+          AND pt.is_active = true
+        GROUP BY pm.month_start, EXTRACT(DAY FROM pt.planned_date)
+      ),
+      cumulative AS (
+        SELECT
+          month_start,
+          day_of_month,
+          SUM(net) OVER (PARTITION BY month_start ORDER BY day_of_month) AS cumulative_net
+        FROM planned_daily
+      )
+      SELECT
+        day_of_month,
+        AVG(cumulative_net) AS avg_cumulative_planned
+      FROM cumulative
+      GROUP BY day_of_month
+      ORDER BY day_of_month
+    `;
+    const plannedHistResult = await query(sqlPlannedHistorical);
+    const plannedHistByDay = {};
+    for (const row of plannedHistResult.rows) {
+      plannedHistByDay[row.day_of_month] = parseFloat(row.avg_cumulative_planned);
+    }
+
+    // --- Build response ---
+    // Average line (without planned) - fill gaps with previous value
+    const avgByDay = {};
+    for (const row of avgResult.rows) {
+      avgByDay[row.day_of_month] = parseFloat(row.avg_cumulative);
+    }
+
+    // Current line (without planned) - fill gaps
+    const currentByDay = {};
+    for (const d of currentDays) {
+      currentByDay[d.day] = d.cumulative;
+    }
+
+    // Build full day arrays
+    const withoutPlanned = [];
+    const withPlanned = [];
+    let lastAvg = 0;
+    let lastCurrent = null;
+    let lastAvgWithPlanned = 0;
+    let lastCurrentWithPlanned = null;
+    let plannedCumulative = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const avgVal = avgByDay[day] !== undefined ? avgByDay[day] : lastAvg;
+      lastAvg = avgVal;
+
+      const currentVal = day <= currentDay ? (currentByDay[day] !== undefined ? currentByDay[day] : (lastCurrent !== null ? lastCurrent : 0)) : null;
+      if (currentVal !== null) lastCurrent = currentVal;
+
+      withoutPlanned.push({
+        day,
+        average: Math.round(avgVal * 100) / 100,
+        current: currentVal !== null ? Math.round(currentVal * 100) / 100 : null,
+      });
+
+      // With planned
+      const plannedHistVal = plannedHistByDay[day] !== undefined ? plannedHistByDay[day] : 0;
+      const avgWithPlanned = avgVal + plannedHistVal;
+      lastAvgWithPlanned = avgWithPlanned;
+
+      plannedCumulative += (plannedByDay[day] || 0);
+      const currentWithPlanned = currentVal !== null ? currentVal + plannedCumulative : null;
+      if (currentWithPlanned !== null) lastCurrentWithPlanned = currentWithPlanned;
+
+      withPlanned.push({
+        day,
+        average: Math.round(avgWithPlanned * 100) / 100,
+        current: currentWithPlanned !== null ? Math.round(currentWithPlanned * 100) / 100 : null,
+      });
+    }
+
+    return {
+      days_in_month: daysInMonth,
+      current_day: currentDay,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+      without_planned: withoutPlanned,
+      with_planned: withPlanned,
+    };
+  },
 };
 
 export default infoRepository;
