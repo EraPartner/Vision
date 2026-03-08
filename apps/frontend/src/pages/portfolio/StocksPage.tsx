@@ -117,5 +117,7 @@ export default function StocksPage() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

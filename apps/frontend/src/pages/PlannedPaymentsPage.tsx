@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api";
 import type { Transaction } from "@/types/api";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const FREQ_LABELS: Record<string, string> = {
   daily: "Daily",

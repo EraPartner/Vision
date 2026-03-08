@@ -300,5 +300,7 @@ export default function TransactionsPage() {
                 actions={actions}
             />
         </div>
+        <ConfirmDialog />
+    </>
     );
 }

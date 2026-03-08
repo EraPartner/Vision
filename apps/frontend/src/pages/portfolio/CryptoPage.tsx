@@ -112,5 +112,7 @@ export default function CryptoPage() {
         </CardContent>
       </Card>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }
