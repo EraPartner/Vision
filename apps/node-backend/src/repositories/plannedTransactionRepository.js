@@ -11,7 +11,7 @@ export const plannedTransactionRepository = {
   async getAll({
     limit = 50, offset = 0, startDate = null, endDate = null,
     bankAccount = null, categoryId = null, recipientId = null,
-    isRecurring = null, isExecuted = null, active = true,
+    isRecurring = null, isExecuted = null, search = null, active = true,
   } = {}) {
     let sql = `
       SELECT pt.*,
@@ -39,6 +39,21 @@ export const plannedTransactionRepository = {
     if (recipientId != null) { sql += ` AND pt.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (isRecurring != null) { sql += ` AND pt.is_recurring = $${paramIdx++}`; params.push(isRecurring); }
     if (isExecuted != null) { sql += ` AND pt.is_executed = $${paramIdx++}`; params.push(isExecuted); }
+    if (search) {
+      const sp = `%${search}%`;
+      sql += ` AND (
+        pt.memo ILIKE $${paramIdx} OR
+        pt.comment ILIKE $${paramIdx} OR
+        pt.bank_account ILIKE $${paramIdx} OR
+        r.name ILIKE $${paramIdx} OR
+        c.general ILIKE $${paramIdx} OR
+        c.detail ILIKE $${paramIdx} OR
+        rc.general ILIKE $${paramIdx} OR
+        rc.detail ILIKE $${paramIdx}
+      )`;
+      paramIdx++;
+      params.push(sp);
+    }
 
     // Count query
     let countSql = sql.replace(/SELECT pt\.\*[\s\S]*?FROM/, 'SELECT count(*) FROM');
