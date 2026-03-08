@@ -37,6 +37,7 @@ export default function RecipientsPage() {
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
     const unmergeMutation = useUnmergeRecipient();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = data?.items[idx];
