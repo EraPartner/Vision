@@ -104,7 +104,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 });
 
 // POST /api/planned-transactions/:id/execute
-router.post('/:id/execute', async (req, res) => {
+router.post('/:id/execute', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { executed_transaction_id, execution_date } = req.body;
