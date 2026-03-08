@@ -38,7 +38,6 @@ export default function RecipientsPage() {
             data: {
                 name: updated.name,
                 notes: updated.notes,
-                address: updated.address,
                 is_active: updated.is_active,
             },
         });
