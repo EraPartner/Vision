@@ -697,16 +697,16 @@ export const infoRepository = {
 
   /**
    * Get current balance per bank account and monthly historical balances.
-   * Uses the latest transaction's balance field (by date) per account+currency,
-   * then converts to EUR.
+   * Uses the balance field from the single most recent transaction (by date)
+   * per bank account, matching the old Python backend behavior.
    */
   async getBankBalances() {
     const accounts = [];
     let totalNetPosition = 0;
 
-    // For each bank account + currency, get the balance from the latest transaction by date
+    // For each bank account, get the balance from the single latest transaction by date
     const latestBalanceResult = await query(`
-      SELECT DISTINCT ON (bank_account, COALESCE(currency, 'EUR'))
+      SELECT DISTINCT ON (bank_account)
              bank_account,
              COALESCE(currency, 'EUR') AS currency,
              balance,
@@ -718,39 +718,26 @@ export const infoRepository = {
       WHERE is_active = true
         AND bank_account IS NOT NULL
         AND balance IS NOT NULL
-      ORDER BY bank_account, COALESCE(currency, 'EUR'), date DESC, id DESC
+      ORDER BY bank_account, date DESC, id DESC
     `);
 
-    // Group by bank_account, converting each currency's balance to EUR
-    const byAccount = {};
     for (const row of latestBalanceResult.rows) {
-      const acctKey = row.bank_account;
-      if (!byAccount[acctKey]) {
-        byAccount[acctKey] = {
-          bank_account: row.bank_account,
-          balance: 0,
-          transaction_count: parseInt(row.transaction_count, 10),
-          first_transaction: row.first_transaction,
-          last_transaction: row.last_transaction,
-        };
-      }
-
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
       const currency = row.currency || 'EUR';
       const eur = await convertToEur(parseFloat(row.balance), currency, dateStr);
-      byAccount[acctKey].balance += Math.round(eur * 100) / 100;
+      const balance = Math.round(eur * 100) / 100;
 
-      // Update date bounds
-      if (row.first_transaction < byAccount[acctKey].first_transaction) byAccount[acctKey].first_transaction = row.first_transaction;
-      if (row.last_transaction > byAccount[acctKey].last_transaction) byAccount[acctKey].last_transaction = row.last_transaction;
+      accounts.push({
+        bank_account: row.bank_account,
+        balance,
+        transaction_count: parseInt(row.transaction_count, 10),
+        first_transaction: row.first_transaction,
+        last_transaction: row.last_transaction,
+      });
+      totalNetPosition += balance;
     }
 
-    for (const acct of Object.values(byAccount)) {
-      totalNetPosition += acct.balance;
-      accounts.push(acct);
-    }
-
-    // Historical monthly balances — use the latest balance per account+currency at end of each month
+    // Historical monthly balances — use the single latest transaction per account at end of each month
     const historyResult = await query(`
       WITH months AS (
         SELECT generate_series(
@@ -772,7 +759,7 @@ export const infoRepository = {
           t.balance,
           t.date,
           ROW_NUMBER() OVER (
-            PARTITION BY a.bank_account, m.month_start, COALESCE(t.currency, 'EUR')
+            PARTITION BY a.bank_account, m.month_start
             ORDER BY t.date DESC, t.id DESC
           ) AS rn
         FROM months m
@@ -804,12 +791,7 @@ export const infoRepository = {
       const eur = await convertToEur(parseFloat(row.balance), currency, dateForRate);
 
       const monthKey = monthStr.substring(0, 7);
-      let existing = historyMap[key].find(h => h.month === monthKey);
-      if (!existing) {
-        existing = { month: monthKey, balance: 0 };
-        historyMap[key].push(existing);
-      }
-      existing.balance += Math.round(eur * 100) / 100;
+      historyMap[key].push({ month: monthKey, balance: Math.round(eur * 100) / 100 });
     }
 
     // Sort each account's history
