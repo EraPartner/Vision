@@ -103,4 +103,4 @@ echo "${BLUE}[3/3]${NC} Starting frontend..."
 echo "${GREEN}✓${NC} All services starting. Frontend at http://localhost:5174"
 echo ""
 
-npm run dev -- --config config/vite.config.ts
+npx vite --config config/vite.config.ts
