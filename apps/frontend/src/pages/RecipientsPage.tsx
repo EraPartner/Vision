@@ -78,7 +78,6 @@ export default function RecipientsPage() {
         default_category_name: r.default_category_name,
         is_active: r.is_active,
         notes: r.notes || '',
-        address: r.address || '',
     })) || [];
 
     const columns = [
