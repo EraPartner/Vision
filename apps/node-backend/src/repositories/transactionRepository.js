@@ -59,11 +59,12 @@ export const transactionRepository = {
       params.push(`%${bankAccount}%`);
     }
     if (categoryId != null) {
-      sql += ` AND t.category_id = $${paramIdx++}`;
+      sql += ` AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${paramIdx++}`;
       params.push(categoryId);
     }
     if (recipientId != null) {
-      sql += ` AND t.recipient_id = $${paramIdx++}`;
+      sql += ` AND (t.recipient_id = $${paramIdx} OR r.primary_recipient_id = $${paramIdx})`;
+      paramIdx++;
       params.push(recipientId);
     }
     if (recipientName) {
@@ -79,10 +80,13 @@ export const transactionRepository = {
         t.currency ILIKE $${paramIdx} OR
         CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
         r.name ILIKE $${paramIdx} OR
+        pr.name ILIKE $${paramIdx} OR
         c.general ILIKE $${paramIdx} OR
         c.detail ILIKE $${paramIdx} OR
         rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx}
+        rc.detail ILIKE $${paramIdx} OR
+        pc.general ILIKE $${paramIdx} OR
+        pc.detail ILIKE $${paramIdx}
       )`;
       paramIdx++;
       params.push(searchParam);
@@ -136,11 +140,12 @@ export const transactionRepository = {
       params.push(`%${bankAccount}%`);
     }
     if (categoryId != null) {
-      sql += ` AND t.category_id = $${paramIdx++}`;
+      sql += ` AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${paramIdx++}`;
       params.push(categoryId);
     }
     if (recipientId != null) {
-      sql += ` AND t.recipient_id = $${paramIdx++}`;
+      sql += ` AND (t.recipient_id = $${paramIdx} OR r.primary_recipient_id = $${paramIdx})`;
+      paramIdx++;
       params.push(recipientId);
     }
     if (recipientName) {
@@ -156,10 +161,13 @@ export const transactionRepository = {
         t.currency ILIKE $${paramIdx} OR
         CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
         r.name ILIKE $${paramIdx} OR
+        pr.name ILIKE $${paramIdx} OR
         c.general ILIKE $${paramIdx} OR
         c.detail ILIKE $${paramIdx} OR
         rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx}
+        rc.detail ILIKE $${paramIdx} OR
+        pc.general ILIKE $${paramIdx} OR
+        pc.detail ILIKE $${paramIdx}
       )`;
       paramIdx++;
       params.push(searchParam);
