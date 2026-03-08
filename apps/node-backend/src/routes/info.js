@@ -174,6 +174,17 @@ router.get('/net-worth', async (req, res) => {
   }
 });
 
+// GET /api/info/recipient-insights - Merchant/recipient spending insights
+router.get('/recipient-insights', async (req, res) => {
+  try {
+    const data = await infoRepository.getRecipientInsights();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error retrieving recipient insights', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving recipient insights' });
+  }
+});
+
 // POST /api/info/refresh-views - Manually refresh materialized views
 router.post('/refresh-views', async (req, res) => {
   try {

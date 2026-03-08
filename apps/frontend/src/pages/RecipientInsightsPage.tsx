@@ -1,0 +1,238 @@
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+} from "recharts";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign } from "lucide-react";
+import { format, parseISO } from "date-fns";
+
+const CHART_COLORS = [
+  "hsl(217, 91%, 60%)",
+  "hsl(142, 76%, 36%)",
+  "hsl(45, 93%, 47%)",
+  "hsl(280, 87%, 65%)",
+  "hsl(340, 82%, 52%)",
+  "hsl(190, 80%, 45%)",
+  "hsl(30, 90%, 55%)",
+  "hsl(260, 70%, 55%)",
+  "hsl(170, 65%, 40%)",
+  "hsl(350, 75%, 60%)",
+];
+
+function formatCurrency(val: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
+}
+
+export default function RecipientInsightsPage() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["recipient-insights"],
+    queryFn: () => apiClient.getRecipientInsights(),
+    staleTime: 60000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 p-6">
+        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
+        <div className="grid gap-6 md:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="p-6">
+        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
+        <p className="text-muted-foreground mt-2">Failed to load recipient insights.</p>
+      </div>
+    );
+  }
+
+  const top10 = data.topMerchants.slice(0, 10);
+  const chartData = top10.map(m => ({
+    name: m.name.length > 18 ? m.name.slice(0, 16) + "…" : m.name,
+    fullName: m.name,
+    spend: m.totalSpend,
+  }));
+
+  const totalTopSpend = top10.reduce((s, m) => s + m.totalSpend, 0);
+  const totalTopTx = top10.reduce((s, m) => s + m.transactionCount, 0);
+  const avgTopAmount = totalTopTx > 0 ? totalTopSpend / totalTopTx : 0;
+
+  const increases = data.monthOverMonth.filter(m => m.changePercent > 0);
+  const decreases = data.monthOverMonth.filter(m => m.changePercent < 0);
+
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
+        <p className="text-muted-foreground mt-1">Understand where your money goes by merchant</p>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Top Merchant</CardTitle>
+            <Store className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{top10[0]?.name || "—"}</div>
+            <p className="text-xs text-muted-foreground">
+              {top10[0] ? formatCurrency(top10[0].totalSpend) : "No data"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Top 10 Total</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(totalTopSpend)}</div>
+            <p className="text-xs text-muted-foreground">{totalTopTx} transactions</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Transaction</CardTitle>
+            <Hash className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(avgTopAmount)}</div>
+            <p className="text-xs text-muted-foreground">across top 10 merchants</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top 10 Bar Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Top 10 Merchants by Spend</CardTitle>
+          <CardDescription>Total spending per merchant across all time</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} className="text-xs" />
+              <YAxis type="category" dataKey="name" width={140} className="text-xs" />
+              <Tooltip
+                formatter={(value: number) => [formatCurrency(value), "Total Spend"]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
+                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+              />
+              <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
+                {chartData.map((_, i) => (
+                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Month over month alerts */}
+      {data.monthOverMonth.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Month-over-Month Changes</CardTitle>
+            <CardDescription>How your spending at top merchants changed vs. last month</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {increases.length > 0 && (
+              <div className="space-y-2">
+                {increases.map((m) => (
+                  <div key={m.recipientId} className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                    <TrendingUp className="h-5 w-5 text-destructive shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        You spent <span className="font-bold text-destructive">{m.changePercent}% more</span> at{" "}
+                        <span className="font-bold">{m.name}</span> this month
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(m.previousSpend)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {decreases.length > 0 && (
+              <div className="space-y-2">
+                {decreases.map((m) => (
+                  <div key={m.recipientId} className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <TrendingDown className="h-5 w-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        You spent <span className="font-bold text-primary">{Math.abs(m.changePercent)}% less</span> at{" "}
+                        <span className="font-bold">{m.name}</span> this month
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCurrency(m.previousSpend)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Detailed table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Merchant Details</CardTitle>
+          <CardDescription>Spending frequency and average transaction size</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-8">#</TableHead>
+                <TableHead>Merchant</TableHead>
+                <TableHead className="text-right">Total Spend</TableHead>
+                <TableHead className="text-right">Transactions</TableHead>
+                <TableHead className="text-right">Avg Amount</TableHead>
+                <TableHead className="text-right">First Seen</TableHead>
+                <TableHead className="text-right">Last Seen</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.topMerchants.map((m, i) => (
+                <TableRow key={m.recipientId}>
+                  <TableCell className="font-medium text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="font-medium">{m.name}</TableCell>
+                  <TableCell className="text-right font-mono">{formatCurrency(m.totalSpend)}</TableCell>
+                  <TableCell className="text-right">{m.transactionCount}</TableCell>
+                  <TableCell className="text-right font-mono">{formatCurrency(m.avgAmount)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {format(parseISO(m.firstSeen), "MMM yyyy")}
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {format(parseISO(m.lastSeen), "MMM yyyy")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

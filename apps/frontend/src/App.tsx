@@ -28,6 +28,7 @@ const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
 const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
 const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NetWorthPage = lazy(() => import("./pages/portfolio/NetWorthPage"));
+const RecipientInsightsPage = lazy(() => import("./pages/RecipientInsightsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -76,6 +77,7 @@ const App = () => {
                                                 <Route path="/recipients" element={<RecipientsPage/>}/>
                                                 <Route path="/planned" element={<PlannedPaymentsPage/>}/>
                                                 <Route path="/statistics" element={<StatisticsPage/>}/>
+                                                <Route path="/recipient-insights" element={<RecipientInsightsPage/>}/>
                                                 <Route path="/import" element={<ImportPage/>}/>
                                                 {/* Portfolio */}
                                                 <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
