@@ -236,6 +236,7 @@ class Recipient(Base):
     name = Column(Text, nullable=False, index=True)
     normalized_name = Column(Text, nullable=False, unique=True, index=True)
     default_category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    primary_recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=True, index=True)
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
