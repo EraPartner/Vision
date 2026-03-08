@@ -53,6 +53,7 @@ const App = () => {
         <QueryClientProvider client={queryClient}>
             <ThemeProvider>
                 <SettingsProvider>
+                <AppSettingsProvider>
                     <TooltipProvider>
                         <ErrorBoundary>
                             <Toaster/>
@@ -91,6 +92,7 @@ const App = () => {
                             </BrowserRouter>
                         </ErrorBoundary>
                     </TooltipProvider>
+                </AppSettingsProvider>
                 </SettingsProvider>
             </ThemeProvider>
         </QueryClientProvider>
