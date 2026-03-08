@@ -193,6 +193,7 @@ router.post('/', async (req, res) => {
     });
 
     logger.info('Transaction created', { id: transaction.id });
+    scheduleRefresh();
     res.status(201).json(formatTransaction(transaction));
   } catch (err) {
     logger.error('Error creating transaction', { error: err.message });
