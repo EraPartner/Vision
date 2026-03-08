@@ -90,7 +90,7 @@ export function AddTransactionDialog() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_currency">Currency</Label>
-                            <Input id="tx_currency" placeholder="EUR" value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
+                            <Input id="tx_currency" placeholder="EUR" maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
                         </div>
                     </div>
 
