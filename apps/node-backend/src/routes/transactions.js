@@ -9,6 +9,7 @@ import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
@@ -192,6 +193,7 @@ router.post('/', async (req, res) => {
     });
 
     logger.info('Transaction created', { id: transaction.id });
+    scheduleRefresh();
     res.status(201).json(formatTransaction(transaction));
   } catch (err) {
     logger.error('Error creating transaction', { error: err.message });
@@ -260,6 +262,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
       return res.status(404).json({ detail: `Transaction with ID ${id} not found` });
     }
 
+    scheduleRefresh();
     res.json(formatTransaction(updated));
   } catch (err) {
     logger.error('Error updating transaction', { error: err.message });
@@ -275,6 +278,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ detail: `Transaction with ID ${id} not found` });
     }
+    scheduleRefresh();
     res.json({ message: 'Transaction deleted permanently', details: { method: 'hard delete' }, links: [] });
   } catch (err) {
     logger.error('Error deleting transaction', { error: err.message });

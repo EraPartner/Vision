@@ -13,6 +13,7 @@ import { importCSVWithRawStorage } from '../services/rawTransactionImportService
 import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { logger } from '../config/logger.js';
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
@@ -52,6 +53,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
       ...result,
     });
 
+    scheduleRefresh();
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
@@ -111,6 +113,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
     const result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
     cleanup(req.file.path);
 
+    scheduleRefresh();
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
@@ -167,6 +170,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
     cleanup(req.file.path);
 
     if (!aborted) {
+      scheduleRefresh();
       sendEvent('complete', {
         ...result,
         status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
