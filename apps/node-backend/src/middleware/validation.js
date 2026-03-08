@@ -20,6 +20,14 @@ const ALLOWED_COLUMNS = {
     'currency', 'category_id', 'comment', 'url', 'is_recurring',
     'recurrence_pattern', 'is_executed', 'is_active', 'last_executed_date',
   ]),
+  investments: new Set([
+    'name', 'symbol', 'asset_class', 'currency', 'current_price',
+    'interest_rate', 'maturity_date', 'location', 'notes', 'is_active',
+  ]),
+  portfolio_transactions: new Set([
+    'type', 'date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes',
+    'currency', 'note', 'is_recurring', 'recurrence_interval', 'recurrence_end_date',
+  ]),
 };
 
 /**
