@@ -81,6 +81,7 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 
 // PATCH /api/planned-transactions/:id
+// Mirrors Python's planned transaction update with name-to-ID resolution
 router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -95,6 +96,37 @@ router.patch('/:id', validateIdParam, async (req, res) => {
     delete fields.executions;
     delete fields.execution_count;
     delete fields.executed_transaction_id;
+
+    // Resolve recipient_name to recipient_id (mirrors Python PATCH)
+    if (fields.recipient_name && !fields.recipient_id) {
+      const normalized = fields.recipient_name.toUpperCase().trim();
+      const { query: dbQuery } = await import('../database/connection.js');
+      const recipientResult = await dbQuery(
+        `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
+        [normalized]
+      );
+      if (recipientResult.rows.length > 0) {
+        fields.recipient_id = recipientResult.rows[0].id;
+      }
+    }
+    delete fields.recipient_name;
+
+    // Resolve category_name to category_id (mirrors Python PATCH)
+    if (fields.category_name && !fields.category_id) {
+      const normalized = fields.category_name.toUpperCase().trim();
+      const parts = normalized.split(':');
+      if (parts.length === 2) {
+        const { query: dbQuery } = await import('../database/connection.js');
+        const catResult = await dbQuery(
+          `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+          [parts[0].trim(), parts[1].trim()]
+        );
+        if (catResult.rows.length > 0) {
+          fields.category_id = catResult.rows[0].id;
+        }
+      }
+    }
+    delete fields.category_name;
 
     const updated = await plannedTransactionRepository.update(id, fields);
     res.json(formatPlannedTransaction(updated));

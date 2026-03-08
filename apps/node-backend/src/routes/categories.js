@@ -119,4 +119,35 @@ router.post('/:id/assign', validateIdParam, async (req, res) => {
   }
 });
 
+// POST /api/categories/assign - Standalone assign by general:detail name
+// Mirrors: Python POST /api/categories/assign with category_general + category_detail + recipient_ids
+router.post('/assign', async (req, res) => {
+  try {
+    const { category_general, category_detail, recipient_ids } = req.body;
+    if (!category_general || !category_detail) {
+      return res.status(400).json({ detail: 'Missing required fields: category_general, category_detail' });
+    }
+    if (!recipient_ids) {
+      return res.status(400).json({ detail: 'Missing recipient_ids' });
+    }
+
+    const ids = Array.isArray(recipient_ids) ? recipient_ids : [recipient_ids];
+
+    // Create or get the category by name
+    const { category } = await categoryRepository.createOrGet({
+      general: category_general,
+      detail: category_detail,
+    });
+
+    const updated = await categoryRepository.assignToRecipients(category.id, ids);
+    res.json({
+      updated_recipients: updated,
+      links: [],
+    });
+  } catch (err) {
+    logger.error('Error assigning category by name', { error: err.message });
+    res.status(500).json({ detail: 'Failed to assign category' });
+  }
+});
+
 export default router;

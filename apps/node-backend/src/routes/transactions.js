@@ -200,6 +200,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/transactions/:id
+// Mirrors Python's TransactionService.update() with name-to-ID resolution
 router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -215,6 +216,44 @@ router.patch('/:id', validateIdParam, async (req, res) => {
     delete fields.links;
     delete fields.id;
     delete fields.created_at;
+
+    // Resolve recipient_name to recipient_id (mirrors Python TransactionService.update)
+    if (fields.recipient_name && !fields.recipient_id) {
+      const normalized = fields.recipient_name.toUpperCase().trim();
+      const { query: dbQuery } = await import('../database/connection.js');
+      const recipientResult = await dbQuery(
+        `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
+        [normalized]
+      );
+      if (recipientResult.rows.length === 0) {
+        return res.status(400).json({ detail: `Recipient with name '${normalized}' does not exist` });
+      }
+      fields.recipient_id = recipientResult.rows[0].id;
+    }
+    delete fields.recipient_name;
+
+    // Resolve category_name to category_id (mirrors Python TransactionService.update)
+    if (fields.category_name && !fields.category_id) {
+      const normalized = fields.category_name.toUpperCase().trim();
+      if (!normalized.includes(':')) {
+        return res.status(400).json({
+          detail: `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
+        });
+      }
+      const [general, detail] = normalized.split(':', 2).map(s => s.trim());
+      const { query: dbQuery } = await import('../database/connection.js');
+      const catResult = await dbQuery(
+        `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+        [general, detail]
+      );
+      if (catResult.rows.length === 0) {
+        return res.status(400).json({
+          detail: `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
+        });
+      }
+      fields.category_id = catResult.rows[0].id;
+    }
+    delete fields.category_name;
 
     const updated = await transactionRepository.update(id, fields);
     if (!updated) {
