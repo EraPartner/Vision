@@ -5,6 +5,7 @@ import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import {BrowserRouter, Route, Routes} from "react-router-dom";
 import {AppLayout} from "@/components/layout/AppLayout";
 import {SettingsProvider} from "@/contexts/SettingsContext";
+import {AppSettingsProvider} from "@/contexts/AppSettingsContext";
 import {ThemeProvider} from "@/contexts/ThemeContext";
 import {WorkspaceProvider} from "@/contexts/WorkspaceContext";
 import {lazy, Suspense} from "react";
