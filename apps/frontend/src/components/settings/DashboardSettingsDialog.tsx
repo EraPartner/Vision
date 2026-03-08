@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSettings } from '@/contexts/SettingsContext';
+import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContext';
 import { useOnboarding } from '@/components/onboarding/OnboardingWizard';
 import { useQuery } from '@tanstack/react-query';
