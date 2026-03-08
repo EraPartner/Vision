@@ -50,7 +50,6 @@ export default function RecipientsPage() {
 
     useEffect(() => {
         if (initialData) {
-            console.log('[RecipientsPage] initialData:', JSON.stringify({ total: initialData.total, itemCount: initialData.items?.length, firstItem: initialData.items?.[0] }, null, 2));
             setAllItems(initialData.items);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
