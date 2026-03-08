@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { formatCurrency } from "@/utils/currency";
 import { toast } from "sonner";
-import { formatCurrency } from "@/utils/currency";
 
 interface ExchangeRate {
     currency: string;
