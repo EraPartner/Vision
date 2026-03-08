@@ -327,7 +327,6 @@ class ApiClient {
         queryParams.append('skip_rows', skipRows.toString());
 
         const url = `${API_BASE_URL}/api/import/csv/custom?${queryParams.toString()}`;
-        console.log(`API Request: POST ${url}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -336,13 +335,10 @@ class ApiClient {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({detail: 'Request failed'}));
-            console.error(`API Error: ${url}`, error);
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
-        const data = await response.json();
-        console.log(`API Response: ${url}`, data);
-        return data;
+        return response.json();
     }
 
     // ==================== Info/Statistics Methods ====================
