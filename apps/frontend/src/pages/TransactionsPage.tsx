@@ -100,7 +100,7 @@ export default function TransactionsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search]);
+    }, [showAll, search, recipientIdFilter, categoryIdFilter]);
 
     const handleDelete = async (id: number, description?: string) => {
         const ok = await confirm({
