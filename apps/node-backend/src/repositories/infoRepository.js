@@ -720,6 +720,7 @@ export const infoRepository = {
           last_transaction: row.last_transaction,
         });
       }
+    }
 
     // Historical monthly balances (running sum up to end of each month, last 12 months)
     const historyResult = await query(`
