@@ -23,6 +23,7 @@ const defaultSettings: DashboardSettings = {
     excludedCategoryIds: [],
     excludedRecipientIds: [],
     excludeHiddenCategories: true,
+    exclusionScope: 'everywhere',
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
