@@ -110,6 +110,7 @@ app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
 app.use('/api/admin', adminRateLimiter, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
+app.use('/api/investments', investmentsRouter);
 
 logger.info('All route modules registered successfully');
 
