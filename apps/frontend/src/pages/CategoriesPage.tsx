@@ -151,9 +151,12 @@ export default function CategoriesPage() {
                                                     key={cat.id}
                                                     className={cn(
                                                         "flex items-center gap-3 pl-11 pr-4 py-2.5 border-t border-border/50",
-                                                        "transition-colors hover:bg-muted/50",
+                                                        "transition-colors hover:bg-muted/50 cursor-pointer",
                                                         cat.is_active === false && "opacity-60"
                                                     )}
+                                                    onDoubleClick={() => {
+                                                        navigate(`/transactions?category_id=${cat.id}&filter_label=${encodeURIComponent(cat.general + ':' + cat.detail)}`);
+                                                    }}
                                                 >
                                                     <Badge
                                                         variant="outline"
