@@ -205,7 +205,7 @@ export function DataTable<T extends Record<string, any>>({
         }
 
         return result;
-    }, [data, columnFilters, searchQuery, sortKey, sortDir, columns]);
+    }, [data, columnFilters, localSearchQuery, isServerSearch, sortKey, sortDir, columns]);
 
     const startEditing = (idx: number, row: T) => {
         setEditingRow(idx);
