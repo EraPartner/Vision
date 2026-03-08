@@ -26,6 +26,7 @@ export const transactionRepository = {
     let sql = `
       SELECT t.*,
              COALESCE(pr.name, r.name) AS recipient_name,
+             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
