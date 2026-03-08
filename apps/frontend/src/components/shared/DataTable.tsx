@@ -234,7 +234,8 @@ export function DataTable<T extends Record<string, any>>({
 
     const clearAllFilters = () => {
         setColumnFilters({});
-        setSearchQuery("");
+        setLocalSearchQuery("");
+        if (isServerSearch) onSearchChange!("");
         setSortKey(null);
         setSortDir(null);
     };
