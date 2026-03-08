@@ -550,6 +550,127 @@ export const infoRepository = {
       with_planned: withPlanned,
     };
   },
+
+  /**
+   * Get current balance per bank account and monthly historical balances.
+   * Balance is computed as the running sum of all transaction amounts per account.
+   */
+  async getBankBalances() {
+    // Current balance per account (sum of all active transaction amounts)
+    const currentResult = await query(`
+      SELECT bank_account,
+             COUNT(*) AS transaction_count,
+             MIN(date) AS first_transaction,
+             MAX(date) AS last_transaction
+      FROM transactions
+      WHERE is_active = true AND bank_account IS NOT NULL
+      GROUP BY bank_account
+      ORDER BY bank_account
+    `);
+
+    const accounts = [];
+    let totalNetPosition = 0;
+
+    for (const row of currentResult.rows) {
+      // Sum amounts converted to EUR for this account
+      const txResult = await query(
+        `SELECT amount, currency, date FROM transactions
+         WHERE is_active = true AND bank_account = $1`,
+        [row.bank_account]
+      );
+
+      let balanceEur = 0;
+      for (const tx of txResult.rows) {
+        const amt = parseFloat(tx.amount);
+        const dateStr = tx.date instanceof Date ? tx.date.toISOString().split('T')[0] : tx.date;
+        balanceEur += await convertToEur(amt, tx.currency, dateStr);
+      }
+      balanceEur = Math.round(balanceEur * 100) / 100;
+      totalNetPosition += balanceEur;
+
+      accounts.push({
+        bank_account: row.bank_account,
+        balance: balanceEur,
+        transaction_count: parseInt(row.transaction_count, 10),
+        first_transaction: row.first_transaction,
+        last_transaction: row.last_transaction,
+      });
+    }
+
+    // Historical monthly balances (running sum up to end of each month, last 12 months)
+    const historyResult = await query(`
+      WITH months AS (
+        SELECT generate_series(
+          date_trunc('month', CURRENT_DATE - interval '11 months'),
+          date_trunc('month', CURRENT_DATE),
+          interval '1 month'
+        )::date AS month_start
+      ),
+      account_list AS (
+        SELECT DISTINCT bank_account
+        FROM transactions
+        WHERE is_active = true AND bank_account IS NOT NULL
+      )
+      SELECT a.bank_account,
+             m.month_start,
+             (m.month_start + interval '1 month' - interval '1 day')::date AS month_end,
+             COALESCE(SUM(t.amount), 0) AS cumulative_amount,
+             t.currency
+      FROM months m
+      CROSS JOIN account_list a
+      LEFT JOIN transactions t ON t.bank_account = a.bank_account
+        AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
+        AND t.is_active = true
+      GROUP BY a.bank_account, m.month_start, t.currency
+      ORDER BY a.bank_account, m.month_start
+    `);
+
+    // Group monthly history by account
+    const historyMap = {};
+    for (const row of historyResult.rows) {
+      const key = row.bank_account;
+      if (!historyMap[key]) historyMap[key] = [];
+
+      const amt = parseFloat(row.cumulative_amount);
+      const monthStr = row.month_start instanceof Date
+        ? row.month_start.toISOString().split('T')[0]
+        : row.month_start;
+      const eur = await convertToEur(amt, row.currency || 'EUR', monthStr);
+
+      // Find existing month entry or create
+      const monthKey = monthStr.substring(0, 7); // YYYY-MM
+      let existing = historyMap[key].find(h => h.month === monthKey);
+      if (!existing) {
+        existing = { month: monthKey, balance: 0 };
+        historyMap[key].push(existing);
+      }
+      existing.balance += Math.round(eur * 100) / 100;
+    }
+
+    // Sort each account's history
+    for (const key of Object.keys(historyMap)) {
+      historyMap[key].sort((a, b) => a.month.localeCompare(b.month));
+    }
+
+    // Also compute total net position history
+    const totalHistory = [];
+    const allMonths = [...new Set(Object.values(historyMap).flat().map(h => h.month))].sort();
+    for (const month of allMonths) {
+      let total = 0;
+      for (const acct of Object.values(historyMap)) {
+        const entry = acct.find(h => h.month === month);
+        if (entry) total += entry.balance;
+      }
+      totalHistory.push({ month, balance: Math.round(total * 100) / 100 });
+    }
+
+    return {
+      accounts,
+      total_net_position: Math.round(totalNetPosition * 100) / 100,
+      history: historyMap,
+      total_history: totalHistory,
+    };
+  },
 };
 
 export default infoRepository;
