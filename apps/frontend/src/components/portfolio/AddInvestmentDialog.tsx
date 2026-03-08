@@ -42,24 +42,28 @@ export function AddInvestmentDialog() {
     setStep('type');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.assetClass || !form.name.trim()) return;
 
-    addInvestment({
-      name: form.name.trim(),
-      symbol: form.symbol.trim() || undefined,
-      asset_class: form.assetClass,
-      currency: form.currency || 'EUR',
-      current_price: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
-      interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
-      maturity_date: form.maturityDate || undefined,
-      location: form.location.trim() || undefined,
-      notes: form.notes.trim() || undefined,
-    });
-    toast.success(`${ASSET_CLASS_LABELS[form.assetClass]} "${form.name}" added`);
-    reset();
-    setOpen(false);
+    try {
+      await addInvestment({
+        name: form.name.trim(),
+        symbol: form.symbol.trim() || undefined,
+        asset_class: form.assetClass,
+        currency: form.currency || 'EUR',
+        current_price: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
+        interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
+        maturity_date: form.maturityDate || undefined,
+        location: form.location.trim() || undefined,
+        notes: form.notes.trim() || undefined,
+      });
+      toast.success(`${ASSET_CLASS_LABELS[form.assetClass]} "${form.name}" added`);
+      reset();
+      setOpen(false);
+    } catch {
+      // error handled by hook
+    }
   };
 
   const isUnitBased = ['stock', 'etf', 'crypto'].includes(form.assetClass);

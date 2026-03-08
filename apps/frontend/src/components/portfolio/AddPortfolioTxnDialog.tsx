@@ -63,30 +63,33 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     ? (parseFloat(form.units) * parseFloat(form.pricePerUnit)).toFixed(2)
     : '';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(form.amount || computedAmount);
     if (!amount || isNaN(amount)) { toast.error('Amount is required'); return; }
 
-    addTransaction({
-      investmentId: investment.id,
-      type: form.type,
-      date: form.date,
-      amount,
-      units: form.units ? parseFloat(form.units) : undefined,
-      price_per_unit: form.pricePerUnit ? parseFloat(form.pricePerUnit) : undefined,
-      fees: form.fees ? parseFloat(form.fees) : undefined,
-      taxes: form.taxes ? parseFloat(form.taxes) : undefined,
-      currency: investment.currency,
-      note: form.note.trim() || undefined,
-      is_recurring: form.isRecurring,
-      recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
-      recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
-    });
-
-    toast.success(`${TXN_TYPE_LABELS[form.type]} recorded for ${investment.name}`);
-    reset();
-    setOpen(false);
+    try {
+      await addTransaction({
+        investmentId: investment.id,
+        type: form.type,
+        date: form.date,
+        amount,
+        units: form.units ? parseFloat(form.units) : undefined,
+        price_per_unit: form.pricePerUnit ? parseFloat(form.pricePerUnit) : undefined,
+        fees: form.fees ? parseFloat(form.fees) : undefined,
+        taxes: form.taxes ? parseFloat(form.taxes) : undefined,
+        currency: investment.currency,
+        note: form.note.trim() || undefined,
+        is_recurring: form.isRecurring,
+        recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
+        recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
+      });
+      toast.success(`${TXN_TYPE_LABELS[form.type]} recorded for ${investment.name}`);
+      reset();
+      setOpen(false);
+    } catch {
+      // error handled by hook
+    }
   };
 
   const showUnits = isUnitBased && ['buy', 'sell'].includes(form.type);
