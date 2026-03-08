@@ -9,6 +9,7 @@ import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 

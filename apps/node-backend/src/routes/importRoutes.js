@@ -13,6 +13,7 @@ import { importCSVWithRawStorage } from '../services/rawTransactionImportService
 import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { logger } from '../config/logger.js';
+import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
