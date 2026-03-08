@@ -45,7 +45,7 @@ export function AddCategoryDialog() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="detail">Detail</Label>
-                        <Input id="detail" placeholder="e.g. GROCERIES" value={form.detail} onChange={(e) => setForm(f => ({...f, detail: e.target.value}))} required />
+                        <Input id="detail" placeholder="e.g. GROCERIES" maxLength={100} value={form.detail} onChange={(e) => setForm(f => ({...f, detail: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="description">Description (optional)</Label>
