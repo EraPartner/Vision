@@ -156,6 +156,18 @@ export default function MarketLookupPage() {
     staleTime: 60_000,
   });
 
+  // News
+  const { data: newsData, isFetching: isNewsLoading } = useQuery({
+    queryKey: ["market-news", selectedSymbol],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(selectedSymbol!)}&count=10`);
+      if (!res.ok) throw new Error("News fetch failed");
+      return res.json() as Promise<{ articles: NewsArticle[] }>;
+    },
+    enabled: !!selectedSymbol,
+    staleTime: 120_000,
+  });
+
   const handleSelect = useCallback((symbol: string) => {
     setSelectedSymbol(symbol);
     setSearchText("");
