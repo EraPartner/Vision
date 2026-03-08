@@ -63,6 +63,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     const [localExcludedCategories, setLocalExcludedCategories] = useState<number[]>([]);
     const [localExcludedRecipients, setLocalExcludedRecipients] = useState<number[]>([]);
     const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
+    const [recipientSearch, setRecipientSearch] = useState('');
 
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
@@ -88,6 +89,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             setLocalExcludedRecipients(settings.excludedRecipientIds);
             setLocalExcludeHidden(settings.excludeHiddenCategories);
             setLocalAppSettings(appSettings);
+            setRecipientSearch('');
         }
     }, [open, settings, appSettings]);
 
@@ -385,13 +387,33 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                         <p className="text-xs text-muted-foreground">
                                             Select recipients to exclude from statistics
                                         </p>
+                                        <Input
+                                            placeholder="Search recipients…"
+                                            value={recipientSearch}
+                                            onChange={(e) => setRecipientSearch(e.target.value)}
+                                            className="h-8 text-sm"
+                                        />
+                                        <ScrollArea className="h-[200px]">
                                         <div className="space-y-2">
-                                            {recipients.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground text-center py-4">
-                                                    No recipients found
-                                                </p>
-                                            ) : (
-                                                recipients.map((recipient) => (
+                                            {(() => {
+                                                const filtered = recipients.filter(r =>
+                                                    r.name.toLowerCase().includes(recipientSearch.toLowerCase())
+                                                );
+                                                if (filtered.length === 0) {
+                                                    return (
+                                                        <p className="text-sm text-muted-foreground text-center py-4">
+                                                            {recipientSearch ? 'No matching recipients' : 'No recipients found'}
+                                                        </p>
+                                                    );
+                                                }
+                                                // Show excluded first, then alphabetical
+                                                const sorted = [...filtered].sort((a, b) => {
+                                                    const aExcl = localExcludedRecipients.includes(a.id) ? 0 : 1;
+                                                    const bExcl = localExcludedRecipients.includes(b.id) ? 0 : 1;
+                                                    if (aExcl !== bExcl) return aExcl - bExcl;
+                                                    return a.name.localeCompare(b.name);
+                                                });
+                                                return sorted.map((recipient) => (
                                                     <div
                                                         key={recipient.id}
                                                         className="flex items-center space-x-3 rounded-md border px-3 py-2.5 hover:bg-accent/50 transition-colors"
@@ -413,9 +435,10 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                             )}
                                                         </Label>
                                                     </div>
-                                                ))
-                                            )}
+                                                ));
+                                            })()}
                                         </div>
+                                        </ScrollArea>
                                     </div>
                                 </div>
                             </ScrollArea>
