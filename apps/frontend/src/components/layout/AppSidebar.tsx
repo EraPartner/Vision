@@ -20,6 +20,7 @@ const navItems = [
     {title: "Categories", url: "/categories", icon: Tags},
     {title: "Recipients", url: "/recipients", icon: Users},
     {title: "Planned", url: "/planned", icon: CalendarClock},
+    {title: "Statistics", url: "/statistics", icon: BarChart3},
 ];
 
 export function AppSidebar() {
