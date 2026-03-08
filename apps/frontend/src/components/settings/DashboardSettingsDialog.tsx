@@ -65,6 +65,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
     const [localExclusionScope, setLocalExclusionScope] = useState<ExclusionScope>('everywhere');
     const [recipientSearch, setRecipientSearch] = useState('');
+    const [categorySearch, setCategorySearch] = useState('');
 
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
