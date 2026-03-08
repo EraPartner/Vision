@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 
+export type ExclusionScope = 'everywhere' | 'dashboard' | 'statistics';
+
 export interface DashboardSettings {
     excludedCategoryIds: number[];
     excludedRecipientIds: number[];
     excludeHiddenCategories: boolean;
+    exclusionScope: ExclusionScope;
 }
 
 interface SettingsContextType {
