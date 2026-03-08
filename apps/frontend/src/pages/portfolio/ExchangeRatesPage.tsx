@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Database, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
+import { formatCurrency } from "@/utils/currency";
+import { toast } from "sonner";
 import { formatCurrency } from "@/utils/currency";
 
 interface ExchangeRate {
@@ -30,12 +32,26 @@ interface ExchangeRatesData {
 
 export default function ExchangeRatesPage() {
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
+    const queryClient = useQueryClient();
 
-    const { data, isLoading, error, refetch, isFetching } = useQuery<ExchangeRatesData>({
+    const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
         queryKey: ["exchangeRates"],
         queryFn: () => apiClient.request("/api/info/exchange-rates"),
         staleTime: 60_000,
     });
+
+    const refreshMutation = useMutation({
+        mutationFn: () => apiClient.request("/api/info/exchange-rates/refresh", { method: "POST" }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
+            toast.success("Exchange rates refreshed from ECB");
+        },
+        onError: () => {
+            toast.error("Failed to refresh exchange rates");
+        },
+    });
+
+    const isRefreshing = refreshMutation.isPending || isFetching;
 
     if (isLoading) {
         return (
@@ -70,8 +86,8 @@ export default function ExchangeRatesPage() {
                     <h1 className="text-3xl font-bold text-foreground">Exchange Rates</h1>
                     <p className="text-muted-foreground mt-1">ECB rates cached in database &amp; fallback values</p>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refetch()} disabled={isFetching}>
-                    <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                     Refresh
                 </Button>
             </div>
