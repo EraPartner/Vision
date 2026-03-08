@@ -163,6 +163,17 @@ router.get('/recurring-patterns', async (req, res) => {
   }
 });
 
+// GET /api/info/net-worth - Net worth combining bank balances + portfolio
+router.get('/net-worth', async (req, res) => {
+  try {
+    const data = await infoRepository.getNetWorth();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error retrieving net worth', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving net worth' });
+  }
+});
+
 // POST /api/info/refresh-views - Manually refresh materialized views
 router.post('/refresh-views', async (req, res) => {
   try {
