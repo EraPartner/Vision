@@ -1,7 +1,8 @@
 /**
  * Database Schema Initializer
  *
- * Ensures all required tables, indexes, enums, and triggers exist on startup.
+ * Ensures all required tables, indexes, enums, triggers, and
+ * materialized views exist on startup.
  * Uses IF NOT EXISTS / DO $$ blocks so it's safe to run repeatedly (idempotent).
  *
  * Table creation order respects foreign key dependencies:
