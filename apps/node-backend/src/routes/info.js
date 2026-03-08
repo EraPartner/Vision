@@ -89,4 +89,26 @@ router.get('/monthly-summary', async (req, res) => {
   }
 });
 
+// GET /api/info/planned-expenses-next-month
+router.get('/planned-expenses-next-month', async (req, res) => {
+  try {
+    const data = await infoRepository.getPlannedExpensesNextMonth();
+    res.json({ ...data, links: [] });
+  } catch (err) {
+    logger.error('Error retrieving planned expenses next month', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving planned expenses next month' });
+  }
+});
+
+// GET /api/info/average-vs-current-spending
+router.get('/average-vs-current-spending', async (req, res) => {
+  try {
+    const data = await infoRepository.getAverageVsCurrentSpending();
+    res.json({ ...data, links: [] });
+  } catch (err) {
+    logger.error('Error retrieving average vs current spending', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving average vs current spending' });
+  }
+});
+
 export default router;
