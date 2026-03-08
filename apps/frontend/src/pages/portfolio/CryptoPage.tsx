@@ -14,6 +14,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function CryptoPage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
   const totalValue = holdings.reduce((s, h) => s + h.currentValue, 0);
