@@ -215,6 +215,134 @@ describe('Category Routes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
   });
+
+  // ── POST /assign (standalone by name) ──────────────────────
+  describe('POST /assign (standalone)', () => {
+    it('should assign category by general:detail name', async () => {
+      categoryRepository.createOrGet.mockResolvedValue({
+        category: { id: 5, general: 'GROCERIES', detail: 'FOOD' },
+        created: false,
+      });
+      categoryRepository.assignToRecipients.mockResolvedValue(3);
+
+      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1, 2, 3] } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.json.mock.calls[0][0].updated_recipients).toBe(3);
+    });
+
+    it('should return 400 for missing category_general', async () => {
+      const req = { body: { category_detail: 'FOOD', recipient_ids: [1] } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should return 400 for missing category_detail', async () => {
+      const req = { body: { category_general: 'GROCERIES', recipient_ids: [1] } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should return 400 for missing recipient_ids', async () => {
+      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD' } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should handle single recipient_id (not array)', async () => {
+      categoryRepository.createOrGet.mockResolvedValue({
+        category: { id: 5, general: 'GROCERIES', detail: 'FOOD' },
+        created: false,
+      });
+      categoryRepository.assignToRecipients.mockResolvedValue(1);
+
+      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: 42 } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.json.mock.calls[0][0].updated_recipients).toBe(1);
+    });
+
+    it('should handle errors with 500', async () => {
+      categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
+
+      const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1] } };
+      const res = mockResponse();
+      await routeHandlers['post:/assign'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  // ── Error paths for existing routes ────────────────────────
+  describe('Error handling', () => {
+    it('GET / should handle errors with 500', async () => {
+      categoryRepository.getAll.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('POST / should handle errors with 500', async () => {
+      categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
+
+      const req = { body: { general: 'TEST', detail: 'TEST' } };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('GET /:id should handle errors with 500', async () => {
+      categoryRepository.getById.mockRejectedValue(new Error('DB error'));
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('PATCH /:id should handle errors with 500', async () => {
+      categoryRepository.update.mockRejectedValue(new Error('DB error'));
+
+      const req = { params: { id: '1' }, body: { general: 'test' } };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('DELETE /:id should handle errors with 500', async () => {
+      categoryRepository.hardDelete.mockRejectedValue(new Error('DB error'));
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('POST /:id/assign should handle errors with 500', async () => {
+      categoryRepository.assignToRecipients.mockRejectedValue(new Error('DB error'));
+
+      const req = { params: { id: '1' }, body: { recipient_ids: [1] } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/assign'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
 });
 
 function mockResponse() {
