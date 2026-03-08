@@ -9,6 +9,7 @@ import {ThemeProvider} from "@/contexts/ThemeContext";
 import {WorkspaceProvider} from "@/contexts/WorkspaceContext";
 import {lazy, Suspense} from "react";
 import {Loader2} from "lucide-react";
+import {ErrorBoundary} from "@/components/shared/ErrorBoundary";
 
 // Lazy-loaded pages for code splitting
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -50,38 +51,40 @@ const App = () => {
             <ThemeProvider>
                 <SettingsProvider>
                     <TooltipProvider>
-                        <Toaster/>
-                        <Sonner/>
-                        <BrowserRouter
-                            future={{
-                                v7_startTransition: true,
-                                v7_relativeSplatPath: true,
-                            }}
-                        >
-                            <WorkspaceProvider>
-                                <AppLayout>
-                                    <Suspense fallback={<PageLoader/>}>
-                                        <Routes>
-                                            {/* Budgeting */}
-                                            <Route path="/" element={<DashboardPage/>}/>
-                                            <Route path="/transactions" element={<TransactionsPage/>}/>
-                                            <Route path="/categories" element={<CategoriesPage/>}/>
-                                            <Route path="/recipients" element={<RecipientsPage/>}/>
-                                            <Route path="/planned" element={<PlannedPaymentsPage/>}/>
-                                            <Route path="/statistics" element={<StatisticsPage/>}/>
-                                            <Route path="/import" element={<ImportPage/>}/>
-                                            {/* Portfolio */}
-                                            <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
-                                            <Route path="/portfolio/stocks" element={<StocksPage/>}/>
-                                            <Route path="/portfolio/crypto" element={<CryptoPage/>}/>
-                                            <Route path="/portfolio/real-estate" element={<RealEstatePage/>}/>
-                                            <Route path="/portfolio/savings" element={<SavingsPage/>}/>
-                                            <Route path="*" element={<NotFound/>}/>
-                                        </Routes>
-                                    </Suspense>
-                                </AppLayout>
-                            </WorkspaceProvider>
-                        </BrowserRouter>
+                        <ErrorBoundary>
+                            <Toaster/>
+                            <Sonner/>
+                            <BrowserRouter
+                                future={{
+                                    v7_startTransition: true,
+                                    v7_relativeSplatPath: true,
+                                }}
+                            >
+                                <WorkspaceProvider>
+                                    <AppLayout>
+                                        <Suspense fallback={<PageLoader/>}>
+                                            <Routes>
+                                                {/* Budgeting */}
+                                                <Route path="/" element={<DashboardPage/>}/>
+                                                <Route path="/transactions" element={<TransactionsPage/>}/>
+                                                <Route path="/categories" element={<CategoriesPage/>}/>
+                                                <Route path="/recipients" element={<RecipientsPage/>}/>
+                                                <Route path="/planned" element={<PlannedPaymentsPage/>}/>
+                                                <Route path="/statistics" element={<StatisticsPage/>}/>
+                                                <Route path="/import" element={<ImportPage/>}/>
+                                                {/* Portfolio */}
+                                                <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
+                                                <Route path="/portfolio/stocks" element={<StocksPage/>}/>
+                                                <Route path="/portfolio/crypto" element={<CryptoPage/>}/>
+                                                <Route path="/portfolio/real-estate" element={<RealEstatePage/>}/>
+                                                <Route path="/portfolio/savings" element={<SavingsPage/>}/>
+                                                <Route path="*" element={<NotFound/>}/>
+                                            </Routes>
+                                        </Suspense>
+                                    </AppLayout>
+                                </WorkspaceProvider>
+                            </BrowserRouter>
+                        </ErrorBoundary>
                     </TooltipProvider>
                 </SettingsProvider>
             </ThemeProvider>
