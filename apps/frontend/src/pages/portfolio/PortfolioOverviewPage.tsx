@@ -134,43 +134,50 @@ export default function PortfolioOverviewPage() {
             </Card>
           </div>
 
-          {/* All investments list */}
-          <Card>
-            <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {summaries.map((inv) => (
-                  <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
-                        <span className="font-medium text-sm truncate">{inv.name}</span>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
+          {/* News + All investments */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {summaries.map((inv) => (
+                      <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
+                            <span className="font-medium text-sm truncate">{inv.name}</span>
+                            <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                            <span>Invested: {fmt(inv.totalInvested, inv.currency)}</span>
+                            {inv.totalUnits > 0 && <span>{inv.totalUnits.toFixed(4)} units</span>}
+                            {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
+                          <p className={cn("text-xs tabular-nums font-medium", inv.gainLoss >= 0 ? "text-accent" : "text-destructive")}>
+                            {inv.gainLoss >= 0 ? '+' : ''}{fmt(inv.gainLoss, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <AddPortfolioTxnDialog investment={inv} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        <span>Invested: {fmt(inv.totalInvested, inv.currency)}</span>
-                        {inv.totalUnits > 0 && <span>{inv.totalUnits.toFixed(4)} units</span>}
-                        {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
-                      <p className={cn("text-xs tabular-nums font-medium", inv.gainLoss >= 0 ? "text-accent" : "text-destructive")}>
-                        {inv.gainLoss >= 0 ? '+' : ''}{fmt(inv.gainLoss, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <AddPortfolioTxnDialog investment={inv} />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="lg:col-span-1">
+              <PortfolioNewsFeed symbols={newsSymbols} />
+            </div>
+          </div>
         </>
       )}
     </div>
