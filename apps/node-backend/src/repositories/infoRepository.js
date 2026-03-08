@@ -10,6 +10,7 @@
 
 import { query } from '../database/connection.js';
 import { convertToEur } from '../services/currencyConversionService.js';
+import { logger } from '../config/logger.js';
 
 /**
  * Helper: check if a materialized view exists and has rows.
