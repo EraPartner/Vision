@@ -86,10 +86,12 @@ router.get('/monthly-summary', async (req, res) => {
       excludedCategoryIds = [9, 22]; // Default exclusions
     }
 
+    logger.debug('Monthly summary request', { excludedCategoryIds });
     const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds);
+    logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
     res.json({ ...data, links: [] });
   } catch (err) {
-    logger.error('Error retrieving monthly summary', { error: err.message });
+    logger.error('Error retrieving monthly summary', { error: err.message, stack: err.stack });
     res.status(500).json({ detail: 'Error retrieving monthly financial summary' });
   }
 });
