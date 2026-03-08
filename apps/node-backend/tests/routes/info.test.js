@@ -251,6 +251,164 @@ describe('Info Routes', () => {
       expect(res.status).toHaveBeenCalledWith(500);
     });
   });
+
+  describe('GET /cashflow-comparison', () => {
+    it('should return cashflow comparison data', async () => {
+      infoRepository.getCashflowComparison.mockResolvedValue({
+        days_in_month: 31, current_day: 15, month: 3, year: 2026,
+        without_planned: [{ day: 1, average: 100, current: 90 }],
+        with_planned: [{ day: 1, average: 110, current: 95 }],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/cashflow-comparison'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.days_in_month).toBe(31);
+      expect(result.without_planned).toHaveLength(1);
+      expect(result.with_planned).toHaveLength(1);
+    });
+
+    it('should handle errors', async () => {
+      infoRepository.getCashflowComparison.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/cashflow-comparison'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /bank-balances', () => {
+    it('should return bank balance data', async () => {
+      infoRepository.getBankBalances.mockResolvedValue({
+        accounts: [{ bank_account: 'Chase', balance: 5000, transaction_count: 100 }],
+        total_net_position: 5000,
+        history: {},
+        total_history: [],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/bank-balances'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.accounts).toHaveLength(1);
+      expect(result.total_net_position).toBe(5000);
+    });
+
+    it('should handle errors', async () => {
+      infoRepository.getBankBalances.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/bank-balances'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /net-worth', () => {
+    it('should return net worth data with snapshots', async () => {
+      infoRepository.getNetWorth.mockResolvedValue({
+        current: { liquid: 10000, investments: 5000, netWorth: 15000 },
+        monthlyChange: 500,
+        monthlyChangePercent: 3.45,
+        snapshots: [
+          { month: '2026-01', liquid: 9000, investments: 4500, netWorth: 13500 },
+          { month: '2026-02', liquid: 9500, investments: 5000, netWorth: 14500 },
+          { month: '2026-03', liquid: 10000, investments: 5000, netWorth: 15000 },
+        ],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.current.netWorth).toBe(15000);
+      expect(result.monthlyChange).toBe(500);
+      expect(result.snapshots).toHaveLength(3);
+    });
+
+    it('should return empty data when no assets', async () => {
+      infoRepository.getNetWorth.mockResolvedValue({
+        current: { liquid: 0, investments: 0, netWorth: 0 },
+        monthlyChange: 0,
+        monthlyChangePercent: 0,
+        snapshots: [],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.current.netWorth).toBe(0);
+      expect(result.snapshots).toHaveLength(0);
+    });
+
+    it('should handle errors', async () => {
+      infoRepository.getNetWorth.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /recipient-insights', () => {
+    it('should return top merchants and month-over-month data', async () => {
+      infoRepository.getRecipientInsights.mockResolvedValue({
+        topMerchants: [
+          { recipientId: 1, name: 'Amazon', totalSpend: 500, transactionCount: 10, avgAmount: 50, firstSeen: '2025-01-01', lastSeen: '2026-03-01' },
+          { recipientId: 2, name: 'Walmart', totalSpend: 300, transactionCount: 8, avgAmount: 37.5, firstSeen: '2025-06-01', lastSeen: '2026-03-01' },
+        ],
+        monthOverMonth: [
+          { recipientId: 1, name: 'Amazon', currentSpend: 100, previousSpend: 80, changePercent: 25.0 },
+        ],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/recipient-insights'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.topMerchants).toHaveLength(2);
+      expect(result.topMerchants[0].name).toBe('Amazon');
+      expect(result.monthOverMonth).toHaveLength(1);
+      expect(result.monthOverMonth[0].changePercent).toBe(25.0);
+    });
+
+    it('should return empty arrays when no data', async () => {
+      infoRepository.getRecipientInsights.mockResolvedValue({
+        topMerchants: [],
+        monthOverMonth: [],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/recipient-insights'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.topMerchants).toEqual([]);
+      expect(result.monthOverMonth).toEqual([]);
+    });
+
+    it('should handle errors', async () => {
+      infoRepository.getRecipientInsights.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/recipient-insights'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
 });
 
 function mockResponse() {
