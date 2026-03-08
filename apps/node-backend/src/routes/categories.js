@@ -57,7 +57,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/categories/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const category = await categoryRepository.getById(parseInt(req.params.id, 10));
     if (!category) {
