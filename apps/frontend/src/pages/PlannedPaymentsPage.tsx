@@ -654,5 +654,7 @@ export default function PlannedPaymentsPage() {
       </Dialog>
 
     </div>
+    <ConfirmDialog />
+    </>
   );
 }
