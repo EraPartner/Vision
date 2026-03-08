@@ -1,21 +1,24 @@
-import {useState} from "react";
-import {DataTable} from "@/components/shared/DataTable";
-import {Badge} from "@/components/ui/badge";
-import {Button} from "@/components/ui/button";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users} from "lucide-react";
-import {useRecipients, useUpdateRecipient, useDeleteRecipient, useMergeRecipients, useUnmergeRecipient} from "@/hooks/useRecipients";
-import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
-import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
-import {MergeRecipientsDialog} from "@/components/recipients/MergeRecipientsDialog";
-import {useConfirmDialog} from "@/hooks/useConfirmDialog";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users } from "lucide-react";
+import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
+import { AddRecipientDialog } from "@/components/forms/AddRecipientDialog";
+import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { MergeRecipientsDialog } from "@/components/recipients/MergeRecipientsDialog";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { apiClient } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 type TableRecipient = {
     id: number;
     name: string;
     primary_bank_account: string;
     default_category_name?: string;
+    default_category_id?: number | null;
     primary_recipient_id?: number | null;
     primary_recipient_name?: string | null;
     alias_count?: number;
@@ -24,25 +27,66 @@ type TableRecipient = {
 };
 
 export default function RecipientsPage() {
-    const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-    const { data, isLoading, error } = useRecipients({
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
-        active: !showAll,
-        search: search || undefined,
-    });
+    const [allItems, setAllItems] = useState<any[]>([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const offsetRef = useRef(0);
+    const hasMoreRef = useRef(true);
+    const loadingRef = useRef(false);
+
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
     const unmergeMutation = useUnmergeRecipient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const handleUpdate = (idx: number, updated: TableRecipient) => {
-        const originalRecipient = data?.items[idx];
-        if (!originalRecipient) return;
+    const { data: initialData, isLoading, error } = useQuery({
+        queryKey: ['recipients-virtual', { active: !showAll, search: search || undefined }],
+        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined }),
+        staleTime: 30_000,
+    });
 
+    useEffect(() => {
+        if (initialData) {
+            setAllItems(initialData.items);
+            setTotalItems(initialData.total ?? initialData.items.length);
+            offsetRef.current = initialData.items.length;
+            hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
+        }
+    }, [initialData]);
+
+    const loadMore = useCallback(async () => {
+        if (loadingRef.current || !hasMoreRef.current) return;
+        loadingRef.current = true;
+        setIsFetchingMore(true);
+        try {
+            const result = await apiClient.getRecipients({
+                limit: PAGE_SIZE,
+                offset: offsetRef.current,
+                active: !showAll,
+                search: search || undefined,
+            });
+            setAllItems(prev => {
+                const existingIds = new Set(prev.map((r: any) => r.id));
+                const newItems = result.items.filter((r: any) => !existingIds.has(r.id));
+                return [...prev, ...newItems];
+            });
+            offsetRef.current += result.items.length;
+            hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
+            setTotalItems(result.total ?? result.items.length);
+        } catch (err) {
+            console.error('Failed to load more recipients:', err);
+        } finally {
+            setIsFetchingMore(false);
+            loadingRef.current = false;
+        }
+    }, [showAll, search]);
+
+    const handleUpdate = (idx: number, updated: TableRecipient) => {
+        const originalRecipient = allItems[idx];
+        if (!originalRecipient) return;
         updateMutation.mutate({
             id: originalRecipient.id,
             data: {
@@ -54,16 +98,13 @@ export default function RecipientsPage() {
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
-        updateMutation.mutate({
-            id,
-            data: { is_active: !currentActive },
-        });
+        updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
 
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
@@ -79,19 +120,18 @@ export default function RecipientsPage() {
         );
     }
 
-    const totalItems = data?.total ?? data?.items?.length ?? 0;
-
-    const recipients: TableRecipient[] = data?.items.map((r) => ({
+    const recipients: TableRecipient[] = allItems.map((r: any) => ({
         id: r.id,
         name: r.name,
         primary_bank_account: r.primary_bank_account || 'N/A',
         default_category_name: r.default_category_name,
+        default_category_id: r.default_category_id,
         primary_recipient_id: r.primary_recipient_id,
         primary_recipient_name: r.primary_recipient_name,
         alias_count: r.alias_count,
         is_active: r.is_active,
         notes: r.notes || '',
-    })) || [];
+    }));
 
     const columns = [
         {
@@ -132,15 +172,13 @@ export default function RecipientsPage() {
             editable: false,
             render: (row: TableRecipient, isEditing: boolean) => {
                 if (isEditing) {
-                    const originalRecipient = data?.items.find((r) => r.id === row.id);
                     return (
                         <CategoryCombobox
-                            value={originalRecipient?.default_category_id ?? null}
+                            value={row.default_category_id ?? null}
                             onSelect={(catId) => {
-                                if (!originalRecipient) return;
                                 updateMutation.mutate({
-                                    id: originalRecipient.id,
-                                    data: {default_category_id: catId ?? undefined},
+                                    id: row.id,
+                                    data: { default_category_id: catId ?? undefined },
                                 });
                             }}
                             className="w-full"
@@ -157,15 +195,12 @@ export default function RecipientsPage() {
                     }
                     return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
                 };
-                
+
                 const displayName = formatCategoryName(row.default_category_name);
                 const isNone = displayName === 'None';
-                
+
                 return (
-                    <Badge 
-                        variant="outline" 
-                        className={`font-medium ${isNone ? 'text-muted-foreground' : ''}`}
-                    >
+                    <Badge variant="outline" className={`font-medium ${isNone ? 'text-muted-foreground' : ''}`}>
                         {displayName}
                     </Badge>
                 );
@@ -237,12 +272,12 @@ export default function RecipientsPage() {
         },
     ];
 
-    const actions = (
+    const tableActions = (
         <div className="flex gap-2">
             <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => { setShowAll(!showAll); }}
+                onClick={() => setShowAll(!showAll)}
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -263,34 +298,35 @@ export default function RecipientsPage() {
 
     return (
         <>
-        <div className="space-y-8 animate-in">
-            <div>
-                <h2 className="text-3xl font-bold text-foreground">Recipients</h2>
-                <p className="text-muted-foreground mt-1">View and manage transaction recipients</p>
+            <div className="space-y-8 animate-in">
+                <div>
+                    <h2 className="text-3xl font-bold text-foreground">Recipients</h2>
+                    <p className="text-muted-foreground mt-1">View and manage transaction recipients</p>
+                </div>
+
+                <VirtualDataTable
+                    title="All Recipients"
+                    subtitle={`${totalItems} recipients`}
+                    columns={columns}
+                    data={recipients}
+                    onRowUpdate={handleUpdate}
+                    emptyMessage="No recipients found."
+                    totalItems={totalItems}
+                    isFetchingMore={isFetchingMore}
+                    onLoadMore={loadMore}
+                    hasMore={hasMoreRef.current}
+                    onSearchChange={setSearch}
+                    actions={tableActions}
+                    maxHeight={700}
+                />
+
+                <MergeRecipientsDialog
+                    open={mergeDialogOpen}
+                    onOpenChange={setMergeDialogOpen}
+                    recipients={allItems}
+                />
             </div>
-
-            <DataTable
-                title="All Recipients"
-                subtitle={`${totalItems} recipients`}
-                columns={columns}
-                data={recipients}
-                onRowUpdate={handleUpdate}
-                emptyMessage="No recipients found."
-                page={page}
-                pageSize={PAGE_SIZE}
-                totalItems={totalItems}
-                onPageChange={setPage}
-                onSearchChange={setSearch}
-                actions={actions}
-            />
-
-            <MergeRecipientsDialog
-                open={mergeDialogOpen}
-                onOpenChange={setMergeDialogOpen}
-                recipients={data?.items ?? []}
-            />
-        </div>
-        <ConfirmDialog />
-    </>
+            <ConfirmDialog />
+        </>
     );
 }
