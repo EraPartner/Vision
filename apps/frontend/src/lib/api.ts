@@ -39,6 +39,7 @@ class ApiClient {
         recipient_name?: string;
         uncategorised?: boolean;
         active?: boolean;
+        search?: string;
     }): Promise<TransactionsListResponse> {
         const queryParams = new URLSearchParams();
 
