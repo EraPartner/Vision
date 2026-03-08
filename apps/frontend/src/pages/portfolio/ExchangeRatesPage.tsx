@@ -32,12 +32,26 @@ interface ExchangeRatesData {
 
 export default function ExchangeRatesPage() {
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
+    const queryClient = useQueryClient();
 
-    const { data, isLoading, error, refetch, isFetching } = useQuery<ExchangeRatesData>({
+    const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
         queryKey: ["exchangeRates"],
         queryFn: () => apiClient.request("/api/info/exchange-rates"),
         staleTime: 60_000,
     });
+
+    const refreshMutation = useMutation({
+        mutationFn: () => apiClient.request("/api/info/exchange-rates/refresh", { method: "POST" }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
+            toast.success("Exchange rates refreshed from ECB");
+        },
+        onError: () => {
+            toast.error("Failed to refresh exchange rates");
+        },
+    });
+
+    const isRefreshing = refreshMutation.isPending || isFetching;
 
     if (isLoading) {
         return (
