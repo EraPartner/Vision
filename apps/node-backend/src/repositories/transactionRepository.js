@@ -111,8 +111,10 @@ export const transactionRepository = {
     let sql = `
       SELECT count(*) FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
       WHERE 1=1
     `;
     const params = [];
