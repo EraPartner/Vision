@@ -100,6 +100,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             excludedCategoryIds: localExcludedCategories,
             excludedRecipientIds: localExcludedRecipients,
             excludeHiddenCategories: localExcludeHidden,
+            exclusionScope: localExclusionScope,
         });
         updateAppSettings(localAppSettings);
         onOpenChange(false);
