@@ -86,7 +86,7 @@ export function AddTransactionDialog() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_bank">Bank Account</Label>
-                            <Input id="tx_bank" placeholder="e.g. Main Checking" value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
+                            <Input id="tx_bank" placeholder="e.g. Main Checking" maxLength={100} value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_currency">Currency</Label>
