@@ -21,6 +21,7 @@ import infoRouter from './routes/info.js';
 import adminRouter from './routes/admin.js';
 import importRouter from './routes/importRoutes.js';
 import investmentsRouter from './routes/investments.js';
+import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
