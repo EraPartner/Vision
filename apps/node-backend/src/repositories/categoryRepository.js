@@ -7,7 +7,7 @@
 import { query } from '../database/connection.js';
 
 export const categoryRepository = {
-  async getAll({ limit = 50, offset = 0, general = null, detail = null, active = true } = {}) {
+  async getAll({ limit = 50, offset = 0, general = null, detail = null, search = null, active = true } = {}) {
     let sql = `SELECT * FROM categories WHERE 1=1`;
     const params = [];
     let paramIdx = 1;
@@ -23,6 +23,12 @@ export const categoryRepository = {
       sql += ` AND detail ILIKE $${paramIdx++}`;
       params.push(`%${detail}%`);
     }
+    if (search) {
+      const sp = `%${search}%`;
+      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
+      paramIdx++;
+      params.push(sp);
+    }
 
     sql += ` ORDER BY general, detail LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(limit, offset);
@@ -31,7 +37,7 @@ export const categoryRepository = {
     return result.rows.map(enrichCategory);
   },
 
-  async getCount({ general = null, detail = null, active = true } = {}) {
+  async getCount({ general = null, detail = null, search = null, active = true } = {}) {
     let sql = `SELECT count(*) FROM categories WHERE 1=1`;
     const params = [];
     let paramIdx = 1;
@@ -39,6 +45,12 @@ export const categoryRepository = {
     if (active) sql += ` AND is_active = true`;
     if (general) { sql += ` AND general ILIKE $${paramIdx++}`; params.push(`%${general}%`); }
     if (detail) { sql += ` AND detail ILIKE $${paramIdx++}`; params.push(`%${detail}%`); }
+    if (search) {
+      const sp = `%${search}%`;
+      sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
+      paramIdx++;
+      params.push(sp);
+    }
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);
