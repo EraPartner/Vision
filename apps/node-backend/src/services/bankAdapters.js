@@ -536,6 +536,111 @@ function parseSABB(filePath) {
   return transactions;
 }
 
+// ─── Wise Adapter ───
+
+function parseWise(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const records = parse(content, {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    trim: true,
+  });
+
+  const transactions = [];
+
+  for (const row of records) {
+    try {
+      const status = (row['Status'] || '').trim().toUpperCase();
+      if (status !== 'COMPLETED') continue;
+
+      // Date: "2025-11-25 04:42:05"
+      const dateStr = (row['Finished on'] || row['Created on'] || '').trim();
+      if (!dateStr) continue;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) continue;
+
+      // Direction determines sign
+      const direction = (row['Direction'] || '').trim().toUpperCase();
+
+      // Use target amount/currency as the primary transaction value
+      const targetAmountStr = (row['Target amount (after fees)'] || '').trim();
+      const sourceAmountStr = (row['Source amount (after fees)'] || '').trim();
+      const amountStr = targetAmountStr || sourceAmountStr;
+      if (!amountStr) continue;
+      let amount = parseFloat(amountStr);
+      if (isNaN(amount)) continue;
+
+      // Determine sign: OUT = negative, IN = positive, NEUTRAL = use source vs target name
+      if (direction === 'OUT') {
+        amount = -Math.abs(amount);
+      } else if (direction === 'IN') {
+        amount = Math.abs(amount);
+      }
+      // NEUTRAL: keep as-is (e.g. currency conversion to self)
+
+      const targetCurrency = (row['Target currency'] || '').trim().toUpperCase();
+      const sourceCurrency = (row['Source currency'] || '').trim().toUpperCase();
+      const currency = targetCurrency || sourceCurrency || 'USD';
+
+      // Recipient: target name (or source name for incoming)
+      const targetName = (row['Target name'] || '').trim();
+      const sourceName = (row['Source name'] || '').trim();
+      const recipientRaw = direction === 'IN' ? (sourceName || targetName) : (targetName || sourceName);
+      const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
+
+      // Memo from reference
+      const reference = (row['Reference'] || '').trim();
+      const category = (row['Category'] || '').trim();
+      const note = (row['Note'] || '').trim();
+      const memo = normalizeToUppercase([reference, category, note].filter(Boolean).join(' - ') || 'WISE TRANSFER');
+
+      // Fees and exchange rate for comment
+      const sourceFee = (row['Source fee amount'] || '').trim();
+      const sourceFeeCurrency = (row['Source fee currency'] || '').trim();
+      const exchangeRate = (row['Exchange rate'] || '').trim();
+      const transactionId = (row['ID'] || '').trim();
+      const batch = (row['Batch'] || '').trim();
+
+      const commentParts = [];
+      if (transactionId) commentParts.push(`ID: ${transactionId}`);
+      if (direction) commentParts.push(`Direction: ${direction}`);
+      if (sourceFee && parseFloat(sourceFee) > 0) commentParts.push(`Fee: ${sourceFee} ${sourceFeeCurrency}`);
+      if (exchangeRate && parseFloat(exchangeRate) > 0) commentParts.push(`Rate: ${exchangeRate}`);
+      if (sourceCurrency !== targetCurrency && sourceCurrency && targetCurrency) {
+        commentParts.push(`${sourceAmountStr} ${sourceCurrency} → ${targetAmountStr} ${targetCurrency}`);
+      }
+      if (batch) commentParts.push(`Batch: ${batch}`);
+      const comment = commentParts.length ? commentParts.join(' | ') : null;
+
+      // Bank account based on currency
+      const bankAccount = `WISE ${currency}`;
+
+      const rawData = Object.values(row).join('|');
+
+      transactions.push({
+        date,
+        bankAccount,
+        recipient,
+        memo,
+        amount,
+        currency,
+        balance: null,
+        recipientAccount: null,
+        recipientAddress: null,
+        recipientBankName: null,
+        comment,
+        rawData,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  logger.info(`Wise CSV parsed: ${transactions.length} transactions`);
+  return transactions;
+}
+
 // ─── Factory ───
 
 const BANK_CONFIGURATIONS = {
@@ -544,6 +649,7 @@ const BANK_CONFIGURATIONS = {
   kbc: { bankName: 'KBC', parser: parseKBC },
   vault_voyager: { bankName: 'Vault Voyager', parser: parseVaultVoyager },
   sabb: { bankName: 'SABB', parser: parseSABB },
+  wise: { bankName: 'Wise', parser: parseWise },
 };
 
 export function createAdapter(bankName, customConfig = null) {

@@ -41,6 +41,7 @@ router.get('/supported-adapters', async (req, res) => {
     { key: 'revolut', name: 'Revolut', adapter_class: 'RevolutAdapter' },
     { key: 'vault_voyager', name: 'Vault Voyager', adapter_class: 'VaultVoyagerAdapter' },
     { key: 'sabb', name: 'SABB', adapter_class: 'SABBAdapter' },
+    { key: 'wise', name: 'Wise', adapter_class: 'WiseAdapter' },
   ];
   res.json({ adapters, total_count: adapters.length });
 });
