@@ -67,6 +67,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     emptyMessage = "No data available",
     actions,
     onRowUpdate,
+    onRowDoubleClick,
     totalItems,
     isFetchingMore = false,
     onLoadMore,
