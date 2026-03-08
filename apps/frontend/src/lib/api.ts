@@ -409,6 +409,17 @@ class ApiClient {
         return this.request('/api/info/transaction-count');
     }
 
+    async getCashflowComparison(): Promise<{
+        days_in_month: number;
+        current_day: number;
+        month: number;
+        year: number;
+        without_planned: Array<{ day: number; average: number; current: number | null }>;
+        with_planned: Array<{ day: number; average: number; current: number | null }>;
+    }> {
+        return this.request('/api/info/cashflow-comparison');
+    }
+
     async getMonthlyFinancialSummary(): Promise<{
         months: Array<{
             month: number;
