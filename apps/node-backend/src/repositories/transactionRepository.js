@@ -25,16 +25,19 @@ export const transactionRepository = {
   } = {}) {
     let sql = `
       SELECT t.*,
-             r.name AS recipient_name,
+             COALESCE(pr.name, r.name) AS recipient_name,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                ELSE NULL
              END AS category_name
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
       WHERE 1=1
     `;
     const params = [];
