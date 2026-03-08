@@ -1,31 +1,153 @@
 /**
- * Import routes (stub).
- *
+ * Import routes - Full CSV import with bank adapters.
  * Mirrors: apps/backend/api/api_routes_import.py
- *
- * CSV import is complex (bank adapters, deduplication, etc.)
- * This provides a stub that returns a helpful message.
- * For full import functionality, use the Python backend.
  */
 
 import { Router } from 'express';
+import multer from 'multer';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { importCSV } from '../services/importService.js';
+import { getSupportedBanks } from '../services/bankAdapters.js';
+import { logger } from '../config/logger.js';
 
 const router = Router();
 
-// POST /api/import/csv
-router.post('/csv', (req, res) => {
-  res.status(501).json({
-    detail: 'CSV import is not yet implemented in the Node.js backend. Use the Python backend for import functionality.',
-    links: [],
+// Configure multer for file uploads (50MB max)
+const upload = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.originalname.toLowerCase().endsWith('.csv')) {
+      cb(new Error('File must be a CSV'));
+    } else {
+      cb(null, true);
+    }
+  },
+});
+
+// POST /api/import/csv - Import with predefined bank adapter
+router.post('/csv', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ detail: 'No file uploaded. Send a CSV file as multipart form-data with field name "file".' });
+  }
+
+  const bankName = req.query.bank_name || req.body.bank_name;
+  if (!bankName) {
+    cleanup(req.file.path);
+    return res.status(400).json({ detail: 'Missing required parameter: bank_name (query or body)' });
+  }
+
+  try {
+    const result = await importCSV(req.file.path, bankName);
+    cleanup(req.file.path);
+
+    logger.info('CSV import completed', {
+      bankName,
+      fileName: req.file.originalname,
+      ...result,
+    });
+
+    res.status(201).json({
+      ...result,
+      status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
+      error_message: result.error_message || null,
+      links: [],
+    });
+  } catch (err) {
+    cleanup(req.file.path);
+    logger.error('CSV import error', { error: err.message, bankName });
+
+    if (err.message.includes('No configuration found')) {
+      return res.status(400).json({ detail: `Invalid bank configuration: ${err.message}` });
+    }
+    res.status(500).json({ detail: `Import failed: ${err.message}` });
+  }
+});
+
+// POST /api/import/csv/custom - Import with custom CSV configuration
+router.post('/csv/custom', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ detail: 'No file uploaded. Send a CSV file as multipart form-data with field name "file".' });
+  }
+
+  const {
+    bank_name, date_format, date_column, recipient_column, amount_column,
+    memo_column, separator, encoding, skip_rows,
+  } = { ...req.query, ...req.body };
+
+  if (!bank_name || !date_format || !date_column || !recipient_column || !amount_column) {
+    cleanup(req.file.path);
+    return res.status(400).json({
+      detail: 'Missing required parameters: bank_name, date_format, date_column, recipient_column, amount_column',
+    });
+  }
+
+  // Validate separator
+  if (separator && separator.length > 1) {
+    cleanup(req.file.path);
+    return res.status(400).json({ detail: 'separator must be a single character' });
+  }
+
+  const customConfig = {
+    bank_name: bank_name.trim(),
+    date_format: date_format.trim(),
+    encoding: encoding || 'utf-8',
+    separator: separator || ',',
+    skip_rows: parseInt(skip_rows, 10) || 0,
+    column_mapping: {
+      date: date_column.trim(),
+      recipient: recipient_column.trim(),
+      amount: amount_column.trim(),
+      memo: memo_column ? memo_column.trim() : '',
+    },
+  };
+
+  try {
+    const result = await importCSV(req.file.path, bank_name, customConfig);
+    cleanup(req.file.path);
+
+    res.status(201).json({
+      ...result,
+      status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
+      error_message: result.error_message || null,
+      links: [],
+    });
+  } catch (err) {
+    cleanup(req.file.path);
+    logger.error('Custom CSV import error', { error: err.message });
+    res.status(500).json({ detail: `Import failed: ${err.message}` });
+  }
+});
+
+// GET /api/import/supported-banks
+router.get('/supported-banks', (req, res) => {
+  const banks = getSupportedBanks();
+  res.json({
+    banks: banks.map(b => b.charAt(0).toUpperCase() + b.slice(1)),
+    total: banks.length,
   });
 });
 
-// POST /api/import/csv/custom
-router.post('/csv/custom', (req, res) => {
-  res.status(501).json({
-    detail: 'Custom CSV import is not yet implemented in the Node.js backend. Use the Python backend for import functionality.',
-    links: [],
-  });
+// Error handler for multer
+router.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ detail: 'File size exceeds maximum of 50MB' });
+    }
+    return res.status(400).json({ detail: `Upload error: ${err.message}` });
+  }
+  if (err.message === 'File must be a CSV') {
+    return res.status(400).json({ detail: 'File must be a CSV' });
+  }
+  next(err);
 });
+
+function cleanup(filePath) {
+  try {
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch { /* ignore */ }
+}
 
 export default router;
