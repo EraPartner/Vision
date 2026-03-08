@@ -6,6 +6,7 @@ import { Settings, Sun, Moon } from "lucide-react";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
 import {useTheme} from "@/contexts/ThemeContext";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
+import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -14,6 +15,7 @@ interface AppLayoutProps {
 export function AppLayout({children}: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
+    const { isComplete: onboardingComplete, complete: completeOnboarding } = useOnboarding();
 
     return (
         <SidebarProvider>
@@ -50,6 +52,7 @@ export function AppLayout({children}: AppLayoutProps) {
                 </div>
             </div>
             <DashboardSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+            <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} />
         </SidebarProvider>
     );
 }
