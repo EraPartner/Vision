@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ type TableRecipient = {
 };
 
 export default function RecipientsPage() {
+    const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
@@ -310,6 +312,9 @@ export default function RecipientsPage() {
                     columns={columns}
                     data={recipients}
                     onRowUpdate={handleUpdate}
+                    onRowDoubleClick={(row) => {
+                        navigate(`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`);
+                    }}
                     emptyMessage="No recipients found."
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}

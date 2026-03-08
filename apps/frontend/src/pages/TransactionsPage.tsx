@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info } from "lucide-react";
+import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X } from "lucide-react";
 import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
@@ -32,6 +33,7 @@ type TableTransaction = {
 };
 
 export default function TransactionsPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
     const [allItems, setAllItems] = useState<any[]>([]);
@@ -41,14 +43,23 @@ export default function TransactionsPage() {
     const hasMoreRef = useRef(true);
     const loadingRef = useRef(false);
 
+    // URL-based filters
+    const recipientIdFilter = searchParams.get('recipient_id') ? Number(searchParams.get('recipient_id')) : undefined;
+    const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
+    const filterLabel = searchParams.get('filter_label') || undefined;
+
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // Initial load
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined }],
-        queryFn: () => apiClient.getTransactions({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined }),
+        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined, recipientIdFilter, categoryIdFilter }],
+        queryFn: () => apiClient.getTransactions({
+            limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined,
+            recipient_id: recipientIdFilter,
+            category_id: categoryIdFilter,
+        }),
         staleTime: 30_000,
     });
 
@@ -72,6 +83,8 @@ export default function TransactionsPage() {
                 offset: offsetRef.current,
                 active: !showAll,
                 search: search || undefined,
+                recipient_id: recipientIdFilter,
+                category_id: categoryIdFilter,
             });
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t: any) => t.id));
@@ -87,7 +100,7 @@ export default function TransactionsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search]);
+    }, [showAll, search, recipientIdFilter, categoryIdFilter]);
 
     const handleDelete = async (id: number, description?: string) => {
         const ok = await confirm({
@@ -318,6 +331,10 @@ export default function TransactionsPage() {
         </div>
     );
 
+    const clearFilters = () => {
+        setSearchParams({});
+    };
+
     return (
         <>
             <div className="space-y-8 animate-in">
@@ -325,6 +342,17 @@ export default function TransactionsPage() {
                     <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
                     <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
                 </div>
+
+                {(recipientIdFilter || categoryIdFilter) && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
+                        <span className="text-sm text-foreground">
+                            Filtered by {filterLabel || (recipientIdFilter ? `recipient #${recipientIdFilter}` : `category #${categoryIdFilter}`)}
+                        </span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={clearFilters}>
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
 
                 <VirtualDataTable
                     title="All Transactions"

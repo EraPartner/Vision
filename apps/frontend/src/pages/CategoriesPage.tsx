@@ -1,4 +1,5 @@
 import {useMemo, useState} from "react";
+import {useNavigate} from "react-router-dom";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
@@ -9,6 +10,7 @@ import {cn} from "@/lib/utils";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 export default function CategoriesPage() {
+    const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -149,9 +151,12 @@ export default function CategoriesPage() {
                                                     key={cat.id}
                                                     className={cn(
                                                         "flex items-center gap-3 pl-11 pr-4 py-2.5 border-t border-border/50",
-                                                        "transition-colors hover:bg-muted/50",
+                                                        "transition-colors hover:bg-muted/50 cursor-pointer",
                                                         cat.is_active === false && "opacity-60"
                                                     )}
+                                                    onDoubleClick={() => {
+                                                        navigate(`/transactions?category_id=${cat.id}&filter_label=${encodeURIComponent(cat.general + ':' + cat.detail)}`);
+                                                    }}
                                                 >
                                                     <Badge
                                                         variant="outline"
