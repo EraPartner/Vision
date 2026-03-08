@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink,
+  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from "recharts";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
