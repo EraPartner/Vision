@@ -8,6 +8,7 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { ASSET_CLASS_GROUPS, ASSET_CLASS_LABELS } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const COLORS = [
   "hsl(217, 91%, 60%)", "hsl(142, 76%, 36%)", "hsl(45, 93%, 47%)",
@@ -20,6 +21,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function PortfolioOverviewPage() {
   const { summaries, totalPortfolioValue, totalGainLoss, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   const totalInvested = summaries.reduce((s, i) => s + i.totalInvested, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
@@ -40,6 +42,7 @@ export default function PortfolioOverviewPage() {
   const isEmpty = summaries.length === 0;
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Portfolio Overview</h1>
@@ -148,7 +151,7 @@ export default function PortfolioOverviewPage() {
                     <div className="flex items-center gap-1 shrink-0">
                       <AddPortfolioTxnDialog investment={inv} />
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => { if (confirm(`Delete "${inv.name}" and all its transactions?`)) deleteInvestment(inv.id); }}>
+                        onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -160,5 +163,7 @@ export default function PortfolioOverviewPage() {
         </>
       )}
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

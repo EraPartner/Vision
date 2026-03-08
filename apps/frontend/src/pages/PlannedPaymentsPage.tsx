@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api";
 import type { Transaction } from "@/types/api";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 const FREQ_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -61,6 +62,7 @@ type TableRow = PlannedPayment & { _idx: number };
 export default function PlannedPaymentsPage() {
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedPayment | undefined>();
   const [actionLoading, setActionLoading] = useState(false);
@@ -304,7 +306,13 @@ export default function PlannedPaymentsPage() {
             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={async (e) => { 
               e.stopPropagation(); 
-              if (confirm(`Delete planned payment "${row.name}"?`)) {
+              const ok = await confirm({
+                title: "Delete Planned Payment",
+                description: `Are you sure you want to delete planned payment "${row.name}"? This action cannot be undone.`,
+                confirmLabel: "Delete",
+                variant: "destructive",
+              });
+              if (ok) {
                 setActionLoading(true);
                 try {
                   await deletePayment(row.id);
@@ -413,6 +421,7 @@ export default function PlannedPaymentsPage() {
   }
 
   return (
+    <>
     <div className="space-y-8 animate-in">
       <div className="flex items-start justify-between">
         <div>
@@ -646,5 +655,7 @@ export default function PlannedPaymentsPage() {
       </Dialog>
 
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

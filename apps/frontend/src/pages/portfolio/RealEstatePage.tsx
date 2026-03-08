@@ -6,6 +6,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { cn } from "@/lib/utils";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
 function fmt(val: number, currency = 'EUR', decimals = 0) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
@@ -13,6 +14,7 @@ function fmt(val: number, currency = 'EUR', decimals = 0) {
 
 export default function RealEstatePage() {
   const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
 
   const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
@@ -45,6 +47,7 @@ export default function RealEstatePage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Real Estate</h1>
@@ -91,7 +94,7 @@ export default function RealEstatePage() {
                 <div className="flex items-center gap-1">
                   <AddPortfolioTxnDialog investment={p} />
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => { if (confirm(`Delete "${p.name}"?`)) deleteInvestment(p.id); }}>
+                    onClick={async () => { const ok = await confirm({ title: "Delete Property", description: `Are you sure you want to delete "${p.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(p.id); }}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -109,5 +112,7 @@ export default function RealEstatePage() {
         ))}
       </div>
     </div>
+    <ConfirmDialog />
+    </>
   );
 }

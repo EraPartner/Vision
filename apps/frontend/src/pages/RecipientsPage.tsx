@@ -7,6 +7,7 @@ import {useRecipients, useUpdateRecipient, useDeleteRecipient, useMergeRecipient
 import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 import {MergeRecipientsDialog} from "@/components/recipients/MergeRecipientsDialog";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 const PAGE_SIZE = 50;
 
@@ -36,6 +37,7 @@ export default function RecipientsPage() {
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
     const unmergeMutation = useUnmergeRecipient();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = data?.items[idx];
@@ -217,10 +219,14 @@ export default function RecipientsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => {
-                            if (confirm(`Delete recipient "${row.name}"?`)) {
-                                deleteMutation.mutate(row.id);
-                            }
+                        onClick={async () => {
+                            const ok = await confirm({
+                                title: "Delete Recipient",
+                                description: `Are you sure you want to delete recipient "${row.name}"? This action cannot be undone.`,
+                                confirmLabel: "Delete",
+                                variant: "destructive",
+                            });
+                            if (ok) deleteMutation.mutate(row.id);
                         }}
                         disabled={deleteMutation.isPending}
                     >
@@ -256,6 +262,7 @@ export default function RecipientsPage() {
     );
 
     return (
+        <>
         <div className="space-y-8 animate-in">
             <div>
                 <h2 className="text-3xl font-bold text-foreground">Recipients</h2>
@@ -283,5 +290,7 @@ export default function RecipientsPage() {
                 recipients={data?.items ?? []}
             />
         </div>
+        <ConfirmDialog />
+    </>
     );
 }
