@@ -33,6 +33,8 @@ interface VirtualDataTableProps<T> {
     emptyMessage?: string;
     actions?: React.ReactNode;
     onRowUpdate?: (index: number, updatedRow: T) => void;
+    /** Called when a row is double-clicked */
+    onRowDoubleClick?: (row: T, index: number) => void;
     /** Total items available on server */
     totalItems?: number;
     /** Whether more data is currently being fetched */
@@ -65,6 +67,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     emptyMessage = "No data available",
     actions,
     onRowUpdate,
+    onRowDoubleClick,
     totalItems,
     isFetchingMore = false,
     onLoadMore,
@@ -431,7 +434,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                 key={virtualRow.key}
                                                 data-index={virtualRow.index}
                                                 ref={virtualizer.measureElement}
-                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""}`}
+                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
                                                 style={{
                                                     position: "absolute",
                                                     top: 0,
@@ -439,6 +442,14 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     width: "100%",
                                                     transform: `translateY(${virtualRow.start}px)`,
                                                 }}
+                                                onDoubleClick={() => {
+                                                    if (onRowDoubleClick) {
+                                                        onRowDoubleClick(row, idx);
+                                                    } else if (hasEditableColumns && !isEditing) {
+                                                        startEditing(idx, row);
+                                                    }
+                                                }}
+                                            >
                                             >
                                                 {columns.map((col) => {
                                                     const width = columnWidths[col.key];
