@@ -1,5 +1,6 @@
 import {useState} from "react";
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
+import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
@@ -55,6 +56,11 @@ export function AddTransactionDialog() {
                         comment: "",
                     });
                     setOpen(false);
+                },
+                onError: (error: Error) => {
+                    if (error.message.includes('Duplicate')) {
+                        toast.error('Duplicate transaction detected — a matching transaction already exists.');
+                    }
                 },
             }
         );

@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import transactionRepository from '../repositories/transactionRepository.js';
+import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
 
@@ -147,6 +148,22 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ detail: 'Missing required fields: date, bank_account, recipient_id, amount' });
     }
 
+    // Deduplication check for manually added transactions
+    const dupCheck = await isManualDuplicate({
+      date: txDate,
+      amount: data.amount,
+      recipientId: data.recipient_id,
+      memo: data.memo || '',
+      bankAccount: data.bank_account,
+    });
+
+    if (dupCheck.isDuplicate) {
+      return res.status(409).json({
+        detail: 'Duplicate transaction detected',
+        existing_transaction_id: dupCheck.existingTransactionId,
+      });
+    }
+
     const transaction = await transactionRepository.create({
       transaction_date: txDate,
       bank_account: data.bank_account,
@@ -157,6 +174,18 @@ router.post('/', async (req, res) => {
       balance: data.balance,
       category_id: data.category_id,
       comment: data.comment,
+    });
+
+    // Record in manual raw transactions table for future dedup
+    await recordManualRawTransaction({
+      date: txDate,
+      amount: data.amount,
+      recipientId: data.recipient_id,
+      memo: data.memo || '',
+      bankAccount: data.bank_account,
+      categoryId: data.category_id || null,
+      comment: data.comment || null,
+      transactionId: transaction.id,
     });
 
     logger.info('Transaction created', { id: transaction.id });
