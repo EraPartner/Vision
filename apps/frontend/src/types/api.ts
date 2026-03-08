@@ -77,10 +77,8 @@ export interface RecipientCreate {
 
 export interface RecipientUpdate {
     name?: string;
-    account_number?: string;
     default_category_id?: number;
     notes?: string;
-    address?: string;
     is_active?: boolean;
 }
 
