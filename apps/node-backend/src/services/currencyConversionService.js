@@ -288,8 +288,19 @@ export async function convertRowsToEur(rows) {
  */
 export async function warmCache() {
   try {
-    await getRatesForDate(null);
-    logger.info('Exchange rate cache warmed');
+    // Always fetch fresh rates from ECB on startup, regardless of DB cache
+    const today = new Date().toISOString().split('T')[0];
+    const apiRates = await fetchFromApi(null);
+    if (apiRates) {
+      memoryCache['latest'] = { rates: apiRates, timestamp: Date.now() };
+      memoryCache[today] = { rates: apiRates, timestamp: Date.now() };
+      await saveToDatabase(today, apiRates);
+      logger.info(`Exchange rate cache warmed with ${Object.keys(apiRates).length} fresh rates from ECB`);
+    } else {
+      // Fall back to normal cache hierarchy if API fails
+      await getRatesForDate(null);
+      logger.info('Exchange rate cache warmed from DB/fallback (ECB API unavailable)');
+    }
   } catch (err) {
     logger.warn('Failed to warm exchange rate cache', { error: err.message });
   }
