@@ -247,6 +247,8 @@ export default function TransactionsPage() {
             render: (row: TableTransaction) => {
                 const items = [
                     { label: "Bank Account", value: row.bank },
+                    { label: "Recipient", value: row.recipient !== 'Unknown' ? row.recipient : undefined },
+                    { label: "Category", value: row.category !== 'Uncategorized' ? row.category : undefined },
                     { label: "Currency", value: row.currency },
                     { label: "Balance", value: row.balance != null
                         ? new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency }).format(row.balance)
