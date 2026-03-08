@@ -100,7 +100,7 @@ export const infoRepository = {
       GROUP BY m.month_start
       ORDER BY m.month_start
     `;
-    const result = await query(sql);
+    const result = await query(sql, validIds);
 
     const months = result.rows.map(r => ({
       month: r.month,
