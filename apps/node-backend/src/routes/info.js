@@ -139,4 +139,15 @@ router.get('/category-breakdown', async (req, res) => {
   }
 });
 
+// GET /api/info/bank-balances - Current and historical balance per bank account
+router.get('/bank-balances', async (req, res) => {
+  try {
+    const data = await infoRepository.getBankBalances();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error retrieving bank balances', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving bank balances' });
+  }
+});
+
 export default router;
