@@ -15,6 +15,7 @@ function fmt(val: number, currency = 'EUR') {
 
 export default function StocksPage() {
   const { byAssetClass, deleteInvestment, deleteTransaction } = usePortfolio();
+  const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass(['stock', 'etf']);
 
   const totalValue = holdings.reduce((s, h) => s + h.currentValue, 0);
