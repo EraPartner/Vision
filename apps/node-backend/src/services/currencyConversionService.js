@@ -295,4 +295,5 @@ export async function warmCache() {
   }
 }
 
-export default { convertToEur, convertRowsToEur, warmCache };
+export { FALLBACK_RATES };
+export default { convertToEur, convertRowsToEur, warmCache, FALLBACK_RATES };
