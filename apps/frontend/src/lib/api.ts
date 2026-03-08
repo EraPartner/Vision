@@ -642,6 +642,12 @@ class ApiClient {
         return this.request(`/api/market/news${query ? `?${query}` : ''}`);
     }
 
+    // ==================== Admin / Maintenance ====================
+
+    async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
+        return this.request('/api/info/refresh-views', { method: 'POST' });
+    }
+
     // ==================== Private Helpers ====================
 
     /**
