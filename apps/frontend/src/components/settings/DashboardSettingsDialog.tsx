@@ -63,6 +63,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     const [localExcludedCategories, setLocalExcludedCategories] = useState<number[]>([]);
     const [localExcludedRecipients, setLocalExcludedRecipients] = useState<number[]>([]);
     const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
+    const [recipientSearch, setRecipientSearch] = useState('');
 
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
