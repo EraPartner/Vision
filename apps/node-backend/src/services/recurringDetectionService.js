@@ -82,6 +82,9 @@ function detectAmountChanges(transactions) {
   // Calculate baseline (median of all amounts)
   const amounts = sorted.map((t) => Math.abs(parseFloat(t.amount)));
   const medianAmount = [...amounts].sort((a, b) => a - b)[Math.floor(amounts.length / 2)];
+  if (!Number.isFinite(medianAmount) || medianAmount === 0) {
+    return [];
+  }
 
   // Check last few transactions for changes
   for (let i = Math.max(0, sorted.length - 3); i < sorted.length; i++) {
@@ -124,6 +127,12 @@ export async function detectRecurringPatterns() {
 
     if (result.rows.length === 0) return { patterns: [], total: 0 };
 
+    // planned_transactions may not exist in partially initialized environments.
+    const plannedTableCheck = await query(
+      `SELECT to_regclass('public.planned_transactions') IS NOT NULL AS exists`
+    );
+    const plannedTableAvailable = Boolean(plannedTableCheck.rows[0]?.exists);
+
     // Group by recipient
     const byRecipient = {};
     for (const row of result.rows) {
@@ -150,6 +159,9 @@ export async function detectRecurringPatterns() {
       for (let i = 1; i < txns.length; i++) {
         const d1 = new Date(txns[i - 1].date);
         const d2 = new Date(txns[i].date);
+        if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) {
+          continue;
+        }
         const daysDiff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
         if (daysDiff > 0) intervals.push(daysDiff);
       }
@@ -170,17 +182,23 @@ export async function detectRecurringPatterns() {
 
       // Predict next occurrence
       const lastDate = new Date(txns[txns.length - 1].date);
+      if (Number.isNaN(lastDate.getTime())) {
+        continue;
+      }
       const nextDate = new Date(lastDate);
       nextDate.setDate(nextDate.getDate() + detected.medianDays);
 
       // Check if already tracked as planned transaction
-      const existingPlanned = await query(
-        `SELECT id FROM planned_transactions
-         WHERE recipient_id = $1 AND is_active = true
-         LIMIT 1`,
-        [group.recipientId]
-      );
-      const isAlreadyPlanned = existingPlanned.rows.length > 0;
+      let isAlreadyPlanned = false;
+      if (plannedTableAvailable) {
+        const existingPlanned = await query(
+          `SELECT id FROM planned_transactions
+           WHERE recipient_id = $1 AND is_active = true
+           LIMIT 1`,
+          [group.recipientId]
+        );
+        isAlreadyPlanned = existingPlanned.rows.length > 0;
+      }
 
       patterns.push({
         recipientId: group.recipientId,
@@ -221,6 +239,6 @@ export async function detectRecurringPatterns() {
     };
   } catch (err) {
     logger.error('Error detecting recurring patterns', { error: err.message });
-    throw err;
+    return { patterns: [], total: 0 };
   }
 }

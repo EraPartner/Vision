@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
+import { convertRowsToEur } from '../services/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
       limit = 50, offset = 0,
       start_date, end_date, bank_account,
       category_id, recipient_id, recipient_name,
-      uncategorised, active = 'true', search,
+      uncategorised, active = 'true', search, normalize_to_eur = 'false',
     } = req.query;
 
     const opts = {
@@ -41,6 +42,10 @@ router.get('/', async (req, res) => {
       items = await transactionRepository.getUncategorised(opts);
     } else {
       items = await transactionRepository.getAll(opts);
+    }
+
+    if (normalize_to_eur === 'true') {
+      items = await convertRowsToEur(items);
     }
 
     const total = await transactionRepository.getCount(opts);
@@ -292,6 +297,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
  */
 function formatTransaction(row) {
   if (!row) return null;
+  const amount = row.amount != null ? parseFloat(row.amount) : 0;
+  const amountEur = row.amount_eur != null ? parseFloat(row.amount_eur) : amount;
   return {
     id: row.id,
     transaction_date: row.date,
@@ -300,7 +307,8 @@ function formatTransaction(row) {
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
     memo: row.memo,
-    amount: parseFloat(row.amount),
+    amount,
+    amount_eur: amountEur,
     currency: row.currency,
     balance: row.balance != null ? parseFloat(row.balance) : null,
     category_id: row.category_id,

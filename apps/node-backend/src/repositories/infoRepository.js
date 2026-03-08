@@ -168,7 +168,7 @@ export const infoRepository = {
     // ── Fast path: read from mv_monthly_summary ──
     if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
       const mvResult = await query(`
-        SELECT month_start, month, year, currency, category_id,
+        SELECT month_start, month, year, currency,
                SUM(transaction_count) AS transaction_count,
                SUM(total_income) AS total_income,
                SUM(total_spending) AS total_spending,
@@ -234,6 +234,18 @@ export const infoRepository = {
           date_trunc('month', CURRENT_DATE),
           interval '1 month'
         )::date AS month_start
+      ),
+      filtered_transactions AS (
+        SELECT
+          t.id,
+          t.amount,
+          t.currency,
+          t.date,
+          COALESCE(t.category_id, r.default_category_id) AS effective_category_id
+        FROM transactions t
+        LEFT JOIN recipients r ON t.recipient_id = r.id
+        WHERE t.is_active = true
+        ${excludeClause}
       )
       SELECT
         EXTRACT(MONTH FROM m.month_start)::int AS month,
@@ -242,11 +254,8 @@ export const infoRepository = {
         (m.month_start + interval '1 month' - interval '1 day')::date AS period_end,
         t.amount, t.currency, t.date, t.id AS txn_id
       FROM months m
-      LEFT JOIN transactions t ON t.date >= m.month_start
+      LEFT JOIN filtered_transactions t ON t.date >= m.month_start
         AND t.date < m.month_start + interval '1 month'
-        AND t.is_active = true
-        ${excludeClause}
-      LEFT JOIN recipients r ON t.recipient_id = r.id
       ORDER BY m.month_start, t.date
     `;
     logger.debug('Monthly summary SQL executing', { excludeClause: excludeClause || '(none)', paramCount: validIds.length });

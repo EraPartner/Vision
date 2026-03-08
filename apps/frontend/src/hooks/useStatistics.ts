@@ -71,7 +71,7 @@ function processTransactions(
     const period = format(date, 'yyyy-MM');
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
-    const amount = tx.amount;
+    const amount = tx.amount_eur ?? tx.amount;
 
     // Monthly aggregation
     if (!monthlyMap.has(period)) {
@@ -159,7 +159,12 @@ export function useStatistics() {
       let total = Infinity;
 
       while (offset < total) {
-        const res = await apiClient.getTransactions({ limit, offset, active: true });
+        const res = await apiClient.getTransactions({
+          limit,
+          offset,
+          active: true,
+          normalize_to_eur: true,
+        });
         allItems.push(...res.items);
         total = res.total;
         offset += limit;
