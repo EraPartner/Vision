@@ -151,4 +151,15 @@ router.get('/bank-balances', async (req, res) => {
   }
 });
 
+// GET /api/info/recurring-patterns - Detect recurring transaction patterns
+router.get('/recurring-patterns', async (req, res) => {
+  try {
+    const data = await detectRecurringPatterns();
+    res.json(data);
+  } catch (err) {
+    logger.error('Error detecting recurring patterns', { error: err.message });
+    res.status(500).json({ detail: 'Error detecting recurring patterns' });
+  }
+});
+
 export default router;
