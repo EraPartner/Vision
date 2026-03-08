@@ -142,11 +142,13 @@ export default function ImportPage() {
     }
 
     setLoading(true);
+    setProgress({ phase: 'connecting', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 0 });
+
     try {
       let data;
       
       if (bankSource === "custom") {
-        // Call custom import endpoint with configuration
+        // Custom config uses the non-streaming endpoint (no raw table)
         data = await apiClient.importCSVCustom(
           file,
           bank,
@@ -159,9 +161,17 @@ export default function ImportPage() {
           customConfig.encoding,
           customConfig.skipRows
         );
+        setProgress({ phase: 'complete', current: data.total_processed, total: data.total_processed, imported: data.imported, duplicates: data.duplicates, errors: data.errors || 0, percent: 100 });
       } else {
-        // Call standard import endpoint for predefined banks
-        data = await apiClient.importCSV(file, bank);
+        // Use streaming import with SSE progress
+        const { abort, result } = apiClient.importCSVWithProgress(
+          file,
+          bank,
+          (p) => setProgress(p),
+        );
+        abortRef.current = abort;
+        data = await result;
+        abortRef.current = null;
       }
 
       toast.success(`Successfully imported ${data.imported} transactions!`, {
@@ -171,7 +181,6 @@ export default function ImportPage() {
       setFile(null);
       setBankSource("");
       setCustomBank("");
-      // Reset custom config
       setCustomConfig({
         dateColumn: "",
         dateFormat: "%Y-%m-%d",
@@ -186,8 +195,19 @@ export default function ImportPage() {
       const message =
         error instanceof Error ? error.message : "Failed to import CSV";
       toast.error(message);
+      setProgress((p) => p ? { ...p, phase: 'error' } : null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelImport = () => {
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+      setLoading(false);
+      setProgress(null);
+      toast.info("Import cancelled.");
     }
   };
 
