@@ -240,6 +240,9 @@ export default function DashboardPage() {
                           subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"}/>
             </div>
 
+            {/* Bank Account Balances */}
+            <BankBalancesWidget />
+
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
                 {monthlyData.length > 0 && <MonthlyTrendsChart data={monthlyData}/>}
