@@ -25,6 +25,10 @@ vi.mock('../../src/repositories/infoRepository.js', () => ({
     getMonthlyFinancialSummary: vi.fn(),
     getPlannedExpensesNextMonth: vi.fn(),
     getAverageVsCurrentSpending: vi.fn(),
+    getCashflowComparison: vi.fn(),
+    getBankBalances: vi.fn(),
+    getNetWorth: vi.fn(),
+    getRecipientInsights: vi.fn(),
   },
 }));
 
