@@ -2,10 +2,11 @@ import {useState} from "react";
 import {DataTable} from "@/components/shared/DataTable";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2} from "lucide-react";
-import {useRecipients, useUpdateRecipient, useDeleteRecipient} from "@/hooks/useRecipients";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users} from "lucide-react";
+import {useRecipients, useUpdateRecipient, useDeleteRecipient, useMergeRecipients, useUnmergeRecipient} from "@/hooks/useRecipients";
 import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
+import {MergeRecipientsDialog} from "@/components/recipients/MergeRecipientsDialog";
 
 const PAGE_SIZE = 50;
 
@@ -14,6 +15,9 @@ type TableRecipient = {
     name: string;
     primary_bank_account: string;
     default_category_name?: string;
+    primary_recipient_id?: number | null;
+    primary_recipient_name?: string | null;
+    alias_count?: number;
     is_active: boolean;
     notes?: string;
 };
@@ -22,6 +26,7 @@ export default function RecipientsPage() {
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
+    const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
     const { data, isLoading, error } = useRecipients({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
@@ -30,6 +35,7 @@ export default function RecipientsPage() {
     });
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
+    const unmergeMutation = useUnmergeRecipient();
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = data?.items[idx];
@@ -78,6 +84,9 @@ export default function RecipientsPage() {
         name: r.name,
         primary_bank_account: r.primary_bank_account || 'N/A',
         default_category_name: r.default_category_name,
+        primary_recipient_id: r.primary_recipient_id,
+        primary_recipient_name: r.primary_recipient_name,
+        alias_count: r.alias_count,
         is_active: r.is_active,
         notes: r.notes || '',
     })) || [];
@@ -88,9 +97,23 @@ export default function RecipientsPage() {
             header: "Recipient",
             editable: true,
             render: (row: TableRecipient) => (
-                <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
-                    {row.name}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className={`font-medium ${row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                        {row.name}
+                    </span>
+                    {(row.alias_count ?? 0) > 0 && (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                            <Users className="h-3 w-3" />
+                            {row.alias_count}
+                        </Badge>
+                    )}
+                    {row.primary_recipient_id && (
+                        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                            <Link2 className="h-3 w-3" />
+                            → {row.primary_recipient_name}
+                        </Badge>
+                    )}
+                </div>
             ),
         },
         {
@@ -172,24 +195,38 @@ export default function RecipientsPage() {
             ),
         },
         {
-            key: "delete",
+            key: "actions",
             header: "",
-            className: "w-12",
+            className: "w-24",
             editable: false,
             render: (row: TableRecipient) => (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                        if (confirm(`Delete recipient "${row.name}"?`)) {
-                            deleteMutation.mutate(row.id);
-                        }
-                    }}
-                    disabled={deleteMutation.isPending}
-                >
-                    <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                    {row.primary_recipient_id && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            title="Unmerge from primary"
+                            onClick={(e) => { e.stopPropagation(); unmergeMutation.mutate(row.id); }}
+                            disabled={unmergeMutation.isPending}
+                        >
+                            <Unlink className="h-4 w-4" />
+                        </Button>
+                    )}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                            if (confirm(`Delete recipient "${row.name}"?`)) {
+                                deleteMutation.mutate(row.id);
+                            }
+                        }}
+                        disabled={deleteMutation.isPending}
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
             ),
         },
     ];
@@ -204,6 +241,15 @@ export default function RecipientsPage() {
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 {showAll ? "Showing All" : "Active Only"}
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMergeDialogOpen(true)}
+                className="gap-1.5"
+            >
+                <Link2 className="h-4 w-4" />
+                Merge Recipients
             </Button>
             <AddRecipientDialog />
         </div>
@@ -229,6 +275,12 @@ export default function RecipientsPage() {
                 onPageChange={setPage}
                 onSearchChange={setSearch}
                 actions={actions}
+            />
+
+            <MergeRecipientsDialog
+                open={mergeDialogOpen}
+                onOpenChange={setMergeDialogOpen}
+                recipients={data?.items ?? []}
             />
         </div>
     );
