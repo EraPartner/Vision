@@ -421,6 +421,7 @@ export default function PlannedPaymentsPage() {
   }
 
   return (
+    <>
     <div className="space-y-8 animate-in">
       <div className="flex items-start justify-between">
         <div>
