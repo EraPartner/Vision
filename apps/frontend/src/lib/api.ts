@@ -632,6 +632,16 @@ class ApiClient {
         await this.request<void>(`/api/investments/transactions/${txnId}`, { method: 'DELETE' });
     }
 
+    // ==================== Market News ====================
+
+    async getMarketNews(symbols?: string[], count?: number): Promise<{ articles: MarketNewsArticle[] }> {
+        const params: Record<string, any> = {};
+        if (symbols?.length) params.symbols = symbols.join(',');
+        if (count) params.count = count;
+        const query = this.buildQuery(params);
+        return this.request(`/api/market/news${query ? `?${query}` : ''}`);
+    }
+
     // ==================== Private Helpers ====================
 
     /**
