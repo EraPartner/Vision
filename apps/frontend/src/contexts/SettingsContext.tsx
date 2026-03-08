@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { apiClient } from '@/lib/api';
 
 export interface DashboardSettings {
     excludedCategoryIds: number[];
@@ -10,52 +11,89 @@ interface SettingsContextType {
     settings: DashboardSettings;
     updateSettings: (settings: Partial<DashboardSettings>) => void;
     resetSettings: () => void;
+    isLoading: boolean;
 }
+
+const SETTINGS_KEY = 'dashboard_settings';
 
 const defaultSettings: DashboardSettings = {
     excludedCategoryIds: [],
     excludedRecipientIds: [],
-    excludeHiddenCategories: true, // Default to excluding hidden categories
+    excludeHiddenCategories: true,
 };
-
-const SETTINGS_STORAGE_KEY = 'vaultVoyager_dashboardSettings';
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [settings, setSettings] = useState<DashboardSettings>(() => {
-        // Load settings from localStorage on initialization
-        try {
-            const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                return { ...defaultSettings, ...parsed };
-            }
-        } catch (error) {
-            console.error('Failed to load settings from localStorage:', error);
-        }
-        return defaultSettings;
-    });
+    const [settings, setSettings] = useState<DashboardSettings>(defaultSettings);
+    const [isLoading, setIsLoading] = useState(true);
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Persist settings to localStorage whenever they change
+    // Load settings from database on mount
     useEffect(() => {
-        try {
-            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        } catch (error) {
-            console.error('Failed to save settings to localStorage:', error);
+        let cancelled = false;
+
+        async function load() {
+            try {
+                const result = await apiClient.getSetting(SETTINGS_KEY);
+                if (!cancelled && result?.value) {
+                    setSettings({ ...defaultSettings, ...result.value });
+                }
+            } catch {
+                // Setting not found or backend unreachable — use defaults
+                // Try localStorage as fallback for migration
+                try {
+                    const stored = localStorage.getItem('vaultVoyager_dashboardSettings');
+                    if (!cancelled && stored) {
+                        const parsed = JSON.parse(stored);
+                        setSettings({ ...defaultSettings, ...parsed });
+                        // Migrate to database
+                        apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => {});
+                        localStorage.removeItem('vaultVoyager_dashboardSettings');
+                    }
+                } catch {
+                    // ignore
+                }
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
         }
-    }, [settings]);
 
-    const updateSettings = (updates: Partial<DashboardSettings>) => {
+        load();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Debounced save to database whenever settings change (skip initial load)
+    const isFirstRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        if (isLoading) return;
+
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+            apiClient.saveSetting(SETTINGS_KEY, settings).catch((err) => {
+                console.error('Failed to save settings to database:', err);
+            });
+        }, 500);
+
+        return () => {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        };
+    }, [settings, isLoading]);
+
+    const updateSettings = useCallback((updates: Partial<DashboardSettings>) => {
         setSettings((prev) => ({ ...prev, ...updates }));
-    };
+    }, []);
 
-    const resetSettings = () => {
+    const resetSettings = useCallback(() => {
         setSettings(defaultSettings);
-    };
+    }, []);
 
     return (
-        <SettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+        <SettingsContext.Provider value={{ settings, updateSettings, resetSettings, isLoading }}>
             {children}
         </SettingsContext.Provider>
     );
