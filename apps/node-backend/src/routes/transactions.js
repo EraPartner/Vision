@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import transactionRepository from '../repositories/transactionRepository.js';
 import { logger } from '../config/logger.js';
+import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
 
 const router = Router();
 
@@ -122,7 +123,7 @@ router.get('/export/csv', async (req, res) => {
 });
 
 // GET /api/transactions/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateIdParam, async (req, res) => {
   try {
     const transaction = await transactionRepository.getById(parseInt(req.params.id, 10));
     if (!transaction) {
@@ -166,7 +167,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/transactions/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const fields = { ...req.body };
@@ -195,7 +196,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/transactions/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const deleted = await transactionRepository.hardDelete(id);

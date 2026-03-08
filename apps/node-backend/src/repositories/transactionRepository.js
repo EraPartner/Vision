@@ -5,6 +5,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { sanitizeUpdateFields } from '../middleware/validation.js';
 
 export const transactionRepository = {
   /**
@@ -206,15 +207,17 @@ export const transactionRepository = {
    * Update a transaction.
    */
   async update(id, fields) {
+    // Sanitize field names to prevent SQL injection via column names
+    const sanitized = sanitizeUpdateFields('transactions', fields);
     const setClauses = [];
     const params = [];
     let paramIdx = 1;
 
-    for (const [key, value] of Object.entries(fields)) {
+    for (const [key, value] of Object.entries(sanitized)) {
       if (value === undefined) continue;
       // Map frontend field names to DB columns
       const dbCol = key === 'transaction_date' ? 'date' : key;
-      setClauses.push(`${dbCol} = $${paramIdx++}`);
+      setClauses.push(`"${dbCol}" = $${paramIdx++}`);
       params.push(value);
     }
 

@@ -86,11 +86,11 @@ export function AddTransactionDialog() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_bank">Bank Account</Label>
-                            <Input id="tx_bank" placeholder="e.g. Main Checking" value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
+                            <Input id="tx_bank" placeholder="e.g. Main Checking" maxLength={100} value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_currency">Currency</Label>
-                            <Input id="tx_currency" placeholder="EUR" value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
+                            <Input id="tx_currency" placeholder="EUR" maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
                         </div>
                     </div>
 
@@ -120,12 +120,12 @@ export function AddTransactionDialog() {
 
                     <div className="space-y-2">
                         <Label htmlFor="tx_memo">Description / Memo</Label>
-                        <Input id="tx_memo" placeholder="Transaction description" value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
+                        <Input id="tx_memo" placeholder="Transaction description" maxLength={500} value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="tx_comment">Comment (optional)</Label>
-                        <Textarea id="tx_comment" placeholder="Additional notes..." value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
+                        <Textarea id="tx_comment" placeholder="Additional notes..." maxLength={1000} value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
                     </div>
 
                     <div className="flex justify-end gap-2">
