@@ -324,6 +324,30 @@ class ApiClient {
         return response.json();
     }
 
+    // ==================== Settings Methods ====================
+
+    async getSettings(): Promise<Record<string, any>> {
+        return this.request('/api/settings');
+    }
+
+    async getSetting(key: string): Promise<{ key: string; value: any }> {
+        return this.request(`/api/settings/${encodeURIComponent(key)}`);
+    }
+
+    async saveSetting(key: string, value: any): Promise<{ key: string; value: any }> {
+        return this.request(`/api/settings/${encodeURIComponent(key)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ value }),
+        });
+    }
+
+    async saveSettingsBulk(settings: Record<string, any>): Promise<{ saved: number }> {
+        return this.request('/api/settings', {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
+    }
+
     // ==================== Info/Statistics Methods ====================
 
     async getStatistics(): Promise<{
