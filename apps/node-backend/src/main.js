@@ -10,6 +10,7 @@ import cors from 'cors';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
+import { initializeSchema } from './database/schemaInit.js';
 import { warmCache as warmExchangeRateCache } from './services/currencyConversionService.js';
 
 // Import route modules
