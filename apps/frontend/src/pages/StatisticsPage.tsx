@@ -4,16 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   Area, AreaChart,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Filter, FilterX } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
@@ -62,46 +59,6 @@ function formatPeriodShort(period: string) {
   }
 }
 
-// ─── Exclusion Toggle Button ──────────────────────────────
-function ExclusionToggle({
-  graphKey,
-  isFiltered,
-  onToggle,
-  exclusionsApply,
-}: {
-  graphKey: string;
-  isFiltered: boolean;
-  onToggle: (key: string) => void;
-  exclusionsApply: boolean;
-}) {
-  return (
-    <TooltipProvider>
-      <UITooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={isFiltered && exclusionsApply ? "default" : "outline"}
-            size="sm"
-            className={`h-8 gap-2 text-xs ml-4 font-medium transition-colors ${isFiltered && exclusionsApply ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'hover:bg-muted'}`}
-            onClick={() => onToggle(graphKey)}
-            disabled={!exclusionsApply}
-          >
-            {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
-            {exclusionsApply
-              ? (isFiltered ? "Filters Active" : "Filters Ignored")
-              : "No exclusions set"}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {!exclusionsApply
-            ? "No exclusions configured in settings"
-            : isFiltered
-              ? "Exclusions applied — click to show all data"
-              : "Showing all data — click to apply exclusions"}
-        </TooltipContent>
-      </UITooltip>
-    </TooltipProvider>
-  );
-}
 
 // ─── Summary Cards ────────────────────────────────────────
 function SummaryCards({ data }: { data: StatisticsData }) {

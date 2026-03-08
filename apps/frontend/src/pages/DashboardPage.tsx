@@ -1,21 +1,39 @@
-import {StatCard} from "@/components/dashboard/StatCard";
-import {MonthlyTrendsChart} from "@/components/dashboard/MonthlyTrendsChart";
-import {CashFlowComparisonChart} from "@/components/dashboard/CashFlowComparisonChart";
-import {CategoryPieChart} from "@/components/dashboard/CategoryPieChart";
-import {BankBalancesWidget} from "@/components/dashboard/BankBalancesWidget";
-import {DataTable} from "@/components/shared/DataTable";
-import {Badge} from "@/components/ui/badge";
-import {ArrowUpRight, DollarSign, Receipt, TrendingDown, Loader2} from "lucide-react";
-import {useTransactions} from "@/hooks/useTransactions";
-import {useFilteredDashboardStats} from "@/hooks/useFilteredDashboardStats";
-import {useSettings} from "@/contexts/SettingsContext";
-import {useQuery} from "@tanstack/react-query";
-import {apiClient} from "@/lib/api";
-import {getCategoryColor} from "@/utils/categoryColors";
-import {formatCurrency} from "@/utils/currency";
+import { useState, useCallback } from "react";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
+import { CashFlowComparisonChart } from "@/components/dashboard/CashFlowComparisonChart";
+import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
+import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
+import { DataTable } from "@/components/shared/DataTable";
+import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowUpRight, DollarSign, Receipt, TrendingDown, Loader2 } from "lucide-react";
+import { useTransactions } from "@/hooks/useTransactions";
+import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
+import { useSettings } from "@/contexts/SettingsContext";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
+import { getCategoryColor } from "@/utils/categoryColors";
+import { formatCurrency } from "@/utils/currency";
+
+type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
     const { settings } = useSettings();
+    
+    // Per-graph exclusion override state
+    const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
+    const toggleGraphExclusion = useCallback((graphKey: string) => {
+        setGraphExclusions(prev => ({
+            ...prev,
+            [graphKey]: !(prev[graphKey] ?? true),
+        }));
+    }, []);
+    
+    // Check if exclusions should apply to dashboard
+    const exclusionsApply = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard') && 
+        (settings.excludedCategoryIds.length > 0 || settings.excludedRecipientIds.length > 0 || settings.excludeHiddenCategories);
     
     // Fetch real-time statistics from /api/info endpoints with applied filters
     const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
@@ -32,6 +50,9 @@ export default function DashboardPage() {
     
     // Build complete excluded category IDs list (including hidden categories)
     const allExcludedCategoryIds = (() => {
+        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
+            return [];
+        }
         const ids = [...settings.excludedCategoryIds];
         if (settings.excludeHiddenCategories && categoriesData) {
             const hiddenIds = categoriesData.items
@@ -41,29 +62,64 @@ export default function DashboardPage() {
         }
         return [...new Set(ids)];
     })();
+    
+    // Recipient exclusions
+    const excludedRecipientIds = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
+        ? settings.excludedRecipientIds
+        : [];
 
-    // Fetch monthly summary for chart (6 months) — pass excluded categories
-    const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
-        queryKey: ['monthlySummary', allExcludedCategoryIds],
-        queryFn: () => apiClient.getMonthlyFinancialSummary({
+    // Helper to get exclusion params for a specific graph
+    const getExclusionParams = (graphKey: string) => {
+        const useExclusions = graphExclusions[graphKey] ?? true;
+        if (!useExclusions || !exclusionsApply) {
+            return { excluded_category_ids: undefined, excluded_recipient_ids: undefined };
+        }
+        return {
             excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
-        }),
+            excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
+        };
+    };
+
+    // Fetch monthly summary for chart (6 months) — with per-graph exclusion support
+    const monthlyExclusions = getExclusionParams('monthlyTrends');
+    const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
+        queryKey: ['monthlySummary', monthlyExclusions],
+        queryFn: () => apiClient.getMonthlyFinancialSummary(monthlyExclusions),
         staleTime: 30000,
     });
-
-    // Fetch cashflow comparison data with excluded categories
-    const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
-        queryKey: ['cashflowComparison', allExcludedCategoryIds],
-        queryFn: () => apiClient.getCashflowComparison({
-            excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
-        }),
+    
+    // Fetch unfiltered monthly summary for toggle comparison
+    const { data: monthlySummaryUnfiltered } = useQuery({
+        queryKey: ['monthlySummary', 'unfiltered'],
+        queryFn: () => apiClient.getMonthlyFinancialSummary({}),
         staleTime: 30000,
+        enabled: exclusionsApply, // Only fetch if we need comparison
+    });
+
+    // Fetch cashflow comparison data with per-graph exclusion support
+    const cashflowExclusions = getExclusionParams('cashflowComparison');
+    const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
+        queryKey: ['cashflowComparison', cashflowExclusions],
+        queryFn: () => apiClient.getCashflowComparison(cashflowExclusions),
+        staleTime: 30000,
+    });
+    
+    // Fetch unfiltered cashflow for toggle comparison
+    const { data: cashflowDataUnfiltered } = useQuery({
+        queryKey: ['cashflowComparison', 'unfiltered'],
+        queryFn: () => apiClient.getCashflowComparison({}),
+        staleTime: 30000,
+        enabled: exclusionsApply,
     });
 
     const allTransactions = transactionsData?.items || [];
     
     // Apply settings filters to transactions
     const transactions = (() => {
+        if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
+            return allTransactions;
+        }
+        
         // Build hidden category IDs list if needed
         let hiddenCategoryIds: number[] = [];
         if (settings.excludeHiddenCategories && categoriesData) {
@@ -73,22 +129,22 @@ export default function DashboardPage() {
         }
 
         // Build complete exclusion list
-        const excludedCategoryIds = new Set([
+        const excludedCategoryIdSet = new Set([
             ...settings.excludedCategoryIds,
             ...hiddenCategoryIds,
         ]);
 
-        const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+        const excludedRecipientIdSet = new Set(settings.excludedRecipientIds);
 
         // Filter transactions
         return allTransactions.filter((t) => {
             // Exclude if category is in exclusion list
-            if (t.category_id && excludedCategoryIds.has(t.category_id)) {
+            if (t.category_id && excludedCategoryIdSet.has(t.category_id)) {
                 return false;
             }
             
             // Exclude if recipient is in exclusion list
-            if (t.recipient_id && excludedRecipientIds.has(t.recipient_id)) {
+            if (t.recipient_id && excludedRecipientIdSet.has(t.recipient_id)) {
                 return false;
             }
             
@@ -102,14 +158,34 @@ export default function DashboardPage() {
     const totalIncome = statsData?.monthlyIncome ?? 0;
     const netBalance = statsData?.netBalance ?? 0;
 
-    // Use API monthly data for chart (all 6 months)
-    const monthlyData = monthlySummary?.months || [];
+    // Get chart data based on per-graph toggle state
+    const getMonthlyData = () => {
+        const useExclusions = graphExclusions['monthlyTrends'] ?? true;
+        if (useExclusions && exclusionsApply) {
+            return monthlySummary?.months || [];
+        }
+        return monthlySummaryUnfiltered?.months || monthlySummary?.months || [];
+    };
+    
+    const getCashflowData = () => {
+        const useExclusions = graphExclusions['cashflowComparison'] ?? true;
+        if (useExclusions && exclusionsApply) {
+            return cashflowData;
+        }
+        return cashflowDataUnfiltered || cashflowData;
+    };
 
-    // Calculate category breakdown from transactions
+    const monthlyData = getMonthlyData();
+    const effectiveCashflowData = getCashflowData();
+
+    // Calculate category breakdown from transactions (with per-graph toggle)
     const categoryBreakdown = (() => {
+        const useExclusions = graphExclusions['categoryPie'] ?? true;
+        const txToUse = (useExclusions && exclusionsApply) ? transactions : allTransactions;
+        
         const categoryMap = new Map<string, { name: string; count: number }>();
         
-        transactions.forEach(t => {
+        txToUse.forEach(t => {
             const key = t.category_name || 'Uncategorized';
             const name = t.category_name || 'Uncategorized';
             
@@ -252,19 +328,82 @@ export default function DashboardPage() {
 
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
-                {monthlyData.length > 0 && <MonthlyTrendsChart data={monthlyData}/>}
-                <CategoryPieChart data={categoryData}/>
+                {monthlyData.length > 0 && (
+                    <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center shadow-sm text-blue-600 dark:text-blue-400">
+                                    <TrendingDown className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl">6-Month Trends</CardTitle>
+                                    <CardDescription className="text-base">Income vs Spending over the last 6 months</CardDescription>
+                                </div>
+                            </div>
+                            <ExclusionToggle
+                                graphKey="monthlyTrends"
+                                isFiltered={graphExclusions['monthlyTrends'] ?? true}
+                                onToggle={toggleGraphExclusion}
+                                exclusionsApply={exclusionsApply}
+                            />
+                        </CardHeader>
+                        <CardContent>
+                            <MonthlyTrendsChart data={monthlyData} embedded />
+                        </CardContent>
+                    </Card>
+                )}
+                <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="text-xl">Category Distribution</CardTitle>
+                            <CardDescription className="text-base">Transaction breakdown by category</CardDescription>
+                        </div>
+                        <ExclusionToggle
+                            graphKey="categoryPie"
+                            isFiltered={graphExclusions['categoryPie'] ?? true}
+                            onToggle={toggleGraphExclusion}
+                            exclusionsApply={exclusionsApply}
+                        />
+                    </CardHeader>
+                    <CardContent>
+                        <CategoryPieChart data={categoryData} embedded />
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Cash Flow Comparison */}
-            {cashflowData && (
-                <CashFlowComparisonChart
-                    withoutPlanned={cashflowData.without_planned}
-                    withPlanned={cashflowData.with_planned}
-                    currentDay={cashflowData.current_day}
-                    month={cashflowData.month}
-                    year={cashflowData.year}
-                />
+            {effectiveCashflowData && (
+                <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm lg:col-span-2">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
+                                <DollarSign className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-xl">Cash Flow Comparison</CardTitle>
+                                <CardDescription className="text-base">
+                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })} vs 6-month average
+                                </CardDescription>
+                            </div>
+                        </div>
+                        <ExclusionToggle
+                            graphKey="cashflowComparison"
+                            isFiltered={graphExclusions['cashflowComparison'] ?? true}
+                            onToggle={toggleGraphExclusion}
+                            exclusionsApply={exclusionsApply}
+                        />
+                    </CardHeader>
+                    <CardContent>
+                        <CashFlowComparisonChart
+                            withoutPlanned={effectiveCashflowData.without_planned}
+                            withPlanned={effectiveCashflowData.with_planned}
+                            currentDay={effectiveCashflowData.current_day}
+                            month={effectiveCashflowData.month}
+                            year={effectiveCashflowData.year}
+                            embedded
+                        />
+                    </CardContent>
+                </Card>
             )}
 
             {/* Recent transactions */}
