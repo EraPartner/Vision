@@ -790,5 +790,23 @@ export interface MarketNewsArticle {
     relatedSymbols: string[];
 }
 
+export interface NetWorthSnapshot {
+    month: string;
+    liquid: number;
+    investments: number;
+    netWorth: number;
+}
+
+export interface NetWorthResponse {
+    current: {
+        liquid: number;
+        investments: number;
+        netWorth: number;
+    };
+    monthlyChange: number;
+    monthlyChangePercent: number;
+    snapshots: NetWorthSnapshot[];
+}
+
 export const apiClient = new ApiClient();
 export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction };
