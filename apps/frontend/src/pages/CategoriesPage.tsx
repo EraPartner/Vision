@@ -18,6 +18,7 @@ export default function CategoriesPage() {
     });
     const updateMutation = useUpdateCategory();
     const deleteMutation = useDeleteCategory();
+    const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const grouped = useMemo(() => {
         if (!data?.items) return [];
