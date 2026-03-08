@@ -304,7 +304,13 @@ export default function PlannedPaymentsPage() {
             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={async (e) => { 
               e.stopPropagation(); 
-              if (confirm(`Delete planned payment "${row.name}"?`)) {
+              const ok = await confirm({
+                title: "Delete Planned Payment",
+                description: `Are you sure you want to delete planned payment "${row.name}"? This action cannot be undone.`,
+                confirmLabel: "Delete",
+                variant: "destructive",
+              });
+              if (ok) {
                 setActionLoading(true);
                 try {
                   await deletePayment(row.id);
