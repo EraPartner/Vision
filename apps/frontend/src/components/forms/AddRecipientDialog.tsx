@@ -44,7 +44,7 @@ export function AddRecipientDialog() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Name</Label>
-                        <Input id="name" placeholder="Recipient name" value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
+                        <Input id="name" placeholder="Recipient name" maxLength={200} value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="notes">Notes (optional)</Label>
