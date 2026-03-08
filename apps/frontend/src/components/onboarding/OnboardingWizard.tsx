@@ -18,24 +18,40 @@ import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const ONBOARDING_KEY = "vaultVoyager_onboardingComplete";
+const ONBOARDING_KEY = "onboarding_complete";
 
 export function useOnboarding() {
-    const [isComplete, setIsComplete] = useState(() => {
-        return localStorage.getItem(ONBOARDING_KEY) === "true";
-    });
+    const [isComplete, setIsComplete] = useState(true); // Default true to avoid flash
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Load from database on mount
+    useEffect(() => {
+        let cancelled = false;
+        apiClient.getSetting(ONBOARDING_KEY)
+            .then((result) => {
+                if (!cancelled) setIsComplete(result?.value === true);
+            })
+            .catch(() => {
+                // Setting not found = first run = not complete
+                if (!cancelled) setIsComplete(false);
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, []);
 
     const complete = useCallback(() => {
-        localStorage.setItem(ONBOARDING_KEY, "true");
         setIsComplete(true);
+        apiClient.saveSetting(ONBOARDING_KEY, true).catch(() => {});
     }, []);
 
     const reset = useCallback(() => {
-        localStorage.removeItem(ONBOARDING_KEY);
         setIsComplete(false);
+        apiClient.saveSetting(ONBOARDING_KEY, false).catch(() => {});
     }, []);
 
-    return { isComplete, complete, reset };
+    return { isComplete, isLoading, complete, reset };
 }
 
 interface OnboardingWizardProps {

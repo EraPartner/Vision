@@ -30,24 +30,32 @@ interface Props {
 export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(true);
-    const [dismissedIds, setDismissedIds] = useState<Set<number>>(() => {
-        try {
-            const stored = localStorage.getItem("dismissed-recurring-patterns");
-            return stored ? new Set(JSON.parse(stored)) : new Set();
-        } catch { return new Set(); }
-    });
+    const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+    const [dismissedLoaded, setDismissedLoaded] = useState(false);
+
+    // Load dismissed IDs from database settings
+    useEffect(() => {
+        apiClient.getSetting("dismissed_recurring_patterns")
+            .then((result) => {
+                if (result?.value && Array.isArray(result.value)) {
+                    setDismissedIds(new Set(result.value));
+                }
+            })
+            .catch(() => {})
+            .finally(() => setDismissedLoaded(true));
+    }, []);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["recurringPatterns"],
         queryFn: () => apiClient.getRecurringPatterns(),
-        staleTime: 5 * 60_000, // Cache 5 minutes
+        staleTime: 5 * 60_000,
     });
 
     const dismiss = (recipientId: number) => {
         const next = new Set(dismissedIds);
         next.add(recipientId);
         setDismissedIds(next);
-        localStorage.setItem("dismissed-recurring-patterns", JSON.stringify([...next]));
+        apiClient.saveSetting("dismissed_recurring_patterns", [...next]).catch(() => {});
     };
 
     const handleCreatePlanned = async (pattern: RecurringPattern) => {
