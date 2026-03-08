@@ -10,6 +10,7 @@ import {cn} from "@/lib/utils";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 export default function CategoriesPage() {
+    const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
