@@ -642,6 +642,12 @@ class ApiClient {
         return this.request(`/api/market/news${query ? `?${query}` : ''}`);
     }
 
+    // ==================== Net Worth ====================
+
+    async getNetWorth(): Promise<NetWorthResponse> {
+        return this.request('/api/info/net-worth');
+    }
+
     // ==================== Admin / Maintenance ====================
 
     async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
