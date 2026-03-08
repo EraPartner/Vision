@@ -66,18 +66,21 @@ router.get('/export/csv', async (req, res) => {
     const { start_date, end_date, bank_account, category_id } = req.query;
 
     let sql = `
-      SELECT t.date, t.bank_account, r.name AS recipient_name, t.memo,
+      SELECT t.date, t.bank_account, COALESCE(pr.name, r.name) AS recipient_name, t.memo,
              t.amount, t.currency, t.balance,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                ELSE ''
              END AS category_name,
              t.comment
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
       WHERE t.is_active = true
     `;
     const params = [];
