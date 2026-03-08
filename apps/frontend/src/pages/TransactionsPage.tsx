@@ -1,24 +1,28 @@
-import {useState} from "react";
-import {DataTable} from "@/components/shared/DataTable";
-import {Badge} from "@/components/ui/badge";
-import {Button} from "@/components/ui/button";
-import {HoverCard, HoverCardContent, HoverCardTrigger} from "@/components/ui/hover-card";
-import {Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info} from "lucide-react";
-import {useDeleteTransaction, useTransactions, useUpdateTransaction} from "@/hooks/useTransactions";
-import {getCategoryColor} from "@/utils/categoryColors";
-import {AddTransactionDialog} from "@/components/forms/AddTransactionDialog";
-import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
-import {RecipientCombobox} from "@/components/shared/RecipientCombobox";
-import {useConfirmDialog} from "@/hooks/useConfirmDialog";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info } from "lucide-react";
+import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
+import { getCategoryColor } from "@/utils/categoryColors";
+import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
+import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
+import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
+import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { apiClient } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 type TableTransaction = {
     id: number;
     date: string;
     memo: string;
     category: string;
+    categoryId?: number;
     recipient: string;
+    recipientId?: number;
     bank: string;
     amount: number;
     currency: string;
@@ -28,18 +32,62 @@ type TableTransaction = {
 };
 
 export default function TransactionsPage() {
-    const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
-    const { data, isLoading, error } = useTransactions({ 
-        limit: PAGE_SIZE, 
-        offset: page * PAGE_SIZE, 
-        active: !showAll,
-        search: search || undefined,
-    });
+    const [allItems, setAllItems] = useState<any[]>([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const offsetRef = useRef(0);
+    const hasMoreRef = useRef(true);
+    const loadingRef = useRef(false);
+
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
+
+    // Initial load
+    const { data: initialData, isLoading, error } = useQuery({
+        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined }],
+        queryFn: () => apiClient.getTransactions({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined }),
+        staleTime: 30_000,
+    });
+
+    // Reset accumulated data when filters change
+    useEffect(() => {
+        if (initialData) {
+            setAllItems(initialData.items);
+            setTotalItems(initialData.total ?? initialData.items.length);
+            offsetRef.current = initialData.items.length;
+            hasMoreRef.current = initialData.items.length < (initialData.total ?? initialData.items.length);
+        }
+    }, [initialData]);
+
+    const loadMore = useCallback(async () => {
+        if (loadingRef.current || !hasMoreRef.current) return;
+        loadingRef.current = true;
+        setIsFetchingMore(true);
+        try {
+            const result = await apiClient.getTransactions({
+                limit: PAGE_SIZE,
+                offset: offsetRef.current,
+                active: !showAll,
+                search: search || undefined,
+            });
+            setAllItems(prev => {
+                const existingIds = new Set(prev.map((t: any) => t.id));
+                const newItems = result.items.filter((t: any) => !existingIds.has(t.id));
+                return [...prev, ...newItems];
+            });
+            offsetRef.current += result.items.length;
+            hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
+            setTotalItems(result.total ?? result.items.length);
+        } catch (err) {
+            console.error('Failed to load more transactions:', err);
+        } finally {
+            setIsFetchingMore(false);
+            loadingRef.current = false;
+        }
+    }, [showAll, search]);
 
     const handleDelete = async (id: number, description?: string) => {
         const ok = await confirm({
@@ -52,16 +100,12 @@ export default function TransactionsPage() {
     };
 
     const toggleActive = (id: number, currentActive: boolean) => {
-        updateMutation.mutate({
-            id,
-            data: { is_active: !currentActive },
-        });
+        updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
 
     const handleUpdate = (idx: number, updated: TableTransaction) => {
-        const originalTransaction = data?.items[idx];
+        const originalTransaction = allItems[idx];
         if (!originalTransaction) return;
-
         updateMutation.mutate({
             id: originalTransaction.id,
             data: {
@@ -79,7 +123,7 @@ export default function TransactionsPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
@@ -95,10 +139,7 @@ export default function TransactionsPage() {
         );
     }
 
-    const totalItems = data?.total ?? data?.items?.length ?? 0;
-
-    // Map backend data to table format
-    const transactions: TableTransaction[] = data?.items.map((t: any) => ({
+    const transactions: TableTransaction[] = allItems.map((t: any) => ({
         id: t.id,
         date: t.transaction_date || t.date || '',
         memo: t.memo || '',
@@ -112,7 +153,7 @@ export default function TransactionsPage() {
         balance: t.balance,
         comment: t.comment || '',
         is_active: t.is_active ?? true,
-    })) || [];
+    }));
 
     const columns = [
         {
@@ -127,8 +168,8 @@ export default function TransactionsPage() {
             ),
         },
         {
-            key: "memo", 
-            header: "Description", 
+            key: "memo",
+            header: "Description",
             editable: true,
             render: (row: TableTransaction) => (
                 <span className={row.is_active ? 'text-foreground' : 'text-muted-foreground line-through'}>
@@ -142,16 +183,13 @@ export default function TransactionsPage() {
             editable: false,
             render: (row: TableTransaction, isEditing: boolean) => {
                 if (isEditing) {
-                    const originalTransaction = data?.items.find((t: any) => t.id === row.id);
+                    const original = allItems.find((t: any) => t.id === row.id);
                     return (
                         <CategoryCombobox
-                            value={(row as any).categoryId ?? originalTransaction?.category_id ?? null}
+                            value={row.categoryId ?? original?.category_id ?? null}
                             onSelect={(catId) => {
-                                if (!originalTransaction) return;
-                                updateMutation.mutate({
-                                    id: originalTransaction.id,
-                                    data: {category_id: catId ?? undefined},
-                                });
+                                if (!original) return;
+                                updateMutation.mutate({ id: original.id, data: { category_id: catId ?? undefined } });
                             }}
                             className="w-full"
                         />
@@ -170,16 +208,13 @@ export default function TransactionsPage() {
             editable: false,
             render: (row: TableTransaction, isEditing: boolean) => {
                 if (isEditing) {
-                    const originalTransaction = data?.items.find((t: any) => t.id === row.id);
+                    const original = allItems.find((t: any) => t.id === row.id);
                     return (
                         <RecipientCombobox
-                            value={(row as any).recipientId ?? originalTransaction?.recipient_id ?? null}
+                            value={row.recipientId ?? original?.recipient_id ?? null}
                             onSelect={(recipientId) => {
-                                if (!originalTransaction) return;
-                                updateMutation.mutate({
-                                    id: originalTransaction.id,
-                                    data: {recipient_id: recipientId ?? undefined},
-                                });
+                                if (!original) return;
+                                updateMutation.mutate({ id: original.id, data: { recipient_id: recipientId ?? undefined } });
                             }}
                             className="w-full"
                         />
@@ -191,6 +226,19 @@ export default function TransactionsPage() {
             },
         },
         {
+            key: "amount",
+            header: "Amount",
+            editable: true,
+            type: "number" as const,
+            render: (row: TableTransaction) => (
+                <span className={`font-mono font-medium whitespace-nowrap ${
+                    row.amount >= 0 ? 'text-accent' : 'text-destructive'
+                } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
+                    {row.amount >= 0 ? '+' : ''}{row.amount.toFixed(2)} {row.currency}
+                </span>
+            ),
+        },
+        {
             key: "info",
             header: "Info",
             editable: false,
@@ -198,24 +246,24 @@ export default function TransactionsPage() {
             filterable: false,
             render: (row: TableTransaction) => {
                 const items = [
-                    {label: "Bank Account", value: row.bank},
-                    {label: "Currency", value: row.currency},
-                    {label: "Balance", value: row.balance != null
-                        ? new Intl.NumberFormat('en-US', {style: 'currency', currency: row.currency}).format(row.balance)
-                        : undefined},
-                    {label: "Description", value: row.memo},
-                    {label: "Comment", value: row.comment},
+                    { label: "Bank Account", value: row.bank },
+                    { label: "Currency", value: row.currency },
+                    { label: "Balance", value: row.balance != null
+                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency }).format(row.balance)
+                        : undefined },
+                    { label: "Description", value: row.memo },
+                    { label: "Comment", value: row.comment },
                 ].filter(i => i.value);
 
                 return (
                     <HoverCard openDelay={150} closeDelay={100}>
                         <HoverCardTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                                <Info className="h-4 w-4"/>
+                                <Info className="h-4 w-4" />
                             </Button>
                         </HoverCardTrigger>
                         <HoverCardContent side="left" className="w-64 text-sm space-y-1.5 p-3">
-                            {items.map(({label, value}) => (
+                            {items.map(({ label, value }) => (
                                 <div key={label} className="flex justify-between gap-2">
                                     <span className="text-muted-foreground text-xs">{label}</span>
                                     <span className="text-foreground text-xs font-medium text-right truncate max-w-[160px]">{value}</span>
@@ -254,21 +302,21 @@ export default function TransactionsPage() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(row.id, row.memo || row.recipient_name)}
+                    onClick={() => handleDelete(row.id, row.memo || row.recipient)}
                     disabled={deleteMutation.isPending}
                 >
-                    <Trash2 className="h-4 w-4"/>
+                    <Trash2 className="h-4 w-4" />
                 </Button>
             ),
         },
     ];
 
-    const actions = (
+    const tableActions = (
         <div className="flex gap-2">
             <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => { setShowAll(!showAll); }}
+                onClick={() => setShowAll(!showAll)}
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -280,28 +328,29 @@ export default function TransactionsPage() {
 
     return (
         <>
-        <div className="space-y-8 animate-in">
-            <div>
-                <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
-                <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
-            </div>
+            <div className="space-y-8 animate-in">
+                <div>
+                    <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
+                    <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
+                </div>
 
-            <DataTable
-                title="All Transactions"
-                subtitle={`${totalItems} transactions`}
-                columns={columns}
-                data={transactions}
-                onRowUpdate={handleUpdate}
-                emptyMessage="No transactions found."
-                page={page}
-                pageSize={PAGE_SIZE}
-                totalItems={totalItems}
-                onPageChange={setPage}
-                onSearchChange={setSearch}
-                actions={actions}
-            />
-        </div>
-        <ConfirmDialog />
-    </>
+                <VirtualDataTable
+                    title="All Transactions"
+                    subtitle={`${totalItems} transactions`}
+                    columns={columns}
+                    data={transactions}
+                    onRowUpdate={handleUpdate}
+                    emptyMessage="No transactions found."
+                    totalItems={totalItems}
+                    isFetchingMore={isFetchingMore}
+                    onLoadMore={loadMore}
+                    hasMore={hasMoreRef.current}
+                    onSearchChange={setSearch}
+                    actions={tableActions}
+                    maxHeight={700}
+                />
+            </div>
+            <ConfirmDialog />
+        </>
     );
 }
