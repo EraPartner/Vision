@@ -394,12 +394,78 @@ function parseGenericCSV(filePath, config) {
   return transactions;
 }
 
+// ─── Vault Voyager (self-import) Adapter ───
+
+function parseVaultVoyager(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const records = parse(content, {
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    trim: true,
+  });
+
+  const transactions = [];
+
+  for (const row of records) {
+    try {
+      const dateStr = (row['Date'] || '').trim();
+      if (!dateStr) continue;
+
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) continue;
+
+      const amountStr = (row['Amount'] || '').replace(/[€$£,\s]/g, '').trim();
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount)) continue;
+
+      const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VAULT VOYAGER').trim());
+      const recipientRaw = (row['Recipient'] || '').trim();
+      const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
+      const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
+      const currency = (row['Currency'] || 'EUR').trim().toUpperCase();
+      const balanceStr = (row['Balance'] || '').trim();
+      const balance = balanceStr ? parseFloat(balanceStr) : null;
+      const category = (row['Category'] || '').trim();
+      const comment = (row['Comment'] || '').trim() || null;
+
+      const commentParts = [];
+      if (category) commentParts.push(`Imported Category: ${category}`);
+      if (comment) commentParts.push(comment);
+      const fullComment = commentParts.length ? commentParts.join(' | ') : null;
+
+      const rawData = Object.values(row).join('|');
+
+      transactions.push({
+        date,
+        bankAccount,
+        recipient,
+        memo,
+        amount,
+        currency,
+        balance: balance !== null && !isNaN(balance) ? balance : null,
+        recipientAccount: null,
+        recipientAddress: null,
+        recipientBankName: null,
+        comment: fullComment,
+        rawData,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  logger.info(`Vault Voyager CSV parsed: ${transactions.length} transactions`);
+  return transactions;
+}
+
 // ─── Factory ───
 
 const BANK_CONFIGURATIONS = {
   belfius: { bankName: 'Belfius', parser: parseBelfius },
   revolut: { bankName: 'Revolut', parser: parseRevolut },
   kbc: { bankName: 'KBC', parser: parseKBC },
+  vault_voyager: { bankName: 'Vault Voyager', parser: parseVaultVoyager },
 };
 
 export function createAdapter(bankName, customConfig = null) {
