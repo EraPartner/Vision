@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
       limit = 50, offset = 0,
       start_date, end_date, bank_account,
       category_id, recipient_id,
-      is_recurring, is_executed, active = 'true',
+      is_recurring, is_executed, active = 'true', search,
     } = req.query;
 
     const opts = {
@@ -31,6 +31,7 @@ router.get('/', async (req, res) => {
       recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
       isRecurring: is_recurring != null ? is_recurring === 'true' : null,
       isExecuted: is_executed != null ? is_executed === 'true' : null,
+      search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
     };
 
