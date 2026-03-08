@@ -126,6 +126,18 @@ router.post('/:id/execute', async (req, res) => {
       is_executed: !existing.is_recurring, // For recurring, keep false
       last_executed_date: execDate,
     };
+
+    // For recurring transactions, calculate and set next planned_date
+    if (existing.is_recurring && existing.recurrence_pattern) {
+      const { calculateNextDate } = await import('../services/recurrenceService.js');
+      const baseDate = new Date(existing.planned_date);
+      const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
+      if (nextDate) {
+        updateFields.planned_date = nextDate.toISOString().split('T')[0];
+        updateFields.is_executed = false; // Reset for next occurrence
+      }
+    }
+
     const updated = await plannedTransactionRepository.update(id, updateFields);
 
     res.json(formatPlannedTransaction(updated));
