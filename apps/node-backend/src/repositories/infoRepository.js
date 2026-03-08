@@ -162,6 +162,7 @@ export const infoRepository = {
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds });
 
     // ── Fast path: read from mv_monthly_summary ──
     if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
