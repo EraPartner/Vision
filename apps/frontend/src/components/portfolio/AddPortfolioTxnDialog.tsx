@@ -74,14 +74,14 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
       date: form.date,
       amount,
       units: form.units ? parseFloat(form.units) : undefined,
-      pricePerUnit: form.pricePerUnit ? parseFloat(form.pricePerUnit) : undefined,
+      price_per_unit: form.pricePerUnit ? parseFloat(form.pricePerUnit) : undefined,
       fees: form.fees ? parseFloat(form.fees) : undefined,
       taxes: form.taxes ? parseFloat(form.taxes) : undefined,
       currency: investment.currency,
       note: form.note.trim() || undefined,
-      isRecurring: form.isRecurring,
-      recurrenceInterval: form.isRecurring ? form.recurrenceInterval : undefined,
-      recurrenceEndDate: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
+      is_recurring: form.isRecurring,
+      recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,
+      recurrence_end_date: form.isRecurring && form.recurrenceEndDate ? form.recurrenceEndDate : undefined,
     });
 
     toast.success(`${TXN_TYPE_LABELS[form.type]} recorded for ${investment.name}`);
