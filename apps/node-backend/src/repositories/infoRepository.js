@@ -492,10 +492,28 @@ export const infoRepository = {
    * expensive for this endpoint. If multi-currency accuracy is critical here,
    * this can be refactored later.
    */
-  async getCashflowComparison() {
+  async getCashflowComparison(excludedCategoryIds = []) {
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const currentDay = now.getDate();
+
+    const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    // Build category exclusion clause
+    let categoryExclusionJoin = '';
+    let categoryExclusionWhere = '';
+    const excludeParams = [];
+    if (validIds.length > 0) {
+      categoryExclusionJoin = `
+        LEFT JOIN recipients r ON t.recipient_id = r.id
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      `;
+      const placeholders = validIds.map((_, i) => `$${i + 1}`).join(', ');
+      categoryExclusionWhere = `
+        AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS DISTINCT FROM ALL(ARRAY[${placeholders}])
+      `;
+      excludeParams.push(...validIds);
+    }
 
     // --- 1. Average daily cumulative from last 6 complete months (with EUR conversion) ---
     const sqlPast = `
@@ -503,11 +521,13 @@ export const infoRepository = {
              EXTRACT(DAY FROM t.date)::int AS day_of_month,
              TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
       FROM transactions t
+      ${categoryExclusionJoin}
       WHERE t.is_active = true
         AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
         AND t.date < date_trunc('month', CURRENT_DATE)
+        ${categoryExclusionWhere}
     `;
-    const pastResult = await query(sqlPast);
+    const pastResult = await query(sqlPast, excludeParams);
 
     // Convert each row and group by month+day
     const monthDayNet = {}; // { monthKey: { day: netEur } }
@@ -550,11 +570,13 @@ export const infoRepository = {
       SELECT t.amount, t.currency, t.date,
              EXTRACT(DAY FROM t.date)::int AS day_of_month
       FROM transactions t
+      ${categoryExclusionJoin}
       WHERE t.is_active = true
         AND t.date >= date_trunc('month', CURRENT_DATE)
         AND t.date <= CURRENT_DATE
+        ${categoryExclusionWhere}
     `;
-    const currentResult = await query(sqlCurrent);
+    const currentResult = await query(sqlCurrent, excludeParams);
 
     const currentDayNet = {};
     for (const row of currentResult.rows) {
