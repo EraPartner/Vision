@@ -262,6 +262,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
       return res.status(404).json({ detail: `Transaction with ID ${id} not found` });
     }
 
+    scheduleRefresh();
     res.json(formatTransaction(updated));
   } catch (err) {
     logger.error('Error updating transaction', { error: err.message });
