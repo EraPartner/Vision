@@ -20,6 +20,7 @@ const ImportPage = lazy(() => import("./pages/ImportPage"));
 const PlannedPaymentsPage = lazy(() => import("./pages/PlannedPaymentsPage"));
 const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
 const PortfolioOverviewPage = lazy(() => import("./pages/portfolio/PortfolioOverviewPage"));
+const MarketLookupPage = lazy(() => import("./pages/MarketLookupPage"));
 const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
 const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
 const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
@@ -74,6 +75,7 @@ const App = () => {
                                                 <Route path="/import" element={<ImportPage/>}/>
                                                 {/* Portfolio */}
                                                 <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
+                                                <Route path="/portfolio/market" element={<MarketLookupPage/>}/>
                                                 <Route path="/portfolio/stocks" element={<StocksPage/>}/>
                                                 <Route path="/portfolio/crypto" element={<CryptoPage/>}/>
                                                 <Route path="/portfolio/real-estate" element={<RealEstatePage/>}/>
