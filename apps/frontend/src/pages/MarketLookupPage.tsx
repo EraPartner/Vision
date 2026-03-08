@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink,
+  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from "recharts";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
 
@@ -115,6 +117,7 @@ export default function MarketLookupPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
   const debouncedSearch = useDebounce(searchText, 300);
+  const { summaries } = usePortfolio();
 
   // Search
   const { data: searchResults, isFetching: isSearching } = useQuery({
@@ -175,6 +178,11 @@ export default function MarketLookupPage() {
 
   const quote = quoteData;
   const isPositive = (quote?.change ?? 0) >= 0;
+  
+  // Check if this asset already exists in portfolio
+  const existingInvestment = quote ? summaries.find(s => 
+    s.symbol?.toLowerCase() === quote.symbol.toLowerCase()
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -270,9 +278,17 @@ export default function MarketLookupPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>Auto-refreshes every 60s</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>Auto-refreshes every 60s</span>
+                    </div>
+                    {quote && (
+                      <AddInvestmentFromMarketDialog 
+                        quote={quote} 
+                        existingInvestment={existingInvestment}
+                      />
+                    )}
                   </div>
                 </div>
               </CardContent>
