@@ -99,13 +99,16 @@ app.get('/', (req, res) => {
 
 // ==================== Route Registration ====================
 
+// Global rate limiter
+app.use(rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' }));
+
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/recipients', recipientsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
-app.use('/api/admin', adminRouter);
-app.use('/api/import', importRouter);
+app.use('/api/admin', adminRateLimiter, adminRouter);
+app.use('/api/import', importRateLimiter, importRouter);
 
 logger.info('All route modules registered successfully');
 
