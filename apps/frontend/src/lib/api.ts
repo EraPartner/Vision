@@ -492,6 +492,7 @@ class ApiClient {
 
     async getCashflowComparison(params?: {
         excluded_category_ids?: number[];
+        excluded_recipient_ids?: number[];
     }): Promise<{
         days_in_month: number;
         current_day: number;
@@ -504,12 +505,16 @@ class ApiClient {
         if (params?.excluded_category_ids?.length) {
             params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
         }
+        if (params?.excluded_recipient_ids?.length) {
+            params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
+        }
         const q = queryParams.toString();
         return this.request(`/api/info/cashflow-comparison${q ? `?${q}` : ''}`);
     }
 
     async getMonthlyFinancialSummary(params?: {
         excluded_category_ids?: number[];
+        excluded_recipient_ids?: number[];
     }): Promise<{
         months: Array<{
             month: number;
@@ -533,6 +538,9 @@ class ApiClient {
         const queryParams = new URLSearchParams();
         if (params?.excluded_category_ids?.length) {
             params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
+        }
+        if (params?.excluded_recipient_ids?.length) {
+            params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
         }
         const q = queryParams.toString();
         return this.request(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
