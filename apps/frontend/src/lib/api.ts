@@ -236,6 +236,7 @@ class ApiClient {
         is_recurring?: boolean;
         is_executed?: boolean;
         active?: boolean;
+        search?: string;
     }): Promise<PlannedTransactionsListResponse> {
         const queryParams = new URLSearchParams();
 
