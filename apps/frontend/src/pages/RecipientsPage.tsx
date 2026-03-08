@@ -21,10 +21,12 @@ type TableRecipient = {
 export default function RecipientsPage() {
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
+    const [search, setSearch] = useState("");
     const { data, isLoading, error } = useRecipients({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-        active: !showAll,  // false = all recipients, true = active only
+        active: !showAll,
+        search: search || undefined,
     });
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
