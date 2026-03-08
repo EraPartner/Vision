@@ -675,18 +675,18 @@ export const infoRepository = {
 
   /**
    * Get current balance per bank account and monthly historical balances.
-   * Uses the latest transaction's balance field (from bank statement) per account+currency,
-   * then converts to EUR. Falls back to SUM(amount) if no balance field is available.
+   * Uses the latest transaction's balance field (by date) per account+currency,
+   * then converts to EUR.
    */
   async getBankBalances() {
     const accounts = [];
     let totalNetPosition = 0;
 
-    // For each bank account, get the latest balance per currency
+    // For each bank account + currency, get the balance from the latest transaction by date
     const latestBalanceResult = await query(`
-      SELECT DISTINCT ON (bank_account, currency)
+      SELECT DISTINCT ON (bank_account, COALESCE(currency, 'EUR'))
              bank_account,
-             currency,
+             COALESCE(currency, 'EUR') AS currency,
              balance,
              date,
              COUNT(*) OVER (PARTITION BY bank_account) AS transaction_count,
@@ -695,7 +695,8 @@ export const infoRepository = {
       FROM transactions
       WHERE is_active = true
         AND bank_account IS NOT NULL
-      ORDER BY bank_account, currency, date DESC, id DESC
+        AND balance IS NOT NULL
+      ORDER BY bank_account, COALESCE(currency, 'EUR'), date DESC, id DESC
     `);
 
     // Group by bank_account, converting each currency's balance to EUR
@@ -714,22 +715,8 @@ export const infoRepository = {
 
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
       const currency = row.currency || 'EUR';
-
-      if (row.balance != null) {
-        // Use the bank-reported balance
-        const eur = await convertToEur(parseFloat(row.balance), currency, dateStr);
-        byAccount[acctKey].balance += Math.round(eur * 100) / 100;
-      } else {
-        // Fallback: sum all amounts for this account+currency
-        const sumResult = await query(
-          `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-           WHERE is_active = true AND bank_account = $1 AND COALESCE(currency, 'EUR') = $2`,
-          [row.bank_account, currency]
-        );
-        const total = parseFloat(sumResult.rows[0].total);
-        const eur = await convertToEur(total, currency, dateStr);
-        byAccount[acctKey].balance += Math.round(eur * 100) / 100;
-      }
+      const eur = await convertToEur(parseFloat(row.balance), currency, dateStr);
+      byAccount[acctKey].balance += Math.round(eur * 100) / 100;
 
       // Update date bounds
       if (row.first_transaction < byAccount[acctKey].first_transaction) byAccount[acctKey].first_transaction = row.first_transaction;
@@ -759,12 +746,11 @@ export const infoRepository = {
         SELECT
           a.bank_account,
           m.month_start,
-          t.currency,
+          COALESCE(t.currency, 'EUR') AS currency,
           t.balance,
-          t.amount,
           t.date,
           ROW_NUMBER() OVER (
-            PARTITION BY a.bank_account, m.month_start, t.currency
+            PARTITION BY a.bank_account, m.month_start, COALESCE(t.currency, 'EUR')
             ORDER BY t.date DESC, t.id DESC
           ) AS rn
         FROM months m
@@ -772,17 +758,11 @@ export const infoRepository = {
         LEFT JOIN transactions t ON t.bank_account = a.bank_account
           AND t.date <= (m.month_start + interval '1 month' - interval '1 day')::date
           AND t.is_active = true
+          AND t.balance IS NOT NULL
       )
-      SELECT bank_account, month_start, currency, balance, date,
-             (SELECT COALESCE(SUM(t2.amount), 0)
-              FROM transactions t2
-              WHERE t2.bank_account = ranked.bank_account
-                AND t2.is_active = true
-                AND COALESCE(t2.currency, 'EUR') = COALESCE(ranked.currency, 'EUR')
-                AND t2.date <= (ranked.month_start + interval '1 month' - interval '1 day')::date
-             ) AS sum_fallback
+      SELECT bank_account, month_start, currency, balance, date
       FROM ranked
-      WHERE rn = 1
+      WHERE rn = 1 AND balance IS NOT NULL
       ORDER BY bank_account, month_start
     `);
 
@@ -799,9 +779,7 @@ export const infoRepository = {
         : row.month_start;
       const dateForRate = row.date instanceof Date ? row.date.toISOString().split('T')[0] : (row.date || monthStr);
 
-      // Use balance field if available, otherwise fall back to cumulative sum
-      const rawAmount = row.balance != null ? parseFloat(row.balance) : parseFloat(row.sum_fallback);
-      const eur = await convertToEur(rawAmount, currency, dateForRate);
+      const eur = await convertToEur(parseFloat(row.balance), currency, dateForRate);
 
       const monthKey = monthStr.substring(0, 7);
       let existing = historyMap[key].find(h => h.month === monthKey);
