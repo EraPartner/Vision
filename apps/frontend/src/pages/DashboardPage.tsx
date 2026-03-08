@@ -236,6 +236,17 @@ export default function DashboardPage() {
                 <CategoryPieChart data={categoryData}/>
             </div>
 
+            {/* Cash Flow Comparison */}
+            {cashflowData && (
+                <CashFlowComparisonChart
+                    withoutPlanned={cashflowData.without_planned}
+                    withPlanned={cashflowData.with_planned}
+                    currentDay={cashflowData.current_day}
+                    month={cashflowData.month}
+                    year={cashflowData.year}
+                />
+            )}
+
             {/* Recent transactions */}
             <DataTable
                 title="Recent Transactions"
