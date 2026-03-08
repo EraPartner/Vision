@@ -122,6 +122,147 @@ export const infoRepository = {
 
     return { months, summary };
   },
+  async getPlannedExpensesNextMonth() {
+    // Calculate next month boundaries
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthAfter = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+    const lastDay = new Date(monthAfter - 1);
+
+    const sql = `
+      SELECT pt.*, r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               ELSE NULL
+             END AS category_name
+      FROM planned_transactions pt
+      LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN categories c ON pt.category_id = c.id
+      WHERE pt.is_active = true
+        AND (
+          (pt.is_recurring = true)
+          OR (pt.planned_date >= $1 AND pt.planned_date < $2)
+        )
+      ORDER BY pt.planned_date ASC
+    `;
+
+    const result = await query(sql, [
+      nextMonth.toISOString().split('T')[0],
+      monthAfter.toISOString().split('T')[0],
+    ]);
+
+    // Group by date
+    const dailyMap = {};
+    for (const row of result.rows) {
+      const dateStr = row.planned_date instanceof Date
+        ? row.planned_date.toISOString().split('T')[0]
+        : String(row.planned_date);
+      if (!dailyMap[dateStr]) {
+        dailyMap[dateStr] = { date: dateStr, total_income: 0, total_expenses: 0, transactions: [] };
+      }
+      const amt = parseFloat(row.amount);
+      if (amt >= 0) dailyMap[dateStr].total_income += amt;
+      else dailyMap[dateStr].total_expenses += amt;
+      dailyMap[dateStr].transactions.push({
+        id: row.id,
+        recipient_name: row.recipient_name,
+        amount: amt,
+        category_name: row.category_name,
+        is_recurring: row.is_recurring,
+        recurrence_pattern: row.recurrence_pattern,
+      });
+    }
+
+    const dailyData = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    const totalIncome = dailyData.reduce((s, d) => s + d.total_income, 0);
+    const totalExpenses = dailyData.reduce((s, d) => s + d.total_expenses, 0);
+
+    return {
+      month: nextMonth.getMonth() + 1,
+      year: nextMonth.getFullYear(),
+      period_start: nextMonth.toISOString().split('T')[0],
+      period_end: lastDay.toISOString().split('T')[0],
+      daily_data: dailyData,
+      summary: {
+        total_income: totalIncome,
+        total_expenses: totalExpenses,
+        net_amount: totalIncome + totalExpenses,
+        transaction_count: result.rows.length,
+      },
+    };
+  },
+
+  async getAverageVsCurrentSpending() {
+    // Past 6 complete months average daily spending
+    const sql6m = `
+      WITH monthly AS (
+        SELECT
+          date_trunc('month', t.date) AS month,
+          SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) AS spending,
+          COUNT(DISTINCT t.date) AS active_days
+        FROM transactions t
+        WHERE t.is_active = true
+          AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
+          AND t.date < date_trunc('month', CURRENT_DATE)
+        GROUP BY date_trunc('month', t.date)
+      )
+      SELECT
+        AVG(spending / NULLIF(active_days, 0)) AS avg_daily_spending,
+        AVG(spending) AS avg_monthly_spending,
+        COUNT(*) AS months_counted
+      FROM monthly
+    `;
+    const past6Result = await query(sql6m);
+    const past6 = past6Result.rows[0];
+
+    // Current month daily breakdown
+    const sqlCurrent = `
+      SELECT t.date,
+             SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) AS spending,
+             SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS income
+      FROM transactions t
+      WHERE t.is_active = true
+        AND t.date >= date_trunc('month', CURRENT_DATE)
+        AND t.date <= CURRENT_DATE
+      GROUP BY t.date
+      ORDER BY t.date
+    `;
+    const currentResult = await query(sqlCurrent);
+
+    const dailyData = currentResult.rows.map(r => ({
+      date: r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date),
+      spending: parseFloat(r.spending),
+      income: parseFloat(r.income),
+    }));
+
+    const totalCurrentSpending = dailyData.reduce((s, d) => s + d.spending, 0);
+    const daysElapsed = dailyData.length || 1;
+    const avgDaily = parseFloat(past6.avg_daily_spending) || 0;
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const projectedTotal = (totalCurrentSpending / daysElapsed) * daysInMonth;
+
+    return {
+      past_6_months: {
+        avg_daily_spending: avgDaily,
+        avg_monthly_spending: parseFloat(past6.avg_monthly_spending) || 0,
+        months_counted: parseInt(past6.months_counted, 10),
+      },
+      current_month: {
+        daily_data: dailyData,
+        total_spending: totalCurrentSpending,
+        days_elapsed: daysElapsed,
+        days_in_month: daysInMonth,
+      },
+      comparison: {
+        projected_monthly_total: projectedTotal,
+        avg_monthly_spending: parseFloat(past6.avg_monthly_spending) || 0,
+        variance: projectedTotal - (parseFloat(past6.avg_monthly_spending) || 0),
+        pace: avgDaily > 0 ? (totalCurrentSpending / daysElapsed) / avgDaily : null,
+      },
+    };
+  },
 };
 
 export default infoRepository;
