@@ -431,6 +431,21 @@ class ApiClient {
         return this.request(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
     }
 
+    async getBankBalances(): Promise<{
+        accounts: Array<{
+            bank_account: string;
+            balance: number;
+            transaction_count: number;
+            first_transaction: string;
+            last_transaction: string;
+        }>;
+        total_net_position: number;
+        history: Record<string, Array<{ month: string; balance: number }>>;
+        total_history: Array<{ month: string; balance: number }>;
+    }> {
+        return this.request('/api/info/bank-balances');
+    }
+
     // ==================== Portfolio / Investments ====================
 
     async getInvestments(params?: {
