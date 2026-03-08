@@ -60,28 +60,14 @@ export function useFilteredDashboardStats() {
         };
       }
 
-      // Fetch transactions for filtering (get a large sample for accurate stats)
+      // Recipient exclusions require client-side filtering of transactions
       const transactionsData = await apiClient.getTransactions({ 
         limit: 5000,
         active: true 
       });
 
-      // Fetch categories if we need to exclude hidden ones
-      let hiddenCategoryIds: number[] = [];
-      if (settings.excludeHiddenCategories) {
-        const categoriesData = await apiClient.getCategories({ limit: 1000 });
-        hiddenCategoryIds = categoriesData.items
-          .filter((cat) => !cat.active)
-          .map((cat) => cat.id);
-      }
-
-      // Build complete exclusion list
-      const excludedCategoryIds = new Set([
-        ...settings.excludedCategoryIds,
-        ...hiddenCategoryIds,
-      ]);
-
       const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+      const excludedCategoryIds = new Set(allExcludedCategoryIds);
 
       // Filter transactions based on settings
       const filteredTransactions = transactionsData.items.filter((t) => {
