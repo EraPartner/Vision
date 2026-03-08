@@ -149,7 +149,7 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
 });
 
 // DELETE /api/planned-transactions/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const deleted = await plannedTransactionRepository.hardDelete(id);

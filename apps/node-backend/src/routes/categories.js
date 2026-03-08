@@ -101,7 +101,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 });
 
 // POST /api/categories/:id/assign
-router.post('/:id/assign', async (req, res) => {
+router.post('/:id/assign', validateIdParam, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id, 10);
     let { recipient_ids } = req.body;
