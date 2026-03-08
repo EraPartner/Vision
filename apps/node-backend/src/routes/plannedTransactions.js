@@ -80,7 +80,7 @@ router.get('/:id', validateIdParam, async (req, res) => {
 });
 
 // PATCH /api/planned-transactions/:id
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const existing = await plannedTransactionRepository.getById(id);
