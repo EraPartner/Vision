@@ -27,17 +27,17 @@ export function useFilteredDashboardStats() {
 
       // Resolve hidden category IDs if needed
       let hiddenCategoryIds: number[] = [];
-      if (settings.excludeHiddenCategories) {
+      if (exclusionsApply && settings.excludeHiddenCategories) {
         const categoriesData = await apiClient.getCategories({ limit: 1000 });
         hiddenCategoryIds = categoriesData.items
           .filter((cat) => !cat.active)
           .map((cat) => cat.id);
       }
 
-      const allExcludedCategoryIds = [
+      const allExcludedCategoryIds = exclusionsApply ? [
         ...settings.excludedCategoryIds,
         ...hiddenCategoryIds,
-      ];
+      ] : [];
 
       // Fetch monthly financial summary (6 months) with excluded categories
       const monthlySummary = await apiClient.getMonthlyFinancialSummary({
