@@ -1,0 +1,119 @@
+import { useQuery } from "@tanstack/react-query";
+import { apiClient, type MarketNewsArticle } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Newspaper, ExternalLink, Clock } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+
+interface PortfolioNewsFeedProps {
+  symbols: string[];
+}
+
+export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["market-news", symbols],
+    queryFn: () => apiClient.getMarketNews(symbols.length > 0 ? symbols : undefined, 25),
+    staleTime: 5 * 60 * 1000, // 5 min
+    refetchInterval: 10 * 60 * 1000, // 10 min
+    enabled: true,
+  });
+
+  const articles = data?.articles ?? [];
+
+  return (
+    <Card className="h-full">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Newspaper className="h-5 w-5 text-primary" />
+          <CardTitle className="text-lg">Market News</CardTitle>
+          {articles.length > 0 && (
+            <Badge variant="secondary" className="ml-auto text-xs">
+              {articles.length} articles
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <ScrollArea className="h-[480px]">
+          <div className="px-6 pb-4 space-y-1">
+            {isLoading && (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex gap-3 py-3 border-b border-border/50 last:border-0">
+                  <Skeleton className="h-16 w-24 rounded-md shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                </div>
+              ))
+            )}
+
+            {!isLoading && articles.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Newspaper className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {error ? "Unable to load news" : "No news available"}
+                </p>
+              </div>
+            )}
+
+            {articles.map((article, idx) => (
+              <NewsItem key={`${article.title}-${idx}`} article={article} />
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  );
+}
+
+function NewsItem({ article }: { article: MarketNewsArticle }) {
+  const timeAgo = article.publishedAt
+    ? formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })
+    : null;
+
+  return (
+    <a
+      href={article.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 py-3 border-b border-border/50 last:border-0 group hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"
+    >
+      {article.thumbnail && (
+        <img
+          src={article.thumbnail}
+          alt=""
+          className="h-16 w-24 rounded-md object-cover shrink-0 bg-muted"
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-medium text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+          {article.title}
+          <ExternalLink className="inline-block h-3 w-3 ml-1 opacity-0 group-hover:opacity-60 transition-opacity" />
+        </h4>
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground">{article.publisher}</span>
+          {timeAgo && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {timeAgo}
+              </span>
+            </>
+          )}
+          {article.relatedSymbols.map((sym) => (
+            <Badge key={sym} variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+              {sym}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    </a>
+  );
+}
