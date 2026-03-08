@@ -10,6 +10,7 @@ import cors from 'cors';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
+import { warmCache as warmExchangeRateCache } from './services/currencyConversionService.js';
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -152,6 +153,8 @@ async function start() {
   const isConnected = await checkConnection();
   if (isConnected) {
     logger.info('Database connection verified successfully');
+    // Pre-warm exchange rate cache (non-blocking)
+    warmExchangeRateCache().catch(() => {});
   } else {
     logger.error('Failed to connect to database. Check DATABASE_URL configuration.');
     logger.info(`DATABASE_URL: ${settings.database.url.replace(/:[^:@]+@/, ':***@')}`);
