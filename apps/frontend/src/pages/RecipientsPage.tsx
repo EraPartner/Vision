@@ -7,6 +7,7 @@ import {useRecipients, useUpdateRecipient, useDeleteRecipient, useMergeRecipient
 import {AddRecipientDialog} from "@/components/forms/AddRecipientDialog";
 import {CategoryCombobox} from "@/components/shared/CategoryCombobox";
 import {MergeRecipientsDialog} from "@/components/recipients/MergeRecipientsDialog";
+import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
 const PAGE_SIZE = 50;
 
