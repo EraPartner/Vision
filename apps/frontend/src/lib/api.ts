@@ -648,6 +648,29 @@ class ApiClient {
         return this.request('/api/info/net-worth');
     }
 
+    // ==================== Recipient Insights ====================
+
+    async getRecipientInsights(): Promise<{
+        topMerchants: Array<{
+            recipientId: number;
+            name: string;
+            totalSpend: number;
+            transactionCount: number;
+            avgAmount: number;
+            firstSeen: string;
+            lastSeen: string;
+        }>;
+        monthOverMonth: Array<{
+            recipientId: number;
+            name: string;
+            currentSpend: number;
+            previousSpend: number;
+            changePercent: number;
+        }>;
+    }> {
+        return this.request('/api/info/recipient-insights');
+    }
+
     // ==================== Admin / Maintenance ====================
 
     async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
