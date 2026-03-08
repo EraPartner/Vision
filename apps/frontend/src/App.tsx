@@ -12,6 +12,7 @@ import CategoriesPage from "./pages/CategoriesPage";
 import RecipientsPage from "./pages/RecipientsPage";
 import ImportPage from "./pages/ImportPage";
 import PlannedPaymentsPage from "./pages/PlannedPaymentsPage";
+import StatisticsPage from "./pages/StatisticsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
