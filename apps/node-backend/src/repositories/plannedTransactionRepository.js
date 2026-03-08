@@ -5,6 +5,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { sanitizeUpdateFields } from '../middleware/validation.js';
 
 export const plannedTransactionRepository = {
   async getAll({
