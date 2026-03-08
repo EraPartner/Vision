@@ -28,6 +28,7 @@ type TableRecipient = {
 };
 
 export default function RecipientsPage() {
+    const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
