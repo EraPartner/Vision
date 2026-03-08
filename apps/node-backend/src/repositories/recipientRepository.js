@@ -13,9 +13,12 @@ export const recipientRepository = {
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
              (SELECT rba.account_number FROM recipient_bank_accounts rba
               WHERE rba.recipient_id = r.id AND rba.is_active = true
-              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account
+              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account,
+             pr.name AS primary_recipient_name,
+             (SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id) AS alias_count
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE 1=1
     `;
     const params = [];
