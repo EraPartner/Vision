@@ -211,12 +211,6 @@ export function VirtualDataTable<T extends Record<string, any>>({
         overscan: 10,
     });
 
-    // Debug: log virtualizer state
-    useEffect(() => {
-        const el = parentRef.current;
-        console.log(`[VirtualDataTable:${title}] processedData=${processedData.length}, virtualItems=${virtualizer.getVirtualItems().length}, totalSize=${virtualizer.getTotalSize()}, parentEl=${!!el}, parentHeight=${el?.clientHeight}, parentScroll=${el?.scrollHeight}`);
-    }, [processedData.length, virtualizer.getVirtualItems().length, title]);
-
     // Infinite scroll: load more when near bottom
     useEffect(() => {
         if (!onLoadMore || !hasMore || isFetchingMore) return;
