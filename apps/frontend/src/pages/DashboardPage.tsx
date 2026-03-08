@@ -29,6 +29,13 @@ export default function DashboardPage() {
         staleTime: 30000,
     });
 
+    // Fetch cashflow comparison data
+    const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
+        queryKey: ['cashflowComparison'],
+        queryFn: () => apiClient.getCashflowComparison(),
+        staleTime: 30000,
+    });
+
     // Fetch categories if we need to exclude hidden ones
     const { data: categoriesData } = useQuery({
         queryKey: ['categories', 'all'],
