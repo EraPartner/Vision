@@ -43,7 +43,13 @@ export default function PortfolioOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Portfolio Overview</h1>
-        <AddInvestmentDialog />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
+            {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh Prices
+          </Button>
+          <AddInvestmentDialog />
+        </div>
       </div>
 
       {isEmpty ? (
