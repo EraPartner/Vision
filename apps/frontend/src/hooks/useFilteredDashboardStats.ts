@@ -16,6 +16,9 @@ interface FilteredDashboardStats {
 export function useFilteredDashboardStats() {
   const { settings } = useSettings();
 
+  // Check if exclusions should apply to dashboard
+  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard';
+
   return useQuery<FilteredDashboardStats>({
     queryKey: ['filteredDashboardStats', settings],
     queryFn: async () => {
