@@ -5,7 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -16,17 +18,24 @@ import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",  // primary
-  "hsl(142, 76%, 36%)",  // accent
-  "hsl(45, 93%, 47%)",   // chart-3
-  "hsl(280, 87%, 65%)",  // chart-4
-  "hsl(340, 82%, 52%)",  // chart-5
+  "hsl(217, 91%, 60%)",
+  "hsl(142, 76%, 36%)",
+  "hsl(45, 93%, 47%)",
+  "hsl(280, 87%, 65%)",
+  "hsl(340, 82%, 52%)",
   "hsl(190, 80%, 45%)",
   "hsl(30, 90%, 55%)",
   "hsl(260, 70%, 55%)",
   "hsl(170, 65%, 40%)",
   "hsl(350, 75%, 60%)",
 ];
+
+const RECHARTS_TOOLTIP_STYLE = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "var(--radius)",
+  color: "hsl(var(--card-foreground))",
+};
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("en-US", {
@@ -51,6 +60,41 @@ function formatPeriodShort(period: string) {
   } catch {
     return period;
   }
+}
+
+// ─── Exclusion Toggle Button ──────────────────────────────
+function ExclusionToggle({
+  graphKey,
+  isFiltered,
+  onToggle,
+  exclusionsApply,
+}: {
+  graphKey: string;
+  isFiltered: boolean;
+  onToggle: (key: string) => void;
+  exclusionsApply: boolean;
+}) {
+  if (!exclusionsApply) return null;
+
+  return (
+    <TooltipProvider>
+      <UITooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={isFiltered ? "default" : "outline"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onToggle(graphKey)}
+          >
+            {isFiltered ? <Filter className="h-3.5 w-3.5" /> : <FilterX className="h-3.5 w-3.5" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {isFiltered ? "Exclusions applied — click to show all data" : "Showing all data — click to apply exclusions"}
+        </TooltipContent>
+      </UITooltip>
+    </TooltipProvider>
+  );
 }
 
 // ─── Summary Cards ────────────────────────────────────────
@@ -114,28 +158,17 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Monthly Income vs Spending</CardTitle>
-        <CardDescription>Track your cash flow over time</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="period" className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} />
-            <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-            <Legend />
-            <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height={350}>
+      <BarChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <XAxis dataKey="period" className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} />
+        <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+        <Legend />
+        <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -147,32 +180,21 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Net Balance Trend</CardTitle>
-        <CardDescription>Monthly net (income − spending)</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-            <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-            <defs>
-              <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="Net" stroke="hsl(217, 91%, 60%)" fill="url(#netGradient)" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+        <defs>
+          <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area type="monotone" dataKey="Net" stroke="hsl(217, 91%, 60%)" fill="url(#netGradient)" strokeWidth={2} />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -186,28 +208,17 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Year-over-Year Comparison</CardTitle>
-        <CardDescription>Annual totals compared</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="year" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
-            <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-            <Legend />
-            <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <XAxis dataKey="year" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+        <Legend />
+        <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -221,27 +232,19 @@ function TopRecipientsChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top Recipients by Spending</CardTitle>
-        <CardDescription>Where your money goes most</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={chartData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-              labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullName || label}
-            />
-            <Bar dataKey="amount" fill="hsl(217, 91%, 60%)" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height={350}>
+      <BarChart data={chartData} layout="vertical">
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+        <RechartsTooltip
+          contentStyle={RECHARTS_TOOLTIP_STYLE}
+          formatter={(value: number) => formatCurrency(value)}
+          labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullName || label}
+        />
+        <Bar dataKey="amount" fill="hsl(217, 91%, 60%)" radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -254,36 +257,25 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Spending by Category</CardTitle>
-        <CardDescription>Overall distribution across categories</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <PieChart>
-            <Pie
-              data={pieData}
-              cx="50%"
-              cy="50%"
-              outerRadius={120}
-              innerRadius={60}
-              dataKey="value"
-              label={({ name, percent }) => `${name.split(":")[0]} ${(percent * 100).toFixed(0)}%`}
-              labelLine={{ strokeWidth: 1 }}
-            >
-              {pieData.map((entry, index) => (
-                <Cell key={index} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height={350}>
+      <PieChart>
+        <Pie
+          data={pieData}
+          cx="50%"
+          cy="50%"
+          outerRadius={120}
+          innerRadius={60}
+          dataKey="value"
+          label={({ name, percent }) => `${name.split(":")[0]} ${(percent * 100).toFixed(0)}%`}
+          labelLine={{ strokeWidth: 1 }}
+        >
+          {pieData.map((entry, index) => (
+            <Cell key={index} fill={entry.color} />
+          ))}
+        </Pie>
+        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+      </PieChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -306,7 +298,6 @@ function CategoryPivotTable({ data }: { data: StatisticsData }) {
       .sort((a, b) => b.filteredTotal - a.filteredTotal);
   }, [data.categoryPivot, filteredPeriods]);
 
-  // Column totals
   const columnTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const period of filteredPeriods) {
@@ -397,34 +388,68 @@ function CategoryTrendChart({ data }: { data: StatisticsData }) {
   });
 
   return (
+    <ResponsiveContainer width="100%" height={350}>
+      <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+        <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+        <Legend />
+        {topCategories.map((cat, i) => (
+          <Line
+            key={cat.categoryId}
+            type="monotone"
+            dataKey={cat.categoryName}
+            stroke={CHART_COLORS[i % CHART_COLORS.length]}
+            strokeWidth={2}
+            dot={false}
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ─── Chart Card with per-graph exclusion toggle ───────────
+function ChartCard({
+  title,
+  description,
+  graphKey,
+  getGraphData,
+  graphExclusions,
+  toggleGraphExclusion,
+  exclusionsApply,
+  children,
+}: {
+  title: string;
+  description: string;
+  graphKey: string;
+  getGraphData: (key: string) => StatisticsData | null;
+  graphExclusions: Record<string, boolean>;
+  toggleGraphExclusion: (key: string) => void;
+  exclusionsApply: boolean;
+  children: (data: StatisticsData) => React.ReactNode;
+}) {
+  const data = getGraphData(graphKey);
+  if (!data) return null;
+  const isFiltered = graphExclusions[graphKey] ?? true;
+
+  return (
     <Card>
-      <CardHeader>
-        <CardTitle>Top Category Trends</CardTitle>
-        <CardDescription>Monthly spending for top 5 categories</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        <ExclusionToggle
+          graphKey={graphKey}
+          isFiltered={isFiltered}
+          onToggle={toggleGraphExclusion}
+          exclusionsApply={exclusionsApply}
+        />
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-            <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-            <Legend />
-            {topCategories.map((cat, i) => (
-              <Line
-                key={cat.categoryId}
-                type="monotone"
-                dataKey={cat.categoryName}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                strokeWidth={2}
-                dot={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+        {children(data)}
       </CardContent>
     </Card>
   );
@@ -432,7 +457,10 @@ function CategoryTrendChart({ data }: { data: StatisticsData }) {
 
 // ─── Main Page ────────────────────────────────────────────
 export default function StatisticsPage() {
-  const { data, isLoading, isError, error } = useStatistics();
+  const {
+    data, isLoading, isError, error,
+    getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply,
+  } = useStatistics();
 
   if (isLoading) {
     return (
@@ -474,6 +502,8 @@ export default function StatisticsPage() {
     );
   }
 
+  const chartCardProps = { getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
@@ -489,24 +519,36 @@ export default function StatisticsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <MonthlyChart data={data} />
-          <NetTrendChart data={data} />
+          <ChartCard title="Monthly Income vs Spending" description="Track your cash flow over time" graphKey="monthly" {...chartCardProps}>
+            {(d) => <MonthlyChart data={d} />}
+          </ChartCard>
+          <ChartCard title="Net Balance Trend" description="Monthly net (income − spending)" graphKey="netTrend" {...chartCardProps}>
+            {(d) => <NetTrendChart data={d} />}
+          </ChartCard>
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CategoryPieChart data={data} />
-            <CategoryTrendChart data={data} />
+            <ChartCard title="Spending by Category" description="Overall distribution across categories" graphKey="categoryPie" {...chartCardProps}>
+              {(d) => <CategoryPieChart data={d} />}
+            </ChartCard>
+            <ChartCard title="Top Category Trends" description="Monthly spending for top 5 categories" graphKey="categoryTrend" {...chartCardProps}>
+              {(d) => <CategoryTrendChart data={d} />}
+            </ChartCard>
           </div>
-          <CategoryPivotTable data={data} />
+          <CategoryPivotTable data={getGraphData("pivotTable") || data} />
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
-          <TopRecipientsChart data={data} />
+          <ChartCard title="Top Recipients by Spending" description="Where your money goes most" graphKey="topRecipients" {...chartCardProps}>
+            {(d) => <TopRecipientsChart data={d} />}
+          </ChartCard>
         </TabsContent>
 
         <TabsContent value="yearly" className="space-y-6">
-          <YearlyComparisonChart data={data} />
+          <ChartCard title="Year-over-Year Comparison" description="Annual totals compared" graphKey="yearlyComparison" {...chartCardProps}>
+            {(d) => <YearlyComparisonChart data={d} />}
+          </ChartCard>
           {/* Yearly summary table */}
           <Card>
             <CardHeader>
