@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Users,
   Wallet,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useWorkspace, type Workspace } from "@/contexts/WorkspaceContext";
 
@@ -53,6 +54,7 @@ const portfolioNav = [
   { title: "Crypto", url: "/portfolio/crypto", icon: Coins },
   { title: "Real Estate", url: "/portfolio/real-estate", icon: Building2 },
   { title: "Savings & Bonds", url: "/portfolio/savings", icon: PiggyBank },
+  { title: "Exchange Rates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
 ];
 
 function isActiveRoute(itemUrl: string, pathname: string) {
