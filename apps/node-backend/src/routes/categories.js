@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import categoryRepository from '../repositories/categoryRepository.js';
 import { logger } from '../config/logger.js';
+import { validateIdParam, sanitizeString } from '../middleware/validation.js';
 
 const router = Router();
 

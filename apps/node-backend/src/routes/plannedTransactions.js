@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
 import { logger } from '../config/logger.js';
+import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
 
