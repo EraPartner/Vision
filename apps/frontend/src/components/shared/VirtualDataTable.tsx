@@ -450,7 +450,6 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     }
                                                 }}
                                             >
-                                            >
                                                 {columns.map((col) => {
                                                     const width = columnWidths[col.key];
                                                     return (
