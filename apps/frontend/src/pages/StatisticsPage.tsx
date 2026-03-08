@@ -81,14 +81,14 @@ function ExclusionToggle({
           <Button
             variant={isFiltered && exclusionsApply ? "default" : "outline"}
             size="sm"
-            className="h-7 gap-1.5 text-xs"
+            className={`h-8 gap-2 text-xs ml-4 font-medium transition-colors ${isFiltered && exclusionsApply ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'hover:bg-muted'}`}
             onClick={() => onToggle(graphKey)}
             disabled={!exclusionsApply}
           >
-            {isFiltered ? <Filter className="h-3.5 w-3.5" /> : <FilterX className="h-3.5 w-3.5" />}
+            {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
             {exclusionsApply
-              ? (isFiltered ? "Filtered" : "Unfiltered")
-              : "No exclusions"}
+              ? (isFiltered ? "Filters Active" : "Filters Ignored")
+              : "No exclusions set"}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
