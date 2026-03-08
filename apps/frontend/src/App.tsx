@@ -9,6 +9,7 @@ import {ThemeProvider} from "@/contexts/ThemeContext";
 import {WorkspaceProvider} from "@/contexts/WorkspaceContext";
 import {lazy, Suspense} from "react";
 import {Loader2} from "lucide-react";
+import {ErrorBoundary} from "@/components/shared/ErrorBoundary";
 
 // Lazy-loaded pages for code splitting
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
