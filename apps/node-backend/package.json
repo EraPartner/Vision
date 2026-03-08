@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node src/main.js",
-    "dev": "node --watch src/main.js"
+    "dev": "node --watch src/main.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "cors": "^2.8.5",
