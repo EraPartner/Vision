@@ -27,6 +27,25 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 
+export interface ImportProgress {
+  phase: string;
+  current: number;
+  total: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  percent: number;
+}
+
+export interface ImportResult {
+  total_processed: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  status?: string;
+  error_message?: string;
+}
+
 /** Default request timeout in milliseconds */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
