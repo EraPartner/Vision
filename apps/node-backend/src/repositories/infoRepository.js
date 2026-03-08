@@ -10,6 +10,7 @@
 
 import { query } from '../database/connection.js';
 import { convertToEur } from '../services/currencyConversionService.js';
+import { logger } from '../config/logger.js';
 
 /**
  * Helper: check if a materialized view exists and has rows.
@@ -162,6 +163,7 @@ export const infoRepository = {
 
   async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds });
 
     // ── Fast path: read from mv_monthly_summary ──
     if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
@@ -247,7 +249,9 @@ export const infoRepository = {
       LEFT JOIN recipients r ON t.recipient_id = r.id
       ORDER BY m.month_start, t.date
     `;
+    logger.debug('Monthly summary SQL executing', { excludeClause: excludeClause || '(none)', paramCount: validIds.length });
     const result = await query(sql, validIds);
+    logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
     // Group by month and convert amounts
     const monthMap = {};
