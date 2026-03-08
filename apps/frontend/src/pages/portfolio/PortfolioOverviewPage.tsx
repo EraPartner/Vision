@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
@@ -19,7 +19,7 @@ function fmt(val: number, currency = 'EUR') {
 }
 
 export default function PortfolioOverviewPage() {
-  const { summaries, totalPortfolioValue, totalGainLoss, deleteInvestment } = usePortfolio();
+  const { summaries, totalPortfolioValue, totalGainLoss, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
 
   const totalInvested = summaries.reduce((s, i) => s + i.totalInvested, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
@@ -43,7 +43,13 @@ export default function PortfolioOverviewPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Portfolio Overview</h1>
-        <AddInvestmentDialog />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
+            {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh Prices
+          </Button>
+          <AddInvestmentDialog />
+        </div>
       </div>
 
       {isEmpty ? (

@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Loader2, TrendingUp, Bitcoin, Building2, PiggyBank, BarChart3 } from 'lucide-react';
+import { Plus, TrendingUp, Bitcoin, Building2, PiggyBank, BarChart3 } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
 import { ASSET_CLASS_LABELS } from '@/types/portfolio';
+import type { PriceProvider } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -20,6 +21,14 @@ const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   savings: PiggyBank,
   bond: PiggyBank,
 };
+
+const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
+  { key: 'manual', name: 'Manual', hint: 'Set price manually' },
+  { key: 'coingecko', name: 'CoinGecko', hint: 'Coin ID (e.g. bitcoin, ethereum)' },
+  { key: 'yahoo', name: 'Yahoo Finance', hint: 'Ticker (e.g. AAPL, VWCE.DE)' },
+  { key: 'kraken', name: 'Kraken', hint: 'Pair (e.g. XBTUSD, ETHUSD)' },
+  { key: 'custom', name: 'Custom JSON', hint: 'JSON path to price (e.g. data.price)' },
+];
 
 export function AddInvestmentDialog() {
   const [open, setOpen] = useState(false);
@@ -35,10 +44,13 @@ export function AddInvestmentDialog() {
     maturityDate: '',
     location: '',
     notes: '',
+    priceProvider: 'manual' as PriceProvider,
+    priceProviderId: '',
+    priceProviderUrl: '',
   });
 
   const reset = () => {
-    setForm({ assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '', interestRate: '', maturityDate: '', location: '', notes: '' });
+    setForm({ assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '', interestRate: '', maturityDate: '', location: '', notes: '', priceProvider: 'manual', priceProviderId: '', priceProviderUrl: '' });
     setStep('type');
   };
 
@@ -57,6 +69,9 @@ export function AddInvestmentDialog() {
         maturity_date: form.maturityDate || undefined,
         location: form.location.trim() || undefined,
         notes: form.notes.trim() || undefined,
+        price_provider: form.priceProvider,
+        price_provider_id: form.priceProviderId.trim() || undefined,
+        price_provider_url: form.priceProviderUrl.trim() || undefined,
       });
       toast.success(`${ASSET_CLASS_LABELS[form.assetClass]} "${form.name}" added`);
       reset();
@@ -69,6 +84,7 @@ export function AddInvestmentDialog() {
   const isUnitBased = ['stock', 'etf', 'crypto'].includes(form.assetClass);
   const isFixedIncome = ['savings', 'bond'].includes(form.assetClass);
   const isRealEstate = form.assetClass === 'real_estate';
+  const selectedProvider = PRICE_PROVIDERS.find(p => p.key === form.priceProvider);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
@@ -77,7 +93,7 @@ export function AddInvestmentDialog() {
           <Plus className="h-4 w-4" /> Add Investment
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{step === 'type' ? 'Choose Asset Type' : `Add ${form.assetClass ? ASSET_CLASS_LABELS[form.assetClass] : 'Investment'}`}</DialogTitle>
         </DialogHeader>
@@ -89,7 +105,12 @@ export function AddInvestmentDialog() {
               return (
                 <button
                   key={key}
-                  onClick={() => { setForm(f => ({ ...f, assetClass: key })); setStep('details'); }}
+                  onClick={() => {
+                    // Auto-suggest provider based on asset class
+                    const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf'].includes(key) ? 'yahoo' : 'manual';
+                    setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
+                    setStep('details');
+                  }}
                   className={cn(
                     'flex flex-col items-center gap-2 p-4 rounded-lg border border-border',
                     'hover:border-primary hover:bg-primary/5 transition-colors text-center',
@@ -156,6 +177,58 @@ export function AddInvestmentDialog() {
                   <Label htmlFor="inv-location">Location</Label>
                   <Input id="inv-location" placeholder="e.g. Brussels, Belgium" value={form.location} onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))} maxLength={200} />
                 </div>
+              )}
+
+              {/* Price Provider Section */}
+              {isUnitBased && (
+                <>
+                  <div className="space-y-2 col-span-2 pt-2 border-t border-border">
+                    <Label htmlFor="inv-provider" className="text-sm font-semibold">Live Price Provider</Label>
+                    <Select value={form.priceProvider} onValueChange={(v) => setForm(f => ({ ...f, priceProvider: v as PriceProvider, priceProviderId: '' }))}>
+                      <SelectTrigger id="inv-provider"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PRICE_PROVIDERS.map(p => (
+                          <SelectItem key={p.key} value={p.key}>
+                            <span className="font-medium">{p.name}</span>
+                            <span className="text-muted-foreground ml-2 text-xs">— {p.hint}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {form.priceProvider !== 'manual' && (
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="inv-provider-id">
+                        {form.priceProvider === 'custom' ? 'JSON Price Path' : 'Provider ID'}
+                      </Label>
+                      <Input
+                        id="inv-provider-id"
+                        placeholder={selectedProvider?.hint || ''}
+                        value={form.priceProviderId}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderId: e.target.value }))}
+                        maxLength={200}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">{selectedProvider?.hint}</p>
+                    </div>
+                  )}
+
+                  {form.priceProvider === 'custom' && (
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="inv-provider-url">JSON Endpoint URL</Label>
+                      <Input
+                        id="inv-provider-url"
+                        type="url"
+                        placeholder="https://api.example.com/price"
+                        value={form.priceProviderUrl}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderUrl: e.target.value }))}
+                        maxLength={500}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="space-y-2 col-span-2">
