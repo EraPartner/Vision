@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -26,7 +27,18 @@ import {
   Loader2,
   Trash2,
   Upload,
+  XCircle,
 } from "lucide-react";
+
+interface ImportProgress {
+  phase: string;
+  current: number;
+  total: number;
+  imported: number;
+  duplicates: number;
+  errors: number;
+  percent: number;
+}
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +46,8 @@ export default function ImportPage() {
   const [customBank, setCustomBank] = useState("");
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const abortRef = useRef<(() => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch supported parsers from backend
