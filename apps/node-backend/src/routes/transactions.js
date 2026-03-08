@@ -57,6 +57,70 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/transactions/export/csv
+router.get('/export/csv', async (req, res) => {
+  try {
+    const { start_date, end_date, bank_account, category_id } = req.query;
+
+    let sql = `
+      SELECT t.date, t.bank_account, r.name AS recipient_name, t.memo,
+             t.amount, t.currency, t.balance,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE ''
+             END AS category_name,
+             t.comment
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      WHERE t.is_active = true
+    `;
+    const params = [];
+    let paramIdx = 1;
+
+    if (start_date) { sql += ` AND t.date >= $${paramIdx++}`; params.push(start_date); }
+    if (end_date) { sql += ` AND t.date <= $${paramIdx++}`; params.push(end_date); }
+    if (bank_account) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bank_account}%`); }
+    if (category_id) { sql += ` AND t.category_id = $${paramIdx++}`; params.push(parseInt(category_id, 10)); }
+
+    sql += ` ORDER BY t.date ASC`;
+
+    const { query: dbQuery } = await import('../database/connection.js');
+    const result = await dbQuery(sql, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ detail: 'No transactions found matching filters' });
+    }
+
+    // Build CSV
+    const header = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
+    const csvRows = result.rows.map(row => {
+      const escape = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      return [
+        row.date, row.bank_account, row.recipient_name, row.memo,
+        row.amount, row.currency, row.balance, row.category_name, row.comment,
+      ].map(escape).join(',');
+    });
+
+    const csv = [header, ...csvRows].join('\n');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `transactions_export_${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(csv);
+  } catch (err) {
+    logger.error('Error exporting transactions', { error: err.message });
+    res.status(500).json({ detail: `Error exporting transactions: ${err.message}` });
+  }
+});
+
 // GET /api/transactions/:id
 router.get('/:id', async (req, res) => {
   try {
