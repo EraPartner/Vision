@@ -28,6 +28,15 @@ export default function PortfolioOverviewPage() {
   const totalInvested = summaries.reduce((s, i) => s + i.totalInvested, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
+  // Collect symbols for news feed
+  const newsSymbols = useMemo(() =>
+    summaries
+      .filter(s => s.symbol)
+      .map(s => s.symbol!)
+      .slice(0, 10),
+    [summaries]
+  );
+
   // Allocation by group
   const allocationData = Object.entries(ASSET_CLASS_GROUPS).map(([group, classes]) => ({
     name: group,
