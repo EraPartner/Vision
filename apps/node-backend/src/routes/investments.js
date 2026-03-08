@@ -45,17 +45,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/investments/:id
-router.patch('/:id', validateIdParam, async (req, res) => {
-  try {
-    const inv = await investmentRepository.update(parseInt(req.params.id, 10), req.body);
-    if (!inv) return res.status(404).json({ detail: 'Investment not found' });
-    res.json(inv);
-  } catch (err) {
-    logger.error('Failed to update investment', { error: err.message });
-    res.status(500).json({ detail: 'Failed to update investment' });
-  }
-});
 
 // GET /api/investments/providers (must be before /:id)
 router.get('/providers', (req, res) => {
