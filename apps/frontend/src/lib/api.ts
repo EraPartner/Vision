@@ -490,7 +490,9 @@ class ApiClient {
         return this.request('/api/info/transaction-count');
     }
 
-    async getCashflowComparison(): Promise<{
+    async getCashflowComparison(params?: {
+        excluded_category_ids?: number[];
+    }): Promise<{
         days_in_month: number;
         current_day: number;
         month: number;
@@ -498,7 +500,12 @@ class ApiClient {
         without_planned: Array<{ day: number; average: number; current: number | null }>;
         with_planned: Array<{ day: number; average: number; current: number | null }>;
     }> {
-        return this.request('/api/info/cashflow-comparison');
+        const queryParams = new URLSearchParams();
+        if (params?.excluded_category_ids?.length) {
+            params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
+        }
+        const q = queryParams.toString();
+        return this.request(`/api/info/cashflow-comparison${q ? `?${q}` : ''}`);
     }
 
     async getMonthlyFinancialSummary(params?: {
