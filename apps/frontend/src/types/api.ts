@@ -217,6 +217,103 @@ export interface PlannedTransactionExecuteRequest {
     execution_date?: string; // YYYY-MM-DD format, defaults to today
 }
 
+// ==================== Portfolio Types ====================
+
+export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
+export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation';
+export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface Investment {
+    id: number;
+    name: string;
+    symbol?: string;
+    asset_class: AssetClass;
+    currency: string;
+    current_price?: number;
+    interest_rate?: number;
+    maturity_date?: string;
+    location?: string;
+    notes?: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface InvestmentsListResponse {
+    items: Investment[];
+    total: number;
+    limit: number;
+    offset: number;
+    links: Link[];
+}
+
+export interface InvestmentCreate {
+    name: string;
+    symbol?: string;
+    asset_class: AssetClass;
+    currency?: string;
+    current_price?: number;
+    interest_rate?: number;
+    maturity_date?: string;
+    location?: string;
+    notes?: string;
+}
+
+export interface InvestmentUpdate {
+    name?: string;
+    symbol?: string;
+    asset_class?: AssetClass;
+    currency?: string;
+    current_price?: number;
+    interest_rate?: number;
+    maturity_date?: string;
+    location?: string;
+    notes?: string;
+    is_active?: boolean;
+}
+
+export interface PortfolioTransaction {
+    id: number;
+    investment_id: number;
+    type: PortfolioTxnType;
+    date: string;
+    amount: number;
+    units?: number;
+    price_per_unit?: number;
+    fees?: number;
+    taxes?: number;
+    currency: string;
+    note?: string;
+    is_recurring: boolean;
+    recurrence_interval?: RecurrenceInterval;
+    recurrence_end_date?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PortfolioTransactionsListResponse {
+    items: PortfolioTransaction[];
+    total: number;
+    limit: number;
+    offset: number;
+    links: Link[];
+}
+
+export interface PortfolioTransactionCreate {
+    type: PortfolioTxnType;
+    date: string;
+    amount: number;
+    units?: number;
+    price_per_unit?: number;
+    fees?: number;
+    taxes?: number;
+    currency?: string;
+    note?: string;
+    is_recurring?: boolean;
+    recurrence_interval?: RecurrenceInterval;
+    recurrence_end_date?: string;
+}
+
 // ==================== Other Types ====================
 
 export interface CategoryStats {

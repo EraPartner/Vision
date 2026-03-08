@@ -1,5 +1,5 @@
 /**
- * Portfolio investment types and transaction model.
+ * Portfolio investment types — shared between frontend components.
  */
 
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
@@ -35,53 +35,36 @@ export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
 
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 
-export interface PortfolioTransaction {
-  id: string;
-  investmentId: string;
-  type: PortfolioTxnType;
-  date: string; // YYYY-MM-DD
-  amount: number; // monetary value (always positive, sign derived from type)
-  units?: number; // shares / coins bought or sold
-  pricePerUnit?: number;
-  fees?: number;
-  taxes?: number;
-  currency: string;
-  note?: string;
-  /** Recurring buy/sell config */
-  isRecurring?: boolean;
-  recurrenceInterval?: RecurrenceInterval;
-  recurrenceEndDate?: string;
-}
-
-export interface Investment {
-  id: string;
+// Computed view model returned by usePortfolio
+export interface InvestmentSummary {
+  id: number;
   name: string;
-  symbol?: string; // ticker / coin symbol
+  symbol?: string;
   assetClass: AssetClass;
+  asset_class: AssetClass;
   currency: string;
-  /** Current / estimated price per unit (manually set or fetched) */
   currentPrice?: number;
-  /** Real estate specific */
-  location?: string;
-  /** Savings / bond specific */
+  current_price?: number;
   interestRate?: number;
+  interest_rate?: number;
   maturityDate?: string;
-  /** General */
+  maturity_date?: string;
+  location?: string;
   notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 
-// Computed view model
-export interface InvestmentSummary extends Investment {
+  // Computed
   totalUnits: number;
-  totalInvested: number; // sum of buys
+  totalInvested: number;
   totalFees: number;
   totalTaxes: number;
   totalDividends: number;
-  totalIncome: number; // dividends + interest + rent
+  totalIncome: number;
   currentValue: number;
   gainLoss: number;
   gainLossPercent: number;
-  transactions: PortfolioTransaction[];
+  transactions: any[];
+  description?: string;
 }
