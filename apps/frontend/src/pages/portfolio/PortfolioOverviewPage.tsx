@@ -1,11 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
 import { ASSET_CLASS_GROUPS, ASSET_CLASS_LABELS } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
@@ -22,10 +23,15 @@ function fmt(val: number, currency = 'EUR') {
 }
 
 export default function PortfolioOverviewPage() {
-  const { summaries, totalPortfolioValue, totalGainLoss, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const { 
+    summaries, totalPortfolioValue, totalGainLoss, 
+    totalRealizedGain, totalUnrealizedGain,
+    deleteInvestment, refreshPrices, isRefreshingPrices 
+  } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
 
-  const totalInvested = summaries.reduce((s, i) => s + i.totalInvested, 0);
+  const totalInvested = summaries.reduce((s, i) => s + i.totalBuyCost, 0);
+  const totalIncome = summaries.reduce((s, i) => s + i.totalIncome, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
   // Collect symbols for news feed
@@ -44,10 +50,34 @@ export default function PortfolioOverviewPage() {
   })).filter(d => d.value > 0);
 
   const cards = [
-    { title: "Total Value", value: fmt(totalPortfolioValue), icon: DollarSign, desc: `${summaries.length} investments`, cls: "text-primary" },
-    { title: "Total Gain/Loss", value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`, icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown, desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% all time`, cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive" },
-    { title: "Total Invested", value: fmt(totalInvested), icon: DollarSign, desc: "Cost basis", cls: "text-foreground" },
-    { title: "Total Income", value: `+${fmt(summaries.reduce((s, i) => s + i.totalIncome, 0))}`, icon: TrendingUp, desc: "Dividends, interest, rent", cls: "text-accent" },
+    { 
+      title: "Total Value", 
+      value: fmt(totalPortfolioValue), 
+      icon: DollarSign, 
+      desc: `${summaries.length} investments`, 
+      cls: "text-primary" 
+    },
+    { 
+      title: "Total Gain/Loss", 
+      value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`, 
+      icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown, 
+      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% all time`, 
+      cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive" 
+    },
+    { 
+      title: "Realized Gains", 
+      value: `${totalRealizedGain >= 0 ? '+' : ''}${fmt(totalRealizedGain)}`, 
+      icon: ArrowUpRight, 
+      desc: "From closed positions", 
+      cls: totalRealizedGain >= 0 ? "text-accent" : "text-destructive" 
+    },
+    { 
+      title: "Unrealized Gains", 
+      value: `${totalUnrealizedGain >= 0 ? '+' : ''}${fmt(totalUnrealizedGain)}`, 
+      icon: Clock, 
+      desc: "Paper profit/loss", 
+      cls: totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive" 
+    },
   ];
 
   const isEmpty = summaries.length === 0;
@@ -113,19 +143,22 @@ export default function PortfolioOverviewPage() {
             )}
 
             <Card>
-              <CardHeader><CardTitle>Cost Breakdown</CardTitle><CardDescription>Fees & taxes across portfolio</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Performance Summary</CardTitle><CardDescription>Gains, income & costs</CardDescription></CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {[
-                    { label: 'Total Fees Paid', value: summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
-                    { label: 'Total Taxes Paid', value: summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
-                    { label: 'Total Dividends', value: summaries.reduce((s, i) => s + i.totalDividends, 0), cls: 'text-accent' },
-                    { label: 'Net Income', value: summaries.reduce((s, i) => s + i.totalIncome - i.totalFees - i.totalTaxes, 0) },
-                  ].map(({ label, value, cls }) => (
+                    { label: 'Total Invested', value: totalInvested, cls: 'text-foreground' },
+                    { label: 'Current Value', value: totalPortfolioValue, cls: 'text-foreground' },
+                    { label: 'Realized Gains', value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                    { label: 'Unrealized Gains', value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                    { label: 'Total Income', value: totalIncome, cls: 'text-accent', showSign: true },
+                    { label: 'Total Fees', value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
+                    { label: 'Total Taxes', value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
+                  ].map(({ label, value, cls, showSign }) => (
                     <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                       <span className="text-sm text-muted-foreground">{label}</span>
-                      <span className={cn("text-sm font-semibold tabular-nums", cls ?? (value >= 0 ? 'text-accent' : 'text-destructive'))}>
-                        {value >= 0 ? '+' : ''}{fmt(value)}
+                      <span className={cn("text-sm font-semibold tabular-nums", cls)}>
+                        {showSign && value > 0 ? '+' : ''}{fmt(value)}
                       </span>
                     </div>
                   ))}
@@ -141,35 +174,41 @@ export default function PortfolioOverviewPage() {
                 <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {summaries.map((inv) => (
-                      <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
-                            <span className="font-medium text-sm truncate">{inv.name}</span>
-                            <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
+                    {summaries.map((inv) => {
+                      const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.assetClass);
+                      return (
+                        <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
+                              <span className="font-medium text-sm truncate">{inv.name}</span>
+                              <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                              <span>Cost: {fmt(inv.totalBuyCost, inv.currency)}</span>
+                              {isUnitBased && inv.totalUnits > 0 && (
+                                <span>{inv.totalUnits.toFixed(4)} units @ {fmt(inv.avgCostBasis, inv.currency)}/ea</span>
+                              )}
+                              {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                            <span>Invested: {fmt(inv.totalInvested, inv.currency)}</span>
-                            {inv.totalUnits > 0 && <span>{inv.totalUnits.toFixed(4)} units</span>}
-                            {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
+                          <div className="text-right shrink-0">
+                            <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
+                            <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "text-accent" : "text-destructive")}>
+                              {inv.totalGain >= 0 ? '+' : ''}{fmt(inv.totalGain, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <InvestmentDetailDialog investment={inv} />
+                            <AddPortfolioTxnDialog investment={inv} />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
-                          <p className={cn("text-xs tabular-nums font-medium", inv.gainLoss >= 0 ? "text-accent" : "text-destructive")}>
-                            {inv.gainLoss >= 0 ? '+' : ''}{fmt(inv.gainLoss, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <AddPortfolioTxnDialog investment={inv} />
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
