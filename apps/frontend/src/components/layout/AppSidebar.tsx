@@ -31,30 +31,67 @@ import {
 } from "lucide-react";
 import { useWorkspace, type Workspace } from "@/contexts/WorkspaceContext";
 
-const budgetingNav = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Transactions", url: "/transactions", icon: Receipt },
-  { title: "Categories", url: "/categories", icon: Tags },
-  { title: "Recipients", url: "/recipients", icon: Users },
-  { title: "Planned", url: "/planned", icon: CalendarClock },
-  { title: "Statistics", url: "/statistics", icon: BarChart3 },
-  { title: "Recipient Insights", url: "/recipient-insights", icon: Briefcase },
+const budgetingGroups = [
+  {
+    label: "Overview",
+    items: [
+      { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Transactions", url: "/transactions", icon: Receipt },
+    ],
+  },
+  {
+    label: "Organization",
+    items: [
+      { title: "Categories", url: "/categories", icon: Tags },
+      { title: "Recipients", url: "/recipients", icon: Users },
+    ],
+  },
+  {
+    label: "Analysis",
+    items: [
+      { title: "Statistics", url: "/statistics", icon: BarChart3 },
+      { title: "Recipient Insights", url: "/recipient-insights", icon: Briefcase },
+      { title: "Planned Payments", url: "/planned", icon: CalendarClock },
+    ],
+  },
+  {
+    label: "Data",
+    items: [
+      { title: "Import / Export", url: "/import", icon: Import },
+    ],
+  },
 ];
 
-const budgetingActions = [
-  { title: "Import / Export", url: "/import", icon: Import },
-];
-
-const portfolioNav = [
-  { title: "Overview", url: "/portfolio", icon: LayoutDashboard },
-  { title: "Net Worth", url: "/portfolio/net-worth", icon: Wallet },
-  { title: "Performance", url: "/portfolio/performance", icon: BarChart3 },
-  { title: "Market Lookup", url: "/portfolio/market", icon: LineChart },
-  { title: "Stocks & ETFs", url: "/portfolio/stocks", icon: TrendingUp },
-  { title: "Crypto", url: "/portfolio/crypto", icon: Coins },
-  { title: "Real Estate", url: "/portfolio/real-estate", icon: Building2 },
-  { title: "Savings & Bonds", url: "/portfolio/savings", icon: PiggyBank },
-  { title: "Exchange Rates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
+const portfolioGroups = [
+  {
+    label: "Overview",
+    items: [
+      { title: "Dashboard", url: "/portfolio", icon: LayoutDashboard },
+      { title: "Net Worth", url: "/portfolio/net-worth", icon: Wallet },
+      { title: "Performance", url: "/portfolio/performance", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Investments",
+    items: [
+      { title: "Stocks & ETFs", url: "/portfolio/stocks", icon: TrendingUp },
+      { title: "Crypto", url: "/portfolio/crypto", icon: Coins },
+    ],
+  },
+  {
+    label: "Assets",
+    items: [
+      { title: "Real Estate", url: "/portfolio/real-estate", icon: Building2 },
+      { title: "Savings & Bonds", url: "/portfolio/savings", icon: PiggyBank },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { title: "Market Lookup", url: "/portfolio/market", icon: LineChart },
+      { title: "Exchange Rates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
+    ],
+  },
 ];
 
 function isActiveRoute(itemUrl: string, pathname: string) {
