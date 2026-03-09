@@ -121,6 +121,7 @@ app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/market', marketLookupRouter);
+app.use('/api/watchlist', watchlistRouter);
 
 logger.info('All route modules registered successfully');
 
