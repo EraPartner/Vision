@@ -24,6 +24,7 @@ import {
   PiggyBank,
   Receipt,
   Tags,
+  Target,
   TrendingUp,
   Users,
   Wallet,
