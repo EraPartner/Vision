@@ -55,16 +55,32 @@ export interface InvestmentSummary {
   created_at: string;
   updated_at: string;
 
-  // Computed
+  // Computed - Core
   totalUnits: number;
-  totalInvested: number;
+  totalInvested: number;       // Net capital deployed (buys - sells principal)
   totalFees: number;
   totalTaxes: number;
   totalDividends: number;
-  totalIncome: number;
+  totalIncome: number;         // All income: dividends + interest + rent
   currentValue: number;
-  gainLoss: number;
+  
+  // Computed - Advanced
+  avgCostBasis: number;        // Weighted average cost per unit (for unit-based)
+  realizedGain: number;        // Profit/loss from sells
+  unrealizedGain: number;      // Paper profit/loss on current holdings
+  totalGain: number;           // realizedGain + unrealizedGain
+  gainLoss: number;            // Legacy: totalGain + income - fees - taxes
   gainLossPercent: number;
+  
+  // Fixed income specific
+  accruedInterest: number;     // Interest earned since last payout
+  projectedAnnualInterest: number; // Expected annual interest
+  totalAppreciation: number;   // For real estate
+  
+  // Cost tracking
+  totalBuyCost: number;        // Total spent on buys (including fees)
+  totalSellProceeds: number;   // Total received from sells
+  
   transactions: any[];
   description?: string;
 }
