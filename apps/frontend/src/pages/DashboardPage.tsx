@@ -414,6 +414,14 @@ export default function DashboardPage() {
                 columns={columns}
                 data={recentTransactions}
                 emptyMessage="No transactions yet. Import a CSV to get started."
+                actions={
+                    <ExclusionToggle
+                        graphKey="recentTransactions"
+                        isFiltered={graphExclusions['recentTransactions'] ?? true}
+                        onToggle={toggleGraphExclusion}
+                        exclusionsApply={exclusionsApply}
+                    />
+                }
             />
         </div>
     );
