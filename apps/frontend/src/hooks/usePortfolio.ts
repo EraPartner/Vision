@@ -6,7 +6,7 @@ import type {
   PortfolioTransaction, PortfolioTransactionCreate,
   AssetClass,
 } from '@/types/api';
-import type { InvestmentSummary } from '@/types/portfolio';
+import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
 import { toast } from 'sonner';
 
 // ---- queries ----
@@ -32,6 +32,112 @@ function usePortfolioTransactionsQuery(investmentIds: number[]) {
     enabled: investmentIds.length > 0,
     staleTime: 30_000,
   });
+}
+
+// ---- calculation helpers ----
+
+interface CostBasisResult {
+  totalUnits: number;
+  totalCost: number;           // Cost basis of current holdings
+  avgCostBasis: number;        // Weighted average cost per unit
+  realizedGain: number;        // Profit/loss from closed positions
+  totalBuyCost: number;        // Total spent on buys (incl fees)
+  totalSellProceeds: number;   // Total received from sells
+}
+
+/**
+ * Calculate weighted average cost basis using FIFO-like weighted method
+ * Fees are added to cost basis on buys, subtracted from proceeds on sells
+ */
+function calculateCostBasis(txns: PortfolioTransaction[]): CostBasisResult {
+  // Sort chronologically for proper cost basis tracking
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+  
+  let totalUnits = 0;
+  let totalCost = 0;  // Cost basis of current holdings
+  let realizedGain = 0;
+  let totalBuyCost = 0;
+  let totalSellProceeds = 0;
+
+  for (const txn of sorted) {
+    const units = Number(txn.units) || 0;
+    const amount = Number(txn.amount) || 0;
+    const fees = Number(txn.fees) || 0;
+    const taxes = Number(txn.taxes) || 0;
+
+    if (txn.type === 'buy') {
+      // Add units at their cost (amount + fees are the cost)
+      const buyCost = amount + fees + taxes;
+      totalUnits += units;
+      totalCost += buyCost;
+      totalBuyCost += buyCost;
+    } else if (txn.type === 'sell') {
+      if (totalUnits > 0 && units > 0) {
+        // Calculate average cost of units being sold
+        const avgCost = totalCost / totalUnits;
+        const costOfSoldUnits = avgCost * units;
+        
+        // Proceeds minus cost minus fees = realized gain
+        const netProceeds = amount - fees - taxes;
+        realizedGain += netProceeds - costOfSoldUnits;
+        
+        // Remove sold units from pool
+        totalUnits -= units;
+        totalCost -= costOfSoldUnits;
+        totalSellProceeds += amount;
+      }
+    }
+  }
+
+  // Ensure no negative units due to floating point
+  totalUnits = Math.max(0, totalUnits);
+  totalCost = Math.max(0, totalCost);
+
+  return {
+    totalUnits,
+    totalCost,
+    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
+    realizedGain,
+    totalBuyCost,
+    totalSellProceeds,
+  };
+}
+
+/**
+ * Calculate accrued interest for fixed income assets
+ */
+function calculateAccruedInterest(
+  txns: PortfolioTransaction[],
+  principal: number,
+  interestRate: number
+): number {
+  if (!interestRate || principal <= 0) return 0;
+
+  // Find last interest payment or first buy
+  const sortedTxns = [...txns].sort((a, b) => b.date.localeCompare(a.date));
+  const lastInterestTxn = sortedTxns.find(t => t.type === 'interest');
+  const firstBuyTxn = [...txns]
+    .filter(t => t.type === 'buy')
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+
+  const startDate = lastInterestTxn?.date || firstBuyTxn?.date;
+  if (!startDate) return 0;
+
+  const start = new Date(startDate);
+  const now = new Date();
+  const daysSinceStart = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Simple interest calculation: P * r * t
+  const dailyRate = interestRate / 100 / 365;
+  return principal * dailyRate * daysSinceStart;
+}
+
+/**
+ * Calculate projected annual interest
+ */
+function calculateProjectedAnnualInterest(principal: number, interestRate: number): number {
+  if (!interestRate || principal <= 0) return 0;
+  return principal * (interestRate / 100);
 }
 
 // ---- main hook ----
@@ -135,37 +241,109 @@ export function usePortfolio() {
   const summaries: InvestmentSummary[] = useMemo(() => {
     return investments.map((inv) => {
       const txns = transactions.filter((t) => t.investment_id === inv.id);
-      const buys = txns.filter((t) => t.type === 'buy');
-      const sells = txns.filter((t) => t.type === 'sell');
-      const totalBuyUnits = buys.reduce((s, t) => s + (Number(t.units) || 0), 0);
-      const totalSellUnits = sells.reduce((s, t) => s + (Number(t.units) || 0), 0);
-      const totalUnits = totalBuyUnits - totalSellUnits;
-      const totalInvested = buys.reduce((s, t) => s + Number(t.amount), 0) - sells.reduce((s, t) => s + Number(t.amount), 0);
-      const totalFees = txns.filter((t) => t.type === 'fee').reduce((s, t) => s + Number(t.amount), 0)
-        + txns.reduce((s, t) => s + (Number(t.fees) || 0), 0);
-      const totalTaxes = txns.filter((t) => t.type === 'tax').reduce((s, t) => s + Number(t.amount), 0)
-        + txns.reduce((s, t) => s + (Number(t.taxes) || 0), 0);
-      const totalDividends = txns.filter((t) => t.type === 'dividend').reduce((s, t) => s + Number(t.amount), 0);
-      const totalInterest = txns.filter((t) => t.type === 'interest').reduce((s, t) => s + Number(t.amount), 0);
-      const totalRent = txns.filter((t) => t.type === 'rent_income').reduce((s, t) => s + Number(t.amount), 0);
-      const totalIncome = totalDividends + totalInterest + totalRent;
+      const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.asset_class);
+      const isFixedIncome = ['savings', 'bond'].includes(inv.asset_class);
+      const isRealEstate = inv.asset_class === 'real_estate';
 
-      let currentValue: number;
-      if (['stock', 'etf', 'crypto'].includes(inv.asset_class)) {
-        currentValue = (Number(inv.current_price) || 0) * totalUnits;
-      } else if (inv.asset_class === 'real_estate') {
-        const appreciations = txns.filter((t) => t.type === 'appreciation').reduce((s, t) => s + Number(t.amount), 0);
-        currentValue = totalInvested + appreciations;
+      // Calculate all fee and tax transactions
+      const feeTxns = txns.filter((t) => t.type === 'fee');
+      const taxTxns = txns.filter((t) => t.type === 'tax');
+      const totalFees = feeTxns.reduce((s, t) => s + Number(t.amount), 0)
+        + txns.reduce((s, t) => s + (Number(t.fees) || 0), 0);
+      const totalTaxes = taxTxns.reduce((s, t) => s + Number(t.amount), 0)
+        + txns.reduce((s, t) => s + (Number(t.taxes) || 0), 0);
+
+      // Income calculations
+      const totalDividends = txns.filter((t) => t.type === 'dividend').reduce((s, t) => s + Number(t.amount), 0);
+      const totalInterestPaid = txns.filter((t) => t.type === 'interest').reduce((s, t) => s + Number(t.amount), 0);
+      const totalRent = txns.filter((t) => t.type === 'rent_income').reduce((s, t) => s + Number(t.amount), 0);
+      const totalAppreciation = txns.filter((t) => t.type === 'appreciation').reduce((s, t) => s + Number(t.amount), 0);
+
+      let totalUnits = 0;
+      let avgCostBasis = 0;
+      let realizedGain = 0;
+      let unrealizedGain = 0;
+      let currentValue = 0;
+      let totalInvested = 0;
+      let totalBuyCost = 0;
+      let totalSellProceeds = 0;
+      let accruedInterest = 0;
+      let projectedAnnualInterest = 0;
+
+      if (isUnitBased) {
+        // Use weighted average cost basis for stocks/ETFs/crypto
+        const costBasis = calculateCostBasis(txns);
+        totalUnits = costBasis.totalUnits;
+        avgCostBasis = costBasis.avgCostBasis;
+        realizedGain = costBasis.realizedGain;
+        totalBuyCost = costBasis.totalBuyCost;
+        totalSellProceeds = costBasis.totalSellProceeds;
+        totalInvested = costBasis.totalCost; // Current cost basis
+        
+        // Current value = units * current price
+        const currentPrice = Number(inv.current_price) || 0;
+        currentValue = totalUnits * currentPrice;
+        
+        // Unrealized = (current price - avg cost) * units held
+        unrealizedGain = totalUnits > 0 ? (currentPrice - avgCostBasis) * totalUnits : 0;
+        
+      } else if (isFixedIncome) {
+        // Savings accounts and bonds: principal-based
+        const buys = txns.filter((t) => t.type === 'buy');
+        const sells = txns.filter((t) => t.type === 'sell');
+        const totalBuyAmount = buys.reduce((s, t) => s + Number(t.amount), 0);
+        const totalSellAmount = sells.reduce((s, t) => s + Number(t.amount), 0);
+        
+        totalInvested = totalBuyAmount - totalSellAmount;
+        totalBuyCost = totalBuyAmount;
+        totalSellProceeds = totalSellAmount;
+        
+        const interestRate = Number(inv.interest_rate) || 0;
+        accruedInterest = calculateAccruedInterest(txns, totalInvested, interestRate);
+        projectedAnnualInterest = calculateProjectedAnnualInterest(totalInvested, interestRate);
+        
+        // Current value = principal + accrued interest (unpaid)
+        currentValue = totalInvested + accruedInterest;
+        
+        // Realized gain from interest payments already received
+        realizedGain = totalInterestPaid;
+        unrealizedGain = accruedInterest;
+        
+      } else if (isRealEstate) {
+        // Real estate: purchase price + appreciation - depreciation
+        const buys = txns.filter((t) => t.type === 'buy');
+        const sells = txns.filter((t) => t.type === 'sell');
+        const totalBuyAmount = buys.reduce((s, t) => s + Number(t.amount), 0);
+        const totalSellAmount = sells.reduce((s, t) => s + Number(t.amount), 0);
+        
+        totalInvested = totalBuyAmount - totalSellAmount;
+        totalBuyCost = totalBuyAmount;
+        totalSellProceeds = totalSellAmount;
+        
+        // Current value = purchase price + appreciation
+        currentValue = totalInvested + totalAppreciation;
+        
+        // Unrealized = appreciation, Realized = rent income (less costs)
+        unrealizedGain = totalAppreciation;
+        realizedGain = totalRent - totalFees - totalTaxes;
+        
       } else {
-        currentValue = totalInvested + totalInterest;
+        // Generic fallback
+        const buys = txns.filter((t) => t.type === 'buy');
+        const sells = txns.filter((t) => t.type === 'sell');
+        totalInvested = buys.reduce((s, t) => s + Number(t.amount), 0) - sells.reduce((s, t) => s + Number(t.amount), 0);
+        currentValue = totalInvested;
       }
 
-      const gainLoss = currentValue - totalInvested - totalFees - totalTaxes + totalIncome;
-      const gainLossPercent = totalInvested > 0 ? (gainLoss / totalInvested) * 100 : 0;
+      const totalIncome = totalDividends + totalInterestPaid + totalRent;
+      const totalGain = realizedGain + unrealizedGain;
+      
+      // Legacy calculation for backwards compatibility
+      const gainLoss = totalGain + totalIncome - totalFees - totalTaxes;
+      const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
 
       return {
         ...inv,
-        // Map DB field to portfolio type field
         assetClass: inv.asset_class as any,
         totalUnits,
         totalInvested: Math.abs(totalInvested),
@@ -176,8 +354,24 @@ export function usePortfolio() {
         currentValue,
         currentPrice: Number(inv.current_price) || undefined,
         interestRate: Number(inv.interest_rate) || undefined,
+        
+        // Advanced metrics
+        avgCostBasis,
+        realizedGain,
+        unrealizedGain,
+        totalGain,
         gainLoss,
         gainLossPercent,
+        
+        // Fixed income
+        accruedInterest,
+        projectedAnnualInterest,
+        totalAppreciation,
+        
+        // Cost tracking
+        totalBuyCost,
+        totalSellProceeds,
+        
         transactions: txns.sort((a, b) => b.date.localeCompare(a.date)),
       } as InvestmentSummary;
     });
@@ -190,6 +384,8 @@ export function usePortfolio() {
 
   const totalPortfolioValue = useMemo(() => summaries.reduce((s, i) => s + i.currentValue, 0), [summaries]);
   const totalGainLoss = useMemo(() => summaries.reduce((s, i) => s + i.gainLoss, 0), [summaries]);
+  const totalRealizedGain = useMemo(() => summaries.reduce((s, i) => s + i.realizedGain, 0), [summaries]);
+  const totalUnrealizedGain = useMemo(() => summaries.reduce((s, i) => s + i.unrealizedGain, 0), [summaries]);
 
   return {
     investments, transactions, summaries,
@@ -197,5 +393,6 @@ export function usePortfolio() {
     addTransaction, deleteTransaction,
     refreshPrices, isRefreshingPrices: refreshPricesMutation.isPending,
     byAssetClass, totalPortfolioValue, totalGainLoss,
+    totalRealizedGain, totalUnrealizedGain,
   };
 }
