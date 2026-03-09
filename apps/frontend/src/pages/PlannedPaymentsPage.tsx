@@ -136,7 +136,9 @@ export default function PlannedPaymentsPage() {
           return false;
         }
 
-        const [year, month, day] = p.due_date.split('-').map(Number);
+        // Handle both YYYY-MM-DD and ISO datetime formats
+        const datePart = p.due_date.includes('T') ? p.due_date.split('T')[0] : p.due_date;
+        const [year, month, day] = datePart.split('-').map(Number);
         if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
           return false;
         }
