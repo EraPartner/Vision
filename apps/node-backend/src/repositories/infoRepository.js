@@ -492,27 +492,41 @@ export const infoRepository = {
    * expensive for this endpoint. If multi-currency accuracy is critical here,
    * this can be refactored later.
    */
-  async getCashflowComparison(excludedCategoryIds = []) {
+  async getCashflowComparison(excludedCategoryIds = [], excludedRecipientIds = []) {
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const currentDay = now.getDate();
 
-    const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validCatIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validRecIds = excludedRecipientIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
 
-    // Build category exclusion clause
+    // Build exclusion clauses
     let categoryExclusionJoin = '';
     let categoryExclusionWhere = '';
     const excludeParams = [];
-    if (validIds.length > 0) {
+    let paramIdx = 1;
+
+    if (validCatIds.length > 0 || validRecIds.length > 0) {
       categoryExclusionJoin = `
         LEFT JOIN recipients r ON t.recipient_id = r.id
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       `;
-      const placeholders = validIds.map((_, i) => `$${i + 1}`).join(', ');
-      categoryExclusionWhere = `
-        AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS DISTINCT FROM ALL(ARRAY[${placeholders}])
+    }
+
+    if (validCatIds.length > 0) {
+      const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
+      categoryExclusionWhere += `
+        AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
       `;
-      excludeParams.push(...validIds);
+      excludeParams.push(...validCatIds);
+    }
+
+    if (validRecIds.length > 0) {
+      const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
+      categoryExclusionWhere += `
+        AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+      `;
+      excludeParams.push(...validRecIds);
     }
 
     // --- 1. Average daily cumulative from last 6 complete months (with EUR conversion) ---
