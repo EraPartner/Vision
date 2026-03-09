@@ -345,7 +345,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                             return (
                                 <div
                                     key={col.key}
-                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 ${col.className || ""}`}
+                                    className={`px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap ${col.className || ""}`}
                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                 >
                                     <div className="flex items-center gap-1">
@@ -367,11 +367,10 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                 onOpenChange={(open) => setOpenFilter(open ? col.key : null)}
                                             >
                                                 <PopoverTrigger asChild>
-                                                    <button className={`p-0.5 rounded transition-colors ${
-                                                        hasFilter
+                                                    <button className={`p-0.5 rounded transition-colors ${hasFilter
                                                             ? "text-primary"
                                                             : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
-                                                    }`}>
+                                                        }`}>
                                                         <Filter className="h-3 w-3" />
                                                     </button>
                                                 </PopoverTrigger>
@@ -424,93 +423,93 @@ export function VirtualDataTable<T extends Record<string, any>>({
                         </div>
                     ) : (
                         <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
-                                    {virtualizer.getVirtualItems().map((virtualRow) => {
-                                        const row = processedData[virtualRow.index];
-                                        const idx = virtualRow.index;
-                                        const isEditing = editingRow === idx;
+                            {virtualizer.getVirtualItems().map((virtualRow) => {
+                                const row = processedData[virtualRow.index];
+                                const idx = virtualRow.index;
+                                const isEditing = editingRow === idx;
 
-                                        return (
-                                            <div
-                                                key={virtualRow.key}
-                                                data-index={virtualRow.index}
-                                                ref={virtualizer.measureElement}
-                                                className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
-                                                style={{
-                                                    position: "absolute",
-                                                    top: 0,
-                                                    left: 0,
-                                                    width: "100%",
-                                                    transform: `translateY(${virtualRow.start}px)`,
-                                                }}
-                                                onDoubleClick={() => {
-                                                    if (onRowDoubleClick) {
-                                                        onRowDoubleClick(row, idx);
-                                                    } else if (hasEditableColumns && !isEditing) {
-                                                        startEditing(idx, row);
-                                                    }
-                                                }}
-                                            >
-                                                {columns.map((col) => {
-                                                    const width = columnWidths[col.key];
-                                                    return (
-                                                        <div
-                                                            key={col.key}
-                                                            className={`px-4 py-2 text-sm flex-1 min-w-0 ${col.className || ""}`}
-                                                            style={width ? { width: `${width}px`, flex: "none" } : undefined}
-                                                        >
-                                                            {isEditing && col.editable ? (
-                                                                <Input
-                                                                    type={col.type || "text"}
-                                                                    value={editValues[col.key] ?? ""}
-                                                                    onChange={(e) =>
-                                                                        setEditValues((prev) => ({
-                                                                            ...prev,
-                                                                            [col.key]: col.type === "number"
-                                                                                ? parseFloat(e.target.value) || 0
-                                                                                : e.target.value,
-                                                                        }))
-                                                                    }
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === "Enter") { e.preventDefault(); saveEditing(idx); }
-                                                                        else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
-                                                                    }}
-                                                                    className="h-8 text-sm"
-                                                                />
-                                                            ) : col.render ? (
-                                                                col.render(row, isEditing, idx)
-                                                            ) : (
-                                                                String(row[col.key] ?? "")
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                                {hasEditableColumns && (
-                                                    <div className="px-1 py-2 text-right" style={{ width: "40px", flex: "none" }}>
-                                                        {isEditing ? (
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                <Button variant="ghost" size="icon"
-                                                                    className="h-8 w-8 text-accent hover:text-accent hover:bg-accent/10"
-                                                                    onClick={() => saveEditing(idx)}>
-                                                                    <Check className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button variant="ghost" size="icon"
-                                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                                    onClick={cancelEditing}>
-                                                                    <X className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        ) : (
-                                                            <Button variant="ghost" size="icon"
-                                                                className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                                onClick={() => startEditing(idx, row)}>
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        data-index={virtualRow.index}
+                                        ref={virtualizer.measureElement}
+                                        className={`flex items-center border-b border-border transition-colors hover:bg-muted/50 ${isEditing ? "bg-primary/5" : ""} ${onRowDoubleClick ? "cursor-pointer" : ""}`}
+                                        style={{
+                                            position: "absolute",
+                                            top: 0,
+                                            left: 0,
+                                            width: "100%",
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                        onDoubleClick={() => {
+                                            if (onRowDoubleClick) {
+                                                onRowDoubleClick(row, idx);
+                                            } else if (hasEditableColumns && !isEditing) {
+                                                startEditing(idx, row);
+                                            }
+                                        }}
+                                    >
+                                        {columns.map((col) => {
+                                            const width = columnWidths[col.key];
+                                            return (
+                                                <div
+                                                    key={col.key}
+                                                    className={`px-4 py-2 text-sm flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] ${col.className || ""}`}
+                                                    style={width ? { width: `${width}px`, flex: "none" } : undefined}
+                                                >
+                                                    {isEditing && col.editable ? (
+                                                        <Input
+                                                            type={col.type || "text"}
+                                                            value={editValues[col.key] ?? ""}
+                                                            onChange={(e) =>
+                                                                setEditValues((prev) => ({
+                                                                    ...prev,
+                                                                    [col.key]: col.type === "number"
+                                                                        ? parseFloat(e.target.value) || 0
+                                                                        : e.target.value,
+                                                                }))
+                                                            }
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") { e.preventDefault(); saveEditing(idx); }
+                                                                else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
+                                                            }}
+                                                            className="h-8 text-sm"
+                                                        />
+                                                    ) : col.render ? (
+                                                        col.render(row, isEditing, idx)
+                                                    ) : (
+                                                        String(row[col.key] ?? "")
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                        {hasEditableColumns && (
+                                            <div className="px-1 py-2 text-right" style={{ width: "40px", flex: "none" }}>
+                                                {isEditing ? (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button variant="ghost" size="icon"
+                                                            className="h-8 w-8 text-accent hover:text-accent hover:bg-accent/10"
+                                                            onClick={() => saveEditing(idx)}>
+                                                            <Check className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={cancelEditing}>
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
                                                     </div>
+                                                ) : (
+                                                    <Button variant="ghost" size="icon"
+                                                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                        onClick={() => startEditing(idx, row)}>
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
                                                 )}
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -587,9 +586,8 @@ function ColumnFilter({
                             <button
                                 key={v}
                                 onClick={() => { onChange(v); onClose(); }}
-                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${
-                                    value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
-                                }`}
+                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
+                                    }`}
                             >
                                 {v}
                             </button>

@@ -70,13 +70,52 @@ export function normalizeToUppercase(name) {
   return name.trim().toUpperCase();
 }
 
+/**
+ * Normalize a name for uniqueness matching by sorting all non-initial tokens.
+ * Mirrors Python's normalize_name_for_matching() exactly.
+ *
+ * This creates a canonical form that:
+ * - Filters out single-letter alphabetic tokens (initials like "F", "J")
+ * - Keeps all other tokens including numbers (e.g., "STORE 1" vs "STORE 2")
+ * - Sorts all remaining tokens alphabetically for consistent ordering
+ * - Removes punctuation
+ *
+ * Examples:
+ * - "John Smith" → "JOHN SMITH"
+ * - "Smith John" → "JOHN SMITH" (sorted)
+ * - "John F Doe" → "DOE JOHN" (F filtered out as initial)
+ * - "John F Kennedy" → "JOHN KENNEDY" (F filtered)
+ * - "Test Recipient 1" → "1 RECIPIENT TEST" (1 kept, sorted)
+ *
+ * @param {string} name - The recipient name to normalize for matching
+ * @returns {string} The normalized name with all substantial tokens sorted alphabetically (uppercase)
+ */
 export function normalizeForMatching(name) {
   if (!name) return name;
-  let normalized = name.trim().toUpperCase().replace(/[.,]/g, ' ');
+
+  // Normalize to uppercase and strip
+  let normalized = name.trim().toUpperCase();
+
+  // Remove common punctuation (periods, commas)
+  normalized = normalized.replace(/\./g, ' ').replace(/,/g, ' ');
+
+  // Split into tokens and filter empty strings
   const tokens = normalized.split(/\s+/).filter(Boolean);
-  if (tokens.length <= 1) return tokens[0] || '';
+
+  if (!tokens.length) return '';
+
+  // Single word name - just return it
+  if (tokens.length === 1) return tokens[0];
+
+  // Filter out single-LETTER tokens (initials like "F", "J")
+  // Keep single-digit tokens as they're meaningful (e.g., "STORE 1" vs "STORE 2")
+  // Keep any multi-character tokens
   const substantial = tokens.filter(t => t.length > 1 || !/^[A-Z]$/.test(t));
+
+  // If we have no substantial tokens (all were initials), return sorted originals
   if (!substantial.length) return tokens.sort().join(' ');
+
+  // Sort all substantial tokens alphabetically for consistent ordering
   return substantial.sort().join(' ');
 }
 

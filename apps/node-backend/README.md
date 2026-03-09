@@ -73,3 +73,7 @@ cd apps/backend && ./venv/bin/python main.py
 ```
 
 Both backends are fully compatible with the frontend - just point to the same port.
+
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only). See the root [LICENSE](../../LICENSE) file.

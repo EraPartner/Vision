@@ -178,9 +178,9 @@ export default function MarketLookupPage() {
 
   const quote = quoteData;
   const isPositive = (quote?.change ?? 0) >= 0;
-  
+
   // Check if this asset already exists in portfolio
-  const existingInvestment = quote ? summaries.find(s => 
+  const existingInvestment = quote ? summaries.find(s =>
     s.symbol?.toLowerCase() === quote.symbol.toLowerCase()
   ) : null;
 
@@ -284,8 +284,8 @@ export default function MarketLookupPage() {
                       <span>Auto-refreshes every 60s</span>
                     </div>
                     {quote && (
-                      <AddInvestmentFromMarketDialog 
-                        quote={quote} 
+                      <AddInvestmentFromMarketDialog
+                        quote={quote}
                         existingInvestment={existingInvestment}
                       />
                     )}

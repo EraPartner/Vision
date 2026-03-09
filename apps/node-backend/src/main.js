@@ -195,8 +195,10 @@ async function start() {
         logger.info('Database connection verified successfully');
         // Ensure all tables exist (idempotent)
         await initializeSchema();
-        // Pre-warm exchange rate cache (non-blocking)
-        warmExchangeRateCache().catch(() => { });
+        // Pre-warm exchange rate cache (non-blocking) - fetch fresh rates from ECB on startup
+        warmExchangeRateCache().catch((err) => {
+          logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
+        });
       } else {
         attemptCount++;
         logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts})`);

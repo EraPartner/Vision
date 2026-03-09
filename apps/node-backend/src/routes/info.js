@@ -83,7 +83,7 @@ router.get('/monthly-summary', async (req, res) => {
       if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
       excludedCategoryIds = excludedCategoryIds.map(Number);
     } else {
-      excludedCategoryIds = [9, 22]; // Default exclusions
+      excludedCategoryIds = [];
     }
 
     logger.debug('Monthly summary request', { excludedCategoryIds });
@@ -245,7 +245,10 @@ router.get('/exchange-rates', async (req, res) => {
 // POST /api/info/exchange-rates/refresh - Fetch fresh rates from ECB and save to database
 router.post('/exchange-rates/refresh', async (req, res) => {
   try {
-    const { warmCache } = await import('../services/currencyConversionService.js');
+    const { warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
+    // Clear memory cache to force fresh fetch from ECB API
+    clearMemoryCache();
+    // Fetch fresh rates from ECB and save to database
     await warmCache();
     res.json({ message: 'Exchange rates refreshed from ECB' });
   } catch (err) {

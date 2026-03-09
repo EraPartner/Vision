@@ -302,8 +302,9 @@ export async function importCSVWithRawStorage(filePath, bankName, customConfig =
  */
 async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (!name) name = 'UNKNOWN';
+  const { normalizeForMatching } = await import('./textNormalization.js');
   const upperName = name.toUpperCase().trim();
-  const normalizedName = upperName.replace(/\s+/g, ' ');
+  const normalizedName = normalizeForMatching(name);
 
   const existing = await query(
     `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
@@ -322,7 +323,7 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
           `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
            VALUES ($1, $2, $3, false, true) ON CONFLICT DO NOTHING`,
           [recipientId, accountNumber, bankName || null]
-        ).catch(() => {});
+        ).catch(() => { });
       }
     }
     return recipientId;
@@ -339,11 +340,11 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
       `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
        VALUES ($1, $2, $3, true, true) ON CONFLICT DO NOTHING`,
       [newId, accountNumber, bankName || null]
-    ).catch(() => {});
+    ).catch(() => { });
   }
 
   if (address) {
-    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => {});
+    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => { });
   }
 
   return newId;

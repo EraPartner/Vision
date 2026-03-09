@@ -22,7 +22,7 @@ type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
     const { settings } = useSettings();
-    
+
     // Per-graph exclusion override state
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
     const toggleGraphExclusion = useCallback((graphKey: string) => {
@@ -31,14 +31,14 @@ export default function DashboardPage() {
             [graphKey]: !(prev[graphKey] ?? true),
         }));
     }, []);
-    
+
     // Check if exclusions should apply to dashboard
-    const exclusionsApply = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard') && 
+    const exclusionsApply = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard') &&
         (settings.excludedCategoryIds.length > 0 || settings.excludedRecipientIds.length > 0 || settings.excludeHiddenCategories);
-    
+
     // Fetch real-time statistics from /api/info endpoints with applied filters
     const { data: statsData, isLoading: statsLoading, error: statsError } = useFilteredDashboardStats();
-    
+
     // Fetch transactions for charts and recent transactions table
     const { data: transactionsData, isLoading: transactionsLoading, error: transactionsError } = useTransactions({ limit: 50 });
 
@@ -48,7 +48,7 @@ export default function DashboardPage() {
         queryFn: () => apiClient.getCategories({ limit: 1000 }),
         staleTime: 60000,
     });
-    
+
     // Build complete excluded category IDs list (including hidden categories)
     const allExcludedCategoryIds = (() => {
         if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
@@ -57,13 +57,13 @@ export default function DashboardPage() {
         const ids = [...settings.excludedCategoryIds];
         if (settings.excludeHiddenCategories && categoriesData) {
             const hiddenIds = categoriesData.items
-                .filter((cat) => !cat.active)
+                .filter((cat) => !cat.is_active)
                 .map((cat) => cat.id);
             ids.push(...hiddenIds);
         }
         return [...new Set(ids)];
     })();
-    
+
     // Recipient exclusions
     const excludedRecipientIds = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
         ? settings.excludedRecipientIds
@@ -82,14 +82,14 @@ export default function DashboardPage() {
         staleTime: 30000,
         enabled: exclusionsApply,
     });
-    
+
     // Fetch monthly summary — UNFILTERED version (stable query key)
     const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useQuery({
         queryKey: ['monthlySummary', 'unfiltered'],
         queryFn: () => apiClient.getMonthlyFinancialSummary({}),
         staleTime: 30000,
     });
-    
+
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
     // Fetch cashflow comparison — FILTERED version (stable query key)
@@ -99,29 +99,85 @@ export default function DashboardPage() {
         staleTime: 30000,
         enabled: exclusionsApply,
     });
-    
+
     // Fetch cashflow comparison — UNFILTERED version (stable query key)
     const { data: cashflowDataUnfiltered, isLoading: cashflowUnfilteredLoading } = useQuery({
         queryKey: ['cashflowComparison', 'unfiltered'],
         queryFn: () => apiClient.getCashflowComparison({}),
         staleTime: 30000,
     });
-    
+
     const cashflowLoading = cashflowFilteredLoading || cashflowUnfilteredLoading;
 
+    // Fetch recent transactions that survive exclusions (up to 5),
+    // scanning additional pages when early rows are excluded.
+    const {
+        data: recentFilteredTransactions,
+        isLoading: recentFilteredLoading,
+        error: recentFilteredError,
+    } = useQuery({
+        queryKey: ['dashboardRecentTransactions', allExcludedCategoryIds, excludedRecipientIds, exclusionsApply],
+        queryFn: async () => {
+            const pageSize = 200;
+            let offset = 0;
+            const picked: any[] = [];
+
+            const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
+            const excludedRecipientIdSet = new Set(excludedRecipientIds);
+
+            while (picked.length < 5) {
+                const page = await apiClient.getTransactions({
+                    limit: pageSize,
+                    offset,
+                    active: true,
+                });
+
+                if (page.items.length === 0) {
+                    break;
+                }
+
+                for (const t of page.items) {
+                    if (t.category_id && excludedCategoryIdSet.has(t.category_id)) {
+                        continue;
+                    }
+
+                    if (t.recipient_id && excludedRecipientIdSet.has(t.recipient_id)) {
+                        continue;
+                    }
+
+                    picked.push(t);
+                    if (picked.length === 5) {
+                        break;
+                    }
+                }
+
+                offset += pageSize;
+                if (offset >= page.total || page.items.length < pageSize) {
+                    break;
+                }
+            }
+
+            return picked;
+        },
+        enabled: exclusionsApply,
+        staleTime: 30000,
+    });
+
+    const recentTransactionsLoading = exclusionsApply ? recentFilteredLoading : false;
+
     const allTransactions = transactionsData?.items || [];
-    
+
     // Apply settings filters to transactions
     const transactions = (() => {
         if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
             return allTransactions;
         }
-        
+
         // Build hidden category IDs list if needed
         let hiddenCategoryIds: number[] = [];
         if (settings.excludeHiddenCategories && categoriesData) {
             hiddenCategoryIds = categoriesData.items
-                .filter((cat) => !cat.active)
+                .filter((cat) => !cat.is_active)
                 .map((cat) => cat.id);
         }
 
@@ -139,16 +195,16 @@ export default function DashboardPage() {
             if (t.category_id && excludedCategoryIdSet.has(t.category_id)) {
                 return false;
             }
-            
+
             // Exclude if recipient is in exclusion list
             if (t.recipient_id && excludedRecipientIdSet.has(t.recipient_id)) {
                 return false;
             }
-            
+
             return true;
         });
     })();
-    
+
     // Use real-time statistics from API (last month with data)
     const totalTransactions = statsData?.totalTransactions ?? 0;
     const totalSpending = statsData?.monthlySpending ?? 0;
@@ -163,7 +219,7 @@ export default function DashboardPage() {
         }
         return monthlySummaryUnfiltered?.months || [];
     };
-    
+
     const getCashflowData = () => {
         const useExclusions = graphExclusions['cashflowComparison'] ?? true;
         if (useExclusions && exclusionsApply && cashflowDataFiltered) {
@@ -179,20 +235,20 @@ export default function DashboardPage() {
     const categoryBreakdown = (() => {
         const useExclusions = graphExclusions['categoryPie'] ?? true;
         const txToUse = (useExclusions && exclusionsApply) ? transactions : allTransactions;
-        
+
         const categoryMap = new Map<string, { name: string; count: number }>();
-        
+
         txToUse.forEach(t => {
             const key = t.category_name || 'Uncategorized';
             const name = t.category_name || 'Uncategorized';
-            
+
             if (categoryMap.has(key)) {
                 categoryMap.get(key)!.count++;
             } else {
                 categoryMap.set(key, { name, count: 1 });
             }
         });
-        
+
         return Array.from(categoryMap.values());
     })();
 
@@ -200,17 +256,17 @@ export default function DashboardPage() {
     const categoryData = (() => {
         // Sort by count descending
         const sorted = [...categoryBreakdown].sort((a, b) => b.count - a.count);
-        
+
         // Take top 5 categories
         const topCategories = sorted.slice(0, 5);
-        
+
         // Sum up the rest as "Other"
         const otherCount = sorted.slice(7).reduce((sum, cat) => sum + cat.count, 0);
-        
+
         // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
         const extractDetail = (categoryName: string): string => {
             if (categoryName === 'Uncategorized') return categoryName;
-            
+
             const parts = categoryName.split(':');
             if (parts.length > 1) {
                 // Get the detail part and format it nicely
@@ -220,12 +276,12 @@ export default function DashboardPage() {
             // If no colon, just format the whole name nicely
             return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
         };
-        
+
         const result = topCategories.map(cat => ({
             name: extractDetail(cat.name),
             value: cat.count
         }));
-        
+
         // Add "Other" if there are more categories
         if (otherCount > 0) {
             result.push({
@@ -233,16 +289,18 @@ export default function DashboardPage() {
                 value: otherCount
             });
         }
-        
+
         return result;
     })();
 
     // Recent transactions data (with per-graph toggle)
     const recentTransactionsSource = (() => {
         const useExclusions = graphExclusions['recentTransactions'] ?? true;
-        return (useExclusions && exclusionsApply) ? transactions : allTransactions;
+        return (useExclusions && exclusionsApply)
+            ? (recentFilteredTransactions ?? [])
+            : allTransactions;
     })();
-    
+
     const recentTransactions = recentTransactionsSource.slice(0, 5).map(t => ({
         id: t.id,
         date: (t as any).date || t.transaction_date || '',
@@ -267,7 +325,7 @@ export default function DashboardPage() {
                 }
             },
         },
-        {key: "description", header: "Description"},
+        { key: "description", header: "Description" },
         {
             key: "category",
             header: "Category",
@@ -277,7 +335,7 @@ export default function DashboardPage() {
                 </Badge>
             ),
         },
-        {key: "recipient", header: "Recipient"},
+        { key: "recipient", header: "Recipient" },
         {
             key: "amount",
             header: "Amount",
@@ -290,7 +348,7 @@ export default function DashboardPage() {
         },
     ];
 
-    if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading) {
+    if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading || recentTransactionsLoading) {
         return (
             <div className="space-y-8 animate-in">
                 <div>
@@ -298,14 +356,14 @@ export default function DashboardPage() {
                     <p className="text-muted-foreground mt-1">Loading your financial data...</p>
                 </div>
                 <div className="flex items-center justify-center h-96">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
             </div>
         );
     }
 
-    if (statsError || transactionsError) {
-        const errorMessage = statsError?.message || transactionsError?.message || 'Unknown error';
+    if (statsError || transactionsError || recentFilteredError) {
+        const errorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || 'Unknown error';
         return (
             <div className="space-y-8 animate-in">
                 <div>
@@ -326,14 +384,14 @@ export default function DashboardPage() {
 
             {/* Stats */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt}/>
+                <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt} />
                 <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="down"
-                          subtitle="Most recent month"/>
+                    subtitle="Most recent month" />
                 <StatCard title="Last Month Income" value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="up"
-                          subtitle="Most recent month"/>
+                    subtitle="Most recent month" />
                 <StatCard title="Last Month Net" value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
-                          trend={netBalance >= 0 ? "up" : "down"}
-                          subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"}/>
+                    trend={netBalance >= 0 ? "up" : "down"}
+                    subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"} />
             </div>
 
             {/* Bank Account Balances */}

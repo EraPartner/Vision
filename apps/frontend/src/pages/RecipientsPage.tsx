@@ -30,6 +30,7 @@ type TableRecipient = {
 export default function RecipientsPage() {
     const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
+    const [showUncategorized, setShowUncategorized] = useState(false);
     const [search, setSearch] = useState("");
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
     const [allItems, setAllItems] = useState<any[]>([]);
@@ -45,8 +46,8 @@ export default function RecipientsPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['recipients-virtual', { active: !showAll, search: search || undefined }],
-        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined }),
+        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized }],
+        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized }),
         staleTime: 30_000,
     });
 
@@ -69,6 +70,7 @@ export default function RecipientsPage() {
                 offset: offsetRef.current,
                 active: !showAll,
                 search: search || undefined,
+                uncategorized: showUncategorized,
             });
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((r: any) => r.id));
@@ -84,7 +86,7 @@ export default function RecipientsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search]);
+    }, [showAll, search, showUncategorized]);
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = allItems[idx];
@@ -180,7 +182,7 @@ export default function RecipientsPage() {
                             onSelect={(catId) => {
                                 updateMutation.mutate({
                                     id: row.id,
-                                    data: { default_category_id: catId ?? undefined },
+                                    data: { default_category_id: catId },
                                 });
                             }}
                             className="w-full"
@@ -284,6 +286,15 @@ export default function RecipientsPage() {
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 {showAll ? "Showing All" : "Active Only"}
+            </Button>
+            <Button
+                variant={showUncategorized ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setShowUncategorized(!showUncategorized)}
+                className="gap-1.5"
+            >
+                <Badge variant={showUncategorized ? "default" : "outline"} className="h-4 w-4 p-0 flex items-center justify-center">?</Badge>
+                {showUncategorized ? "Uncategorized" : "All Categories"}
             </Button>
             <Button
                 variant="outline"
