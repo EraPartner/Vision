@@ -13,6 +13,7 @@ import {
 import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -591,9 +592,13 @@ export default function StatisticsPage() {
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
-          <ChartCard title="Top Recipients by Spending" description="Where your money goes most" graphKey="topRecipients" {...chartCardProps}>
-            {(d) => <TopRecipientsChart data={d} />}
-          </ChartCard>
+          <RecipientInsightsTab
+            statisticsTopRecipientsChart={
+              <ChartCard title="Top Recipients by Spending" description="Where your money goes most (from statistics)" graphKey="topRecipients" {...chartCardProps}>
+                {(d) => <TopRecipientsChart data={d} />}
+              </ChartCard>
+            }
+          />
         </TabsContent>
 
         <TabsContent value="yearly" className="space-y-6">
