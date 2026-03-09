@@ -48,12 +48,18 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     }
   }
 
+  // Normalize planned_date to YYYY-MM-DD format (strip time portion if present)
+  let normalizedDate = pt.planned_date;
+  if (normalizedDate && normalizedDate.includes('T')) {
+    normalizedDate = normalizedDate.split('T')[0];
+  }
+
   return {
     id: pt.id,
     name: pt.memo || pt.recipient_name || "Unnamed payment",
     amount: pt.amount,
     currency: pt.currency || "EUR",
-    due_date: pt.planned_date,
+    due_date: normalizedDate,
     url: pt.url,
     is_recurring: pt.is_recurring,
     frequency: pt.is_recurring ? frequency : undefined,
