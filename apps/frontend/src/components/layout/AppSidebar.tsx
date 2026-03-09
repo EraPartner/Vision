@@ -90,6 +90,7 @@ const portfolioGroups = [
     label: "Tools",
     items: [
       { title: "Market Lookup", url: "/portfolio/market", icon: LineChart },
+      { title: "Watchlist", url: "/portfolio/watchlist", icon: Target },
       { title: "Exchange Rates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
     ],
   },
