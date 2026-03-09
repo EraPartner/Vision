@@ -72,7 +72,14 @@ router.get('/quote', async (req, res) => {
         const [quote, summary] = await Promise.allSettled([
           yahooFinance.quote(sym),
           yahooFinance.quoteSummary(sym, {
-            modules: ['summaryDetail', 'defaultKeyStatistics', 'price', 'financialData'],
+            modules: [
+              'summaryDetail',
+              'defaultKeyStatistics',
+              'price',
+              'financialData',
+              'recommendationTrend',
+              'upgradeDowngradeHistory',
+            ],
           }),
         ]);
 
@@ -96,6 +103,31 @@ router.get('/quote', async (req, res) => {
         const eps = pr.epsTrailingTwelveMonths ?? ks.trailingEps ?? q.epsTrailingTwelveMonths;
         const beta = sd.beta ?? ks.beta ?? q.beta;
         const priceToBook = ks.priceToBook ?? q.priceToBook;
+
+        // Analyst consensus — current month bucket (period "0m")
+        const trendBuckets = s?.recommendationTrend?.trend || [];
+        const currentTrend = trendBuckets.find(t => t.period === '0m') || trendBuckets[0] || null;
+        const analystConsensus = currentTrend
+          ? {
+            strongBuy: currentTrend.strongBuy ?? 0,
+            buy: currentTrend.buy ?? 0,
+            hold: currentTrend.hold ?? 0,
+            sell: currentTrend.sell ?? 0,
+            strongSell: currentTrend.strongSell ?? 0,
+          }
+          : null;
+
+        // Recent analyst upgrades / downgrades (latest 10)
+        const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
+          .slice(0, 10)
+          .map(h => ({
+            date: h.epochGradeDate,
+            firm: h.firm,
+            toGrade: h.toGrade,
+            fromGrade: h.fromGrade || null,
+            action: h.action,
+            priceTarget: h.currentPriceTarget ?? null,
+          }));
 
         return {
           symbol: q.symbol,
@@ -121,6 +153,8 @@ router.get('/quote', async (req, res) => {
           eps,
           beta,
           priceToBook,
+          analystConsensus,
+          recentAnalystActions,
         };
       })
     );

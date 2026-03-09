@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus,
+  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus, Users,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
@@ -46,6 +46,23 @@ interface SearchResult {
   exchange: string;
 }
 
+interface AnalystConsensus {
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
+}
+
+interface AnalystAction {
+  date: string;
+  firm: string;
+  toGrade: string;
+  fromGrade: string | null;
+  action: string;
+  priceTarget: number | null;
+}
+
 interface Quote {
   symbol: string;
   name: string;
@@ -68,6 +85,10 @@ interface Quote {
   forwardPE: number;
   dividendYield: number;
   eps: number;
+  beta?: number;
+  priceToBook?: number;
+  analystConsensus: AnalystConsensus | null;
+  recentAnalystActions: AnalystAction[];
 }
 
 interface ChartPoint {
@@ -99,6 +120,13 @@ function fmtLargeNum(val: number | null | undefined) {
   if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
   if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
   return fmtNum(val, { maximumFractionDigits: 0 });
+}
+
+function gradeColor(grade: string): string {
+  const g = grade.toLowerCase();
+  if (/buy|outperform|overweight|accumulate/.test(g)) return "text-green-500 dark:text-green-400";
+  if (/sell|underperform|underweight|reduce/.test(g)) return "text-destructive";
+  return "text-yellow-500 dark:text-yellow-400";
 }
 
 function fmtDate(ts: number, range: string) {
@@ -443,6 +471,8 @@ export default function MarketLookupPage() {
                       { label: "Forward P/E", value: quote.forwardPE ? quote.forwardPE.toFixed(2) : "—" },
                       { label: "EPS (TTM)", value: quote.eps ? fmtPrice(quote.eps, quote.currency) : "—" },
                       { label: "Dividend Yield", value: quote.dividendYield ? `${(quote.dividendYield * 100).toFixed(2)}%` : "—" },
+                      { label: "Beta", value: quote.beta != null ? quote.beta.toFixed(2) : "—" },
+                      { label: "Price / Book", value: quote.priceToBook != null ? quote.priceToBook.toFixed(2) : "—" },
                       { label: "52-Week Range", value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
@@ -455,6 +485,96 @@ export default function MarketLookupPage() {
               </Card>
             </div>
           )}
+
+          {/* Analyst Ratings */}
+          {quote?.analystConsensus && (() => {
+            const { strongBuy, buy, hold, sell, strongSell } = quote.analystConsensus!;
+            const total = strongBuy + buy + hold + sell + strongSell;
+            if (total === 0) return null;
+            const bullish = strongBuy + buy;
+            const bearish = sell + strongSell;
+            const bullPct = bullish / total;
+            const bearPct = bearish / total;
+            const verdict =
+              bullPct >= 0.6 ? "Strong Buy"
+                : bullPct >= 0.45 ? "Buy"
+                  : bearPct >= 0.6 ? "Strong Sell"
+                    : bearPct >= 0.45 ? "Sell"
+                      : "Hold";
+            const verdictColor =
+              bullPct >= 0.45 ? "text-green-500 dark:text-green-400"
+                : bearPct >= 0.45 ? "text-destructive"
+                  : "text-yellow-500 dark:text-yellow-400";
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Analyst Ratings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-6">
+                    <div className="text-center shrink-0">
+                      <div className={cn("text-2xl font-bold", verdictColor)}>{verdict}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{total} analyst{total !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      {([
+                        { label: "Strong Buy", count: strongBuy, barClass: "bg-green-600" },
+                        { label: "Buy", count: buy, barClass: "bg-green-400" },
+                        { label: "Hold", count: hold, barClass: "bg-yellow-400" },
+                        { label: "Sell", count: sell, barClass: "bg-red-400" },
+                        { label: "Strong Sell", count: strongSell, barClass: "bg-red-600" },
+                      ] as { label: string; count: number; barClass: string }[]).map(({ label, count, barClass }) => (
+                        <div key={label} className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground w-20 shrink-0">{label}</span>
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full", barClass)}
+                              style={{ width: `${(count / total) * 100}%` }}
+                            />
+                          </div>
+                          <span className="w-4 text-right tabular-nums text-muted-foreground">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {quote.recentAnalystActions && quote.recentAnalystActions.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Recent Actions</p>
+                      <div className="space-y-2">
+                        {quote.recentAnalystActions.map((action, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            {action.action === "up"
+                              ? <TrendingUp className="h-3 w-3 text-green-500 dark:text-green-400 shrink-0" />
+                              : action.action === "down"
+                                ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
+                                : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            <span className="text-muted-foreground shrink-0 w-14">
+                              {new Date(action.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </span>
+                            <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
+                            <span className={cn("shrink-0", gradeColor(action.toGrade))}>
+                              {action.toGrade}
+                              {action.fromGrade && action.fromGrade !== action.toGrade && (
+                                <span className="text-muted-foreground font-normal"> ← {action.fromGrade}</span>
+                              )}
+                            </span>
+                            {action.priceTarget != null && (
+                              <span className="shrink-0 text-muted-foreground ml-2">
+                                PT {fmtPrice(action.priceTarget, quote.currency)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* News */}
           <Card>
