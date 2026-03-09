@@ -256,12 +256,12 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     ]}
                   />
                   <ReferenceLine
-                    y={item.target_price}
+                    y={targetPrice}
                     stroke="hsl(var(--primary))"
                     strokeDasharray="5 5"
                     strokeWidth={2}
                     label={{
-                      value: `Target: ${item.currency}${item.target_price.toFixed(2)}`,
+                      value: `Target: ${item.currency}${targetPrice.toFixed(2)}`,
                       position: "insideTopRight",
                       fill: "hsl(var(--primary))",
                       fontSize: 12,
