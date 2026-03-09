@@ -68,49 +68,45 @@ export default function DashboardPage() {
         ? settings.excludedRecipientIds
         : [];
 
-    // Helper to get exclusion params for a specific graph
-    const getExclusionParams = (graphKey: string) => {
-        const useExclusions = graphExclusions[graphKey] ?? true;
-        if (!useExclusions || !exclusionsApply) {
-            return { excluded_category_ids: undefined, excluded_recipient_ids: undefined };
-        }
-        return {
-            excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
-            excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
-        };
+    // Stable exclusion params (don't change with toggle)
+    const filteredExclusionParams = {
+        excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
+        excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
     };
 
-    // Fetch monthly summary for chart (6 months) — with per-graph exclusion support
-    const monthlyExclusions = getExclusionParams('monthlyTrends');
-    const { data: monthlySummary, isLoading: monthlyLoading } = useQuery({
-        queryKey: ['monthlySummary', monthlyExclusions],
-        queryFn: () => apiClient.getMonthlyFinancialSummary(monthlyExclusions),
-        staleTime: 30000,
-    });
-    
-    // Fetch unfiltered monthly summary for toggle comparison
-    const { data: monthlySummaryUnfiltered } = useQuery({
-        queryKey: ['monthlySummary', 'unfiltered'],
-        queryFn: () => apiClient.getMonthlyFinancialSummary({}),
-        staleTime: 30000,
-        enabled: exclusionsApply, // Only fetch if we need comparison
-    });
-
-    // Fetch cashflow comparison data with per-graph exclusion support
-    const cashflowExclusions = getExclusionParams('cashflowComparison');
-    const { data: cashflowData, isLoading: cashflowLoading } = useQuery({
-        queryKey: ['cashflowComparison', cashflowExclusions],
-        queryFn: () => apiClient.getCashflowComparison(cashflowExclusions),
-        staleTime: 30000,
-    });
-    
-    // Fetch unfiltered cashflow for toggle comparison
-    const { data: cashflowDataUnfiltered } = useQuery({
-        queryKey: ['cashflowComparison', 'unfiltered'],
-        queryFn: () => apiClient.getCashflowComparison({}),
+    // Fetch monthly summary — FILTERED version (stable query key)
+    const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useQuery({
+        queryKey: ['monthlySummary', 'filtered', filteredExclusionParams],
+        queryFn: () => apiClient.getMonthlyFinancialSummary(filteredExclusionParams),
         staleTime: 30000,
         enabled: exclusionsApply,
     });
+    
+    // Fetch monthly summary — UNFILTERED version (stable query key)
+    const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useQuery({
+        queryKey: ['monthlySummary', 'unfiltered'],
+        queryFn: () => apiClient.getMonthlyFinancialSummary({}),
+        staleTime: 30000,
+    });
+    
+    const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
+
+    // Fetch cashflow comparison — FILTERED version (stable query key)
+    const { data: cashflowDataFiltered, isLoading: cashflowFilteredLoading } = useQuery({
+        queryKey: ['cashflowComparison', 'filtered', filteredExclusionParams],
+        queryFn: () => apiClient.getCashflowComparison(filteredExclusionParams),
+        staleTime: 30000,
+        enabled: exclusionsApply,
+    });
+    
+    // Fetch cashflow comparison — UNFILTERED version (stable query key)
+    const { data: cashflowDataUnfiltered, isLoading: cashflowUnfilteredLoading } = useQuery({
+        queryKey: ['cashflowComparison', 'unfiltered'],
+        queryFn: () => apiClient.getCashflowComparison({}),
+        staleTime: 30000,
+    });
+    
+    const cashflowLoading = cashflowFilteredLoading || cashflowUnfilteredLoading;
 
     const allTransactions = transactionsData?.items || [];
     
@@ -161,18 +157,18 @@ export default function DashboardPage() {
     // Get chart data based on per-graph toggle state
     const getMonthlyData = () => {
         const useExclusions = graphExclusions['monthlyTrends'] ?? true;
-        if (useExclusions && exclusionsApply) {
-            return monthlySummary?.months || [];
+        if (useExclusions && exclusionsApply && monthlySummaryFiltered) {
+            return monthlySummaryFiltered.months || [];
         }
-        return monthlySummaryUnfiltered?.months || monthlySummary?.months || [];
+        return monthlySummaryUnfiltered?.months || [];
     };
     
     const getCashflowData = () => {
         const useExclusions = graphExclusions['cashflowComparison'] ?? true;
-        if (useExclusions && exclusionsApply) {
-            return cashflowData;
+        if (useExclusions && exclusionsApply && cashflowDataFiltered) {
+            return cashflowDataFiltered;
         }
-        return cashflowDataUnfiltered || cashflowData;
+        return cashflowDataUnfiltered;
     };
 
     const monthlyData = getMonthlyData();
