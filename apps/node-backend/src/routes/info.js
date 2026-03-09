@@ -130,10 +130,17 @@ router.get('/cashflow-comparison', async (req, res) => {
     } else {
       excludedCategoryIds = [];
     }
-    const data = await infoRepository.getCashflowComparison(excludedCategoryIds);
+    let excludedRecipientIds = req.query.excluded_recipient_ids;
+    if (excludedRecipientIds) {
+      if (!Array.isArray(excludedRecipientIds)) excludedRecipientIds = [excludedRecipientIds];
+      excludedRecipientIds = excludedRecipientIds.map(Number);
+    } else {
+      excludedRecipientIds = [];
+    }
+    const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds);
     res.json(data);
   } catch (err) {
-    logger.error('Error retrieving cashflow comparison', { error: err.message });
+    logger.error('Error retrieving cashflow comparison', { error: err.message, stack: err.stack });
     res.status(500).json({ detail: 'Error retrieving cashflow comparison' });
   }
 });
