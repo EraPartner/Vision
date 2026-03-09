@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +76,25 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
     };
   }, [data, excludedRecipientIds]);
+
+  const PAGE_SIZE = 100;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+
+  const totalMerchants = filteredData?.topMerchants.length ?? 0;
+
+  // Reset to first page whenever the filtered list changes (e.g. exclusion toggle)
+  useEffect(() => {
+    setDisplayCount(PAGE_SIZE);
+  }, [totalMerchants]);
+
+  const displayedMerchants = useMemo(
+    () => filteredData?.topMerchants.slice(0, displayCount) ?? [],
+    [filteredData, displayCount]
+  );
+  const hasMore = displayCount < totalMerchants;
+  const handleLoadMore = useCallback(() => {
+    setDisplayCount(prev => Math.min(prev + PAGE_SIZE, totalMerchants));
+  }, [totalMerchants]);
 
   const recipientDetailsColumns = useMemo(() => [
     {
@@ -285,7 +304,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         title="Recipient Details"
         subtitle="Spending frequency and average transaction size"
         columns={recipientDetailsColumns}
-        data={filteredData.topMerchants}
+        data={displayedMerchants}
+        totalItems={totalMerchants}
+        hasMore={hasMore}
+        onLoadMore={handleLoadMore}
         emptyMessage="No recipient details available."
         maxHeight={700}
         rowHeight={48}
