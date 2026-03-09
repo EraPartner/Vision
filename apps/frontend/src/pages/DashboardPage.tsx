@@ -157,18 +157,18 @@ export default function DashboardPage() {
     // Get chart data based on per-graph toggle state
     const getMonthlyData = () => {
         const useExclusions = graphExclusions['monthlyTrends'] ?? true;
-        if (useExclusions && exclusionsApply) {
-            return monthlySummary?.months || [];
+        if (useExclusions && exclusionsApply && monthlySummaryFiltered) {
+            return monthlySummaryFiltered.months || [];
         }
-        return monthlySummaryUnfiltered?.months || monthlySummary?.months || [];
+        return monthlySummaryUnfiltered?.months || [];
     };
     
     const getCashflowData = () => {
         const useExclusions = graphExclusions['cashflowComparison'] ?? true;
-        if (useExclusions && exclusionsApply) {
-            return cashflowData;
+        if (useExclusions && exclusionsApply && cashflowDataFiltered) {
+            return cashflowDataFiltered;
         }
-        return cashflowDataUnfiltered || cashflowData;
+        return cashflowDataUnfiltered;
     };
 
     const monthlyData = getMonthlyData();
