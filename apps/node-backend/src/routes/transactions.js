@@ -226,14 +226,15 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 
     // Resolve recipient_name to recipient_id (mirrors Python TransactionService.update)
     if (fields.recipient_name && !fields.recipient_id) {
-      const normalized = fields.recipient_name.toUpperCase().trim();
+      const { normalizeForMatching } = await import('../services/textNormalization.js');
+      const normalized = normalizeForMatching(fields.recipient_name);
       const { query: dbQuery } = await import('../database/connection.js');
       const recipientResult = await dbQuery(
-        `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
+        `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
         [normalized]
       );
       if (recipientResult.rows.length === 0) {
-        return res.status(400).json({ detail: `Recipient with name '${normalized}' does not exist` });
+        return res.status(400).json({ detail: `Recipient with name '${fields.recipient_name}' does not exist` });
       }
       fields.recipient_id = recipientResult.rows[0].id;
     }

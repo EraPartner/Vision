@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -25,14 +25,24 @@ const CHART_COLORS = [
   "hsl(350, 75%, 60%)",
 ];
 
-function formatCurrency(val: number) {
+function formatCurrency(val: number, fractionDigits = 0) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(val);
 }
+
+type RecipientDetailRow = {
+  recipientId: number;
+  name: string;
+  totalSpend: number;
+  transactionCount: number;
+  avgAmount: number;
+  firstSeen: string;
+  lastSeen: string;
+};
 
 export default function RecipientInsightsPage() {
   const { settings } = useSettings();
@@ -56,6 +66,57 @@ export default function RecipientInsightsPage() {
       monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
     };
   }, [data, excludedRecipientIds]);
+
+  const recipientDetailsColumns = useMemo(() => [
+    {
+      key: "rank",
+      header: "#",
+      sortable: false,
+      filterable: false,
+      className: "w-14",
+      render: (_row: RecipientDetailRow, _isEditing: boolean, index?: number) => (
+        <span className="font-medium text-muted-foreground">{(index ?? 0) + 1}</span>
+      ),
+    },
+    {
+      key: "name",
+      header: "Recipient",
+      render: (row: RecipientDetailRow) => <span className="font-medium">{row.name}</span>,
+    },
+    {
+      key: "totalSpend",
+      header: "Total Spend",
+      className: "text-right",
+      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.totalSpend)}</span>,
+    },
+    {
+      key: "transactionCount",
+      header: "Transactions",
+      className: "text-right",
+    },
+    {
+      key: "avgAmount",
+      header: "Avg Amount",
+      className: "text-right",
+      render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.avgAmount)}</span>,
+    },
+    {
+      key: "firstSeen",
+      header: "First Seen",
+      className: "text-right",
+      render: (row: RecipientDetailRow) => (
+        <span className="text-muted-foreground text-sm">{format(parseISO(row.firstSeen), "MMM yyyy")}</span>
+      ),
+    },
+    {
+      key: "lastSeen",
+      header: "Last Seen",
+      className: "text-right",
+      render: (row: RecipientDetailRow) => (
+        <span className="text-muted-foreground text-sm">{format(parseISO(row.lastSeen), "MMM yyyy")}</span>
+      ),
+    },
+  ], []);
 
   if (isLoading) {
     return (
@@ -188,11 +249,11 @@ export default function RecipientInsightsPage() {
                     <TrendingUp className="h-5 w-5 text-destructive shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        You spent <span className="font-bold text-destructive">{m.changePercent}% more</span> at{" "}
+                        You spent <span className="font-bold text-destructive">{m.changePercent.toFixed(1)}% more</span> at{" "}
                         <span className="font-bold">{m.name}</span> this month
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCurrency(m.previousSpend)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend)}
+                        {formatCurrency(m.previousSpend, 2)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend, 2)}
                       </p>
                     </div>
                   </div>
@@ -206,11 +267,11 @@ export default function RecipientInsightsPage() {
                     <TrendingDown className="h-5 w-5 text-primary shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        You spent <span className="font-bold text-primary">{Math.abs(m.changePercent)}% less</span> at{" "}
+                        You spent <span className="font-bold text-primary">{Math.abs(m.changePercent).toFixed(1)}% less</span> at{" "}
                         <span className="font-bold">{m.name}</span> this month
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCurrency(m.previousSpend)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend)}
+                        {formatCurrency(m.previousSpend, 2)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend, 2)}
                       </p>
                     </div>
                   </div>
@@ -221,45 +282,15 @@ export default function RecipientInsightsPage() {
         </Card>
       )}
 
-      {/* Detailed table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recipient Details</CardTitle>
-          <CardDescription>Spending frequency and average transaction size</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">#</TableHead>
-                <TableHead>Recipient</TableHead>
-                <TableHead className="text-right">Total Spend</TableHead>
-                <TableHead className="text-right">Transactions</TableHead>
-                <TableHead className="text-right">Avg Amount</TableHead>
-                <TableHead className="text-right">First Seen</TableHead>
-                <TableHead className="text-right">Last Seen</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.topMerchants.map((m, i) => (
-                <TableRow key={m.recipientId}>
-                  <TableCell className="font-medium text-muted-foreground">{i + 1}</TableCell>
-                  <TableCell className="font-medium">{m.name}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(m.totalSpend)}</TableCell>
-                  <TableCell className="text-right">{m.transactionCount}</TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(m.avgAmount)}</TableCell>
-                  <TableCell className="text-right text-muted-foreground text-sm">
-                    {format(parseISO(m.firstSeen), "MMM yyyy")}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground text-sm">
-                    {format(parseISO(m.lastSeen), "MMM yyyy")}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <VirtualDataTable
+        title="Recipient Details"
+        subtitle="Spending frequency and average transaction size"
+        columns={recipientDetailsColumns}
+        data={filteredData.topMerchants}
+        emptyMessage="No recipient details available."
+        maxHeight={700}
+        rowHeight={48}
+      />
     </div>
   );
 }

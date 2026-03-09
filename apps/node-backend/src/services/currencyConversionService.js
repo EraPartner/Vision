@@ -120,7 +120,12 @@ async function loadFromDatabase(rateDate) {
       const t = new Date(r.fetched_at).getTime();
       return t > max ? t : max;
     }, 0);
-    if (Date.now() - latestFetch > DB_MAX_AGE_MS) return null;
+    const ageMs = Date.now() - latestFetch;
+    if (ageMs > DB_MAX_AGE_MS) {
+      const ageDays = Math.round(ageMs / (1000 * 60 * 60 * 24));
+      logger.warn(`Cached exchange rates for ${rateDate} are ${ageDays} days old, refetching from ECB`);
+      return null;
+    }
 
     const rates = { EUR: 1.0 };
     for (const row of result.rows) {
@@ -296,6 +301,15 @@ export async function convertRowsToEur(rows) {
 }
 
 /**
+ * Clear the in-memory cache to force fresh data on next request.
+ * Useful for manual refresh flows.
+ */
+export function clearMemoryCache() {
+  Object.keys(memoryCache).forEach(key => delete memoryCache[key]);
+  logger.debug('Cleared exchange rate memory cache');
+}
+
+/**
  * Warm the cache on startup (non-blocking).
  */
 export async function warmCache() {
@@ -319,4 +333,4 @@ export async function warmCache() {
 }
 
 export { FALLBACK_RATES };
-export default { convertToEur, convertRowsToEur, warmCache, FALLBACK_RATES };
+export default { convertToEur, convertRowsToEur, warmCache, clearMemoryCache, FALLBACK_RATES };

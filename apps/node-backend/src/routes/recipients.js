@@ -14,7 +14,7 @@ const router = Router();
 // GET /api/recipients
 router.get('/', async (req, res) => {
   try {
-    const { limit = 50, offset = 0, name, default_category_id, active = 'true', search } = req.query;
+    const { limit = 50, offset = 0, name, default_category_id, active = 'true', search, uncategorized = 'false' } = req.query;
 
     const opts = {
       limit: Math.min(parseInt(limit, 10) || 50, 1000),
@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
       defaultCategoryId: default_category_id ? parseInt(default_category_id, 10) : null,
       search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
+      uncategorized: uncategorized === 'true',
     };
 
     const items = await recipientRepository.getAll(opts);

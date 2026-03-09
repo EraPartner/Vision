@@ -209,7 +209,7 @@ export function useStatistics() {
     let hiddenCategoryIds: number[] = [];
     if (settings.excludeHiddenCategories) {
       hiddenCategoryIds = categoriesQuery.data
-        .filter((cat) => !cat.active)
+        .filter((cat) => !cat.is_active)
         .map((cat) => cat.id);
     }
 

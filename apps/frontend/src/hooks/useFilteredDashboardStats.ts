@@ -25,12 +25,18 @@ export function useFilteredDashboardStats() {
       // Fetch total transaction count from the transaction-count endpoint
       const countData = await apiClient.getTransactionCount();
 
+      // Use previous calendar month for "last month" cards.
+      const now = new Date();
+      const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonth = previousMonthDate.getMonth() + 1;
+      const previousMonthYear = previousMonthDate.getFullYear();
+
       // Resolve hidden category IDs if needed
       let hiddenCategoryIds: number[] = [];
       if (exclusionsApply && settings.excludeHiddenCategories) {
         const categoriesData = await apiClient.getCategories({ limit: 1000 });
         hiddenCategoryIds = categoriesData.items
-          .filter((cat) => !cat.active)
+          .filter((cat) => !cat.is_active)
           .map((cat) => cat.id);
       }
 
@@ -44,30 +50,39 @@ export function useFilteredDashboardStats() {
         excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
       });
 
-      // Find the last month with actual transactions
-      let lastMonthWithData = monthlySummary.months[monthlySummary.months.length - 1];
-      for (let i = monthlySummary.months.length - 1; i >= 0; i--) {
-        if (monthlySummary.months[i].transaction_count > 0) {
-          lastMonthWithData = monthlySummary.months[i];
-          break;
-        }
-      }
+      // Pick the previous calendar month from summary (may be empty).
+      const previousMonthSummary = monthlySummary.months.find(
+        (month) => month.month === previousMonth && month.year === previousMonthYear
+      );
 
       // If no recipient exclusions (or exclusions don't apply), we can use the API data directly
       if (!exclusionsApply || settings.excludedRecipientIds.length === 0) {
         return {
           totalTransactions: countData.total_transactions,
-          monthlyIncome: lastMonthWithData.total_income,
-          monthlySpending: Math.abs(lastMonthWithData.total_spending),
-          netBalance: lastMonthWithData.net_amount,
+          monthlyIncome: previousMonthSummary?.total_income ?? 0,
+          monthlySpending: Math.abs(previousMonthSummary?.total_spending ?? 0),
+          netBalance: previousMonthSummary?.net_amount ?? 0,
         };
       }
 
-      // Recipient exclusions require client-side filtering of transactions
+      // Recipient exclusions require client-side filtering of transactions.
+      // Restrict query to the previous month for accuracy and smaller payload.
+      const toIsoDate = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const previousMonthStart = new Date(previousMonthYear, previousMonth - 1, 1);
+      const previousMonthEnd = new Date(previousMonthYear, previousMonth, 0);
+
       const transactionsData = await apiClient.getTransactions({
         limit: 5000,
         active: true,
         normalize_to_eur: true,
+        start_date: toIsoDate(previousMonthStart),
+        end_date: toIsoDate(previousMonthEnd),
       });
 
       const excludedRecipientIds = new Set(settings.excludedRecipientIds);
@@ -88,35 +103,30 @@ export function useFilteredDashboardStats() {
         return true;
       });
 
-      // Get last month's date range
-      const lastMonthStart = new Date(lastMonthWithData.period_start);
-      const lastMonthEnd = new Date(lastMonthWithData.period_end);
-
-      // Filter for last month's transactions
-      const lastMonthTransactions = filteredTransactions.filter((t) => {
-        const transactionDate = new Date(t.transaction_date);
-        return transactionDate >= lastMonthStart && transactionDate <= lastMonthEnd;
-      });
-
-      // Calculate statistics from filtered transactions
+      // Calculate last-month statistics from fully filtered transactions
+      // so category + recipient exclusions are both respected.
       const amountInEur = (tx: { amount: number; amount_eur?: number }) => (
         tx.amount_eur ?? tx.amount
       );
 
-      const monthlyIncome = lastMonthTransactions
-        .filter((t) => amountInEur(t) > 0)
-        .reduce((sum, t) => sum + amountInEur(t), 0);
+      let monthlyIncome = 0;
+      let monthlySpending = 0;
 
-      const monthlySpending = Math.abs(
-        lastMonthTransactions
-          .filter((t) => amountInEur(t) < 0)
-          .reduce((sum, t) => sum + amountInEur(t), 0)
-      );
+      filteredTransactions.forEach((t) => {
+        const amount = amountInEur(t);
+        if (amount >= 0) {
+          monthlyIncome += amount;
+        } else {
+          monthlySpending += Math.abs(amount);
+        }
+      });
 
       const netBalance = monthlyIncome - monthlySpending;
 
       return {
-        totalTransactions: filteredTransactions.length,
+        // Dashboard total transaction count should always reflect DB total,
+        // independent of dashboard filtering preferences.
+        totalTransactions: countData.total_transactions,
         monthlyIncome,
         monthlySpending,
         netBalance,

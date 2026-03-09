@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api";
 import type { Transaction } from "@/types/api";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { formatCurrency } from "@/utils/currency";
 
 const FREQ_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -228,7 +229,7 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 120,
       render: (row: TableRow) => (
         <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-destructive" : "text-accent"}`}>
-          {row.amount < 0 ? "−" : "+"}{Math.abs(row.amount).toFixed(2)} {row.currency}
+          {row.amount < 0 ? "−" : "+"}{formatCurrency(Math.abs(row.amount), row.currency)}
         </span>
       ),
     },

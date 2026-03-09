@@ -183,6 +183,7 @@ class ApiClient {
         default_category_id?: number;
         active?: boolean;
         search?: string;
+        uncategorized?: boolean;
     }): Promise<RecipientsListResponse> {
         const query = this.buildQuery(params);
         return this.request<RecipientsListResponse>(

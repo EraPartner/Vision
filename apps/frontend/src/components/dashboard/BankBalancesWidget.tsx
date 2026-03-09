@@ -64,13 +64,16 @@ export function BankBalancesWidget() {
 
     const { accounts, total_net_position, history, total_history } = data;
 
+    // Do not present accounts with a zero balance on the dashboard.
+    const visibleAccounts = accounts.filter((acct) => Math.abs(acct.balance) > 0.000001);
+
     // Build chart data from total_history
     const chartData = total_history.map((entry) => {
         const point: Record<string, any> = {
             month: format(parseISO(entry.month + "-01"), "MMM yy"),
         };
         // Add per-account data
-        for (const acct of accounts) {
+        for (const acct of visibleAccounts) {
             const acctHistory = history[acct.bank_account] || [];
             const match = acctHistory.find((h) => h.month === entry.month);
             point[acct.bank_account] = match?.balance ?? 0;
@@ -100,15 +103,15 @@ export function BankBalancesWidget() {
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        Across {accounts.length} account{accounts.length !== 1 ? "s" : ""}
+                        Across {visibleAccounts.length} account{visibleAccounts.length !== 1 ? "s" : ""}
                     </p>
                 </CardContent>
             </Card>
 
             {/* Per-Account Balance Cards */}
-            {accounts.length > 0 && (
+            {visibleAccounts.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {accounts.map((acct, idx) => {
+                    {visibleAccounts.map((acct, idx) => {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
@@ -140,7 +143,7 @@ export function BankBalancesWidget() {
             )}
 
             {/* Historical Balance Chart */}
-            {chartData.length > 1 && (
+            {visibleAccounts.length > 0 && chartData.length > 1 && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -153,7 +156,7 @@ export function BankBalancesWidget() {
                         <ResponsiveContainer width="100%" height={320}>
                             <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                                 <defs>
-                                    {accounts.map((acct, idx) => (
+                                    {visibleAccounts.map((acct, idx) => (
                                         <linearGradient key={acct.bank_account} id={`gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} stopOpacity={0.3} />
                                             <stop offset="95%" stopColor={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} stopOpacity={0} />
@@ -186,7 +189,7 @@ export function BankBalancesWidget() {
                                         </span>
                                     )}
                                 />
-                                {accounts.map((acct, idx) => (
+                                {visibleAccounts.map((acct, idx) => (
                                     <Area
                                         key={acct.bank_account}
                                         type="monotone"

@@ -1,10 +1,10 @@
-import {useCallback, useMemo, useRef, useState} from "react";
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Input} from "@/components/ui/input";
-import {Button} from "@/components/ui/button";
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
-import {ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X} from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X } from "lucide-react";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -225,7 +225,7 @@ export function DataTable<T extends Record<string, any>>({
 
     const saveEditing = (idx: number) => {
         if (onRowUpdate) {
-            const updatedRow = {...data[idx], ...editValues} as T;
+            const updatedRow = { ...data[idx], ...editValues } as T;
             onRowUpdate(idx, updatedRow);
         }
         setEditingRow(null);
@@ -341,7 +341,7 @@ export function DataTable<T extends Record<string, any>>({
                                     return (
                                         <TableHead
                                             key={col.key}
-                                            className={`font-semibold text-muted-foreground relative select-none group ${col.className || ""}`}
+                                            className={`font-semibold text-muted-foreground relative select-none group whitespace-nowrap ${col.className || ""}`}
                                             style={width ? { width: `${width}px` } : undefined}
                                         >
                                             <div className="flex items-center gap-1">
@@ -366,11 +366,10 @@ export function DataTable<T extends Record<string, any>>({
                                                     >
                                                         <PopoverTrigger asChild>
                                                             <button
-                                                                className={`p-0.5 rounded transition-colors ${
-                                                                    hasFilter
+                                                                className={`p-0.5 rounded transition-colors ${hasFilter
                                                                         ? "text-primary"
                                                                         : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <Filter className="h-3 w-3" />
                                                             </button>
@@ -431,7 +430,7 @@ export function DataTable<T extends Record<string, any>>({
                                             className={`transition-colors ${isEditing ? "bg-primary/5" : ""}`}
                                         >
                                             {columns.map((col) => (
-                                                <TableCell key={col.key} className={col.className || ""}>
+                                                <TableCell key={col.key} className={`whitespace-normal break-words [overflow-wrap:anywhere] align-top ${col.className || ""}`}>
                                                     {isEditing && col.editable ? (
                                                         <Input
                                                             type={col.type || "text"}
@@ -473,7 +472,7 @@ export function DataTable<T extends Record<string, any>>({
                                                                 className="h-8 w-8 text-accent hover:text-accent hover:bg-accent/10"
                                                                 onClick={() => saveEditing(idx)}
                                                             >
-                                                                <Check className="h-4 w-4"/>
+                                                                <Check className="h-4 w-4" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
@@ -481,7 +480,7 @@ export function DataTable<T extends Record<string, any>>({
                                                                 className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                                 onClick={cancelEditing}
                                                             >
-                                                                <X className="h-4 w-4"/>
+                                                                <X className="h-4 w-4" />
                                                             </Button>
                                                         </div>
                                                     ) : (
@@ -491,7 +490,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                             onClick={() => startEditing(idx, row)}
                                                         >
-                                                            <Pencil className="h-4 w-4"/>
+                                                            <Pencil className="h-4 w-4" />
                                                         </Button>
                                                     )}
                                                 </TableCell>
@@ -601,9 +600,8 @@ function ColumnFilter({
                             <button
                                 key={v}
                                 onClick={() => { onChange(v); onClose(); }}
-                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${
-                                    value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
-                                }`}
+                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
+                                    }`}
                             >
                                 {v}
                             </button>

@@ -7,7 +7,7 @@
 import { query } from '../database/connection.js';
 
 export const recipientRepository = {
-  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true } = {}) {
+  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false } = {}) {
     let sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
@@ -26,7 +26,12 @@ export const recipientRepository = {
 
     if (active) sql += ` AND r.is_active = true`;
     if (name) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${name}%`); }
-    if (defaultCategoryId != null) { sql += ` AND r.default_category_id = $${paramIdx++}`; params.push(defaultCategoryId); }
+    if (uncategorized) {
+      sql += ` AND r.default_category_id IS NULL`;
+    } else if (defaultCategoryId != null) {
+      sql += ` AND r.default_category_id = $${paramIdx++}`;
+      params.push(defaultCategoryId);
+    }
     if (search) {
       const sp = `%${search}%`;
       sql += ` AND (
@@ -47,7 +52,7 @@ export const recipientRepository = {
     return result.rows;
   },
 
-  async getCount({ name = null, defaultCategoryId = null, search = null, active = true } = {}) {
+  async getCount({ name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false } = {}) {
     let sql = `
       SELECT count(*) FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
@@ -58,7 +63,12 @@ export const recipientRepository = {
 
     if (active) sql += ` AND r.is_active = true`;
     if (name) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${name}%`); }
-    if (defaultCategoryId != null) { sql += ` AND r.default_category_id = $${paramIdx++}`; params.push(defaultCategoryId); }
+    if (uncategorized) {
+      sql += ` AND r.default_category_id IS NULL`;
+    } else if (defaultCategoryId != null) {
+      sql += ` AND r.default_category_id = $${paramIdx++}`;
+      params.push(defaultCategoryId);
+    }
     if (search) {
       const sp = `%${search}%`;
       sql += ` AND (
@@ -95,7 +105,8 @@ export const recipientRepository = {
   },
 
   async getByName(name) {
-    const normalized = name.toUpperCase().trim().replace(/\s+/g, ' ');
+    const { normalizeForMatching } = await import('../services/textNormalization.js');
+    const normalized = normalizeForMatching(name);
     const result = await query(
       `SELECT * FROM recipients WHERE normalized_name = $1`,
       [normalized]
@@ -104,8 +115,9 @@ export const recipientRepository = {
   },
 
   async createOrGet({ name }) {
+    const { normalizeForMatching } = await import('../services/textNormalization.js');
     const upperName = name.toUpperCase().trim();
-    const normalizedName = upperName.replace(/\s+/g, ' ');
+    const normalizedName = normalizeForMatching(name);
 
     const existing = await this.getByName(name);
     if (existing) {
@@ -127,11 +139,12 @@ export const recipientRepository = {
     let paramIdx = 1;
 
     if (name !== undefined && name !== null) {
+      const { normalizeForMatching } = await import('../services/textNormalization.js');
       const upperName = name.toUpperCase().trim();
       setClauses.push(`name = $${paramIdx++}`);
       params.push(upperName);
       setClauses.push(`normalized_name = $${paramIdx++}`);
-      params.push(upperName.replace(/\s+/g, ' '));
+      params.push(normalizeForMatching(name));
     }
     if (default_category_id !== undefined) { setClauses.push(`default_category_id = $${paramIdx++}`); params.push(default_category_id); }
     if (notes !== undefined) { setClauses.push(`notes = $${paramIdx++}`); params.push(notes); }

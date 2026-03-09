@@ -13,6 +13,7 @@ import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { formatCurrency } from "@/utils/currency";
 
 const PAGE_SIZE = 100;
 
@@ -237,7 +238,7 @@ export default function TransactionsPage() {
                 <span className={`font-mono font-medium whitespace-nowrap ${
                     row.amount >= 0 ? 'text-accent' : 'text-destructive'
                 } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
-                    {row.amount >= 0 ? '+' : ''}{row.amount.toFixed(2)} {row.currency}
+                    {row.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(row.amount), row.currency)}
                 </span>
             ),
         },
@@ -256,7 +257,7 @@ export default function TransactionsPage() {
                     { label: "Category", value: row.category !== 'Uncategorized' ? row.category : undefined },
                     { label: "Currency", value: row.currency },
                     { label: "Balance", value: row.balance != null
-                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: row.currency }).format(row.balance)
+                        ? formatCurrency(row.balance, row.currency)
                         : undefined },
                     { label: "Description", value: row.memo },
                     { label: "Comment", value: row.comment },

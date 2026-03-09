@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from "react";
+import { Fragment, useState, useMemo, type ReactNode } from "react";
 import { useStatistics, type StatisticsData } from "@/hooks/useStatistics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -243,13 +243,13 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
 }
 
 // ─── Category Pivot Table ─────────────────────────────────
-function CategoryPivotTable({ 
-  data, 
-  graphKey, 
-  isFiltered, 
-  onToggle, 
-  exclusionsApply 
-}: { 
+function CategoryPivotTable({
+  data,
+  graphKey,
+  isFiltered,
+  onToggle,
+  exclusionsApply
+}: {
   data: StatisticsData;
   graphKey: string;
   isFiltered: boolean;
@@ -272,6 +272,50 @@ function CategoryPivotTable({
       .filter((cat) => cat.filteredTotal > 0)
       .sort((a, b) => b.filteredTotal - a.filteredTotal);
   }, [data.categoryPivot, filteredPeriods]);
+
+  const hierarchicalCategories = useMemo(() => {
+    type PivotItem = (typeof filteredCategories)[number];
+    const grouped = new Map<string, {
+      general: string;
+      total: number;
+      months: Record<string, number>;
+      children: Array<PivotItem & { detailName: string }>;
+    }>();
+
+    for (const cat of filteredCategories) {
+      const [rawGeneral, ...detailParts] = String(cat.categoryName || "Uncategorized").split(":");
+      const general = rawGeneral || "Uncategorized";
+      const detailName = detailParts.length > 0 ? detailParts.join(":") : general;
+
+      if (!grouped.has(general)) {
+        const initialMonths: Record<string, number> = {};
+        for (const period of filteredPeriods) {
+          initialMonths[period] = 0;
+        }
+
+        grouped.set(general, {
+          general,
+          total: 0,
+          months: initialMonths,
+          children: [],
+        });
+      }
+
+      const group = grouped.get(general)!;
+      group.total += cat.filteredTotal;
+      for (const period of filteredPeriods) {
+        group.months[period] += cat.months[period] || 0;
+      }
+      group.children.push({ ...cat, detailName });
+    }
+
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        children: group.children.sort((a, b) => b.filteredTotal - a.filteredTotal),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [filteredCategories, filteredPeriods]);
 
   const columnTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -324,19 +368,37 @@ function CategoryPivotTable({
                 </tr>
               </thead>
               <tbody>
-                {filteredCategories.map((cat) => (
-                  <tr key={cat.categoryId} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                    <td className="py-2 px-3 font-medium sticky left-0 bg-card z-10 whitespace-nowrap">{cat.categoryName}</td>
-                    {filteredPeriods.map((p) => {
-                      const val = cat.months[p] || 0;
-                      return (
-                        <td key={p} className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""}`}>
-                          {val === 0 ? "—" : formatCurrency(val)}
+                {hierarchicalCategories.map((group) => (
+                  <Fragment key={`group-${group.general}`}>
+                    <tr key={`group-${group.general}`} className="border-b border-border/50 bg-muted/30">
+                      <td className="py-2 px-3 font-semibold sticky left-0 bg-card z-10 whitespace-nowrap">{group.general}</td>
+                      {filteredPeriods.map((p) => {
+                        const val = group.months[p] || 0;
+                        return (
+                          <td key={p} className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""}`}>
+                            {val === 0 ? "—" : formatCurrency(val)}
+                          </td>
+                        );
+                      })}
+                      <td className="text-right py-2 px-3 font-bold tabular-nums">{formatCurrency(group.total)}</td>
+                    </tr>
+                    {group.children.map((cat) => (
+                      <tr key={cat.categoryId} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                        <td className="py-2 px-3 pl-8 text-muted-foreground sticky left-0 bg-card z-10 whitespace-nowrap">
+                          {cat.detailName}
                         </td>
-                      );
-                    })}
-                    <td className="text-right py-2 px-3 font-bold tabular-nums">{formatCurrency(cat.filteredTotal)}</td>
-                  </tr>
+                        {filteredPeriods.map((p) => {
+                          const val = cat.months[p] || 0;
+                          return (
+                            <td key={p} className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""}`}>
+                              {val === 0 ? "—" : formatCurrency(val)}
+                            </td>
+                          );
+                        })}
+                        <td className="text-right py-2 px-3 font-medium tabular-nums">{formatCurrency(cat.filteredTotal)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot>
@@ -519,8 +581,8 @@ export default function StatisticsPage() {
               {(d) => <CategoryTrendChart data={d} />}
             </ChartCard>
           </div>
-          <CategoryPivotTable 
-            data={getGraphData("pivotTable") || data} 
+          <CategoryPivotTable
+            data={getGraphData("pivotTable") || data}
             graphKey="pivotTable"
             isFiltered={graphExclusions["pivotTable"] ?? true}
             onToggle={toggleGraphExclusion}

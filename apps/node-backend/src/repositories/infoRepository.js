@@ -169,7 +169,7 @@ export const infoRepository = {
     };
   },
 
-  async getMonthlyFinancialSummary(excludedCategoryIds = [9, 22]) {
+  async getMonthlyFinancialSummary(excludedCategoryIds = []) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds });
 
@@ -992,9 +992,10 @@ export const infoRepository = {
       recipientAgg[rid].transactionCount++;
     }
 
+    // Keep full recipient detail set for searchable/scrollable insights table.
+    // The frontend still slices top N for chart/KPIs.
     const topMerchants = Object.values(recipientAgg)
       .sort((a, b) => b.totalSpend - a.totalSpend)
-      .slice(0, 20)
       .map(r => ({
         ...r,
         totalSpend: Math.round(r.totalSpend * 100) / 100,

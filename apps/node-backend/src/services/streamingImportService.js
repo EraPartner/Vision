@@ -53,8 +53,9 @@ function determineBankType(bankName) {
  */
 async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (!name) name = 'UNKNOWN';
+  const { normalizeForMatching } = await import('./textNormalization.js');
   const upperName = name.toUpperCase().trim();
-  const normalizedName = upperName.replace(/\s+/g, ' ');
+  const normalizedName = normalizeForMatching(name);
 
   const existing = await query(
     `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
@@ -73,7 +74,7 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
           `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
            VALUES ($1, $2, $3, false, true) ON CONFLICT DO NOTHING`,
           [recipientId, accountNumber, bankName || null]
-        ).catch(() => {});
+        ).catch(() => { });
       }
     }
     return recipientId;
@@ -90,11 +91,11 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
       `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
        VALUES ($1, $2, $3, true, true) ON CONFLICT DO NOTHING`,
       [newId, accountNumber, bankName || null]
-    ).catch(() => {});
+    ).catch(() => { });
   }
 
   if (address) {
-    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => {});
+    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => { });
   }
 
   return newId;
@@ -113,7 +114,7 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
 export async function importCSVStreaming(filePath, bankName, customConfig = null, onProgress = null) {
   const emitProgress = (data) => {
     if (onProgress) {
-      try { onProgress(data); } catch {}
+      try { onProgress(data); } catch { }
     }
   };
 
@@ -146,7 +147,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
     // Phase 3: Process each transaction
     for (let i = 0; i < transactionDataList.length; i++) {
       const txData = transactionDataList[i];
-      
+
       try {
         // Dedup check
         let isDup = false;
@@ -200,7 +201,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
                 rawSourceType: bankType,
                 rawSourceId: rawTxn.id,
               });
-            } catch {}
+            } catch { }
           }
 
           results.imported++;

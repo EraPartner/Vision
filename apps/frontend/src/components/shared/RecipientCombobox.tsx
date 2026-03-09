@@ -1,10 +1,10 @@
-import {useState} from "react";
-import {Check, ChevronsUpDown} from "lucide-react";
-import {cn} from "@/lib/utils";
-import {Button} from "@/components/ui/button";
-import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from "@/components/ui/command";
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
-import {useRecipients} from "@/hooks/useRecipients";
+import { useMemo, useState } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useRecipients } from "@/hooks/useRecipients";
 
 interface RecipientComboboxProps {
     value?: number | null;
@@ -13,11 +13,18 @@ interface RecipientComboboxProps {
     className?: string;
 }
 
-export function RecipientCombobox({value, onSelect, disabled, className}: RecipientComboboxProps) {
+export function RecipientCombobox({ value, onSelect, disabled, className }: RecipientComboboxProps) {
     const [open, setOpen] = useState(false);
-    const {data} = useRecipients({limit: 500, active: true});
+    const [search, setSearch] = useState("");
+    const trimmedSearch = search.trim();
 
-    const recipients = data?.items ?? [];
+    const { data } = useRecipients({
+        limit: 1000,
+        active: false,
+        search: trimmedSearch || undefined,
+    });
+
+    const recipients = useMemo(() => data?.items ?? [], [data?.items]);
     const selected = recipients.find((r) => r.id === value);
     const displayLabel = selected ? selected.name : "Select recipient…";
 
@@ -37,7 +44,11 @@ export function RecipientCombobox({value, onSelect, disabled, className}: Recipi
             </PopoverTrigger>
             <PopoverContent className="w-[280px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
                 <Command>
-                    <CommandInput placeholder="Search recipients…" />
+                    <CommandInput
+                        placeholder="Search recipients…"
+                        value={search}
+                        onValueChange={setSearch}
+                    />
                     <CommandList>
                         <CommandEmpty>No recipients found.</CommandEmpty>
                         <CommandGroup>
@@ -56,7 +67,7 @@ export function RecipientCombobox({value, onSelect, disabled, className}: Recipi
                                 return (
                                     <CommandItem
                                         key={recipient.id}
-                                        value={label}
+                                        value={`${label} ${recipient.id}`}
                                         onSelect={() => {
                                             onSelect(recipient.id, label);
                                             setOpen(false);
