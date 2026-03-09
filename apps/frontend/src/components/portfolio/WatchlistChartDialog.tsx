@@ -101,9 +101,10 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
 
   if (!item) return null;
 
+  const targetPrice = Number(item.target_price);
   const currentPrice = quoteData?.price ?? null;
-  const isBelowTarget = currentPrice != null && currentPrice <= item.target_price;
-  const priceDiff = currentPrice != null ? ((currentPrice - item.target_price) / item.target_price) * 100 : null;
+  const isBelowTarget = currentPrice != null && currentPrice <= targetPrice;
+  const priceDiff = currentPrice != null ? ((currentPrice - targetPrice) / targetPrice) * 100 : null;
 
   // Format chart data
   const formattedData = chartData?.points?.map((p) => ({
@@ -114,7 +115,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
 
   // Find min/max for chart domain
   const prices = formattedData.map((d) => d.price).filter(Boolean);
-  const allPrices = [...prices, item.target_price];
+  const allPrices = [...prices, targetPrice];
   const minPrice = Math.min(...allPrices) * 0.98;
   const maxPrice = Math.max(...allPrices) * 1.02;
 
@@ -160,12 +161,12 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
               ) : (
                 <button
                   onClick={() => {
-                    setNewTargetPrice(item.target_price.toString());
+                    setNewTargetPrice(targetPrice.toString());
                     setEditingPrice(true);
                   }}
                   className="text-2xl font-bold text-primary hover:underline text-left"
                 >
-                  {item.currency} {item.target_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {item.currency} {targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </button>
               )}
             </div>
@@ -255,12 +256,12 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     ]}
                   />
                   <ReferenceLine
-                    y={item.target_price}
+                    y={targetPrice}
                     stroke="hsl(var(--primary))"
                     strokeDasharray="5 5"
                     strokeWidth={2}
                     label={{
-                      value: `Target: ${item.currency}${item.target_price.toFixed(2)}`,
+                      value: `Target: ${item.currency}${targetPrice.toFixed(2)}`,
                       position: "insideTopRight",
                       fill: "hsl(var(--primary))",
                       fontSize: 12,
