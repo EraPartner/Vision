@@ -107,8 +107,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { workspace, setWorkspace } = useWorkspace();
 
-  const navItems = workspace === "budgeting" ? budgetingNav : portfolioNav;
-  const actionItems = workspace === "budgeting" ? budgetingActions : [];
+  const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
 
   return (
     <Sidebar collapsible="icon">
