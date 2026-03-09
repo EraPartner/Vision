@@ -1,10 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Trash2 } from "lucide-react";
+import { Building2, Trash2, Eye, TrendingUp, TrendingDown, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
+import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 
@@ -18,14 +19,23 @@ export default function RealEstatePage() {
   const properties = byAssetClass('real_estate');
 
   const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
-  const totalCost = properties.reduce((s, p) => s + p.totalInvested, 0);
-  const monthlyRent = properties.reduce((s, p) => {
+  const totalCost = properties.reduce((s, p) => s + p.totalBuyCost, 0);
+  const totalAppreciation = properties.reduce((s, p) => s + p.totalAppreciation, 0);
+  const totalRentIncome = properties.reduce((s, p) => s + p.totalIncome, 0);
+  const totalFees = properties.reduce((s, p) => s + p.totalFees, 0);
+  const totalTaxes = properties.reduce((s, p) => s + p.totalTaxes, 0);
+  
+  // Estimate monthly rent from most recent rent_income transactions
+  const estimatedMonthlyRent = properties.reduce((s, p) => {
     const rentTxns = p.transactions.filter(t => t.type === 'rent_income');
     if (rentTxns.length === 0) return s;
-    // Estimate monthly from last rent entry
+    // Use most recent rent as monthly estimate
     return s + (rentTxns[0]?.amount ?? 0);
   }, 0);
-  const annualYield = totalValue > 0 ? (monthlyRent * 12) / totalValue * 100 : 0;
+  
+  const annualYield = totalValue > 0 ? (estimatedMonthlyRent * 12) / totalValue * 100 : 0;
+  const totalReturn = totalAppreciation + totalRentIncome - totalFees - totalTaxes;
+  const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
   if (properties.length === 0) {
     return (
@@ -38,7 +48,9 @@ export default function RealEstatePage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold mb-1">No properties</h3>
-            <p className="text-muted-foreground text-sm mb-4">Add your first property to track real estate investments.</p>
+            <p className="text-muted-foreground text-sm mb-4">
+              Track real estate with purchase price, appreciation, rental income, and expenses.
+            </p>
             <AddInvestmentDialog />
           </CardContent>
         </Card>
@@ -54,63 +66,206 @@ export default function RealEstatePage() {
         <AddInvestmentDialog />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Value</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-primary">{fmt(totalValue)}</p></CardContent>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <DollarSign className="h-3 w-3" /> Total Value
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalValue)}</p>
+          </CardContent>
         </Card>
+        
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Appreciation</CardTitle></CardHeader>
-          <CardContent>
-            <p className={cn("text-2xl font-bold", totalValue - totalCost >= 0 ? "text-accent" : "text-destructive")}>
-              +{fmt(totalValue - totalCost)}
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Home className="h-3 w-3" /> Total Cost
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className="text-xl font-bold text-muted-foreground tabular-nums">{fmt(totalCost)}</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" /> Appreciation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className={cn("text-xl font-bold tabular-nums", totalAppreciation >= 0 ? "text-accent" : "text-destructive")}>
+              {totalAppreciation >= 0 ? "+" : ""}{fmt(totalAppreciation)}
             </p>
           </CardContent>
         </Card>
+        
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Monthly Rent</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-accent">{fmt(monthlyRent)}</p></CardContent>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Rental Income</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalRentIncome)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}/mo</p>
+          </CardContent>
         </Card>
+        
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Annual Yield</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{annualYield.toFixed(1)}%</p></CardContent>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Percent className="h-3 w-3" /> Yield
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className="text-xl font-bold text-foreground tabular-nums">{annualYield.toFixed(1)}%</p>
+            <p className="text-xs text-muted-foreground mt-0.5">annual</p>
+          </CardContent>
+        </Card>
+        
+        <Card className={cn("border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Total Return</CardTitle>
+          </CardHeader>
+          <CardContent className="pb-3 px-4">
+            <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "text-accent" : "text-destructive")}>
+              {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{roi >= 0 ? "+" : ""}{roi.toFixed(1)}% ROI</p>
+          </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {properties.map((p) => (
-          <Card key={p.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-primary" />
+      {/* Property Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {properties.map((p) => {
+          const propertyROI = p.totalBuyCost > 0 
+            ? ((p.totalAppreciation + p.totalIncome - p.totalFees - p.totalTaxes) / p.totalBuyCost) * 100 
+            : 0;
+          const monthlyRent = p.transactions.filter(t => t.type === 'rent_income')[0]?.amount ?? 0;
+          const propertyYield = p.currentValue > 0 ? (monthlyRent * 12) / p.currentValue * 100 : 0;
+          
+          return (
+            <Card key={p.id} className="overflow-hidden">
+              <CardHeader className="bg-muted/30">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Building2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{p.name}</CardTitle>
+                      {p.location && (
+                        <CardDescription className="flex items-center gap-1 mt-0.5">
+                          <MapPin className="h-3 w-3" /> {p.location}
+                        </CardDescription>
+                      )}
+                    </div>
                   </div>
+                  <div className="flex items-center gap-1">
+                    <InvestmentDetailDialog 
+                      investment={p} 
+                      trigger={
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                    <AddPortfolioTxnDialog investment={p} />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={async () => { 
+                        const ok = await confirm({ 
+                          title: "Delete Property", 
+                          description: `Delete "${p.name}"? All transaction history will be removed.`, 
+                          confirmLabel: "Delete", 
+                          variant: "destructive" 
+                        }); 
+                        if (ok) deleteInvestment(p.id); 
+                      }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="pt-4 space-y-4">
+                {/* Value Summary */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <CardTitle className="text-lg">{p.name}</CardTitle>
-                    {p.location && <CardDescription>{p.location}</CardDescription>}
+                    <p className="text-xs text-muted-foreground mb-1">Purchase Price</p>
+                    <p className="text-xl font-bold tabular-nums">{fmt(p.totalBuyCost, p.currency)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">Current Value</p>
+                    <p className="text-xl font-bold text-primary tabular-nums">{fmt(p.currentValue, p.currency)}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <AddPortfolioTxnDialog investment={p} />
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={async () => { const ok = await confirm({ title: "Delete Property", description: `Are you sure you want to delete "${p.name}"? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(p.id); }}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+
+                {/* Returns Breakdown */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground mb-1">Appreciation</p>
+                    <p className={cn(
+                      "text-lg font-bold tabular-nums",
+                      p.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
+                    )}>
+                      {p.totalAppreciation >= 0 ? "+" : ""}{fmt(p.totalAppreciation, p.currency)}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground mb-1">Rental Income</p>
+                    <p className="text-lg font-bold text-accent tabular-nums">
+                      +{fmt(p.totalIncome, p.currency)}
+                    </p>
+                    {monthlyRent > 0 && (
+                      <p className="text-xs text-muted-foreground">~{fmt(monthlyRent, p.currency)}/mo</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-muted-foreground">Purchase Price</p><p className="font-medium tabular-nums">{fmt(p.totalInvested, p.currency)}</p></div>
-                <div><p className="text-muted-foreground">Current Value</p><p className="font-medium tabular-nums">{fmt(p.currentValue, p.currency)}</p></div>
-                <div><p className="text-muted-foreground">Rent Income</p><p className="font-medium tabular-nums text-accent">+{fmt(p.totalIncome, p.currency)}</p></div>
-                <div><p className="text-muted-foreground">Fees & Taxes</p><p className="font-medium tabular-nums text-destructive">-{fmt(p.totalFees + p.totalTaxes, p.currency)}</p></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+
+                {/* Yield & ROI */}
+                <div className="flex items-center justify-between py-3 border-t border-border">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Yield</p>
+                    <p className="text-sm font-medium">{propertyYield.toFixed(1)}% annual</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total ROI</p>
+                    <p className={cn(
+                      "text-sm font-bold",
+                      propertyROI >= 0 ? "text-accent" : "text-destructive"
+                    )}>
+                      {propertyROI >= 0 ? "+" : ""}{propertyROI.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Expenses */}
+                {(p.totalFees > 0 || p.totalTaxes > 0) && (
+                  <div className="flex justify-between text-sm border-t border-border pt-3">
+                    <span className="text-muted-foreground">Fees & Taxes</span>
+                    <span className="font-medium text-destructive">-{fmt(p.totalFees + p.totalTaxes, p.currency)}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {/* Info Card */}
+      <Card className="bg-muted/30 border-dashed">
+        <CardContent className="py-4">
+          <p className="text-sm text-muted-foreground">
+            <strong>How it works:</strong> Record the purchase as a "Buy" transaction. 
+            Track rental income with "Rent Income" transactions. 
+            Use "Appreciation" to update property value over time. 
+            Include closing costs, maintenance, and property taxes as "Fee" or "Tax" transactions.
+          </p>
+        </CardContent>
+      </Card>
     </div>
     <ConfirmDialog />
     </>
