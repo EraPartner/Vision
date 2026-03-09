@@ -256,8 +256,8 @@ describe('Info Routes', () => {
     it('should return cashflow comparison data', async () => {
       infoRepository.getCashflowComparison.mockResolvedValue({
         days_in_month: 31, current_day: 15, month: 3, year: 2026,
-        without_planned: [{ day: 1, average: 100, current: 90 }],
-        with_planned: [{ day: 1, average: 110, current: 95 }],
+        without_planned: Array.from({ length: 31 }, (_, i) => ({ day: i + 1, average: (i + 1) * 10, current: i < 15 ? (i + 1) * 9 : null })),
+        with_planned: Array.from({ length: 31 }, (_, i) => ({ day: i + 1, average: (i + 1) * 11, current: i < 15 ? (i + 1) * 9.5 : null })),
       });
 
       const req = { query: {} };
@@ -265,9 +265,10 @@ describe('Info Routes', () => {
       await routeHandlers['get:/cashflow-comparison'](req, res);
 
       const result = res.json.mock.calls[0][0];
+      expect(result.month).toBe(3);
       expect(result.days_in_month).toBe(31);
-      expect(result.without_planned).toHaveLength(1);
-      expect(result.with_planned).toHaveLength(1);
+      expect(result.without_planned).toHaveLength(31);
+      expect(result.with_planned).toHaveLength(31);
     });
 
     it('should handle errors', async () => {

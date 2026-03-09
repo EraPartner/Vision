@@ -20,9 +20,12 @@ interface CashFlowComparisonProps {
 }
 
 function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: number }) {
-  const lastCurrent = data.filter(d => d.current !== null).at(-1);
-  const lastAvgAtSameDay = data.find(d => d.day === currentDay);
-  const isAboveAverage = lastCurrent && lastAvgAtSameDay ? lastCurrent.current! > lastAvgAtSameDay.average : null;
+  const lastActual = data.slice(0, currentDay).at(-1);
+  const avgAtCurrentDay = lastActual ? data[currentDay - 1]?.average : null;
+  const diff = lastActual?.current !== null && lastActual?.current !== undefined && avgAtCurrentDay !== null
+    ? lastActual.current - (avgAtCurrentDay ?? 0)
+    : null;
+  const isAboveAverage = diff !== null ? diff > 0 : null;
 
   return (
     <div>
@@ -32,13 +35,14 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
           <XAxis
             dataKey="day"
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-            tickFormatter={(d) => `${d}`}
-            interval={4}
+            tickFormatter={(v) => String(v)}
+            label={{ value: 'Day of month', position: 'insideBottom', offset: -2, fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            height={40}
           />
           <YAxis
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-            tickFormatter={(v) => `€${v >= 0 ? '' : ''}${Math.round(v)}`}
-            width={65}
+            tickFormatter={(v) => `€${Math.round(v)}`}
+            width={70}
           />
           <Tooltip
             contentStyle={{
@@ -48,16 +52,16 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
               padding: "12px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
             }}
-            formatter={(value: number | null, name: string) => {
-              if (value === null) return ['-', name];
-              return [formatCurrency(value, 'EUR'), name === 'average' ? '6-Month Average' : 'Current Month'];
-            }}
-            labelFormatter={(day) => `Day ${day}`}
+            formatter={(value: number, name: string) => [
+              formatCurrency(value, 'EUR'),
+              name === 'average' ? '24-Month Avg' : 'This Month',
+            ]}
+            labelFormatter={(label) => `Day ${label}`}
           />
           <Legend
             verticalAlign="top"
             height={36}
-            formatter={(value) => value === 'average' ? '6-Month Average' : 'Current Month'}
+            formatter={(value) => value === 'average' ? '24-Month Avg' : 'This Month'}
           />
           <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" opacity={0.5} />
           <Line
@@ -81,19 +85,18 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
         </LineChart>
       </ResponsiveContainer>
 
-      {isAboveAverage !== null && lastCurrent && lastAvgAtSameDay && (
-        <div className={`mt-4 flex items-center gap-2 p-3 rounded-lg border ${
-          isAboveAverage
-            ? 'bg-accent/10 border-accent/30'
-            : 'bg-destructive/10 border-destructive/30'
-        }`}>
+      {isAboveAverage !== null && diff !== null && lastActual && (
+        <div className={`mt-4 flex items-center gap-2 p-3 rounded-lg border ${isAboveAverage
+          ? 'bg-accent/10 border-accent/30'
+          : 'bg-destructive/10 border-destructive/30'
+          }`}>
           <div className={`w-2.5 h-2.5 rounded-full ${isAboveAverage ? 'bg-accent' : 'bg-destructive'}`} />
           <p className="text-sm font-medium text-foreground">
-            {isAboveAverage ? 'Above' : 'Below'} average by{' '}
+            {isAboveAverage ? 'Ahead of' : 'Behind'} 24-month daily average by{' '}
             <span className="font-bold">
-              {formatCurrency(Math.abs(lastCurrent.current! - lastAvgAtSameDay.average), 'EUR')}
+              {formatCurrency(Math.abs(diff), 'EUR')}
             </span>
-            {' '}on day {currentDay}
+            {' '}as of day {currentDay}
           </p>
         </div>
       )}
@@ -134,7 +137,7 @@ export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDa
           <div className="flex-1">
             <CardTitle className="text-xl">Cash Flow Comparison</CardTitle>
             <CardDescription className="text-base">
-              {monthName} vs 6-month average — cumulative net cash flow by day
+              {monthName} — daily cumulative vs 24-month average pattern
             </CardDescription>
           </div>
         </div>
@@ -145,3 +148,4 @@ export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDa
     </Card>
   );
 }
+

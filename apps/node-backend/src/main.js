@@ -13,7 +13,7 @@ import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
 import { initializeSchema } from './database/schemaInit.js';
-import { warmCache as warmExchangeRateCache } from './services/currencyConversionService.js';
+import { warmCache as warmExchangeRateCache, clearMemoryCache as clearExchangeRateCache } from './services/currencyConversionService.js';
 import PostgresManager from './database/postgresManager.js';
 
 // Import route modules
@@ -162,6 +162,8 @@ const defaultProjectRoot = resolve(moduleDir, '..', '..', '..');
 
 // PostgreSQL manager instance
 let postgresManager = null;
+// Exchange rate refresh interval handle
+let exchangeRateRefreshInterval = null;
 
 async function start() {
   try {
@@ -199,6 +201,16 @@ async function start() {
         warmExchangeRateCache().catch((err) => {
           logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
         });
+
+        // Schedule automatic exchange rate refresh every 12 hours so rates stay
+        // current even when no currency conversions are triggered by user activity
+        exchangeRateRefreshInterval = setInterval(async () => {
+          logger.info('Running scheduled exchange rate refresh...');
+          clearExchangeRateCache();
+          await warmExchangeRateCache().catch((err) => {
+            logger.error('Scheduled exchange rate refresh failed', { error: err.message });
+          });
+        }, 12 * 60 * 60 * 1000); // every 12 hours
       } else {
         attemptCount++;
         logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts})`);
@@ -241,6 +253,7 @@ async function start() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   logger.info('Shutting down...');
+  if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   await closePool();
   if (postgresManager) {
     try {
@@ -256,6 +269,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   logger.info('Shutting down...');
+  if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   await closePool();
   if (postgresManager) {
     try {
