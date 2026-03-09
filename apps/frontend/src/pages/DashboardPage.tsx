@@ -255,7 +255,18 @@ export default function DashboardPage() {
     }));
 
     const columns = [
-        {key: "date", header: "Date"},
+        {
+            key: "date",
+            header: "Date",
+            render: (row: (typeof recentTransactions)[0]) => {
+                try {
+                    const dateObj = parseISO(row.date);
+                    return <span>{format(dateObj, "EEE, d MMM")}</span>;
+                } catch {
+                    return <span>{row.date}</span>;
+                }
+            },
+        },
         {key: "description", header: "Description"},
         {
             key: "category",
