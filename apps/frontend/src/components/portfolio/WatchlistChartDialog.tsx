@@ -161,12 +161,12 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
               ) : (
                 <button
                   onClick={() => {
-                    setNewTargetPrice(item.target_price.toString());
+                    setNewTargetPrice(targetPrice.toString());
                     setEditingPrice(true);
                   }}
                   className="text-2xl font-bold text-primary hover:underline text-left"
                 >
-                  {item.currency} {item.target_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {item.currency} {targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </button>
               )}
             </div>
