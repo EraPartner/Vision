@@ -91,6 +91,7 @@ const App = () => {
                                                 <Route path="/portfolio/performance" element={<PerformancePage/>}/>
                                                 <Route path="/portfolio/net-worth" element={<NetWorthPage/>}/>
                                                 <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage/>}/>
+                                                <Route path="/portfolio/watchlist" element={<WatchlistPage/>}/>
                                                 <Route path="*" element={<NotFound/>}/>
                                             </Routes>
                                         </Suspense>
