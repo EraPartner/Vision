@@ -28,6 +28,7 @@ import investmentsRouter from './routes/investments.js';
 import recipientBankAccountsRouter from './routes/recipientBankAccounts.js';
 import settingsRouter from './routes/settings.js';
 import marketLookupRouter from './routes/marketLookup.js';
+import watchlistRouter from './routes/watchlist.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
