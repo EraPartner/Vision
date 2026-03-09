@@ -236,8 +236,13 @@ export default function DashboardPage() {
         return result;
     })();
 
-    // Recent transactions data
-    const recentTransactions = transactions.slice(0, 5).map(t => ({
+    // Recent transactions data (with per-graph toggle)
+    const recentTransactionsSource = (() => {
+        const useExclusions = graphExclusions['recentTransactions'] ?? true;
+        return (useExclusions && exclusionsApply) ? transactions : allTransactions;
+    })();
+    
+    const recentTransactions = recentTransactionsSource.slice(0, 5).map(t => ({
         id: t.id,
         date: (t as any).date || t.transaction_date || '',
         description: t.memo || 'No description',
@@ -409,6 +414,14 @@ export default function DashboardPage() {
                 columns={columns}
                 data={recentTransactions}
                 emptyMessage="No transactions yet. Import a CSV to get started."
+                actions={
+                    <ExclusionToggle
+                        graphKey="recentTransactions"
+                        isFiltered={graphExclusions['recentTransactions'] ?? true}
+                        onToggle={toggleGraphExclusion}
+                        exclusionsApply={exclusionsApply}
+                    />
+                }
             />
         </div>
     );
