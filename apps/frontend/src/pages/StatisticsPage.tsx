@@ -13,6 +13,7 @@ import {
 import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
