@@ -51,7 +51,6 @@ const budgetingGroups = [
     label: "Analysis",
     items: [
       { title: "Statistics", url: "/statistics", icon: BarChart3 },
-      { title: "Recipient Insights", url: "/recipient-insights", icon: Briefcase },
       { title: "Planned Payments", url: "/planned", icon: CalendarClock },
     ],
   },
