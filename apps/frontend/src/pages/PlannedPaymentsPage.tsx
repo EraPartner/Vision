@@ -32,8 +32,12 @@ function dueBadge(dateStr?: string | null) {
     return <Badge variant="secondary">No date</Badge>;
   }
 
+  // Handle both YYYY-MM-DD and ISO datetime formats (e.g., "2025-01-15T00:00:00Z")
+  // Extract just the date portion if it's a datetime string
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  
   // Parse the date string (YYYY-MM-DD) explicitly
-  const [year, month, day] = dateStr.split('-').map(Number);
+  const [year, month, day] = datePart.split('-').map(Number);
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
     return <Badge variant="secondary">Invalid date</Badge>;
   }
