@@ -30,10 +30,7 @@ const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NetWorthPage = lazy(() => import("./pages/portfolio/NetWorthPage"));
 const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
 const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
-
-const NotFound = lazy(() => import("./pages/NotFound"));
-
-const queryClient = new QueryClient({
+ QueryClient({
     defaultOptions: {
         queries: {
             staleTime: 30_000,        // 30s before data considered stale
@@ -80,7 +77,7 @@ const App = () => {
                                                 <Route path="/planned" element={<PlannedPaymentsPage/>}/>
                                                 <Route path="/statistics" element={<StatisticsPage/>}/>
                                                 <Route path="/recipient-insights" element={<RecipientInsightsPage/>}/>
-                                                <Route path="/import" element={<ImportPage/>}/>
+           mportPage/>}/>
                                                 {/* Portfolio */}
                                                 <Route path="/portfolio" element={<PortfolioOverviewPage/>}/>
                                                 <Route path="/portfolio/market" element={<MarketLookupPage/>}/>

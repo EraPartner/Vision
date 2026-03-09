@@ -592,9 +592,13 @@ export default function StatisticsPage() {
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
-          <ChartCard title="Top Recipients by Spending" description="Where your money goes most" graphKey="topRecipients" {...chartCardProps}>
-            {(d) => <TopRecipientsChart data={d} />}
-          </ChartCard>
+          <RecipientInsightsTab
+            statisticsTopRecipientsChart={
+              <ChartCard title="Top Recipients by Spending" description="Where your money goes most (from statistics)" graphKey="topRecipients" {...chartCardProps}>
+                {(d) => <TopRecipientsChart data={d} />}
+              </ChartCard>
+            }
+          />
         </TabsContent>
 
         <TabsContent value="yearly" className="space-y-6">
