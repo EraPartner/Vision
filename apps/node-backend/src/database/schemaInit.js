@@ -62,6 +62,7 @@ export async function initializeSchema() {
     await createExchangeRates();
     await createInvestments();
     await createPortfolioTransactions();
+    await createWatchlist();
     await createUserSettings();
 
     // --- Materialized views ---
@@ -455,6 +456,25 @@ async function createPortfolioTransactions() {
   await safeIndex('idx_portfolio_txn_date', 'portfolio_transactions', 'date');
   await safeIndex('idx_portfolio_txn_type', 'portfolio_transactions', 'type');
   await safeTrigger('update_portfolio_txn_updated_at', 'portfolio_transactions');
+}
+
+async function createWatchlist() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS watchlist (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      symbol VARCHAR(20),
+      asset_class asset_class NOT NULL,
+      target_price NUMERIC(18,6) NOT NULL,
+      currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
+      notes TEXT,
+      price_provider_id VARCHAR(200),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await safeIndex('idx_watchlist_asset_class', 'watchlist', 'asset_class');
+  await safeTrigger('update_watchlist_updated_at', 'watchlist');
 }
 
 async function createUserSettings() {

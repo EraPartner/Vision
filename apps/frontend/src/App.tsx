@@ -29,6 +29,7 @@ const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
 const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NetWorthPage = lazy(() => import("./pages/portfolio/NetWorthPage"));
 const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
+const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
 const RecipientInsightsPage = lazy(() => import("./pages/RecipientInsightsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -90,6 +91,7 @@ const App = () => {
                                                 <Route path="/portfolio/performance" element={<PerformancePage/>}/>
                                                 <Route path="/portfolio/net-worth" element={<NetWorthPage/>}/>
                                                 <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage/>}/>
+                                                <Route path="/portfolio/watchlist" element={<WatchlistPage/>}/>
                                                 <Route path="*" element={<NotFound/>}/>
                                             </Routes>
                                         </Suspense>
