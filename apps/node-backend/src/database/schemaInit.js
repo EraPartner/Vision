@@ -62,6 +62,7 @@ export async function initializeSchema() {
     await createExchangeRates();
     await createInvestments();
     await createPortfolioTransactions();
+    await createWatchlist();
     await createUserSettings();
 
     // --- Materialized views ---
