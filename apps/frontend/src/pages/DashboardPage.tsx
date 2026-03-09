@@ -453,7 +453,7 @@ export default function DashboardPage() {
                             <div>
                                 <CardTitle className="text-xl">Cash Flow Comparison</CardTitle>
                                 <CardDescription className="text-base">
-                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })} vs 6-month average
+                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })} — cumulative net cash flow vs 2-year monthly average
                                 </CardDescription>
                             </div>
                         </div>

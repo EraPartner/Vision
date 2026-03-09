@@ -216,7 +216,7 @@ router.get('/exchange-rates', async (req, res) => {
     `);
 
     // Also get the fallback rates for comparison
-    const { FALLBACK_RATES } = await import('../services/currencyConversionService.js');
+    const { FALLBACK_RATES, warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
 
     // Group by date
     const byDate = {};
@@ -236,6 +236,18 @@ router.get('/exchange-rates', async (req, res) => {
       currency_count: rates.length,
       rates,
     }));
+
+    // If the most recent stored date is not today, trigger a background refresh so
+    // the next page load will show current data (rates only update on server startup
+    // and on the 12-hour scheduled refresh, so a stale-check here catches gaps).
+    const today = new Date().toISOString().split('T')[0];
+    const mostRecentDate = dates.length > 0 ? dates[0].date : null;
+    if (!mostRecentDate || mostRecentDate < today) {
+      clearMemoryCache();
+      warmCache().catch((err) =>
+        logger.warn('Background exchange rate refresh failed', { error: err.message })
+      );
+    }
 
     res.json({
       total_rates: result.rows.length,

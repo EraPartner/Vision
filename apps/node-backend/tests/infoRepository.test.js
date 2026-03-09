@@ -206,24 +206,20 @@ describe('InfoRepository', () => {
 
   describe('getCashflowComparison', () => {
     it('should return cashflow data with correct structure', async () => {
-      query.mockImplementation(async (sql) => {
-        if (sql.includes('past_months') && sql.includes('AVG')) {
-          return { rows: [{ day_of_month: 1, avg_cumulative: '100' }] };
-        }
-        if (sql.includes('CURRENT_DATE') && !sql.includes('past_months') && !sql.includes('planned')) {
-          return { rows: [{ day_of_month: 1, net: '-50' }] };
-        }
-        return { rows: [] };
-      });
+      query.mockImplementation(async () => ({ rows: [] }));
 
       const result = await infoRepository.getCashflowComparison();
 
+      expect(result).toHaveProperty('month');
+      expect(result).toHaveProperty('year');
       expect(result).toHaveProperty('days_in_month');
       expect(result).toHaveProperty('current_day');
       expect(result).toHaveProperty('without_planned');
       expect(result).toHaveProperty('with_planned');
+      // one entry per day of the current month
       expect(result.without_planned.length).toBe(result.days_in_month);
       expect(result.with_planned.length).toBe(result.days_in_month);
+      expect(result.without_planned[0]).toMatchObject({ day: 1, average: 0, current: expect.anything() });
     });
   });
 
