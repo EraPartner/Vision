@@ -69,11 +69,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             .catch(() => {
                 // Try localStorage migration
                 try {
-                    const stored = localStorage.getItem('vaultVoyager_theme');
+                    const stored = localStorage.getItem('vision_theme');
                     if (!cancelled && (stored === 'light' || stored === 'dark')) {
                         setModeState(stored as ThemeMode);
                     }
-                } catch {}
+                } catch { }
             })
             .finally(() => { if (!cancelled) setLoaded(true); });
         return () => { cancelled = true; };
@@ -83,7 +83,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const persist = useCallback((m: ThemeMode, s: ThemeSchedule) => {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, { mode: m, schedule: s }).catch(() => {});
+            apiClient.saveSetting(SETTINGS_KEY, { mode: m, schedule: s }).catch(() => { });
         }, 500);
     }, []);
 

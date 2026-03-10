@@ -44,12 +44,12 @@ export function useOnboarding() {
 
     const complete = useCallback(() => {
         setIsComplete(true);
-        apiClient.saveSetting(ONBOARDING_KEY, true).catch(() => {});
+        apiClient.saveSetting(ONBOARDING_KEY, true).catch(() => { });
     }, []);
 
     const reset = useCallback(() => {
         setIsComplete(false);
-        apiClient.saveSetting(ONBOARDING_KEY, false).catch(() => {});
+        apiClient.saveSetting(ONBOARDING_KEY, false).catch(() => { });
     }, []);
 
     return { isComplete, isLoading, complete, reset };
@@ -164,7 +164,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
             .then((res) => {
                 if (mounted) setAdapters(res.adapters || []);
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => { if (mounted) setAdaptersLoading(false); });
         return () => { mounted = false; };
     }, [open]);
@@ -235,7 +235,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                                 <Wallet className="h-4 w-4 text-primary-foreground" />
                             </div>
-                            <span className="font-bold text-foreground">Vault Voyager</span>
+                            <span className="font-bold text-foreground">Vision</span>
                         </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onComplete}>
                             <X className="h-4 w-4" />
@@ -270,10 +270,10 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                 <Sparkles className="h-8 w-8 text-primary-foreground" />
                             </div>
                             <h2 className="text-2xl font-bold text-foreground">
-                                Welcome to Vault Voyager!
+                                Welcome to Vision!
                             </h2>
                             <p className="text-muted-foreground max-w-md">
-                                Let's get you set up in just a few steps. We'll help you connect your bank, 
+                                Let's get you set up in just a few steps. We'll help you connect your bank,
                                 import your first transactions, and organize your spending categories.
                             </p>
                             <div className="flex gap-2 mt-2">
@@ -519,7 +519,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                             <div>
                                 <h2 className="text-xl font-bold text-foreground">You're all set! 🎉</h2>
                                 <p className="text-sm text-muted-foreground mt-1">
-                                    Here's a quick look at what you can do with Vault Voyager.
+                                    Here's a quick look at what you can do with Vision.
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

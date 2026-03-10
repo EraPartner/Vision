@@ -56,7 +56,7 @@ const PROVIDERS = {
     const res = await fetch(url, {
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'VaultVoyager/1.0',
+        'User-Agent': 'Vision/1.0',
       },
     });
     if (!res.ok) throw new Error(`Yahoo Finance API error: ${res.status}`);

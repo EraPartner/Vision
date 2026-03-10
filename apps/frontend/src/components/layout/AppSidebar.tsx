@@ -120,7 +120,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="overflow-hidden">
               <h1 className="text-base font-bold text-sidebar-foreground truncate">
-                Vault Voyager
+                Vision
               </h1>
               <p className="text-xs text-muted-foreground truncate">Finance Manager</p>
             </div>
@@ -194,7 +194,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         {!collapsed && (
           <p className="text-xs text-muted-foreground text-center">
-            Vault Voyager v1.0
+            Vision v1.0
           </p>
         )}
       </SidebarFooter>
@@ -216,11 +216,10 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all ${
-        active
+      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all ${active
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground"
-      }`}
+        }`}
     >
       {icon}
       {label}

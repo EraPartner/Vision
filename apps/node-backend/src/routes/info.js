@@ -41,7 +41,7 @@ router.get('/supported-adapters', async (req, res) => {
     { key: 'kbc', name: 'KBC', adapter_class: 'KBCAdapter' },
     { key: 'belfius', name: 'Belfius', adapter_class: 'BelfiusAdapter' },
     { key: 'revolut', name: 'Revolut', adapter_class: 'RevolutAdapter' },
-    { key: 'vault_voyager', name: 'Vault Voyager', adapter_class: 'VaultVoyagerAdapter' },
+    { key: 'vision', name: 'Vision', adapter_class: 'VisionAdapter' },
     { key: 'sabb', name: 'SABB', adapter_class: 'SABBAdapter' },
     { key: 'wise', name: 'Wise', adapter_class: 'WiseAdapter' },
   ];

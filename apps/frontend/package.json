@@ -1,8 +1,8 @@
 {
-    "name": "vault-voyager-frontend",
+    "name": "vision-frontend",
     "version": "1.0.0",
     "private": true,
-    "description": "React frontend for Vault Voyager",
+    "description": "React frontend for Vision",
     "license": "AGPL-3.0-only",
     "type": "module",
     "scripts": {
