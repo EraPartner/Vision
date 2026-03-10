@@ -26,6 +26,7 @@ import type {
 } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
+import logger from '@/lib/logger';
 
 export interface ImportProgress {
     phase: string;
@@ -664,7 +665,7 @@ class ApiClient {
         } catch (err) {
             // Fail-soft: recurrence detection is optional UI enrichment.
             // Returning an empty payload avoids repeated query retries/noise.
-            console.warn('Recurring patterns unavailable; using empty result', err);
+            logger.warn('Recurring patterns unavailable; using empty result', err);
             return { patterns: [], total: 0 };
         }
     }

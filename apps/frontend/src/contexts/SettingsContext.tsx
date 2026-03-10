@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
+import logger from '@/lib/logger';
 
 export type ExclusionScope = 'everywhere' | 'dashboard' | 'statistics';
 
@@ -52,7 +53,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                         const parsed = JSON.parse(stored);
                         setSettings({ ...defaultSettings, ...parsed });
                         // Migrate to database
-                        apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => {});
+                        apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => { });
                         localStorage.removeItem('vaultVoyager_dashboardSettings');
                     }
                 } catch {
@@ -79,7 +80,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SETTINGS_KEY, settings).catch((err) => {
-                console.error('Failed to save settings to database:', err);
+                logger.error('Failed to save settings to database:', err);
             });
         }, 500);
 

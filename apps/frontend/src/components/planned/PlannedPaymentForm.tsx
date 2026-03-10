@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
+import logger from "@/lib/logger";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
           setRecipients(recipientsRes.items);
           setCategories(categoriesRes.items);
         } catch (err) {
-          console.error("Failed to load form data:", err);
+          logger.error("Failed to load form data:", err);
         } finally {
           setLoading(false);
         }

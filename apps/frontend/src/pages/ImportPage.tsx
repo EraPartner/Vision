@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import logger from "@/lib/logger";
 import {
   Card,
   CardContent,
@@ -74,7 +75,7 @@ export default function ImportPage() {
           setAdapters(res.adapters);
         }
       } catch (err) {
-        console.error("Failed to load supported parsers", err);
+        logger.error("Failed to load supported parsers", err);
         if (mounted) {
           setAdaptersError(err instanceof Error ? err.message : String(err));
           setAdapters([]);

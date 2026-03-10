@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
+import logger from '@/lib/logger';
 
 export interface AppSettings {
     defaultCurrency: string;
@@ -46,7 +47,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
                     setAppSettings({ ...defaultAppSettings, ...result.value });
                 }
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => { if (!cancelled) setIsLoading(false); });
         return () => { cancelled = true; };
     }, []);
@@ -61,7 +62,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
             apiClient.saveSetting(SETTINGS_KEY, appSettings).catch((err) => {
-                console.error('Failed to save app settings:', err);
+                logger.error('Failed to save app settings:', err);
             });
         }, 500);
 

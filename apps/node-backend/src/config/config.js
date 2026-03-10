@@ -8,13 +8,14 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load .env.local if present
 const envLocalPath = join(__dirname, '..', '..', '.env.local');
 if (existsSync(envLocalPath)) {
-  console.log(`[config] Loading .env.local from ${envLocalPath}`);
+  logger.debug(`[config] Loading .env.local from ${envLocalPath}`);
   const content = readFileSync(envLocalPath, 'utf-8');
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -27,9 +28,9 @@ if (existsSync(envLocalPath)) {
       process.env[key] = value;
     }
   }
-  console.log(`[config] LOG_LEVEL=${process.env.LOG_LEVEL}, ENABLE_LOGGING=${process.env.ENABLE_LOGGING}`);
+  logger.debug(`[config] LOG_LEVEL=${process.env.LOG_LEVEL}, ENABLE_LOGGING=${process.env.ENABLE_LOGGING}`);
 } else {
-  console.log(`[config] No .env.local found at ${envLocalPath}`);
+  logger.debug(`[config] No .env.local found at ${envLocalPath}`);
 }
 
 /** @type {import('./types').Settings} */
