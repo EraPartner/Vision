@@ -3,7 +3,7 @@
 **ALWAYS check the active mode at the START of processing any request.**
 
 Before taking any action:
-1. Check what mode you're in (e.g., "Vault Voyager Agent", "Refactor Agent", etc.)
+1. Check what mode you're in (e.g., "Vision Agent", "Refactor Agent", etc.)
 2. Follow that mode's specific rules and workflow
 3. Never jump into "solve the problem" mode without confirming the mode context
 

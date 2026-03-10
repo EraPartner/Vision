@@ -13,7 +13,7 @@ RUN bun install --frozen-lockfile
 
 # Copy frontend source and build
 COPY apps/frontend/ ./apps/frontend/
-RUN bun run --filter vault-voyager-frontend build
+RUN bun run --filter vision-frontend build
 
 # ============================================================
 # Stage 2: Production Node.js backend

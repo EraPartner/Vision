@@ -13,6 +13,8 @@ import { logger } from '../config/logger.js';
 
 const execFileAsync = promisify(execFile);
 
+const REPO_URL = 'https://github.com/EraPartner/Vision.git';
+
 /**
  * Run a git command inside the repo root (three levels up from this file's src/ dir).
  * Uses execFile (not exec/shell) to avoid shell injection.
@@ -107,7 +109,7 @@ router.get('/update/check', async (req, res) => {
 
     // Fetch without merging so we get up-to-date remote tracking refs
     try {
-      await git(['fetch', 'origin'], cwd);
+      await git(['fetch', REPO_URL], cwd);
     } catch (fetchErr) {
       logger.warn('git fetch failed during update check', { error: fetchErr.message });
       // Continue – we can still compare cached remote refs
@@ -157,7 +159,7 @@ router.post('/update/apply-and-restart', async (req, res) => {
     const isDocker = process.env.EXTERNAL_DATABASE === 'true';
 
     logger.info('Applying update + restart via git pull', { isDocker });
-    const { stdout, stderr } = await git(['pull', '--ff-only'], cwd)
+    const { stdout, stderr } = await git(['pull', '--ff-only', REPO_URL, 'main'], cwd)
       .catch(async (err) => {
         const { stdout: s, stderr: e } = await git(['pull', '--ff-only', 'origin', 'main'], cwd)
           .catch(() => { throw err; });
@@ -197,9 +199,9 @@ router.post('/update/apply', async (req, res) => {
     const cwd = await getRepoRoot();
 
     logger.info('Applying update via git pull');
-    const { stdout, stderr } = await git(['pull', '--ff-only'], cwd)
+    const { stdout, stderr } = await git(['pull', '--ff-only', REPO_URL, 'main'], cwd)
       .catch(async (err) => {
-        // Try with explicit remote/branch as fallback
+        // Try with named remote as fallback
         const { stdout: s, stderr: e } = await git(['pull', '--ff-only', 'origin', 'main'], cwd)
           .catch(() => { throw err; });
         return { stdout: s, stderr: e };

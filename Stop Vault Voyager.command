@@ -1,10 +1,10 @@
 #!/bin/bash
-# Stop Vault Voyager
+# Stop Vision
 # Double-click this file in Finder to stop the app.
 
 cd "$(dirname "$0")"
 
-echo "Stopping Vault Voyager..."
+echo "Stopping Vision..."
 docker compose down 2>&1
 
-osascript -e 'display notification "Vault Voyager has been stopped." with title "Vault Voyager"'
+osascript -e 'display notification "Vision has been stopped." with title "Vision"'

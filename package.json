@@ -1,5 +1,5 @@
 {
-  "name": "vault-voyager",
+  "name": "vision",
   "private": true,
   "version": "1.0.0",
   "description": "Financial transaction management application",
@@ -10,11 +10,11 @@
   ],
   "scripts": {
     "install:all": "bun install",
-    "dev": "concurrently --names \"backend,frontend\" -c \"blue,green\" \"bun run --filter 'financial-transaction-manager-node' dev\" \"bun run --filter 'vault-voyager-frontend' dev\"",
-    "build": "bun run --filter 'vault-voyager-frontend' build",
-    "build:dev": "bun run --filter 'vault-voyager-frontend' build:dev",
-    "preview": "bun run --filter 'vault-voyager-frontend' preview",
-    "lint": "bun run --filter 'vault-voyager-frontend' lint",
+    "dev": "concurrently --names \"backend,frontend\" -c \"blue,green\" \"bun run --filter 'financial-transaction-manager-node' dev\" \"bun run --filter 'vision-frontend' dev\"",
+    "build": "bun run --filter 'vision-frontend' build",
+    "build:dev": "bun run --filter 'vision-frontend' build:dev",
+    "preview": "bun run --filter 'vision-frontend' preview",
+    "lint": "bun run --filter 'vision-frontend' lint",
     "backend": "bun run --filter 'financial-transaction-manager-node' start",
     "test": "bun run --filter 'financial-transaction-manager-node' test",
     "test:watch": "bun run --filter 'financial-transaction-manager-node' test:watch",

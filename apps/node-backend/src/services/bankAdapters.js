@@ -394,9 +394,9 @@ function parseGenericCSV(filePath, config) {
   return transactions;
 }
 
-// ─── Vault Voyager (self-import) Adapter ───
+// ─── Vision (self-import) Adapter ───
 
-function parseVaultVoyager(filePath) {
+function parseVision(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const records = parse(content, {
     columns: true,
@@ -419,7 +419,7 @@ function parseVaultVoyager(filePath) {
       const amount = parseFloat(amountStr);
       if (isNaN(amount)) continue;
 
-      const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VAULT VOYAGER').trim());
+      const bankAccount = normalizeToUppercase((row['Bank Account'] || 'VISION').trim());
       const recipientRaw = (row['Recipient'] || '').trim();
       const recipient = recipientRaw ? normalizeToUppercase(cleanRecipientName(recipientRaw)) : 'UNKNOWN';
       const memo = row['Memo'] ? normalizeToUppercase(row['Memo'].trim()) : '';
@@ -455,7 +455,7 @@ function parseVaultVoyager(filePath) {
     }
   }
 
-  logger.info(`Vault Voyager CSV parsed: ${transactions.length} transactions`);
+  logger.info(`Vision CSV parsed: ${transactions.length} transactions`);
   return transactions;
 }
 
@@ -647,7 +647,7 @@ const BANK_CONFIGURATIONS = {
   belfius: { bankName: 'Belfius', parser: parseBelfius },
   revolut: { bankName: 'Revolut', parser: parseRevolut },
   kbc: { bankName: 'KBC', parser: parseKBC },
-  vault_voyager: { bankName: 'Vault Voyager', parser: parseVaultVoyager },
+  vision: { bankName: 'Vision', parser: parseVision },
   sabb: { bankName: 'SABB', parser: parseSABB },
   wise: { bankName: 'Wise', parser: parseWise },
 };

@@ -1,7 +1,7 @@
 {
   "name": "financial-transaction-manager-node",
   "version": "1.0.0",
-  "description": "Node.js backend for Vault Voyager",
+  "description": "Node.js backend for Vision",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

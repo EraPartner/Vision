@@ -48,13 +48,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 // Setting not found or backend unreachable — use defaults
                 // Try localStorage as fallback for migration
                 try {
-                    const stored = localStorage.getItem('vaultVoyager_dashboardSettings');
+                    const stored = localStorage.getItem('vision_dashboardSettings');
                     if (!cancelled && stored) {
                         const parsed = JSON.parse(stored);
                         setSettings({ ...defaultSettings, ...parsed });
                         // Migrate to database
                         apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => { });
-                        localStorage.removeItem('vaultVoyager_dashboardSettings');
+                        localStorage.removeItem('vision_dashboardSettings');
                     }
                 } catch {
                     // ignore
