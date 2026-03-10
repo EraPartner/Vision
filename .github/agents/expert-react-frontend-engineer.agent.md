@@ -1,7 +1,8 @@
 ---
 description: "Expert React 19.2 frontend engineer specializing in modern hooks, Server Components, Actions, TypeScript, and performance optimization"
 name: "Expert React Frontend Engineer"
-tools: [vscode, execute, read, agent, edit, search, web, browser, github/get_file_contents, github/search_code, awesome-copilot/load_instruction, todo]
+model: Claude Sonnet 4.6 (copilot)
+tools: ["search/changes", "search/codebase", "edit/editFiles", "vscode/extensions", "web/fetch", "vscode/installExtension", "vscode/newWorkspace", "vscode/runCommand", "browser/openBrowserPage", "read/problems", "execute/getTerminalOutput", "execute/runInTerminal", "read/terminalLastCommand", "read/terminalSelection", "execute/createAndRunTask", "execute/runTests", "search", "search/searchResults", "read/terminalLastCommand", "read/terminalSelection", "execute/testFailure", "search/usages", "vscode/vscodeAPI"]
 ---
 
 # Expert React Frontend Engineer

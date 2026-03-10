@@ -24,7 +24,7 @@ import {
 import {
     Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import { Loader2, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
@@ -70,6 +70,12 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
 
+    // Update tab state
+    type UpdateStatus = { up_to_date: boolean; behind_by: number | string; latest_message?: string; error?: string } | null;
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
+    const [checkingUpdate, setCheckingUpdate] = useState(false);
+    const [applyingUpdate, setApplyingUpdate] = useState(false);
+
     const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
         queryKey: ['categories', 'all'],
         queryFn: () => apiClient.getCategories({ limit: 1000 }),
@@ -109,8 +115,57 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
         toast.success('Settings saved');
     };
 
+    const handleCheckForUpdates = async () => {
+        setCheckingUpdate(true);
+        try {
+            const result = await apiClient.checkForUpdates();
+            setUpdateStatus(result);
+            if (result.up_to_date) {
+                toast.success('App is up to date');
+            } else {
+                toast.info(`Update available — ${result.behind_by} commit(s) behind`);
+            }
+        } catch {
+            toast.error('Failed to check for updates. Is git configured?');
+        } finally {
+            setCheckingUpdate(false);
+        }
+    };
+
+    const handleApplyUpdate = async () => {
+        setApplyingUpdate(true);
+        try {
+            const result = await apiClient.applyUpdateAndRestart();
+            if (result.already_up_to_date) {
+                toast.success('Already up to date');
+                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true, behind_by: 0 } : null);
+            } else if (result.restarting) {
+                toast.success('Update applied! The server is restarting — the page will reload shortly.', { duration: 8000 });
+                // Poll until the server is back up, then reload
+                setTimeout(async () => {
+                    const poll = async (attempts: number) => {
+                        try {
+                            await apiClient.checkForUpdates();
+                            window.location.reload();
+                        } catch {
+                            if (attempts > 0) setTimeout(() => poll(attempts - 1), 2000);
+                        }
+                    };
+                    poll(15);
+                }, 3000);
+            } else {
+                toast.success('Update applied. Restart the application manually for changes to take effect.');
+                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true, behind_by: 0 } : null);
+            }
+        } catch (err: unknown) {
+            const msg = (err as { detail?: string })?.detail ?? 'Update failed';
+            toast.error(msg);
+        } finally {
+            setApplyingUpdate(false);
+        }
+    };
+
     const handleReset = () => {
-        resetSettings();
         resetAppSettings();
         setLocalExcludedCategories([]);
         setLocalExcludedRecipients([]);
@@ -369,99 +424,99 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             className="h-8 text-sm"
                                         />
                                         <ScrollArea className="h-[250px]">
-                                        <div className="space-y-1">
-                                            {categories.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground text-center py-4">
-                                                    No categories found
-                                                </p>
-                                            ) : (() => {
-                                                // Group by general, filter by search
-                                                const searchLower = categorySearch.toLowerCase();
-                                                const grouped = new Map<string, typeof categories>();
-                                                for (const cat of categories) {
-                                                    const matchesSearch = !categorySearch ||
-                                                        cat.general.toLowerCase().includes(searchLower) ||
-                                                        cat.detail.toLowerCase().includes(searchLower);
-                                                    if (!matchesSearch) continue;
-                                                    const group = grouped.get(cat.general) || [];
-                                                    group.push(cat);
-                                                    grouped.set(cat.general, group);
-                                                }
+                                            <div className="space-y-1">
+                                                {categories.length === 0 ? (
+                                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                                        No categories found
+                                                    </p>
+                                                ) : (() => {
+                                                    // Group by general, filter by search
+                                                    const searchLower = categorySearch.toLowerCase();
+                                                    const grouped = new Map<string, typeof categories>();
+                                                    for (const cat of categories) {
+                                                        const matchesSearch = !categorySearch ||
+                                                            cat.general.toLowerCase().includes(searchLower) ||
+                                                            cat.detail.toLowerCase().includes(searchLower);
+                                                        if (!matchesSearch) continue;
+                                                        const group = grouped.get(cat.general) || [];
+                                                        group.push(cat);
+                                                        grouped.set(cat.general, group);
+                                                    }
 
-                                                if (grouped.size === 0) {
-                                                    return (
-                                                        <p className="text-sm text-muted-foreground text-center py-4">
-                                                            No matching categories
-                                                        </p>
-                                                    );
-                                                }
-
-                                                return Array.from(grouped.entries())
-                                                    .sort(([a], [b]) => a.localeCompare(b))
-                                                    .map(([general, items]) => {
-                                                        const allExcluded = items.every(c => localExcludedCategories.includes(c.id));
-                                                        const someExcluded = items.some(c => localExcludedCategories.includes(c.id));
-
-                                                        const toggleGroup = () => {
-                                                            if (allExcluded) {
-                                                                // Remove all in group
-                                                                setLocalExcludedCategories(prev =>
-                                                                    prev.filter(id => !items.some(c => c.id === id))
-                                                                );
-                                                            } else {
-                                                                // Add all in group
-                                                                setLocalExcludedCategories(prev => {
-                                                                    const newIds = items.map(c => c.id).filter(id => !prev.includes(id));
-                                                                    return [...prev, ...newIds];
-                                                                });
-                                                            }
-                                                        };
-
+                                                    if (grouped.size === 0) {
                                                         return (
-                                                            <div key={general} className="space-y-0.5">
-                                                                {/* Group header */}
-                                                                <div
-                                                                    className="flex items-center space-x-3 rounded-md bg-muted/50 px-3 py-2 cursor-pointer hover:bg-muted transition-colors"
-                                                                    onClick={toggleGroup}
-                                                                >
-                                                                    <Checkbox
-                                                                        checked={allExcluded ? true : someExcluded ? 'indeterminate' : false}
-                                                                        onCheckedChange={toggleGroup}
-                                                                    />
-                                                                    <span className="text-sm font-semibold text-foreground flex-1">{general}</span>
-                                                                    <span className="text-xs text-muted-foreground">{items.length}</span>
-                                                                </div>
-                                                                {/* Detail items */}
-                                                                {items
-                                                                    .sort((a, b) => a.detail.localeCompare(b.detail))
-                                                                    .map((category) => (
+                                                            <p className="text-sm text-muted-foreground text-center py-4">
+                                                                No matching categories
+                                                            </p>
+                                                        );
+                                                    }
+
+                                                    return Array.from(grouped.entries())
+                                                        .sort(([a], [b]) => a.localeCompare(b))
+                                                        .map(([general, items]) => {
+                                                            const allExcluded = items.every(c => localExcludedCategories.includes(c.id));
+                                                            const someExcluded = items.some(c => localExcludedCategories.includes(c.id));
+
+                                                            const toggleGroup = () => {
+                                                                if (allExcluded) {
+                                                                    // Remove all in group
+                                                                    setLocalExcludedCategories(prev =>
+                                                                        prev.filter(id => !items.some(c => c.id === id))
+                                                                    );
+                                                                } else {
+                                                                    // Add all in group
+                                                                    setLocalExcludedCategories(prev => {
+                                                                        const newIds = items.map(c => c.id).filter(id => !prev.includes(id));
+                                                                        return [...prev, ...newIds];
+                                                                    });
+                                                                }
+                                                            };
+
+                                                            return (
+                                                                <div key={general} className="space-y-0.5">
+                                                                    {/* Group header */}
                                                                     <div
-                                                                        key={category.id}
-                                                                        className="flex items-center space-x-3 rounded-md border px-3 py-2 ml-6 hover:bg-accent/50 transition-colors"
+                                                                        className="flex items-center space-x-3 rounded-md bg-muted/50 px-3 py-2 cursor-pointer hover:bg-muted transition-colors"
+                                                                        onClick={toggleGroup}
                                                                     >
                                                                         <Checkbox
-                                                                            id={`category-${category.id}`}
-                                                                            checked={localExcludedCategories.includes(category.id)}
-                                                                            onCheckedChange={() => toggleCategory(category.id)}
+                                                                            checked={allExcluded ? true : someExcluded ? 'indeterminate' : false}
+                                                                            onCheckedChange={toggleGroup}
                                                                         />
-                                                                        <Label
-                                                                            htmlFor={`category-${category.id}`}
-                                                                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
-                                                                        >
-                                                                            <span>{category.detail}</span>
-                                                                            {!category.active && (
-                                                                                <Badge variant="outline" className="ml-2 text-xs">
-                                                                                    Hidden
-                                                                                </Badge>
-                                                                            )}
-                                                                        </Label>
+                                                                        <span className="text-sm font-semibold text-foreground flex-1">{general}</span>
+                                                                        <span className="text-xs text-muted-foreground">{items.length}</span>
                                                                     </div>
-                                                                ))}
-                                                            </div>
-                                                        );
-                                                    });
-                                            })()}
-                                        </div>
+                                                                    {/* Detail items */}
+                                                                    {items
+                                                                        .sort((a, b) => a.detail.localeCompare(b.detail))
+                                                                        .map((category) => (
+                                                                            <div
+                                                                                key={category.id}
+                                                                                className="flex items-center space-x-3 rounded-md border px-3 py-2 ml-6 hover:bg-accent/50 transition-colors"
+                                                                            >
+                                                                                <Checkbox
+                                                                                    id={`category-${category.id}`}
+                                                                                    checked={localExcludedCategories.includes(category.id)}
+                                                                                    onCheckedChange={() => toggleCategory(category.id)}
+                                                                                />
+                                                                                <Label
+                                                                                    htmlFor={`category-${category.id}`}
+                                                                                    className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                                                                                >
+                                                                                    <span>{category.detail}</span>
+                                                                                    {!category.active && (
+                                                                                        <Badge variant="outline" className="ml-2 text-xs">
+                                                                                            Hidden
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </Label>
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            );
+                                                        });
+                                                })()}
+                                            </div>
                                         </ScrollArea>
                                     </div>
 
@@ -485,50 +540,50 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             className="h-8 text-sm"
                                         />
                                         <ScrollArea className="h-[200px]">
-                                        <div className="space-y-2">
-                                            {(() => {
-                                                const filtered = recipients.filter(r =>
-                                                    r.name.toLowerCase().includes(recipientSearch.toLowerCase())
-                                                );
-                                                if (filtered.length === 0) {
-                                                    return (
-                                                        <p className="text-sm text-muted-foreground text-center py-4">
-                                                            {recipientSearch ? 'No matching recipients' : 'No recipients found'}
-                                                        </p>
+                                            <div className="space-y-2">
+                                                {(() => {
+                                                    const filtered = recipients.filter(r =>
+                                                        r.name.toLowerCase().includes(recipientSearch.toLowerCase())
                                                     );
-                                                }
-                                                // Show excluded first, then alphabetical
-                                                const sorted = [...filtered].sort((a, b) => {
-                                                    const aExcl = localExcludedRecipients.includes(a.id) ? 0 : 1;
-                                                    const bExcl = localExcludedRecipients.includes(b.id) ? 0 : 1;
-                                                    if (aExcl !== bExcl) return aExcl - bExcl;
-                                                    return a.name.localeCompare(b.name);
-                                                });
-                                                return sorted.map((recipient) => (
-                                                    <div
-                                                        key={recipient.id}
-                                                        className="flex items-center space-x-3 rounded-md border px-3 py-2.5 hover:bg-accent/50 transition-colors"
-                                                    >
-                                                        <Checkbox
-                                                            id={`recipient-${recipient.id}`}
-                                                            checked={localExcludedRecipients.includes(recipient.id)}
-                                                            onCheckedChange={() => toggleRecipient(recipient.id)}
-                                                        />
-                                                        <Label
-                                                            htmlFor={`recipient-${recipient.id}`}
-                                                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <p className="text-sm text-muted-foreground text-center py-4">
+                                                                {recipientSearch ? 'No matching recipients' : 'No recipients found'}
+                                                            </p>
+                                                        );
+                                                    }
+                                                    // Show excluded first, then alphabetical
+                                                    const sorted = [...filtered].sort((a, b) => {
+                                                        const aExcl = localExcludedRecipients.includes(a.id) ? 0 : 1;
+                                                        const bExcl = localExcludedRecipients.includes(b.id) ? 0 : 1;
+                                                        if (aExcl !== bExcl) return aExcl - bExcl;
+                                                        return a.name.localeCompare(b.name);
+                                                    });
+                                                    return sorted.map((recipient) => (
+                                                        <div
+                                                            key={recipient.id}
+                                                            className="flex items-center space-x-3 rounded-md border px-3 py-2.5 hover:bg-accent/50 transition-colors"
                                                         >
-                                                            <span>{recipient.name}</span>
-                                                            {!recipient.active && (
-                                                                <Badge variant="outline" className="ml-2 text-xs">
-                                                                    Hidden
-                                                                </Badge>
-                                                            )}
-                                                        </Label>
-                                                    </div>
-                                                ));
-                                            })()}
-                                        </div>
+                                                            <Checkbox
+                                                                id={`recipient-${recipient.id}`}
+                                                                checked={localExcludedRecipients.includes(recipient.id)}
+                                                                onCheckedChange={() => toggleRecipient(recipient.id)}
+                                                            />
+                                                            <Label
+                                                                htmlFor={`recipient-${recipient.id}`}
+                                                                className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                                                            >
+                                                                <span>{recipient.name}</span>
+                                                                {!recipient.active && (
+                                                                    <Badge variant="outline" className="ml-2 text-xs">
+                                                                        Hidden
+                                                                    </Badge>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                    ));
+                                                })()}
+                                            </div>
                                         </ScrollArea>
                                     </div>
                                 </div>
@@ -562,6 +617,69 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
                                             Restart
                                         </Button>
+                                    </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* App Updates */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-foreground">App Updates</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        Pull the latest changes from GitHub. When running via Docker Compose the server restarts automatically; otherwise restart manually.
+                                    </p>
+
+                                    {/* Status banner */}
+                                    {updateStatus && (
+                                        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${updateStatus.up_to_date ? 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400' : 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400'}`}>
+                                            {updateStatus.up_to_date
+                                                ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                                                : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                            }
+                                            <div>
+                                                {updateStatus.up_to_date
+                                                    ? 'App is up to date.'
+                                                    : <>
+                                                        <span className="font-medium">{updateStatus.behind_by} commit(s) available.</span>
+                                                        {updateStatus.latest_message && (
+                                                            <p className="text-xs mt-0.5 opacity-80">{updateStatus.latest_message}</p>
+                                                        )}
+                                                        {updateStatus.error && (
+                                                            <p className="text-xs mt-0.5 opacity-80">{updateStatus.error}</p>
+                                                        )}
+                                                    </>
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleCheckForUpdates}
+                                            disabled={checkingUpdate || applyingUpdate}
+                                        >
+                                            {checkingUpdate
+                                                ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                            }
+                                            Check for Updates
+                                        </Button>
+
+                                        {updateStatus && !updateStatus.up_to_date && (
+                                            <Button
+                                                size="sm"
+                                                onClick={handleApplyUpdate}
+                                                disabled={applyingUpdate || checkingUpdate}
+                                            >
+                                                {applyingUpdate
+                                                    ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                    : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                                }
+                                                Update &amp; Restart
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
 

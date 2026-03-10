@@ -54,7 +54,8 @@ All colors MUST be HSL.
         --sidebar-ring: 217.2 91.2% 59.8%;
 
         /* Expense text color (H S% L%) -- used by amount spans to ensure contrast */
-        --expense: 0 84% 50%; /* default (light theme) */
+        --expense: 0 84% 50%;
+        /* default (light theme) */
     }
 
     .dark {
@@ -79,7 +80,8 @@ All colors MUST be HSL.
         --accent: 142 76% 36%;
         --accent-foreground: 0 0% 100%;
 
-        --destructive: 0 100% 65%; /* bright red for negative amounts in dark mode */
+        --destructive: 0 100% 65%;
+        /* bright red for negative amounts in dark mode */
         --destructive-foreground: 0 0% 100%;
 
         --border: 217 33% 20%;
@@ -127,10 +129,40 @@ All colors MUST be HSL.
             opacity: 0;
             transform: translateY(10px);
         }
+
         to {
             opacity: 1;
             transform: translateY(0);
         }
+    }
+
+    /* Stagger helpers: apply to children with [&>*:nth-child(n)] or directly */
+    .animate-stagger>* {
+        animation: animate-in 0.3s ease-out both;
+    }
+
+    .animate-stagger>*:nth-child(1) {
+        animation-delay: 0ms;
+    }
+
+    .animate-stagger>*:nth-child(2) {
+        animation-delay: 60ms;
+    }
+
+    .animate-stagger>*:nth-child(3) {
+        animation-delay: 120ms;
+    }
+
+    .animate-stagger>*:nth-child(4) {
+        animation-delay: 180ms;
+    }
+
+    .animate-stagger>*:nth-child(5) {
+        animation-delay: 240ms;
+    }
+
+    .animate-stagger>*:nth-child(6) {
+        animation-delay: 300ms;
     }
 
     .gradient-bg {
@@ -151,12 +183,15 @@ All colors MUST be HSL.
 
     /* Guarantee negative amount color is always correct, even if Tailwind or other classes interfere */
     .negative-amount {
-      color: hsl(var(--expense)) !important;
+        color: hsl(var(--expense)) !important;
     }
+
     :root .negative-amount {
-      color: hsl(var(--expense)) !important;
+        color: hsl(var(--expense)) !important;
     }
+
     :root.dark .negative-amount {
-      color: #ff3333 !important; /* Global override: very bright red in dark mode */
+        color: #ff3333 !important;
+        /* Global override: very bright red in dark mode */
     }
 }

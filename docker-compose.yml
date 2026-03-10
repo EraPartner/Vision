@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ftm_user
+      POSTGRES_DB: financial_transactions
+      # Password is read from POSTGRES_PASSWORD in .env (see .env.example)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3002:3002"
+    environment:
+      # DATABASE_URL is built in .env so the password is never hard-coded here
+      EXTERNAL_DATABASE: "true"
+      SERVER_HOST: "0.0.0.0"
+      CORS_ORIGINS: "http://localhost:3002"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

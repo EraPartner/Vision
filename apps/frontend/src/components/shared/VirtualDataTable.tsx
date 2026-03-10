@@ -30,7 +30,7 @@ interface VirtualDataTableProps<T> {
     subtitle?: string;
     columns: Column<T>[];
     data: T[];
-    emptyMessage?: string;
+    emptyMessage?: React.ReactNode;
     actions?: React.ReactNode;
     onRowUpdate?: (index: number, updatedRow: T) => void;
     /** Called when a row is double-clicked */
@@ -64,7 +64,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     subtitle,
     columns,
     data,
-    emptyMessage = "No data available",
+    emptyMessage = "No data available" as React.ReactNode,
     actions,
     onRowUpdate,
     onRowDoubleClick,
@@ -368,8 +368,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                             >
                                                 <PopoverTrigger asChild>
                                                     <button className={`p-0.5 rounded transition-colors ${hasFilter
-                                                            ? "text-primary"
-                                                            : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
+                                                        ? "text-primary"
+                                                        : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground"
                                                         }`}>
                                                         <Filter className="h-3 w-3" />
                                                     </button>

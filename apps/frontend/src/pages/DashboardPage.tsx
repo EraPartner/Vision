@@ -9,7 +9,8 @@ import { DataTable } from "@/components/shared/DataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, DollarSign, Receipt, TrendingDown, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowUpRight, DollarSign, Receipt, TrendingDown } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -353,11 +354,42 @@ export default function DashboardPage() {
             <div className="space-y-8 animate-in">
                 <div>
                     <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-                    <p className="text-muted-foreground mt-1">Loading your financial data...</p>
+                    <p className="text-muted-foreground mt-1">Loading your financial data…</p>
                 </div>
-                <div className="flex items-center justify-center h-96">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                {/* Stat cards skeleton */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {[...Array(4)].map((_, i) => (
+                        <Card key={i} className="border-none shadow-lg">
+                            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-10 w-10 rounded-xl" />
+                            </CardHeader>
+                            <CardContent>
+                                <Skeleton className="h-8 w-32 mb-2" />
+                                <Skeleton className="h-3 w-20" />
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
+                {/* Bank balances skeleton */}
+                <Skeleton className="h-64 w-full rounded-xl" />
+                {/* Charts skeleton */}
+                <div className="grid gap-6 lg:grid-cols-2">
+                    <Skeleton className="h-80 w-full rounded-xl" />
+                    <Skeleton className="h-80 w-full rounded-xl" />
+                </div>
+                {/* Recent transactions skeleton */}
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-6 w-44" />
+                        <Skeleton className="h-4 w-32 mt-1" />
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {[...Array(5)].map((_, i) => (
+                            <Skeleton key={i} className="h-10 w-full" />
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -383,14 +415,14 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
                 <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt} />
-                <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="down"
+                <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="expense"
                     subtitle="Most recent month" />
-                <StatCard title="Last Month Income" value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="up"
+                <StatCard title="Last Month Income" value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="income"
                     subtitle="Most recent month" />
                 <StatCard title="Last Month Net" value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
-                    trend={netBalance >= 0 ? "up" : "down"}
+                    trend={netBalance >= 0 ? "income" : "expense"}
                     subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"} />
             </div>
 

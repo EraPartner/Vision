@@ -12,6 +12,7 @@ import { importCSV } from '../services/importService.js';
 import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
 import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
+import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
@@ -194,6 +195,58 @@ router.get('/supported-banks', (req, res) => {
     banks: banks.map(b => b.charAt(0).toUpperCase() + b.slice(1)),
     total: banks.length,
   });
+});
+
+// POST /api/import/recipients - Bulk import recipients from CSV
+router.post('/recipients', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ detail: 'No file uploaded. Send a CSV file as multipart form-data with field name "file".' });
+  }
+
+  const separator = req.query.separator || req.body.separator || ',';
+  const encoding = req.query.encoding || req.body.encoding || 'utf-8';
+
+  if (separator.length !== 1) {
+    cleanup(req.file.path);
+    return res.status(400).json({ detail: 'separator must be a single character' });
+  }
+
+  try {
+    const result = await importRecipientsCSV(req.file.path, { separator, encoding });
+    cleanup(req.file.path);
+    logger.info('Recipient CSV import completed', result);
+    res.status(201).json({ ...result, status: result.errors > 0 ? 'completed_with_errors' : 'completed' });
+  } catch (err) {
+    cleanup(req.file.path);
+    logger.error('Recipient CSV import error', { error: err.message });
+    res.status(500).json({ detail: `Import failed: ${err.message}` });
+  }
+});
+
+// POST /api/import/categories - Bulk import categories from CSV
+router.post('/categories', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ detail: 'No file uploaded. Send a CSV file as multipart form-data with field name "file".' });
+  }
+
+  const separator = req.query.separator || req.body.separator || ',';
+  const encoding = req.query.encoding || req.body.encoding || 'utf-8';
+
+  if (separator.length !== 1) {
+    cleanup(req.file.path);
+    return res.status(400).json({ detail: 'separator must be a single character' });
+  }
+
+  try {
+    const result = await importCategoriesCSV(req.file.path, { separator, encoding });
+    cleanup(req.file.path);
+    logger.info('Category CSV import completed', result);
+    res.status(201).json({ ...result, status: result.errors > 0 ? 'completed_with_errors' : 'completed' });
+  } catch (err) {
+    cleanup(req.file.path);
+    logger.error('Category CSV import error', { error: err.message });
+    res.status(500).json({ detail: `Import failed: ${err.message}` });
+  }
 });
 
 // Error handler for multer

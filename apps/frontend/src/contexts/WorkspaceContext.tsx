@@ -1,20 +1,17 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export type Workspace = "budgeting" | "portfolio";
 
-interface WorkspaceContextValue {
-  workspace: Workspace;
-  setWorkspace: (ws: Workspace) => void;
-}
-
-const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
-
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+/**
+ * Derives the active workspace from the current route and provides a
+ * navigate-based setter. No Context or Provider needed — all state lives
+ * in the router, which is already a context.
+ */
+export function useWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Derive workspace from current route
   const isPortfolio = location.pathname.startsWith("/portfolio");
   const workspace: Workspace = isPortfolio ? "portfolio" : "budgeting";
 
@@ -29,15 +26,5 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [navigate, location.pathname]
   );
 
-  return (
-    <WorkspaceContext.Provider value={{ workspace, setWorkspace }}>
-      {children}
-    </WorkspaceContext.Provider>
-  );
-}
-
-export function useWorkspace() {
-  const ctx = useContext(WorkspaceContext);
-  if (!ctx) throw new Error("useWorkspace must be used within WorkspaceProvider");
-  return ctx;
+  return { workspace, setWorkspace };
 }

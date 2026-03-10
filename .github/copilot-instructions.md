@@ -19,13 +19,4 @@ This repository contains the source code of a financial transaction management a
 - **Export**: The process of generating a file (csv) that contains transaction data from the application, which can be used for backup or analysis purposes.
 
 ## Architecture
-The application has a React frontend, that communicates with a Python FastAPI backend. The backend uses a PostgreSQL database to store transaction data. The application is designed to be modular and scalable, allowing for easy maintenance and future feature additions, using GRASP and design patterns.
-
-## Mode Context Awareness - CRITICAL
-
-**ALWAYS check the active mode at the START of processing any request.**
-
-Before taking any action:
-1. Check what mode you're in (e.g., "Vault Voyager Agent", "Refactor Agent", etc.)
-2. Follow that mode's specific rules and workflow
-3. Never jump into "solve the problem" mode without confirming the mode context
+The application has a React frontend that communicates with a Node.js backend. The backend uses a PostgreSQL database to store transaction data. The application is designed to be modular and scalable, allowing for easy maintenance and future feature additions, using GRASP and design patterns.

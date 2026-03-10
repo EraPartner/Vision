@@ -34,9 +34,10 @@ export async function importCSV(filePath, bankName, customConfig = null) {
       errors: 0,
     };
 
+    // Phase 1: dedup + recipient resolution (sequential, order matters)
+    const pendingInserts = [];
     for (const txData of transactionDataList) {
       try {
-        // Deduplication check
         const dateStr = txData.date.toISOString().split('T')[0];
         const dup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
         if (dup) {
@@ -44,7 +45,6 @@ export async function importCSV(filePath, bankName, customConfig = null) {
           continue;
         }
 
-        // Get or create recipient
         const recipientId = await getOrCreateRecipient(
           txData.recipient,
           txData.recipientAccount,
@@ -52,26 +52,39 @@ export async function importCSV(filePath, bankName, customConfig = null) {
           txData.recipientBankName
         );
 
-        // Insert transaction
-        await query(
-          `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
-          [
-            dateStr,
-            txData.bankAccount,
-            recipientId,
-            txData.amount,
-            txData.memo || '',
-            txData.currency || null,
-            txData.balance,
-            txData.comment,
-          ]
-        );
-
-        results.imported++;
+        pendingInserts.push([
+          dateStr,
+          txData.bankAccount,
+          recipientId,
+          txData.amount,
+          txData.memo || '',
+          txData.currency || null,
+          txData.balance,
+          txData.comment,
+        ]);
       } catch (err) {
         logger.warn(`Error processing transaction: ${err.message}`);
         results.errors++;
+      }
+    }
+
+    // Phase 2: batch insert resolved transactions (100 rows per statement)
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < pendingInserts.length; i += BATCH_SIZE) {
+      const chunk = pendingInserts.slice(i, i + BATCH_SIZE);
+      try {
+        const placeholders = chunk.map((_, j) => {
+          const b = j * 8;
+          return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},true)`;
+        }).join(',');
+        await query(
+          `INSERT INTO transactions (date,bank_account,recipient_id,amount,memo,currency,balance,comment,is_active) VALUES ${placeholders}`,
+          chunk.flat()
+        );
+        results.imported += chunk.length;
+      } catch (err) {
+        logger.warn(`Batch insert failed: ${err.message}`);
+        results.errors += chunk.length;
       }
     }
 

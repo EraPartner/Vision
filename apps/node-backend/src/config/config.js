@@ -37,7 +37,7 @@ const settings = {
   debug: (process.env.DEBUG || 'true').toLowerCase() === 'true',
 
   server: {
-    host: process.env.HOSTNAME || 'localhost',
+    host: process.env.SERVER_HOST || process.env.HOSTNAME || 'localhost',
     port: parseInt(process.env.PORT || '3002', 10),
     environment: process.env.ENVIRONMENT || process.env.NODE_ENV || 'development',
   },

@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+apps/node-backend/node_modules/
+
+# Local database (Docker uses its own volume)
+postgres_data/
+
+# Build artifacts (Stage 1 rebuilds these)
+dist/
+
+# Dev/cache files
+cache/
+*.log
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Editor
+.vscode/
+*.idea/
+
+# Python (legacy backend)
+apps/backend/
+__pycache__/
+*.pyc
+*.pyo
+alembic/
+alembic.ini
+config/alembic.ini
+
+# Test artifacts
+apps/node-backend/tests/
+coverage/
