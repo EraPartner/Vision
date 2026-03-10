@@ -1,16 +1,18 @@
 import { Fragment, useState, useMemo, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useStatistics, type StatisticsData } from "@/hooks/useStatistics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   Area, AreaChart,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Import } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
@@ -95,7 +97,7 @@ function SummaryCards({ data }: { data: StatisticsData }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger">
       {cards.map((card) => (
         <Card key={card.title}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -538,10 +540,20 @@ export default function StatisticsPage() {
   if (!data || data.monthlyData.length === 0) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+          <p className="text-muted-foreground mt-1">Visualise your income, spending and net balance over time</p>
+        </div>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">No transaction data available yet. Import some transactions to see statistics.</p>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No data yet</h3>
+            <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+              Import your bank transactions to start seeing statistics about your income, spending, and financial trends.
+            </p>
+            <Button asChild size="sm">
+              <Link to="/import"><Import className="h-4 w-4 mr-2" />Import transactions</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -552,7 +564,10 @@ export default function StatisticsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+        <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+      </div>
 
       <SummaryCards data={data} />
 

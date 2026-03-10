@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import {SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
-import {AppSidebar} from "@/components/layout/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
 import { Settings, Sun, Moon, Monitor, Clock } from "lucide-react";
 import {
@@ -10,15 +10,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
-import {useTheme} from "@/contexts/ThemeContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
+import { UpdateNotification } from "@/components/notifications/UpdateNotification";
 import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
 
 interface AppLayoutProps {
     children: React.ReactNode;
 }
 
-export function AppLayout({children}: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { theme, mode, schedule, setMode, setSchedule, toggleTheme } = useTheme();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
@@ -33,12 +34,13 @@ export function AppLayout({children}: AppLayoutProps) {
     return (
         <SidebarProvider>
             <div className="min-h-screen flex w-full">
-                <AppSidebar/>
+                <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
                         className="h-14 border-b bg-card/80 backdrop-blur-sm flex items-center px-4 sticky top-0 z-30">
-                        <SidebarTrigger className="mr-4"/>
+                        <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
+                        <UpdateNotification />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -46,6 +48,7 @@ export function AppLayout({children}: AppLayoutProps) {
                                     size="icon"
                                     className="ml-auto mr-2"
                                     title="Theme settings"
+                                    aria-label="Change theme"
                                 >
                                     {modeIcon}
                                 </Button>
@@ -120,6 +123,7 @@ export function AppLayout({children}: AppLayoutProps) {
                             onClick={() => setSettingsOpen(true)}
                             className="ml-2"
                             title="Dashboard Settings"
+                            aria-label="Open dashboard settings"
                         >
                             <Settings className="h-5 w-5" />
                         </Button>

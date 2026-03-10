@@ -25,8 +25,10 @@ import {
   Download,
   File,
   Loader2,
+  Tags,
   Trash2,
   Upload,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -56,7 +58,7 @@ export default function ImportPage() {
     name: string;
     adapter_class: string;
   }
-  
+
   const [adapters, setAdapters] = useState<BankAdapter[]>([]);
   const [adaptersLoading, setAdaptersLoading] = useState(false);
   const [adaptersError, setAdaptersError] = useState<string | null>(null);
@@ -146,7 +148,7 @@ export default function ImportPage() {
 
     try {
       let data;
-      
+
       if (bankSource === "custom") {
         // Custom config uses the non-streaming endpoint (no raw table)
         data = await apiClient.importCSVCustom(
@@ -211,6 +213,77 @@ export default function ImportPage() {
     }
   };
 
+  // ── Recipients import ────────────────────────────────────────────────────────
+  const [recipientFile, setRecipientFile] = useState<File | null>(null);
+  const [recipientSeparator, setRecipientSeparator] = useState(",");
+  const [recipientEncoding, setRecipientEncoding] = useState("utf-8");
+  const [recipientLoading, setRecipientLoading] = useState(false);
+  const [recipientResult, setRecipientResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
+  const recipientFileRef = useRef<HTMLInputElement>(null);
+
+  const handleRecipientFile = useCallback((f: File | null) => {
+    if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
+      toast.error("Please select a CSV file.");
+      return;
+    }
+    setRecipientFile(f);
+    setRecipientResult(null);
+  }, []);
+
+  const handleRecipientImport = async () => {
+    if (!recipientFile) { toast.error("Please select a file first."); return; }
+    setRecipientLoading(true);
+    setRecipientResult(null);
+    try {
+      const data = await apiClient.importRecipients(recipientFile, recipientSeparator, recipientEncoding);
+      setRecipientResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
+      toast.success(`Imported ${data.imported} recipient(s)`, {
+        description: `${data.skipped} already existed, ${data.errors} errors`,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+      setRecipientFile(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import recipients");
+    } finally {
+      setRecipientLoading(false);
+    }
+  };
+
+  // ── Categories import ────────────────────────────────────────────────────────
+  const [categoryFile, setCategoryFile] = useState<File | null>(null);
+  const [categorySeparator, setCategorySeparator] = useState(",");
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryResult, setCategoryResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
+  const categoryFileRef = useRef<HTMLInputElement>(null);
+
+  const handleCategoryFile = useCallback((f: File | null) => {
+    if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
+      toast.error("Please select a CSV file.");
+      return;
+    }
+    setCategoryFile(f);
+    setCategoryResult(null);
+  }, []);
+
+  const handleCategoryImport = async () => {
+    if (!categoryFile) { toast.error("Please select a file first."); return; }
+    setCategoryLoading(true);
+    setCategoryResult(null);
+    try {
+      const data = await apiClient.importCategories(categoryFile, categorySeparator);
+      setCategoryResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
+      toast.success(`Imported ${data.imported} categor${data.imported === 1 ? "y" : "ies"}`, {
+        description: `${data.skipped} already existed, ${data.errors} errors`,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+      setCategoryFile(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import categories");
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
@@ -218,7 +291,7 @@ export default function ImportPage() {
     try {
       // Build query parameters for export with filters
       const queryParams = new URLSearchParams();
-      
+
       if (exportFilters.startDate) {
         queryParams.append('start_date', exportFilters.startDate);
       }
@@ -233,7 +306,7 @@ export default function ImportPage() {
       }
 
       const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3002'}/api/transactions/export/csv?${queryParams.toString()}`;
-      
+
       // Call the backend export endpoint
       const response = await fetch(url, {
         method: 'GET',
@@ -245,7 +318,7 @@ export default function ImportPage() {
 
       // Get the blob from the response
       const blob = await response.blob();
-      
+
       // Create download link
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -536,10 +609,9 @@ export default function ImportPage() {
                 relative flex flex-col items-center justify-center gap-3
                 rounded-xl border-2 border-dashed p-10 cursor-pointer
                 transition-colors duration-200
-                ${
-                  dragOver
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50 hover:bg-muted/50"
+                ${dragOver
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50 hover:bg-muted/50"
                 }
               `}
             >
@@ -666,6 +738,196 @@ export default function ImportPage() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Recipients Import Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Recipients Import
+          </CardTitle>
+          <CardDescription>
+            Import recipients from a CSV file. Expected columns:{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">name</code>{" "}
+            (required),{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">bank_account</code>{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">address</code>{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">category</code>{" "}
+            (optional, format <em>GENERAL:DETAIL</em>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Options row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="recipient-separator">Separator</Label>
+              <Select value={recipientSeparator} onValueChange={setRecipientSeparator}>
+                <SelectTrigger id="recipient-separator">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value=",">, (Comma)</SelectItem>
+                  <SelectItem value=";">; (Semicolon)</SelectItem>
+                  <SelectItem value="\t">⇥ (Tab)</SelectItem>
+                  <SelectItem value="|">| (Pipe)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recipient-encoding">Encoding</Label>
+              <Select value={recipientEncoding} onValueChange={setRecipientEncoding}>
+                <SelectTrigger id="recipient-encoding">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="utf-8">UTF-8</SelectItem>
+                  <SelectItem value="latin-1">Latin-1</SelectItem>
+                  <SelectItem value="iso-8859-1">ISO-8859-1</SelectItem>
+                  <SelectItem value="windows-1252">Windows-1252</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* File picker */}
+          <div
+            onClick={() => recipientFileRef.current?.click()}
+            onDrop={(e) => { e.preventDefault(); handleRecipientFile(e.dataTransfer.files?.[0] ?? null); }}
+            onDragOver={(e) => e.preventDefault()}
+            className="relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 cursor-pointer transition-colors duration-200 border-border hover:border-primary/50 hover:bg-muted/50"
+          >
+            <input
+              ref={recipientFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => handleRecipientFile(e.target.files?.[0] ?? null)}
+            />
+            {recipientFile ? (
+              <>
+                <File className="h-8 w-8 text-primary" />
+                <div className="text-center">
+                  <p className="font-medium text-foreground">{recipientFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{(recipientFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); setRecipientFile(null); }}>
+                  <Trash2 className="h-4 w-4 mr-1" /> Remove
+                </Button>
+              </>
+            ) : (
+              <>
+                <CloudUpload className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Drag & drop or click to browse</p>
+              </>
+            )}
+          </div>
+
+          {/* Result summary */}
+          {recipientResult && !recipientLoading && (
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+              <p className="text-sm text-green-800 dark:text-green-300">
+                {recipientResult.imported} imported &middot; {recipientResult.skipped} already existed &middot; {recipientResult.errors} errors
+              </p>
+            </div>
+          )}
+
+          <Button onClick={handleRecipientImport} disabled={!recipientFile || recipientLoading} className="w-full h-11" size="lg">
+            {recipientLoading ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importing…</>
+            ) : (
+              <><Users className="h-4 w-4 mr-2" /> Import Recipients</>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Categories Import Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tags className="h-5 w-5 text-primary" />
+            Categories Import
+          </CardTitle>
+          <CardDescription>
+            Import categories from a CSV file. Each row must have a{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">category</code>{" "}
+            column (or the first column is used) in{" "}
+            <em>GENERAL:DETAIL</em> format, e.g.{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">FOOD:GROCERIES</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Separator option */}
+          <div className="w-1/2 space-y-2">
+            <Label htmlFor="category-separator">Separator</Label>
+            <Select value={categorySeparator} onValueChange={setCategorySeparator}>
+              <SelectTrigger id="category-separator">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value=",">, (Comma)</SelectItem>
+                <SelectItem value=";">; (Semicolon)</SelectItem>
+                <SelectItem value="\t">⇥ (Tab)</SelectItem>
+                <SelectItem value="|">| (Pipe)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* File picker */}
+          <div
+            onClick={() => categoryFileRef.current?.click()}
+            onDrop={(e) => { e.preventDefault(); handleCategoryFile(e.dataTransfer.files?.[0] ?? null); }}
+            onDragOver={(e) => e.preventDefault()}
+            className="relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 cursor-pointer transition-colors duration-200 border-border hover:border-primary/50 hover:bg-muted/50"
+          >
+            <input
+              ref={categoryFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => handleCategoryFile(e.target.files?.[0] ?? null)}
+            />
+            {categoryFile ? (
+              <>
+                <File className="h-8 w-8 text-primary" />
+                <div className="text-center">
+                  <p className="font-medium text-foreground">{categoryFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{(categoryFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); setCategoryFile(null); }}>
+                  <Trash2 className="h-4 w-4 mr-1" /> Remove
+                </Button>
+              </>
+            ) : (
+              <>
+                <CloudUpload className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Drag & drop or click to browse</p>
+              </>
+            )}
+          </div>
+
+          {/* Result summary */}
+          {categoryResult && !categoryLoading && (
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+              <p className="text-sm text-green-800 dark:text-green-300">
+                {categoryResult.imported} imported &middot; {categoryResult.skipped} already existed &middot; {categoryResult.errors} errors
+              </p>
+            </div>
+          )}
+
+          <Button onClick={handleCategoryImport} disabled={!categoryFile || categoryLoading} className="w-full h-11" size="lg">
+            {categoryLoading ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importing…</>
+            ) : (
+              <><Tags className="h-4 w-4 mr-2" /> Import Categories</>
+            )}
+          </Button>
         </CardContent>
       </Card>
 

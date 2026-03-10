@@ -7,6 +7,70 @@
 import { query } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 
+// Shared JOIN fragment used by every multi-join query
+const TRANSACTION_JOINS = `
+  LEFT JOIN recipients r ON t.recipient_id = r.id
+  LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+  LEFT JOIN categories c ON t.category_id = c.id
+  LEFT JOIN categories rc ON r.default_category_id = rc.id
+  LEFT JOIN categories pc ON pr.default_category_id = pc.id
+`;
+
+/**
+ * Build the WHERE clause and parameter list from common filter options.
+ * Returns { where, params, nextParam } so callers can append further params.
+ */
+function buildWhereClause({
+  startDate = null,
+  endDate = null,
+  bankAccount = null,
+  categoryId = null,
+  recipientId = null,
+  recipientName = null,
+  search = null,
+  active = true,
+} = {}) {
+  const clauses = ['1=1'];
+  const params = [];
+  let p = 1;
+
+  if (active) clauses.push('t.is_active = true');
+  if (startDate) { clauses.push(`t.date >= $${p++}`); params.push(startDate); }
+  if (endDate) { clauses.push(`t.date <= $${p++}`); params.push(endDate); }
+  if (bankAccount) { clauses.push(`t.bank_account ILIKE $${p++}`); params.push(`%${bankAccount}%`); }
+  if (categoryId != null) {
+    clauses.push(`COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${p++}`);
+    params.push(categoryId);
+  }
+  if (recipientId != null) {
+    clauses.push(`(t.recipient_id = $${p} OR r.primary_recipient_id = $${p})`);
+    p++;
+    params.push(recipientId);
+  }
+  if (recipientName) { clauses.push(`r.name ILIKE $${p++}`); params.push(`%${recipientName}%`); }
+  if (search) {
+    clauses.push(`(
+      t.memo ILIKE $${p} OR
+      t.comment ILIKE $${p} OR
+      t.bank_account ILIKE $${p} OR
+      t.currency ILIKE $${p} OR
+      CAST(t.amount AS TEXT) ILIKE $${p} OR
+      r.name ILIKE $${p} OR
+      pr.name ILIKE $${p} OR
+      c.general ILIKE $${p} OR
+      c.detail ILIKE $${p} OR
+      rc.general ILIKE $${p} OR
+      rc.detail ILIKE $${p} OR
+      pc.general ILIKE $${p} OR
+      pc.detail ILIKE $${p}
+    )`);
+    p++;
+    params.push(`%${search}%`);
+  }
+
+  return { where: clauses.join(' AND '), params, nextParam: p };
+}
+
 export const transactionRepository = {
   /**
    * Get transactions with pagination and filtering.
@@ -23,7 +87,11 @@ export const transactionRepository = {
     search = null,
     active = true,
   } = {}) {
-    let sql = `
+    const { where, params, nextParam: p } = buildWhereClause({
+      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+    });
+
+    const sql = `
       SELECT t.*,
              COALESCE(pr.name, r.name) AS recipient_name,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
@@ -34,66 +102,10 @@ export const transactionRepository = {
                ELSE NULL
              END AS category_name
       FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
-      LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      WHERE 1=1
+      ${TRANSACTION_JOINS}
+      WHERE ${where}
+      ORDER BY t.date DESC LIMIT $${p} OFFSET $${p + 1}
     `;
-    const params = [];
-    let paramIdx = 1;
-
-    if (active) {
-      sql += ` AND t.is_active = true`;
-    }
-    if (startDate) {
-      sql += ` AND t.date >= $${paramIdx++}`;
-      params.push(startDate);
-    }
-    if (endDate) {
-      sql += ` AND t.date <= $${paramIdx++}`;
-      params.push(endDate);
-    }
-    if (bankAccount) {
-      sql += ` AND t.bank_account ILIKE $${paramIdx++}`;
-      params.push(`%${bankAccount}%`);
-    }
-    if (categoryId != null) {
-      sql += ` AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${paramIdx++}`;
-      params.push(categoryId);
-    }
-    if (recipientId != null) {
-      sql += ` AND (t.recipient_id = $${paramIdx} OR r.primary_recipient_id = $${paramIdx})`;
-      paramIdx++;
-      params.push(recipientId);
-    }
-    if (recipientName) {
-      sql += ` AND r.name ILIKE $${paramIdx++}`;
-      params.push(`%${recipientName}%`);
-    }
-    if (search) {
-      const searchParam = `%${search}%`;
-      sql += ` AND (
-        t.memo ILIKE $${paramIdx} OR
-        t.comment ILIKE $${paramIdx} OR
-        t.bank_account ILIKE $${paramIdx} OR
-        t.currency ILIKE $${paramIdx} OR
-        CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
-        r.name ILIKE $${paramIdx} OR
-        pr.name ILIKE $${paramIdx} OR
-        c.general ILIKE $${paramIdx} OR
-        c.detail ILIKE $${paramIdx} OR
-        rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx} OR
-        pc.general ILIKE $${paramIdx} OR
-        pc.detail ILIKE $${paramIdx}
-      )`;
-      paramIdx++;
-      params.push(searchParam);
-    }
-
-    sql += ` ORDER BY t.date DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -101,7 +113,7 @@ export const transactionRepository = {
   },
 
   /**
-   * Get total count with optional filters.
+   * Get total count with optional filters (reuses the same WHERE builder as getAll).
    */
   async getCount({
     startDate = null,
@@ -113,66 +125,15 @@ export const transactionRepository = {
     search = null,
     active = true,
   } = {}) {
-    let sql = `
-      SELECT count(*) FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
-      LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      WHERE 1=1
-    `;
-    const params = [];
-    let paramIdx = 1;
+    const { where, params } = buildWhereClause({
+      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+    });
 
-    if (active) {
-      sql += ` AND t.is_active = true`;
-    }
-    if (startDate) {
-      sql += ` AND t.date >= $${paramIdx++}`;
-      params.push(startDate);
-    }
-    if (endDate) {
-      sql += ` AND t.date <= $${paramIdx++}`;
-      params.push(endDate);
-    }
-    if (bankAccount) {
-      sql += ` AND t.bank_account ILIKE $${paramIdx++}`;
-      params.push(`%${bankAccount}%`);
-    }
-    if (categoryId != null) {
-      sql += ` AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${paramIdx++}`;
-      params.push(categoryId);
-    }
-    if (recipientId != null) {
-      sql += ` AND (t.recipient_id = $${paramIdx} OR r.primary_recipient_id = $${paramIdx})`;
-      paramIdx++;
-      params.push(recipientId);
-    }
-    if (recipientName) {
-      sql += ` AND r.name ILIKE $${paramIdx++}`;
-      params.push(`%${recipientName}%`);
-    }
-    if (search) {
-      const searchParam = `%${search}%`;
-      sql += ` AND (
-        t.memo ILIKE $${paramIdx} OR
-        t.comment ILIKE $${paramIdx} OR
-        t.bank_account ILIKE $${paramIdx} OR
-        t.currency ILIKE $${paramIdx} OR
-        CAST(t.amount AS TEXT) ILIKE $${paramIdx} OR
-        r.name ILIKE $${paramIdx} OR
-        pr.name ILIKE $${paramIdx} OR
-        c.general ILIKE $${paramIdx} OR
-        c.detail ILIKE $${paramIdx} OR
-        rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx} OR
-        pc.general ILIKE $${paramIdx} OR
-        pc.detail ILIKE $${paramIdx}
-      )`;
-      paramIdx++;
-      params.push(searchParam);
-    }
+    const sql = `
+      SELECT count(*) FROM transactions t
+      ${TRANSACTION_JOINS}
+      WHERE ${where}
+    `;
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);

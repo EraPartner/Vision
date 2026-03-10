@@ -449,6 +449,74 @@ class ApiClient {
         });
     }
 
+    async importRecipients(
+        file: File,
+        separator: string = ',',
+        encoding: string = 'utf-8',
+    ): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        const queryParams = new URLSearchParams({ separator, encoding });
+        const url = `${API_BASE_URL}/api/import/recipients?${queryParams}`;
+        const response = await this.rawFetch(url, { method: 'POST', body: formData });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+        return response.json();
+    }
+
+    async importCategories(
+        file: File,
+        separator: string = ',',
+        encoding: string = 'utf-8',
+    ): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        const queryParams = new URLSearchParams({ separator, encoding });
+        const url = `${API_BASE_URL}/api/import/categories?${queryParams}`;
+        const response = await this.rawFetch(url, { method: 'POST', body: formData });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+        return response.json();
+    }
+
+    // ==================== Update Methods ====================
+
+    async checkForUpdates(): Promise<{
+        up_to_date: boolean;
+        current_commit: string;
+        latest_commit: string | null;
+        behind_by: number | string;
+        latest_message?: string;
+        error?: string;
+    }> {
+        return this.request('/api/admin/update/check');
+    }
+
+    async applyUpdate(): Promise<{
+        success: boolean;
+        already_up_to_date: boolean;
+        output: string;
+        note: string;
+        detail?: string;
+    }> {
+        return this.request('/api/admin/update/apply', { method: 'POST' });
+    }
+
+    async applyUpdateAndRestart(): Promise<{
+        success: boolean;
+        already_up_to_date: boolean;
+        output: string;
+        restarting: boolean;
+        note: string;
+        detail?: string;
+    }> {
+        return this.request('/api/admin/update/apply-and-restart', { method: 'POST' });
+    }
+
     // ==================== Info/Statistics Methods ====================
 
     async getStatistics(): Promise<{

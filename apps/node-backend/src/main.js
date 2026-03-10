@@ -97,14 +97,6 @@ app.get('/api/', (req, res) => {
   });
 });
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Financial Transaction Manager API (Node.js)',
-    version: settings.api.version,
-    docs: '/api/',
-  });
-});
-
 // ==================== Route Registration ====================
 
 // Global rate limiter
@@ -124,6 +116,20 @@ app.use('/api/market', marketLookupRouter);
 app.use('/api/watchlist', watchlistRouter);
 
 logger.info('All route modules registered successfully');
+
+// ==================== Static Frontend (Production) ====================
+// Serve the built React app when running in production (Docker/standalone)
+// Must be registered AFTER API routes but BEFORE the 404 handler.
+if (settings.isProduction()) {
+  const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
+  // Hashed assets (JS/CSS) — long-lived cache
+  app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
+  // SPA fallback: serve index.html (no-cache) for all non-API paths
+  app.get(/^(?!\/api)/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(resolve(distPath, 'index.html'));
+  });
+}
 
 // ==================== Error Handling ====================
 
@@ -172,17 +178,21 @@ async function start() {
     postgresManager = new PostgresManager(projectRoot);
 
     // Start PostgreSQL server (initialize if needed)
-    logger.info('PostgreSQL initialization and startup...');
-    try {
-      await postgresManager.start();
-      logger.info('PostgreSQL server is ready');
-    } catch (error) {
-      logger.error('Failed to start PostgreSQL', {
-        error: error.message,
-        dataDir: postgresManager.postgresDataDir,
-      });
-      logger.error('Make sure PostgreSQL is installed: brew install postgresql@15');
-      throw error;
+    if (process.env.EXTERNAL_DATABASE === 'true') {
+      logger.info('EXTERNAL_DATABASE mode: skipping local PostgreSQL management, expecting external DB at DATABASE_URL');
+    } else {
+      logger.info('PostgreSQL initialization and startup...');
+      try {
+        await postgresManager.start();
+        logger.info('PostgreSQL server is ready');
+      } catch (error) {
+        logger.error('Failed to start PostgreSQL', {
+          error: error.message,
+          dataDir: postgresManager.postgresDataDir,
+        });
+        logger.error('Make sure PostgreSQL is installed: brew install postgresql@15');
+        throw error;
+      }
     }
 
     // Wait for PostgreSQL to be fully ready

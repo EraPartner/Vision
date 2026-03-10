@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Import, Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X } from "lucide-react";
 import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
@@ -136,8 +138,22 @@ export default function TransactionsPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="space-y-8 animate-in">
+                <div>
+                    <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
+                    <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
+                </div>
+                <Card>
+                    <CardHeader className="pb-3">
+                        <Skeleton className="h-6 w-44" />
+                        <Skeleton className="h-4 w-28 mt-1" />
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {[...Array(8)].map((_, i) => (
+                            <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -235,9 +251,8 @@ export default function TransactionsPage() {
             editable: true,
             type: "number" as const,
             render: (row: TableTransaction) => (
-                <span className={`font-mono font-medium whitespace-nowrap ${
-                    row.amount >= 0 ? 'text-accent' : 'text-destructive'
-                } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
+                <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'
+                    } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
                     {row.amount >= 0 ? '+' : '-'}{formatCurrency(Math.abs(row.amount), row.currency)}
                 </span>
             ),
@@ -256,9 +271,11 @@ export default function TransactionsPage() {
                     { label: "Recipient", value: row.recipient !== 'Unknown' ? row.recipient : undefined },
                     { label: "Category", value: row.category !== 'Uncategorized' ? row.category : undefined },
                     { label: "Currency", value: row.currency },
-                    { label: "Balance", value: row.balance != null
-                        ? formatCurrency(row.balance, row.currency)
-                        : undefined },
+                    {
+                        label: "Balance", value: row.balance != null
+                            ? formatCurrency(row.balance, row.currency)
+                            : undefined
+                    },
                     { label: "Description", value: row.memo },
                     { label: "Comment", value: row.comment },
                 ].filter(i => i.value);
@@ -363,7 +380,20 @@ export default function TransactionsPage() {
                     columns={columns}
                     data={transactions}
                     onRowUpdate={handleUpdate}
-                    emptyMessage="No transactions found."
+                    emptyMessage={(
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <Import className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                            <p className="text-sm font-medium text-foreground mb-1">No transactions found</p>
+                            <p className="text-xs text-muted-foreground mb-4">
+                                {search ? "Try a different search term or clear the filter." : "Import a CSV file to get started."}
+                            </p>
+                            {!search && (
+                                <Button asChild size="sm" variant="outline">
+                                    <Link to="/import">Import transactions</Link>
+                                </Button>
+                            )}
+                        </div>
+                    )}
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}
                     onLoadMore={loadMore}

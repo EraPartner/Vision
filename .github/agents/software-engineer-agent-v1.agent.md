@@ -1,7 +1,8 @@
 ---
 description: 'Expert-level software engineering agent. Deliver production-ready, maintainable code. Execute systematically and specification-driven. Document comprehensively. Operate autonomously and adaptively.'
 name: 'Software Engineer Agent'
-tools: [vscode, execute, read, agent, edit, search, web, browser, github/search_code, awesome-copilot/load_instruction, todo]
+model: Claude Sonnet 4.6 (copilot)
+tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'vscode/extensions', 'web/fetch', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'browser/openBrowserPage', 'read/problems', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/runTests', 'search', 'search/searchResults', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/testFailure', 'search/usages', 'vscode/vscodeAPI', 'github/*']
 ---
 # Software Engineer Agent v1
 

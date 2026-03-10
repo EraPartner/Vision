@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { formatCurrency } from "@/utils/currency";
-import { Landmark, Wallet, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 
@@ -33,14 +34,18 @@ export function BankBalancesWidget() {
     if (isLoading) {
         return (
             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Landmark className="h-5 w-5 text-primary" />
-                        Bank Account Balances
-                    </CardTitle>
+                <CardHeader className="flex flex-row items-center gap-2 pb-3">
+                    <Landmark className="h-5 w-5 text-primary" />
+                    <CardTitle>Bank Account Balances</CardTitle>
                 </CardHeader>
-                <CardContent className="flex items-center justify-center h-48">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <CardContent className="space-y-4">
+                    <Skeleton className="h-24 w-full rounded-xl" />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[...Array(3)].map((_, i) => (
+                            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                        ))}
+                    </div>
+                    <Skeleton className="h-48 w-full rounded-xl" />
                 </CardContent>
             </Card>
         );

@@ -1,16 +1,19 @@
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {LucideIcon} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
     title: string;
     value: string;
+    /** Small delta text displayed below the value (e.g. "+12%"). */
     change?: string;
     changeType?: "positive" | "negative" | "neutral";
+    /** Subtitle shown in muted text beneath the value when no change delta is provided. */
+    subtitle?: string;
     icon: LucideIcon;
-    trend?: "income" | "expense" | "neutral";
+    trend?: "income" | "expense" | "up" | "down" | "neutral";
 }
 
-export function StatCard({title, value, change, changeType = "neutral", icon: Icon, trend = "neutral"}: StatCardProps) {
+export function StatCard({ title, value, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral" }: StatCardProps) {
     const changeColor = {
         positive: "text-emerald-600 dark:text-emerald-400",
         // Use brighter rose in dark mode for better contrast
@@ -18,18 +21,21 @@ export function StatCard({title, value, change, changeType = "neutral", icon: Ic
         neutral: "text-muted-foreground",
     }[changeType];
 
+    // Normalise "up"/"down" aliases so callers can pass either form
+    const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
+
     const trendGradient = {
         income: "from-emerald-500/10 to-green-500/5",
         expense: "from-rose-500/10 to-red-500/5",
         neutral: "from-blue-500/10 to-indigo-500/5",
-    }[trend];
+    }[normalisedTrend] ?? "from-blue-500/10 to-indigo-500/5";
 
     const iconBg = {
         income: "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400",
         // brighten the text/icon in dark mode
         expense: "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300",
         neutral: "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400",
-    }[trend];
+    }[normalisedTrend] ?? "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400";
 
     return (
         <Card
@@ -39,7 +45,7 @@ export function StatCard({title, value, change, changeType = "neutral", icon: Ic
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">{title}</CardTitle>
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
-                    <Icon className="h-5 w-5"/>
+                    <Icon className="h-5 w-5" />
                 </div>
             </CardHeader>
             <CardContent>
@@ -53,6 +59,9 @@ export function StatCard({title, value, change, changeType = "neutral", icon: Ic
                         {changeType === "negative" && "↘"}
                         {change}
                     </p>
+                )}
+                {!change && subtitle && (
+                    <p className="text-xs text-muted-foreground mt-2">{subtitle}</p>
                 )}
             </CardContent>
         </Card>

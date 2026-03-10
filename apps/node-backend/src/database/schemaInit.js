@@ -35,6 +35,10 @@ export async function initializeSchema() {
     // --- Enums ---
     await ensureEnums();
 
+    // --- Extensions ---
+    // pg_trgm enables GIN trigram indexes for fast ILIKE / full-text search
+    await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+
     // --- Helper function ---
     await query(`
       CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -187,6 +191,9 @@ async function createTransactions() {
   await safeIndex('idx_transactions_category_id', 'transactions', 'category_id');
   await safeIndex('idx_transactions_bank_account', 'transactions', 'bank_account');
   await safeIndex('idx_transaction_date_recipient', 'transactions', 'date, recipient_id');
+  // GIN trigram indexes for fast ILIKE search on free-text columns
+  await safeGinIndex('idx_transactions_memo_trgm', 'transactions', 'memo gin_trgm_ops');
+  await safeGinIndex('idx_transactions_comment_trgm', 'transactions', 'comment gin_trgm_ops');
   await safeTrigger('update_transactions_updated_at', 'transactions');
 }
 
@@ -492,11 +499,20 @@ async function createUserSettings() {
 // ─────────────────────────────────────────────
 
 /**
- * Create an index if it doesn't already exist.
+ * Create a B-tree index if it doesn't already exist.
  */
 async function safeIndex(name, table, columns) {
   await query(`
     CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${columns});
+  `);
+}
+
+/**
+ * Create a GIN index if it doesn't already exist (used for trigram/full-text search).
+ */
+async function safeGinIndex(name, table, expression) {
+  await query(`
+    CREATE INDEX IF NOT EXISTS ${name} ON ${table} USING GIN (${expression});
   `);
 }
 

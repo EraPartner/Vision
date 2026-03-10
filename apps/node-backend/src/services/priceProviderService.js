@@ -5,6 +5,23 @@
 
 import { logger } from '../config/logger.js';
 
+// ─── In-process price cache (5-minute TTL) ───────────────────────────────────
+// Key: `${provider}:${providerId}` — Value: { data, expiresAt }
+const PRICE_CACHE_TTL_MS = 5 * 60_000;
+const _priceCache = new Map();
+
+function _cacheGet(key) {
+  const entry = _priceCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) { _priceCache.delete(key); return undefined; }
+  return entry.data;
+}
+
+function _cacheSet(key, data) {
+  _priceCache.set(key, { data, expiresAt: Date.now() + PRICE_CACHE_TTL_MS });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PROVIDERS = {
   /**
    * CoinGecko — free API, no key required.
@@ -126,30 +143,38 @@ const PROVIDERS = {
 /**
  * Fetch live prices for a list of investments.
  * Groups by provider and batches requests where possible.
+ * Caches individual symbol prices for PRICE_CACHE_TTL_MS to avoid hammering external APIs.
  * Returns { investmentId: newPrice } map.
  */
 export async function fetchLivePrices(investments) {
   const results = {};
 
-  // Group by provider
-  const groups = {};
+  // Serve cached prices immediately; only fetch stale/missing ones
+  const stale = { coingecko: [], yahoo: [], kraken: [], custom: [] };
   for (const inv of investments) {
     const provider = inv.price_provider || 'manual';
     if (provider === 'manual') continue;
-    if (!groups[provider]) groups[provider] = [];
-    groups[provider].push(inv);
+    const cacheKey = provider === 'custom' ? `custom:${inv.id}` : `${provider}:${inv.price_provider_id}`;
+    const cached = _cacheGet(cacheKey);
+    if (cached !== undefined) {
+      results[inv.id] = cached;
+    } else if (stale[provider]) {
+      stale[provider].push(inv);
+    }
   }
 
   // CoinGecko batch
-  if (groups.coingecko?.length) {
+  if (stale.coingecko.length) {
     try {
-      const ids = groups.coingecko.map(i => i.price_provider_id).filter(Boolean);
+      const ids = stale.coingecko.map(i => i.price_provider_id).filter(Boolean);
       const prices = await PROVIDERS.coingecko(ids);
-      for (const inv of groups.coingecko) {
+      for (const inv of stale.coingecko) {
         const pid = inv.price_provider_id;
         if (prices[pid]) {
           const currency = (inv.currency || 'EUR').toUpperCase();
-          results[inv.id] = prices[pid][currency.toLowerCase()] || prices[pid].usd || prices[pid].eur;
+          const price = prices[pid][currency.toLowerCase()] || prices[pid].usd || prices[pid].eur;
+          results[inv.id] = price;
+          _cacheSet(`coingecko:${pid}`, price);
         }
       }
     } catch (err) {
@@ -158,14 +183,15 @@ export async function fetchLivePrices(investments) {
   }
 
   // Yahoo Finance batch
-  if (groups.yahoo?.length) {
+  if (stale.yahoo.length) {
     try {
-      const ids = groups.yahoo.map(i => i.price_provider_id).filter(Boolean);
+      const ids = stale.yahoo.map(i => i.price_provider_id).filter(Boolean);
       const prices = await PROVIDERS.yahoo(ids);
-      for (const inv of groups.yahoo) {
+      for (const inv of stale.yahoo) {
         const pid = (inv.price_provider_id || '').toUpperCase();
         if (prices[pid]) {
           results[inv.id] = prices[pid].price;
+          _cacheSet(`yahoo:${pid}`, prices[pid].price);
         }
       }
     } catch (err) {
@@ -174,18 +200,18 @@ export async function fetchLivePrices(investments) {
   }
 
   // Kraken batch
-  if (groups.kraken?.length) {
+  if (stale.kraken.length) {
     try {
-      const ids = groups.kraken.map(i => i.price_provider_id).filter(Boolean);
+      const ids = stale.kraken.map(i => i.price_provider_id).filter(Boolean);
       const prices = await PROVIDERS.kraken(ids);
-      for (const inv of groups.kraken) {
+      for (const inv of stale.kraken) {
         const pid = inv.price_provider_id;
-        // Kraken may return with different key formats
         const match = Object.entries(prices).find(([key]) =>
           key === pid || key.includes(pid) || pid.includes(key)
         );
         if (match) {
           results[inv.id] = match[1].price;
+          _cacheSet(`kraken:${pid}`, match[1].price);
         }
       }
     } catch (err) {
@@ -194,11 +220,15 @@ export async function fetchLivePrices(investments) {
   }
 
   // Custom — individual fetches
-  if (groups.custom?.length) {
+  if (stale.custom.length) {
     try {
-      const prices = await PROVIDERS.custom(groups.custom);
-      for (const [id, data] of Object.entries(prices)) {
-        results[id] = data.price;
+      const prices = await PROVIDERS.custom(stale.custom);
+      for (const inv of stale.custom) {
+        const data = prices[inv.id];
+        if (data !== undefined) {
+          results[inv.id] = data.price;
+          _cacheSet(`custom:${inv.id}`, data.price);
+        }
       }
     } catch (err) {
       logger.error('Custom price fetch failed', { error: err.message });
