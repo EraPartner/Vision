@@ -1,5 +1,6 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import logger from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -24,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log to console in development; in production this could go to an error reporting service
-    console.error("[ErrorBoundary] Uncaught error:", error, errorInfo);
+    logger.error("[ErrorBoundary] Uncaught error:", error, errorInfo);
   }
 
   handleReset = () => {

@@ -91,8 +91,6 @@ router.get('/monthly-summary', async (req, res) => {
     logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
     res.json({ ...data, links: [] });
   } catch (err) {
-    // Use console.error directly to guarantee output regardless of logger config
-    console.error('[monthly-summary] ERROR:', err.message, '\n', err.stack);
     logger.error('Error retrieving monthly summary', { error: err.message, stack: err.stack });
     res.status(500).json({ detail: 'Error retrieving monthly financial summary' });
   }

@@ -5,16 +5,15 @@ FROM oven/bun:1-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Install root dependencies (Vite, React, etc.)
+# Copy workspace manifests so bun can resolve the workspace graph
 COPY package.json bun.lockb* ./
+COPY apps/frontend/package.json ./apps/frontend/
+COPY apps/node-backend/package.json ./apps/node-backend/
 RUN bun install --frozen-lockfile
 
-# Copy only what Vite needs to build
-COPY index.html ./
-COPY config/ ./config/
+# Copy frontend source and build
 COPY apps/frontend/ ./apps/frontend/
-
-RUN bun run build
+RUN bun run --filter vault-voyager-frontend build
 
 # ============================================================
 # Stage 2: Production Node.js backend

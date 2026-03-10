@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
 import type { PlannedTransaction, PlannedTransactionCreate, PlannedTransactionUpdate } from "@/types/api";
 
 export interface PlannedPayment {
@@ -151,7 +152,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       setPayments(response.items.map(mapFromAPI));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch planned payments");
-      console.error("Error fetching planned payments:", err);
+      logger.error("Error fetching planned payments:", err);
     } finally {
       setLoading(false);
     }
@@ -167,7 +168,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       const created = await apiClient.createPlannedTransaction(apiPayload);
       setPayments((prev) => [...prev, mapFromAPI(created)]);
     } catch (err) {
-      console.error("Error creating planned payment:", err);
+      logger.error("Error creating planned payment:", err);
       throw err;
     }
   }, []);
@@ -178,7 +179,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       const updated = await apiClient.updatePlannedTransaction(id, apiUpdates);
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
     } catch (err) {
-      console.error("Error updating planned payment:", err);
+      logger.error("Error updating planned payment:", err);
       throw err;
     }
   }, []);
@@ -188,7 +189,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       await apiClient.deletePlannedTransaction(id);
       setPayments((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
-      console.error("Error deleting planned payment:", err);
+      logger.error("Error deleting planned payment:", err);
       throw err;
     }
   }, []);
@@ -203,7 +204,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       });
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
     } catch (err) {
-      console.error("Error toggling payment active status:", err);
+      logger.error("Error toggling payment active status:", err);
       throw err;
     }
   }, [payments]);
@@ -217,7 +218,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
       const updated = await apiClient.executePlannedTransaction(id, executeRequest);
       setPayments((prev) => prev.map((p) => (p.id === id ? mapFromAPI(updated) : p)));
     } catch (err) {
-      console.error("Error executing payment:", err);
+      logger.error("Error executing payment:", err);
       throw err;
     }
   }, []);

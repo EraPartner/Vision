@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
+import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ function dueBadge(dateStr?: string | null) {
   // Handle both YYYY-MM-DD and ISO datetime formats (e.g., "2025-01-15T00:00:00Z")
   // Extract just the date portion if it's a datetime string
   const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-  
+
   // Parse the date string (YYYY-MM-DD) explicitly
   const [year, month, day] = datePart.split('-').map(Number);
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
@@ -199,8 +200,8 @@ export default function PlannedPaymentsPage() {
       render: (row: TableRow) => (
         <div className="flex flex-col gap-0.5">
           <span className={`font-medium ${!row.is_active ? "text-muted-foreground line-through" :
-              row.is_executed ? "text-muted-foreground line-through" :
-                "text-foreground"
+            row.is_executed ? "text-muted-foreground line-through" :
+              "text-foreground"
             }`}>
             <div className="flex items-center gap-2">
               <span>{row.name}</span>
@@ -301,7 +302,7 @@ export default function PlannedPaymentsPage() {
             try {
               await toggleActive(row.id);
             } catch (err) {
-              console.error("Failed to toggle status:", err);
+              logger.error("Failed to toggle status:", err);
             } finally {
               setActionLoading(false);
             }
@@ -346,7 +347,7 @@ export default function PlannedPaymentsPage() {
                 try {
                   await deletePayment(row.id);
                 } catch (err) {
-                  console.error("Failed to delete payment:", err);
+                  logger.error("Failed to delete payment:", err);
                 } finally {
                   setActionLoading(false);
                 }
@@ -372,7 +373,7 @@ export default function PlannedPaymentsPage() {
       }
       setFormOpen(false);
     } catch (err) {
-      console.error("Failed to save payment:", err);
+      logger.error("Failed to save payment:", err);
       alert("Failed to save payment. Please check console for details.");
     } finally {
       setActionLoading(false);
@@ -406,7 +407,7 @@ export default function PlannedPaymentsPage() {
           setCandidateTxs(res.items || []);
         }
       } catch (err) {
-        console.error("Failed to fetch transactions:", err);
+        logger.error("Failed to fetch transactions:", err);
         if (isMounted) setCandidateTxs([]);
       } finally {
         if (isMounted) setTxLoading(false);
@@ -672,7 +673,7 @@ export default function PlannedPaymentsPage() {
                     setLinkDialogOpen(false);
                     setPaymentToLink(null);
                   } catch (err) {
-                    console.error('Failed to link/execute planned payment:', err);
+                    logger.error('Failed to link/execute planned payment:', err);
                     alert('Failed to execute planned payment. Check console for details.');
                   } finally {
                     setActionLoading(false);

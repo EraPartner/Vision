@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,7 +99,7 @@ export default function TransactionsPage() {
             hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } catch (err) {
-            console.error('Failed to load more transactions:', err);
+            logger.error('Failed to load more transactions:', err);
         } finally {
             setIsFetchingMore(false);
             loadingRef.current = false;

@@ -68,9 +68,9 @@ import('compression').then(({ default: compression }) => {
   logger.warn('compression package not installed, responses will not be compressed');
 });
 
-// Request logging — always use console.log so it's visible regardless of logger config
+// Request logging
 app.use((req, res, next) => {
-  console.log(`[REQ] ${req.method} ${req.originalUrl}`);
+  logger.debug(`[REQ] ${req.method} ${req.originalUrl}`);
   next();
 });
 

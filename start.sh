@@ -110,4 +110,4 @@ echo "${BLUE}[3/3]${NC} Starting frontend..."
 echo "${GREEN}✓${NC} All services starting. Frontend at http://localhost:8080"
 echo ""
 
-bunx vite --config config/vite.config.ts
+cd "$PROJECT_ROOT/apps/frontend" && bun run dev
