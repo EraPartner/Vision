@@ -20,6 +20,8 @@ jobs:
   build_and_push_images:
     name: Build and push multi-arch images
     runs-on: ubuntu-latest
+    env:
+      OWNER: ${{ github.repository_owner }}
     outputs:
       image_full: ${{ steps.set_tag.outputs.image_full }}
     steps:
@@ -28,8 +30,11 @@ jobs:
       - name: Set image tag
         id: set_tag
         run: |
-          # Compose the image tag and expose it as a step output via GITHUB_OUTPUT
-          echo "image_full=${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
+          # Lowercase the owner to form a valid registry path and expose image tags
+          OWNER_LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE_REPO="ghcr.io/${OWNER_LOWER}/vision"
+          echo "image_full=${IMAGE_REPO}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=${IMAGE_REPO}:latest" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -52,8 +57,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_REPO }}:latest
+            ${{ steps.set_tag.outputs.image_full }}
+            ${{ steps.set_tag.outputs.image_latest }}
 
   build_mac_app:
     name: Build macOS DMG
