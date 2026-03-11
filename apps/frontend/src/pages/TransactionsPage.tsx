@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Import, Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X } from "lucide-react";
+import { Import, Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X, Users } from "lucide-react";
 import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { AddTransactionDialog } from "@/components/forms/AddTransactionDialog";
