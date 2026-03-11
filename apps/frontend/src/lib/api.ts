@@ -492,34 +492,30 @@ class ApiClient {
 
     async checkForUpdates(): Promise<{
         up_to_date: boolean;
-        current_commit: string;
-        latest_commit: string | null;
-        behind_by: number | string;
-        latest_message?: string;
+        current_version: string;
+        latest_version: string | null;
+        published_at?: string;
+        release_notes?: string;
+        html_url?: string;
         error?: string;
     }> {
         return this.request('/api/admin/update/check');
     }
 
-    async applyUpdate(): Promise<{
-        success: boolean;
-        already_up_to_date: boolean;
-        output: string;
-        note: string;
-        detail?: string;
-    }> {
-        return this.request('/api/admin/update/apply', { method: 'POST' });
+    /**
+     * Pull the latest Docker image and hot-swap the running container.
+     * Only available inside the Electron desktop app (window.electronUpdater).
+     * Returns null when called from a browser context.
+     */
+    async triggerDockerUpdate(): Promise<{ success: boolean; wasNew: boolean; error?: string } | null> {
+        const updater = (window as Window & { electronUpdater?: { pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }> } }).electronUpdater;
+        if (!updater) return null;
+        return updater.pullImage();
     }
 
-    async applyUpdateAndRestart(): Promise<{
-        success: boolean;
-        already_up_to_date: boolean;
-        output: string;
-        restarting: boolean;
-        note: string;
-        detail?: string;
-    }> {
-        return this.request('/api/admin/update/apply-and-restart', { method: 'POST' });
+    /** Whether the app is running inside the Electron desktop wrapper. */
+    isElectron(): boolean {
+        return !!(window as Window & { electronUpdater?: unknown }).electronUpdater;
     }
 
     // ==================== Info/Statistics Methods ====================

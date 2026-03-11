@@ -1,0 +1,28 @@
+# docker-compose.clean.yml — Clean-slate / new-user testing override
+#
+# Builds the app from local source with a fresh, empty database.
+# Use this to test the first-run / onboarding experience.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build
+#   # or via npm:  bun run docker:clean
+#
+# To fully reset and start over:
+#   docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v
+#   docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build
+
+services:
+  db:
+    volumes:
+      - postgres_data_clean:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+volumes:
+  # Isolated volume for clean-slate testing. Never shares data with dev or prod.
+  # Wipe with:  docker volume rm vision_postgres_data_clean
+  postgres_data_clean:
+    name: vision_postgres_data_clean

@@ -1,0 +1,26 @@
+# docker-compose.dev.yml — Development override
+#
+# Builds the app image from local source instead of pulling from GHCR.
+# Uses an isolated volume so your production Docker data is never touched.
+#
+# Usage (with your real data — after running scripts/db/export-to-docker.sh once):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   # or:  bun run docker:dev
+
+services:
+  db:
+    # Override the base volume mount so dev uses its own isolated volume.
+    # Compose merges volumes lists so we must also nullify the base entry
+    # by keeping the same target path — the last definition for a given
+    # target wins, which replaces the base postgres_data mount entirely.
+    volumes:
+      - vision_postgres_data_dev:/var/lib/postgresql
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+volumes:
+  vision_postgres_data_dev:
+    external: true

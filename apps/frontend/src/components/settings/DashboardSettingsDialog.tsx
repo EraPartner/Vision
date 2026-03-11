@@ -24,7 +24,7 @@ import {
 import {
     Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
@@ -71,10 +71,20 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
 
     // Update tab state
-    type UpdateStatus = { up_to_date: boolean; behind_by: number | string; latest_message?: string; error?: string } | null;
+    type UpdateStatus = {
+        up_to_date: boolean;
+        current_version: string;
+        latest_version: string | null;
+        published_at?: string;
+        release_notes?: string;
+        html_url?: string;
+        error?: string;
+    } | null;
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(null);
     const [checkingUpdate, setCheckingUpdate] = useState(false);
-    const [applyingUpdate, setApplyingUpdate] = useState(false);
+    type ApplyPhase = 'idle' | 'pulling' | 'restarting' | 'done';
+    const [applyPhase, setApplyPhase] = useState<ApplyPhase>('idle');
+    const applyingUpdate = applyPhase !== 'idle' && applyPhase !== 'done';
 
     const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
         queryKey: ['categories', 'all'],
@@ -123,45 +133,60 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             if (result.up_to_date) {
                 toast.success('App is up to date');
             } else {
-                toast.info(`Update available — ${result.behind_by} commit(s) behind`);
+                toast.info(`Update available — ${result.latest_version}`);
             }
         } catch {
-            toast.error('Failed to check for updates. Is git configured?');
+            toast.error('Failed to check for updates');
         } finally {
             setCheckingUpdate(false);
         }
     };
 
     const handleApplyUpdate = async () => {
-        setApplyingUpdate(true);
+        setApplyPhase('pulling');
         try {
-            const result = await apiClient.applyUpdateAndRestart();
-            if (result.already_up_to_date) {
-                toast.success('Already up to date');
-                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true, behind_by: 0 } : null);
-            } else if (result.restarting) {
-                toast.success('Update applied! The server is restarting — the page will reload shortly.', { duration: 8000 });
-                // Poll until the server is back up, then reload
-                setTimeout(async () => {
-                    const poll = async (attempts: number) => {
-                        try {
-                            await apiClient.checkForUpdates();
-                            window.location.reload();
-                        } catch {
-                            if (attempts > 0) setTimeout(() => poll(attempts - 1), 2000);
-                        }
-                    };
-                    poll(15);
-                }, 3000);
-            } else {
-                toast.success('Update applied. Restart the application manually for changes to take effect.');
-                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true, behind_by: 0 } : null);
+            const result = await apiClient.triggerDockerUpdate();
+            if (result === null) {
+                // Not running inside Electron — shouldn't happen since the button is
+                // only shown in Electron, but guard anyway.
+                toast.info('Updates are applied automatically when the app restarts.');
+                setApplyPhase('idle');
+                return;
             }
+            if (!result.success) {
+                toast.error('Update failed', { description: result.error });
+                setApplyPhase('idle');
+                return;
+            }
+            if (!result.wasNew) {
+                toast.success('Already on the latest version');
+                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true } : null);
+                setApplyPhase('done');
+                return;
+            }
+            // Container was replaced with the new image; migrations ran via entrypoint.
+            // Poll /api/admin/update/check until the new version is reported.
+            setApplyPhase('restarting');
+            toast.success('New image pulled — waiting for the app to restart…', { duration: 10000 });
+            const poll = async (attempts: number) => {
+                try {
+                    const status = await apiClient.checkForUpdates();
+                    setUpdateStatus(status);
+                    setApplyPhase('done');
+                    toast.success('Update complete', { description: `Now running ${status.current_version}` });
+                } catch {
+                    if (attempts > 0) setTimeout(() => poll(attempts - 1), 2000);
+                    else {
+                        setApplyPhase('done');
+                        toast.info('App restarted. You may need to reload the page.');
+                    }
+                }
+            };
+            setTimeout(() => poll(20), 3000);
         } catch (err: unknown) {
-            const msg = (err as { detail?: string })?.detail ?? 'Update failed';
+            const msg = (err as { message?: string })?.message ?? 'Update failed';
             toast.error(msg);
-        } finally {
-            setApplyingUpdate(false);
+            setApplyPhase('idle');
         }
     };
 
@@ -626,30 +651,64 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                 <div className="space-y-3">
                                     <h3 className="text-sm font-semibold text-foreground">App Updates</h3>
                                     <p className="text-xs text-muted-foreground">
-                                        Pull the latest changes from GitHub. When running via Docker Compose the server restarts automatically; otherwise restart manually.
+                                        {apiClient.isElectron()
+                                            ? 'Check for a new release and pull the latest Docker image. Database migrations run automatically on restart.'
+                                            : 'Updates are applied automatically when the desktop app restarts.'}
                                     </p>
 
                                     {/* Status banner */}
                                     {updateStatus && (
-                                        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${updateStatus.up_to_date ? 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400' : 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400'}`}>
+                                        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
+                                            updateStatus.up_to_date
+                                                ? 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400'
+                                                : 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400'
+                                        }`}>
                                             {updateStatus.up_to_date
                                                 ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                                                 : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                                             }
-                                            <div>
-                                                {updateStatus.up_to_date
-                                                    ? 'App is up to date.'
-                                                    : <>
-                                                        <span className="font-medium">{updateStatus.behind_by} commit(s) available.</span>
-                                                        {updateStatus.latest_message && (
-                                                            <p className="text-xs mt-0.5 opacity-80">{updateStatus.latest_message}</p>
+                                            <div className="flex-1 min-w-0">
+                                                {updateStatus.up_to_date ? (
+                                                    <p>Running the latest version{updateStatus.current_version ? ` (${updateStatus.current_version})` : ''}.</p>
+                                                ) : (
+                                                    <>
+                                                        <p className="font-medium">
+                                                            Version {updateStatus.latest_version} is available
+                                                            {updateStatus.current_version ? ` (current: ${updateStatus.current_version})` : ''}.
+                                                        </p>
+                                                        {updateStatus.published_at && (
+                                                            <p className="text-xs mt-0.5 opacity-80">
+                                                                Released {new Date(updateStatus.published_at).toLocaleDateString()}
+                                                            </p>
                                                         )}
-                                                        {updateStatus.error && (
-                                                            <p className="text-xs mt-0.5 opacity-80">{updateStatus.error}</p>
+                                                        {updateStatus.release_notes && (
+                                                            <p className="text-xs mt-1 opacity-80 line-clamp-2">{updateStatus.release_notes}</p>
                                                         )}
                                                     </>
-                                                }
+                                                )}
+                                                {updateStatus.error && (
+                                                    <p className="text-xs mt-0.5 opacity-80">{updateStatus.error}</p>
+                                                )}
                                             </div>
+                                            {updateStatus.html_url && (
+                                                <a
+                                                    href={updateStatus.html_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                                                    title="View release notes"
+                                                >
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Phase indicator while updating */}
+                                    {(applyPhase === 'pulling' || applyPhase === 'restarting') && (
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            {applyPhase === 'pulling' ? 'Pulling latest image…' : 'Waiting for app to restart…'}
                                         </div>
                                     )}
 
@@ -664,10 +723,11 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                 ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                                                 : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                                             }
-                                            Check for Updates
+                                            Check for updates
                                         </Button>
 
-                                        {updateStatus && !updateStatus.up_to_date && (
+                                        {/* Only shown inside Electron when an update is available */}
+                                        {apiClient.isElectron() && updateStatus && !updateStatus.up_to_date && (
                                             <Button
                                                 size="sm"
                                                 onClick={handleApplyUpdate}
@@ -675,9 +735,9 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             >
                                                 {applyingUpdate
                                                     ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                    : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                                    : <Download className="h-3.5 w-3.5 mr-1.5" />
                                                 }
-                                                Update &amp; Restart
+                                                {applyPhase === 'restarting' ? 'Restarting…' : 'Install update'}
                                             </Button>
                                         )}
                                     </div>

@@ -1,49 +1,32 @@
-name: Build macOS DMG (Apple Silicon)
+name: Build DMG (legacy)
+
+# This workflow is superseded by release.yml which builds the arm64 DMG,
+# pushes the Docker image to GHCR, and creates a GitHub Release.
+#
+# Kept here only to avoid breaking any external references; it immediately
+# triggers the release workflow instead.
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v1.2.3). Triggers the release workflow.'
+        required: true
 
 jobs:
-  build_dmg_arm64:
-    name: Build DMG (arm64)
-    runs-on: macos-13-arm64
+  trigger-release:
+    name: Trigger Release Workflow
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
-        shell: bash
-
-      - name: Build Electron DMG (arm64)
-        run: |
-          set -euo pipefail
-          cd packaging/electron
-          bun install
-          # build only Apple Silicon (arm64)
-          bun run dist:arm64
-        shell: bash
-
-      - name: Find generated DMG
-        id: find_dmg
-        run: |
-          echo "Searching for DMG under packaging/electron/dist"
-          ls -la packaging/electron || true
-          ls -la packaging/electron/dist || true
-          DMG_PATH=$(find packaging/electron/dist -type f -name '*.dmg' -print -quit || true)
-          if [ -z "$DMG_PATH" ]; then
-            echo "No DMG found under packaging/electron/dist" >&2
-            exit 1
-          fi
-          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
-        shell: bash
-
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+      - name: Trigger release.yml
+        uses: actions/github-script@v7
         with:
-          name: vision-macos-dmg-arm64
-          path: ${{ steps.find_dmg.outputs.dmg_path }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: context.ref,
+              inputs: { tag: '${{ github.event.inputs.tag }}' },
+            });
+            console.log('Triggered release.yml');

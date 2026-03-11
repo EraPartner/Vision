@@ -1,41 +1,49 @@
 /**
  * Admin routes.
  *
- * Mirrors: apps/backend/api/api_routes_admin.py
+ * Update strategy (packaged desktop app):
+ *   - Electron shell updates: handled by electron-updater checking GitHub Releases
+ *   - Docker image updates: Electron calls `docker compose pull` + `docker compose up -d`
+ *   - Alembic migrations: run automatically via docker-entrypoint.sh on every container start
+ *
+ * The git-pull based update approach has been removed. The Node backend running
+ * inside the Docker container has no git repo, so those endpoints were only
+ * applicable to bare self-hosted installs (which can still use git manually).
+ * Version information is now read from the GitHub Releases API.
  */
 
 import { Router } from 'express';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import https from 'https';
 import { checkConnection, getTableCount } from '../database/connection.js';
 import { getSettings } from '../config/config.js';
 import { logger } from '../config/logger.js';
 
-const execFileAsync = promisify(execFile);
-
-const REPO_URL = 'https://github.com/EraPartner/Vision.git';
+const GITHUB_OWNER = 'EraPartner';
+const GITHUB_REPO = 'Vision';
+const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
 /**
- * Run a git command inside the repo root (three levels up from this file's src/ dir).
- * Uses execFile (not exec/shell) to avoid shell injection.
+ * Fetch the latest GitHub Release metadata.
+ * Returns a plain object — callers handle errors.
  */
-async function git(args, cwd) {
-  const { stdout, stderr } = await execFileAsync('git', args, {
-    cwd,
-    timeout: 30_000,
-    maxBuffer: 1024 * 512,
+function fetchLatestRelease() {
+  return new Promise((resolve, reject) => {
+    const options = {
+      headers: {
+        'User-Agent': `${GITHUB_REPO}-backend`,
+        'Accept': 'application/vnd.github+json',
+      },
+    };
+    https.get(GITHUB_RELEASES_URL, options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error(`Failed to parse GitHub response: ${e.message}`)); }
+      });
+      res.on('error', reject);
+    }).on('error', reject);
   });
-  return { stdout: stdout.trim(), stderr: stderr.trim() };
-}
-
-async function getRepoRoot() {
-  // __dirname equivalent in ESM
-  const { dirname } = await import('path');
-  const { fileURLToPath } = await import('url');
-  const currentDir = dirname(fileURLToPath(import.meta.url));
-  // src/routes -> src -> node-backend -> apps -> project-root
-  const { resolve } = await import('path');
-  return resolve(currentDir, '..', '..', '..', '..');
 }
 
 const router = Router();
@@ -102,45 +110,31 @@ router.post('/database/reset', async (req, res) => {
 });
 
 // GET /api/admin/update/check
-// Fetches the latest refs from origin and returns whether the local repo is behind.
+// Queries the GitHub Releases API for the latest published release.
+// Works in any environment (Docker, bare-metal) — no git required.
 router.get('/update/check', async (req, res) => {
   try {
-    const cwd = await getRepoRoot();
+    const release = await fetchLatestRelease();
 
-    // Fetch without merging so we get up-to-date remote tracking refs
-    try {
-      await git(['fetch', REPO_URL], cwd);
-    } catch (fetchErr) {
-      logger.warn('git fetch failed during update check', { error: fetchErr.message });
-      // Continue – we can still compare cached remote refs
+    if (release.message === 'Not Found' || !release.tag_name) {
+      return res.json({ up_to_date: true, error: 'No published releases found', latest_version: null });
     }
 
-    const [localHead, remoteHead] = await Promise.all([
-      git(['rev-parse', 'HEAD'], cwd).then(r => r.stdout),
-      git(['rev-parse', '@{u}'], cwd).then(r => r.stdout).catch(() => null),
-    ]);
+    const latestVersion = release.tag_name;          // e.g. "v1.2.3"
+    // The running image is tagged with the same semver at build time via CI.
+    // Fall back to APP_IMAGE_TAG env var (set in docker-compose.yml) or "unknown".
+    const currentVersion = process.env.APP_VERSION || process.env.APP_IMAGE_TAG || 'unknown';
 
-    if (!remoteHead) {
-      return res.json({ up_to_date: true, current_commit: localHead, latest_commit: null, behind_by: 0, error: 'No upstream tracking branch configured' });
-    }
+    const upToDate = latestVersion === currentVersion || latestVersion === `v${currentVersion}`;
 
-    if (localHead === remoteHead) {
-      return res.json({ up_to_date: true, current_commit: localHead, latest_commit: remoteHead, behind_by: 0 });
-    }
-
-    // Count commits between HEAD and upstream
-    const { stdout: countStr } = await git(['rev-list', '--count', `HEAD..@{u}`], cwd).catch(() => ({ stdout: '?' }));
-
-    // Get the latest commit message on the upstream
-    const { stdout: latestMsg } = await git(['log', '-1', '--format=%s', '@{u}'], cwd).catch(() => ({ stdout: '' }));
-
-    logger.info('Update check: updates available', { behind_by: countStr });
+    logger.info('Update check via GitHub Releases', { currentVersion, latestVersion, upToDate });
     return res.json({
-      up_to_date: false,
-      current_commit: localHead,
-      latest_commit: remoteHead,
-      behind_by: parseInt(countStr, 10) || countStr,
-      latest_message: latestMsg,
+      up_to_date: upToDate,
+      current_version: currentVersion,
+      latest_version: latestVersion,
+      published_at: release.published_at,
+      release_notes: release.body || '',
+      html_url: release.html_url,
     });
   } catch (err) {
     logger.error('Update check failed', { error: err.message });
@@ -149,79 +143,23 @@ router.get('/update/check', async (req, res) => {
 });
 
 // POST /api/admin/update/apply
-// Runs `git pull --ff-only` to update the local repo.
-// POST /api/admin/update/apply-and-restart
-// Pulls the latest code and, when running inside Docker (EXTERNAL_DATABASE=true),
-// exits the process after responding so Docker's restart policy brings the server back up.
-router.post('/update/apply-and-restart', async (req, res) => {
-  try {
-    const cwd = await getRepoRoot();
-    const isDocker = process.env.EXTERNAL_DATABASE === 'true';
-
-    logger.info('Applying update + restart via git pull', { isDocker });
-    const { stdout, stderr } = await git(['pull', '--ff-only', REPO_URL, 'main'], cwd)
-      .catch(async (err) => {
-        const { stdout: s, stderr: e } = await git(['pull', '--ff-only', 'origin', 'main'], cwd)
-          .catch(() => { throw err; });
-        return { stdout: s, stderr: e };
-      });
-
-    const output = [stdout, stderr].filter(Boolean).join('\n');
-    const alreadyUpToDate = /already up[ -]to[ -]date/i.test(output);
-
-    logger.info('git pull completed (apply-and-restart)', { output, alreadyUpToDate, isDocker });
-    res.json({
-      success: true,
-      already_up_to_date: alreadyUpToDate,
-      output,
-      restarting: isDocker && !alreadyUpToDate,
-      note: alreadyUpToDate
-        ? 'Already up to date.'
-        : isDocker
-          ? 'Update applied. The server will restart automatically via Docker.'
-          : 'Update applied. Please restart the application manually for changes to take effect.',
-    });
-
-    // In Docker, exit gracefully so the container restarts and picks up the new code.
-    if (!alreadyUpToDate && isDocker) {
-      setTimeout(() => process.exit(0), 1500);
-    }
-  } catch (err) {
-    logger.error('git pull + restart failed', { error: err.message, stderr: err.stderr });
-    const detail = err.stderr || err.message;
-    res.status(500).json({ success: false, detail: `Update failed: ${detail}` });
-  }
+// In the packaged desktop app, the actual update is orchestrated by Electron
+// (docker compose pull → docker compose up → alembic migrations via entrypoint).
+// This endpoint exists so the frontend can trigger a soft "update acknowledgement"
+// and surface a user-facing message directing them to the Electron shell update.
+router.post('/update/apply', async (req, res) => {
+  res.json({
+    success: true,
+    note: 'Updates are applied automatically by the desktop app. If an update is available, use the notification in the Vision app window to download and install it.',
+  });
 });
 
-// NOTE: The server process must be restarted separately for code changes to take effect.
-router.post('/update/apply', async (req, res) => {
-  try {
-    const cwd = await getRepoRoot();
-
-    logger.info('Applying update via git pull');
-    const { stdout, stderr } = await git(['pull', '--ff-only', REPO_URL, 'main'], cwd)
-      .catch(async (err) => {
-        // Try with named remote as fallback
-        const { stdout: s, stderr: e } = await git(['pull', '--ff-only', 'origin', 'main'], cwd)
-          .catch(() => { throw err; });
-        return { stdout: s, stderr: e };
-      });
-
-    const output = [stdout, stderr].filter(Boolean).join('\n');
-    const alreadyUpToDate = /already up[ -]to[ -]date/i.test(output);
-
-    logger.info('git pull completed', { output });
-    res.json({
-      success: true,
-      already_up_to_date: alreadyUpToDate,
-      output,
-      note: alreadyUpToDate ? 'Already up to date.' : 'Update applied. Restart the server for changes to take effect.',
-    });
-  } catch (err) {
-    logger.error('git pull failed', { error: err.message, stderr: err.stderr });
-    const detail = err.stderr || err.message;
-    res.status(500).json({ success: false, detail: `Update failed: ${detail}` });
-  }
+// POST /api/admin/update/apply-and-restart (kept for backwards-compatibility)
+router.post('/update/apply-and-restart', async (req, res) => {
+  res.json({
+    success: true,
+    note: 'Updates are managed by the Vision desktop app via Docker image pulls and electron-updater. No manual action is required.',
+  });
 });
 
 export default router;

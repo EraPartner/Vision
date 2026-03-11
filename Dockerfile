@@ -26,10 +26,8 @@ WORKDIR /app
 COPY apps/node-backend/package.json apps/node-backend/bun.lockb* ./apps/node-backend/
 RUN cd apps/node-backend && bun install --frozen-lockfile --production
 
-# Copy backend source
+# Copy backend source and built frontend
 COPY apps/node-backend/src/ ./apps/node-backend/src/
-
-# Copy built frontend from Stage 1
 COPY --from=frontend-builder /app/dist ./dist
 
 ENV NODE_ENV=production
