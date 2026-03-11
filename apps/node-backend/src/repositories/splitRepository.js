@@ -1,0 +1,210 @@
+/**
+ * Split Repository - data access for transaction_splits and split_payments tables.
+ */
+
+import { query } from '../database/connection.js';
+
+export const splitRepository = {
+  /**
+   * Create a new split for a transaction.
+   */
+  async createSplit({ transaction_id, recipient_id, amount, note }) {
+    const sql = `
+      INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    const result = await query(sql, [transaction_id, recipient_id, amount, note || null]);
+    return result.rows[0];
+  },
+
+  /**
+   * Get all splits for a specific transaction.
+   */
+  async getSplitsByTransaction(transactionId) {
+    const sql = `
+      SELECT ts.*, r.name AS recipient_name,
+             COALESCE(SUM(sp.amount), 0) AS amount_paid
+      FROM transaction_splits ts
+      LEFT JOIN recipients r ON ts.recipient_id = r.id
+      LEFT JOIN split_payments sp ON sp.split_id = ts.id
+      WHERE ts.transaction_id = $1
+      GROUP BY ts.id, r.name
+      ORDER BY ts.created_at
+    `;
+    const result = await query(sql, [transactionId]);
+    return result.rows.map(formatSplit);
+  },
+
+  /**
+   * Get all unsettled splits grouped by recipient (who owes what).
+   */
+  async getOwedSummary() {
+    const sql = `
+      SELECT ts.recipient_id,
+             r.name AS recipient_name,
+             SUM(ts.amount) AS total_owed,
+             COALESCE(SUM(paid.total_paid), 0) AS total_paid,
+             COUNT(ts.id) AS split_count
+      FROM transaction_splits ts
+      JOIN recipients r ON ts.recipient_id = r.id
+      WHERE ts.is_settled = false
+      GROUP BY ts.recipient_id, r.name
+      ORDER BY SUM(ts.amount) - COALESCE(SUM(paid.total_paid), 0) DESC
+    `;
+    // Subquery approach for paid amounts
+    const sql2 = `
+      SELECT ts.recipient_id,
+             r.name AS recipient_name,
+             SUM(ts.amount) AS total_owed,
+             COALESCE(paid_totals.total_paid, 0) AS total_paid,
+             COUNT(ts.id) AS split_count
+      FROM transaction_splits ts
+      JOIN recipients r ON ts.recipient_id = r.id
+      LEFT JOIN (
+        SELECT sp.split_id, SUM(sp.amount) AS total_paid
+        FROM split_payments sp
+        GROUP BY sp.split_id
+      ) paid_totals ON paid_totals.split_id = ts.id
+      WHERE ts.is_settled = false
+      GROUP BY ts.recipient_id, r.name, paid_totals.total_paid
+      ORDER BY r.name
+    `;
+    // Actually we need a cleaner approach - aggregate at recipient level
+    const sql3 = `
+      SELECT ts.recipient_id,
+             r.name AS recipient_name,
+             SUM(ts.amount) AS total_owed,
+             COALESCE(SUM(sp_agg.paid), 0) AS total_paid,
+             COUNT(DISTINCT ts.id) AS split_count
+      FROM transaction_splits ts
+      JOIN recipients r ON ts.recipient_id = r.id
+      LEFT JOIN (
+        SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
+      ) sp_agg ON sp_agg.split_id = ts.id
+      WHERE ts.is_settled = false
+      GROUP BY ts.recipient_id, r.name
+      HAVING SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) > 0
+      ORDER BY SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) DESC
+    `;
+    const result = await query(sql3, []);
+    return result.rows.map(row => ({
+      recipient_id: row.recipient_id,
+      recipient_name: row.recipient_name,
+      total_owed: parseFloat(row.total_owed),
+      total_paid: parseFloat(row.total_paid),
+      remaining: parseFloat(row.total_owed) - parseFloat(row.total_paid),
+      split_count: parseInt(row.split_count, 10),
+    }));
+  },
+
+  /**
+   * Get detailed unsettled splits for a specific recipient.
+   */
+  async getOwedByRecipient(recipientId) {
+    const sql = `
+      SELECT ts.*,
+             t.date AS transaction_date,
+             t.memo AS transaction_memo,
+             t.amount AS transaction_amount,
+             t.currency AS transaction_currency,
+             t.bank_account,
+             COALESCE(sp_agg.paid, 0) AS amount_paid
+      FROM transaction_splits ts
+      JOIN transactions t ON ts.transaction_id = t.id
+      LEFT JOIN (
+        SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
+      ) sp_agg ON sp_agg.split_id = ts.id
+      WHERE ts.recipient_id = $1 AND ts.is_settled = false
+      ORDER BY t.date DESC
+    `;
+    const result = await query(sql, [recipientId]);
+    return result.rows.map(row => ({
+      ...formatSplit(row),
+      transaction_date: row.transaction_date,
+      transaction_memo: row.transaction_memo,
+      transaction_amount: parseFloat(row.transaction_amount),
+      transaction_currency: row.transaction_currency,
+      bank_account: row.bank_account,
+      amount_paid: parseFloat(row.amount_paid),
+      remaining: parseFloat(row.amount) - parseFloat(row.amount_paid),
+    }));
+  },
+
+  /**
+   * Record a payment against a split.
+   */
+  async addPayment({ split_id, amount, note, paid_at }) {
+    const sql = `
+      INSERT INTO split_payments (split_id, amount, note, paid_at)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    const result = await query(sql, [split_id, amount, note || null, paid_at || new Date().toISOString().split('T')[0]]);
+
+    // Check if split is fully paid and auto-settle
+    const splitResult = await query(`
+      SELECT ts.amount AS owed,
+             COALESCE(SUM(sp.amount), 0) AS paid
+      FROM transaction_splits ts
+      LEFT JOIN split_payments sp ON sp.split_id = ts.id
+      WHERE ts.id = $1
+      GROUP BY ts.amount
+    `, [split_id]);
+
+    if (splitResult.rows.length > 0) {
+      const { owed, paid } = splitResult.rows[0];
+      if (parseFloat(paid) >= parseFloat(owed)) {
+        await query(`UPDATE transaction_splits SET is_settled = true WHERE id = $1`, [split_id]);
+      }
+    }
+
+    return result.rows[0];
+  },
+
+  /**
+   * Get payments for a split.
+   */
+  async getPayments(splitId) {
+    const sql = `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC`;
+    const result = await query(sql, [splitId]);
+    return result.rows.map(row => ({
+      ...row,
+      amount: parseFloat(row.amount),
+    }));
+  },
+
+  /**
+   * Settle a split manually (mark as fully paid regardless of payments).
+   */
+  async settleSplit(splitId) {
+    const sql = `UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *`;
+    const result = await query(sql, [splitId]);
+    return result.rows[0] ? formatSplit(result.rows[0]) : null;
+  },
+
+  /**
+   * Delete a split.
+   */
+  async deleteSplit(splitId) {
+    const result = await query('DELETE FROM transaction_splits WHERE id = $1', [splitId]);
+    return result.rowCount > 0;
+  },
+};
+
+function formatSplit(row) {
+  return {
+    id: row.id,
+    transaction_id: row.transaction_id,
+    recipient_id: row.recipient_id,
+    recipient_name: row.recipient_name || null,
+    amount: parseFloat(row.amount),
+    amount_paid: row.amount_paid != null ? parseFloat(row.amount_paid) : 0,
+    note: row.note,
+    is_settled: row.is_settled,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export default splitRepository;
