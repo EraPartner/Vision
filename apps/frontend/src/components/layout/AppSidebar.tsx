@@ -18,6 +18,7 @@ import {
   Building2,
   CalendarClock,
   Coins,
+  HandCoins,
   Import,
   LayoutDashboard,
   LineChart,
