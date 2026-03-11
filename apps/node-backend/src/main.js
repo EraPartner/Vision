@@ -115,6 +115,7 @@ app.use('/api/investments', investmentsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/market', marketLookupRouter);
 app.use('/api/watchlist', watchlistRouter);
+app.use('/api/splits', splitsRouter);
 
 logger.info('All route modules registered successfully');
 
