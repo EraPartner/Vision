@@ -101,7 +101,8 @@ app.get('/api/', (req, res) => {
 // ==================== Route Registration ====================
 
 // Global rate limiter
-app.use(rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' }));
+const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' });
+app.use(globalLimiter);
 
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/categories', categoriesRouter);
@@ -127,7 +128,7 @@ if (settings.isProduction()) {
   // Hashed assets (JS/CSS) — long-lived cache
   app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
   // SPA fallback: serve index.html (no-cache) for all non-API paths
-  app.get(/^(?!\/api)/, (req, res) => {
+  app.get(/^(?!\/api)/, globalLimiter, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(resolve(distPath, 'index.html'));
   });
