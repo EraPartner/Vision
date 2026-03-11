@@ -69,9 +69,9 @@ jobs:
 
       - name: Install Bun
         run: |
+          # Install Bun and add it to the runner PATH for subsequent steps
           curl -fsSL https://bun.sh/install | bash
-          export BUN_INSTALL="$HOME/.bun"
-          export PATH="$BUN_INSTALL/bin:$PATH"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Prepare embedded docker-compose with concrete image
