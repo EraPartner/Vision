@@ -7,14 +7,14 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
     branches:
       - main
 
 env:
-  IMAGE_REPO: ghcr.io/${{ toLower(github.repository_owner) }}/vision
+  IMAGE_REPO: ghcr.io/erapartner/vision
   IMAGE_TAG: ${{ github.sha }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build_and_push_images:
