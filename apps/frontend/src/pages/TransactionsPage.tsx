@@ -283,22 +283,29 @@ export default function TransactionsPage() {
                 ].filter(i => i.value);
 
                 return (
-                    <HoverCard openDelay={150} closeDelay={100}>
-                        <HoverCardTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                                <Info className="h-4 w-4" />
-                            </Button>
-                        </HoverCardTrigger>
-                        <HoverCardContent side="left" className="w-64 text-sm space-y-1.5 p-3">
-                            {items.map(({ label, value }) => (
-                                <div key={label} className="flex justify-between gap-2">
-                                    <span className="text-muted-foreground text-xs">{label}</span>
-                                    <span className="text-foreground text-xs font-medium text-right truncate max-w-[160px]">{value}</span>
-                                </div>
-                            ))}
-                            {items.length === 0 && <span className="text-muted-foreground text-xs italic">No additional info</span>}
-                        </HoverCardContent>
-                    </HoverCard>
+                    <div className="flex items-center">
+                        <SplitTransactionDialog
+                            transactionId={row.id}
+                            transactionAmount={row.amount}
+                            transactionCurrency={row.currency}
+                        />
+                        <HoverCard openDelay={150} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                    <Info className="h-4 w-4" />
+                                </Button>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="left" className="w-64 text-sm space-y-1.5 p-3">
+                                {items.map(({ label, value }) => (
+                                    <div key={label} className="flex justify-between gap-2">
+                                        <span className="text-muted-foreground text-xs">{label}</span>
+                                        <span className="text-foreground text-xs font-medium text-right truncate max-w-[160px]">{value}</span>
+                                    </div>
+                                ))}
+                                {items.length === 0 && <span className="text-muted-foreground text-xs italic">No additional info</span>}
+                            </HoverCardContent>
+                        </HoverCard>
+                    </div>
                 );
             },
         },
