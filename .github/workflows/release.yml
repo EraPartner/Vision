@@ -113,12 +113,24 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Find generated DMG
+        id: find_dmg
+        run: |
+          echo "Listing dist directory"
+          ls -la packaging/electron/dist || true
+          DMG_PATH=$(ls packaging/electron/dist/*.dmg 2>/dev/null | head -n1 || true)
+          if [ -z "$DMG_PATH" ]; then
+            echo "No DMG found in packaging/electron/dist" >&2
+            exit 1
+          fi
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Upload DMG to Release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: packaging/electron/dist/*.dmg
+          asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
           asset_name: vision-${{ github.ref_name }}.dmg
           asset_content_type: application/x-apple-diskimage
