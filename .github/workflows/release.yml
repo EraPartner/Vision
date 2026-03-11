@@ -1,7 +1,7 @@
 name: Build images & Mac app
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 on:
@@ -104,9 +104,9 @@ jobs:
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Use a dedicated RELEASE_PAT secret if you have stricter repo policies; fall back to the automatic github.token
+          token: ${{ secrets.RELEASE_PAT || github.token }}
           tag_name: ${{ github.ref_name }}
           release_name: ${{ github.ref_name }}
           draft: false
@@ -114,9 +114,8 @@ jobs:
 
       - name: Upload DMG to Release
         uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          token: ${{ secrets.RELEASE_PAT || github.token }}
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: packaging/electron/dist/*.dmg
           asset_name: vision-${{ github.ref_name }}.dmg
