@@ -17,6 +17,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrency } from "@/utils/currency";
+import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDialog";
 
 const PAGE_SIZE = 100;
 
