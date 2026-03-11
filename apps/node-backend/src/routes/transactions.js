@@ -10,6 +10,7 @@ import { isManualDuplicate, recordManualRawTransaction } from '../services/dedup
 import { convertRowsToEur } from '../services/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
+import { rateLimiter } from '../middleware/rateLimiter.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
@@ -70,7 +71,11 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/transactions/export/csv
-router.get('/export/csv', async (req, res) => {
+// Apply a modest per-route rate limiter to protect the DB-heavy export operation.
+router.get(
+  '/export/csv',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-csv' }),
+  async (req, res) => {
   try {
     const { start_date, end_date, bank_account, category_id } = req.query;
 
@@ -211,7 +216,14 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/transactions/:id
 // Mirrors Python's TransactionService.update() with name-to-ID resolution
-router.patch('/:id', validateIdParam, async (req, res) => {
+// PATCH /api/transactions/:id
+// Apply per-route rate limiting because this handler performs several DB lookups
+// (recipient/category resolution) and updates which could be abused.
+router.patch(
+  '/:id',
+  validateIdParam,
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-patch' }),
+  async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const fields = { ...req.body };

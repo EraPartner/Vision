@@ -9,6 +9,7 @@ import infoRepository from '../repositories/infoRepository.js';
 import { detectRecurringPatterns } from '../services/recurringDetectionService.js';
 import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import { logger } from '../config/logger.js';
+import { rateLimiter, adminRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -202,7 +203,12 @@ router.get('/recipient-insights', async (req, res) => {
 });
 
 // GET /api/info/exchange-rates - View cached exchange rates from database
-router.get('/exchange-rates', async (req, res) => {
+// Apply a modest per-route rate limiter in addition to the global limiter so
+// automated scanners or abusive clients can't hammer the database-heavy route.
+router.get(
+  '/exchange-rates',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
+  async (req, res) => {
   try {
     const { query: dbQuery } = await import('../database/connection.js');
 
@@ -260,7 +266,8 @@ router.get('/exchange-rates', async (req, res) => {
 });
 
 // POST /api/info/exchange-rates/refresh - Fetch fresh rates from ECB and save to database
-router.post('/exchange-rates/refresh', async (req, res) => {
+// This endpoint triggers an expensive refresh; restrict it with the admin limiter.
+router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
   try {
     const { warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
     // Clear memory cache to force fresh fetch from ECB API

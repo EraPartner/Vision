@@ -8,6 +8,7 @@ import { Router } from 'express';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { rateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -82,7 +83,14 @@ router.get('/:id', validateIdParam, async (req, res) => {
 
 // PATCH /api/planned-transactions/:id
 // Mirrors Python's planned transaction update with name-to-ID resolution
-router.patch('/:id', validateIdParam, async (req, res) => {
+// PATCH /api/planned-transactions/:id
+// Apply a per-route rate limiter because this handler performs DB lookups
+// and name-to-id resolution which can be expensive when abused.
+router.patch(
+  '/:id',
+  validateIdParam,
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'planned-transactions-patch' }),
+  async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const existing = await plannedTransactionRepository.getById(id);
