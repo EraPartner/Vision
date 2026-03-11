@@ -764,6 +764,42 @@ class ApiClient {
         return this.request('/api/info/recipient-insights');
     }
 
+    // ==================== Splits / Owes Methods ====================
+
+    async getOwedSummary(): Promise<{ items: any[] }> {
+        return this.request('/api/splits/owed');
+    }
+
+    async getOwedByRecipient(recipientId: number): Promise<{ items: any[] }> {
+        return this.request(`/api/splits/owed/${recipientId}`);
+    }
+
+    async getSplitsByTransaction(transactionId: number): Promise<{ items: any[] }> {
+        return this.request(`/api/splits/transaction/${transactionId}`);
+    }
+
+    async createSplitsBatch(transactionId: number, splits: Array<{ recipient_id: number; amount: number; note?: string }>): Promise<{ items: any[] }> {
+        return this.request('/api/splits/batch', {
+            method: 'POST',
+            body: JSON.stringify({ transaction_id: transactionId, splits }),
+        });
+    }
+
+    async recordSplitPayment(splitId: number, amount: number, note?: string, paid_at?: string): Promise<any> {
+        return this.request(`/api/splits/${splitId}/pay`, {
+            method: 'POST',
+            body: JSON.stringify({ amount, note, paid_at }),
+        });
+    }
+
+    async settleSplit(splitId: number): Promise<any> {
+        return this.request(`/api/splits/${splitId}/settle`, { method: 'POST' });
+    }
+
+    async deleteSplit(splitId: number): Promise<any> {
+        return this.request(`/api/splits/${splitId}`, { method: 'DELETE' });
+    }
+
     // ==================== Admin / Maintenance ====================
 
     async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {

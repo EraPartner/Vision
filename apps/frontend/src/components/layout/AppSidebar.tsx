@@ -53,6 +53,7 @@ const budgetingGroups = [
     items: [
       { title: "Statistics", url: "/statistics", icon: BarChart3 },
       { title: "Planned Payments", url: "/planned", icon: CalendarClock },
+      { title: "Who Owes You", url: "/owes", icon: HandCoins },
     ],
   },
   {
