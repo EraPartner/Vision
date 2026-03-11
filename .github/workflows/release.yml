@@ -114,13 +114,17 @@ jobs:
       - name: Find generated DMG
         id: find_dmg
         run: |
-          echo "Listing dist directory"
+          echo "Searching recursively for any .dmg under packaging/electron/dist"
+          # show tree for debugging
+          ls -la packaging/electron || true
           ls -la packaging/electron/dist || true
-          DMG_PATH=$(ls packaging/electron/dist/*.dmg 2>/dev/null | head -n1 || true)
+          # Find the first .dmg (recursively) and write it to the output
+          DMG_PATH=$(find packaging/electron/dist -type f -name '*.dmg' -print -quit || true)
           if [ -z "$DMG_PATH" ]; then
-            echo "No DMG found in packaging/electron/dist" >&2
+            echo "No DMG found under packaging/electron/dist" >&2
             exit 1
           fi
+          echo "Found DMG: $DMG_PATH"
           echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload DMG to Release
