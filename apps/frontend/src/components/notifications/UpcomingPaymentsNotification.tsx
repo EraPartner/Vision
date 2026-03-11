@@ -46,7 +46,7 @@ export function UpcomingPaymentsNotification() {
               {pt.memo || pt.recipient_name || "Unnamed"}
             </span>
             <span className="flex items-center gap-3 text-muted-foreground">
-              <span>{pt.planned_date}</span>
+              <span>{pt.planned_date?.split("T")[0]}</span>
               <span className="font-semibold text-foreground">
                 {formatCurrency(Math.abs(pt.amount), pt.currency || "EUR")}
               </span>
