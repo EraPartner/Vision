@@ -33,6 +33,8 @@ export default function RecipientsPage() {
     const [showAll, setShowAll] = useState(false);
     const [showUncategorized, setShowUncategorized] = useState(false);
     const [search, setSearch] = useState("");
+    const [sortKey, setSortKey] = useState<string | null>(null);
+    const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
     const [allItems, setAllItems] = useState<any[]>([]);
     const [totalItems, setTotalItems] = useState(0);
@@ -47,8 +49,8 @@ export default function RecipientsPage() {
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized }],
-        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized }),
+        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir }],
+        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
         staleTime: 30_000,
     });
 
@@ -72,6 +74,8 @@ export default function RecipientsPage() {
                 active: !showAll,
                 search: search || undefined,
                 uncategorized: showUncategorized,
+                sort_by: sortKey || undefined,
+                sort_dir: sortDir || undefined,
             });
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((r: any) => r.id));
@@ -87,7 +91,16 @@ export default function RecipientsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search, showUncategorized]);
+    }, [showAll, search, showUncategorized, sortKey, sortDir]);
+
+    const handleSortChange = useCallback((key: string | null, dir: "asc" | "desc" | null) => {
+        setSortKey(key);
+        setSortDir(dir);
+        setAllItems([]);
+        setTotalItems(0);
+        offsetRef.current = 0;
+        hasMoreRef.current = true;
+    }, []);
 
     const handleUpdate = (idx: number, updated: TableRecipient) => {
         const originalRecipient = allItems[idx];
@@ -333,6 +346,9 @@ export default function RecipientsPage() {
                     onLoadMore={loadMore}
                     hasMore={hasMoreRef.current}
                     onSearchChange={setSearch}
+                    onSortChange={handleSortChange}
+                    sortKeyProp={sortKey}
+                    sortDirProp={sortDir}
                     actions={tableActions}
                     maxHeight={700}
                 />

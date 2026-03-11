@@ -30,9 +30,9 @@ def upgrade() -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE INDEX idx_splits_transaction ON transaction_splits(transaction_id);
-        CREATE INDEX idx_splits_recipient ON transaction_splits(recipient_id);
-        CREATE INDEX idx_splits_unsettled ON transaction_splits(is_settled) WHERE is_settled = false;
+        CREATE INDEX IF NOT EXISTS idx_splits_transaction ON transaction_splits(transaction_id);
+        CREATE INDEX IF NOT EXISTS idx_splits_recipient ON transaction_splits(recipient_id);
+        CREATE INDEX IF NOT EXISTS idx_splits_unsettled ON transaction_splits(is_settled) WHERE is_settled = false;
     """)
 
     op.execute("""
@@ -45,15 +45,16 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE INDEX idx_split_payments_split ON split_payments(split_id);
+        CREATE INDEX IF NOT EXISTS idx_split_payments_split ON split_payments(split_id);
     """)
 
     # Trigger to update updated_at on transaction_splits
     op.execute("""
+        DROP TRIGGER IF EXISTS update_transaction_splits_updated_at ON transaction_splits;
         CREATE TRIGGER update_transaction_splits_updated_at
             BEFORE UPDATE ON transaction_splits
             FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+            EXECUTE FUNCTION update_updated_at_column();
     """)
 
 

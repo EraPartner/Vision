@@ -93,6 +93,8 @@ class ApiClient {
         active?: boolean;
         search?: string;
         normalize_to_eur?: boolean;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     }): Promise<TransactionsListResponse> {
         const query = this.buildQuery(params);
         const res = await this.request<TransactionsListResponse>(
@@ -185,6 +187,8 @@ class ApiClient {
         active?: boolean;
         search?: string;
         uncategorized?: boolean;
+        sort_by?: string;
+        sort_dir?: 'asc' | 'desc';
     }): Promise<RecipientsListResponse> {
         const query = this.buildQuery(params);
         return this.request<RecipientsListResponse>(

@@ -71,6 +71,22 @@ function buildWhereClause({
   return { where: clauses.join(' AND '), params, nextParam: p };
 }
 
+// Allowed sort columns for transactions (maps frontend key -> SQL expression)
+const TRANSACTION_SORT_COLUMNS = {
+  date: 't.date',
+  amount: 't.amount',
+  memo: 't.memo',
+  recipient: 'COALESCE(pr.name, r.name)',
+  category: `CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END`,
+  bank: 't.bank_account',
+  currency: 't.currency',
+};
+
 export const transactionRepository = {
   /**
    * Get transactions with pagination and filtering.
@@ -86,10 +102,20 @@ export const transactionRepository = {
     recipientName = null,
     search = null,
     active = true,
+    sortBy = null,
+    sortDir = null,
   } = {}) {
     const { where, params, nextParam: p } = buildWhereClause({
       startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
+
+    // Build ORDER BY — fall back to default date DESC when no valid sort supplied
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
+    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    // Secondary sort by date DESC keeps rows stable when primary column has ties
+    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+      ? `${sortCol} ${sortDirection}, t.date DESC`
+      : `t.date DESC`;
 
     const sql = `
       SELECT t.*,
@@ -104,7 +130,7 @@ export const transactionRepository = {
       FROM transactions t
       ${TRANSACTION_JOINS}
       WHERE ${where}
-      ORDER BY t.date DESC LIMIT $${p} OFFSET $${p + 1}
+      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
     params.push(limit, offset);
 

@@ -28,6 +28,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const [entries, setEntries] = useState<SplitEntry[]>([
         { recipient_id: null, amount: "", note: "" },
     ]);
+    const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
     const createSplits = useCreateSplits();
 
     const absAmount = Math.abs(transactionAmount);
@@ -75,6 +76,8 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
+                {/* Portal target: dropdowns render here (inside dialog DOM) so the dialog focus trap covers them */}
+                <div ref={setPortalContainer} />
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Split className="h-5 w-5" />
@@ -120,6 +123,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                                         value={entry.recipient_id}
                                         onSelect={(id) => updateEntry(idx, "recipient_id", id)}
                                         className="w-full"
+                                        portalContainer={portalContainer}
                                     />
                                     {splitType === "custom" && (
                                         <Input

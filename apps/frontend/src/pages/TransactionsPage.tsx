@@ -5,7 +5,7 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Import, Loader2, Trash2, Eye, EyeOff, ToggleLeft, ToggleRight, Info, X, Users } from "lucide-react";
 import { useUpdateTransaction, useDeleteTransaction } from "@/hooks/useTransactions";
@@ -41,6 +41,8 @@ export default function TransactionsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
+    const [sortKey, setSortKey] = useState<string | null>(null);
+    const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
     const [allItems, setAllItems] = useState<any[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -53,17 +55,20 @@ export default function TransactionsPage() {
     const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
     const filterLabel = searchParams.get('filter_label') || undefined;
 
+    const [infoTransaction, setInfoTransaction] = useState<TableTransaction | null>(null);
     const updateMutation = useUpdateTransaction();
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // Initial load
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined, recipientIdFilter, categoryIdFilter }],
+        queryKey: ['transactions-virtual', { active: !showAll, search: search || undefined, recipientIdFilter, categoryIdFilter, sortKey, sortDir }],
         queryFn: () => apiClient.getTransactions({
             limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined,
             recipient_id: recipientIdFilter,
             category_id: categoryIdFilter,
+            sort_by: sortKey || undefined,
+            sort_dir: sortDir || undefined,
         }),
         staleTime: 30_000,
     });
@@ -90,6 +95,8 @@ export default function TransactionsPage() {
                 search: search || undefined,
                 recipient_id: recipientIdFilter,
                 category_id: categoryIdFilter,
+                sort_by: sortKey || undefined,
+                sort_dir: sortDir || undefined,
             });
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t: any) => t.id));
@@ -105,7 +112,17 @@ export default function TransactionsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search, recipientIdFilter, categoryIdFilter]);
+    }, [showAll, search, recipientIdFilter, categoryIdFilter, sortKey, sortDir]);
+
+    const handleSortChange = useCallback((key: string | null, dir: "asc" | "desc" | null) => {
+        setSortKey(key);
+        setSortDir(dir);
+        // Reset accumulated data so the next useQuery result starts fresh
+        setAllItems([]);
+        setTotalItems(0);
+        offsetRef.current = 0;
+        hasMoreRef.current = true;
+    }, []);
 
     const handleDelete = async (id: number, description?: string) => {
         const ok = await confirm({
@@ -265,49 +282,25 @@ export default function TransactionsPage() {
             editable: false,
             sortable: false,
             filterable: false,
-            defaultWidth: 48,
-            minWidth: 40,
-            render: (row: TableTransaction) => {
-                const items = [
-                    { label: "Bank Account", value: row.bank },
-                    { label: "Recipient", value: row.recipient !== 'Unknown' ? row.recipient : undefined },
-                    { label: "Category", value: row.category !== 'Uncategorized' ? row.category : undefined },
-                    { label: "Currency", value: row.currency },
-                    {
-                        label: "Balance", value: row.balance != null
-                            ? formatCurrency(row.balance, row.currency)
-                            : undefined
-                    },
-                    { label: "Description", value: row.memo },
-                    { label: "Comment", value: row.comment },
-                ].filter(i => i.value);
-
-                return (
-                    <div className="flex items-center">
-                        <SplitTransactionDialog
-                            transactionId={row.id}
-                            transactionAmount={row.amount}
-                            transactionCurrency={row.currency}
-                        />
-                        <HoverCard openDelay={150} closeDelay={100}>
-                            <HoverCardTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                                    <Info className="h-4 w-4" />
-                                </Button>
-                            </HoverCardTrigger>
-                            <HoverCardContent side="left" className="w-64 text-sm space-y-1.5 p-3">
-                                {items.map(({ label, value }) => (
-                                    <div key={label} className="flex justify-between gap-2">
-                                        <span className="text-muted-foreground text-xs">{label}</span>
-                                        <span className="text-foreground text-xs font-medium text-right truncate max-w-[160px]">{value}</span>
-                                    </div>
-                                ))}
-                                {items.length === 0 && <span className="text-muted-foreground text-xs italic">No additional info</span>}
-                            </HoverCardContent>
-                        </HoverCard>
-                    </div>
-                );
-            },
+            defaultWidth: 96,
+            minWidth: 80,
+            render: (row: TableTransaction) => (
+                <div className="flex items-center">
+                    <SplitTransactionDialog
+                        transactionId={row.id}
+                        transactionAmount={row.amount}
+                        transactionCurrency={row.currency}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); setInfoTransaction(row); }}
+                    >
+                        <Info className="h-4 w-4" />
+                    </Button>
+                </div>
+            ),
         },
         {
             key: "is_active",
@@ -329,7 +322,9 @@ export default function TransactionsPage() {
         {
             key: "delete",
             header: "",
-            className: "w-12",
+            className: "!px-1",
+            defaultWidth: 40,
+            minWidth: 36,
             editable: false,
             render: (row: TableTransaction) => (
                 <Button
@@ -408,11 +403,52 @@ export default function TransactionsPage() {
                     onLoadMore={loadMore}
                     hasMore={hasMoreRef.current}
                     onSearchChange={setSearch}
+                    onSortChange={handleSortChange}
+                    sortKeyProp={sortKey}
+                    sortDirProp={sortDir}
                     actions={tableActions}
                     maxHeight={700}
                 />
             </div>
             <ConfirmDialog />
+            <Dialog open={!!infoTransaction} onOpenChange={(open) => { if (!open) setInfoTransaction(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-muted-foreground" />
+                            Transaction Details
+                        </DialogTitle>
+                    </DialogHeader>
+                    {infoTransaction && (() => {
+                        const t = infoTransaction;
+                        const fields = [
+                            { label: "ID", value: String(t.id) },
+                            { label: "Date", value: t.date ? t.date.split('T')[0] : '—' },
+                            { label: "Description", value: t.memo || undefined },
+                            { label: "Recipient", value: t.recipient !== 'Unknown' ? t.recipient : undefined },
+                            { label: "Category", value: t.category !== 'Uncategorized' ? t.category : undefined },
+                            { label: "Amount", value: `${t.amount >= 0 ? '+' : '-'}${formatCurrency(Math.abs(t.amount), t.currency)}` },
+                            { label: "Currency", value: t.currency },
+                            { label: "Bank Account", value: t.bank },
+                            { label: "Balance", value: t.balance != null ? formatCurrency(t.balance, t.currency) : undefined },
+                            { label: "Comment", value: t.comment || undefined },
+                            { label: "Status", value: t.is_active ? 'Active' : 'Inactive' },
+                        ];
+                        return (
+                            <div className="divide-y divide-border">
+                                {fields.map(({ label, value }) => (
+                                    value ? (
+                                        <div key={label} className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+                                            <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+                                            <span className="text-sm font-medium text-right break-all">{value}</span>
+                                        </div>
+                                    ) : null
+                                ))}
+                            </div>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
