@@ -46,6 +46,16 @@ interface VirtualDataTableProps<T> {
     /** Server-side search callback */
     onSearchChange?: (query: string) => void;
     searchValue?: string;
+    /**
+     * When provided the table operates in server-sort mode: clicking a column
+     * header calls onSortChange instead of sorting locally. This ensures the
+     * full dataset (not just the loaded page) is sorted by the server.
+     */
+    onSortChange?: (key: string | null, dir: SortDirection) => void;
+    /** Controlled sort key (server-sort mode) */
+    sortKeyProp?: string | null;
+    /** Controlled sort direction (server-sort mode) */
+    sortDirProp?: SortDirection;
     /** Height of the virtual scroll container. Defaults to 600 */
     maxHeight?: number;
     /** Estimated row height for virtualizer */
@@ -74,9 +84,13 @@ export function VirtualDataTable<T extends Record<string, any>>({
     hasMore = false,
     onSearchChange,
     searchValue,
+    onSortChange,
+    sortKeyProp,
+    sortDirProp,
     maxHeight = 600,
     rowHeight = 44,
 }: VirtualDataTableProps<T>) {
+    const isServerSort = !!onSortChange;
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
     const [localSearchQuery, setLocalSearchQuery] = useState("");
@@ -95,8 +109,12 @@ export function VirtualDataTable<T extends Record<string, any>>({
         }
     }, [isServerSearch, onSearchChange]);
 
-    const [sortKey, setSortKey] = useState<string | null>(null);
-    const [sortDir, setSortDir] = useState<SortDirection>(null);
+    // In server-sort mode use controlled props; otherwise use local state
+    const [localSortKey, setLocalSortKey] = useState<string | null>(null);
+    const [localSortDir, setLocalSortDir] = useState<SortDirection>(null);
+    const sortKey = isServerSort ? (sortKeyProp ?? null) : localSortKey;
+    const sortDir = isServerSort ? (sortDirProp ?? null) : localSortDir;
+
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
     const [openFilter, setOpenFilter] = useState<string | null>(null);
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -134,13 +152,27 @@ export function VirtualDataTable<T extends Record<string, any>>({
     }, [columns]);
 
     const handleSort = (key: string) => {
-        if (sortKey === key) {
-            if (sortDir === "asc") setSortDir("desc");
-            else if (sortDir === "desc") { setSortKey(null); setSortDir(null); }
-            else setSortDir("asc");
+        if (isServerSort) {
+            // Cycle: null -> asc -> desc -> null; dispatch to parent
+            let newDir: SortDirection;
+            let newKey: string | null;
+            if (sortKey === key) {
+                if (sortDir === "asc") { newKey = key; newDir = "desc"; }
+                else if (sortDir === "desc") { newKey = null; newDir = null; }
+                else { newKey = key; newDir = "asc"; }
+            } else {
+                newKey = key; newDir = "asc";
+            }
+            onSortChange!(newKey, newDir);
         } else {
-            setSortKey(key);
-            setSortDir("asc");
+            if (localSortKey === key) {
+                if (localSortDir === "asc") setLocalSortDir("desc");
+                else if (localSortDir === "desc") { setLocalSortKey(null); setLocalSortDir(null); }
+                else setLocalSortDir("asc");
+            } else {
+                setLocalSortKey(key);
+                setLocalSortDir("asc");
+            }
         }
     };
 
@@ -170,6 +202,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
     }, [data, columns]);
 
     // Client-side filter/sort pipeline
+    // NOTE: when onSortChange is provided (server-sort mode) the sort step is
+    // skipped — the server already returns rows in the correct order.
     const processedData = useMemo(() => {
         let result = [...data];
 
@@ -191,7 +225,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
             );
         }
 
-        if (sortKey && sortDir) {
+        // Only apply client-side sort when NOT in server-sort mode
+        if (!isServerSort && sortKey && sortDir) {
             result.sort((a, b) => {
                 const va = getSortValue(a[sortKey]);
                 const vb = getSortValue(b[sortKey]);
@@ -203,7 +238,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
         }
 
         return result;
-    }, [data, columnFilters, localSearchQuery, isServerSearch, sortKey, sortDir, columns]);
+    }, [data, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columns]);
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
@@ -253,8 +288,12 @@ export function VirtualDataTable<T extends Record<string, any>>({
         setColumnFilters({});
         setLocalSearchQuery("");
         if (isServerSearch) onSearchChange!("");
-        setSortKey(null);
-        setSortDir(null);
+        if (isServerSort) {
+            onSortChange!(null, null);
+        } else {
+            setLocalSortKey(null);
+            setLocalSortDir(null);
+        }
     };
 
     const hasEditableColumns = columns.some((c) => c.editable);

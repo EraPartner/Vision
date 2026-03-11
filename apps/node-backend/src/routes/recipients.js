@@ -14,7 +14,7 @@ const router = Router();
 // GET /api/recipients
 router.get('/', async (req, res) => {
   try {
-    const { limit = 50, offset = 0, name, default_category_id, active = 'true', search, uncategorized = 'false' } = req.query;
+    const { limit = 50, offset = 0, name, default_category_id, active = 'true', search, uncategorized = 'false', sort_by, sort_dir } = req.query;
 
     const opts = {
       limit: Math.min(parseInt(limit, 10) || 50, 1000),
@@ -24,6 +24,8 @@ router.get('/', async (req, res) => {
       search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
       uncategorized: uncategorized === 'true',
+      sortBy: sort_by || null,
+      sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     };
 
     const items = await recipientRepository.getAll(opts);

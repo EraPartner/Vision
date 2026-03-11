@@ -6,8 +6,20 @@
 
 import { query } from '../database/connection.js';
 
+// Allowed sort columns for recipients (maps frontend key -> SQL expression)
+const RECIPIENT_SORT_COLUMNS = {
+  name: 'r.name',
+  default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END`,
+  primary_bank_account: `(SELECT rba.account_number FROM recipient_bank_accounts rba
+                          WHERE rba.recipient_id = r.id AND rba.is_active = true
+                          ORDER BY rba.is_primary DESC LIMIT 1)`,
+  alias_count: `(SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id)`,
+  notes: 'r.notes',
+  is_active: 'r.is_active',
+};
+
 export const recipientRepository = {
-  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false } = {}) {
+  async getAll({ limit = 50, offset = 0, name = null, defaultCategoryId = null, search = null, active = true, uncategorized = false, sortBy = null, sortDir = null } = {}) {
     let sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
@@ -45,7 +57,14 @@ export const recipientRepository = {
       params.push(sp);
     }
 
-    sql += ` ORDER BY r.name LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+    // Build ORDER BY — fall back to default r.name ASC when no valid sort supplied
+    const sortCol = RECIPIENT_SORT_COLUMNS[sortBy] || 'r.name';
+    const sortDirection = sortDir === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = sortBy && RECIPIENT_SORT_COLUMNS[sortBy]
+      ? `${sortCol} ${sortDirection}, r.name ASC`
+      : `r.name ASC`;
+
+    sql += ` ORDER BY ${orderBy} LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);

@@ -11,9 +11,10 @@ interface RecipientComboboxProps {
     onSelect: (recipientId: number | null, recipientName: string | null) => void;
     disabled?: boolean;
     className?: string;
+    portalContainer?: HTMLElement | null;
 }
 
-export function RecipientCombobox({ value, onSelect, disabled, className }: RecipientComboboxProps) {
+export function RecipientCombobox({ value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
     const trimmedSearch = search.trim();
@@ -42,7 +43,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className }: Reci
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[280px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
+            <PopoverContent container={portalContainer} className="w-[280px] p-0 bg-popover border border-border shadow-lg z-[200]" align="start">
                 <Command>
                     <CommandInput
                         placeholder="Search recipients…"

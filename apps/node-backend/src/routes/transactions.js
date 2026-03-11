@@ -22,6 +22,7 @@ router.get('/', async (req, res) => {
       start_date, end_date, bank_account,
       category_id, recipient_id, recipient_name,
       uncategorised, active = 'true', search, normalize_to_eur = 'false',
+      sort_by, sort_dir,
     } = req.query;
 
     const opts = {
@@ -35,6 +36,8 @@ router.get('/', async (req, res) => {
       recipientName: recipient_name || null,
       search: search ? String(search).slice(0, 200) : null,
       active: active !== 'false',
+      sortBy: sort_by || null,
+      sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     };
 
     let items;
