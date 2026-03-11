@@ -1,0 +1,49 @@
+name: Build macOS DMG (Apple Silicon)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+jobs:
+  build_dmg_arm64:
+    name: Build DMG (arm64)
+    runs-on: macos-13-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+        shell: bash
+
+      - name: Build Electron DMG (arm64)
+        run: |
+          set -euo pipefail
+          cd packaging/electron
+          bun install
+          # build only Apple Silicon (arm64)
+          bun run dist:arm64
+        shell: bash
+
+      - name: Find generated DMG
+        id: find_dmg
+        run: |
+          echo "Searching for DMG under packaging/electron/dist"
+          ls -la packaging/electron || true
+          ls -la packaging/electron/dist || true
+          DMG_PATH=$(find packaging/electron/dist -type f -name '*.dmg' -print -quit || true)
+          if [ -z "$DMG_PATH" ]; then
+            echo "No DMG found under packaging/electron/dist" >&2
+            exit 1
+          fi
+          echo "dmg_path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-macos-dmg-arm64
+          path: ${{ steps.find_dmg.outputs.dmg_path }}
