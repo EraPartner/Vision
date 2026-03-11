@@ -11,7 +11,7 @@
     "dist:arm64": "electron-builder --mac --arm64"
   },
   "devDependencies": {
-    "electron": "^32.0.0",
+    "electron": "^41.0.0",
     "electron-builder": "^25.0.0"
   },
   "build": {
