@@ -20,6 +20,7 @@ const RecipientsPage = lazy(() => import("./pages/RecipientsPage"));
 const ImportPage = lazy(() => import("./pages/ImportPage"));
 const PlannedPaymentsPage = lazy(() => import("./pages/PlannedPaymentsPage"));
 const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
+const OwesPage = lazy(() => import("./pages/OwesPage"));
 const PortfolioOverviewPage = lazy(() => import("./pages/portfolio/PortfolioOverviewPage"));
 const MarketLookupPage = lazy(() => import("./pages/MarketLookupPage"));
 const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
