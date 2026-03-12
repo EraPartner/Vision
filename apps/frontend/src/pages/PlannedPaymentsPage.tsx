@@ -456,7 +456,7 @@ export default function PlannedPaymentsPage() {
         <div className="flex items-start justify-between">
             <div>
             <h2 className="text-3xl font-bold text-foreground">{t('plannedPage.title')}</h2>
-            <p className="text-muted-foreground mt-1">{t('plannedPage.newPayment')}</p>
+            <p className="text-muted-foreground mt-1">{t('plannedPage.subtitle')}</p>
           </div>
           <div className="flex gap-2">
               <Button

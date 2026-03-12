@@ -416,6 +416,7 @@ export const translations = {
         'common.cancel': 'Cancel',
         'common.delete': 'Delete',
         'common.edit': 'Edit',
+        'common.create': 'Create',
         'common.add': 'Add',
         'common.search': 'Search',
         'common.filter': 'Filter',
@@ -1029,7 +1030,7 @@ export const translations = {
         'addCat.descriptionPlaceholder': 'Category description…',
 
         // AddRecipientDialog (additional)
-        'addRec.namePlaceHolder': 'Recipient name',
+        'addRec.namePlaceholder': 'Recipient name',
         'addRec.notesOptional': 'Notes (optional)',
         'addRec.notesPlaceholder': 'Additional notes…',
 
@@ -1628,8 +1629,9 @@ export const translations = {
         'recipientsPage.delete.confirm': 'Delete',
 
         // PlannedPaymentsPage (additional)
-        'plannedPage.title': 'Planned Payments',
-        'plannedPage.loading': 'Loading planned payments…',
+         'plannedPage.title': 'Planned Payments',
+         'plannedPage.subtitle': 'Manage your recurring and scheduled payments',
+         'plannedPage.loading': 'Loading planned payments…',
         'plannedPage.showingAll': 'Showing All',
         'plannedPage.activeOnly': 'Active Only',
         'plannedPage.newPayment': 'New Payment',
@@ -1740,6 +1742,48 @@ export const translations = {
         'charts.updateFailed': 'Failed to update chart',
         'charts.deleted': 'Chart deleted',
         'charts.deleteFailed': 'Failed to delete chart',
+        // Toast / error messages – categories
+        'categories.created': 'Category created',
+        'categories.createFailed': 'Failed to create category: {msg}',
+        'categories.exists': 'Category already exists',
+        'categories.updateFailed': 'Failed to update category: {msg}',
+        'categories.deleteFailed': 'Failed to delete category: {msg}',
+        // Toast / error messages – recipients
+        'recipients.created': 'Recipient created',
+        'recipients.createFailed': 'Failed to create recipient: {msg}',
+        'recipients.exists': 'Recipient already exists',
+        'recipients.updateFailed': 'Failed to update recipient: {msg}',
+        'recipients.deleted': 'Recipient deleted',
+        'recipients.deleteFailed': 'Failed to delete recipient: {msg}',
+        'recipients.merged': '{n} recipient(s) merged into "{name}"',
+        'recipients.mergeFailed': 'Failed to merge recipients: {msg}',
+        'recipients.unmerged': 'Recipient unlinked',
+        'recipients.unmergeFailed': 'Failed to unmerge recipient: {msg}',
+        // Toast / error messages – transactions
+        'transactions.created': 'Transaction created',
+        'transactions.createFailed': 'Failed to create transaction: {msg}',
+        'transactions.updated': 'Transaction updated',
+        'transactions.updateFailed': 'Failed to update transaction: {msg}',
+        'transactions.deleted': 'Transaction deleted',
+        'transactions.deleteFailed': 'Failed to delete transaction: {msg}',
+        // Toast / error messages – portfolio
+        'portfolio.createInvestmentFailed': 'Failed to create investment: {msg}',
+        'portfolio.deleteInvestmentFailed': 'Failed to delete investment: {msg}',
+        'portfolio.deleteTxnFailed': 'Failed to delete portfolio transaction: {msg}',
+        'portfolio.recordTxnFailed': 'Failed to record portfolio transaction: {msg}',
+        'portfolio.refreshPricesFailed': 'Failed to refresh prices: {msg}',
+        'portfolio.refreshedPrices': 'Prices refreshed for {n} investment(s)',
+        'portfolio.updateInvestmentFailed': 'Failed to update investment: {msg}',
+        // Dashboard – stat card labels & recent transactions
+        'dashboard.recentTransactions.empty': 'No transactions yet. Import a CSV to get started.',
+        'dashboard.recentTransactionsSubtitle': 'Last {n} transactions',
+        'dashboard.stat.lastMonthIncome': 'Last Month — Income',
+        'dashboard.stat.lastMonthNet': 'Last Month — Net',
+        'dashboard.stat.lastMonthSpending': 'Last Month — Spending',
+        'dashboard.stat.mostRecentMonth': 'Most Recent Month',
+        'dashboard.stat.negativeCashFlow': 'Negative Cash Flow',
+        'dashboard.stat.positiveCashFlow': 'Positive Cash Flow',
+        'dashboard.stat.totalTransactions': 'Total Transactions',
         // Portfolio – asset class labels (for ASSET_CLASS_LABELS replacement)
         'portfolio.assetClass.stock': 'Stock',
         'portfolio.assetClass.etf': 'ETF',
@@ -1795,8 +1839,8 @@ export const translations = {
         'importPage.memoColPlaceholder': 'e.g., Notes, Comments',
         'importPage.errors': '✗ {n} errors',
         'importPage.toleranceAriaLabel': 'Amount tolerance percent',
-        'importPage.placeholdermainaccount': 'Select account',
-        'importPage.placeholdercategoryid': 'Select category',
+        'importPage.placeholderMainAccount': 'Select account',
+        'importPage.placeholderCategoryId': 'Select category',
 
         // PlannedPaymentForm – tolerance placeholder
         'plannedForm.tolerancePlaceholder': 'e.g. 10',
@@ -1820,7 +1864,7 @@ export const translations = {
         'nav.recipients': 'Ontvangers',
         'nav.statistics': 'Statistieken',
         'nav.plannedPayments': 'Geplande Betalingen',
-        'nav.whoOwesYou': 'Wie Schuld Jou',
+        'nav.whoOwesYou': 'Verschuldigde Betalingen',
         'nav.importExport': 'Importeren / Exporteren',
         'nav.budgeting': 'Budgettering',
         'nav.portfolio': 'Portfolio',
@@ -1923,6 +1967,15 @@ export const translations = {
         // Dashboard page
         'dashboard.title': 'Dashboard',
         'dashboard.recentTransactions': 'Recente transacties',
+        'dashboard.recentTransactions.empty': 'Nog geen transacties. Importeer een CSV om te beginnen.',
+        'dashboard.recentTransactionsSubtitle': 'Laatste {n} transacties',
+        'dashboard.stat.lastMonthIncome': 'Vorige maand — Inkomsten',
+        'dashboard.stat.lastMonthNet': 'Vorige maand — Netto',
+        'dashboard.stat.lastMonthSpending': 'Vorige maand — Uitgaven',
+        'dashboard.stat.mostRecentMonth': 'Meest recente maand',
+        'dashboard.stat.negativeCashFlow': 'Negatieve kasstroom',
+        'dashboard.stat.positiveCashFlow': 'Positieve kasstroom',
+        'dashboard.stat.totalTransactions': 'Totale transacties',
         'dashboard.monthlyTrends': '6-maands trends',
         'dashboard.categoryDistribution': 'Categorieverdeling',
         'dashboard.cashFlowComparison': 'Cashflowvergelijking',
@@ -2237,6 +2290,7 @@ export const translations = {
         'common.cancel': 'Annuleren',
         'common.delete': 'Verwijderen',
         'common.edit': 'Bewerken',
+        'common.create': 'Maak',
         'common.add': 'Toevoegen',
         'common.search': 'Zoeken',
         'common.filter': 'Filter',
@@ -2667,6 +2721,13 @@ export const translations = {
         'watchlist.atTarget': '✓ Koers is op of onder uw doelkoers!',
         'watchlist.doubleClickChart': 'Dubbelklik voor grafiek',
         'watchlist.removedSuccess': 'Verwijderd uit volglijst',
+        'watchlist.targetUpdated': 'Doelkoers bijgewerkt',
+        'watchlist.updateFailed': 'Bijwerken van volglijstitem mislukt: {msg}',
+        'charts.saved': 'Grafiek opgeslagen',
+        'charts.saveFailed': 'Opslaan van grafiek mislukt: {msg}',
+        'charts.updateFailed': 'Bijwerken van grafiek mislukt: {msg}',
+        'charts.deleted': 'Grafiek verwijderd',
+        'charts.deleteFailed': 'Verwijderen van grafiek mislukt: {msg}',
 
         // Portfolio – ExchangeRatesPage
         'exchangeRates.title': 'Wisselkoersen',
@@ -3426,8 +3487,9 @@ export const translations = {
         'recipientsPage.delete.confirm': 'Verwijderen',
 
         // PlannedPaymentsPage (additional)
-        'plannedPage.title': 'Geplande betalingen',
-        'plannedPage.loading': 'Geplande betalingen laden…',
+         'plannedPage.title': 'Geplande betalingen',
+         'plannedPage.subtitle': 'Beheer uw terugkerende en geplande betalingen',
+         'plannedPage.loading': 'Geplande betalingen laden…',
         'plannedPage.showingAll': 'Alles tonen',
         'plannedPage.activeOnly': 'Alleen actief',
         'plannedPage.newPayment': 'Nieuwe betaling',
@@ -3556,7 +3618,7 @@ export const translations = {
         'categoriesPage.delete.confirm': 'Verwijderen',
 
         // OwesPage (additional)
-        'owesPage.title': 'Wie Schuld Jou',
+        'owesPage.title': 'Openstaande verordeningen',
         'owesPage.subtitle': 'Volg gedeelde uitgaven en betalingen',
         'owesPage.totalOutstanding': 'Totaal openstaand',
         'owesPage.fromPerson': 'van {n} persoon',
@@ -3636,8 +3698,8 @@ export const translations = {
         'importPage.memoColPlaceholder': 'bijv. Notities, Opmerkingen',
         'importPage.errors': '✗ {n} fouten',
         'importPage.toleranceAriaLabel': 'Bedragtolerantie procent',
-        'importPage.placeholdermainaccount': 'Selecteer rekening',
-        'importPage.placeholdercategoryid': 'Selecteer categorie',
+        'importPage.placeholderMainAccount': 'Selecteer rekening',
+        'importPage.placeholderCategoryId': 'Selecteer categorie',
 
         // PlannedPaymentForm (nl)
         'plannedForm.tolerancePlaceholder': 'bijv. 10',
