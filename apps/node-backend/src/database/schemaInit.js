@@ -22,7 +22,7 @@
 
 import { query } from './connection.js';
 import { logger } from '../config/logger.js';
-import { createMaterializedViews, refreshMaterializedViews } from '../services/materializedViewService.js';
+import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterializedViews } from '../services/materializedViewService.js';
 
 /**
  * Run the full schema initialisation. Safe to call on every startup.
@@ -68,9 +68,12 @@ export async function initializeSchema() {
     await createPortfolioTransactions();
     await createWatchlist();
     await createUserSettings();
+    await createSavedCharts();
 
     // --- Materialized views ---
     await createMaterializedViews();
+    // Ensure unique indexes exist even on DBs that pre-date their addition
+    await ensureMaterializedViewIndexes();
     // Initial population
     await refreshMaterializedViews();
 
@@ -492,6 +495,20 @@ async function createUserSettings() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+}
+
+async function createSavedCharts() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_charts (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      chart_type TEXT NOT NULL DEFAULT 'line',
+      category_ids JSONB NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await safeTrigger('update_saved_charts_updated_at', 'saved_charts');
 }
 
 // ─────────────────────────────────────────────

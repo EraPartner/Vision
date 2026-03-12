@@ -4,30 +4,37 @@
  * Converts currencies to EUR using ECB exchange rates.
  * Mirrors: apps/backend/services/currency_conversion_service.py
  *
- * Features:
- * - Real-time rates from European Central Bank API (free, no auth)
- * - Database caching (exchange_rates table)
- * - In-memory caching (24-hour lifetime)
- * - Fallback rates if API + DB unavailable
+ * Design:
+ * - Fetches latest rates from ECB (primary) on startup and every 12 hours
+ * - Supplements ECB rates with open.er-api.com for currencies ECB doesn't cover
+ *   (AED, SAR, KWD, QAR, BHD, OMR, PKR, EGP, NGN, and ~130 more)
+ * - ECB always takes priority over the supplementary source on overlapping currencies
+ * - Stores exactly ONE row per currency in the database (the latest rates)
+ * - On a successful fetch the in-memory fallback is updated to match live rates
+ * - If both APIs are unavailable the service falls back to DB → hardcoded constants
  */
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 
-const ECB_LATEST_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
-const ECB_HISTORICAL_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
+const ECB_LATEST_URL   = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
+const ERAR_LATEST_URL  = 'https://open.er-api.com/v6/latest/EUR';
 
+// In-memory cache: { rates: {...}, timestamp: number } | null
+let memoryCache = null;
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
-const DB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// Fallback rates (only used if API and DB are completely unavailable)
+// Fallback rates (used only when both APIs and DB are unavailable).
+// These are updated in-memory whenever a successful fetch occurs so that
+// they stay current for the lifetime of the process.
+// Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
 const FALLBACK_RATES = {
   EUR: 1.0,
+  // ECB currencies
   USD: 1 / 1.09,
   GBP: 1 / 0.85,
   CHF: 1 / 0.95,
   JPY: 1 / 163.0,
-  SAR: 1 / 4.09,
   SEK: 1 / 11.20,
   NOK: 1 / 11.50,
   DKK: 1 / 7.46,
@@ -35,7 +42,6 @@ const FALLBACK_RATES = {
   CZK: 1 / 25.30,
   HUF: 1 / 395.0,
   RON: 1 / 4.97,
-  BGN: 1 / 1.96,
   TRY: 1 / 35.0,
   AUD: 1 / 1.66,
   CAD: 1 / 1.50,
@@ -54,85 +60,68 @@ const FALLBACK_RATES = {
   HKD: 1 / 8.50,
   ISK: 1 / 150.0,
   ILS: 1 / 3.95,
+  // Supplementary currencies (open.er-api.com)
+  AED: 1 / 4.01,
+  SAR: 1 / 4.09,
+  KWD: 1 / 0.335,
+  QAR: 1 / 3.97,
+  BHD: 1 / 0.41,
+  OMR: 1 / 0.42,
+  PKR: 1 / 305.0,
+  EGP: 1 / 53.0,
+  MAD: 1 / 10.9,
+  NGN: 1 / 1650.0,
+  KES: 1 / 141.0,
 };
 
-// In-memory cache: { [cacheKey]: { rates: {...}, timestamp: Date } }
-const memoryCache = {};
+// ---------------------------------------------------------------------------
+// XML parsing
+// ---------------------------------------------------------------------------
 
 /**
- * Parse ECB XML response to extract rates.
- * ECB gives EUR->X rates; we convert to X->EUR (i.e., 1 X = rate EUR).
+ * Parse ECB daily XML into a rates map { EUR: 1, USD: x, ... }.
+ * ECB publishes EUR->X rates; we store X->EUR (1 / eurToX).
+ *
+ * The daily feed uses single-quoted attributes (e.g. currency='USD' rate='1.09')
+ * while the historical feed uses double quotes — both variants are handled.
  */
-function parseEcbXml(xmlText, targetDateStr = null) {
+function parseEcbXml(xmlText) {
   const rates = { EUR: 1.0 };
-
-  // Simple regex-based XML parsing (no external dependency needed)
-  if (targetDateStr) {
-    // Historical: find the Cube with matching time attribute
-    const datePattern = new RegExp(
-      `<Cube\\s+time="${targetDateStr}"[^>]*>([\\s\\S]*?)</Cube>`,
-      'i'
-    );
-    const dateMatch = xmlText.match(datePattern);
-    if (!dateMatch) return null;
-
-    const currencyPattern = /<Cube\s+currency="([A-Z]{3})"\s+rate="([0-9.]+)"\s*\/>/g;
-    let match;
-    while ((match = currencyPattern.exec(dateMatch[1])) !== null) {
-      const [, currency, rateStr] = match;
-      const eurToX = parseFloat(rateStr);
-      if (eurToX > 0) {
-        rates[currency] = 1.0 / eurToX; // X -> EUR
-      }
-    }
-  } else {
-    // Latest: parse all Cube currency entries
-    const currencyPattern = /<Cube\s+currency="([A-Z]{3})"\s+rate="([0-9.]+)"\s*\/>/g;
-    let match;
-    while ((match = currencyPattern.exec(xmlText)) !== null) {
-      const [, currency, rateStr] = match;
-      const eurToX = parseFloat(rateStr);
-      if (eurToX > 0) {
-        rates[currency] = 1.0 / eurToX;
-      }
+  const q = `['"]`;
+  const currencyPattern = new RegExp(
+    `<Cube\\s+currency=${q}([A-Z]{3})${q}\\s+rate=${q}([0-9.]+)${q}\\s*\\/>`,'g'
+  );
+  let match;
+  while ((match = currencyPattern.exec(xmlText)) !== null) {
+    const [, currency, rateStr] = match;
+    const eurToX = parseFloat(rateStr);
+    if (eurToX > 0) {
+      rates[currency] = 1.0 / eurToX;
     }
   }
-
   return Object.keys(rates).length > 1 ? rates : null;
 }
 
+// ---------------------------------------------------------------------------
+// Database (latest-only, no history)
+// ---------------------------------------------------------------------------
+
 /**
- * Load rates from the exchange_rates table.
+ * Load the stored latest rates from the database.
+ * Returns null if no rows exist.
  */
-async function loadFromDatabase(rateDate) {
+async function loadFromDatabase() {
   try {
     const result = await query(
-      `SELECT currency_code, rate_to_eur, fetched_at
-       FROM exchange_rates
-       WHERE rate_date = $1`,
-      [rateDate]
+      `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`
     );
-
     if (result.rows.length === 0) return null;
-
-    // Check age
-    const latestFetch = result.rows.reduce((max, r) => {
-      const t = new Date(r.fetched_at).getTime();
-      return t > max ? t : max;
-    }, 0);
-    const ageMs = Date.now() - latestFetch;
-    if (ageMs > DB_MAX_AGE_MS) {
-      const ageDays = Math.round(ageMs / (1000 * 60 * 60 * 24));
-      logger.warn(`Cached exchange rates for ${rateDate} are ${ageDays} days old, refetching from ECB`);
-      return null;
-    }
 
     const rates = { EUR: 1.0 };
     for (const row of result.rows) {
       rates[row.currency_code] = parseFloat(row.rate_to_eur);
     }
-
-    logger.debug(`Loaded ${result.rows.length} exchange rates from database for ${rateDate}`);
+    logger.debug(`Loaded ${result.rows.length} exchange rates from database`);
     return rates;
   } catch (err) {
     logger.error('Failed to load exchange rates from database', { error: err.message });
@@ -141,53 +130,48 @@ async function loadFromDatabase(rateDate) {
 }
 
 /**
- * Save rates to the exchange_rates table.
+ * Replace all stored rates with the freshly-fetched set.
+ * Wipes every existing row and inserts the new rates so the table always
+ * contains exactly one row per currency (the latest values).
  */
-async function saveToDatabase(rateDate, rates) {
+async function saveToDatabase(rates) {
   try {
+    await query(`DELETE FROM exchange_rates`);
+
     const today = new Date().toISOString().split('T')[0];
-    const isLatest = rateDate === today;
-
-    if (isLatest) {
-      await query(`UPDATE exchange_rates SET is_latest = false WHERE is_latest = true`);
-    }
-
     for (const [currency, rate] of Object.entries(rates)) {
       if (currency === 'EUR') continue;
       await query(
         `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (currency_code, rate_date)
-         DO UPDATE SET rate_to_eur = $2, fetched_at = NOW(), is_latest = $4`,
-        [currency, rate, rateDate, isLatest]
+         VALUES ($1, $2, $3, true)`,
+        [currency, rate, today]
       );
     }
-
-    logger.info(`Saved ${Object.keys(rates).length - 1} exchange rates to database for ${rateDate}`);
+    logger.info(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
   } catch (err) {
     logger.error('Failed to save exchange rates to database', { error: err.message });
   }
 }
 
-/**
- * Fetch rates from ECB API.
- */
-async function fetchFromApi(targetDate = null) {
-  try {
-    const isHistorical = targetDate && targetDate < new Date().toISOString().split('T')[0];
-    const url = isHistorical ? ECB_HISTORICAL_URL : ECB_LATEST_URL;
+// ---------------------------------------------------------------------------
+// API fetch
+// ---------------------------------------------------------------------------
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+/**
+ * Fetch the latest rates from the ECB daily feed.
+ * Returns a { EUR: 1, USD: x, ... } map (X→EUR), or null on failure.
+ */
+async function fetchFromEcb() {
+  try {
+    const response = await fetch(ECB_LATEST_URL, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) {
       logger.error(`ECB API returned ${response.status}`);
       return null;
     }
-
     const xmlText = await response.text();
-    const rates = parseEcbXml(xmlText, isHistorical ? targetDate : null);
-
+    const rates = parseEcbXml(xmlText);
     if (rates) {
-      logger.info(`Fetched ${Object.keys(rates).length} exchange rates from ECB`);
+      logger.info(`Fetched ${Object.keys(rates).length - 1} exchange rates from ECB`);
     }
     return rates;
   } catch (err) {
@@ -197,59 +181,127 @@ async function fetchFromApi(targetDate = null) {
 }
 
 /**
- * Get rates for a specific date, with cache hierarchy:
- * 1. Memory cache
- * 2. Database cache
- * 3. ECB API
- * 4. Fallback hardcoded rates
+ * Fetch the latest rates from open.er-api.com (supplementary source).
+ * Returns a { EUR: 1, USD: x, ... } map (X→EUR), or null on failure.
+ * Rates are EUR-based in the response (EUR->X), so we invert to X->EUR.
  */
-async function getRatesForDate(dateStr) {
-  const cacheKey = dateStr || 'latest';
+async function fetchFromErApi() {
+  try {
+    const response = await fetch(ERAR_LATEST_URL, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) {
+      logger.error(`open.er-api returned ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    if (data.result !== 'success' || !data.rates) {
+      logger.error('Unexpected response from open.er-api', { result: data.result });
+      return null;
+    }
+    const rates = { EUR: 1.0 };
+    for (const [currency, eurToX] of Object.entries(data.rates)) {
+      if (currency === 'EUR') continue;
+      if (eurToX > 0) rates[currency] = 1.0 / eurToX;
+    }
+    logger.info(`Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`);
+    return rates;
+  } catch (err) {
+    logger.error('Failed to fetch exchange rates from open.er-api', { error: err.message });
+    return null;
+  }
+}
 
+// ---------------------------------------------------------------------------
+// Public cache helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the current rates, using the cache hierarchy:
+ *   1. In-memory cache (24-hour TTL)
+ *   2. Database (latest rows)
+ *   3. Hardcoded fallback
+ */
+async function getRates() {
   // 1. Memory cache
-  const cached = memoryCache[cacheKey];
-  if (cached && Date.now() - cached.timestamp < CACHE_LIFETIME_MS) {
-    return cached.rates;
+  if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
+    return memoryCache.rates;
   }
 
-  const effectiveDate = dateStr || new Date().toISOString().split('T')[0];
-
-  // 2. Database cache
-  const dbRates = await loadFromDatabase(effectiveDate);
+  // 2. Database
+  const dbRates = await loadFromDatabase();
   if (dbRates) {
-    memoryCache[cacheKey] = { rates: dbRates, timestamp: Date.now() };
+    memoryCache = { rates: dbRates, timestamp: Date.now() };
     return dbRates;
   }
 
-  // 3. ECB API
-  const apiRates = await fetchFromApi(dateStr);
-  if (apiRates) {
-    memoryCache[cacheKey] = { rates: apiRates, timestamp: Date.now() };
-    await saveToDatabase(effectiveDate, apiRates);
-    return apiRates;
-  }
-
-  // 4. Fallback
+  // 3. Fallback
   logger.warn('Using fallback exchange rates — ECB API and database unavailable');
-  memoryCache[cacheKey] = { rates: { ...FALLBACK_RATES }, timestamp: Date.now() };
-  return FALLBACK_RATES;
+  return { ...FALLBACK_RATES };
 }
+
+/**
+ * Clear the in-memory cache to force fresh data on next request.
+ */
+export function clearMemoryCache() {
+  memoryCache = null;
+  logger.debug('Cleared exchange rate memory cache');
+}
+
+/**
+ * Fetch fresh rates from both sources, update the DB, memory cache, and fallback map.
+ * ECB is fetched first and takes priority; open.er-api fills in every currency ECB
+ * doesn't publish.  Called on startup and every 12 hours by the scheduler in main.js.
+ */
+export async function warmCache() {
+  try {
+    // 1. Fetch from both sources concurrently
+    const [ecbRates, erarRates] = await Promise.all([fetchFromEcb(), fetchFromErApi()]);
+
+    if (!ecbRates && !erarRates) {
+      // Both APIs down — warm from DB or fallback so the cache is at least populated
+      const rates = await getRates();
+      logger.warn(`Exchange rate cache warmed from ${rates === FALLBACK_RATES ? 'fallback' : 'database'} (all APIs unavailable)`);
+      return;
+    }
+
+    // 2. Merge: supplementary first, then ECB overwrites any overlaps
+    const mergedRates = {
+      ...(erarRates ?? {}),
+      ...(ecbRates  ?? {}),
+    };
+
+    const ecbCount  = ecbRates  ? Object.keys(ecbRates).length  - 1 : 0;
+    const erarCount = erarRates ? Object.keys(erarRates).length - 1 : 0;
+    const totalCount = Object.keys(mergedRates).length - 1; // exclude EUR
+    logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${erarCount - ecbCount} supplementary = ${totalCount} total`);
+
+    // 3. Update fallback, DB, and memory cache with the merged set
+    Object.assign(FALLBACK_RATES, mergedRates);
+    await saveToDatabase(mergedRates);
+    memoryCache = { rates: mergedRates, timestamp: Date.now() };
+
+  } catch (err) {
+    logger.warn('Failed to warm exchange rate cache', { error: err.message });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Conversion helpers (public API)
+// ---------------------------------------------------------------------------
 
 /**
  * Convert an amount from a given currency to EUR.
  *
  * @param {number} amount - The amount to convert
  * @param {string|null} fromCurrency - ISO 4217 currency code (e.g. "USD")
- * @param {string|null} transactionDate - YYYY-MM-DD date string for historical rates
  * @returns {Promise<number>} Amount in EUR
  */
-export async function convertToEur(amount, fromCurrency, transactionDate = null) {
+export async function convertToEur(amount, fromCurrency) {
   if (!fromCurrency || fromCurrency.toUpperCase().trim() === 'EUR') {
     return amount;
   }
 
   const currency = fromCurrency.toUpperCase().trim();
-  const rates = await getRatesForDate(transactionDate);
+  const rates = await getRates();
 
   if (!(currency in rates)) {
     logger.warn(`Unsupported currency ${currency}, using 1:1 conversion`);
@@ -263,73 +315,31 @@ export async function convertToEur(amount, fromCurrency, transactionDate = null)
  * Convert amounts in a SQL result set to EUR.
  * Designed for use with transaction queries that include `amount` and `currency` columns.
  *
- * @param {Array<{amount: number|string, currency: string|null, date?: string}>} rows
+ * @param {Array<{amount: number|string, currency: string|null}>} rows
  * @returns {Promise<Array<{...row, amount_eur: number}>>}
  */
 export async function convertRowsToEur(rows) {
   if (!rows || rows.length === 0) return [];
 
-  // Batch: collect unique (currency, date) pairs to pre-fetch rates
-  const datesToFetch = new Set();
-  for (const row of rows) {
-    const currency = (row.currency || 'EUR').toUpperCase().trim();
-    if (currency !== 'EUR') {
-      const dateStr = row.date instanceof Date
-        ? row.date.toISOString().split('T')[0]
-        : row.date || null;
-      datesToFetch.add(dateStr || 'latest');
-    }
-  }
+  // Pre-warm once for all rows
+  const rates = await getRates();
 
-  // Pre-warm cache for all needed dates
-  await Promise.all([...datesToFetch].map(d => getRatesForDate(d === 'latest' ? null : d)));
-
-  // Convert
-  const results = [];
-  for (const row of rows) {
+  return rows.map(row => {
     const currency = (row.currency || 'EUR').toUpperCase().trim();
     const amount = typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount;
-    const dateStr = row.date instanceof Date
-      ? row.date.toISOString().split('T')[0]
-      : row.date || null;
 
-    const amountEur = await convertToEur(amount, currency, dateStr);
-    results.push({ ...row, amount_eur: amountEur });
-  }
-
-  return results;
-}
-
-/**
- * Clear the in-memory cache to force fresh data on next request.
- * Useful for manual refresh flows.
- */
-export function clearMemoryCache() {
-  Object.keys(memoryCache).forEach(key => delete memoryCache[key]);
-  logger.debug('Cleared exchange rate memory cache');
-}
-
-/**
- * Warm the cache on startup (non-blocking).
- */
-export async function warmCache() {
-  try {
-    // Always fetch fresh rates from ECB on startup, regardless of DB cache
-    const today = new Date().toISOString().split('T')[0];
-    const apiRates = await fetchFromApi(null);
-    if (apiRates) {
-      memoryCache['latest'] = { rates: apiRates, timestamp: Date.now() };
-      memoryCache[today] = { rates: apiRates, timestamp: Date.now() };
-      await saveToDatabase(today, apiRates);
-      logger.info(`Exchange rate cache warmed with ${Object.keys(apiRates).length} fresh rates from ECB`);
+    let amountEur;
+    if (currency === 'EUR') {
+      amountEur = amount;
+    } else if (currency in rates) {
+      amountEur = amount * rates[currency];
     } else {
-      // Fall back to normal cache hierarchy if API fails
-      await getRatesForDate(null);
-      logger.info('Exchange rate cache warmed from DB/fallback (ECB API unavailable)');
+      logger.warn(`Unsupported currency ${currency}, using 1:1 conversion`);
+      amountEur = amount;
     }
-  } catch (err) {
-    logger.warn('Failed to warm exchange rate cache', { error: err.message });
-  }
+
+    return { ...row, amount_eur: amountEur };
+  });
 }
 
 export { FALLBACK_RATES };

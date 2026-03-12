@@ -12,6 +12,16 @@ import { ASSET_CLASS_GROUPS, ASSET_CLASS_LABELS } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useMemo } from "react";
+import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
+import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+
+const PORTFOLIO_WIDGETS: WidgetDefinition[] = [
+  { id: "summaryCards",    label: "Summary Cards",       defaultVisible: true },
+  { id: "allocation",      label: "Asset Allocation",    defaultVisible: true },
+  { id: "performance",     label: "Performance Summary", defaultVisible: true },
+  { id: "investments",     label: "All Investments",     defaultVisible: true },
+  { id: "news",            label: "News Feed",           defaultVisible: true },
+];
 
 const COLORS = [
   "hsl(217, 91%, 60%)", "hsl(142, 76%, 36%)", "hsl(45, 93%, 47%)",
@@ -23,18 +33,18 @@ function fmt(val: number, currency = 'EUR') {
 }
 
 export default function PortfolioOverviewPage() {
-  const { 
-    summaries, totalPortfolioValue, totalGainLoss, 
+  const {
+    summaries, totalPortfolioValue, totalGainLoss,
     totalRealizedGain, totalUnrealizedGain,
-    deleteInvestment, refreshPrices, isRefreshingPrices 
+    deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
+  const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
 
   const totalInvested = summaries.reduce((s, i) => s + i.totalBuyCost, 0);
   const totalIncome = summaries.reduce((s, i) => s + i.totalIncome, 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
-  // Collect symbols for news feed
   const newsSymbols = useMemo(() =>
     summaries
       .filter(s => s.symbol)
@@ -43,51 +53,56 @@ export default function PortfolioOverviewPage() {
     [summaries]
   );
 
-  // Allocation by group
   const allocationData = Object.entries(ASSET_CLASS_GROUPS).map(([group, classes]) => ({
     name: group,
     value: summaries.filter(s => classes.includes(s.assetClass)).reduce((sum, s) => sum + s.currentValue, 0),
   })).filter(d => d.value > 0);
 
   const cards = [
-    { 
-      title: "Total Value", 
-      value: fmt(totalPortfolioValue), 
-      icon: DollarSign, 
-      desc: `${summaries.length} investments`, 
-      cls: "text-primary" 
+    {
+      title: "Total Value",
+      value: fmt(totalPortfolioValue),
+      icon: DollarSign,
+      desc: `${summaries.length} investments`,
+      cls: "text-primary"
     },
-    { 
-      title: "Total Gain/Loss", 
-      value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`, 
-      icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown, 
-      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% all time`, 
-      cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive" 
+    {
+      title: "Total Gain/Loss",
+      value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`,
+      icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown,
+      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% all time`,
+      cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive"
     },
-    { 
-      title: "Realized Gains", 
-      value: `${totalRealizedGain >= 0 ? '+' : ''}${fmt(totalRealizedGain)}`, 
-      icon: ArrowUpRight, 
-      desc: "From closed positions", 
-      cls: totalRealizedGain >= 0 ? "text-accent" : "text-destructive" 
+    {
+      title: "Realized Gains",
+      value: `${totalRealizedGain >= 0 ? '+' : ''}${fmt(totalRealizedGain)}`,
+      icon: ArrowUpRight,
+      desc: "From closed positions",
+      cls: totalRealizedGain >= 0 ? "text-accent" : "text-destructive"
     },
-    { 
-      title: "Unrealized Gains", 
-      value: `${totalUnrealizedGain >= 0 ? '+' : ''}${fmt(totalUnrealizedGain)}`, 
-      icon: Clock, 
-      desc: "Paper profit/loss", 
-      cls: totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive" 
+    {
+      title: "Unrealized Gains",
+      value: `${totalUnrealizedGain >= 0 ? '+' : ''}${fmt(totalUnrealizedGain)}`,
+      icon: Clock,
+      desc: "Paper profit/loss",
+      cls: totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive"
     },
   ];
 
   const isEmpty = summaries.length === 0;
 
   return (
-    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Portfolio Overview</h1>
         <div className="flex items-center gap-2">
+          <WidgetVisibilityDialog
+            widgets={widgetDefs}
+            isVisible={isVisible}
+            setWidgetVisible={setWidgetVisible}
+            setAllVisible={setAllVisible}
+            resetToDefaults={resetToDefaults}
+          />
           <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
             {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh Prices
@@ -109,23 +124,25 @@ export default function PortfolioOverviewPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {cards.map((c) => (
-              <Card key={c.title}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                  <c.icon className={`h-4 w-4 ${c.cls}`} />
-                </CardHeader>
-                <CardContent>
-                  <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {isVisible('summaryCards') && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {cards.map((c) => (
+                <Card key={c.title}>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
+                    <c.icon className={`h-4 w-4 ${c.cls}`} />
+                  </CardHeader>
+                  <CardContent>
+                    <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {allocationData.length > 0 && (
+            {isVisible('allocation') && allocationData.length > 0 && (
               <Card>
                 <CardHeader><CardTitle>Asset Allocation</CardTitle><CardDescription>By asset class</CardDescription></CardHeader>
                 <CardContent>
@@ -142,85 +159,100 @@ export default function PortfolioOverviewPage() {
               </Card>
             )}
 
-            <Card>
-              <CardHeader><CardTitle>Performance Summary</CardTitle><CardDescription>Gains, income & costs</CardDescription></CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Total Invested', value: totalInvested, cls: 'text-foreground' },
-                    { label: 'Current Value', value: totalPortfolioValue, cls: 'text-foreground' },
-                    { label: 'Realized Gains', value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                    { label: 'Unrealized Gains', value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                    { label: 'Total Income', value: totalIncome, cls: 'text-accent', showSign: true },
-                    { label: 'Total Fees', value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
-                    { label: 'Total Taxes', value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
-                  ].map(({ label, value, cls, showSign }) => (
-                    <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                      <span className="text-sm text-muted-foreground">{label}</span>
-                      <span className={cn("text-sm font-semibold tabular-nums", cls)}>
-                        {showSign && value > 0 ? '+' : ''}{fmt(value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* News + All investments */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+            {isVisible('performance') && (
               <Card>
-                <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Performance Summary</CardTitle><CardDescription>Gains, income & costs</CardDescription></CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    {summaries.map((inv) => {
-                      const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.assetClass);
-                      return (
-                        <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
-                              <span className="font-medium text-sm truncate">{inv.name}</span>
-                              <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
-                            </div>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                              <span>Cost: {fmt(inv.totalBuyCost, inv.currency)}</span>
-                              {isUnitBased && inv.totalUnits > 0 && (
-                                <span>{inv.totalUnits.toFixed(4)} units @ {fmt(inv.avgCostBasis, inv.currency)}/ea</span>
-                              )}
-                              {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
-                            <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "text-accent" : "text-destructive")}>
-                              {inv.totalGain >= 0 ? '+' : ''}{fmt(inv.totalGain, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <InvestmentDetailDialog investment={inv} />
-                            <AddPortfolioTxnDialog investment={inv} />
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              onClick={async () => { const ok = await confirm({ title: "Delete Investment", description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`, confirmLabel: "Delete", variant: "destructive" }); if (ok) deleteInvestment(inv.id); }}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Total Invested', value: totalInvested, cls: 'text-foreground' },
+                      { label: 'Current Value', value: totalPortfolioValue, cls: 'text-foreground' },
+                      { label: 'Realized Gains', value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      { label: 'Unrealized Gains', value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      { label: 'Total Income', value: totalIncome, cls: 'text-accent', showSign: true },
+                      { label: 'Total Fees', value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
+                      { label: 'Total Taxes', value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
+                    ].map(({ label, value, cls, showSign }) => (
+                      <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
+                        <span className="text-sm text-muted-foreground">{label}</span>
+                        <span className={cn("text-sm font-semibold tabular-nums", cls)}>
+                          {showSign && value > 0 ? '+' : ''}{fmt(value)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
-            </div>
-            <div className="lg:col-span-1">
-              <PortfolioNewsFeed symbols={newsSymbols} />
-            </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {isVisible('investments') && (
+              <div className={isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
+                <Card>
+                  <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {summaries.map((inv) => {
+                        const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.assetClass);
+                        return (
+                          <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                {inv.symbol && <span className="font-mono font-bold text-sm">{inv.symbol}</span>}
+                                <span className="font-medium text-sm truncate">{inv.name}</span>
+                                <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                <span>Cost: {fmt(inv.totalBuyCost, inv.currency)}</span>
+                                {isUnitBased && inv.totalUnits > 0 && (
+                                  <span>{inv.totalUnits.toFixed(4)} units @ {fmt(inv.avgCostBasis, inv.currency)}/ea</span>
+                                )}
+                                {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
+                              <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "text-accent" : "text-destructive")}>
+                                {inv.totalGain >= 0 ? '+' : ''}{fmt(inv.totalGain, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <InvestmentDetailDialog investment={inv} />
+                              <AddPortfolioTxnDialog investment={inv} />
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={async () => {
+                                  const ok = await confirm({
+                                    title: "Delete Investment",
+                                    description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`,
+                                    confirmLabel: "Delete",
+                                    variant: "destructive",
+                                  });
+                                  if (ok) deleteInvestment(inv.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+            {isVisible('news') && newsSymbols.length > 0 && (
+              <div className="lg:col-span-1">
+                <PortfolioNewsFeed symbols={newsSymbols} />
+              </div>
+            )}
           </div>
         </>
       )}
+
+      <ConfirmDialog />
     </div>
-    <ConfirmDialog />
-    </>
   );
 }

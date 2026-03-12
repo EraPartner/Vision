@@ -25,8 +25,10 @@ export async function createMaterializedViews() {
   logger.info('Creating materialized views (if not exist)…');
 
   // 1. Monthly income / spending / net per month (last 12 months)
+  //    Drop and recreate if the column list changed (e.g. category_id_key added).
+  await query(`DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE`);
   await query(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS
+    CREATE MATERIALIZED VIEW mv_monthly_summary AS
     SELECT
       date_trunc('month', t.date)::date AS month_start,
       EXTRACT(MONTH FROM t.date)::int AS month,
@@ -37,6 +39,7 @@ export async function createMaterializedViews() {
       SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS total_spending,
       SUM(t.amount) AS net_amount,
       c.id AS category_id,
+      COALESCE(c.id, -1) AS category_id_key,
       COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS category_name
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
@@ -47,10 +50,10 @@ export async function createMaterializedViews() {
     ORDER BY month_start
   `);
 
-  // Unique index for CONCURRENT refresh
+  // Unique index on plain columns — no expressions, so CONCURRENT refresh works
   await query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx
-    ON mv_monthly_summary (month_start, currency, COALESCE(category_id, -1))
+    CREATE UNIQUE INDEX mv_monthly_summary_idx
+    ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
 
   // 2. Category totals (all-time)
@@ -123,7 +126,40 @@ export async function createMaterializedViews() {
   logger.info('Materialized views ready');
 }
 
-/** Track whether a refresh is already in flight to avoid pile-ups */
+/**
+ * Ensure all unique indexes exist (idempotent).
+ * Runs at startup separately from createMaterializedViews so that DBs which
+ * were created before the indexes were added get them retroactively.
+ * Note: mv_monthly_summary is always dropped+recreated above so its index
+ * is always fresh — only the remaining views need this safety net.
+ */
+export async function ensureMaterializedViewIndexes() {
+  const indexes = [
+    {
+      name: 'mv_category_totals_idx',
+      view: 'mv_category_totals',
+      columns: `(category_id, currency)`,
+    },
+    {
+      name: 'mv_cashflow_daily_idx',
+      view: 'mv_cashflow_daily',
+      columns: `(date, currency)`,
+    },
+    {
+      name: 'mv_bank_balances_idx',
+      view: 'mv_bank_balances',
+      columns: `(bank_account, currency)`,
+    },
+  ];
+
+  for (const { name, view, columns } of indexes) {
+    try {
+      await query(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`);
+    } catch (err) {
+      logger.warn(`Could not create index ${name} on ${view}`, { error: err.message });
+    }
+  }
+}
 let refreshInFlight = false;
 let refreshQueued = false;
 
@@ -146,8 +182,13 @@ export async function refreshMaterializedViews() {
     await Promise.all(
       MATERIALIZED_VIEWS.map(view =>
         query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch(err => {
-          // Fall back to non-concurrent if view was never populated
-          if (err.message?.includes('has not been populated')) {
+          // Fall back to non-concurrent if the view has no unique index or was never populated
+          if (
+            err.message?.includes('has not been populated') ||
+            err.message?.includes('cannot refresh materialized view') ||
+            err.message?.includes('concurrently')
+          ) {
+            logger.warn(`Falling back to non-concurrent refresh for ${view}`);
             return query(`REFRESH MATERIALIZED VIEW ${view}`);
           }
           logger.warn(`Failed to refresh ${view}`, { error: err.message });

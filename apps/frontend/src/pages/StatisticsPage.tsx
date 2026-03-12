@@ -16,6 +16,22 @@ import { TrendingUp, TrendingDown, DollarSign, BarChart3, Import } from "lucide-
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
+import { CustomCategoryChart } from "@/components/statistics/CustomCategoryChart";
+import { useSavedCharts } from "@/hooks/useSavedCharts";
+import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
+import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+
+const STATISTICS_WIDGETS: WidgetDefinition[] = [
+  { id: "summaryCards",      label: "Summary Cards",          defaultVisible: true },
+  { id: "monthly",           label: "Monthly Income vs Spending", defaultVisible: true },
+  { id: "netTrend",          label: "Net Balance Trend",      defaultVisible: true },
+  { id: "categoryPie",       label: "Spending by Category",   defaultVisible: true },
+  { id: "categoryTrend",     label: "Top Category Trends",    defaultVisible: true },
+  { id: "pivotTable",        label: "Category Pivot Table",   defaultVisible: true },
+  { id: "topRecipients",     label: "Top Recipients",         defaultVisible: true },
+  { id: "yearlyComparison",  label: "Year-over-Year Chart",   defaultVisible: true },
+  { id: "yearlySummary",     label: "Yearly Summary Table",   defaultVisible: true },
+];
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -503,12 +519,51 @@ function ChartCard({
   );
 }
 
+// ─── Saved Charts Section ─────────────────────────────────
+function SavedChartsSection({
+  data,
+  getGraphData,
+  graphExclusions,
+  toggleGraphExclusion,
+  exclusionsApply,
+}: {
+  data: StatisticsData;
+  getGraphData: (key: string) => StatisticsData | null;
+  graphExclusions: Record<string, boolean>;
+  toggleGraphExclusion: (key: string) => void;
+  exclusionsApply: boolean;
+}) {
+  const { data: savedCharts, isLoading } = useSavedCharts();
+  if (isLoading || !savedCharts || savedCharts.length === 0) return null;
+
+  return (
+    <>
+      {savedCharts.map((chart) => {
+        const graphKey = `savedChart_${chart.id}`;
+        return (
+          <CustomCategoryChart
+            key={chart.id}
+            data={getGraphData(graphKey) || data}
+            graphKey={graphKey}
+            isFiltered={graphExclusions[graphKey] ?? true}
+            onToggle={toggleGraphExclusion}
+            exclusionsApply={exclusionsApply}
+            savedChart={chart}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function StatisticsPage() {
   const {
     data, isLoading, isError, error,
     getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply,
   } = useStatistics();
+
+  const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('statistics', STATISTICS_WIDGETS);
 
   if (isLoading) {
     return (
@@ -540,9 +595,18 @@ export default function StatisticsPage() {
   if (!data || data.monthlyData.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
-          <p className="text-muted-foreground mt-1">Visualise your income, spending and net balance over time</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+            <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+          </div>
+          <WidgetVisibilityDialog
+              widgets={widgetDefs}
+              isVisible={isVisible}
+              setWidgetVisible={setWidgetVisible}
+              setAllVisible={setAllVisible}
+              resetToDefaults={resetToDefaults}
+          />
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -564,12 +628,21 @@ export default function StatisticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
-        <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+          <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+        </div>
+        <WidgetVisibilityDialog
+          widgets={widgetDefs}
+          isVisible={isVisible}
+          setWidgetVisible={setWidgetVisible}
+          setAllVisible={setAllVisible}
+          resetToDefaults={resetToDefaults}
+        />
       </div>
 
-      <SummaryCards data={data} />
+      {isVisible('summaryCards') && <SummaryCards data={data} />}
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
@@ -580,78 +653,91 @@ export default function StatisticsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <ChartCard title="Monthly Income vs Spending" description="Track your cash flow over time" graphKey="monthly" {...chartCardProps}>
-            {(d) => <MonthlyChart data={d} />}
-          </ChartCard>
-          <ChartCard title="Net Balance Trend" description="Monthly net (income − spending)" graphKey="netTrend" {...chartCardProps}>
-            {(d) => <NetTrendChart data={d} />}
-          </ChartCard>
+          {isVisible('monthly') && (
+              <ChartCard title="Monthly Income vs Spending" description="Track your cash flow over time" graphKey="monthly" {...chartCardProps}>
+                {(d) => <MonthlyChart data={d} />}
+              </ChartCard>
+          )}
+          {isVisible('netTrend') && (
+              <ChartCard title="Net Balance Trend" description="Monthly net (income − spending)" graphKey="netTrend" {...chartCardProps}>
+                {(d) => <NetTrendChart data={d} />}
+              </ChartCard>
+          )}
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartCard title="Spending by Category" description="Overall distribution across categories" graphKey="categoryPie" {...chartCardProps}>
-              {(d) => <CategoryPieChart data={d} />}
-            </ChartCard>
-            <ChartCard title="Top Category Trends" description="Monthly spending for top 5 categories" graphKey="categoryTrend" {...chartCardProps}>
-              {(d) => <CategoryTrendChart data={d} />}
-            </ChartCard>
+            {isVisible('categoryPie') && (
+                <ChartCard title="Spending by Category" description="Overall distribution across categories" graphKey="categoryPie" {...chartCardProps}>
+                  {(d) => <CategoryPieChart data={d} />}
+                </ChartCard>
+            )}
+            {isVisible('categoryTrend') && (
+                <ChartCard title="Top Category Trends" description="Monthly spending for top 5 categories" graphKey="categoryTrend" {...chartCardProps}>
+                  {(d) => <CategoryTrendChart data={d} />}
+                </ChartCard>
+            )}
           </div>
-          <CategoryPivotTable
-            data={getGraphData("pivotTable") || data}
-            graphKey="pivotTable"
-            isFiltered={graphExclusions["pivotTable"] ?? true}
-            onToggle={toggleGraphExclusion}
-            exclusionsApply={exclusionsApply}
-          />
+          {isVisible('pivotTable') && (
+              <CategoryPivotTable
+                  data={getGraphData("pivotTable") || data}
+                  graphKey="pivotTable"
+                  isFiltered={graphExclusions["pivotTable"] ?? true}
+                  onToggle={toggleGraphExclusion}
+                  exclusionsApply={exclusionsApply}
+              />
+          )}
         </TabsContent>
-
         <TabsContent value="recipients" className="space-y-6">
-          <RecipientInsightsTab
-            statisticsTopRecipientsChart={
-              <ChartCard title="Top Recipients by Spending" description="Where your money goes most (from statistics)" graphKey="topRecipients" {...chartCardProps}>
-                {(d) => <TopRecipientsChart data={d} />}
-              </ChartCard>
-            }
-          />
+          {isVisible('topRecipients') && (
+              <RecipientInsightsTab
+                  statisticsTopRecipientsChart={
+                    <ChartCard title="Top Recipients by Spending" description="Where your money goes most (from statistics)" graphKey="topRecipients" {...chartCardProps}>
+                      {(d) => <TopRecipientsChart data={d} />}
+                    </ChartCard>
+                  }
+              />
+          )}
         </TabsContent>
-
         <TabsContent value="yearly" className="space-y-6">
-          <ChartCard title="Year-over-Year Comparison" description="Annual totals compared" graphKey="yearlyComparison" {...chartCardProps}>
-            {(d) => <YearlyComparisonChart data={d} />}
-          </ChartCard>
-          {/* Yearly summary table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Yearly Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Year</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Income</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Spending</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Net</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground">Transactions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.yearlyComparison.map((y) => (
-                    <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">
-                      <td className="py-2 px-3 font-medium">{y.year}</td>
-                      <td className="text-right py-2 px-3 text-accent tabular-nums">{formatCurrency(y.totalIncome)}</td>
-                      <td className="text-right py-2 px-3 text-destructive tabular-nums">{formatCurrency(y.totalSpending)}</td>
-                      <td className={`text-right py-2 px-3 font-bold tabular-nums ${y.net >= 0 ? "text-accent" : "text-destructive"}`}>
-                        {formatCurrency(y.net)}
-                      </td>
-                      <td className="text-right py-2 px-3 tabular-nums">{y.transactionCount.toLocaleString()}</td>
+          {isVisible('yearlyComparison') && (
+              <ChartCard title="Year-over-Year Comparison" description="Annual totals compared" graphKey="yearlyComparison" {...chartCardProps}>
+                {(d) => <YearlyComparisonChart data={d} />}
+            </ChartCard>
+          )}
+          {isVisible('yearlySummary') && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Yearly Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">Year</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Income</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Spending</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Net</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Transactions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                    {data.yearlyComparison.map((y) => (
+                        <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">
+                          <td className="py-2 px-3 font-medium">{y.year}</td>
+                          <td className="text-right py-2 px-3 text-accent tabular-nums">{formatCurrency(y.totalIncome)}</td>
+                          <td className="text-right py-2 px-3 text-destructive tabular-nums">{formatCurrency(y.totalSpending)}</td>
+                          <td className={`text-right py-2 px-3 font-bold tabular-nums ${y.net >= 0 ? "text-accent" : "text-destructive"}`}>
+                            {formatCurrency(y.net)}
+                          </td>
+                          <td className="text-right py-2 px-3 tabular-nums">{y.transactionCount.toLocaleString()}</td>
+                        </tr>
+                    ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

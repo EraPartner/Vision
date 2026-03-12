@@ -822,6 +822,30 @@ class ApiClient {
         return queryParams.toString();
     }
 
+    // ==================== Saved Charts Methods ====================
+
+    async getSavedCharts(): Promise<SavedChart[]> {
+        return this.request('/api/saved-charts');
+    }
+
+    async createSavedChart(payload: SavedChartCreate): Promise<SavedChart> {
+        return this.request('/api/saved-charts', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
+
+    async updateSavedChart(id: number, payload: Partial<SavedChartCreate>): Promise<SavedChart> {
+        return this.request(`/api/saved-charts/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        });
+    }
+
+    async deleteSavedChart(id: number): Promise<void> {
+        return this.request(`/api/saved-charts/${id}`, { method: 'DELETE' });
+    }
+
     /**
      * Raw fetch with timeout and AbortController support.
      * Does NOT parse response – caller handles that.
@@ -931,6 +955,21 @@ class ApiClient {
 
         throw lastError || new Error('Request failed');
     }
+}
+
+export interface SavedChart {
+    id: number;
+    name: string;
+    chart_type: 'line' | 'bar' | 'area';
+    category_ids: number[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SavedChartCreate {
+    name: string;
+    chartType: 'line' | 'bar' | 'area';
+    categoryIds: number[];
 }
 
 export interface MarketNewsArticle {

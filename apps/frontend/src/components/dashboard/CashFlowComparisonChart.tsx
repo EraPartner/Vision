@@ -25,7 +25,8 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
   const diff = lastActual?.current !== null && lastActual?.current !== undefined && avgAtCurrentDay !== null
     ? lastActual.current - (avgAtCurrentDay ?? 0)
     : null;
-  const isAboveAverage = diff !== null ? diff > 0 : null;
+  // Higher net cash flow = better (spent less / earned more than average)
+  const isBetterThanAverage = diff !== null ? diff > 0 : null;
 
   return (
     <div>
@@ -85,18 +86,20 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
         </LineChart>
       </ResponsiveContainer>
 
-      {isAboveAverage !== null && diff !== null && lastActual && (
-        <div className={`mt-4 flex items-center gap-2 p-3 rounded-lg border ${isAboveAverage
+      {isBetterThanAverage !== null && diff !== null && lastActual && (
+        <div className={`mt-4 flex items-center gap-2 p-3 rounded-lg border ${isBetterThanAverage
           ? 'bg-accent/10 border-accent/30'
           : 'bg-destructive/10 border-destructive/30'
           }`}>
-          <div className={`w-2.5 h-2.5 rounded-full ${isAboveAverage ? 'bg-accent' : 'bg-destructive'}`} />
+          <div className={`w-2.5 h-2.5 rounded-full ${isBetterThanAverage ? 'bg-accent' : 'bg-destructive'}`} />
           <p className="text-sm font-medium text-foreground">
-            {isAboveAverage ? 'Ahead of' : 'Behind'} 24-month daily average by{' '}
+            {isBetterThanAverage
+              ? `Saving more than average — net is `
+              : `Spending more than average — net is `}
             <span className="font-bold">
               {formatCurrency(Math.abs(diff), 'EUR')}
             </span>
-            {' '}as of day {currentDay}
+            {isBetterThanAverage ? ' better' : ' worse'}{' '}than the 24-month average as of day {currentDay}
           </p>
         </div>
       )}

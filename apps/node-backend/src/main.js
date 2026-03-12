@@ -30,6 +30,7 @@ import settingsRouter from './routes/settings.js';
 import marketLookupRouter from './routes/marketLookup.js';
 import watchlistRouter from './routes/watchlist.js';
 import splitsRouter from './routes/splits.js';
+import savedChartsRouter from './routes/savedCharts.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
@@ -117,6 +118,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/market', marketLookupRouter);
 app.use('/api/watchlist', watchlistRouter);
 app.use('/api/splits', splitsRouter);
+  app.use('/api/saved-charts', savedChartsRouter);
 
 logger.info('All route modules registered successfully');
 

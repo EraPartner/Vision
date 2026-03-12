@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Database, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,25 +10,17 @@ import { toast } from "sonner";
 interface ExchangeRate {
     currency: string;
     rate_to_eur: number;
-    is_latest: boolean;
+    rate_date: string;
     fetched_at: string;
-}
-
-interface RateDate {
-    date: string;
-    currency_count: number;
-    rates: ExchangeRate[];
 }
 
 interface ExchangeRatesData {
     total_rates: number;
-    dates_stored: number;
-    dates: RateDate[];
+    rates: ExchangeRate[];
     fallback_rates: Record<string, number>;
 }
 
 export default function ExchangeRatesPage() {
-    const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const queryClient = useQueryClient();
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
@@ -70,20 +60,56 @@ export default function ExchangeRatesPage() {
         );
     }
 
-    const fallbackEntries = Object.entries(data?.fallback_rates || {})
+    const liveRates = data?.rates ?? [];
+    const rateDate = liveRates[0]?.rate_date ?? null;
+    const fetchedAt = liveRates[0]?.fetched_at ?? null;
+
+    const fallbackEntries = Object.entries(data?.fallback_rates ?? {})
         .filter(([k]) => k !== "EUR")
         .sort(([a], [b]) => a.localeCompare(b));
 
-    const latestDate = data?.dates?.find(d => d.rates.some(r => r.is_latest));
-    const activeDate = selectedDate || latestDate?.date || data?.dates?.[0]?.date;
-    const activeDateData = data?.dates?.find(d => d.date === activeDate);
+    const RatesTable = ({
+        rows,
+        showFallbackNote,
+    }: {
+        rows: { currency: string; rate: number }[];
+        showFallbackNote?: boolean;
+    }) => (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="border-b text-muted-foreground">
+                        <th className="text-left py-2 px-3 font-medium">Currency</th>
+                        <th className="text-right py-2 px-3 font-medium">1 unit → EUR</th>
+                        <th className="text-right py-2 px-3 font-medium">1 EUR →</th>
+                        <th className="text-right py-2 px-3 font-medium">100 units in EUR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map(({ currency, rate }) => (
+                        <tr key={currency} className="border-b border-border/50 hover:bg-muted/50">
+                            <td className="py-2 px-3 font-mono font-medium">{currency}</td>
+                            <td className="py-2 px-3 text-right font-mono">{rate.toFixed(6)}</td>
+                            <td className="py-2 px-3 text-right font-mono">{(1 / rate).toFixed(4)}</td>
+                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, "EUR")}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            {showFallbackNote && (
+                <p className="text-xs text-muted-foreground mt-3 px-3">
+                    Fallback rates are updated in-memory whenever a successful ECB fetch occurs and match the live rates above.
+                </p>
+            )}
+        </div>
+    );
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">Exchange Rates</h1>
-                    <p className="text-muted-foreground mt-1">ECB rates cached in database &amp; fallback values</p>
+                    <p className="text-muted-foreground mt-1">Latest ECB rates — fallback updated automatically on each successful fetch</p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
                     <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -101,7 +127,7 @@ export default function ExchangeRatesPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold">{data?.total_rates ?? 0}</p>
-                        <p className="text-xs text-muted-foreground">{data?.dates_stored ?? 0} date(s) cached</p>
+                        <p className="text-xs text-muted-foreground">Latest values only — no history</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -112,7 +138,7 @@ export default function ExchangeRatesPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold">{fallbackEntries.length}</p>
-                        <p className="text-xs text-muted-foreground">Hardcoded backup rates</p>
+                        <p className="text-xs text-muted-foreground">Mirror live rates after each fetch</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -122,139 +148,63 @@ export default function ExchangeRatesPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold">{latestDate?.date ?? "—"}</p>
+                        <p className="text-2xl font-bold">{rateDate ?? "—"}</p>
                         <p className="text-xs text-muted-foreground">
-                            {latestDate ? `${latestDate.currency_count} currencies` : "No data fetched yet"}
+                            {fetchedAt
+                                ? `Fetched ${new Date(fetchedAt).toLocaleString()}`
+                                : "No data fetched yet"}
                         </p>
                     </CardContent>
                 </Card>
             </div>
 
-            <Tabs defaultValue="database" className="space-y-4">
+            <Tabs defaultValue="live" className="space-y-4">
                 <TabsList>
-                    <TabsTrigger value="database">
-                        <Database className="h-4 w-4 mr-1.5" /> Database Rates
+                    <TabsTrigger value="live">
+                        <Database className="h-4 w-4 mr-1.5" /> Live Rates
                     </TabsTrigger>
                     <TabsTrigger value="fallback">
                         <Globe className="h-4 w-4 mr-1.5" /> Fallback Rates
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="database" className="space-y-4">
-                    {(data?.dates?.length ?? 0) === 0 ? (
+                <TabsContent value="live">
+                    {liveRates.length === 0 ? (
                         <Card>
                             <CardContent className="py-8 text-center text-muted-foreground">
-                                No exchange rates stored in database yet. They will be fetched automatically when currency conversion is needed.
+                                No exchange rates stored yet. They will be fetched automatically from ECB on startup.
                             </CardContent>
                         </Card>
                     ) : (
-                        <>
-                            {/* Date selector */}
-                            <div className="flex flex-wrap gap-2">
-                                {data?.dates?.map(d => (
-                                    <Badge
-                                        key={d.date}
-                                        variant={d.date === activeDate ? "default" : "outline"}
-                                        className="cursor-pointer"
-                                        onClick={() => setSelectedDate(d.date)}
-                                    >
-                                        {d.date}
-                                        {d.rates.some(r => r.is_latest) && (
-                                            <span className="ml-1 text-[10px] opacity-70">latest</span>
-                                        )}
-                                    </Badge>
-                                ))}
-                            </div>
-
-                            {/* Rates table for selected date */}
-                            {activeDateData && (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">Rates for {activeDate}</CardTitle>
-                                        <CardDescription>
-                                            {activeDateData.currency_count} currencies •
-                                            Fetched {activeDateData.rates[0]?.fetched_at
-                                                ? new Date(activeDateData.rates[0].fetched_at).toLocaleString()
-                                                : "—"}
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b text-muted-foreground">
-                                                        <th className="text-left py-2 px-3 font-medium">Currency</th>
-                                                        <th className="text-right py-2 px-3 font-medium">1 unit → EUR</th>
-                                                        <th className="text-right py-2 px-3 font-medium">1 EUR →</th>
-                                                        <th className="text-right py-2 px-3 font-medium">100 units in EUR</th>
-                                                        <th className="text-center py-2 px-3 font-medium">Latest</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {activeDateData.rates.map(r => (
-                                                        <tr key={r.currency} className="border-b border-border/50 hover:bg-muted/50">
-                                                            <td className="py-2 px-3 font-mono font-medium">{r.currency}</td>
-                                                            <td className="py-2 px-3 text-right font-mono">
-                                                                {r.rate_to_eur.toFixed(6)}
-                                                            </td>
-                                                            <td className="py-2 px-3 text-right font-mono">
-                                                                {(1 / r.rate_to_eur).toFixed(4)}
-                                                            </td>
-                                                            <td className="py-2 px-3 text-right">
-                                                                {formatCurrency(100 * r.rate_to_eur, "EUR")}
-                                                            </td>
-                                                            <td className="py-2 px-3 text-center">
-                                                                {r.is_latest && <Badge variant="secondary" className="text-[10px]">✓</Badge>}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Latest ECB Rates</CardTitle>
+                                <CardDescription>
+                                    {liveRates.length} currencies • Rate date: {rateDate} •{" "}
+                                    {fetchedAt ? `Fetched ${new Date(fetchedAt).toLocaleString()}` : ""}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <RatesTable rows={liveRates.map(r => ({ currency: r.currency, rate: r.rate_to_eur }))} />
+                            </CardContent>
+                        </Card>
                     )}
                 </TabsContent>
 
                 <TabsContent value="fallback">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Hardcoded Fallback Rates</CardTitle>
+                            <CardTitle className="text-lg">Fallback Rates</CardTitle>
                             <CardDescription>
-                                Used when ECB API and database cache are both unavailable
+                                Used only when the ECB API and database are both unavailable.
+                                Updated in-memory to match live rates after every successful ECB fetch.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b text-muted-foreground">
-                                            <th className="text-left py-2 px-3 font-medium">Currency</th>
-                                            <th className="text-right py-2 px-3 font-medium">1 unit → EUR</th>
-                                            <th className="text-right py-2 px-3 font-medium">1 EUR →</th>
-                                            <th className="text-right py-2 px-3 font-medium">100 units in EUR</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {fallbackEntries.map(([currency, rate]) => (
-                                            <tr key={currency} className="border-b border-border/50 hover:bg-muted/50">
-                                                <td className="py-2 px-3 font-mono font-medium">{currency}</td>
-                                                <td className="py-2 px-3 text-right font-mono">
-                                                    {(rate as number).toFixed(6)}
-                                                </td>
-                                                <td className="py-2 px-3 text-right font-mono">
-                                                    {(1 / (rate as number)).toFixed(4)}
-                                                </td>
-                                                <td className="py-2 px-3 text-right">
-                                                    {formatCurrency(100 * (rate as number), "EUR")}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <RatesTable
+                                rows={fallbackEntries.map(([currency, rate]) => ({ currency, rate: rate as number }))}
+                                showFallbackNote
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>

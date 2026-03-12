@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
@@ -18,10 +18,22 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrency } from "@/utils/currency";
+import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
+import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
 type GraphExclusions = Record<string, boolean>;
 
+const DASHBOARD_WIDGETS: WidgetDefinition[] = [
+    { id: 'statCards', label: 'Summary Cards', description: 'Transaction count, spending, income, net balance' },
+    { id: 'bankBalances', label: 'Bank Balances', description: 'Account balances across banks' },
+    { id: 'monthlyTrends', label: '6-Month Trends', description: 'Income vs spending over last 6 months' },
+    { id: 'categoryPie', label: 'Category Distribution', description: 'Transaction breakdown by category' },
+    { id: 'cashflowComparison', label: 'Cash Flow Comparison', description: 'Current month vs average cash flow' },
+    { id: 'recentTransactions', label: 'Recent Transactions', description: 'Last 5 transactions table' },
+];
+
 export default function DashboardPage() {
+    const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
     const { settings } = useSettings();
 
     // Per-graph exclusion override state
@@ -409,12 +421,22 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8 animate-in">
             {/* Page header */}
-            <div>
-                <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-                <p className="text-muted-foreground mt-1">Overview of your financial activity</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
+                    <p className="text-muted-foreground mt-1">Overview of your financial activity</p>
+                </div>
+                <WidgetVisibilityDialog
+                    widgets={widgetDefs}
+                    isVisible={isVisible}
+                    setWidgetVisible={setWidgetVisible}
+                    setAllVisible={setAllVisible}
+                    resetToDefaults={resetToDefaults}
+                />
             </div>
 
             {/* Stats */}
+            {isVisible('statCards') && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
                 <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt} />
                 <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="expense"
@@ -425,17 +447,18 @@ export default function DashboardPage() {
                     trend={netBalance >= 0 ? "income" : "expense"}
                     subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"} />
             </div>
+            )}
 
             {/* Bank Account Balances */}
-            <BankBalancesWidget />
+            {isVisible('bankBalances') && <BankBalancesWidget />}
 
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
-                {monthlyData.length > 0 && (
+                {isVisible('monthlyTrends') && monthlyData.length > 0 && (
                     <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center shadow-sm text-blue-600 dark:text-blue-400">
+                                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
                                     <TrendingDown className="h-6 w-6" />
                                 </div>
                                 <div>
@@ -455,6 +478,7 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
                 )}
+                {isVisible('categoryPie') && (
                 <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
@@ -472,10 +496,11 @@ export default function DashboardPage() {
                         <CategoryPieChart data={categoryData} embedded />
                     </CardContent>
                 </Card>
+                )}
             </div>
 
             {/* Cash Flow Comparison */}
-            {effectiveCashflowData && (
+            {isVisible('cashflowComparison') && effectiveCashflowData && (
                 <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -510,6 +535,7 @@ export default function DashboardPage() {
             )}
 
             {/* Recent transactions */}
+            {isVisible('recentTransactions') && (
             <DataTable
                 title="Recent Transactions"
                 subtitle="Last 5 transactions"
@@ -525,6 +551,7 @@ export default function DashboardPage() {
                     />
                 }
             />
+            )}
         </div>
     );
 }

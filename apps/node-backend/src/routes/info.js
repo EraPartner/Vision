@@ -211,42 +211,27 @@ router.get(
   async (req, res) => {
   try {
     const { query: dbQuery } = await import('../database/connection.js');
-
-    // Get all stored exchange rates, grouped by rate_date
-    const result = await dbQuery(`
-      SELECT currency_code, rate_to_eur, rate_date, is_latest, fetched_at
-      FROM exchange_rates
-      ORDER BY rate_date DESC, currency_code ASC
-    `);
-
-    // Also get the fallback rates for comparison
     const { FALLBACK_RATES, warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
 
-    // Group by date
-    const byDate = {};
-    for (const row of result.rows) {
-      const dateKey = row.rate_date instanceof Date ? row.rate_date.toISOString().split('T')[0] : String(row.rate_date);
-      if (!byDate[dateKey]) byDate[dateKey] = [];
-      byDate[dateKey].push({
-        currency: row.currency_code,
-        rate_to_eur: parseFloat(row.rate_to_eur),
-        is_latest: row.is_latest,
-        fetched_at: row.fetched_at,
-      });
-    }
+    // Fetch the latest stored rates (one row per currency)
+    const result = await dbQuery(`
+      SELECT currency_code, rate_to_eur, rate_date, fetched_at
+      FROM exchange_rates
+      WHERE is_latest = true
+      ORDER BY currency_code ASC
+    `);
 
-    const dates = Object.entries(byDate).map(([date, rates]) => ({
-      date,
-      currency_count: rates.length,
-      rates,
+    const rates = result.rows.map(row => ({
+      currency: row.currency_code,
+      rate_to_eur: parseFloat(row.rate_to_eur),
+      rate_date: row.rate_date instanceof Date ? row.rate_date.toISOString().split('T')[0] : String(row.rate_date),
+      fetched_at: row.fetched_at,
     }));
 
-    // If the most recent stored date is not today, trigger a background refresh so
-    // the next page load will show current data (rates only update on server startup
-    // and on the 12-hour scheduled refresh, so a stale-check here catches gaps).
+    // If the stored rates are from a previous day, kick off a background refresh
     const today = new Date().toISOString().split('T')[0];
-    const mostRecentDate = dates.length > 0 ? dates[0].date : null;
-    if (!mostRecentDate || mostRecentDate < today) {
+    const storedDate = rates.length > 0 ? rates[0].rate_date : null;
+    if (!storedDate || storedDate < today) {
       clearMemoryCache();
       warmCache().catch((err) =>
         logger.warn('Background exchange rate refresh failed', { error: err.message })
@@ -254,9 +239,8 @@ router.get(
     }
 
     res.json({
-      total_rates: result.rows.length,
-      dates_stored: dates.length,
-      dates,
+      total_rates: rates.length,
+      rates,
       fallback_rates: FALLBACK_RATES || {},
     });
   } catch (err) {
