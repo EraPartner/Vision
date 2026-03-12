@@ -28,3 +28,47 @@ contextBridge.exposeInMainWorld('electronUpdater', {
    */
   checkRelease: () => ipcRenderer.invoke('update:check-github'),
 });
+
+/**
+ * Expose backup controls to the renderer via contextBridge.
+ */
+contextBridge.exposeInMainWorld('electronBackup', {
+  /**
+   * Run a pg_dump backup immediately, writing a .sql file to destDir.
+   * @param {string} destDir  Absolute path to the destination directory.
+   * @returns {Promise<{ success: boolean, file?: string, error?: string }>}
+   */
+  runBackup: (destDir) => ipcRenderer.invoke('backup:run', destDir),
+
+  /**
+   * Open the system folder-picker dialog to choose a backup directory.
+   * @returns {Promise<string | null>}  Chosen path or null if cancelled.
+   */
+  selectDir: () => ipcRenderer.invoke('backup:select-dir'),
+
+  /**
+   * Open the system file-picker dialog to choose a .sql backup file to restore.
+   * @returns {Promise<string | null>}  Chosen file path or null if cancelled.
+   */
+  selectFile: () => ipcRenderer.invoke('backup:select-file'),
+
+  /**
+   * Restore the database from a plain-SQL backup file.
+   * Stops the app container, drops & recreates the DB, runs psql, then restarts.
+   * @param {string} sqlFilePath  Absolute path to the .sql file on the host.
+   * @returns {Promise<{ success: boolean, file?: string, error?: string }>}
+   */
+  restoreBackup: (sqlFilePath) => ipcRenderer.invoke('backup:restore', sqlFilePath),
+
+  /**
+   * Persist backup settings (backupDir, backupOnQuit) to Electron settings.json.
+   * @param {{ backupDir: string, backupOnQuit: boolean }} settings
+   */
+  saveSettings: (settings) => ipcRenderer.invoke('backup:save-settings', settings),
+
+  /**
+   * Read backup settings from Electron settings.json.
+   * @returns {Promise<{ backupDir: string, backupOnQuit: boolean }>}
+   */
+  loadSettings: () => ipcRenderer.invoke('backup:load-settings'),
+});

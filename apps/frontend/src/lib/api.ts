@@ -518,6 +518,72 @@ class ApiClient {
         return !!(window as Window & { electronUpdater?: unknown }).electronUpdater;
     }
 
+    // ==================== Backup Methods (Electron only) ====================
+
+    /**
+     * Run a pg_dump backup immediately, writing a .sql file to the configured directory.
+     * Only available inside the Electron desktop app.
+     * Returns null when called from a browser context.
+     */
+    async runBackup(destDir: string): Promise<{ success: boolean; file?: string; error?: string } | null> {
+        const backup = (window as Window & { electronBackup?: { runBackup: (d: string) => Promise<{ success: boolean; file?: string; error?: string }> } }).electronBackup;
+        if (!backup) return null;
+        return backup.runBackup(destDir);
+    }
+
+    /**
+     * Open the system file-picker to choose a .sql backup file to restore.
+     * Only available inside the Electron desktop app.
+     */
+    async selectBackupFile(): Promise<string | null> {
+        const backup = (window as Window & { electronBackup?: { selectFile: () => Promise<string | null> } }).electronBackup;
+        if (!backup) return null;
+        return backup.selectFile();
+    }
+
+    /**
+     * Restore the database from a plain-SQL backup file.
+     * Stops the app container, drops & recreates the DB, restores with psql,
+     * then restarts the app container. The page will become temporarily
+     * unreachable while the restore runs.
+     * Only available inside the Electron desktop app.
+     */
+    async restoreBackup(sqlFilePath: string): Promise<{ success: boolean; file?: string; error?: string } | null> {
+        const backup = (window as Window & { electronBackup?: { restoreBackup: (f: string) => Promise<{ success: boolean; file?: string; error?: string }> } }).electronBackup;
+        if (!backup) return null;
+        return backup.restoreBackup(sqlFilePath);
+    }
+
+    /**
+     * Open the system folder-picker to choose a backup directory.
+     * Only available inside the Electron desktop app.
+     */
+    async selectBackupDir(): Promise<string | null> {
+        const backup = (window as Window & { electronBackup?: { selectDir: () => Promise<string | null> } }).electronBackup;
+        if (!backup) return null;
+        return backup.selectDir();
+    }
+
+    /**
+     * Persist backup settings to Electron settings.json (survives container restart).
+     * Only available inside the Electron desktop app.
+     */
+    async saveBackupSettings(settings: { backupDir: string; backupOnQuit: boolean }): Promise<void> {
+        const backup = (window as Window & { electronBackup?: { saveSettings: (s: { backupDir: string; backupOnQuit: boolean }) => Promise<void> } }).electronBackup;
+        if (!backup) return;
+        await backup.saveSettings(settings);
+    }
+
+    /**
+     * Load backup settings from Electron settings.json.
+     * Only available inside the Electron desktop app.
+     */
+    async loadBackupSettings(): Promise<{ backupDir: string; backupOnQuit: boolean } | null> {
+        const backup = (window as Window & { electronBackup?: { loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }> } }).electronBackup;
+        if (!backup) return null;
+        return backup.loadSettings();
+    }
+
     // ==================== Info/Statistics Methods ====================
 
     async getStatistics(): Promise<{

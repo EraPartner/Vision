@@ -30,5 +30,11 @@
   "app.imageUpdated": "Vision image updated and restarted.",
   "app.running": "Vision is running."
   ,"update.downloading": "Downloading Vision update…",
-  "app.stopped": "Vision has been stopped."
+  "app.stopped": "Vision has been stopped.",
+
+  "backup.done": "Database backup saved.",
+  "backup.failed": "Database backup failed — check the backup directory.",
+
+  "restore.done": "Database restore complete. Reloading Vision…",
+  "restore.failed": "Database restore failed — your previous data is unchanged."
 }

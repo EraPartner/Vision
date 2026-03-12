@@ -13,6 +13,16 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,8 +35,9 @@ import {
 import {
     Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Database, Download, ExternalLink, FolderOpen, Loader2, RefreshCw, RotateCcw, Sparkles, UploadCloud } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
 interface DashboardSettingsDialogProps {
@@ -72,6 +83,47 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
 
+    // Backup tab state (Electron-only; stored in settings.json, not DB)
+    const [backupDir, setBackupDir] = useState('');
+    const [backupOnQuit, setBackupOnQuit] = useState(false);
+    const [backupLoading, setBackupLoading] = useState(false);
+    const [backupRunning, setBackupRunning] = useState(false);
+
+    // Restore state
+    const [restoreFile, setRestoreFile] = useState('');
+    const [restoreRunning, setRestoreRunning] = useState(false);
+    const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+
+    const handleSelectRestoreFile = async () => {
+        const chosen = await apiClient.selectBackupFile();
+        if (chosen) setRestoreFile(chosen);
+    };
+
+    const handleRestoreConfirmed = async () => {
+        setRestoreConfirmOpen(false);
+        if (!restoreFile) return;
+        setRestoreRunning(true);
+        try {
+            const result = await apiClient.restoreBackup(restoreFile);
+            if (!result) return;
+            if (result.success) {
+                toast.success(t('settings.restore.success'), {
+                    description: t('settings.restore.successDesc').replace('{file}', result.file ?? restoreFile),
+                    duration: 8000,
+                });
+                // The app container was restarted — reload the page after a short delay
+                // so the frontend reconnects to the freshly restored backend.
+                setTimeout(() => window.location.reload(), 3000);
+            } else {
+                toast.error(t('settings.restore.failed'), { description: result.error });
+            }
+        } catch (err: unknown) {
+            toast.error(t('settings.restore.failed'), { description: String(err) });
+        } finally {
+            setRestoreRunning(false);
+        }
+    };
+
     // Update tab state
     type UpdateStatus = {
         up_to_date: boolean;
@@ -112,6 +164,16 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             setLocalAppSettings(appSettings);
             setRecipientSearch('');
             setCategorySearch('');
+            // Load backup settings from Electron settings.json
+            if (apiClient.isElectron()) {
+                setBackupLoading(true);
+                apiClient.loadBackupSettings().then((bs) => {
+                    if (bs) {
+                        setBackupDir(bs.backupDir || '');
+                        setBackupOnQuit(bs.backupOnQuit ?? false);
+                    }
+                }).finally(() => setBackupLoading(false));
+            }
         }
     }, [open, settings, appSettings]);
 
@@ -123,8 +185,40 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             exclusionScope: localExclusionScope,
         });
         updateAppSettings(localAppSettings);
+        // Persist backup settings to Electron settings.json
+        if (apiClient.isElectron()) {
+            apiClient.saveBackupSettings({ backupDir, backupOnQuit });
+        }
         onOpenChange(false);
         toast.success(t('settings.saved'));
+    };
+
+    const handleBrowseBackupDir = async () => {
+        const chosen = await apiClient.selectBackupDir();
+        if (chosen) setBackupDir(chosen);
+    };
+
+    const handleBackupNow = async () => {
+        if (!backupDir) {
+            toast.error(t('settings.backup.noDir'));
+            return;
+        }
+        setBackupRunning(true);
+        try {
+            const result = await apiClient.runBackup(backupDir);
+            if (!result) return;
+            if (result.success) {
+                toast.success(t('settings.backup.success'), {
+                    description: t('settings.backup.successDesc').replace('{file}', result.file ?? ''),
+                });
+            } else {
+                toast.error(t('settings.backup.failed'), { description: result.error });
+            }
+        } catch (err: unknown) {
+            toast.error(t('settings.backup.failed'), { description: String(err) });
+        } finally {
+            setBackupRunning(false);
+        }
     };
 
     const handleCheckForUpdates = async () => {
@@ -238,10 +332,11 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                 </DialogHeader>
 
                 <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="general">{t('settings.tab.general')}</TabsTrigger>
                         <TabsTrigger value="dashboard">{t('settings.tab.dashboard')}</TabsTrigger>
                         <TabsTrigger value="app">{t('settings.tab.app')}</TabsTrigger>
+                        <TabsTrigger value="backup">{t('settings.tab.backup')}</TabsTrigger>
                     </TabsList>
 
                     {/* ── General Tab ── */}
@@ -792,7 +887,190 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                             </div>
                         </ScrollArea>
                     </TabsContent>
+                    {/* ── Backup Tab ── */}
+                    <TabsContent value="backup" className="flex-1 min-h-0">
+                        <ScrollArea className="h-full pr-4">
+                            <div className="space-y-6 py-4">
+                                {!apiClient.isElectron() ? (
+                                    <div className="flex items-start gap-3 rounded-lg border border-muted px-4 py-3 text-sm text-muted-foreground">
+                                        <Database className="h-4 w-4 mt-0.5 shrink-0" />
+                                        <p>{t('settings.backup.electronOnly')}</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Description */}
+                                        <div className="space-y-1">
+                                            <h3 className="text-sm font-semibold text-foreground">{t('settings.backup.title')}</h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                {t('settings.backup.description')}
+                                            </p>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Directory picker */}
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold">{t('settings.backup.directory')}</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    readOnly
+                                                    value={backupDir}
+                                                    placeholder={t('settings.backup.notConfigured')}
+                                                    className="flex-1 font-mono text-xs"
+                                                />
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleBrowseBackupDir}
+                                                    disabled={backupLoading}
+                                                    className="shrink-0"
+                                                >
+                                                    <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+                                                    {backupDir ? t('settings.backup.change') : t('settings.backup.browse')}
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {t('settings.backup.directoryHint')}
+                                            </p>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Backup on quit toggle */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                                <div className="flex-1">
+                                                    <Label
+                                                        htmlFor="backup-on-quit"
+                                                        className="text-sm font-medium cursor-pointer"
+                                                    >
+                                                        {t('settings.backup.backupOnQuit')}
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        {t('settings.backup.backupOnQuitHint')}
+                                                    </p>
+                                                </div>
+                                                <Switch
+                                                    id="backup-on-quit"
+                                                    checked={backupOnQuit}
+                                                    onCheckedChange={setBackupOnQuit}
+                                                    disabled={!backupDir}
+                                                    className="ml-4 shrink-0"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Run backup now */}
+                                        <div className="space-y-3">
+                                            <h3 className="text-sm font-semibold text-foreground">{t('settings.backup.runNow')}</h3>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleBackupNow}
+                                                disabled={backupRunning || !backupDir}
+                                            >
+                                                {backupRunning
+                                                    ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                    : <Database className="h-3.5 w-3.5 mr-1.5" />
+                                                }
+                                                {backupRunning ? t('settings.backup.running') : t('settings.backup.runNow')}
+                                            </Button>
+                                        </div>
+
+                                        <Separator />
+
+                    {/* Format note */}
+                    <div className="flex items-start gap-3 rounded-lg border border-muted bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        <p>{t('settings.backup.formatNote')}</p>
+                    </div>
+
+                    <Separator />
+
+                    {/* ── Restore Section ── */}
+                    <div className="space-y-1">
+                        <h3 className="text-sm font-semibold text-foreground">{t('settings.restore.title')}</h3>
+                        <p className="text-xs text-muted-foreground">
+                            {t('settings.restore.description')}
+                        </p>
+                    </div>
+
+                    {/* Warning banner */}
+                    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        <p>{t('settings.restore.warning')}</p>
+                    </div>
+
+                    {/* File picker */}
+                    <div className="space-y-2">
+                        <div className="flex gap-2">
+                            <Input
+                                readOnly
+                                value={restoreFile ? restoreFile.split('/').pop() ?? restoreFile : ''}
+                                placeholder={t('settings.restore.noFile')}
+                                className="flex-1 font-mono text-xs"
+                                title={restoreFile}
+                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSelectRestoreFile}
+                                disabled={restoreRunning}
+                                className="shrink-0"
+                            >
+                                <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+                                {t('settings.restore.selectFile')}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Restore now button */}
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setRestoreConfirmOpen(true)}
+                        disabled={restoreRunning || !restoreFile}
+                    >
+                        {restoreRunning
+                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            : <UploadCloud className="h-3.5 w-3.5 mr-1.5" />
+                        }
+                        {restoreRunning ? t('settings.restore.running') : t('settings.restore.runNow')}
+                                    </Button>
+                                </>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
                 </Tabs>
+
+                {/* Restore confirmation dialog — rendered outside Tabs so it overlays properly */}
+                <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>{t('settings.restore.confirmTitle')}</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {t('settings.restore.confirmDesc')}
+                                {restoreFile && (
+                                    <span className="block mt-2 font-mono text-xs break-all">
+                                        {restoreFile.split('/').pop()}
+                                    </span>
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>{t('settings.restore.cancelButton')}</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleRestoreConfirmed}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {t('settings.restore.confirmButton')}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 <DialogFooter className="gap-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>

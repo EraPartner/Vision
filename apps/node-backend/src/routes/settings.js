@@ -37,6 +37,7 @@ const SETTING_DEFAULTS = {
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
     defaultBankAccount: '',
+    language: 'en',
   },
   dashboard_settings: {
     excludedCategoryIds: [],

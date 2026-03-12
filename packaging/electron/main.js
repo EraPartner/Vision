@@ -1,7 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, dialog, Notification, shell, ipcMain } = require('electron');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -47,8 +47,8 @@ try {
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
-const HEALTH_POLL_ATTEMPTS = 30;   // 30 × 2s = 60s max (same as .command files)
-const HEALTH_POLL_INTERVAL_MS = 2000;
+const HEALTH_POLL_ATTEMPTS = 120;  // 120 × 300ms = 36s max
+const HEALTH_POLL_INTERVAL_MS = 300;
 
 // Resolved at launch — see findFreePort() below
 let appPort = DEFAULT_APP_PORT;
@@ -149,7 +149,9 @@ function run(bin, args, cwd, opts = {}) {
   const { env: envOverride, ...rest } = opts;
   const env = envOverride || dockerEnv;
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { env, cwd, ...rest }, (err, stdout, stderr) => {
+    // Default maxBuffer to 200 MB — pg_dump output can be large.
+    const maxBuffer = rest.maxBuffer ?? 200 * 1024 * 1024;
+    execFile(bin, args, { env, cwd, ...rest, maxBuffer }, (err, stdout, stderr) => {
       if (err) return reject(stderr?.trim() || err.message || String(err));
       resolve(stdout);
     });
@@ -184,14 +186,18 @@ function pollHealth() {
 }
 
 // ── Docker checks ─────────────────────────────────────────────────────────────
-async function checkDockerInstalled(cwd) {
-  try { await run('docker', ['--version'], cwd); return true; }
-  catch { return false; }
-}
-
-async function checkDockerRunning(cwd) {
-  try { await run('docker', ['info'], cwd, { timeout: 8000 }); return true; }
-  catch { return false; }
+// A single `docker info` call tells us both: if docker isn't on PATH it throws
+// ENOENT (not installed); if Docker Desktop isn't running it exits non-zero.
+// Returns 'ok' | 'not-installed' | 'not-running'
+async function checkDocker(cwd) {
+  try {
+    await run('docker', ['info'], cwd, { timeout: 8000 });
+    return 'ok';
+  } catch (err) {
+    // ENOENT / "command not found" → binary missing
+    if (/ENOENT|not found|no such file/i.test(String(err))) return 'not-installed';
+    return 'not-running';
+  }
 }
 
 // ── Docker Compose actions ────────────────────────────────────────────────────
@@ -204,11 +210,11 @@ function composeArgs(cwd, extraFiles = []) {
   return files.flatMap(f => ['-f', f]);
 }
 
-function startContainers(cwd, extraFiles = []) {
+function startContainers(cwd, extraFiles = [], skipBuild = false) {
   const args = [
     'compose', ...composeArgs(cwd, extraFiles),
     'up', '-d',
-    ...(app.isPackaged ? [] : ['--build']),
+    ...(app.isPackaged || skipBuild ? [] : ['--build']),
   ];
   // Inject the resolved port so docker-compose.yml's ${PORT:-3002} interpolation
   // maps the correct host port → container 3002.
@@ -332,6 +338,63 @@ async function applyDockerImageUpdate(cwd, extraFiles = []) {
   }
 }
 
+// ── Backup helpers ────────────────────────────────────────────────────────────
+// Streams pg_dump output directly from the db container to a file on the host
+// using spawn() + piped stdout — no in-memory buffering, handles any DB size.
+async function runBackup(destDir) {
+  if (!destDir) throw new Error('No backup directory configured');
+
+  let dbName = 'financial_transactions';
+  let dbUser = 'ftm_user';
+  try {
+    const envFile = path.join(workDir, '.env');
+    const envContents = fs.readFileSync(envFile, 'utf8');
+    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::[^@]*)?@[^/]+\/(\S+)/);
+    if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
+  } catch { /* use defaults */ }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+  const filename = `vision_backup_${timestamp}.sql`;
+  const destFile = path.join(destDir, filename);
+
+  fs.mkdirSync(destDir, { recursive: true });
+
+  const composeFileArgs = composeArgs(workDir, overrideFiles);
+  const args = [
+    'compose', ...composeFileArgs,
+    'exec', '-T', 'db',
+    'pg_dump', '-U', dbUser, '-d', dbName, '--no-owner', '--no-acl',
+  ];
+
+  await new Promise((resolve, reject) => {
+    const child = spawn('docker', args, { env: dockerEnv, cwd: workDir });
+    const out = fs.createWriteStream(destFile);
+
+    child.stdout.pipe(out);
+
+    const stderr = [];
+    child.stderr.on('data', (chunk) => stderr.push(chunk));
+
+    child.on('error', (err) => {
+      out.destroy();
+      fs.unlink(destFile, () => {});
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        out.end(() => resolve());
+      } else {
+        out.destroy();
+        fs.unlink(destFile, () => {});
+        reject(new Error(Buffer.concat(stderr).toString().trim() || `pg_dump exited with code ${code}`));
+      }
+    });
+  });
+
+  return { success: true, file: destFile };
+}
+
 // ── IPC: renderer can request a Docker image update ──────────────────────────
 ipcMain.handle('update:pull-image', async () => {
   if (!workDir) return { success: false, error: 'workDir not set' };
@@ -354,6 +417,196 @@ ipcMain.handle('update:check-github', async () => {
   } catch (err) {
     return { error: String(err) };
   }
+});
+
+// ── Restore helpers ───────────────────────────────────────────────────────────
+// Restores a plain-SQL pg_dump file into the running PostgreSQL container.
+//
+// The backup file is accessed via a bind-mount — it is never copied into the
+// container, so there is no size limit and no extra disk usage.
+//
+// Sequence:
+//   1. Stop the app container (disconnect all clients from the DB)
+//   2. Terminate remaining DB connections, drop & recreate the database
+//   3. Restore via `docker run --rm -v <dir>:/restore <pg-image> psql -f /restore/<file>`
+//      — a temporary throwaway container that has direct access to the host file
+//   4. Restart the app container (backend reconnects + schemaInit runs)
+async function runRestore(sqlFilePath) {
+  if (!sqlFilePath) throw new Error('No backup file specified');
+  if (!fs.existsSync(sqlFilePath)) throw new Error(`File not found: ${sqlFilePath}`);
+
+  let dbName = 'financial_transactions';
+  let dbUser = 'ftm_user';
+  let dbPass = '';
+  try {
+    const envFile = path.join(workDir, '.env');
+    const envContents = fs.readFileSync(envFile, 'utf8');
+    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/(\S+)/);
+    if (urlMatch) { dbUser = urlMatch[1]; dbPass = urlMatch[2] || ''; dbName = urlMatch[3]; }
+  } catch { /* use defaults */ }
+
+  const composeFileArgs = composeArgs(workDir, overrideFiles);
+
+  // 1. Stop the app container (release DB connections)
+  await run('docker', [
+    'compose', ...composeFileArgs, 'stop', 'app',
+  ], workDir, { timeout: 60000 });
+
+  try {
+    // 2a. Terminate any remaining connections
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();`,
+    ], workDir, { timeout: 30000 });
+
+    // 2b. Drop and recreate the database
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `DROP DATABASE IF EXISTS "${dbName}";`,
+    ], workDir, { timeout: 30000 });
+
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `CREATE DATABASE "${dbName}" OWNER "${dbUser}";`,
+    ], workDir, { timeout: 30000 });
+
+    // 3. Restore using a throwaway container that bind-mounts the backup directory.
+    //    This avoids any `docker cp` and works for arbitrarily large files.
+    //    We need the postgres image name used by the db service.
+    const pgImage = await run('docker', [
+      'compose', ...composeFileArgs, 'images', '--quiet', 'db',
+    ], workDir, { timeout: 15000 }).then(s => s.trim()).catch(() => 'postgres:16');
+
+    // Resolve the actual image name (images --quiet gives the ID, we need the tag).
+    // Fall back to inspecting the running container.
+    const dbContainerName = await run('docker', [
+      'compose', ...composeFileArgs, 'ps', '-q', 'db',
+    ], workDir, { timeout: 10000 }).then(s => s.trim()).catch(() => '');
+
+    let pgImageTag = 'postgres:16';
+    if (dbContainerName) {
+      pgImageTag = await run('docker', [
+        'inspect', '--format', '{{.Config.Image}}', dbContainerName,
+      ], workDir, { timeout: 10000 }).then(s => s.trim()).catch(() => 'postgres:16');
+    }
+
+    // Get the internal Docker network so the throwaway container can reach the db service.
+    const networkName = await run('docker', [
+      'inspect', '--format', '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}', dbContainerName,
+    ], workDir, { timeout: 10000 }).then(s => s.trim().split('\n')[0]).catch(() => '');
+
+    const hostDir = path.dirname(sqlFilePath);
+    const sqlFilename = path.basename(sqlFilePath);
+
+    const dockerRunArgs = [
+      'run', '--rm',
+      '-v', `${hostDir}:/restore:ro`,
+      ...(networkName ? ['--network', networkName] : []),
+      '-e', `PGPASSWORD=${dbPass}`,
+      pgImageTag,
+      'psql',
+      '-h', 'db',
+      '-U', dbUser,
+      '-d', dbName,
+      '-f', `/restore/${sqlFilename}`,
+    ];
+
+    // Stream psql output — no buffering, works for any file size
+    await new Promise((resolve, reject) => {
+      const child = spawn('docker', dockerRunArgs, {
+        env: dockerEnv,
+        cwd: workDir,
+      });
+
+      const stderr = [];
+      child.stderr.on('data', (chunk) => stderr.push(chunk));
+      // psql outputs progress to stdout — discard it (we don't need it in memory)
+      child.stdout.resume();
+
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(Buffer.concat(stderr).toString().trim() || `psql exited with code ${code}`));
+      });
+    });
+
+  } finally {
+    // 4. Always restart the app container
+    const env = { ...dockerEnv, PORT: String(appPort) };
+    await run('docker', [
+      'compose', ...composeFileArgs, 'start', 'app',
+    ], workDir, { timeout: 120000, env }).catch((err) => {
+      console.error('Failed to restart app container after restore:', err);
+    });
+  }
+
+  return { success: true, file: sqlFilePath };
+}
+
+// ── IPC: restore ──────────────────────────────────────────────────────────────
+ipcMain.handle('backup:select-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    title: 'Select Backup File to Restore',
+    buttonLabel: 'Restore',
+    filters: [
+      { name: 'SQL Backup Files', extensions: ['sql'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('backup:restore', async (_event, sqlFilePath) => {
+  if (!workDir) return { success: false, error: 'workDir not set' };
+  try {
+    const result = await runRestore(sqlFilePath);
+    return result;
+  } catch (err) {
+    // Make sure app container is back up even after an error
+    const composeFileArgs = composeArgs(workDir, overrideFiles);
+    const env = { ...dockerEnv, PORT: String(appPort) };
+    run('docker', [
+      'compose', ...composeFileArgs,
+      'start', 'app',
+    ], workDir, { timeout: 120000, env }).catch(() => {});
+    return { success: false, error: String(err) };
+  }
+});
+
+// ── IPC: backup:run ───────────────────────────────────────────────────────────
+ipcMain.handle('backup:run', async (_event, destDir) => {
+  if (!workDir) return { success: false, error: 'workDir not set' };
+  try {
+    const result = await runBackup(destDir);
+    return result;
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('backup:select-dir', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Select Backup Directory',
+    buttonLabel: 'Choose',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('backup:save-settings', (_event, { backupDir, backupOnQuit }) => {
+  saveSettings({ ...loadSettings(), backupDir: backupDir || '', backupOnQuit: !!backupOnQuit });
+  return { success: true };
+});
+
+ipcMain.handle('backup:load-settings', () => {
+  const s = loadSettings();
+  return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
 // ── GitHub Releases API helper ────────────────────────────────────────────────
@@ -422,8 +675,9 @@ async function launch() {
   // 2. First run: generate .env if missing
   ensureEnv(workDir);
 
-  // 3. Check Docker is installed
-  if (!(await checkDockerInstalled(workDir))) {
+  // 3. Check Docker is installed and running (single docker info call)
+  const dockerStatus = await checkDocker(workDir);
+  if (dockerStatus === 'not-installed') {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
       buttons: [t('app.openDockerSite'), t('common.cancel')],
@@ -436,9 +690,7 @@ async function launch() {
     app.quit();
     return;
   }
-
-  // 4. Check Docker daemon is running
-  if (!(await checkDockerRunning(workDir))) {
+  if (dockerStatus === 'not-running') {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
       buttons: [t('app.openDockerApp'), t('common.cancel')],
@@ -452,7 +704,16 @@ async function launch() {
     return;
   }
 
-  // 5. docker compose up  (packaged: --pull always; dev: --build)
+  // 5. If running in clean mode, wipe the clean volume so every run starts fresh.
+  const isCleanRun = overrideFiles.some(f => path.basename(f) === 'docker-compose.clean.yml');
+  if (isCleanRun) {
+    // Bring down any leftover containers from a previous clean run first,
+    // then remove the volume — Docker won't delete a volume that's still in use.
+    await run('docker', ['compose', ...composeArgs(workDir, overrideFiles), 'down', '--volumes'],
+      workDir, { timeout: 60000 }).catch(() => {});
+  }
+
+  // 6. docker compose up  (packaged: --pull always; dev: --build)
   try {
     await startContainers(workDir, overrideFiles);
   } catch (err) {
@@ -495,7 +756,22 @@ app.on('will-quit', (e) => {
   e.preventDefault();
   isQuitting = true;
 
-  stopContainers(workDir, overrideFiles)
+  // Run backup-on-quit if the user has configured a backup directory.
+  const settings = loadSettings();
+  const backupOnQuit = settings.backupOnQuit === true;
+  const backupDir = settings.backupDir || '';
+
+  const doBackup = backupOnQuit && backupDir
+    ? runBackup(backupDir)
+        .then(() => notify(t('backup.done')))
+        .catch((err) => {
+          console.error('Backup on quit failed:', err);
+          notify(t('backup.failed'));
+        })
+    : Promise.resolve();
+
+  doBackup
+    .then(() => stopContainers(workDir, overrideFiles))
     .catch((err) => console.error('docker compose down failed:', err))
     .finally(() => {
       notify(t('app.stopped'));

@@ -25,5 +25,11 @@
   "app.imageUpdated": "Vision-image bijgewerkt en herstart.",
   "app.running": "Vision wordt uitgevoerd.",
   "update.downloading": "Vision update downloaden…",
-  "app.stopped": "Vision is gestopt."
+  "app.stopped": "Vision is gestopt.",
+
+  "backup.done": "Databaseback-up opgeslagen.",
+  "backup.failed": "Databaseback-up mislukt — controleer de back-upmap.",
+
+  "restore.done": "Databaseherstel voltooid. Vision wordt herladen…",
+  "restore.failed": "Databaseherstel mislukt — uw vorige gegevens zijn ongewijzigd."
 }
