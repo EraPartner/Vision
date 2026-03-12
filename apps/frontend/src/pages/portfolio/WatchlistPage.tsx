@@ -11,7 +11,7 @@ import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialo
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+import { API_BASE_URL } from "@/lib/api";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
   stock: "bg-blue-500/10 text-blue-500 border-blue-500/20",

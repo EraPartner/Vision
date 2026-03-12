@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import logger from "@/lib/logger";
+import { API_BASE_URL } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -306,7 +307,7 @@ export default function ImportPage() {
         queryParams.append('category_id', exportFilters.categoryId);
       }
 
-      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3002'}/api/transactions/export/csv?${queryParams.toString()}`;
+      const url = `${API_BASE_URL}/api/transactions/export/csv?${queryParams.toString()}`;
 
       // Call the backend export endpoint
       const response = await fetch(url, {

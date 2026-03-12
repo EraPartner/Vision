@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { WatchlistItem } from "@/types/watchlist";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+import { API_BASE_URL } from "@/lib/api";
 
 const RANGES = [
   { label: "1M", range: "1mo", interval: "1d" },

@@ -34,11 +34,9 @@
     "docker:clean": "docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
     "docker:clean:down": "docker compose -f docker-compose.yml -f docker-compose.clean.yml down",
     "docker:clean:reset": "docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f app",
-    "docker:rebuild": "docker compose down && docker compose build --no-cache && docker compose up -d",
+    "electron:dev": "VISION_COMPOSE_OVERRIDE=docker-compose.dev.yml packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
+    "electron:clean": "VISION_COMPOSE_OVERRIDE=docker-compose.clean.yml packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
+    "docker:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app",
     "update": "bun update"
   },
   "devDependencies": {

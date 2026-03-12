@@ -18,13 +18,33 @@ try {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = 'Vision';
-const APP_PORT = 3002;
-const APP_URL = `http://localhost:${APP_PORT}`;
-const HEALTH_URL = `http://localhost:${APP_PORT}/health`;
+const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = 30;   // 30 × 2s = 60s max (same as .command files)
 const HEALTH_POLL_INTERVAL_MS = 2000;
+
+// Resolved at launch — see findFreePort() below
+let appPort = DEFAULT_APP_PORT;
+let APP_URL = `http://localhost:${appPort}`;
+let HEALTH_URL = `http://localhost:${appPort}/health`;
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
+
+// ── Port detection ────────────────────────────────────────────────────────────
+// Try the preferred port; if it's in use, walk up until a free one is found.
+function findFreePort(preferred) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const tryPort = (port) => {
+      const server = net.createServer();
+      server.unref();
+      server.on('error', () => tryPort(port + 1));
+      server.listen(port, '127.0.0.1', () => {
+        server.close(() => resolve(port));
+      });
+    };
+    tryPort(preferred);
+  });
+}
 
 // ── Settings (persisted across launches) ─────────────────────────────────────
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -98,8 +118,10 @@ const dockerEnv = {
 };
 
 function run(bin, args, cwd, opts = {}) {
+  const { env: envOverride, ...rest } = opts;
+  const env = envOverride || dockerEnv;
   return new Promise((resolve, reject) => {
-    execFile(bin, args, { env: dockerEnv, cwd, ...opts }, (err, stdout, stderr) => {
+    execFile(bin, args, { env, cwd, ...rest }, (err, stdout, stderr) => {
       if (err) return reject(stderr?.trim() || err.message || String(err));
       resolve(stdout);
     });
@@ -145,18 +167,30 @@ async function checkDockerRunning(cwd) {
 }
 
 // ── Docker Compose actions ────────────────────────────────────────────────────
-function startContainers(cwd) {
-  // Packaged mode: start from the locally available image (pulled during install or last update).
-  // The `pullLatestImage` / `applyDockerImageUpdate` functions handle pulling new versions.
-  // Dev mode: rebuild from local source.
-  const args = app.isPackaged
-    ? ['compose', 'up', '-d']
-    : ['compose', 'up', '-d', '--build'];
-  return run('docker', args, cwd, { timeout: 300000 });
+function composeArgs(cwd, extraFiles = []) {
+  // Build -f flags: always start with the base docker-compose.yml, then any overrides.
+  const files = [
+    path.join(cwd, 'docker-compose.yml'),
+    ...extraFiles,
+  ];
+  return files.flatMap(f => ['-f', f]);
 }
 
-function stopContainers(cwd) {
-  return run('docker', ['compose', 'down'], cwd, { timeout: 60000 });
+function startContainers(cwd, extraFiles = []) {
+  const args = [
+    'compose', ...composeArgs(cwd, extraFiles),
+    'up', '-d',
+    ...(app.isPackaged ? [] : ['--build']),
+  ];
+  // Inject the resolved port so docker-compose.yml's ${PORT:-3002} interpolation
+  // maps the correct host port → container 3002.
+  const env = { ...dockerEnv, PORT: String(appPort) };
+  return run('docker', args, cwd, { timeout: 300000, env });
+}
+
+function stopContainers(cwd, extraFiles = []) {
+  const args = ['compose', ...composeArgs(cwd, extraFiles), 'down'];
+  return run('docker', args, cwd, { timeout: 60000 });
 }
 
 // Pull the latest Docker image tag for the app service without stopping the DB.
@@ -173,9 +207,9 @@ async function pullLatestImage(cwd) {
 }
 
 // Restart only the app container (not the db) to pick up the new image.
-// The new container runs the alembic migration entrypoint before serving.
-async function restartAppContainer(cwd) {
-  await run('docker', ['compose', 'up', '-d', '--no-deps', 'app'], cwd, { timeout: 120000 });
+async function restartAppContainer(cwd, extraFiles = []) {
+  const args = ['compose', ...composeArgs(cwd, extraFiles), 'up', '-d', '--no-deps', 'app'];
+  await run('docker', args, cwd, { timeout: 120000 });
 }
 
 // ── Main window ───────────────────────────────────────────────────────────────
@@ -256,17 +290,12 @@ function setupAutoUpdater() {
 }
 
 // ── Docker image update (called after new Electron version detected) ──────────
-// When a GitHub Release ships both a new DMG and a new Docker image, we also
-// want to refresh the running container — otherwise the old image keeps serving
-// until the user's next relaunch. This pulls the new image and hot-swaps the
-// app container while leaving the database untouched.
-async function applyDockerImageUpdate(cwd) {
+async function applyDockerImageUpdate(cwd, extraFiles = []) {
   try {
     notify('Pulling latest Vision image…');
     const wasNew = await pullLatestImage(cwd);
     if (wasNew) {
-      await restartAppContainer(cwd);
-      // Health-check again after restart
+      await restartAppContainer(cwd, extraFiles);
       await pollHealth().catch(() => {});
       notify('Vision image updated and restarted.');
     }
@@ -281,7 +310,7 @@ ipcMain.handle('update:pull-image', async () => {
   try {
     const wasNew = await pullLatestImage(workDir);
     if (wasNew) {
-      await restartAppContainer(workDir);
+      await restartAppContainer(workDir, overrideFiles);
       await pollHealth().catch(() => {});
     }
     return { success: true, wasNew };
@@ -333,13 +362,34 @@ function checkGitHubRelease() {
   });
 }
 
+// ── Compose override (dev modes) ─────────────────────────────────────────────
+// Set VISION_COMPOSE_OVERRIDE to a filename (relative to workDir) to layer an
+// additional compose file on top of the base — e.g. docker-compose.dev.yml.
+// Used by the electron:dev and electron:clean root package.json scripts.
+function resolveOverrideFiles(workDir) {
+  const override = process.env.VISION_COMPOSE_OVERRIDE;
+  if (!override || app.isPackaged) return [];
+  // Accept absolute paths too, but the common case is a repo-root filename.
+  const resolved = path.isAbsolute(override) ? override : path.join(workDir, override);
+  return fs.existsSync(resolved) ? [resolved] : [];
+}
+
 // ── Launch flow ───────────────────────────────────────────────────────────────
 let workDir = null;
+let overrideFiles = [];
 
 async function launch() {
   // 1. Resolve project folder
   workDir = await resolveWorkDir();
   if (!workDir) return;
+
+  // 1b. Resolve any compose override requested via env var (dev flows only)
+  overrideFiles = resolveOverrideFiles(workDir);
+
+  // 1c. Find a free host port for the backend (default 3002, auto-increment if taken)
+  appPort = await findFreePort(DEFAULT_APP_PORT);
+  APP_URL = `http://localhost:${appPort}`;
+  HEALTH_URL = `http://localhost:${appPort}/health`;
 
   // 2. First run: generate .env if missing
   ensureEnv(workDir);
@@ -376,7 +426,7 @@ async function launch() {
 
   // 5. docker compose up  (packaged: --pull always; dev: --build)
   try {
-    await startContainers(workDir);
+    await startContainers(workDir, overrideFiles);
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',
@@ -417,7 +467,7 @@ app.on('will-quit', (e) => {
   e.preventDefault();
   isQuitting = true;
 
-  stopContainers(workDir)
+  stopContainers(workDir, overrideFiles)
     .catch((err) => console.error('docker compose down failed:', err))
     .finally(() => {
       notify('Vision has been stopped.');

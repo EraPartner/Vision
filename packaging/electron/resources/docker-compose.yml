@@ -25,11 +25,11 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "3002:3002"
+      - "${PORT:-3002}:3002"
     environment:
       EXTERNAL_DATABASE: "true"
       SERVER_HOST: "0.0.0.0"
-      CORS_ORIGINS: "http://localhost:3002"
+      CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       # Expose version to the backend so /api/admin/update/check can report it
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
     depends_on:
