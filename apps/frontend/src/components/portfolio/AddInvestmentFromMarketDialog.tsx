@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,14 +29,11 @@ interface Props {
   existingInvestment?: InvestmentSummary;
 }
 
-const RECURRENCE_LABELS: Record<RecurrenceInterval, string> = {
-  daily: 'Daily', weekly: 'Weekly', 'bi-weekly': 'Bi-weekly',
-  monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly',
-};
 
 export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'choose' | 'new' | 'transaction'>('choose');
+  const { t } = useLanguage();
   const { addInvestment, addTransaction } = usePortfolio();
 
   // Determine asset class from quote type
@@ -54,7 +52,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     symbol: quote.symbol,
     currency: quote.currency === 'USD' ? 'USD' : 'EUR',
     currentPrice: quote.price.toString(),
-    notes: `Added from market lookup on ${new Date().toLocaleDateString()}`,
+    notes: t('addInvFromMarket.notesDefault', { date: new Date().toLocaleDateString() }),
   });
 
   const [transactionForm, setTransactionForm] = useState({
@@ -78,7 +76,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
       symbol: quote.symbol,
       currency: quote.currency === 'USD' ? 'USD' : 'EUR',
       currentPrice: quote.price.toString(),
-      notes: `Added from market lookup on ${new Date().toLocaleDateString()}`,
+      notes: t('addInvFromMarket.notesDefault', { date: new Date().toLocaleDateString() }),
     });
     setTransactionForm({
       type: 'buy',
@@ -110,7 +108,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         price_provider: 'yahoo',
         price_provider_id: quote.symbol,
       });
-      toast.success(`${quote.symbol} added to portfolio`);
+      toast.success(t('addInv.toast.added', { assetClass, name: quote.symbol }));
       reset();
       setOpen(false);
     } catch {
@@ -128,7 +126,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     
     const amount = parseFloat(transactionForm.amount || computedAmount);
     if (!amount || isNaN(amount)) { 
-      toast.error('Amount is required'); 
+      toast.error(t('addPortTxn.error.amountRequired'));
       return; 
     }
 
@@ -148,7 +146,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         recurrence_interval: transactionForm.isRecurring ? transactionForm.recurrenceInterval : undefined,
         recurrence_end_date: transactionForm.isRecurring && transactionForm.recurrenceEndDate ? transactionForm.recurrenceEndDate : undefined,
       });
-      toast.success(`${TXN_TYPE_LABELS[transactionForm.type]} recorded for ${quote.symbol}`);
+      toast.success(t('addPortTxn.toast.recorded', { type: TXN_TYPE_LABELS[transactionForm.type], name: quote.symbol }));
       reset();
       setOpen(false);
     } catch {
@@ -169,22 +167,22 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
           <Plus className="h-4 w-4" />
-          {existingInvestment ? 'Add Transaction' : 'Add to Portfolio'}
+          {t(existingInvestment ? 'form.addTransaction.title' : 'portfolio.addInvestment')}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {step === 'choose' ? `Add ${quote.symbol}` : 
-             step === 'new' ? `Create Investment` : 
-             `Add Transaction`}
+            {step === 'choose' ? t('addInvFromMarket.title.add', { symbol: quote.symbol }) : 
+             step === 'new' ? t('addInvFromMarket.title.create') : 
+             t('addInvFromMarket.title.transaction')}
           </DialogTitle>
         </DialogHeader>
 
         {step === 'choose' && (
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              What would you like to do with <strong>{quote.symbol}</strong>?
+              {t('addInvFromMarket.prompt', { symbol: quote.symbol })}
             </div>
             <div className="space-y-2">
               {existingInvestment && (
@@ -194,9 +192,9 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                   onClick={() => setStep('transaction')}
                 >
                   <div className="text-left">
-                    <div className="font-medium">Add Transaction</div>
+                    <div className="font-medium">{t('form.addTransaction.title')}</div>
                     <div className="text-sm text-muted-foreground">
-                      Record a buy/sell for existing investment
+                      {t('addInvFromMarket.option.addTxnDesc')}
                     </div>
                   </div>
                 </Button>
@@ -207,9 +205,9 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                 onClick={() => setStep('new')}
               >
                 <div className="text-left">
-                  <div className="font-medium">Create New Investment</div>
+                  <div className="font-medium">{t('addInvFromMarket.option.createNew')}</div>
                   <div className="text-sm text-muted-foreground">
-                    {existingInvestment ? 'Create a separate tracking entry' : 'Add to your portfolio'}
+                    {existingInvestment ? t('addInvFromMarket.option.createDescExisting') : t('addInvFromMarket.option.createDescNew')}
                   </div>
                 </div>
               </Button>
@@ -221,7 +219,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
           <form onSubmit={handleCreateInvestment} className="space-y-4">
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="new-name">Name</Label>
+                <Label htmlFor="new-name">{t('addInv.label.name')}</Label>
                 <Input 
                   id="new-name" 
                   value={newInvestmentForm.name} 
@@ -232,7 +230,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="new-symbol">Symbol</Label>
+                  <Label htmlFor="new-symbol">{t('addInv.label.ticker')}</Label>
                   <Input 
                     id="new-symbol" 
                     value={newInvestmentForm.symbol} 
@@ -243,7 +241,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="new-currency">Currency</Label>
+                  <Label htmlFor="new-currency">{t('addInv.label.currency')}</Label>
                   <Select 
                     value={newInvestmentForm.currency} 
                     onValueChange={(v) => setNewInvestmentForm(f => ({ ...f, currency: v }))}
@@ -258,7 +256,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-price">Current Price</Label>
+                <Label htmlFor="new-price">{t('addInv.label.currentPrice')}</Label>
                 <Input 
                   id="new-price" 
                   type="number" 
@@ -269,7 +267,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="new-notes">Notes</Label>
+                <Label htmlFor="new-notes">{t('addInv.label.notes')}</Label>
                 <Textarea 
                   id="new-notes" 
                   rows={2} 
@@ -281,9 +279,9 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
             </div>
             <div className="flex justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
-                Back
+                {t('addInv.back')}
               </Button>
-              <Button type="submit">Create Investment</Button>
+              <Button type="submit">{t('addInv.create')}</Button>
             </div>
           </form>
         )}
@@ -292,7 +290,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
           <form onSubmit={handleAddTransaction} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Type</Label>
+                <Label>{t('addPortTxn.type')}</Label>
                 <Select 
                   value={transactionForm.type} 
                   onValueChange={(v) => setTransactionForm(f => ({ ...f, type: v as PortfolioTxnType }))}
@@ -306,7 +304,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="txn-date">Date</Label>
+                <Label htmlFor="txn-date">{t('addPortTxn.date')}</Label>
                 <Input 
                   id="txn-date" 
                   type="date" 
@@ -318,36 +316,36 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
               {showUnits && (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="txn-units">Units / Shares</Label>
-                    <Input 
-                      id="txn-units" 
-                      type="number" 
-                      step="0.000001" 
-                      min="0" 
-                      placeholder="10" 
-                      value={transactionForm.units} 
-                      onChange={(e) => setTransactionForm(f => ({ ...f, units: e.target.value }))} 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="txn-ppu">Price per Unit</Label>
-                    <Input 
-                      id="txn-ppu" 
-                      type="number" 
-                      step="0.0001" 
-                      min="0" 
-                      placeholder={quote.price.toString()} 
-                      value={transactionForm.pricePerUnit} 
-                      onChange={(e) => setTransactionForm(f => ({ ...f, pricePerUnit: e.target.value }))} 
-                    />
-                  </div>
-                </>
-              )}
+                    <div className="space-y-2">
+                      <Label htmlFor="txn-units">{t('addPortTxn.units')}</Label>
+                      <Input 
+                        id="txn-units" 
+                        type="number" 
+                        step="0.000001" 
+                        min="0" 
+                        placeholder="10" 
+                        value={transactionForm.units} 
+                        onChange={(e) => setTransactionForm(f => ({ ...f, units: e.target.value }))} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="txn-ppu">{t('addPortTxn.pricePerUnit')}</Label>
+                      <Input 
+                        id="txn-ppu" 
+                        type="number" 
+                        step="0.0001" 
+                        min="0" 
+                        placeholder={quote.price.toString()} 
+                        value={transactionForm.pricePerUnit} 
+                        onChange={(e) => setTransactionForm(f => ({ ...f, pricePerUnit: e.target.value }))} 
+                      />
+                    </div>
+                  </>
+                )}
 
               <div className={`space-y-2 ${showUnits ? 'col-span-2' : ''}`}>
                 <Label htmlFor="txn-amount">
-                  Total Amount ({existingInvestment.currency})
+                  {t('addPortTxn.totalAmount', { currency: existingInvestment.currency })}
                   {computedAmount && <span className="text-muted-foreground ml-1 text-xs">= {computedAmount}</span>}
                 </Label>
                 <Input 
@@ -363,8 +361,8 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
               {showFeesTaxes && (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="txn-fees">Fees</Label>
+                    <div className="space-y-2">
+                    <Label htmlFor="txn-fees">{t('addPortTxn.fees')}</Label>
                     <Input 
                       id="txn-fees" 
                       type="number" 
@@ -376,7 +374,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="txn-taxes">Taxes</Label>
+                    <Label htmlFor="txn-taxes">{t('addPortTxn.taxes')}</Label>
                     <Input 
                       id="txn-taxes" 
                       type="number" 
@@ -392,10 +390,10 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="txn-note">Note</Label>
+              <Label htmlFor="txn-note">{t('addPortTxn.note')}</Label>
               <Textarea 
                 id="txn-note" 
-                placeholder="Optional note…" 
+                placeholder={t('addPortTxn.note')} 
                 rows={2} 
                 value={transactionForm.note} 
                 onChange={(e) => setTransactionForm(f => ({ ...f, note: e.target.value }))} 
@@ -405,9 +403,9 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
 
             <div className="flex justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
-                Back
+                {t('addInv.back')}
               </Button>
-              <Button type="submit">Record Transaction</Button>
+              <Button type="submit">{t('addPortTxn.record')}</Button>
             </div>
           </form>
         )}

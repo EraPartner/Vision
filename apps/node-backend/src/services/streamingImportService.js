@@ -16,6 +16,9 @@ import {
   belfiusRawRepo,
   revolutRawRepo,
   kbcRawRepo,
+  sabbRawRepo,
+  wiseRawRepo,
+  visionRawRepo,
   rawReferenceRepo,
   isRawDuplicate,
 } from '../repositories/rawTransactionRepository.js';
@@ -45,6 +48,9 @@ function determineBankType(bankName) {
   if (lower.includes('belfius')) return 'belfius';
   if (lower.includes('revolut')) return 'revolut';
   if (lower.includes('kbc')) return 'kbc';
+  if (lower.includes('sabb')) return 'sabb';
+  if (lower.includes('wise')) return 'wise';
+  if (lower.includes('vision')) return 'vision';
   return 'generic';
 }
 
@@ -158,6 +164,9 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
             if (bankType === 'belfius') isDup = await belfiusRawRepo.existsByHash(dedupHash);
             else if (bankType === 'revolut') isDup = await revolutRawRepo.existsByHash(dedupHash);
             else if (bankType === 'kbc') isDup = await kbcRawRepo.existsByHash(dedupHash);
+            else if (bankType === 'sabb') isDup = await sabbRawRepo.existsByHash(dedupHash);
+            else if (bankType === 'wise') isDup = await wiseRawRepo.existsByHash(dedupHash);
+            else if (bankType === 'vision') isDup = await visionRawRepo.existsByHash(dedupHash);
           } catch {
             const { isDuplicateByFields } = await import('./deduplication.js');
             const dateStr = txData.date.toISOString().split('T')[0];
@@ -179,6 +188,9 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
             if (bankType === 'belfius') rawTxn = await storeBelfiusRaw(txData, dedupHash);
             else if (bankType === 'revolut') rawTxn = await storeRevolutRaw(txData, dedupHash);
             else if (bankType === 'kbc') rawTxn = await storeKbcRaw(txData, dedupHash);
+            else if (bankType === 'sabb') rawTxn = await storeSABBRaw(txData, dedupHash);
+            else if (bankType === 'wise') rawTxn = await storeWiseRaw(txData, dedupHash);
+            else if (bankType === 'vision') rawTxn = await storeVisionRaw(txData, dedupHash);
           } catch (rawErr) {
             logger.warn(`Raw storage failed: ${rawErr.message}`);
           }
@@ -367,6 +379,61 @@ async function storeKbcRaw(txData, dedupHash) {
     counterparty_address: (parsed[15] || '').trim() || null,
     structured_communication: (parsed[16] || '').trim() || null,
     free_communication: (parsed[17] || '').trim() || null,
+    raw_csv_line: txData.rawData,
+  });
+}
+
+async function storeSABBRaw(txData, dedupHash) {
+  const parts = (txData.rawData || '').split('|');
+  return sabbRawRepo.create({
+    deduplication_hash: dedupHash,
+    transaction_date: txData.date.toISOString().split('T')[0],
+    posting_date: parseDateStr((parts[1] || '').trim()) || null,
+    description: (parts[2] || '').trim() || txData.memo || null,
+    amount: txData.amount,
+    currency: txData.currency || 'SAR',
+    status: (parts[5] || '').trim() || null,
+    amount_other_currency: (parts[4] || '').trim() || null,
+    raw_csv_line: txData.rawData,
+  });
+}
+
+async function storeWiseRaw(txData, dedupHash) {
+  const parts = (txData.rawData || '').split('|');
+  return wiseRawRepo.create({
+    deduplication_hash: dedupHash,
+    transfer_id: (parts[0] || '').trim() || null,
+    status: (parts[1] || '').trim() || 'COMPLETED',
+    direction: (parts[2] || '').trim() || null,
+    finished_on: parseDateStr((parts[4] || '').trim(), false) || txData.date.toISOString(),
+    source_name: (parts[5] || '').trim() || null,
+    source_amount: parts[6] ? parseDecimal(parts[6]) : null,
+    source_fee_amount: parts[7] ? parseDecimal(parts[7]) : null,
+    source_fee_currency: (parts[8] || '').trim() || null,
+    source_currency: (parts[9] || '').trim() || null,
+    target_name: (parts[10] || '').trim() || null,
+    target_amount: parts[11] ? parseDecimal(parts[11]) : txData.amount,
+    target_currency: (parts[12] || '').trim() || txData.currency || null,
+    exchange_rate: parts[13] ? parseDecimal(parts[13]) : null,
+    reference: (parts[14] || '').trim() || null,
+    batch: (parts[15] || '').trim() || null,
+    raw_csv_line: txData.rawData,
+  });
+}
+
+async function storeVisionRaw(txData, dedupHash) {
+  const parts = (txData.rawData || '').split('|');
+  return visionRawRepo.create({
+    deduplication_hash: dedupHash,
+    transaction_date: txData.date.toISOString().split('T')[0],
+    bank_account: txData.bankAccount || (parts[2] || '').trim() || null,
+    recipient: txData.recipient || (parts[3] || '').trim() || null,
+    memo: txData.memo || (parts[4] || '').trim() || null,
+    amount: txData.amount,
+    currency: txData.currency || (parts[5] || '').trim() || 'EUR',
+    balance: txData.balance != null ? txData.balance : null,
+    category: (parts[7] || '').trim() || null,
+    comment: txData.comment || (parts[8] || '').trim() || null,
     raw_csv_line: txData.rawData,
   });
 }

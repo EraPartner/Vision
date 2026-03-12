@@ -3,6 +3,7 @@ import {apiClient} from '@/lib/api';
 import type {TransactionCreate, TransactionUpdate} from '@/types/api';
 import {toast} from 'sonner';
 import {useCallback} from 'react';
+import {useLanguage} from '@/contexts/LanguageContext';
 
 interface UseTransactionsParams {
     limit?: number;
@@ -38,22 +39,24 @@ export function useTransaction(id: number) {
 
 export function useCreateTransaction() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: (transaction: TransactionCreate) => apiClient.createTransaction(transaction),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
-            toast.success('Transaction created successfully');
+            toast.success(t('transactions.created'));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to create transaction: ${error.message}`);
+            toast.error(t('transactions.createFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useUpdateTransaction() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: ({id, data}: { id: number; data: TransactionUpdate }) =>
@@ -61,26 +64,27 @@ export function useUpdateTransaction() {
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
-            toast.success('Transaction updated successfully');
+            toast.success(t('transactions.updated'));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to update transaction: ${error.message}`);
+            toast.error(t('transactions.updateFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useDeleteTransaction() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteTransaction(id),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
-            toast.success('Transaction deleted successfully');
+            toast.success(t('transactions.deleted'));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to delete transaction: ${error.message}`);
+            toast.error(t('transactions.deleteFailedTitle'), { description: error.message });
         },
     });
 }

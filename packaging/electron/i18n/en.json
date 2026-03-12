@@ -1,0 +1,34 @@
+{
+  "common.ok": "OK",
+  "common.cancel": "Cancel",
+
+  "app.failedPrepareEmbedded": "Failed to prepare embedded resources.",
+  "app.dockerRequired": "Docker Desktop is required but is not installed.",
+  "app.dockerRequiredDetail": "Please download and install Docker Desktop, then relaunch Vision.",
+  "app.openDockerSite": "Open docker.com",
+  "app.dockerNotRunning": "Docker Desktop is installed but not running.",
+  "app.dockerNotRunningDetail": "Please open Docker Desktop, wait for the whale icon to appear in the menu bar, then relaunch Vision.",
+  "app.openDockerApp": "Open Docker Desktop",
+
+  "app.failedStart": "Failed to start Vision.",
+  "app.checkDockerLogs": "Check Docker Desktop for logs.",
+
+  "app.startSlow": "App is taking longer than expected to start.",
+  "app.startSlowDetail": "Try opening {url} in your browser in a moment, or check Docker Desktop for logs.",
+
+  "update.download": "Download update",
+  "update.later": "Later",
+  "update.restartNow": "Restart now",
+  "update.availableTitle": "{app} update available",
+  "update.readyTitle": "{app} ready to update",
+  "update.versionAvailable": "Version {version} is available.",
+  "update.versionDownloaded": "Version {version} has been downloaded.",
+  "update.detailDownload": "The update will download in the background and install when you next quit Vision.",
+  "update.detailRestart": "Restart Vision to apply the update.",
+
+  "app.pullingLatestImage": "Pulling latest Vision image…",
+  "app.imageUpdated": "Vision image updated and restarted.",
+  "app.running": "Vision is running."
+  ,"update.downloading": "Downloading Vision update…",
+  "app.stopped": "Vision has been stopped."
+}

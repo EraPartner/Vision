@@ -1,21 +1,24 @@
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MonthlySpendingChartProps {
     data: Array<{ month: string; spending: number; income: number }>;
 }
 
 export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
+    const { t } = useLanguage();
+
     if (!data || data.length === 0) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-lg font-semibold">Monthly Spending vs Income</CardTitle>
-                    <p className="text-sm text-muted-foreground">Last 6 months overview</p>
+                    <CardTitle className="text-lg font-semibold">{t('monthlySpending.title')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('monthlySpending.desc')}</p>
                 </CardHeader>
                 <CardContent>
                     <div className="h-72 flex items-center justify-center text-muted-foreground">
-                        No monthly data available
+                        {t('monthlySpending.noData')}
                     </div>
                 </CardContent>
             </Card>
@@ -25,8 +28,8 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-lg font-semibold">Monthly Spending vs Income</CardTitle>
-                <p className="text-sm text-muted-foreground">Last 6 months overview</p>
+                <CardTitle className="text-lg font-semibold">{t('monthlySpending.title')}</CardTitle>
+                <p className="text-sm text-muted-foreground">{t('monthlySpending.desc')}</p>
             </CardHeader>
             <CardContent>
                 <div className="h-72">
@@ -56,11 +59,11 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
                                 }}
                                 formatter={(value: number, name: string) => [
                                     `€${value.toLocaleString()}`,
-                                    name === "spending" ? "Spending" : "Income",
+                                    name === "spending" ? t('monthlySpending.spending') : t('monthlySpending.income'),
                                 ]}
                             />
                             <Legend
-                                formatter={(value) => (value === "spending" ? "Spending" : "Income")}
+                                formatter={(value) => (value === "spending" ? t('monthlySpending.spending') : t('monthlySpending.income'))}
                             />
                             <Bar
                                 dataKey="spending"

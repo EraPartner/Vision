@@ -1,4 +1,7 @@
 import { useState, useCallback } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,29 +102,6 @@ interface ChartPoint {
   volume: number;
 }
 
-function fmtNum(val: number | null | undefined, opts?: Intl.NumberFormatOptions) {
-  if (val == null || isNaN(val)) return "—";
-  return new Intl.NumberFormat("en-US", opts).format(val);
-}
-
-function fmtPrice(val: number | null | undefined, currency = "USD") {
-  if (val == null || isNaN(val)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(val);
-}
-
-function fmtLargeNum(val: number | null | undefined) {
-  if (val == null || isNaN(val)) return "—";
-  if (val >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
-  if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-  if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
-  return fmtNum(val, { maximumFractionDigits: 0 });
-}
-
 function gradeColor(grade: string): string {
   const g = grade.toLowerCase();
   if (/buy|outperform|overweight|accumulate/.test(g)) return "text-green-500 dark:text-green-400";
@@ -132,15 +112,38 @@ function gradeColor(grade: string): string {
 function fmtDate(ts: number, range: string) {
   const d = new Date(ts);
   if (range === "1d" || range === "5d") {
-    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   }
   if (range === "1mo" || range === "3mo") {
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
-  return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
 
 export default function MarketLookupPage() {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const fmtNum = (val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {
+    if (val == null || isNaN(val)) return "—";
+    return new Intl.NumberFormat(locale, opts).format(val);
+  };
+  const fmtPrice = (val: number | null | undefined, currency = "USD") => {
+    if (val == null || isNaN(val)) return "—";
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(val);
+  };
+  const fmtLargeNum = (val: number | null | undefined) => {
+    if (val == null || isNaN(val)) return "—";
+    if (val >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
+    if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
+    if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
+    return fmtNum(val, { maximumFractionDigits: 0 });
+  };
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
@@ -215,14 +218,14 @@ export default function MarketLookupPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Market Lookup</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('marketLookup.title')}</h1>
       </div>
 
       {/* Search */}
       <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search ticker, company, ETF, index…"
+          placeholder={t('market.searchPlaceholder')}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="pl-10"
@@ -259,9 +262,9 @@ export default function MarketLookupPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <BarChart3 className="h-14 w-14 text-muted-foreground/30 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">Search for a ticker</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-1">{t('market.searchTicker')}</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              Look up any stock, ETF, index, or crypto by name or ticker symbol to see live pricing, charts, and key metrics.
+              {t('market.searchHint')}
             </p>
           </CardContent>
         </Card>
@@ -309,7 +312,7 @@ export default function MarketLookupPage() {
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      <span>Auto-refreshes every 60s</span>
+                      <span>{t('market.autoRefresh')}</span>
                     </div>
                     {quote && (
                       <AddInvestmentFromMarketDialog
@@ -324,7 +327,7 @@ export default function MarketLookupPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
-                No quote data available for {selectedSymbol}
+                {t('market.noQuote', { symbol: selectedSymbol })}
               </CardContent>
             </Card>
           )}
@@ -333,7 +336,7 @@ export default function MarketLookupPage() {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Price Chart</CardTitle>
+                <CardTitle className="text-base">{t('market.priceChart')}</CardTitle>
                 <div className="flex gap-1">
                   {RANGES.map((r) => (
                     <Button
@@ -387,7 +390,7 @@ export default function MarketLookupPage() {
                           fontSize: 12,
                         }}
                         labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                        formatter={(value: number) => [fmtPrice(value, chartData.currency || "USD"), "Price"]}
+                        formatter={(value: number) => [fmtPrice(value, chartData.currency || "USD"), t('market.priceChart')]}
                       />
                       <Area
                         type="monotone"
@@ -416,14 +419,14 @@ export default function MarketLookupPage() {
                           fontSize: 12,
                         }}
                         labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                        formatter={(value: number) => [fmtLargeNum(value), "Volume"]}
+                        formatter={(value: number) => [fmtLargeNum(value), t('market.volume')]}
                       />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
                 <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
-                  No chart data available
+                  {t('market.noChartData')}
                 </div>
               )}
             </CardContent>
@@ -435,18 +438,18 @@ export default function MarketLookupPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Activity className="h-4 w-4" /> Trading Info
+                    <Activity className="h-4 w-4" /> {t('market.tradingInfo')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2.5">
                     {[
-                      { label: "Open", value: fmtPrice(quote.open, quote.currency) },
-                      { label: "Day High", value: fmtPrice(quote.dayHigh, quote.currency) },
-                      { label: "Day Low", value: fmtPrice(quote.dayLow, quote.currency) },
-                      { label: "Previous Close", value: fmtPrice(quote.prevClose, quote.currency) },
-                      { label: "Volume", value: fmtLargeNum(quote.volume) },
-                      { label: "Avg Volume (3M)", value: fmtLargeNum(quote.avgVolume) },
+                      { label: t('market.open'), value: fmtPrice(quote.open, quote.currency) },
+                      { label: t('market.dayHigh'), value: fmtPrice(quote.dayHigh, quote.currency) },
+                      { label: t('market.dayLow'), value: fmtPrice(quote.dayLow, quote.currency) },
+                      { label: t('market.prevClose'), value: fmtPrice(quote.prevClose, quote.currency) },
+                      { label: t('market.volume'), value: fmtLargeNum(quote.volume) },
+                      { label: t('market.avgVolume'), value: fmtLargeNum(quote.avgVolume) },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
@@ -460,20 +463,20 @@ export default function MarketLookupPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" /> Fundamentals
+                    <DollarSign className="h-4 w-4" /> {t('market.fundamentals')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2.5">
                     {[
-                      { label: "Market Cap", value: fmtLargeNum(quote.marketCap) },
-                      { label: "P/E Ratio (TTM)", value: quote.pe ? quote.pe.toFixed(2) : "—" },
-                      { label: "Forward P/E", value: quote.forwardPE ? quote.forwardPE.toFixed(2) : "—" },
-                      { label: "EPS (TTM)", value: quote.eps ? fmtPrice(quote.eps, quote.currency) : "—" },
-                      { label: "Dividend Yield", value: quote.dividendYield ? `${(quote.dividendYield * 100).toFixed(2)}%` : "—" },
-                      { label: "Beta", value: quote.beta != null ? quote.beta.toFixed(2) : "—" },
-                      { label: "Price / Book", value: quote.priceToBook != null ? quote.priceToBook.toFixed(2) : "—" },
-                      { label: "52-Week Range", value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
+                      { label: t('market.marketCap'), value: fmtLargeNum(quote.marketCap) },
+                      { label: t('market.pe'), value: quote.pe ? quote.pe.toFixed(2) : "—" },
+                      { label: t('market.forwardPE'), value: quote.forwardPE ? quote.forwardPE.toFixed(2) : "—" },
+                      { label: t('market.eps'), value: quote.eps ? fmtPrice(quote.eps, quote.currency) : "—" },
+                      { label: t('market.divYield'), value: quote.dividendYield ? `${(quote.dividendYield * 100).toFixed(2)}%` : "—" },
+                      { label: t('market.beta'), value: quote.beta != null ? quote.beta.toFixed(2) : "—" },
+                      { label: t('market.priceBook'), value: quote.priceToBook != null ? quote.priceToBook.toFixed(2) : "—" },
+                      { label: t('market.52wRange'), value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}` },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex justify-between items-center py-1 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
@@ -496,11 +499,11 @@ export default function MarketLookupPage() {
             const bullPct = bullish / total;
             const bearPct = bearish / total;
             const verdict =
-              bullPct >= 0.6 ? "Strong Buy"
-                : bullPct >= 0.45 ? "Buy"
-                  : bearPct >= 0.6 ? "Strong Sell"
-                    : bearPct >= 0.45 ? "Sell"
-                      : "Hold";
+              bullPct >= 0.6 ? t('market.strongBuy')
+                : bullPct >= 0.45 ? t('market.buy')
+                  : bearPct >= 0.6 ? t('market.strongSell')
+                    : bearPct >= 0.45 ? t('market.sell')
+                      : t('market.hold');
             const verdictColor =
               bullPct >= 0.45 ? "text-green-500 dark:text-green-400"
                 : bearPct >= 0.45 ? "text-destructive"
@@ -509,22 +512,24 @@ export default function MarketLookupPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4" /> Analyst Ratings
+                    <Users className="h-4 w-4" /> {t('market.analystRatings')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-start gap-6">
                     <div className="text-center shrink-0">
                       <div className={cn("text-2xl font-bold", verdictColor)}>{verdict}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{total} analyst{total !== 1 ? "s" : ""}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {total !== 1 ? t('market.analystCountPlural', { n: total }) : t('market.analystCount', { n: total })}
+                      </div>
                     </div>
                     <div className="flex-1 space-y-2">
                       {([
-                        { label: "Strong Buy", count: strongBuy, barClass: "bg-green-600" },
-                        { label: "Buy", count: buy, barClass: "bg-green-400" },
-                        { label: "Hold", count: hold, barClass: "bg-yellow-400" },
-                        { label: "Sell", count: sell, barClass: "bg-red-400" },
-                        { label: "Strong Sell", count: strongSell, barClass: "bg-red-600" },
+                        { label: t('market.strongBuy'), count: strongBuy, barClass: "bg-green-600" },
+                        { label: t('market.buy'), count: buy, barClass: "bg-green-400" },
+                        { label: t('market.hold'), count: hold, barClass: "bg-yellow-400" },
+                        { label: t('market.sell'), count: sell, barClass: "bg-red-400" },
+                        { label: t('market.strongSell'), count: strongSell, barClass: "bg-red-600" },
                       ] as { label: string; count: number; barClass: string }[]).map(({ label, count, barClass }) => (
                         <div key={label} className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground w-20 shrink-0">{label}</span>
@@ -542,7 +547,7 @@ export default function MarketLookupPage() {
 
                   {quote.recentAnalystActions && quote.recentAnalystActions.length > 0 && (
                     <div className="border-t border-border pt-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">Recent Actions</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">{t('market.recentActions')}</p>
                       <div className="space-y-2">
                         {quote.recentAnalystActions.map((action, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs">
@@ -552,7 +557,7 @@ export default function MarketLookupPage() {
                                 ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                                 : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
                             <span className="text-muted-foreground shrink-0 w-14">
-                              {new Date(action.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              {new Date(action.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                             </span>
                             <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
                             <span className={cn("shrink-0", gradeColor(action.toGrade))}>
@@ -579,9 +584,9 @@ export default function MarketLookupPage() {
           {/* News */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Newspaper className="h-4 w-4" /> Latest News
-              </CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Newspaper className="h-4 w-4" /> {t('market.latestNews')}
+                </CardTitle>
             </CardHeader>
             <CardContent>
               {isNewsLoading ? (
@@ -623,7 +628,7 @@ export default function MarketLookupPage() {
                           {article.publishedAt && (
                             <>
                               <span>·</span>
-                              <span>{new Date(article.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                              <span>{new Date(article.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
                             </>
                           )}
                           <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -633,7 +638,7 @@ export default function MarketLookupPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No news available</p>
+                <p className="text-sm text-muted-foreground text-center py-4">{t('market.noNews')}</p>
               )}
             </CardContent>
           </Card>

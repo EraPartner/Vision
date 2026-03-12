@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { formatCurrency } from "@/utils/currency";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Legend, ReferenceLine,
@@ -25,15 +26,6 @@ function getMonthlyInflation(year: number): number {
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
-const PERIOD_LABELS: Record<Period, string> = {
-    "1m": "1 Month",
-    "3m": "3 Months",
-    "6m": "6 Months",
-    "1y": "1 Year",
-    "3y": "3 Years",
-    "all": "All Time",
-};
-
 interface MonthlySnapshot {
     month: string; // YYYY-MM
     date: Date;
@@ -46,9 +38,21 @@ interface MonthlySnapshot {
     cumulativeInflation: number;
 }
 
+const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
+
 export default function PerformancePage() {
+    const { t, language } = useLanguage();
     const { summaries, totalPortfolioValue, totalGainLoss, investments, transactions } = usePortfolio();
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+
+    const PERIOD_LABELS: Record<Period, string> = {
+        "1m": t('performance.period.1m'),
+        "3m": t('performance.period.3m'),
+        "6m": t('performance.period.6m'),
+        "1y": t('performance.period.1y'),
+        "3y": t('performance.period.3y'),
+        "all": t('performance.period.all'),
+    };
 
     // ─── Compute monthly snapshots ───
     const allSnapshots: MonthlySnapshot[] = useMemo(() => {
@@ -208,7 +212,13 @@ export default function PerformancePage() {
         return { years, data };
     }, [allSnapshots]);
 
-    const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    // Locale-aware month abbreviations (no hardcoded English)
+    const MONTH_LABELS = useMemo(() => {
+        const locale = language === 'nl' ? 'nl-NL' : 'en-US';
+        return Array.from({ length: 12 }, (_, i) =>
+            new Date(2000, i, 1).toLocaleDateString(locale, { month: 'short' })
+        );
+    }, [language]);
 
     function getHeatColor(val: number | null): string {
         if (val === null) return "bg-muted/30";
@@ -224,18 +234,18 @@ export default function PerformancePage() {
     // ─── Chart data ───
     const chartData = filteredSnapshots.map((s) => ({
         month: format(s.date, "MMM yy"),
-        "Portfolio Value": s.value,
-        "Total Invested": s.invested,
-        "Inflation-Adjusted": s.inflationAdjustedValue,
+        [t('portfolio.totalInvested')]: s.invested,
+        [t('performance.inflationAdjusted')]: s.inflationAdjustedValue,
+        [t('portfolio.portfolioValue')]: s.value,
     }));
 
     if (summaries.length === 0) {
         return (
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-foreground">Performance</h1>
+                <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
                 <Card>
                     <CardContent className="flex items-center justify-center h-48">
-                        <p className="text-muted-foreground">Add investments to see performance metrics.</p>
+                        <p className="text-muted-foreground">{t('performance.noData')}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -245,7 +255,7 @@ export default function PerformancePage() {
     if (allSnapshots.length === 0) {
         return (
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-foreground">Performance</h1>
+                <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
                 <Card>
                     <CardContent className="flex items-center justify-center h-48">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -262,14 +272,14 @@ export default function PerformancePage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground">Performance</h1>
-                    <p className="text-muted-foreground mt-1">Portfolio returns & inflation-adjusted metrics</p>
+                    <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
+                    <p className="text-muted-foreground mt-1">{t('performance.subtitle')}</p>
                 </div>
             </div>
 
             {/* Period selector */}
             <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-                {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+                {PERIOD_KEYS.map((p) => (
                     <button
                         key={p}
                         onClick={() => setSelectedPeriod(p)}
@@ -288,30 +298,30 @@ export default function PerformancePage() {
             {periodMetrics && (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <MetricCard
-                        title="Portfolio Value"
+                        title={t('portfolio.portfolioValue')}
                         value={formatCurrency(periodMetrics.currentValue, "EUR")}
-                        subtitle={`${formatCurrency(periodMetrics.valueChange, "EUR")} in period`}
+                        subtitle={t('performance.inPeriod', { amount: formatCurrency(periodMetrics.valueChange, "EUR") })}
                         icon={DollarSign}
                         trend={periodMetrics.valueChange >= 0}
                     />
                     <MetricCard
-                        title="Total Return"
+                        title={t('portfolio.totalReturn')}
                         value={`${periodMetrics.totalReturnPct >= 0 ? "+" : ""}${periodMetrics.totalReturnPct.toFixed(2)}%`}
                         subtitle={formatCurrency(periodMetrics.totalGainLoss, "EUR")}
                         icon={periodMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
                         trend={periodMetrics.totalReturnPct >= 0}
                     />
                     <MetricCard
-                        title="Annualized Return"
+                        title={t('portfolio.annualizedReturn')}
                         value={`${periodMetrics.annualizedReturn >= 0 ? "+" : ""}${periodMetrics.annualizedReturn.toFixed(2)}%`}
-                        subtitle="Projected yearly"
+                        subtitle={t('performance.projectedYearly')}
                         icon={Activity}
                         trend={periodMetrics.annualizedReturn >= 0}
                     />
                     <MetricCard
-                        title="Real Return (Infl. Adj.)"
+                        title={t('portfolio.realReturn')}
                         value={`${periodMetrics.periodRealReturn >= 0 ? "+" : ""}${periodMetrics.periodRealReturn.toFixed(2)}%`}
-                        subtitle={`Cum. inflation: ${periodMetrics.cumulativeInflation.toFixed(1)}%`}
+                        subtitle={t('performance.cumulativeInflation', { n: periodMetrics.cumulativeInflation.toFixed(1) })}
                         icon={Percent}
                         trend={periodMetrics.periodRealReturn >= 0}
                     />
@@ -324,10 +334,10 @@ export default function PerformancePage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-primary" />
-                            Portfolio Value Over Time
+                            {t('performance.valueOverTime')}
                         </CardTitle>
                         <CardDescription>
-                            Nominal vs inflation-adjusted value ({PERIOD_LABELS[selectedPeriod]})
+                            {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -366,7 +376,7 @@ export default function PerformancePage() {
                                 <Legend />
                                 <Area
                                     type="monotone"
-                                    dataKey="Total Invested"
+                                    dataKey={t('portfolio.totalInvested')}
                                     stroke="hsl(var(--muted-foreground))"
                                     fill="url(#gradInvested)"
                                     strokeWidth={1.5}
@@ -374,14 +384,14 @@ export default function PerformancePage() {
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey="Inflation-Adjusted"
+                                    dataKey={t('performance.inflationAdjusted')}
                                     stroke="hsl(30, 80%, 55%)"
                                     fill="url(#gradInflAdj)"
                                     strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey="Portfolio Value"
+                                    dataKey={t('portfolio.portfolioValue')}
                                     stroke="hsl(var(--primary))"
                                     fill="url(#gradValue)"
                                     strokeWidth={2.5}
@@ -402,19 +412,19 @@ export default function PerformancePage() {
                         const classInvested = items.reduce((s, i) => s + i.totalInvested, 0);
                         const classGain = items.reduce((s, i) => s + i.gainLoss, 0);
                         const classPct = classInvested > 0 ? (classGain / classInvested) * 100 : 0;
-                        const labels: Record<string, string> = {
-                            stock: "Stocks", etf: "ETFs", crypto: "Crypto",
-                            real_estate: "Real Estate", savings: "Savings", bond: "Bonds",
-                        };
+                        const label = t(`performance.${cls}` as any) || cls;
+                        const count = items.length;
                         return (
                             <Card key={cls} className="border shadow-sm">
                                 <CardContent className="pt-4 pb-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm font-semibold text-muted-foreground">
-                                            {labels[cls] || cls}
+                                            {label}
                                         </span>
                                         <span className="text-xs text-muted-foreground">
-                                            {items.length} holding{items.length !== 1 ? "s" : ""}
+                                            {count === 1
+                                                ? t('performance.holdings', { count: String(count) })
+                                                : t('performance.holdingsPlural', { count: String(count) })}
                                         </span>
                                     </div>
                                     <div className="text-xl font-bold text-foreground">
@@ -424,7 +434,7 @@ export default function PerformancePage() {
                                         {classGain >= 0 ? "+" : ""}{formatCurrency(classGain, "EUR")} ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
-                                        Invested: {formatCurrency(classInvested, "EUR")}
+                                        {t('portfolio.invested', { amount: formatCurrency(classInvested, "EUR") })}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -439,22 +449,22 @@ export default function PerformancePage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Calendar className="h-5 w-5 text-primary" />
-                            Monthly Returns Heatmap
+                            {t('performance.monthlyHeatmap')}
                         </CardTitle>
-                        <CardDescription>Month-over-month portfolio return (%)</CardDescription>
+                        <CardDescription>{t('performance.heatmapDesc')}</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs">
                                 <thead>
                                     <tr>
-                                        <th className="text-left py-2 px-2 font-semibold text-muted-foreground w-16">Year</th>
+                                        <th className="text-left py-2 px-2 font-semibold text-muted-foreground w-16">{t('performance.year')}</th>
                                         {MONTH_LABELS.map((m) => (
                                             <th key={m} className="text-center py-2 px-1 font-semibold text-muted-foreground min-w-[48px]">
                                                 {m}
                                             </th>
                                         ))}
-                                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground min-w-[56px]">YTD</th>
+                                         <th className="text-center py-2 px-2 font-semibold text-muted-foreground min-w-[56px]">{t('performance.ytd')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -473,7 +483,7 @@ export default function PerformancePage() {
                                                     <td key={idx} className="py-1 px-1">
                                                         <div
                                                             className={`rounded-md py-1.5 px-1 text-center font-mono font-medium transition-colors ${getHeatColor(val)}`}
-                                                            title={val !== null ? `${val.toFixed(2)}%` : "No data"}
+                                                            title={val !== null ? `${val.toFixed(2)}%` : t('common.noData2')}
                                                         >
                                                             {val !== null ? `${val > 0 ? "+" : ""}${val.toFixed(1)}` : "–"}
                                                         </div>
@@ -493,9 +503,9 @@ export default function PerformancePage() {
                             </table>
                         </div>
 
-                        {/* Legend */}
+                         {/* Legend */}
                         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
-                            <span>Loss</span>
+                             <span>{t('performance.loss')}</span>
                             <div className="flex gap-0.5">
                                 <div className="w-6 h-4 rounded-sm bg-rose-600" />
                                 <div className="w-6 h-4 rounded-sm bg-rose-500" />
@@ -505,7 +515,7 @@ export default function PerformancePage() {
                                 <div className="w-6 h-4 rounded-sm bg-emerald-500" />
                                 <div className="w-6 h-4 rounded-sm bg-emerald-600" />
                             </div>
-                            <span>Gain</span>
+                            <span>{t('performance.gain')}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -517,7 +527,7 @@ export default function PerformancePage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-accent">
                             <TrendingUp className="h-5 w-5" />
-                            Top Performers
+                            {t('performance.topPerformers')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -549,7 +559,7 @@ export default function PerformancePage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-destructive">
                             <TrendingDown className="h-5 w-5" />
-                            Bottom Performers
+                            {t('performance.bottomPerformers')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>

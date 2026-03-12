@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, type NetWorthSnapshot } from "@/lib/api";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,30 +13,33 @@ import {
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function fmt(val: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "EUR",
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(val);
-}
-
-function fmtMonth(month: string) {
+function fmtMonth(month: string, locale: string) {
   const [y, m] = month.split("-");
   const date = new Date(Number(y), Number(m) - 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+  return date.toLocaleDateString(locale, { month: "short", year: "2-digit" });
 }
 
 export default function NetWorthPage() {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const { data, isLoading, error } = useQuery({
     queryKey: ["net-worth"],
     queryFn: () => apiClient.getNetWorth(),
     staleTime: 60_000,
   });
 
+  function fmt(val: number) {
+    return new Intl.NumberFormat(locale, {
+      style: "currency", currency: "EUR",
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(val);
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Net Worth</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
             <Card key={i}><CardContent className="pt-6"><Skeleton className="h-16 w-full" /></CardContent></Card>
@@ -47,13 +53,13 @@ export default function NetWorthPage() {
   if (error || !data) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Net Worth</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Wallet className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">Unable to load net worth</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-1">{t('networth.unableToLoad')}</h3>
             <p className="text-muted-foreground text-sm">
-              {error instanceof Error ? error.message : "Please try again later."}
+              {error instanceof Error ? error.message : t('networth.tryAgain')}
             </p>
           </CardContent>
         </Card>
@@ -74,28 +80,28 @@ export default function NetWorthPage() {
 
   const cards = [
     {
-      title: "Net Worth",
+      title: t('networth.title'),
       value: fmt(current.netWorth),
       icon: Wallet,
       desc: (
         <span className={cn("text-xs font-medium", isPositiveChange ? "text-accent" : "text-destructive")}>
-          {isPositiveChange ? "+" : ""}{fmt(monthlyChange)} ({monthlyChangePercent >= 0 ? "+" : ""}{monthlyChangePercent.toFixed(1)}%) this month
+          {isPositiveChange ? "+" : ""}{fmt(monthlyChange)} ({monthlyChangePercent >= 0 ? "+" : ""}{monthlyChangePercent.toFixed(1)}%) {t('networth.thisMonth')}
         </span>
       ),
       cls: "text-primary",
     },
     {
-      title: "Liquid Assets",
+      title: t('networth.liquid'),
       value: fmt(current.liquid),
       icon: Landmark,
-      desc: `${current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : 0}% of net worth`,
+      desc: `${current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : 0}% ${t('networth.ofNetWorth')}`,
       cls: "text-foreground",
     },
     {
-      title: "Investments",
+      title: t('networth.investments'),
       value: fmt(current.investments),
       icon: PiggyBank,
-      desc: `${current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : 0}% of net worth`,
+      desc: `${current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : 0}% ${t('networth.ofNetWorth')}`,
       cls: "text-foreground",
     },
   ];
@@ -103,13 +109,13 @@ export default function NetWorthPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Net Worth</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
         <Badge variant="outline" className={cn(
           "text-sm px-3 py-1",
           allTimeChange >= 0 ? "border-accent/30 text-accent" : "border-destructive/30 text-destructive"
         )}>
           {allTimeChange >= 0 ? <TrendingUp className="h-3.5 w-3.5 mr-1" /> : <TrendingDown className="h-3.5 w-3.5 mr-1" />}
-          {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} all time ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
+          {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
         </Badge>
       </div>
 
@@ -131,8 +137,8 @@ export default function NetWorthPage() {
       {/* Main Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Net Worth Over Time</CardTitle>
-          <CardDescription>Monthly snapshots combining liquid assets and investments</CardDescription>
+          <CardTitle>{t('networth.overTime')}</CardTitle>
+          <CardDescription>{t('networth.chartDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={420}>
@@ -154,7 +160,7 @@ export default function NetWorthPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="month"
-                tickFormatter={fmtMonth}
+                tickFormatter={(v: string) => fmtMonth(v, locale)}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
                 axisLine={{ stroke: "hsl(var(--border))" }}
               />
@@ -171,14 +177,14 @@ export default function NetWorthPage() {
                   borderRadius: "var(--radius)",
                   color: "hsl(var(--card-foreground))",
                 }}
-                labelFormatter={fmtMonth}
+                labelFormatter={(v: string) => fmtMonth(v, locale)}
                 formatter={(value: number, name: string) => [fmt(value), name]}
               />
               <Legend />
               <Area
                 type="monotone"
                 dataKey="netWorth"
-                name="Net Worth"
+                name={t('networth.title')}
                 stroke="hsl(var(--primary))"
                 strokeWidth={2.5}
                 fill="url(#gradNetWorth)"
@@ -186,7 +192,7 @@ export default function NetWorthPage() {
               <Area
                 type="monotone"
                 dataKey="liquid"
-                name="Liquid Assets"
+                name={t('networth.liquid')}
                 stroke="hsl(var(--accent))"
                 strokeWidth={1.5}
                 fill="url(#gradLiquid)"
@@ -195,7 +201,7 @@ export default function NetWorthPage() {
               <Area
                 type="monotone"
                 dataKey="investments"
-                name="Investments"
+                name={t('networth.investments')}
                 stroke="hsl(217, 91%, 60%)"
                 strokeWidth={1.5}
                 fill="url(#gradInvest)"
@@ -210,7 +216,7 @@ export default function NetWorthPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Peak Net Worth</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.peak')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold text-foreground">{fmt(peak)}</p>
@@ -218,7 +224,7 @@ export default function NetWorthPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Lowest Point</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.lowest')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold text-foreground">{fmt(trough)}</p>
@@ -226,7 +232,7 @@ export default function NetWorthPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Months Tracked</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.monthsTracked')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold text-foreground">{snapshots.length}</p>
@@ -238,15 +244,21 @@ export default function NetWorthPage() {
       {snapshots.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Monthly Breakdown</CardTitle>
+            <CardTitle>{t('networth.monthlyBreakdown')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {["Month", "Liquid Assets", "Investments", "Net Worth", "Change"].map(h => (
-                      <th key={h} className={cn("py-2 px-3 font-medium text-muted-foreground", h !== "Month" ? "text-right" : "text-left")}>{h}</th>
+                    {[
+                      t('networth.month'),
+                      t('networth.liquid'),
+                      t('networth.investments'),
+                      t('networth.title'),
+                      t('networth.change'),
+                    ].map(h => (
+                      <th key={h} className={cn("py-2 px-3 font-medium text-muted-foreground", h !== t('networth.month') ? "text-right" : "text-left")}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -256,7 +268,7 @@ export default function NetWorthPage() {
                     const change = prev ? s.netWorth - prev.netWorth : 0;
                     return (
                       <tr key={s.month} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-3 font-medium">{fmtMonth(s.month)}</td>
+                        <td className="py-2 px-3 font-medium">{fmtMonth(s.month, locale)}</td>
                         <td className="text-right py-2 px-3 tabular-nums">{fmt(s.liquid)}</td>
                         <td className="text-right py-2 px-3 tabular-nums">{fmt(s.investments)}</td>
                         <td className="text-right py-2 px-3 tabular-nums font-bold">{fmt(s.netWorth)}</td>

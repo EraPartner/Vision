@@ -3,6 +3,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Filter, FilterX } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ExclusionToggleProps {
   graphKey: string;
@@ -17,6 +18,7 @@ export function ExclusionToggle({
   onToggle,
   exclusionsApply,
 }: ExclusionToggleProps) {
+  const { t } = useLanguage();
   return (
     <TooltipProvider>
       <Tooltip>
@@ -34,16 +36,16 @@ export function ExclusionToggle({
           >
             {isFiltered ? <Filter className="h-4 w-4" /> : <FilterX className="h-4 w-4" />}
             {exclusionsApply
-              ? (isFiltered ? "Filters Active" : "Filters Ignored")
-              : "No exclusions set"}
+              ? (isFiltered ? t('exclusion.filtersActive') : t('exclusion.filtersIgnored'))
+              : t('exclusion.noExclusions')}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
           {!exclusionsApply
-            ? "No exclusions configured in settings"
+            ? t('exclusion.tooltipNone')
             : isFiltered
-              ? "Exclusions applied — click to show all data"
-              : "Showing all data — click to apply exclusions"}
+              ? t('exclusion.tooltipActive')
+              : t('exclusion.tooltipInactive')}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

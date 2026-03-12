@@ -14,6 +14,7 @@
  *   6. planned_transaction_executions (FK → planned_transactions, transactions)
  *   7. transaction_raw_references (FK → transactions)
  *   8. belfius_raw_transactions, revolut_raw_transactions, kbc_raw_transactions
+ *      sabb_raw_transactions, wise_raw_transactions, vision_raw_transactions
  *   9. custom_raw_transactions, manual_raw_transactions
  *  10. exchange_rates
  *  11. investments, portfolio_transactions
@@ -61,6 +62,9 @@ export async function initializeSchema() {
     await createBelfiusRaw();
     await createRevolutRaw();
     await createKbcRaw();
+    await createSABBRaw();
+    await createWiseRaw();
+    await createVisionRaw();
     await createCustomRaw();
     await createManualRaw();
     await createExchangeRates();
@@ -346,6 +350,78 @@ async function createKbcRaw() {
   await safeIndex('idx_kbc_hash', 'kbc_raw_transactions', 'deduplication_hash');
   await safeIndex('idx_kbc_account_date', 'kbc_raw_transactions', 'account_number, transaction_date');
   await safeIndex('idx_kbc_statement', 'kbc_raw_transactions', 'statement_number');
+}
+
+async function createSABBRaw() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS sabb_raw_transactions (
+      id SERIAL PRIMARY KEY,
+      deduplication_hash VARCHAR(64) NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+      transaction_date DATE NOT NULL,
+      posting_date DATE,
+      description TEXT,
+      amount NUMERIC(15,2) NOT NULL,
+      currency VARCHAR(3) NOT NULL,
+      status VARCHAR(50),
+      amount_other_currency TEXT,
+      raw_csv_line TEXT NOT NULL
+    );
+  `);
+  await safeIndex('idx_sabb_hash', 'sabb_raw_transactions', 'deduplication_hash');
+  await safeIndex('idx_sabb_date', 'sabb_raw_transactions', 'transaction_date');
+}
+
+async function createWiseRaw() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS wise_raw_transactions (
+      id SERIAL PRIMARY KEY,
+      deduplication_hash VARCHAR(64) NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+      transfer_id TEXT,
+      direction VARCHAR(20),
+      status VARCHAR(50) NOT NULL,
+      finished_on TIMESTAMPTZ,
+      source_name TEXT,
+      source_amount NUMERIC(15,2),
+      source_currency VARCHAR(3),
+      target_name TEXT,
+      target_amount NUMERIC(15,2),
+      target_currency VARCHAR(3),
+      exchange_rate NUMERIC(20,10),
+      source_fee_amount NUMERIC(15,2),
+      source_fee_currency VARCHAR(3),
+      reference TEXT,
+      batch TEXT,
+      raw_csv_line TEXT NOT NULL
+    );
+  `);
+  await safeIndex('idx_wise_hash', 'wise_raw_transactions', 'deduplication_hash');
+  await safeIndex('idx_wise_finished_on', 'wise_raw_transactions', 'finished_on');
+  await safeIndex('idx_wise_transfer_id', 'wise_raw_transactions', 'transfer_id');
+}
+
+async function createVisionRaw() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS vision_raw_transactions (
+      id SERIAL PRIMARY KEY,
+      deduplication_hash VARCHAR(64) NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+      transaction_date DATE NOT NULL,
+      bank_account VARCHAR(100),
+      recipient TEXT,
+      memo TEXT,
+      amount NUMERIC(15,2) NOT NULL,
+      currency VARCHAR(3) NOT NULL,
+      balance NUMERIC(15,2),
+      category TEXT,
+      comment TEXT,
+      raw_csv_line TEXT NOT NULL
+    );
+  `);
+  await safeIndex('idx_vision_hash', 'vision_raw_transactions', 'deduplication_hash');
+  await safeIndex('idx_vision_date', 'vision_raw_transactions', 'transaction_date');
+  await safeIndex('idx_vision_bank_account', 'vision_raw_transactions', 'bank_account');
 }
 
 async function createCustomRaw() {

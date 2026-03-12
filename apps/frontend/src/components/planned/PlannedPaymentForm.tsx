@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { apiClient } from "@/lib/api";
 import type { Recipient, Category } from "@/types/api";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type Frequency = PlannedPayment["frequency"];
 
@@ -32,6 +33,7 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initial }: Props) {
+  const { t } = useLanguage();
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial?.amount?.toString() ?? "");
   const [currency, setCurrency] = useState(initial?.currency ?? "EUR");
@@ -74,7 +76,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
   const handleSubmit = () => {
     if (!name.trim() || !amount || !dueDate) {
-      alert("Please fill in all required fields (Name, Amount, Due Date)");
+      alert(t('plannedForm.requiredFieldsHint'));
       return;
     }
 
@@ -83,7 +85,6 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     const day = String(dueDate.getDate()).padStart(2, '0');
     const dueDateStr = `${year}-${month}-${day}`;
 
-    // Compute endDateStr only if an end date was selected (optional)
     let endDateStr: string | undefined = undefined;
     if (endDate) {
       const eYear = endDate.getFullYear();
@@ -91,7 +92,6 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       const eDay = String(endDate.getDate()).padStart(2, '0');
       endDateStr = `${eYear}-${eMonth}-${eDay}`;
     }
-
 
     onSubmit({
       name: name.trim(),
@@ -118,7 +118,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit Payment" : "New Planned Payment"}</DialogTitle>
+          <DialogTitle>{initial ? t('plannedForm.editTitle') : t('plannedForm.newTitle')}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -129,18 +129,18 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
           <div className="grid gap-4 py-2">
             {/* Name */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-name">Name *</Label>
-              <Input id="pp-name" placeholder="e.g. Rent, Netflix…" value={name} onChange={(e) => setName(e.target.value)} />
+              <Label htmlFor="pp-name">{t('plannedForm.nameRequired2')}</Label>
+              <Input id="pp-name" placeholder={t('plannedForm.namePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
 
             {/* Amount + Currency */}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 grid gap-1.5">
-                <Label htmlFor="pp-amount">Amount *</Label>
+                <Label htmlFor="pp-amount">{t('plannedForm.amountRequired2')}</Label>
                 <Input id="pp-amount" type="number" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="pp-currency">Currency</Label>
+                <Label htmlFor="pp-currency">{t('plannedForm.currency')}</Label>
                 <Select value={currency} onValueChange={setCurrency}>
                   <SelectTrigger id="pp-currency"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -154,12 +154,12 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Due date */}
             <div className="grid gap-1.5">
-              <Label>Due Date *</Label>
+              <Label>{t('plannedForm.dueDate')}</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className={cn("justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                    {dueDate ? format(dueDate, "PPP") : t('plannedForm.pickDate')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -168,15 +168,15 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
               </Popover>
             </div>
 
-            {/* Recipient (Optional) */}
+            {/* Recipient */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-recipient">Recipient</Label>
+              <Label htmlFor="pp-recipient">{t('plannedForm.recipient')}</Label>
               <Select value={recipientId != null ? String(recipientId) : "none"} onValueChange={(v) => setRecipientId(v === "none" ? undefined : parseInt(v))}>
                 <SelectTrigger id="pp-recipient">
-                  <SelectValue placeholder="Select a recipient (optional)" />
+                  <SelectValue placeholder={t('plannedForm.recipientOptional')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t('plannedForm.freq.none')}</SelectItem>
                   {recipients.map((r) => (
                     <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
                   ))}
@@ -186,13 +186,13 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Category */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-category">Category</Label>
+              <Label htmlFor="pp-category">{t('plannedForm.category')}</Label>
               <Select value={categoryId?.toString() ?? "none"} onValueChange={(v) => setCategoryId(v === "none" ? undefined : parseInt(v))}>
                 <SelectTrigger id="pp-category">
-                  <SelectValue placeholder="Select a category (optional)" />
+                  <SelectValue placeholder={t('plannedForm.categoryOptional')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t('plannedForm.freq.none')}</SelectItem>
                   {categories.map((c) => (
                     <SelectItem key={c.id} value={c.id.toString()}>
                       {c.general}:{c.detail}
@@ -204,15 +204,15 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Bank account */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-bank">Bank Account</Label>
-              <Input id="pp-bank" placeholder="e.g. Main checking" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+              <Label htmlFor="pp-bank">{t('plannedForm.bankAccount')}</Label>
+              <Input id="pp-bank" placeholder={t('plannedForm.bankPlaceholder')} value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
             </div>
 
             {/* Recurring toggle */}
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <Label htmlFor="pp-recurring" className="font-medium">Recurring</Label>
-                <p className="text-xs text-muted-foreground">Repeats on a schedule</p>
+                <Label htmlFor="pp-recurring" className="font-medium">{t('plannedForm.recurring')}</Label>
+                <p className="text-xs text-muted-foreground">{t('plannedForm.recurringDesc')}</p>
               </div>
               <Switch id="pp-recurring" checked={isRecurring} onCheckedChange={setIsRecurring} />
             </div>
@@ -221,36 +221,36 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {isRecurring && (
               <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
                 <div className="grid gap-1.5">
-                  <Label>Frequency</Label>
+                  <Label>{t('plannedForm.frequency')}</Label>
                   <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="biweekly">Every 2 weeks</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="yearly">Yearly</SelectItem>
-                      <SelectItem value="custom">Custom interval</SelectItem>
+                      <SelectItem value="daily">{t('plannedForm.freq.daily')}</SelectItem>
+                      <SelectItem value="weekly">{t('plannedForm.freq.weekly')}</SelectItem>
+                      <SelectItem value="biweekly">{t('plannedForm.freq.biweekly')}</SelectItem>
+                      <SelectItem value="monthly">{t('plannedForm.freq.monthly')}</SelectItem>
+                      <SelectItem value="quarterly">{t('plannedForm.freq.quarterly')}</SelectItem>
+                      <SelectItem value="yearly">{t('plannedForm.freq.yearly')}</SelectItem>
+                      <SelectItem value="custom">{t('plannedForm.freq.custom')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {frequency === "custom" && (
                   <div className="grid gap-1.5">
-                    <Label htmlFor="pp-custom-days">Repeat every N days</Label>
-                    <Input id="pp-custom-days" type="number" min={1} placeholder="e.g. 10" value={customDays} onChange={(e) => setCustomDays(e.target.value)} />
+                    <Label htmlFor="pp-custom-days">{t('plannedForm.repeatEvery')}</Label>
+                    <Input id="pp-custom-days" type="number" min={1} placeholder={t('plannedForm.customDaysPlaceholder')} value={customDays} onChange={(e) => setCustomDays(e.target.value)} />
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
-                    <Label>End Date</Label>
+                    <Label>{t('plannedForm.endDate')}</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal text-xs", !endDate && "text-muted-foreground")}>
                           <CalendarIcon className="mr-1 h-3 w-3" />
-                          {endDate ? format(endDate, "PP") : "None"}
+                          {endDate ? format(endDate, "PP") : t('plannedForm.freq.none')}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -259,7 +259,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
                     </Popover>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="pp-max">Max occurrences</Label>
+                    <Label htmlFor="pp-max">{t('plannedForm.maxOccurrences')}</Label>
                     <Input id="pp-max" type="number" min={1} placeholder="∞" value={maxOccurrences} onChange={(e) => setMaxOccurrences(e.target.value)} />
                   </div>
                 </div>
@@ -268,23 +268,23 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
             {/* Notes */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-notes">Notes</Label>
-              <Textarea id="pp-notes" placeholder="Any additional details…" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+              <Label htmlFor="pp-notes">{t('plannedForm.notes')}</Label>
+              <Textarea id="pp-notes" placeholder={t('plannedForm.notesPlaceholder2')} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
             </div>
 
             {/* Optional Link */}
             <div className="grid gap-1.5">
-              <Label htmlFor="pp-url">Link (optional)</Label>
-              <Input id="pp-url" placeholder="https://example.com/invoice/123" value={url} onChange={(e) => setUrl(e.target.value)} />
-              <p className="text-xs text-muted-foreground">An optional https:// or http:// URL related to this planned expense.</p>
+              <Label htmlFor="pp-url">{t('plannedForm.link')}</Label>
+              <Input id="pp-url" placeholder={t('plannedForm.linkPlaceholder')} value={url} onChange={(e) => setUrl(e.target.value)} />
+              <p className="text-xs text-muted-foreground">{t('plannedForm.linkDesc')}</p>
             </div>
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('plannedForm.cancel')}</Button>
           <Button onClick={handleSubmit} disabled={loading || !name.trim() || !amount || !dueDate}>
-            {initial ? "Save Changes" : "Create Payment"}
+            {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>
         </DialogFooter>
       </DialogContent>

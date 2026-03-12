@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
 import { UpdateNotification } from "@/components/notifications/UpdateNotification";
 import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
@@ -22,6 +23,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { theme, mode, schedule, setMode, setSchedule, toggleTheme } = useTheme();
+    const { t } = useLanguage();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 
     const modeIcon = {
@@ -47,21 +49,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     variant="ghost"
                                     size="icon"
                                     className="ml-auto mr-2"
-                                    title="Theme settings"
-                                    aria-label="Change theme"
+                                    title={t('layout.settings')}
+                                    aria-label={t('layout.openSettings')}
                                 >
                                     {modeIcon}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                                <DropdownMenuLabel>{t('layout.theme')}</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     onClick={() => setMode('light')}
                                     className={mode === 'light' ? 'bg-accent/10' : ''}
                                 >
                                     <Sun className="h-4 w-4 mr-2" />
-                                    Light
+                                    {t('layout.light')}
                                     {mode === 'light' && <span className="ml-auto text-xs text-primary">✓</span>}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -69,7 +71,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     className={mode === 'dark' ? 'bg-accent/10' : ''}
                                 >
                                     <Moon className="h-4 w-4 mr-2" />
-                                    Dark
+                                    {t('layout.dark')}
                                     {mode === 'dark' && <span className="ml-auto text-xs text-primary">✓</span>}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -77,7 +79,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     className={mode === 'system' ? 'bg-accent/10' : ''}
                                 >
                                     <Monitor className="h-4 w-4 mr-2" />
-                                    System
+                                    {t('layout.system')}
                                     {mode === 'system' && <span className="ml-auto text-xs text-primary">✓</span>}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -85,7 +87,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     className={mode === 'schedule' ? 'bg-accent/10' : ''}
                                 >
                                     <Clock className="h-4 w-4 mr-2" />
-                                    Schedule
+                                    {t('layout.schedule')}
                                     {mode === 'schedule' && <span className="ml-auto text-xs text-primary">✓</span>}
                                 </DropdownMenuItem>
                                 {mode === 'schedule' && (
@@ -94,7 +96,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                         <div className="px-3 py-2 space-y-2" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
                                                 <Sun className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                                <Label className="text-xs text-muted-foreground w-14 shrink-0">Light at</Label>
+                                                <Label className="text-xs text-muted-foreground w-14 shrink-0">{t('layout.lightAt')}</Label>
                                                 <Input
                                                     type="time"
                                                     value={schedule.lightFrom}
@@ -104,7 +106,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Moon className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                                                <Label className="text-xs text-muted-foreground w-14 shrink-0">Dark at</Label>
+                                                <Label className="text-xs text-muted-foreground w-14 shrink-0">{t('layout.darkAt')}</Label>
                                                 <Input
                                                     type="time"
                                                     value={schedule.darkFrom}
@@ -122,8 +124,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                             size="icon"
                             onClick={() => setSettingsOpen(true)}
                             className="ml-2"
-                            title="Dashboard Settings"
-                            aria-label="Open dashboard settings"
+                            title={t('layout.settings')}
+                            aria-label={t('layout.openSettings')}
                         >
                             <Settings className="h-5 w-5" />
                         </Button>

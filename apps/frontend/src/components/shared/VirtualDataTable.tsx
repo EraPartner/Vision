@@ -9,6 +9,7 @@ import {
     ArrowDown, ArrowUp, ArrowUpDown, Check, Filter, Loader2,
     Pencil, Search, X,
 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -74,7 +75,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     subtitle,
     columns,
     data,
-    emptyMessage = "No data available" as React.ReactNode,
+    emptyMessage,
     actions,
     onRowUpdate,
     onRowDoubleClick,
@@ -90,6 +91,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     maxHeight = 600,
     rowHeight = 44,
 }: VirtualDataTableProps<T>) {
+    const { t } = useLanguage();
     const isServerSort = !!onSortChange;
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
@@ -321,7 +323,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder={isServerSearch ? "Search database…" : "Search across all columns…"}
+                        placeholder={isServerSearch ? t('table.searchDatabase') : t('table.searchAllColumns')}
                         value={localSearchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
@@ -343,7 +345,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                         onClick={clearAllFilters}
                         className="text-xs text-muted-foreground hover:text-destructive shrink-0 gap-1"
                     >
-                        <X className="h-3 w-3" /> Clear all
+                        <X className="h-3 w-3" /> {t('table.clearAll')}
                         {activeFilterCount > 0 && (
                             <span className="ml-1 bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-bold">
                                 {activeFilterCount}
@@ -442,7 +444,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                         })}
                         {hasEditableColumns && (
                             <div className="px-2 py-2 text-right font-semibold text-muted-foreground text-sm" style={{ width: "40px", flex: "none" }}>
-                                Edit
+                                {t('table.edit')}
                             </div>
                         )}
                     </div>
@@ -457,8 +459,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
                     {processedData.length === 0 ? (
                         <div className="text-center text-muted-foreground py-12">
                             {localSearchQuery || activeFilterCount > 0
-                                ? "No results match your filters."
-                                : emptyMessage}
+                                ? t('table.noFilterResults')
+                                : (emptyMessage ?? t('table.noData'))}
                         </div>
                     ) : (
                         <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
@@ -556,7 +558,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                     {isFetchingMore && (
                         <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm">Loading more…</span>
+                            <span className="text-sm">{t('table.loadingMore')}</span>
                         </div>
                     )}
                 </div>
@@ -565,9 +567,9 @@ export function VirtualDataTable<T extends Record<string, any>>({
                 <div className="flex items-center justify-between border-t px-6 py-3">
                     <p className="text-sm text-muted-foreground">
                         {processedData.length !== data.length
-                            ? `${processedData.length} of ${displayTotal} shown (filtered)`
-                            : `${data.length} of ${displayTotal} loaded`}
-                        {hasMore && " · Scroll for more"}
+                            ? t('table.shownOfFiltered', { shown: processedData.length.toString(), total: displayTotal.toString() })
+                            : t('table.loadedOf', { loaded: data.length.toString(), total: displayTotal.toString() })}
+                        {hasMore && ` · ${t('table.scrollForMore')}`}
                     </p>
                 </div>
             </CardContent>
@@ -591,6 +593,7 @@ function ColumnFilter({
     uniqueValues: string[];
     onClose: () => void;
 }) {
+    const { t } = useLanguage();
     const [filterSearch, setFilterSearch] = useState("");
     const filtered = uniqueValues.filter(v =>
         v.toLowerCase().includes(filterSearch.toLowerCase())
@@ -598,9 +601,9 @@ function ColumnFilter({
 
     return (
         <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground px-1">Filter: {header}</p>
+            <p className="text-xs font-medium text-muted-foreground px-1">{t('table.filterLabel', { header })}</p>
             <Input
-                placeholder={`Filter ${header.toLowerCase()}…`}
+                placeholder={t('table.filterInputPlaceholder', { header: header.toLowerCase() })}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 className="h-8 text-sm"
@@ -614,7 +617,7 @@ function ColumnFilter({
                 <>
                     {uniqueValues.length > 8 && (
                         <Input
-                            placeholder="Search values…"
+                            placeholder={t('table.searchValues')}
                             value={filterSearch}
                             onChange={(e) => setFilterSearch(e.target.value)}
                             className="h-7 text-xs"
@@ -632,7 +635,7 @@ function ColumnFilter({
                             </button>
                         ))}
                         {filtered.length > 30 && (
-                            <p className="text-[10px] text-muted-foreground px-2">+{filtered.length - 30} more…</p>
+                            <p className="text-[10px] text-muted-foreground px-2">{t('table.moreValues', { count: (filtered.length - 30).toString() })}</p>
                         )}
                     </div>
                 </>
@@ -640,7 +643,7 @@ function ColumnFilter({
             {value && (
                 <Button variant="ghost" size="sm" onClick={() => { onChange(""); onClose(); }}
                     className="w-full text-xs h-7 text-muted-foreground">
-                    Clear filter
+                    {t('table.clearFilter')}
                 </Button>
             )}
         </div>

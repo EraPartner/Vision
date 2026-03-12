@@ -11,20 +11,12 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
-const PATTERN_LABELS: Record<string, string> = {
-    weekly: "Weekly",
-    biweekly: "Bi-weekly",
-    monthly: "Monthly",
-    quarterly: "Quarterly",
-    yearly: "Yearly",
-    custom: "Custom",
-};
-
-function safeDateLabel(value: string): string {
-    if (!value || typeof value !== "string") return "Unknown date";
+function safeDateLabel(value: string, t: (key: string) => string): string {
+    if (!value || typeof value !== "string") return t('common.unknownDate');
     const parsed = parseISO(value);
     if (Number.isNaN(parsed.getTime())) return value;
     return format(parsed, "PP");
@@ -37,10 +29,20 @@ interface Props {
 }
 
 export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(true);
     const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
     const [dismissedLoaded, setDismissedLoaded] = useState(false);
+
+    const PATTERN_LABELS: Record<string, string> = {
+        weekly: t('recurring.pattern.weekly'),
+        biweekly: t('recurring.pattern.biweekly'),
+        monthly: t('recurring.pattern.monthly'),
+        quarterly: t('recurring.pattern.quarterly'),
+        yearly: t('recurring.pattern.yearly'),
+        custom: t('recurring.pattern.custom'),
+    };
 
     const loadDismissedFromLocalStorage = () => {
         try {
@@ -66,7 +68,6 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
         }
     };
 
-    // Load dismissed IDs from database settings
     useEffect(() => {
         loadDismissedFromLocalStorage();
         setDismissedLoaded(true);
@@ -94,13 +95,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             return;
         }
 
-        // Default: create planned transaction via API
         try {
             await apiClient.createPlannedTransaction({
                 planned_date: pattern.predictedNext,
                 recipient_id: pattern.recipientId,
-                memo: `${pattern.recipientName} (auto-detected)`,
-                amount: pattern.latestAmount * -1, // expenses are negative
+                memo: t('recurring.autoDetectedMemo', { name: pattern.recipientName }),
+                amount: pattern.latestAmount * -1,
                 currency: pattern.currency,
                 category_id: pattern.categoryId ?? undefined,
                 bank_account: pattern.bankAccount ?? undefined,
@@ -111,13 +111,12 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             });
             queryClient.invalidateQueries({ queryKey: ["recurringPatterns"] });
             queryClient.invalidateQueries({ queryKey: ["plannedTransactions"] });
-            toast.success(`Created planned payment for ${pattern.recipientName}`);
+            toast.success(t('recurring.toast.created', { name: pattern.recipientName }));
         } catch (err: any) {
-            toast.error(`Failed to create: ${err.message}`);
+            toast.error(t('recurring.toast.failed', { msg: err.message }));
         }
     };
 
-    // Filter out dismissed and already-planned patterns
     const patterns = (data?.patterns ?? []).filter(
         (p) => !p.isAlreadyPlanned && !dismissedIds.has(p.recipientId)
     );
@@ -132,7 +131,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <Sparkles className="h-4 w-4 text-primary" />
-                        Recurring Detection
+                        {t('recurring.loading')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="flex items-center justify-center py-6">
@@ -150,9 +149,9 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                 <CardContent className="flex items-center gap-3 py-4">
                     <CheckCircle2 className="h-5 w-5 text-accent shrink-0" />
                     <div>
-                        <p className="text-sm font-medium text-foreground">All caught up!</p>
+                        <p className="text-sm font-medium text-foreground">{t('recurring.allCaughtUp')}</p>
                         <p className="text-xs text-muted-foreground">
-                            No new recurring patterns detected. All known recurring charges are tracked.
+                            {t('recurring.noPatterns')}
                         </p>
                     </div>
                 </CardContent>
@@ -168,10 +167,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                     <CardHeader className="pb-2">
                         <CardTitle className="flex items-center gap-2 text-base text-destructive">
                             <AlertTriangle className="h-4 w-4" />
-                            Amount Changes Detected
+                            {t('recurring.amountChanges')}
                         </CardTitle>
                         <CardDescription>
-                            These recurring charges have recently changed in amount
+                            {t('recurring.amountChangesDesc')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -201,7 +200,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                Changed on {safeDateLabel(lastChange.date)}
+                                                {t('recurring.changedOn', { date: safeDateLabel(lastChange.date, t) })}
                                             </p>
                                         </div>
                                         <Button
@@ -228,11 +227,11 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                             <div>
                                 <CardTitle className="flex items-center gap-2 text-base">
                                     <Sparkles className="h-4 w-4 text-primary" />
-                                    Detected Recurring Patterns
+                                    {t('recurring.patterns')}
                                     <Badge variant="secondary" className="ml-1">{patterns.length}</Badge>
                                 </CardTitle>
                                 <CardDescription className="mt-1">
-                                    These transactions appear to recur regularly. Add them as planned payments?
+                                    {t('recurring.patternsDesc')}
                                 </CardDescription>
                             </div>
                             <Button
@@ -253,18 +252,16 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         key={pattern.recipientId}
                                         className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:shadow-sm transition-shadow"
                                     >
-                                        {/* Icon */}
                                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                             <Repeat className="h-4 w-4 text-primary" />
                                         </div>
 
-                                        {/* Info */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className="text-sm font-semibold text-foreground truncate">
                                                     {pattern.recipientName}
                                                 </p>
-                                                <ConfidenceBadge confidence={pattern.confidence} />
+                                                <ConfidenceBadge confidence={pattern.confidence} t={t} />
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                                 <Badge variant="outline" className="text-xs">
@@ -276,16 +273,15 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     </span>
                                                 )}
                                                 <span className="text-xs text-muted-foreground">
-                                                    · {pattern.occurrences}× seen
+                                                    · {pattern.occurrences}{t('recurring.seen')}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                                                 <Calendar className="h-3 w-3" />
-                                                Next expected: {safeDateLabel(pattern.predictedNext)}
+                                                {t('recurring.nextExpected', { date: safeDateLabel(pattern.predictedNext, t) })}
                                             </div>
                                         </div>
 
-                                        {/* Amount + Actions */}
                                         <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                                             <span className="text-sm font-bold text-foreground">
                                                 {formatCurrency(pattern.latestAmount, pattern.currency)}
@@ -298,7 +294,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     onClick={() => handleCreatePlanned(pattern)}
                                                 >
                                                     <Plus className="h-3 w-3" />
-                                                    Track
+                                                    {t('recurring.track')}
                                                 </Button>
                                                 <Button
                                                     size="sm"
@@ -306,7 +302,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                     className="h-7 text-xs text-muted-foreground"
                                                     onClick={() => dismiss(pattern.recipientId)}
                                                 >
-                                                    Dismiss
+                                                    {t('recurring.dismissBtn')}
                                                 </Button>
                                             </div>
                                         </div>
@@ -321,16 +317,16 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     );
 }
 
-function ConfidenceBadge({ confidence }: { confidence: number }) {
+function ConfidenceBadge({ confidence, t }: { confidence: number; t: (key: any) => string }) {
     let color = "text-muted-foreground border-muted";
-    let label = "Low";
+    let label = t('recurring.confidence.low');
 
     if (confidence >= 80) {
         color = "text-accent border-accent/30 bg-accent/10";
-        label = "High";
+        label = t('recurring.confidence.high');
     } else if (confidence >= 60) {
         color = "text-chart-5 border-chart-5/30 bg-chart-5/10";
-        label = "Medium";
+        label = t('recurring.confidence.medium');
     }
 
     return (

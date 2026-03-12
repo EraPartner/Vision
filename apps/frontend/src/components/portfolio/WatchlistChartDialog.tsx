@@ -21,6 +21,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
+import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -47,6 +48,7 @@ interface WatchlistChartDialogProps {
 }
 
 export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChartDialogProps) {
+  const { t } = useLanguage();
   const [selectedRange, setSelectedRange] = useState(RANGES[0]);
   const [editingPrice, setEditingPrice] = useState(false);
   const [newTargetPrice, setNewTargetPrice] = useState("");
@@ -91,11 +93,11 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       if (!res.ok) throw new Error("Failed to update");
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: "Target price updated" });
+      toast({ title: t('watchlist.targetUpdated') });
       setEditingPrice(false);
       setNewTargetPrice("");
     } catch {
-      toast({ title: "Error", description: "Failed to update target price", variant: "destructive" });
+      toast({ title: t('common.error'), description: t('watchlist.updateFailed'), variant: "destructive" });
     }
   };
 
@@ -137,10 +139,10 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
           {/* Price Summary */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-muted/50 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                <Target className="h-4 w-4" />
-                Target Price
-              </div>
+                 <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+                 <Target className="h-4 w-4" />
+                 {t('watchlistChart.targetPrice')}
+               </div>
               {editingPrice ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -154,9 +156,9 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                   <Button size="sm" onClick={handleUpdateTargetPrice}>
                     <Check className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingPrice(false)}>
-                    Cancel
-                  </Button>
+                   <Button size="sm" variant="ghost" onClick={() => setEditingPrice(false)}>
+                     {t('watchlistChart.cancelEdit')}
+                   </Button>
                 </div>
               ) : (
                 <button
@@ -172,18 +174,18 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
             </div>
 
             <div className="bg-muted/50 rounded-lg p-4">
-              <p className="text-muted-foreground text-sm mb-1">Current Price</p>
+              <p className="text-muted-foreground text-sm mb-1">{t('watchlistChart.currentPrice')}</p>
               {currentPrice != null ? (
                 <>
                   <p className="text-2xl font-bold">
                     {item.currency} {currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
-                  <div className={cn(
-                    "flex items-center gap-1 text-sm mt-1",
-                    priceDiff! > 0 ? "text-red-500" : "text-green-500"
-                  )}>
+                    <div className={cn(
+                      "flex items-center gap-1 text-sm mt-1",
+                      priceDiff! > 0 ? "text-red-500" : "text-green-500"
+                    )}>
                     {priceDiff! > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                    {Math.abs(priceDiff!).toFixed(2)}% {priceDiff! > 0 ? "above" : "below"} target
+                    {Math.abs(priceDiff!).toFixed(2)}% {priceDiff! > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff!).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff!).toFixed(0) })}
                   </div>
                 </>
               ) : (
@@ -194,23 +196,23 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
 
           {isBelowTarget && (
             <div className="bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 rounded-lg p-3 text-center font-medium">
-              ✓ Price is at or below your target! Consider buying.
+              ✓ {t('watchlistChart.atTarget')}
             </div>
           )}
 
           {/* Range selector */}
-          <div className="flex gap-2 justify-center">
-            {RANGES.map((r) => (
-              <Button
-                key={r.label}
-                variant={selectedRange.range === r.range ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedRange(r)}
-              >
-                {r.label}
-              </Button>
-            ))}
-          </div>
+            <div className="flex gap-2 justify-center">
+              {RANGES.map((r) => (
+                <Button
+                  key={r.label}
+                  variant={selectedRange.range === r.range ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedRange(r)}
+                >
+                  {r.label}
+                </Button>
+              ))}
+            </div>
 
           {/* Chart */}
           <div className="h-80 w-full">
@@ -252,7 +254,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     }}
                     formatter={(value: number) => [
                       `${item.currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                      "Price",
+                      t('watchlistChart.priceLabel'),
                     ]}
                   />
                   <ReferenceLine
@@ -261,7 +263,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     strokeDasharray="5 5"
                     strokeWidth={2}
                     label={{
-                      value: `Target: ${item.currency}${targetPrice.toFixed(2)}`,
+                      value: t('watchlistChart.targetLabel', { currency: item.currency, price: targetPrice.toFixed(2) }),
                       position: "insideTopRight",
                       fill: "hsl(var(--primary))",
                       fontSize: 12,
@@ -279,15 +281,15 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                No chart data available
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                {t('watchlistChart.noData')}
               </div>
-            )}
-          </div>
+              )}
+            </div>
 
           {item.notes && (
             <div className="bg-muted/30 rounded-lg p-4">
-              <Label className="text-muted-foreground text-xs">Notes</Label>
+              <Label className="text-muted-foreground text-xs">{t('watchlistChart.notes')}</Label>
               <p className="mt-1 text-sm">{item.notes}</p>
             </div>
           )}

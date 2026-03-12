@@ -20,19 +20,22 @@ import { getCategoryColor } from "@/utils/categoryColors";
 import { formatCurrency } from "@/utils/currency";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type GraphExclusions = Record<string, boolean>;
 
-const DASHBOARD_WIDGETS: WidgetDefinition[] = [
-    { id: 'statCards', label: 'Summary Cards', description: 'Transaction count, spending, income, net balance' },
-    { id: 'bankBalances', label: 'Bank Balances', description: 'Account balances across banks' },
-    { id: 'monthlyTrends', label: '6-Month Trends', description: 'Income vs spending over last 6 months' },
-    { id: 'categoryPie', label: 'Category Distribution', description: 'Transaction breakdown by category' },
-    { id: 'cashflowComparison', label: 'Cash Flow Comparison', description: 'Current month vs average cash flow' },
-    { id: 'recentTransactions', label: 'Recent Transactions', description: 'Last 5 transactions table' },
-];
-
 export default function DashboardPage() {
+    const { t } = useLanguage();
+
+    const DASHBOARD_WIDGETS: WidgetDefinition[] = [
+        { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
+        { id: 'bankBalances', label: t('dashboard.bankBalances'), description: t('dashboard.widgetDescriptions.bankBalances') },
+        { id: 'monthlyTrends', label: t('dashboard.monthlyTrends'), description: t('dashboard.widgetDescriptions.monthlyTrends') },
+        { id: 'categoryPie', label: t('dashboard.categoryDistribution'), description: t('dashboard.widgetDescriptions.categoryPie') },
+        { id: 'cashflowComparison', label: t('dashboard.cashFlowComparison'), description: t('dashboard.widgetDescriptions.cashflowComparison') },
+        { id: 'recentTransactions', label: t('dashboard.recentTransactions'), description: t('dashboard.widgetDescriptions.recentTransactions') },
+    ];
+
     const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
     const { settings } = useSettings();
 
@@ -149,16 +152,16 @@ export default function DashboardPage() {
                     break;
                 }
 
-                for (const t of page.items) {
-                    if (t.category_id && excludedCategoryIdSet.has(t.category_id)) {
+                for (const tx of page.items) {
+                    if (tx.category_id && excludedCategoryIdSet.has(tx.category_id)) {
                         continue;
                     }
 
-                    if (t.recipient_id && excludedRecipientIdSet.has(t.recipient_id)) {
+                    if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id)) {
                         continue;
                     }
 
-                    picked.push(t);
+                    picked.push(tx);
                     if (picked.length === 5) {
                         break;
                     }
@@ -251,16 +254,16 @@ export default function DashboardPage() {
 
         const categoryMap = new Map<string, { name: string; count: number }>();
 
-        txToUse.forEach(t => {
-            const key = t.category_name || 'Uncategorized';
-            const name = t.category_name || 'Uncategorized';
+        txToUse.forEach(tx => {
+            const key = tx.category_name || t('txPage.field.uncategorized');
+            const name = tx.category_name || t('txPage.field.uncategorized');
 
-            if (categoryMap.has(key)) {
-                categoryMap.get(key)!.count++;
-            } else {
-                categoryMap.set(key, { name, count: 1 });
-            }
-        });
+                if (categoryMap.has(key)) {
+                    categoryMap.get(key)!.count++;
+                } else {
+                    categoryMap.set(key, { name, count: 1 });
+                }
+            });
 
         return Array.from(categoryMap.values());
     })();
@@ -278,7 +281,7 @@ export default function DashboardPage() {
 
         // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
         const extractDetail = (categoryName: string): string => {
-            if (categoryName === 'Uncategorized') return categoryName;
+            if (categoryName === t('txPage.field.uncategorized')) return categoryName;
 
             const parts = categoryName.split(':');
             if (parts.length > 1) {
@@ -298,7 +301,7 @@ export default function DashboardPage() {
         // Add "Other" if there are more categories
         if (otherCount > 0) {
             result.push({
-                name: 'Andere',
+                name: t('dashboard.other'),
                 value: otherCount
             });
         }
@@ -317,18 +320,18 @@ export default function DashboardPage() {
     const recentTransactions = recentTransactionsSource.slice(0, 5).map(t => ({
         id: t.id,
         date: (t as any).date || t.transaction_date || '',
-        description: t.memo || 'No description',
+        description: t.memo || t('txPage.field.description'),
         amount: t.amount,
         currency: t.currency || 'EUR',
-        category: t.category_name || 'Uncategorized',
-        recipient: t.recipient_name || 'Unknown',
+        category: t.category_name || t('txPage.field.uncategorized'),
+        recipient: t.recipient_name || t('txPage.field.unknown'),
         bank: t.bank_account
     }));
 
     const columns = [
         {
             key: "date",
-            header: "Date",
+            header: t('txPage.col.date'),
             render: (row: (typeof recentTransactions)[0]) => {
                 try {
                     const dateObj = parseISO(row.date);
@@ -338,20 +341,20 @@ export default function DashboardPage() {
                 }
             },
         },
-        { key: "description", header: "Description" },
+        { key: "description", header: t('txPage.field.description') },
         {
             key: "category",
-            header: "Category",
+            header: t('txPage.col.category'),
             render: (row: (typeof recentTransactions)[0]) => (
                 <Badge variant="outline" className={`font-medium ${getCategoryColor(row.category)}`}>
                     {row.category}
                 </Badge>
             ),
         },
-        { key: "recipient", header: "Recipient" },
+        { key: "recipient", header: t('txPage.col.recipient') },
         {
             key: "amount",
-            header: "Amount",
+            header: t('txPage.col.amount'),
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
@@ -365,8 +368,8 @@ export default function DashboardPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-                    <p className="text-muted-foreground mt-1">Loading your financial data…</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('dashboard.loadingData')}</p>
                 </div>
                 {/* Stat cards skeleton */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -411,8 +414,8 @@ export default function DashboardPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-                    <p className="text-destructive mt-1">Error loading data: {errorMessage}</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
+                    <p className="text-destructive mt-1">{t('dashboard.errorLoading', { msg: String(errorMessage) })}</p>
                 </div>
             </div>
         );
@@ -423,8 +426,8 @@ export default function DashboardPage() {
             {/* Page header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Dashboard</h2>
-                    <p className="text-muted-foreground mt-1">Overview of your financial activity</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('dashboard.subtitle')}</p>
                 </div>
                 <WidgetVisibilityDialog
                     widgets={widgetDefs}
@@ -438,14 +441,14 @@ export default function DashboardPage() {
             {/* Stats */}
             {isVisible('statCards') && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
-                <StatCard title="Total Transactions" value={totalTransactions.toLocaleString()} icon={Receipt} />
-                <StatCard title="Last Month Spending" value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="expense"
-                    subtitle="Most recent month" />
-                <StatCard title="Last Month Income" value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="income"
-                    subtitle="Most recent month" />
-                <StatCard title="Last Month Net" value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
+                <StatCard title={t('dashboard.stat.totalTransactions')} value={totalTransactions.toLocaleString()} icon={Receipt} />
+                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="expense"
+                    subtitle={t('dashboard.stat.mostRecentMonth')} />
+                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="income"
+                    subtitle={t('dashboard.stat.mostRecentMonth')} />
+                <StatCard title={t('dashboard.stat.lastMonthNet')} value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
                     trend={netBalance >= 0 ? "income" : "expense"}
-                    subtitle={netBalance >= 0 ? "Positive cash flow" : "Negative cash flow"} />
+                    subtitle={netBalance >= 0 ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')} />
             </div>
             )}
 
@@ -462,9 +465,9 @@ export default function DashboardPage() {
                                     <TrendingDown className="h-6 w-6" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-xl">6-Month Trends</CardTitle>
-                                    <CardDescription className="text-base">Income vs Spending over the last 6 months</CardDescription>
-                                </div>
+                                     <CardTitle className="text-xl">{t('monthlyTrends.title')}</CardTitle>
+                                     <CardDescription className="text-base">{t('monthlyTrends.desc')}</CardDescription>
+                                 </div>
                             </div>
                             <ExclusionToggle
                                 graphKey="monthlyTrends"
@@ -482,8 +485,8 @@ export default function DashboardPage() {
                 <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle className="text-xl">Category Distribution</CardTitle>
-                            <CardDescription className="text-base">Transaction breakdown by category</CardDescription>
+                            <CardTitle className="text-xl">{t('categoryPie.title')}</CardTitle>
+                            <CardDescription className="text-base">{t('categoryPie.desc')}</CardDescription>
                         </div>
                         <ExclusionToggle
                             graphKey="categoryPie"
@@ -508,9 +511,9 @@ export default function DashboardPage() {
                                 <DollarSign className="h-6 w-6" />
                             </div>
                             <div>
-                                <CardTitle className="text-xl">Cash Flow Comparison</CardTitle>
+                                <CardTitle className="text-xl">{t('cashflow.title')}</CardTitle>
                                 <CardDescription className="text-base">
-                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })} — cumulative net cash flow vs 2-year monthly average
+                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })} — {t('cashflow.chartDesc', { monthName: new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(undefined, { month: 'long' }) })}
                                 </CardDescription>
                             </div>
                         </div>
@@ -537,11 +540,11 @@ export default function DashboardPage() {
             {/* Recent transactions */}
             {isVisible('recentTransactions') && (
             <DataTable
-                title="Recent Transactions"
-                subtitle="Last 5 transactions"
+                title={t('dashboard.recentTransactions')}
+                subtitle={t('dashboard.recentTransactionsSubtitle', { n: recentTransactions.length })}
                 columns={columns}
                 data={recentTransactions}
-                emptyMessage="No transactions yet. Import a CSV to get started."
+                emptyMessage={t('dashboard.recentTransactions.empty')}
                 actions={
                     <ExclusionToggle
                         graphKey="recentTransactions"

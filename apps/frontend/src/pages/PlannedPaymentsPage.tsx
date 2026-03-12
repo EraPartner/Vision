@@ -10,6 +10,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,19 +20,20 @@ import type { Transaction } from "@/types/api";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { formatCurrency } from "@/utils/currency";
 
-const FREQ_LABELS: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  biweekly: "Bi-weekly",
-  monthly: "Monthly",
-  quarterly: "Quarterly",
-  yearly: "Yearly",
-  custom: "Custom",
+// map frequency -> translation key (use inside component with t())
+const FREQ_LABEL_KEYS: Record<string, string> = {
+  daily: 'plannedPage.freq.daily',
+  weekly: 'plannedPage.freq.weekly',
+  biweekly: 'plannedPage.freq.biweekly',
+  monthly: 'plannedPage.freq.monthly',
+  quarterly: 'plannedPage.freq.quarterly',
+  yearly: 'plannedPage.freq.yearly',
+  custom: 'plannedPage.freq.custom',
 };
 
-function dueBadge(dateStr?: string | null) {
+function dueBadge(t: any, dateStr?: string | null) {
   if (!dateStr || typeof dateStr !== "string") {
-    return <Badge variant="secondary">No date</Badge>;
+    return <Badge variant="secondary">{t('plannedPage.due.noDate')}</Badge>;
   }
 
   // Handle both YYYY-MM-DD and ISO datetime formats (e.g., "2025-01-15T00:00:00Z")
@@ -41,7 +43,7 @@ function dueBadge(dateStr?: string | null) {
   // Parse the date string (YYYY-MM-DD) explicitly
   const [year, month, day] = datePart.split('-').map(Number);
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return <Badge variant="secondary">Invalid date</Badge>;
+    return <Badge variant="secondary">{t('plannedPage.due.invalid')}</Badge>;
   }
 
   // Get today's date at midnight in local time
@@ -56,17 +58,17 @@ function dueBadge(dateStr?: string | null) {
 
   // Calculate if it's the same day
   if (days === 0) {
-    return <Badge className="bg-chart-3/20 text-chart-3 border-chart-3/30">Today</Badge>;
+    return <Badge className="bg-chart-3/20 text-chart-3 border-chart-3/30">{t('plannedPage.due.today')}</Badge>;
   }
 
   if (days < 0) {
-    return <Badge variant="destructive">Overdue</Badge>;
+    return <Badge variant="destructive">{t('plannedPage.due.overdue')}</Badge>;
   }
   if (days === 1) {
-    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">Tomorrow</Badge>;
+    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">{t('plannedPage.due.tomorrow')}</Badge>;
   }
   if (days <= 7) {
-    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">In {days}d</Badge>;
+    return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">{t('plannedPage.due.inDays', { n: days })}</Badge>;
   }
   return <Badge variant="secondary">{format(normalizedDue, "PP")}</Badge>;
 }
@@ -74,6 +76,7 @@ function dueBadge(dateStr?: string | null) {
 type TableRow = PlannedPayment & { _idx: number };
 
 export default function PlannedPaymentsPage() {
+  const { t } = useLanguage();
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -106,10 +109,7 @@ export default function PlannedPaymentsPage() {
     return payments.filter((p) => p.is_active);
   }, [payments, showAll]);
 
-  const rows: TableRow[] = useMemo(
-    () => filteredPayments.map((p, i) => ({ ...p, _idx: i })),
-    [filteredPayments]
-  );
+  const rows: TableRow[] = useMemo(() => filteredPayments.map((p, i) => ({ ...p, _idx: i })), [filteredPayments]);
 
   const totalMonthly = useMemo(() => {
     return payments
@@ -171,10 +171,10 @@ export default function PlannedPaymentsPage() {
           variant="ghost"
           size="icon"
           className={`h-8 w-8 ${row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
-          onClick={async (e) => {
-            e.stopPropagation();
+            onClick={async (e) => {
+              e.stopPropagation();
 
-            if (!row.is_executed) {
+              if (!row.is_executed) {
               // Open dialog to select transaction
               setPaymentToLink(row);
               // reset dialog state
@@ -185,16 +185,16 @@ export default function PlannedPaymentsPage() {
               setLinkDialogOpen(true);
             }
           }}
-          disabled={actionLoading || !row.is_active || row.is_executed}
-          title={row.is_executed ? `Executed (linked to transaction #${row.executed_transaction_id})` : "Execute payment"}
-        >
+            disabled={actionLoading || !row.is_active || row.is_executed}
+            title={row.is_executed ? t('plannedPage.execute.linked', { n: row.executed_transaction_id }) : t('plannedPage.execute.button')}
+          >
           {row.is_executed ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
         </Button>
       ),
     },
     {
       key: "name",
-      header: "Payment",
+      header: t('plannedPage.col.payment'),
       editable: false,
       defaultWidth: 180,
       render: (row: TableRow) => (
@@ -206,7 +206,7 @@ export default function PlannedPaymentsPage() {
             <div className="flex items-center gap-2">
               <span>{row.name}</span>
               {row.url && (
-                <a href={row.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Open related link" className="text-muted-foreground hover:text-primary">
+                <a href={row.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
                   {/* small link icon */}
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-1.414 1.414a4 4 0 01-5.656-5.656l1.414-1.414" />
@@ -225,7 +225,7 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "amount",
-      header: "Amount",
+      header: t('plannedPage.col.amount'),
       editable: false,
       defaultWidth: 120,
       render: (row: TableRow) => (
@@ -236,14 +236,14 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "due_date",
-      header: "Due Date",
+      header: t('plannedPage.col.dueDate'),
       editable: false,
       defaultWidth: 130,
-      render: (row: TableRow) => dueBadge(row.due_date),
+      render: (row: TableRow) => dueBadge(t, row.due_date),
     },
     {
       key: "is_recurring",
-      header: "Recurrence",
+      header: t('plannedPage.col.recurrence'),
       editable: false,
       defaultWidth: 160,
       render: (row: TableRow) =>
@@ -252,24 +252,24 @@ export default function PlannedPaymentsPage() {
             <div className="flex items-center gap-1.5">
               <Repeat className="h-3.5 w-3.5 text-primary" />
               <span className="text-sm">
-                {row.frequency === "custom" && row.custom_interval_days
-                  ? `Every ${row.custom_interval_days}d`
-                  : FREQ_LABELS[row.frequency ?? "monthly"]}
+                 {row.frequency === "custom" && row.custom_interval_days
+                   ? t('plannedPage.everyNDays', { n: row.custom_interval_days })
+                   : t(FREQ_LABEL_KEYS[row.frequency ?? "monthly"])}
               </span>
             </div>
             {row.execution_count > 0 && (
-              <span className="text-xs text-muted-foreground">
-                Executed {row.execution_count}x
-              </span>
-            )}
+               <span className="text-xs text-muted-foreground">
+                 {t('plannedPage.executedCount', { n: row.execution_count })}
+               </span>
+             )}
           </div>
         ) : (
-          <span className="text-sm text-muted-foreground">One-time</span>
+            <span className="text-sm text-muted-foreground">{t('plannedPage.oneTime')}</span>
         ),
     },
     {
       key: "category",
-      header: "Category",
+      header: t('plannedPage.col.category'),
       editable: false,
       defaultWidth: 120,
       render: (row: TableRow) => {
@@ -288,7 +288,7 @@ export default function PlannedPaymentsPage() {
     },
     {
       key: "is_active",
-      header: "Status",
+      header: t('plannedPage.col.status'),
       editable: false,
       defaultWidth: 100,
       render: (row: TableRow) => (
@@ -310,7 +310,7 @@ export default function PlannedPaymentsPage() {
           disabled={actionLoading}
         >
           {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-          {row.is_active ? "Active" : "Paused"}
+          {row.is_active ? t('plannedPage.statusActive') : t('plannedPage.statusPaused')}
         </Button>
       ),
     },
@@ -337,9 +337,9 @@ export default function PlannedPaymentsPage() {
             onClick={async (e) => {
               e.stopPropagation();
               const ok = await confirm({
-                title: "Delete Planned Payment",
-                description: `Are you sure you want to delete planned payment "${row.name}"? This action cannot be undone.`,
-                confirmLabel: "Delete",
+                title: t('plannedPage.delete.title'),
+                description: t('plannedPage.delete.desc'),
+                confirmLabel: t('plannedPage.delete.confirm'),
                 variant: "destructive",
               });
               if (ok) {
@@ -374,7 +374,7 @@ export default function PlannedPaymentsPage() {
       setFormOpen(false);
     } catch (err) {
       logger.error("Failed to save payment:", err);
-      alert("Failed to save payment. Please check console for details.");
+      alert(t('plannedPage.saveFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -444,7 +444,7 @@ export default function PlannedPaymentsPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading planned payments...</p>
+          <p className="text-muted-foreground">{t('plannedPage.loading')}</p>
         </div>
       </div>
     );
@@ -454,24 +454,24 @@ export default function PlannedPaymentsPage() {
     <>
       <div className="space-y-8 animate-in">
         <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-foreground">Planned Payments</h2>
-            <p className="text-muted-foreground mt-1">Manage upcoming and recurring payments</p>
+            <div>
+            <h2 className="text-3xl font-bold text-foreground">{t('plannedPage.title')}</h2>
+            <p className="text-muted-foreground mt-1">{t('plannedPage.newPayment')}</p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant={showAll ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowAll(!showAll)}
-              className="gap-1.5"
-            >
-              {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              {showAll ? "Showing All" : "Active Only"}
-            </Button>
-            <Button onClick={() => { setEditing(undefined); setFormOpen(true); }} className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Payment
-            </Button>
+              <Button
+                variant={showAll ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setShowAll(!showAll)}
+                className="gap-1.5"
+              >
+                {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {showAll ? t('plannedPage.showingAll') : t('plannedPage.activeOnly')}
+              </Button>
+              <Button onClick={() => { setEditing(undefined); setFormOpen(true); }} className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t('plannedPage.newPayment')}
+              </Button>
           </div>
         </div>
 
@@ -485,17 +485,17 @@ export default function PlannedPaymentsPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-none shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+              <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{pending}</p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-md">
-            <CardHeader className="pb-2">
+              <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" /> Executed
+                <CheckCircle2 className="h-4 w-4" /> {t('plannedPage.executed')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -503,9 +503,9 @@ export default function PlannedPaymentsPage() {
             </CardContent>
           </Card>
           <Card className="border-none shadow-md">
-            <CardHeader className="pb-2">
+              <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <Repeat className="h-4 w-4" /> Est. Monthly
+                <Repeat className="h-4 w-4" /> {t('plannedPage.estMonthly')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -513,9 +513,9 @@ export default function PlannedPaymentsPage() {
             </CardContent>
           </Card>
           <Card className="border-none shadow-md">
-            <CardHeader className="pb-2">
+              <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <CalendarClock className="h-4 w-4" /> Due This Week
+                <CalendarClock className="h-4 w-4" /> {t('plannedPage.dueThisWeek')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -528,11 +528,11 @@ export default function PlannedPaymentsPage() {
         <RecurringDetectionPanel />
 
         <DataTable
-          title="All Payments"
-          subtitle={`${payments.length} planned payments`}
+          title={t('plannedPage.tableTitle')}
+          subtitle={t('plannedPage.tableSubtitle', { n: payments.length })}
           columns={columns}
           data={rows}
-          emptyMessage="No planned payments yet. Click 'New Payment' to create one."
+          emptyMessage={t('plannedPage.empty')}
         />
 
         <PlannedPaymentForm
@@ -547,18 +547,18 @@ export default function PlannedPaymentsPage() {
         <Dialog open={linkDialogOpen} onOpenChange={(open) => { setLinkDialogOpen(open); if (!open) setPaymentToLink(null); }}>
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Link Transaction for "{paymentToLink?.name}"</DialogTitle>
+              <DialogTitle>{t('plannedPage.link.title', { name: paymentToLink?.name })}</DialogTitle>
             </DialogHeader>
 
             <div className="grid gap-3 py-2">
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Search memo, recipient, amount..." value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
+                <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
                 <div>
                   <input type="date" className="input" value={executionDate} onChange={(e) => setExecutionDate(e.target.value)} />
                   {/* Show the selected transaction's date for clarity when a tx is selected */}
                   {selectedTxId && (
                     <div className="text-xs text-muted-foreground mt-1">
-                      Transaction date: {candidateTxs.find(t => t.id === selectedTxId)?.transaction_date || '—'}
+                      {t('plannedPage.link.txDate')} {candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date || '—'}
                     </div>
                   )}
                 </div>
@@ -568,38 +568,38 @@ export default function PlannedPaymentsPage() {
               <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="tx-start-date">Start Date</Label>
+                    <Label htmlFor="tx-start-date">{t('importPage.startDate')}</Label>
                     <Input id="tx-start-date" type="date" value={txFilters.start_date} onChange={(e) => setTxFilters({ ...txFilters, start_date: e.target.value })} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tx-end-date">End Date</Label>
+                    <Label htmlFor="tx-end-date">{t('importPage.endDate')}</Label>
                     <Input id="tx-end-date" type="date" value={txFilters.end_date} onChange={(e) => setTxFilters({ ...txFilters, end_date: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="tx-bank-account">Bank Account</Label>
-                    <Input id="tx-bank-account" placeholder="e.g., Main Account" value={txFilters.bank_account} onChange={(e) => setTxFilters({ ...txFilters, bank_account: e.target.value })} />
+                    <Label htmlFor="tx-bank-account">{t('importPage.bankAccount')}</Label>
+                    <Input id="tx-bank-account" placeholder={t('importPage.bankAccount') || "e.g., Main Account"} value={txFilters.bank_account} onChange={(e) => setTxFilters({ ...txFilters, bank_account: e.target.value })} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tx-recipient">Recipient</Label>
-                    <Input id="tx-recipient" placeholder="Partial recipient name" value={txFilters.recipient_name} onChange={(e) => setTxFilters({ ...txFilters, recipient_name: e.target.value })} />
+                    <Label htmlFor="tx-recipient">{t('recipientsPage.col.recipient')}</Label>
+                    <Input id="tx-recipient" placeholder={t('recipientsPage.search') || "Partial recipient name"} value={txFilters.recipient_name} onChange={(e) => setTxFilters({ ...txFilters, recipient_name: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="tx-uncategorised" checked={txFilters.uncategorised} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, uncategorised: v })} />
-                    <Label htmlFor="tx-uncategorised">Uncategorised</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="tx-active" checked={txFilters.active} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, active: v })} />
-                    <Label htmlFor="tx-active">Active only</Label>
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <Checkbox id="tx-match-amount" checked={txFilters.matchAmount} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, matchAmount: v })} />
-                    <Label htmlFor="tx-match-amount">Match amount</Label>
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="tx-uncategorised" checked={txFilters.uncategorised} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, uncategorised: v })} />
+                      <Label htmlFor="tx-uncategorised">{t('plannedPage.link.uncategorised')}</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="tx-active" checked={txFilters.active} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, active: v })} />
+                      <Label htmlFor="tx-active">{t('plannedPage.link.activeOnly')}</Label>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Checkbox id="tx-match-amount" checked={txFilters.matchAmount} onCheckedChange={(v: boolean) => setTxFilters({ ...txFilters, matchAmount: v })} />
+                    <Label htmlFor="tx-match-amount">{t('plannedPage.link.matchAmount')}</Label>
                     <Input
                       id="tx-amount-tolerance"
                       type="number"
@@ -609,7 +609,7 @@ export default function PlannedPaymentsPage() {
                       min={0}
                       step={1}
                       disabled={!txFilters.matchAmount}
-                      aria-label="Amount tolerance percent"
+                      aria-label={t('importPage.toleranceAriaLabel')}
                     />
                     <span className="text-sm text-muted-foreground">%</span>
                   </div>
@@ -618,10 +618,10 @@ export default function PlannedPaymentsPage() {
 
               <div className="max-h-64 overflow-y-auto border rounded-md p-2">
                 {txLoading ? (
-                  <div className="text-center py-6">Loading transactions…</div>
+                  <div className="text-center py-6">{t('plannedPage.link.loading')}</div>
                 ) : (
                   (candidateTxs.length === 0) ? (
-                    <div className="text-sm text-muted-foreground">No recent transactions found.</div>
+                    <div className="text-sm text-muted-foreground">{t('plannedPage.link.empty')}</div>
                   ) : (
                     candidateTxs
                       .filter(tx => {
@@ -643,15 +643,15 @@ export default function PlannedPaymentsPage() {
                         <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                           <div className="flex items-center gap-3">
                             <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); setExecutionDate(tx.transaction_date); }} />
-                            <div className="flex flex-col">
-                              <span className="font-medium">{tx.memo || 'Transaction #' + tx.id}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {[tx.recipient_name, tx.transaction_date ? format(new Date(tx.transaction_date), 'yyyy-MM-dd') : null].filter(Boolean).join(' • ')}
-                              </span>
-                            </div>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{tx.memo || t('plannedPage.link.txFallback', { id: tx.id })}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {[tx.recipient_name, tx.transaction_date ? format(new Date(tx.transaction_date), 'yyyy-MM-dd') : null].filter(Boolean).join(' • ')}
+                                </span>
+                              </div>
                           </div>
                           <div className="text-right">
-                            <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}€{Math.abs(tx.amount).toFixed(2)}</div>
+                            <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(tx.amount), tx.currency || 'EUR')}</div>
                             <div className="text-xs text-muted-foreground">#{tx.id}</div>
                           </div>
                         </label>
@@ -662,11 +662,11 @@ export default function PlannedPaymentsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setLinkDialogOpen(false); setPaymentToLink(null); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setLinkDialogOpen(false); setPaymentToLink(null); }}>{t('common.cancel')}</Button>
               <Button
                 onClick={async () => {
                   if (!paymentToLink) return;
-                  if (!selectedTxId) { alert('Please select a transaction to link.'); return; }
+                  if (!selectedTxId) { alert(t('plannedPage.link.selectTx')); return; }
                   setActionLoading(true);
                   try {
                     await executePayment(paymentToLink.id, selectedTxId, executionDate || undefined);
@@ -674,14 +674,14 @@ export default function PlannedPaymentsPage() {
                     setPaymentToLink(null);
                   } catch (err) {
                     logger.error('Failed to link/execute planned payment:', err);
-                    alert('Failed to execute planned payment. Check console for details.');
+                    alert(t('plannedPage.link.executeFailed'));
                   } finally {
                     setActionLoading(false);
                   }
                 }}
                 disabled={actionLoading || !selectedTxId}
               >
-                Link & Execute
+                {t('plannedPage.link.linkAndExecute')}
               </Button>
             </DialogFooter>
           </DialogContent>

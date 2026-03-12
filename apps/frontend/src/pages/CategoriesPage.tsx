@@ -1,18 +1,36 @@
 import {useMemo, useState} from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {useNavigate} from "react-router-dom";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder} from "lucide-react";
+import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, Pencil} from "lucide-react";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
 import {cn} from "@/lib/utils";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 
+type CategoryItem = {
+    id: number;
+    general: string;
+    detail: string;
+    description?: string;
+    is_active?: boolean;
+};
+
+type EditTarget = {
+    id: number;
+    general: string;
+    detail: string;
+    description: string;
+};
+
 export default function CategoriesPage() {
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const [showAll, setShowAll] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
     const {data, isLoading, error} = useCategories({
         limit: 500,
@@ -55,6 +73,23 @@ export default function CategoriesPage() {
         updateMutation.mutate({id, data: {is_active: !currentActive}});
     };
 
+    const openEdit = (cat: CategoryItem) => {
+        setEditTarget({
+            id: cat.id,
+            general: cat.general,
+            detail: cat.detail,
+            description: cat.description ?? "",
+        });
+    };
+
+    const handleEditSave = (values: { general: string; detail: string; description: string }) => {
+        if (!editTarget) return;
+        updateMutation.mutate(
+            { id: editTarget.id, data: { general: values.general, detail: values.detail, description: values.description || undefined } },
+            { onSuccess: () => setEditTarget(null) }
+        );
+    };
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-96">
@@ -67,8 +102,8 @@ export default function CategoriesPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Categories</h2>
-                    <p className="text-destructive mt-1">Error loading categories: {error.message}</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('categories.title')}</h2>
+                    <p className="text-destructive mt-1">{t('categoriesPage.error', { msg: error.message })}</p>
                 </div>
             </div>
         );
@@ -82,9 +117,9 @@ export default function CategoriesPage() {
         <div className="space-y-6 animate-in">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Categories</h2>
+                    <h2 className="text-3xl font-bold text-foreground">{t('categories.title')}</h2>
                     <p className="text-muted-foreground mt-1">
-                        {totalItems} categories in {grouped.length} groups
+                        {t('categoriesPage.subtitle', { n: totalItems, g: grouped.length })}
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -95,7 +130,7 @@ export default function CategoriesPage() {
                         className="gap-1.5"
                     >
                         {allExpanded ? <Folder className="h-4 w-4"/> : <FolderOpen className="h-4 w-4"/>}
-                        {allExpanded ? "Collapse All" : "Expand All"}
+                        {allExpanded ? t('categoriesPage.collapseAll') : t('categoriesPage.expandAll')}
                     </Button>
                     <Button
                         variant={showAll ? "secondary" : "outline"}
@@ -104,20 +139,20 @@ export default function CategoriesPage() {
                         className="gap-1.5"
                     >
                         {showAll ? <Eye className="h-4 w-4"/> : <EyeOff className="h-4 w-4"/>}
-                        {showAll ? "Showing All" : "Active Only"}
+                        {showAll ? t('categoriesPage.showingAll') : t('categoriesPage.activeOnly')}
                     </Button>
                     <AddCategoryDialog/>
                 </div>
             </div>
 
             <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Category Tree</CardTitle>
+                    <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">{t('categoriesPage.treeTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="divide-y divide-border">
                         {grouped.length === 0 && (
-                            <p className="text-muted-foreground text-center py-8">No categories found.</p>
+                            <p className="text-muted-foreground text-center py-8">{t('categoriesPage.empty')}</p>
                         )}
                         {grouped.map(({general, items, activeCount}) => {
                             const isExpanded = expandedGroups.has(general);
@@ -138,10 +173,11 @@ export default function CategoriesPage() {
                                         <span className="font-semibold text-foreground text-sm tracking-wide">
                                             {general}
                                         </span>
-                                        <Badge variant="secondary" className="ml-auto text-xs font-normal">
-                                            {activeCount}{showAll && activeCount !== items.length ? `/${items.length}` : ""} {items.length === 1 ? "category" : "categories"}
-                                        </Badge>
-                                    </button>
+                                            <Badge variant="secondary" className="ml-auto text-xs font-normal">
+                                                {t(items.length === 1 ? 'categoriesPage.badgeSingular' : 'categoriesPage.badgePlural', { n: activeCount })}
+                                                {showAll && activeCount !== items.length ? ` / ${t('categoriesPage.badgePlural', { n: items.length })}` : ''}
+                                            </Badge>
+                                        </button>
 
                                     {/* Detail rows */}
                                     {isExpanded && (
@@ -184,24 +220,34 @@ export default function CategoriesPage() {
                                                                     ? "text-accent hover:text-accent"
                                                                     : "text-muted-foreground"
                                                             )}
-                                                            onClick={() => toggleActive(cat.id, cat.is_active !== false)}
+                                                            onClick={(e) => { e.stopPropagation(); toggleActive(cat.id, cat.is_active !== false); }}
                                                             disabled={updateMutation.isPending}
                                                         >
                                                             {cat.is_active !== false
                                                                 ? <ToggleRight className="h-3.5 w-3.5"/>
                                                                 : <ToggleLeft className="h-3.5 w-3.5"/>
                                                             }
-                                                            {cat.is_active !== false ? "Active" : "Inactive"}
+                                                            {cat.is_active !== false ? t('categoriesPage.statusActive') : t('categoriesPage.statusInactive')}
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                            onClick={(e) => { e.stopPropagation(); openEdit(cat); }}
+                                                            title={t('common.edit')}
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={async () => {
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
                                                                 const ok = await confirm({
-                                                                    title: "Delete Category",
-                                                                    description: `Are you sure you want to delete "${general}:${cat.detail}"? This action cannot be undone.`,
-                                                                    confirmLabel: "Delete",
+                                                                    title: t('categoriesPage.delete.title'),
+                                                                    description: t('categoriesPage.delete.desc'),
+                                                                    confirmLabel: t('categoriesPage.delete.confirm'),
                                                                     variant: "destructive",
                                                                 });
                                                                 if (ok) deleteMutation.mutate(cat.id);
@@ -222,7 +268,23 @@ export default function CategoriesPage() {
                 </CardContent>
             </Card>
         </div>
+
         <ConfirmDialog />
+
+        {editTarget && (
+            <AddCategoryDialog
+                mode="edit"
+                open={!!editTarget}
+                onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+                initialValues={{
+                    general: editTarget.general,
+                    detail: editTarget.detail,
+                    description: editTarget.description,
+                }}
+                onSave={handleEditSave}
+                isSaving={updateMutation.isPending}
+            />
+        )}
     </>
     );
 }

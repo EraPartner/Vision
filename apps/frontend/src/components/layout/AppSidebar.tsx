@@ -31,71 +31,8 @@ import {
   Wallet,
   ArrowLeftRight,
 } from "lucide-react";
-import { useWorkspace, type Workspace } from "@/contexts/WorkspaceContext";
-
-const budgetingGroups = [
-  {
-    label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/", icon: LayoutDashboard },
-      { title: "Transactions", url: "/transactions", icon: Receipt },
-    ],
-  },
-  {
-    label: "Organization",
-    items: [
-      { title: "Categories", url: "/categories", icon: Tags },
-      { title: "Recipients", url: "/recipients", icon: Users },
-    ],
-  },
-  {
-    label: "Analysis",
-    items: [
-      { title: "Statistics", url: "/statistics", icon: BarChart3 },
-      { title: "Planned Payments", url: "/planned", icon: CalendarClock },
-      { title: "Who Owes You", url: "/owes", icon: HandCoins },
-    ],
-  },
-  {
-    label: "Data",
-    items: [
-      { title: "Import / Export", url: "/import", icon: Import },
-    ],
-  },
-];
-
-const portfolioGroups = [
-  {
-    label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/portfolio", icon: LayoutDashboard },
-      { title: "Net Worth", url: "/portfolio/net-worth", icon: Wallet },
-      { title: "Performance", url: "/portfolio/performance", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Investments",
-    items: [
-      { title: "Stocks & ETFs", url: "/portfolio/stocks", icon: TrendingUp },
-      { title: "Crypto", url: "/portfolio/crypto", icon: Coins },
-    ],
-  },
-  {
-    label: "Assets",
-    items: [
-      { title: "Real Estate", url: "/portfolio/real-estate", icon: Building2 },
-      { title: "Savings & Bonds", url: "/portfolio/savings", icon: PiggyBank },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [
-      { title: "Market Lookup", url: "/portfolio/market", icon: LineChart },
-      { title: "Watchlist", url: "/portfolio/watchlist", icon: Target },
-      { title: "Exchange Rates", url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
-    ],
-  },
-];
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
@@ -109,6 +46,71 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { workspace, setWorkspace } = useWorkspace();
+  const { t } = useLanguage();
+
+  const budgetingGroups = [
+    {
+      label: t('nav.overview'),
+      items: [
+        { title: t('nav.dashboard'), url: "/", icon: LayoutDashboard },
+        { title: t('nav.transactions'), url: "/transactions", icon: Receipt },
+      ],
+    },
+    {
+      label: t('nav.organization'),
+      items: [
+        { title: t('nav.categories'), url: "/categories", icon: Tags },
+        { title: t('nav.recipients'), url: "/recipients", icon: Users },
+      ],
+    },
+    {
+      label: t('nav.analysis'),
+      items: [
+        { title: t('nav.statistics'), url: "/statistics", icon: BarChart3 },
+        { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
+        { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
+      ],
+    },
+    {
+      label: t('nav.data'),
+      items: [
+        { title: t('nav.importExport'), url: "/import", icon: Import },
+      ],
+    },
+  ];
+
+  const portfolioGroups = [
+    {
+      label: t('nav.overview'),
+      items: [
+        { title: t('nav.dashboard'), url: "/portfolio", icon: LayoutDashboard },
+        { title: t('nav.netWorth'), url: "/portfolio/net-worth", icon: Wallet },
+        { title: t('nav.performance'), url: "/portfolio/performance", icon: BarChart3 },
+      ],
+    },
+    {
+      label: t('nav.investments'),
+      items: [
+        { title: t('nav.stocksEtfs'), url: "/portfolio/stocks", icon: TrendingUp },
+        { title: t('nav.crypto'), url: "/portfolio/crypto", icon: Coins },
+      ],
+    },
+    {
+      label: t('nav.assets'),
+      items: [
+        { title: t('nav.realEstate'), url: "/portfolio/real-estate", icon: Building2 },
+        { title: t('nav.savingsBonds'), url: "/portfolio/savings", icon: PiggyBank },
+      ],
+    },
+    {
+      label: t('nav.tools'),
+      items: [
+        { title: t('nav.marketLookup'), url: "/portfolio/market", icon: LineChart },
+        { title: t('nav.watchlist'), url: "/portfolio/watchlist", icon: Target },
+        { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
+      ],
+    },
+  ];
 
   const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
 
@@ -124,7 +126,7 @@ export function AppSidebar() {
               <h1 className="text-base font-bold text-sidebar-foreground truncate">
                 Vision
               </h1>
-              <p className="text-xs text-muted-foreground truncate">Finance Manager</p>
+              <p className="text-xs text-muted-foreground truncate">{t('nav.financeManager')}</p>
             </div>
           )}
         </div>
@@ -139,13 +141,13 @@ export function AppSidebar() {
                 active={workspace === "budgeting"}
                 onClick={() => setWorkspace("budgeting")}
                 icon={<Receipt className="h-3.5 w-3.5" />}
-                label="Budgeting"
+                label={t('nav.budgeting')}
               />
               <WorkspaceTab
                 active={workspace === "portfolio"}
                 onClick={() => setWorkspace("portfolio")}
                 icon={<Briefcase className="h-3.5 w-3.5" />}
-                label="Portfolio"
+                label={t('nav.portfolio')}
               />
             </div>
           </div>
@@ -155,14 +157,14 @@ export function AppSidebar() {
             <button
               onClick={() => setWorkspace("budgeting")}
               className={`p-2 rounded-md transition-colors ${workspace === "budgeting" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title="Budgeting"
+              title={t('nav.budgeting')}
             >
               <Receipt className="h-4 w-4" />
             </button>
             <button
               onClick={() => setWorkspace("portfolio")}
               className={`p-2 rounded-md transition-colors ${workspace === "portfolio" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title="Portfolio"
+              title={t('nav.portfolio')}
             >
               <Briefcase className="h-4 w-4" />
             </button>
@@ -177,7 +179,7 @@ export function AppSidebar() {
                 {group.items.map((item) => {
                   const isActive = isActiveRoute(item.url, location.pathname);
                   return (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                         <NavLink to={item.url}>
                           <item.icon className="h-4 w-4" />

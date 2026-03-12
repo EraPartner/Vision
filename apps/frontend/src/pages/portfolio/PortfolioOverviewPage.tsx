@@ -1,3 +1,6 @@
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,31 +18,37 @@ import { useMemo } from "react";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
-const PORTFOLIO_WIDGETS: WidgetDefinition[] = [
-  { id: "summaryCards",    label: "Summary Cards",       defaultVisible: true },
-  { id: "allocation",      label: "Asset Allocation",    defaultVisible: true },
-  { id: "performance",     label: "Performance Summary", defaultVisible: true },
-  { id: "investments",     label: "All Investments",     defaultVisible: true },
-  { id: "news",            label: "News Feed",           defaultVisible: true },
-];
+function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
+  return [
+    { id: "summaryCards",    label: t('portfolio.widget.summaryCards'), defaultVisible: true },
+    { id: "allocation",      label: t('portfolio.widget.allocation'),   defaultVisible: true },
+    { id: "performance",     label: t('portfolio.widget.performance'),  defaultVisible: true },
+    { id: "investments",     label: t('portfolio.widget.investments'),  defaultVisible: true },
+    { id: "news",            label: t('portfolio.widget.news'),         defaultVisible: true },
+  ];
+}
 
 const COLORS = [
   "hsl(217, 91%, 60%)", "hsl(142, 76%, 36%)", "hsl(45, 93%, 47%)",
   "hsl(280, 87%, 65%)", "hsl(340, 82%, 52%)", "hsl(200, 80%, 50%)",
 ];
 
-function fmt(val: number, currency = 'EUR') {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
-}
-
 export default function PortfolioOverviewPage() {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
     summaries, totalPortfolioValue, totalGainLoss,
     totalRealizedGain, totalUnrealizedGain,
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
+  const PORTFOLIO_WIDGETS = getPortfolioWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
+
+  function fmt(val: number, currency = 'EUR') {
+    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+  }
 
   const totalInvested = summaries.reduce((s, i) => s + i.totalBuyCost, 0);
   const totalIncome = summaries.reduce((s, i) => s + i.totalIncome, 0);
@@ -60,31 +69,31 @@ export default function PortfolioOverviewPage() {
 
   const cards = [
     {
-      title: "Total Value",
+      title: t('portfolio.totalValue'),
       value: fmt(totalPortfolioValue),
       icon: DollarSign,
-      desc: `${summaries.length} investments`,
+      desc: t('portfolio.investments', { count: String(summaries.length) }),
       cls: "text-primary"
     },
     {
-      title: "Total Gain/Loss",
+      title: t('portfolio.totalGainLoss'),
       value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`,
       icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown,
-      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% all time`,
+      desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
       cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive"
     },
     {
-      title: "Realized Gains",
+      title: t('portfolio.realizedGains'),
       value: `${totalRealizedGain >= 0 ? '+' : ''}${fmt(totalRealizedGain)}`,
       icon: ArrowUpRight,
-      desc: "From closed positions",
+      desc: t('portfolio.fromClosedPositions'),
       cls: totalRealizedGain >= 0 ? "text-accent" : "text-destructive"
     },
     {
-      title: "Unrealized Gains",
+      title: t('portfolio.unrealizedGains'),
       value: `${totalUnrealizedGain >= 0 ? '+' : ''}${fmt(totalUnrealizedGain)}`,
       icon: Clock,
-      desc: "Paper profit/loss",
+      desc: t('portfolio.paperProfitLoss'),
       cls: totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive"
     },
   ];
@@ -94,7 +103,7 @@ export default function PortfolioOverviewPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Portfolio Overview</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('portfolio.overviewTitle')}</h1>
         <div className="flex items-center gap-2">
           <WidgetVisibilityDialog
             widgets={widgetDefs}
@@ -105,7 +114,7 @@ export default function PortfolioOverviewPage() {
           />
           <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
             {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Refresh Prices
+            {t('portfolio.refreshPrices')}
           </Button>
           <AddInvestmentDialog />
         </div>
@@ -115,9 +124,9 @@ export default function PortfolioOverviewPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <PieChartIcon className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">No investments yet</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-1">{t('portfolio.noInvestments')}</h3>
             <p className="text-muted-foreground text-sm mb-4 max-w-sm">
-              Add your first investment to start tracking stocks, ETFs, crypto, real estate, or savings.
+              {t('portfolio.noInvestmentsDesc')}
             </p>
             <AddInvestmentDialog />
           </CardContent>
@@ -144,7 +153,7 @@ export default function PortfolioOverviewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {isVisible('allocation') && allocationData.length > 0 && (
               <Card>
-                <CardHeader><CardTitle>Asset Allocation</CardTitle><CardDescription>By asset class</CardDescription></CardHeader>
+                <CardHeader><CardTitle>{t('portfolio.widget.allocation')}</CardTitle><CardDescription>{t('portfolio.allocationByClass')}</CardDescription></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
@@ -161,17 +170,17 @@ export default function PortfolioOverviewPage() {
 
             {isVisible('performance') && (
               <Card>
-                <CardHeader><CardTitle>Performance Summary</CardTitle><CardDescription>Gains, income & costs</CardDescription></CardHeader>
+                <CardHeader><CardTitle>{t('portfolio.widget.performance')}</CardTitle><CardDescription>{t('portfolio.gainsIncomeAndCosts')}</CardDescription></CardHeader>
                 <CardContent>
                   <div className="space-y-3">
                     {[
-                      { label: 'Total Invested', value: totalInvested, cls: 'text-foreground' },
-                      { label: 'Current Value', value: totalPortfolioValue, cls: 'text-foreground' },
-                      { label: 'Realized Gains', value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                      { label: 'Unrealized Gains', value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                      { label: 'Total Income', value: totalIncome, cls: 'text-accent', showSign: true },
-                      { label: 'Total Fees', value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
-                      { label: 'Total Taxes', value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
+                      { label: t('portfolio.totalInvested'), value: totalInvested, cls: 'text-foreground' },
+                      { label: t('portfolio.currentValue'), value: totalPortfolioValue, cls: 'text-foreground' },
+                      { label: t('portfolio.realizedGains'), value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                      { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
+                      { label: t('portfolio.totalFees'), value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
+                      { label: t('portfolio.totalTaxes'), value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
                     ].map(({ label, value, cls, showSign }) => (
                       <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
@@ -190,7 +199,7 @@ export default function PortfolioOverviewPage() {
             {isVisible('investments') && (
               <div className={isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
                 <Card>
-                  <CardHeader><CardTitle>All Investments</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>{t('portfolio.widget.investments')}</CardTitle></CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {summaries.map((inv) => {
@@ -204,11 +213,11 @@ export default function PortfolioOverviewPage() {
                                 <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
                               </div>
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                <span>Cost: {fmt(inv.totalBuyCost, inv.currency)}</span>
+                                 <span>{t('portfolio.costLabel')} {fmt(inv.totalBuyCost, inv.currency)}</span>
                                 {isUnitBased && inv.totalUnits > 0 && (
-                                  <span>{inv.totalUnits.toFixed(4)} units @ {fmt(inv.avgCostBasis, inv.currency)}/ea</span>
+                                  <span>{t('portfolio.units.label', { units: inv.totalUnits.toFixed(4), price: fmt(inv.avgCostBasis, inv.currency) })}</span>
                                 )}
-                                {inv.totalIncome > 0 && <span className="text-accent">Income: +{fmt(inv.totalIncome, inv.currency)}</span>}
+                                {inv.totalIncome > 0 && <span className="text-accent">{t('portfolio.income.label', { amount: fmt(inv.totalIncome, inv.currency) })}</span>}
                               </div>
                             </div>
                             <div className="text-right shrink-0">
@@ -223,10 +232,10 @@ export default function PortfolioOverviewPage() {
                               <Button
                                 variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 onClick={async () => {
-                                  const ok = await confirm({
-                                    title: "Delete Investment",
-                                    description: `Are you sure you want to delete "${inv.name}" and all its transactions? This action cannot be undone.`,
-                                    confirmLabel: "Delete",
+                                   const ok = await confirm({
+                                    title: t('portfolio.deleteInvestment'),
+                                    description: t('portfolio.deleteInvestmentDesc', { name: inv.name }),
+                                    confirmLabel: t('common.delete'),
                                     variant: "destructive",
                                   });
                                   if (ok) deleteInvestment(inv.id);

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useRecipients } from "@/hooks/useRecipients";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface RecipientComboboxProps {
     value?: number | null;
@@ -15,6 +16,7 @@ interface RecipientComboboxProps {
 }
 
 export function RecipientCombobox({ value, onSelect, disabled, className, portalContainer }: RecipientComboboxProps) {
+    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
     const trimmedSearch = search.trim();
@@ -27,7 +29,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
 
     const recipients = useMemo(() => data?.items ?? [], [data?.items]);
     const selected = recipients.find((r) => r.id === value);
-    const displayLabel = selected ? selected.name : "Select recipient…";
+    const displayLabel = selected ? selected.name : t('combobox.recipient.placeholder');
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -46,12 +48,12 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
             <PopoverContent container={portalContainer} className="w-[280px] p-0 bg-popover border border-border shadow-lg z-[200]" align="start">
                 <Command>
                     <CommandInput
-                        placeholder="Search recipients…"
+                        placeholder={t('combobox.recipient.search')}
                         value={search}
                         onValueChange={setSearch}
                     />
                     <CommandList>
-                        <CommandEmpty>No recipients found.</CommandEmpty>
+                        <CommandEmpty>{t('combobox.recipient.empty')}</CommandEmpty>
                         <CommandGroup>
                             <CommandItem
                                 value="__none__"
@@ -61,7 +63,7 @@ export function RecipientCombobox({ value, onSelect, disabled, className, portal
                                 }}
                             >
                                 <Check className={cn("mr-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
-                                <span className="text-muted-foreground italic">None</span>
+                                <span className="text-muted-foreground italic">{t('combobox.recipient.none')}</span>
                             </CommandItem>
                             {recipients.map((recipient) => {
                                 const label = recipient.name;

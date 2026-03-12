@@ -4,6 +4,7 @@
 
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
 
+/** @deprecated Use getAssetClassLabel(t, assetClass) for UI display */
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   stock: 'Stock',
   etf: 'ETF',
@@ -13,6 +14,12 @@ export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   bond: 'Bond',
 };
 
+/** Returns a translated label for an asset class. */
+export function getAssetClassLabel(t: (key: string) => string, assetClass: AssetClass): string {
+  return t(`portfolio.assetClass.${assetClass}`);
+}
+
+/** @deprecated Use getAssetClassGroups(t) for UI display */
 export const ASSET_CLASS_GROUPS: Record<string, AssetClass[]> = {
   'Stocks & ETFs': ['stock', 'etf'],
   'Crypto': ['crypto'],
@@ -20,8 +27,19 @@ export const ASSET_CLASS_GROUPS: Record<string, AssetClass[]> = {
   'Savings & Bonds': ['savings', 'bond'],
 };
 
+/** Returns translated asset class groups for UI display. */
+export function getAssetClassGroups(t: (key: string) => string): Record<string, AssetClass[]> {
+  return {
+    [t('portfolio.assetGroup.stocksEtfs')]: ['stock', 'etf'],
+    [t('portfolio.assetGroup.crypto')]: ['crypto'],
+    [t('portfolio.assetGroup.realEstate')]: ['real_estate'],
+    [t('portfolio.assetGroup.savingsBonds')]: ['savings', 'bond'],
+  };
+}
+
 export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation';
 
+/** @deprecated Use getTxnTypeLabel(t, type) for UI display */
 export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
   buy: 'Buy',
   sell: 'Sell',
@@ -32,6 +50,11 @@ export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
   rent_income: 'Rent Income',
   appreciation: 'Appreciation',
 };
+
+/** Returns a translated label for a portfolio transaction type. */
+export function getTxnTypeLabel(t: (key: string) => string, type: PortfolioTxnType | string): string {
+  return t(`portfolio.txnType.${type}`) || type;
+}
 
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 

@@ -19,6 +19,9 @@ import { useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart, type Sav
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -41,15 +44,6 @@ const RECHARTS_TOOLTIP_STYLE = {
 };
 
 type ChartType = "line" | "bar" | "area";
-
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
-}
 
 function formatPeriodShort(period: string) {
   try {
@@ -102,6 +96,15 @@ export function CustomCategoryChart({
   const createChart = useCreateSavedChart();
   const updateChart = useUpdateSavedChart();
   const deleteChart = useDeleteSavedChart();
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
 
   // Auto-save config changes in saved mode (debounced)
   const pendingUpdate = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,11 +183,11 @@ export function CustomCategoryChart({
 
   const title = isSavedMode
     ? (isRenaming ? "" : savedChart!.name)
-    : "Custom Category Comparison";
+    : t('customChart.comparison');
 
   const description = selectedCategories.length === 0
-    ? "Select categories to compare their spending over time"
-    : `Comparing ${selectedCategories.length} categor${selectedCategories.length === 1 ? "y" : "ies"}`;
+    ? t('customChart.selectDesc')
+    : t('customChart.comparing', { n: selectedCategories.length, catWord: selectedCategories.length === 1 ? t('customChart.category') : t('customChart.categories') });
 
   return (
     <>
@@ -201,10 +204,10 @@ export function CustomCategoryChart({
                   autoFocus
                 />
                 <Button size="sm" onClick={handleRename} disabled={updateChart.isPending}>
-                  Save
+                  {t('common.save')}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setIsRenaming(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
               </div>
             ) : (
@@ -214,7 +217,7 @@ export function CustomCategoryChart({
                   <button
                     onClick={() => { setRenameValue(savedChart!.name); setIsRenaming(true); }}
                     className="text-muted-foreground hover:text-foreground transition-colors"
-                    title="Rename"
+                    title={t('customChart.rename')}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -233,7 +236,7 @@ export function CustomCategoryChart({
                 onClick={() => setSaveDialogOpen(true)}
               >
                 <Bookmark className="h-4 w-4 mr-1" />
-                Save chart
+                {t('customChart.saveChart')}
               </Button>
             )}
             {/* Delete button — saved mode */}
@@ -253,7 +256,7 @@ export function CustomCategoryChart({
               onClick={() => setShowSettings(prev => !prev)}
             >
               <Settings2 className="h-4 w-4 mr-1" />
-              Settings
+              {t('customChart.settings')}
             </Button>
             <ExclusionToggle
               graphKey={graphKey}
@@ -269,7 +272,7 @@ export function CustomCategoryChart({
             <div className="space-y-3 p-4 rounded-lg border border-border bg-muted/30">
               {/* Category selector */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Categories</label>
+                <label className="text-sm font-medium text-foreground">{t('customChart.categoriesLabel')}</label>
                 <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -280,16 +283,16 @@ export function CustomCategoryChart({
                     >
                       <span className="text-muted-foreground">
                         <Plus className="h-4 w-4 inline mr-1" />
-                        Add category…
+                        {t('customChart.addCategory')}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[320px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
                     <Command>
-                      <CommandInput placeholder="Search categories…" />
-                      <CommandList>
-                        <CommandEmpty>No categories found.</CommandEmpty>
+                       <CommandInput placeholder={t('customChart.searchCategories')} />
+                       <CommandList>
+                         <CommandEmpty>{t('customChart.noCategoriesFound')}</CommandEmpty>
                         <CommandGroup>
                           {availableCategories.map(cat => (
                             <CommandItem
@@ -334,7 +337,7 @@ export function CustomCategoryChart({
                         className="h-6 text-xs text-muted-foreground"
                         onClick={() => setSelectedCategoryIds([])}
                       >
-                        Clear all
+                        {t('customChart.clearAll')}
                       </Button>
                     )}
                   </div>
@@ -344,15 +347,15 @@ export function CustomCategoryChart({
               {/* Chart type */}
               <div className="flex gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Chart type</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t('customChart.chartType')}</label>
                   <Select value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
                     <SelectTrigger className="w-[110px] h-8 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="line">Line</SelectItem>
-                      <SelectItem value="bar">Bar</SelectItem>
-                      <SelectItem value="area">Area</SelectItem>
+                      <SelectItem value="line">{t('customChart.line')}</SelectItem>
+                      <SelectItem value="bar">{t('customChart.bar')}</SelectItem>
+                      <SelectItem value="area">{t('customChart.area')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -365,7 +368,7 @@ export function CustomCategoryChart({
             <div className="flex items-center justify-center h-[300px] text-muted-foreground">
               <div className="text-center space-y-2">
                 <Settings2 className="h-8 w-8 mx-auto opacity-40" />
-                <p className="text-sm">Select categories above to build your comparison chart</p>
+                <p className="text-sm">{t('customChart.selectPrompt')}</p>
               </div>
             </div>
           ) : (
@@ -416,24 +419,24 @@ export function CustomCategoryChart({
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Save chart</DialogTitle>
+            <DialogTitle>{t('customChart.saveDialog.title')}</DialogTitle>
             <DialogDescription>
-              Give this configuration a name so you can find it later.
+              {t('customChart.saveDialog.desc')}
             </DialogDescription>
           </DialogHeader>
           <Input
-            placeholder="e.g. Groceries vs Transport"
+            placeholder={t('customChart.saveNamePlaceholder')}
             value={saveName}
             onChange={e => setSaveName(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") handleSave(); }}
             autoFocus
           />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!saveName.trim() || createChart.isPending}>
-              {createChart.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>{t('common.cancel')}</Button>
+              <Button onClick={handleSave} disabled={!saveName.trim() || createChart.isPending}>
+                {createChart.isPending ? t('customChart.saving') : t('common.save')}
+              </Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -441,15 +444,15 @@ export function CustomCategoryChart({
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete chart</DialogTitle>
+            <DialogTitle>{t('customChart.deleteTitle')}</DialogTitle>
             <DialogDescription>
-              Delete <strong>{savedChart?.name}</strong>? This cannot be undone.
+              {t('customChart.deleteDesc', { name: savedChart?.name ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>{t('common.cancel')}</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteChart.isPending}>
-              {deleteChart.isPending ? "Deleting…" : "Delete"}
+              {deleteChart.isPending ? t('customChart.deleting') : t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

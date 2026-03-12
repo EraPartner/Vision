@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -51,7 +52,7 @@ export function DataTable<T extends Record<string, any>>({
     subtitle,
     columns,
     data,
-    emptyMessage = "No data available",
+    emptyMessage,
     actions,
     onRowUpdate,
     page,
@@ -61,6 +62,7 @@ export function DataTable<T extends Record<string, any>>({
     onSearchChange,
     searchValue,
 }: DataTableProps<T>) {
+    const { t } = useLanguage();
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
     const [localSearchQuery, setLocalSearchQuery] = useState("");
@@ -269,7 +271,7 @@ export function DataTable<T extends Record<string, any>>({
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder={isServerSearch ? "Search database…" : "Search across all columns…"}
+                        placeholder={isServerSearch ? t('table.searchDatabase') : t('table.searchAllColumns')}
                         value={isServerSearch ? localSearchQuery : localSearchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
@@ -293,7 +295,7 @@ export function DataTable<T extends Record<string, any>>({
                         className="text-xs text-muted-foreground hover:text-destructive shrink-0 gap-1"
                     >
                         <X className="h-3 w-3" />
-                        Clear all
+                        {t('table.clearAll')}
                         {activeFilterCount > 0 && (
                             <span className="ml-1 bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-bold">
                                 {activeFilterCount}
@@ -404,7 +406,7 @@ export function DataTable<T extends Record<string, any>>({
                                 })}
                                 {hasEditableColumns && (
                                     <TableHead className="w-24 text-right font-semibold text-muted-foreground">
-                                        Edit
+                                        {t('table.edit')}
                                     </TableHead>
                                 )}
                             </TableRow>
@@ -417,8 +419,8 @@ export function DataTable<T extends Record<string, any>>({
                                         className="text-center text-muted-foreground py-12"
                                     >
                                         {localSearchQuery || activeFilterCount > 0
-                                            ? "No results match your filters."
-                                            : emptyMessage}
+                                            ? t('table.noFilterResults')
+                                            : (emptyMessage ?? t('table.noData'))}
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -507,10 +509,10 @@ export function DataTable<T extends Record<string, any>>({
                 <div className="flex items-center justify-between border-t px-6 py-3">
                     <p className="text-sm text-muted-foreground">
                         {processedData.length !== data.length
-                            ? `${processedData.length} of ${hasPagination ? totalItems : data.length} shown`
+                            ? t('table.shownOf', { shown: processedData.length.toString(), total: (hasPagination ? totalItems! : data.length).toString() })
                             : hasPagination && totalItems! > 0
-                                ? `Showing ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, totalItems!)} of ${totalItems!}`
-                                : `${data.length} items`
+                                ? t('table.showingRange', { from: (currentPage * pageSize + 1).toString(), to: Math.min((currentPage + 1) * pageSize, totalItems!).toString(), total: totalItems!.toString() })
+                                : t('table.items', { count: data.length.toString() })
                         }
                     </p>
                     {hasPagination && totalItems! > 0 && (
@@ -525,10 +527,10 @@ export function DataTable<T extends Record<string, any>>({
                                 }}
                             >
                                 <ChevronLeft className="h-4 w-4 mr-1" />
-                                Previous
+                                {t('table.previous')}
                             </Button>
                             <span className="text-sm text-muted-foreground px-2">
-                                Page {currentPage + 1} of {totalPages}
+                                {t('table.page')} {currentPage + 1} {t('table.of')} {totalPages}
                             </span>
                             <Button
                                 variant="outline"
@@ -539,7 +541,7 @@ export function DataTable<T extends Record<string, any>>({
                                     else onPageChange!(currentPage + 1);
                                 }}
                             >
-                                Next
+                                {t('table.next')}
                                 <ChevronRight className="h-4 w-4 ml-1" />
                             </Button>
                         </div>
@@ -566,6 +568,7 @@ function ColumnFilter({
     uniqueValues: string[];
     onClose: () => void;
 }) {
+    const { t } = useLanguage();
     const [filterSearch, setFilterSearch] = useState("");
     const filtered = uniqueValues.filter(v =>
         v.toLowerCase().includes(filterSearch.toLowerCase())
@@ -573,9 +576,9 @@ function ColumnFilter({
 
     return (
         <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground px-1">Filter: {header}</p>
+            <p className="text-xs font-medium text-muted-foreground px-1">{t('table.filterLabel', { header })}</p>
             <Input
-                placeholder={`Filter ${header.toLowerCase()}…`}
+                placeholder={t('table.filterInputPlaceholder', { header: header.toLowerCase() })}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 className="h-8 text-sm"
@@ -589,7 +592,7 @@ function ColumnFilter({
                 <>
                     {uniqueValues.length > 8 && (
                         <Input
-                            placeholder="Search values…"
+                            placeholder={t('table.searchValues')}
                             value={filterSearch}
                             onChange={(e) => setFilterSearch(e.target.value)}
                             className="h-7 text-xs"
@@ -607,7 +610,7 @@ function ColumnFilter({
                             </button>
                         ))}
                         {filtered.length > 30 && (
-                            <p className="text-[10px] text-muted-foreground px-2">+{filtered.length - 30} more…</p>
+                            <p className="text-[10px] text-muted-foreground px-2">{t('table.moreValues', { count: (filtered.length - 30).toString() })}</p>
                         )}
                     </div>
                 </>
@@ -619,7 +622,7 @@ function ColumnFilter({
                     onClick={() => { onChange(""); onClose(); }}
                     className="w-full text-xs h-7 text-muted-foreground"
                 >
-                    Clear filter
+                    {t('table.clearFilter')}
                 </Button>
             )}
         </div>

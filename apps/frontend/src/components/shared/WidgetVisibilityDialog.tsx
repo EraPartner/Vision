@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { LayoutGrid, RotateCcw } from 'lucide-react';
 import type { WidgetDefinition } from '@/hooks/useWidgetVisibility';
+import { useLanguage } from '@/contexts/LanguageContext';
 interface WidgetVisibilityDialogProps {
     widgets: WidgetDefinition[];
     isVisible: (id: string) => boolean;
@@ -21,13 +22,14 @@ export function WidgetVisibilityDialog({
                                            setAllVisible,
                                            resetToDefaults,
                                        }: WidgetVisibilityDialogProps) {
+    const { t } = useLanguage();
     const visibleCount = widgets.filter((w) => isVisible(w.id)).length;
     return (
         <Dialog>
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
                     <LayoutGrid className="h-4 w-4" />
-                    Widgets
+                    {t('widgets.button')}
                     <span className="text-xs text-muted-foreground">
             {visibleCount}/{widgets.length}
           </span>
@@ -35,9 +37,9 @@ export function WidgetVisibilityDialog({
             </DialogTrigger>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Manage Widgets</DialogTitle>
+                    <DialogTitle>{t('widgets.title')}</DialogTitle>
                     <DialogDescription>
-                        Choose which sections to display on this page.
+                        {t('widgets.description')}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-1 py-2">
@@ -66,15 +68,15 @@ export function WidgetVisibilityDialog({
                 <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
                     <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => setAllVisible(true)}>
-                            Show All
+                            {t('widgets.showAll')}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => setAllVisible(false)}>
-                            Hide All
+                            {t('widgets.hideAll')}
                         </Button>
                     </div>
                     <Button variant="ghost" size="sm" className="gap-1.5" onClick={resetToDefaults}>
                         <RotateCcw className="h-3.5 w-3.5" />
-                        Reset
+                        {t('widgets.reset')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

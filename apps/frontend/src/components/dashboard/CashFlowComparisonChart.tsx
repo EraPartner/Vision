@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, ReferenceLine } from "recharts";
 import { Activity } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DayData {
   day: number;
@@ -20,6 +21,7 @@ interface CashFlowComparisonProps {
 }
 
 function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: number }) {
+  const { t } = useLanguage();
   const lastActual = data.slice(0, currentDay).at(-1);
   const avgAtCurrentDay = lastActual ? data[currentDay - 1]?.average : null;
   const diff = lastActual?.current !== null && lastActual?.current !== undefined && avgAtCurrentDay !== null
@@ -37,7 +39,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
             dataKey="day"
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
             tickFormatter={(v) => String(v)}
-            label={{ value: 'Day of month', position: 'insideBottom', offset: -2, fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            label={{ value: t('cashflow.dayOfMonth'), position: 'insideBottom', offset: -2, fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
             height={40}
           />
           <YAxis
@@ -55,14 +57,14 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
             }}
             formatter={(value: number, name: string) => [
               formatCurrency(value, 'EUR'),
-              name === 'average' ? '24-Month Avg' : 'This Month',
+              name === 'average' ? t('cashflow.24monthAvg') : t('cashflow.thisMonth'),
             ]}
-            labelFormatter={(label) => `Day ${label}`}
+            labelFormatter={(label) => t('cashflow.day', { n: String(label) })}
           />
           <Legend
             verticalAlign="top"
             height={36}
-            formatter={(value) => value === 'average' ? '24-Month Avg' : 'This Month'}
+            formatter={(value) => value === 'average' ? t('cashflow.24monthAvg') : t('cashflow.thisMonth')}
           />
           <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" opacity={0.5} />
           <Line
@@ -94,12 +96,12 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
           <div className={`w-2.5 h-2.5 rounded-full ${isBetterThanAverage ? 'bg-accent' : 'bg-destructive'}`} />
           <p className="text-sm font-medium text-foreground">
             {isBetterThanAverage
-              ? `Saving more than average — net is `
-              : `Spending more than average — net is `}
+              ? `${t('cashflow.savingMore')} `
+              : `${t('cashflow.spendingMore')} `}
             <span className="font-bold">
               {formatCurrency(Math.abs(diff), 'EUR')}
             </span>
-            {isBetterThanAverage ? ' better' : ' worse'}{' '}than the 24-month average as of day {currentDay}
+            {isBetterThanAverage ? ` ${t('cashflow.better')}` : ` ${t('cashflow.worse')}`}{' '}{t('cashflow.comparedTo')} {currentDay}
           </p>
         </div>
       )}
@@ -108,13 +110,14 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
 }
 
 export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDay, month, year, embedded = false }: CashFlowComparisonProps) {
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const { t } = useLanguage();
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   const chartContent = (
     <Tabs defaultValue="without" className="w-full">
       <TabsList className="grid w-full grid-cols-2 mb-4">
-        <TabsTrigger value="without">Without Planned</TabsTrigger>
-        <TabsTrigger value="with">With Planned</TabsTrigger>
+        <TabsTrigger value="without">{t('cashflow.withoutPlanned')}</TabsTrigger>
+        <TabsTrigger value="with">{t('cashflow.withPlanned')}</TabsTrigger>
       </TabsList>
       <TabsContent value="without">
         <CashFlowLineChart data={withoutPlanned} currentDay={currentDay} />
@@ -138,9 +141,9 @@ export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDa
             <Activity className="h-6 w-6" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-xl">Cash Flow Comparison</CardTitle>
+            <CardTitle className="text-xl">{t('cashflow.title')}</CardTitle>
             <CardDescription className="text-base">
-              {monthName} — daily cumulative vs 24-month average pattern
+              {t('cashflow.chartDesc', { monthName })}
             </CardDescription>
           </div>
         </div>
@@ -151,4 +154,3 @@ export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDa
     </Card>
   );
 }
-

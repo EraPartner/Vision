@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const COLORS = [
     "hsl(var(--primary))",
@@ -17,6 +18,7 @@ interface CategoryPieChartProps {
 }
 
 export function CategoryPieChart({ data, embedded = false }: CategoryPieChartProps) {
+    const { t } = useLanguage();
     const chartContent = (
         <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -42,7 +44,7 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
                             background: "hsl(var(--card))",
                             color: "hsl(var(--card-foreground))",
                         }}
-                        formatter={(value: number) => [`€${value.toLocaleString()}`, "Amount"]}
+                        formatter={(value: number) => [`€${value.toLocaleString()}`, t('categoryPie.amount')]}
                     />
                     <Legend
                         verticalAlign="bottom"
@@ -62,7 +64,7 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
     if (!data || data.length === 0) {
         const emptyContent = (
             <div className="h-72 flex items-center justify-center text-muted-foreground">
-                No category data available
+                {t('categoryPie.noData')}
             </div>
         );
         
@@ -74,8 +76,8 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
             <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
                 <CardHeader>
-                    <CardTitle className="text-lg font-semibold">Spending by Category</CardTitle>
-                    <p className="text-sm text-muted-foreground">This month's breakdown</p>
+                    <CardTitle className="text-lg font-semibold">{t('categoryPie.title')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{t('categoryPie.desc')}</p>
                 </CardHeader>
                 <CardContent>
                     {emptyContent}
@@ -92,8 +94,8 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
         <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader>
-                <CardTitle className="text-lg font-semibold">Spending by Category</CardTitle>
-                <p className="text-sm text-muted-foreground">This month's breakdown</p>
+                <CardTitle className="text-lg font-semibold">{t('categoryPie.title')}</CardTitle>
+                <p className="text-sm text-muted-foreground">{t('categoryPie.desc')}</p>
             </CardHeader>
             <CardContent>
                 {chartContent}

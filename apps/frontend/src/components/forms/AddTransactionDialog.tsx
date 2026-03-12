@@ -10,8 +10,10 @@ import {Plus, Loader2} from "lucide-react";
 import {useCreateTransaction} from "@/hooks/useTransactions";
 import {useRecipients} from "@/hooks/useRecipients";
 import {useCategories} from "@/hooks/useCategories";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function AddTransactionDialog() {
+    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const createMutation = useCreateTransaction();
     const {data: recipientsData} = useRecipients({limit: 200, active: true});
@@ -59,7 +61,7 @@ export function AddTransactionDialog() {
                 },
                 onError: (error: Error) => {
                     if (error.message.includes('Duplicate')) {
-                        toast.error('Duplicate transaction detected — a matching transaction already exists.');
+                        toast.error(t('addTxn.duplicateError'));
                     }
                 },
             }
@@ -70,40 +72,40 @@ export function AddTransactionDialog() {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> Add Transaction
+                    <Plus className="h-4 w-4" /> {t('form.addTransaction.title')}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Add Transaction</DialogTitle>
+                    <DialogTitle>{t('form.addTransaction.title')}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="tx_date">Date</Label>
+                            <Label htmlFor="tx_date">{t('form.addTransaction.date')}</Label>
                             <Input id="tx_date" type="date" value={form.transaction_date} onChange={(e) => setForm(f => ({...f, transaction_date: e.target.value}))} required />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="tx_amount">Amount</Label>
-                            <Input id="tx_amount" type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required />
+                            <Label htmlFor="tx_amount">{t('form.addTransaction.amount')}</Label>
+                            <Input id="tx_amount" type="number" step="0.01" placeholder={t('form.addTransaction.amountPlaceholder')} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="tx_bank">Bank Account</Label>
-                            <Input id="tx_bank" placeholder="e.g. Main Checking" maxLength={100} value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
+                            <Label htmlFor="tx_bank">{t('addTxn.bankAccount')}</Label>
+                            <Input id="tx_bank" placeholder={t('addTxn.bankAccountPlaceholder')} maxLength={100} value={form.bank_account} onChange={(e) => setForm(f => ({...f, bank_account: e.target.value}))} required />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="tx_currency">Currency</Label>
-                            <Input id="tx_currency" placeholder="EUR" maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
+                            <Label htmlFor="tx_currency">{t('form.addTransaction.bank')}</Label>
+                            <Input id="tx_currency" placeholder={t('addTxn.currencyPlaceholder')} maxLength={10} value={form.currency} onChange={(e) => setForm(f => ({...f, currency: e.target.value}))} />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Recipient</Label>
+                        <Label>{t('form.addTransaction.recipient')}</Label>
                         <Select value={form.recipient_id} onValueChange={(v) => setForm(f => ({...f, recipient_id: v}))}>
-                            <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={t('form.addTransaction.recipient')} /></SelectTrigger>
                             <SelectContent>
                                 {recipientsData?.items.map((r) => (
                                     <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
@@ -113,9 +115,9 @@ export function AddTransactionDialog() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Category (optional)</Label>
+                        <Label>{t('addTxn.categoryOptional')}</Label>
                         <Select value={form.category_id} onValueChange={(v) => setForm(f => ({...f, category_id: v}))}>
-                            <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={t('form.addTransaction.category')} /></SelectTrigger>
                             <SelectContent>
                                 {categoriesData?.items.map((c) => (
                                     <SelectItem key={c.id} value={String(c.id)}>{c.general}: {c.detail}</SelectItem>
@@ -125,20 +127,20 @@ export function AddTransactionDialog() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="tx_memo">Description / Memo</Label>
-                        <Input id="tx_memo" placeholder="Transaction description" maxLength={500} value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
+                        <Label htmlFor="tx_memo">{t('addTxn.descMemo')}</Label>
+                        <Input id="tx_memo" placeholder={t('addTxn.descPlaceholder')} maxLength={500} value={form.memo} onChange={(e) => setForm(f => ({...f, memo: e.target.value}))} />
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="tx_comment">Comment (optional)</Label>
-                        <Textarea id="tx_comment" placeholder="Additional notes..." maxLength={1000} value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
+                        <Label htmlFor="tx_comment">{t('addTxn.commentOptional')}</Label>
+                        <Textarea id="tx_comment" placeholder={t('addTxn.commentPlaceholder')} maxLength={1000} value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
                     </div>
 
                     <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Create
+                            {t('common.create')}
                         </Button>
                     </div>
                 </form>

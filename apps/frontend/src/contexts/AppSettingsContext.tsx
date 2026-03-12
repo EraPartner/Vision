@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
+import type { Language } from '@/contexts/LanguageContext';
 
 export interface AppSettings {
     defaultCurrency: string;
@@ -10,6 +11,7 @@ export interface AppSettings {
     startOfWeek: 'monday' | 'sunday';
     showDecimalPlaces: number;
     defaultBankAccount: string;
+    language: Language;
 }
 
 interface AppSettingsContextType {
@@ -29,6 +31,7 @@ const defaultAppSettings: AppSettings = {
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
     defaultBankAccount: '',
+    language: 'en',
 };
 
 const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ type TableRecipient = {
 
 export default function RecipientsPage() {
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [showAll, setShowAll] = useState(false);
     const [showUncategorized, setShowUncategorized] = useState(false);
     const [search, setSearch] = useState("");
@@ -131,8 +133,8 @@ export default function RecipientsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Recipients</h2>
-                    <p className="text-destructive mt-1">Error loading recipients: {error.message}</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('recipientsPage.tableTitle')}</h2>
+                    <p className="text-destructive mt-1">{t('recipientsPage.error', { msg: error.message })}</p>
                 </div>
             </div>
         );
@@ -141,7 +143,7 @@ export default function RecipientsPage() {
     const recipients: TableRecipient[] = allItems.map((r: any) => ({
         id: r.id,
         name: r.name,
-        primary_bank_account: r.primary_bank_account || 'N/A',
+        primary_bank_account: r.primary_bank_account || t('recipientsPage.none'),
         default_category_name: r.default_category_name,
         default_category_id: r.default_category_id,
         primary_recipient_id: r.primary_recipient_id,
@@ -154,7 +156,7 @@ export default function RecipientsPage() {
     const columns = [
         {
             key: "name",
-            header: "Recipient",
+            header: t('recipientsPage.col.recipient'),
             editable: true,
             render: (row: TableRecipient) => (
                 <div className="flex items-center gap-2">
@@ -178,7 +180,7 @@ export default function RecipientsPage() {
         },
         {
             key: "primary_bank_account",
-            header: "Primary Account",
+            header: t('recipientsPage.col.account'),
             editable: false,
             render: (row: TableRecipient) => (
                 <span className={`text-muted-foreground font-mono text-sm ${!row.is_active ? 'line-through' : ''}`}>{row.primary_bank_account}</span>
@@ -186,7 +188,7 @@ export default function RecipientsPage() {
         },
         {
             key: "default_category_name",
-            header: "Default Category",
+            header: t('recipientsPage.col.category'),
             editable: false,
             render: (row: TableRecipient, isEditing: boolean) => {
                 if (isEditing) {
@@ -205,7 +207,7 @@ export default function RecipientsPage() {
                 }
 
                 const formatCategoryName = (categoryName?: string): string => {
-                    if (!categoryName) return 'None';
+                    if (!categoryName) return t('recipientsPage.none');
                     const parts = categoryName.split(':');
                     if (parts.length > 1) {
                         const detail = parts[1].trim();
@@ -215,7 +217,7 @@ export default function RecipientsPage() {
                 };
 
                 const displayName = formatCategoryName(row.default_category_name);
-                const isNone = displayName === 'None';
+                const isNone = !row.default_category_name;
 
                 return (
                     <Badge variant="outline" className={`font-medium ${isNone ? 'text-muted-foreground' : ''}`}>
@@ -226,7 +228,7 @@ export default function RecipientsPage() {
         },
         {
             key: "notes",
-            header: "Notes",
+            header: t('recipientsPage.col.notes'),
             editable: true,
             render: (row: TableRecipient) => (
                 <span className={`text-sm text-muted-foreground ${!row.is_active ? 'line-through' : ''}`}>{row.notes || '-'}</span>
@@ -234,7 +236,7 @@ export default function RecipientsPage() {
         },
         {
             key: "is_active",
-            header: "Status",
+            header: t('recipientsPage.col.status'),
             editable: false,
             render: (row: TableRecipient) => (
                 <Button
@@ -245,7 +247,7 @@ export default function RecipientsPage() {
                     disabled={updateMutation.isPending}
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                    {row.is_active ? 'Active' : 'Inactive'}
+                    {row.is_active ? t('recipientsPage.statusActive') : t('recipientsPage.statusInactive')}
                 </Button>
             ),
         },
@@ -261,7 +263,7 @@ export default function RecipientsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            title="Unmerge from primary"
+                            title={t('recipientsPage.unmergeTitle')}
                             onClick={(e) => { e.stopPropagation(); unmergeMutation.mutate(row.id); }}
                             disabled={unmergeMutation.isPending}
                         >
@@ -274,9 +276,9 @@ export default function RecipientsPage() {
                         className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={async () => {
                             const ok = await confirm({
-                                title: "Delete Recipient",
-                                description: `Are you sure you want to delete recipient "${row.name}"? This action cannot be undone.`,
-                                confirmLabel: "Delete",
+                                title: t('recipientsPage.delete.title'),
+                                description: t('recipientsPage.delete.desc', { name: row.name }),
+                                confirmLabel: t('recipientsPage.delete.confirm'),
                                 variant: "destructive",
                             });
                             if (ok) deleteMutation.mutate(row.id);
@@ -299,7 +301,7 @@ export default function RecipientsPage() {
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                {showAll ? "Showing All" : "Active Only"}
+                {showAll ? t('recipientsPage.showingAll') : t('recipientsPage.activeOnly')}
             </Button>
             <Button
                 variant={showUncategorized ? "secondary" : "outline"}
@@ -308,7 +310,7 @@ export default function RecipientsPage() {
                 className="gap-1.5"
             >
                 <Badge variant={showUncategorized ? "default" : "outline"} className="h-4 w-4 p-0 flex items-center justify-center">?</Badge>
-                {showUncategorized ? "Uncategorized" : "All Categories"}
+                {showUncategorized ? t('recipientsPage.uncategorized') : t('recipientsPage.allCategories')}
             </Button>
             <Button
                 variant="outline"
@@ -317,7 +319,7 @@ export default function RecipientsPage() {
                 className="gap-1.5"
             >
                 <Link2 className="h-4 w-4" />
-                Merge Recipients
+                {t('merge.title')}
             </Button>
             <AddRecipientDialog />
         </div>
@@ -327,20 +329,20 @@ export default function RecipientsPage() {
         <>
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Recipients</h2>
-                    <p className="text-muted-foreground mt-1">View and manage transaction recipients</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('recipientsPage.tableTitle')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('recipientsPage.tableSubtitle', { n: totalItems })}</p>
                 </div>
 
                 <VirtualDataTable
-                    title="All Recipients"
-                    subtitle={`${totalItems} recipients`}
+                    title={t('recipientsPage.tableTitle')}
+                    subtitle={`${totalItems} ${t('recipients.title').toLowerCase()}`}
                     columns={columns}
                     data={recipients}
                     onRowUpdate={handleUpdate}
                     onRowDoubleClick={(row) => {
                         navigate(`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`);
                     }}
-                    emptyMessage="No recipients found."
+                    emptyMessage={t('recipientsPage.empty')}
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}
                     onLoadMore={loadMore}

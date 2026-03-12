@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import logger from "@/lib/logger";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { API_BASE_URL } from "@/lib/api";
 import {
   Card,
@@ -45,6 +46,7 @@ interface ImportProgress {
 }
 
 export default function ImportPage() {
+  const { t } = useLanguage();
   const [file, setFile] = useState<File | null>(null);
   const [bankSource, setBankSource] = useState("");
   const [customBank, setCustomBank] = useState("");
@@ -80,9 +82,7 @@ export default function ImportPage() {
         if (mounted) {
           setAdaptersError(err instanceof Error ? err.message : String(err));
           setAdapters([]);
-          toast.error(
-            "Could not load supported parsers from server — you can still use Custom"
-          );
+          toast.error(t('importPage.toast.parsersError'));
         }
       } finally {
         if (mounted) setAdaptersLoading(false);
@@ -97,7 +97,7 @@ export default function ImportPage() {
 
   const handleFile = useCallback((f: File | null) => {
     if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error("Please select a CSV file.");
+      toast.error(t('importPage.toast.noFile'));
       return;
     }
     setFile(f);
@@ -127,22 +127,22 @@ export default function ImportPage() {
 
   const handleImport = async () => {
     if (!file) {
-      toast.error("Please select a file first.");
+      toast.error(t('importPage.toast.noFileSel'));
       return;
     }
 
     const bank = resolvedBank();
     if (!bank) {
-      toast.error("Please select a bank source.");
+      toast.error(t('importPage.toast.noBank'));
       return;
     }
 
     // If custom bank, validate custom configuration
     if (bankSource === "custom") {
-      if (!customConfig.dateColumn || !customConfig.recipientColumn || !customConfig.amountColumn) {
-        toast.error("Please fill in all required custom configuration fields.");
-        return;
-      }
+        if (!customConfig.dateColumn || !customConfig.recipientColumn || !customConfig.amountColumn) {
+          toast.error(t('importPage.toast.noConfig'));
+          return;
+        }
     }
 
     setLoading(true);
@@ -178,8 +178,7 @@ export default function ImportPage() {
         abortRef.current = null;
       }
 
-      toast.success(`Successfully imported ${data.imported} transactions!`, {
-        description: `${data.duplicates} duplicates skipped, ${data.total_processed} total processed`,
+      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: data.total_processed }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setFile(null);
@@ -196,9 +195,8 @@ export default function ImportPage() {
         skipRows: 0,
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to import CSV";
-      toast.error(message);
+      const message = error instanceof Error ? error.message : t('importPage.failed');
+      toast.error(t('importPage.toast.serverError'), { description: message });
       setProgress((p) => p ? { ...p, phase: 'error' } : null);
     } finally {
       setLoading(false);
@@ -211,7 +209,7 @@ export default function ImportPage() {
       abortRef.current = null;
       setLoading(false);
       setProgress(null);
-      toast.info("Import cancelled.");
+      toast.info(t('importPage.toast.importCancelled'));
     }
   };
 
@@ -225,7 +223,7 @@ export default function ImportPage() {
 
   const handleRecipientFile = useCallback((f: File | null) => {
     if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error("Please select a CSV file.");
+      toast.error(t('importPage.toast.noFile'));
       return;
     }
     setRecipientFile(f);
@@ -233,19 +231,19 @@ export default function ImportPage() {
   }, []);
 
   const handleRecipientImport = async () => {
-    if (!recipientFile) { toast.error("Please select a file first."); return; }
+    if (!recipientFile) { toast.error(t('importPage.toast.noFileSel')); return; }
     setRecipientLoading(true);
     setRecipientResult(null);
     try {
       const data = await apiClient.importRecipients(recipientFile, recipientSeparator, recipientEncoding);
       setRecipientResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
-      toast.success(`Imported ${data.imported} recipient(s)`, {
-        description: `${data.skipped} already existed, ${data.errors} errors`,
+      toast.success(t('importPage.recipientsResult', { n: data.imported, e: data.skipped, x: data.errors }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setRecipientFile(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to import recipients");
+      const msg = err instanceof Error ? err.message : undefined;
+      toast.error(t('importPage.toast.recipientsImportFailed'), { description: msg });
     } finally {
       setRecipientLoading(false);
     }
@@ -260,7 +258,7 @@ export default function ImportPage() {
 
   const handleCategoryFile = useCallback((f: File | null) => {
     if (f && f.type !== "text/csv" && !f.name.endsWith(".csv")) {
-      toast.error("Please select a CSV file.");
+      toast.error(t('importPage.toast.noFile'));
       return;
     }
     setCategoryFile(f);
@@ -268,19 +266,19 @@ export default function ImportPage() {
   }, []);
 
   const handleCategoryImport = async () => {
-    if (!categoryFile) { toast.error("Please select a file first."); return; }
+    if (!categoryFile) { toast.error(t('importPage.toast.noFileSel')); return; }
     setCategoryLoading(true);
     setCategoryResult(null);
     try {
       const data = await apiClient.importCategories(categoryFile, categorySeparator);
       setCategoryResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
-      toast.success(`Imported ${data.imported} categor${data.imported === 1 ? "y" : "ies"}`, {
-        description: `${data.skipped} already existed, ${data.errors} errors`,
+      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.skipped, total: data.imported }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setCategoryFile(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to import categories");
+      const msg = err instanceof Error ? err.message : undefined;
+      toast.error(t('importPage.toast.categoriesImportFailed'), { description: msg });
     } finally {
       setCategoryLoading(false);
     }
@@ -329,12 +327,12 @@ export default function ImportPage() {
       link.click();
       URL.revokeObjectURL(downloadUrl);
 
-      toast.success('Transactions exported successfully!', {
+      toast.success(t('importPage.toast.exportSuccess'), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to export";
-      toast.error(message);
+      const message = error instanceof Error ? error.message : t('importPage.toast.exportFailed');
+      toast.error(t('importPage.toast.exportFailed'), { description: message });
     } finally {
       setExporting(false);
     }
@@ -365,10 +363,8 @@ export default function ImportPage() {
     <div className="space-y-8 animate-in max-w-2xl mx-auto">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold text-foreground">Import & Export</h2>
-        <p className="text-muted-foreground mt-1">
-          Import transactions from your bank or export your data as CSV
-        </p>
+        <h2 className="text-3xl font-bold text-foreground">{t('importPage.title')}</h2>
+        <p className="text-muted-foreground mt-1">{t('importPage.subtitle')}</p>
       </div>
 
       {/* Import Card */}
@@ -376,29 +372,26 @@ export default function ImportPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-primary" />
-            CSV Import
+            {t('importPage.csvImport')}
           </CardTitle>
-          <CardDescription>
-            We support most common bank CSV formats. Select your bank for the
-            best results.
-          </CardDescription>
+          <CardDescription>{t('importPage.csvImportDesc')}</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
           {/* Bank selector */}
           <div className="space-y-2">
             <Label htmlFor="bank-select" className="font-semibold">
-              Bank Source
+              {t('importPage.bankSource')}
             </Label>
             <Select value={bankSource} onValueChange={setBankSource}>
-              <SelectTrigger id="bank-select">
-                <SelectValue placeholder="Select a bank…" />
-              </SelectTrigger>
+                <SelectTrigger id="bank-select">
+                  <SelectValue placeholder={t('importPage.bankSourcePlaceholder')} />
+                </SelectTrigger>
               <SelectContent>
                 {adaptersLoading ? (
-                  <SelectItem value="loading" disabled>
-                    <Loader2 className="h-4 w-4 mr-2 inline" /> Loading parsers...
-                  </SelectItem>
+                    <SelectItem value="loading" disabled>
+                      <Loader2 className="h-4 w-4 mr-2 inline" /> {t('importPage.loading')}
+                    </SelectItem>
                 ) : adapters.length > 0 ? (
                   adapters.map((adapter) => (
                     <SelectItem key={adapter.key} value={adapter.key}>
@@ -406,41 +399,37 @@ export default function ImportPage() {
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value="none" disabled>
-                    No parsers available — use Custom
-                  </SelectItem>
+                  <SelectItem value="none" disabled>{t('importPage.noParsers')}</SelectItem>
                 )}
-                <SelectItem value="custom">✏️ Custom / Andere</SelectItem>
+                <SelectItem value="custom">✏️ {t('importPage.customOther')}</SelectItem>
               </SelectContent>
             </Select>
 
             {bankSource === "custom" && (
-              <Input
-                placeholder="Enter your bank name…"
-                value={customBank}
-                onChange={(e) => setCustomBank(e.target.value)}
-                className="mt-2"
-              />
+                  <Input
+                    placeholder={t('importPage.customBankName')}
+                    value={customBank}
+                    onChange={(e) => setCustomBank(e.target.value)}
+                    className="mt-2"
+                  />
             )}
 
-            <p className="text-xs text-muted-foreground">
-              Selecting your bank helps parse the CSV more accurately.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('importPage.bankHint')}</p>
           </div>
 
           {/* Custom CSV configuration fields */}
           {bankSource === "custom" && (
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-              <p className="text-sm font-semibold text-foreground">
-                Custom CSV Configuration
-              </p>
+                  <p className="text-sm font-semibold text-foreground"> 
+                 {t('importPage.customConfig')}
+               </p>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="date-column">Date Column *</Label>
+                  <Label htmlFor="date-column">{t('importPage.dateCol')}</Label>
                   <Input
                     id="date-column"
-                    placeholder="e.g., Date, Transaction Date"
+                    placeholder={t('importPage.dateColPlaceholder')}
                     value={customConfig.dateColumn}
                     onChange={(e) =>
                       setCustomConfig({
@@ -452,7 +441,7 @@ export default function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="date-format">Date Format *</Label>
+                  <Label htmlFor="date-format">{t('importPage.dateFormat')}</Label>
                   <Select
                     value={customConfig.dateFormat}
                     onValueChange={(val) =>
@@ -485,10 +474,10 @@ export default function ImportPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="recipient-column">Recipient Column *</Label>
+                  <Label htmlFor="recipient-column">{t('importPage.recipientCol')}</Label>
                   <Input
                     id="recipient-column"
-                    placeholder="e.g., Description, Payee"
+                    placeholder={t('importPage.recipientColPlaceholder')}
                     value={customConfig.recipientColumn}
                     onChange={(e) =>
                       setCustomConfig({
@@ -500,10 +489,10 @@ export default function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="amount-column">Amount Column *</Label>
+                  <Label htmlFor="amount-column">{t('importPage.amountCol')}</Label>
                   <Input
                     id="amount-column"
-                    placeholder="e.g., Amount, Value"
+                    placeholder={t('importPage.amountColPlaceholder')}
                     value={customConfig.amountColumn}
                     onChange={(e) =>
                       setCustomConfig({
@@ -517,10 +506,10 @@ export default function ImportPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="memo-column">Memo Column (Optional)</Label>
+                  <Label htmlFor="memo-column">{t('importPage.memoCol')}</Label>
                   <Input
                     id="memo-column"
-                    placeholder="e.g., Notes, Comments"
+                    placeholder={t('importPage.memoColPlaceholder')}
                     value={customConfig.memoColumn}
                     onChange={(e) =>
                       setCustomConfig({
@@ -532,7 +521,7 @@ export default function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="separator">Separator</Label>
+                  <Label htmlFor="separator">{t('importPage.separator')}</Label>
                   <Select
                     value={customConfig.separator}
                     onValueChange={(val) =>
@@ -554,7 +543,7 @@ export default function ImportPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="encoding">Encoding</Label>
+                  <Label htmlFor="encoding">{t('importPage.encoding')}</Label>
                   <Select
                     value={customConfig.encoding}
                     onValueChange={(val) =>
@@ -574,7 +563,7 @@ export default function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="skip-rows">Skip Rows</Label>
+                  <Label htmlFor="skip-rows">{t('importPage.skipRows')}</Label>
                   <Input
                     id="skip-rows"
                     type="number"
@@ -592,15 +581,14 @@ export default function ImportPage() {
               </div>
 
               <p className="text-xs text-muted-foreground">
-                * Required fields. Column names must match exactly as they appear
-                in your CSV header row.
+                {t('importPage.requiredFieldsNote')}
               </p>
             </div>
           )}
 
           {/* Drag-and-drop file picker */}
           <div className="space-y-2">
-            <Label className="font-semibold">CSV File</Label>
+              <Label className="font-semibold">{t('importPage.csvFile')}</Label>
 
             <div
               onClick={() => fileInputRef.current?.click()}
@@ -631,7 +619,7 @@ export default function ImportPage() {
                   <div className="text-center">
                     <p className="font-medium text-foreground">{file.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {(file.size / 1024).toFixed(1)} KB
+                      {(file.size / 1024).toFixed(1)} {t('common.kb')}
                     </p>
                   </div>
                   <Button
@@ -643,21 +631,17 @@ export default function ImportPage() {
                       setFile(null);
                     }}
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Remove
+                   <Trash2 className="h-4 w-4 mr-1" />
+                     {t('importPage.remove')}
                   </Button>
                 </>
               ) : (
                 <>
                   <CloudUpload className="h-10 w-10 text-muted-foreground" />
-                  <div className="text-center">
-                    <p className="font-medium text-foreground">
-                      Drag & drop your CSV here
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      or click to browse files
-                    </p>
-                  </div>
+                   <div className="text-center">
+                     <p className="font-medium text-foreground">{t('importPage.dropzone')}</p>
+                     <p className="text-sm text-muted-foreground">{t('importPage.dropzoneOr')}</p>
+                   </div>
                 </>
               )}
             </div>
@@ -668,21 +652,21 @@ export default function ImportPage() {
             <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground font-medium capitalize">
-                  {progress.phase === 'counting' && 'Analyzing file…'}
-                  {progress.phase === 'parsing' && 'Parsing CSV…'}
-                  {progress.phase === 'importing' && `Importing transactions…`}
-                  {progress.phase === 'connecting' && 'Connecting…'}
+                   {progress.phase === 'counting' && t('importPage.analyzing')}
+                   {progress.phase === 'parsing' && t('importPage.parsingCSV')}
+                   {progress.phase === 'importing' && t('importPage.importingTxns')}
+                   {progress.phase === 'connecting' && t('importPage.connecting')}
                 </span>
                 <span className="text-foreground font-semibold">{progress.percent}%</span>
               </div>
               <Progress value={progress.percent} className="h-2" />
               {progress.phase === 'importing' && progress.total > 0 && (
                 <div className="flex gap-4 text-xs text-muted-foreground">
-                  <span>{progress.current} / {progress.total} rows</span>
-                  <span className="text-green-600 dark:text-green-400">✓ {progress.imported} imported</span>
-                  <span className="text-amber-600 dark:text-amber-400">⊘ {progress.duplicates} duplicates</span>
+                  <span>{t('importPage.rows', { current: progress.current, total: progress.total })}</span>
+                  <span className="text-green-600 dark:text-green-400">{t('importPage.imported', { n: progress.imported })}</span>
+                  <span className="text-amber-600 dark:text-amber-400">{t('importPage.duplicates', { n: progress.duplicates })}</span>
                   {progress.errors > 0 && (
-                    <span className="text-destructive">✗ {progress.errors} errors</span>
+                    <span className="text-destructive">{t('importPage.errors', { n: progress.errors })}</span>
                   )}
                 </div>
               )}
@@ -694,9 +678,9 @@ export default function ImportPage() {
             <div className="flex items-center gap-3 p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
               <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
               <div className="text-sm">
-                <p className="font-medium text-green-800 dark:text-green-300">Import complete</p>
+                  <p className="font-medium text-green-800 dark:text-green-300">{t('importPage.complete')}</p>
                 <p className="text-green-700 dark:text-green-400">
-                  {progress.imported} imported, {progress.duplicates} duplicates, {progress.errors} errors
+                  {t('importPage.progressSummary', { imported: progress.imported, duplicates: progress.duplicates, errors: progress.errors })}
                 </p>
               </div>
             </div>
@@ -705,7 +689,7 @@ export default function ImportPage() {
           {progress && !loading && progress.phase === 'error' && (
             <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
               <XCircle className="h-5 w-5 text-destructive shrink-0" />
-              <p className="text-sm font-medium text-destructive">Import failed. Please try again.</p>
+                <p className="text-sm font-medium text-destructive">{t('importPage.failed')}</p>
             </div>
           )}
 
@@ -719,13 +703,13 @@ export default function ImportPage() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importing…
+                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                   {t('importPage.importingBtn')}
                 </>
               ) : (
                 <>
                   <Upload className="h-4 w-4 mr-2" />
-                  Import Transactions
+                  {t('importPage.importBtn')}
                 </>
               )}
             </Button>
@@ -736,7 +720,7 @@ export default function ImportPage() {
                 className="h-11"
                 onClick={handleCancelImport}
               >
-                Cancel
+                {t('importPage.cancelBtn')}
               </Button>
             )}
           </div>
@@ -748,37 +732,31 @@ export default function ImportPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Recipients Import
+            {t('importPage.recipientsImport')}
           </CardTitle>
           <CardDescription>
-            Import recipients from a CSV file. Expected columns:{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">name</code>{" "}
-            (required),{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">bank_account</code>{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">address</code>{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">category</code>{" "}
-            (optional, format <em>GENERAL:DETAIL</em>).
+            {t('importPage.recipientsImportDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* Options row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="recipient-separator">Separator</Label>
+              <Label htmlFor="recipient-separator">{t('importPage.separator')}</Label>
               <Select value={recipientSeparator} onValueChange={setRecipientSeparator}>
                 <SelectTrigger id="recipient-separator">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value=",">, (Comma)</SelectItem>
-                  <SelectItem value=";">; (Semicolon)</SelectItem>
-                  <SelectItem value="\t">⇥ (Tab)</SelectItem>
-                  <SelectItem value="|">| (Pipe)</SelectItem>
+                  <SelectItem value=",">{t('importPage.sep.comma')}</SelectItem>
+                  <SelectItem value=";">{t('importPage.sep.semicolon')}</SelectItem>
+                  <SelectItem value="\t">{t('importPage.sep.tab')}</SelectItem>
+                  <SelectItem value="|">{t('importPage.sep.pipe')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="recipient-encoding">Encoding</Label>
+              <Label htmlFor="recipient-encoding">{t('importPage.encoding')}</Label>
               <Select value={recipientEncoding} onValueChange={setRecipientEncoding}>
                 <SelectTrigger id="recipient-encoding">
                   <SelectValue />
@@ -812,17 +790,17 @@ export default function ImportPage() {
                 <File className="h-8 w-8 text-primary" />
                 <div className="text-center">
                   <p className="font-medium text-foreground">{recipientFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{(recipientFile.size / 1024).toFixed(1)} KB</p>
+                  <p className="text-xs text-muted-foreground">{(recipientFile.size / 1024).toFixed(1)} {t('common.kb')}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
                   onClick={(e) => { e.stopPropagation(); setRecipientFile(null); }}>
-                  <Trash2 className="h-4 w-4 mr-1" /> Remove
+                   <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.remove')}
                 </Button>
               </>
             ) : (
               <>
                 <CloudUpload className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Drag & drop or click to browse</p>
+                <p className="text-sm text-muted-foreground">{t('importPage.dropzoneSmall')}</p>
               </>
             )}
           </div>
@@ -832,16 +810,16 @@ export default function ImportPage() {
             <div className="flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
               <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
               <p className="text-sm text-green-800 dark:text-green-300">
-                {recipientResult.imported} imported &middot; {recipientResult.skipped} already existed &middot; {recipientResult.errors} errors
+                {t('importPage.resultSummary', { imported: recipientResult.imported, skipped: recipientResult.skipped, errors: recipientResult.errors })}
               </p>
             </div>
           )}
 
           <Button onClick={handleRecipientImport} disabled={!recipientFile || recipientLoading} className="w-full h-11" size="lg">
             {recipientLoading ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importing…</>
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.importingRecipients')}</>
             ) : (
-              <><Users className="h-4 w-4 mr-2" /> Import Recipients</>
+              <><Users className="h-4 w-4 mr-2" /> {t('importPage.importRecipientsBtn')}</>
             )}
           </Button>
         </CardContent>
@@ -849,32 +827,26 @@ export default function ImportPage() {
 
       {/* Categories Import Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Tags className="h-5 w-5 text-primary" />
-            Categories Import
-          </CardTitle>
-          <CardDescription>
-            Import categories from a CSV file. Each row must have a{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">category</code>{" "}
-            column (or the first column is used) in{" "}
-            <em>GENERAL:DETAIL</em> format, e.g.{" "}
-            <code className="text-xs bg-muted px-1 py-0.5 rounded">FOOD:GROCERIES</code>.
-          </CardDescription>
-        </CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tags className="h-5 w-5 text-primary" />
+              {t('importPage.categoriesImport')}
+            </CardTitle>
+            <CardDescription>{t('importPage.categoriesImportDesc')}</CardDescription>
+          </CardHeader>
         <CardContent className="space-y-5">
           {/* Separator option */}
           <div className="w-1/2 space-y-2">
-            <Label htmlFor="category-separator">Separator</Label>
+            <Label htmlFor="category-separator">{t('importPage.separator')}</Label>
             <Select value={categorySeparator} onValueChange={setCategorySeparator}>
               <SelectTrigger id="category-separator">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value=",">, (Comma)</SelectItem>
-                <SelectItem value=";">; (Semicolon)</SelectItem>
-                <SelectItem value="\t">⇥ (Tab)</SelectItem>
-                <SelectItem value="|">| (Pipe)</SelectItem>
+                <SelectItem value=",">{t('importPage.sep.comma')}</SelectItem>
+                <SelectItem value=";">{t('importPage.sep.semicolon')}</SelectItem>
+                <SelectItem value="\t">{t('importPage.sep.tab')}</SelectItem>
+                <SelectItem value="|">{t('importPage.sep.pipe')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -898,17 +870,17 @@ export default function ImportPage() {
                 <File className="h-8 w-8 text-primary" />
                 <div className="text-center">
                   <p className="font-medium text-foreground">{categoryFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{(categoryFile.size / 1024).toFixed(1)} KB</p>
+                  <p className="text-xs text-muted-foreground">{(categoryFile.size / 1024).toFixed(1)} {t('common.kb')}</p>
                 </div>
-                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
                   onClick={(e) => { e.stopPropagation(); setCategoryFile(null); }}>
-                  <Trash2 className="h-4 w-4 mr-1" /> Remove
+                  <Trash2 className="h-4 w-4 mr-1" /> {t('importPage.remove')}
                 </Button>
               </>
             ) : (
               <>
                 <CloudUpload className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Drag & drop or click to browse</p>
+              <p className="text-sm text-muted-foreground">{t('importPage.dropzoneSmall')}</p>
               </>
             )}
           </div>
@@ -918,16 +890,16 @@ export default function ImportPage() {
             <div className="flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
               <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
               <p className="text-sm text-green-800 dark:text-green-300">
-                {categoryResult.imported} imported &middot; {categoryResult.skipped} already existed &middot; {categoryResult.errors} errors
+                {t('importPage.resultSummary', { imported: categoryResult.imported, skipped: categoryResult.skipped, errors: categoryResult.errors })}
               </p>
             </div>
           )}
 
-          <Button onClick={handleCategoryImport} disabled={!categoryFile || categoryLoading} className="w-full h-11" size="lg">
+                <Button onClick={handleCategoryImport} disabled={!categoryFile || categoryLoading} className="w-full h-11" size="lg">
             {categoryLoading ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importing…</>
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.importingCategories')}</>
             ) : (
-              <><Tags className="h-4 w-4 mr-2" /> Import Categories</>
+              <><Tags className="h-4 w-4 mr-2" /> {t('importPage.importCategoriesBtn')}</>
             )}
           </Button>
         </CardContent>
@@ -938,27 +910,24 @@ export default function ImportPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Download className="h-5 w-5 text-accent" />
-            CSV Export
+            {t('importPage.csvExport')}
           </CardTitle>
-          <CardDescription>
-            Download all your transactions as a CSV file for backups or use in
-            spreadsheet software.
-          </CardDescription>
+          <CardDescription>{t('importPage.csvExportDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {/* Export filters toggle */}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-foreground">
-              Export Filters
+              {t('importPage.exportFilters')}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowExportFilters((prev) => !prev)}
-              className="text-foreground"
-            >
-              {showExportFilters ? "Hide Filters" : "Show Filters"}
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportFilters((prev) => !prev)}
+                className="text-foreground"
+              >
+                {showExportFilters ? t('importPage.hideFilters') : t('importPage.showFilters')}
+              </Button>
           </div>
 
           {/* Export filters form */}
@@ -966,11 +935,11 @@ export default function ImportPage() {
             <div className="space-y-4 mb-4 p-4 border rounded-lg bg-muted/30">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="start-date">Start Date</Label>
+                  <Label htmlFor="start-date">{t('importPage.startDate')}</Label>
                   <Input
                     id="start-date"
                     type="date"
-                    placeholder="YYYY-MM-DD"
+                    placeholder={t('importPage.placeholderIso')}
                     value={exportFilters.startDate}
                     onChange={(e) =>
                       setExportFilters({
@@ -982,11 +951,11 @@ export default function ImportPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="end-date">End Date</Label>
+                  <Label htmlFor="end-date">{t('importPage.endDate')}</Label>
                   <Input
                     id="end-date"
                     type="date"
-                    placeholder="YYYY-MM-DD"
+                    placeholder={t('importPage.placeholderIso')}
                     value={exportFilters.endDate}
                     onChange={(e) =>
                       setExportFilters({
@@ -1000,39 +969,38 @@ export default function ImportPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="bank-account">Bank Account</Label>
-                  <Input
-                    id="bank-account"
-                    placeholder="e.g., Main Account"
-                    value={exportFilters.bankAccount}
-                    onChange={(e) =>
-                      setExportFilters({
-                        ...exportFilters,
-                        bankAccount: e.target.value,
-                      })
-                    }
-                  />
+                  <Label htmlFor="bank-account">{t('importPage.bankAccount')}</Label>
+                   <Input
+                     id="bank-account"
+                     placeholder={t('importPage.placeholderMainAccount')}
+                     value={exportFilters.bankAccount}
+                     onChange={(e) =>
+                       setExportFilters({
+                         ...exportFilters,
+                         bankAccount: e.target.value,
+                       })
+                     }
+                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category-id">Category ID</Label>
-                  <Input
-                    id="category-id"
-                    placeholder="e.g., 123, Expenses"
-                    value={exportFilters.categoryId}
-                    onChange={(e) =>
-                      setExportFilters({
-                        ...exportFilters,
-                        categoryId: e.target.value,
-                      })
-                    }
-                  />
+                  <Label htmlFor="category-id">{t('importPage.categoryId')}</Label>
+                   <Input
+                     id="category-id"
+                     placeholder={t('importPage.placeholderCategoryId')}
+                     value={exportFilters.categoryId}
+                     onChange={(e) =>
+                       setExportFilters({
+                         ...exportFilters,
+                         categoryId: e.target.value,
+                       })
+                     }
+                   />
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Leave fields empty to include all records. Date filters are
-                inclusive.
+                {t('importPage.exportNote')}
               </p>
             </div>
           )}
@@ -1047,12 +1015,12 @@ export default function ImportPage() {
             {exporting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Exporting…
+                {t('importPage.exporting')}
               </>
             ) : (
               <>
                 <Download className="h-4 w-4 mr-2" />
-                Export All Transactions
+                 {t('importPage.exportBtn')}
               </>
             )}
           </Button>
@@ -1063,12 +1031,12 @@ export default function ImportPage() {
       <Card className="bg-muted/30">
         <CardContent className="pt-6">
           <p className="text-sm font-semibold text-foreground mb-2">
-            Supported Banks
+            {t('importPage.supportedBanks')}
           </p>
           <div className="flex flex-wrap gap-2">
             {adaptersLoading ? (
               <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading…
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('importPage.supportedLoading')}
               </span>
             ) : adapters.length > 0 ? (
               adapters.map((adapter) => (
@@ -1080,16 +1048,10 @@ export default function ImportPage() {
                 </span>
               ))
             ) : (
-              <span className="text-xs text-muted-foreground">
-                No supported parsers loaded. Select <strong>Custom</strong> to
-                provide a bank name.
-              </span>
+              <span className="text-xs text-muted-foreground">{t('importPage.noSupportedParsers')}</span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Don't see your bank? Try{" "}
-            <strong>Custom</strong>.
-          </p>
+          <p className="text-xs text-muted-foreground mt-3">{t('importPage.noSupportedBank')}</p>
         </CardContent>
       </Card>
     </div>

@@ -177,6 +177,95 @@ export const kbcRawRepo = {
   },
 };
 
+// ─── SABB Raw Transaction Repository ───
+
+export const sabbRawRepo = {
+  async create(data) {
+    const sql = `
+      INSERT INTO sabb_raw_transactions (
+        deduplication_hash, transaction_date, posting_date, description,
+        amount, currency, status, amount_other_currency, raw_csv_line
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *
+    `;
+    const result = await query(sql, [
+      data.deduplication_hash, data.transaction_date, data.posting_date,
+      data.description, data.amount, data.currency, data.status,
+      data.amount_other_currency, data.raw_csv_line,
+    ]);
+    return result.rows[0];
+  },
+
+  async existsByHash(hash) {
+    const result = await query(
+      `SELECT id FROM sabb_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
+      [hash]
+    );
+    return result.rows.length > 0;
+  },
+};
+
+// ─── Wise Raw Transaction Repository ───
+
+export const wiseRawRepo = {
+  async create(data) {
+    const sql = `
+      INSERT INTO wise_raw_transactions (
+        deduplication_hash, transfer_id, direction, status, finished_on,
+        source_name, source_amount, source_currency,
+        target_name, target_amount, target_currency,
+        exchange_rate, source_fee_amount, source_fee_currency,
+        reference, batch, raw_csv_line
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      RETURNING *
+    `;
+    const result = await query(sql, [
+      data.deduplication_hash, data.transfer_id, data.direction, data.status,
+      data.finished_on, data.source_name, data.source_amount, data.source_currency,
+      data.target_name, data.target_amount, data.target_currency,
+      data.exchange_rate, data.source_fee_amount, data.source_fee_currency,
+      data.reference, data.batch, data.raw_csv_line,
+    ]);
+    return result.rows[0];
+  },
+
+  async existsByHash(hash) {
+    const result = await query(
+      `SELECT id FROM wise_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
+      [hash]
+    );
+    return result.rows.length > 0;
+  },
+};
+
+// ─── Vision Raw Transaction Repository ───
+
+export const visionRawRepo = {
+  async create(data) {
+    const sql = `
+      INSERT INTO vision_raw_transactions (
+        deduplication_hash, transaction_date, bank_account, recipient,
+        memo, amount, currency, balance, category, comment, raw_csv_line
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      RETURNING *
+    `;
+    const result = await query(sql, [
+      data.deduplication_hash, data.transaction_date, data.bank_account,
+      data.recipient, data.memo, data.amount, data.currency,
+      data.balance, data.category, data.comment, data.raw_csv_line,
+    ]);
+    return result.rows[0];
+  },
+
+  async existsByHash(hash) {
+    const result = await query(
+      `SELECT id FROM vision_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
+      [hash]
+    );
+    return result.rows.length > 0;
+  },
+};
+
 // ─── Raw Reference Repository ───
 
 export const rawReferenceRepo = {
@@ -208,6 +297,9 @@ export async function isRawDuplicate(bankType, rawCsvLine) {
   if (bankLower === 'belfius') return belfiusRawRepo.existsByHash(hash);
   if (bankLower === 'revolut') return revolutRawRepo.existsByHash(hash);
   if (bankLower === 'kbc') return kbcRawRepo.existsByHash(hash);
+  if (bankLower === 'sabb') return sabbRawRepo.existsByHash(hash);
+  if (bankLower === 'wise') return wiseRawRepo.existsByHash(hash);
+  if (bankLower === 'vision') return visionRawRepo.existsByHash(hash);
 
   throw new Error(`Unsupported bank type for raw dedup: ${bankType}`);
 }

@@ -11,6 +11,9 @@ import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter }
 import { format, parseISO } from "date-fns";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -25,15 +28,6 @@ const CHART_COLORS = [
   "hsl(350, 75%, 60%)",
 ];
 
-function formatCurrency(val: number, fractionDigits = 0) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(val);
-}
-
 type RecipientDetailRow = {
   recipientId: number;
   name: string;
@@ -45,6 +39,15 @@ type RecipientDetailRow = {
 };
 
 export default function RecipientInsightsPage() {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number, fractionDigits = 0) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(val);
   const { settings } = useSettings();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights"],
@@ -70,7 +73,7 @@ export default function RecipientInsightsPage() {
   const recipientDetailsColumns = useMemo(() => [
     {
       key: "rank",
-      header: "#",
+      header: t('insights.col.number'),
       sortable: false,
       filterable: false,
       className: "w-14",
@@ -80,29 +83,29 @@ export default function RecipientInsightsPage() {
     },
     {
       key: "name",
-      header: "Recipient",
+      header: t('insights.col.recipient'),
       render: (row: RecipientDetailRow) => <span className="font-medium">{row.name}</span>,
     },
     {
       key: "totalSpend",
-      header: "Total Spend",
+      header: t('insights.col.totalSpend'),
       className: "text-right",
       render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.totalSpend)}</span>,
     },
     {
       key: "transactionCount",
-      header: "Transactions",
+      header: t('insights.col.txCount'),
       className: "text-right",
     },
     {
       key: "avgAmount",
-      header: "Avg Amount",
+      header: t('insights.col.avgAmount'),
       className: "text-right",
       render: (row: RecipientDetailRow) => <span className="font-mono">{formatCurrency(row.avgAmount)}</span>,
     },
     {
       key: "firstSeen",
-      header: "First Seen",
+      header: t('insights.col.firstSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
         <span className="text-muted-foreground text-sm">{format(parseISO(row.firstSeen), "MMM yyyy")}</span>
@@ -110,18 +113,18 @@ export default function RecipientInsightsPage() {
     },
     {
       key: "lastSeen",
-      header: "Last Seen",
+      header: t('insights.col.lastSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
         <span className="text-muted-foreground text-sm">{format(parseISO(row.lastSeen), "MMM yyyy")}</span>
       ),
     },
-  ], []);
+  ], [t]);
 
   if (isLoading) {
     return (
       <div className="space-y-6 p-6">
-        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
         <div className="grid gap-6 md:grid-cols-3">
           {[1, 2, 3].map(i => (
             <Skeleton key={i} className="h-28" />
@@ -135,8 +138,8 @@ export default function RecipientInsightsPage() {
   if (isError || !filteredData) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
-        <p className="text-muted-foreground mt-2">Failed to load recipient insights.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
+        <p className="text-muted-foreground mt-2">{t('insights.failedToLoad')}</p>
       </div>
     );
   }
@@ -159,13 +162,13 @@ export default function RecipientInsightsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Recipient Insights</h1>
-          <p className="text-muted-foreground mt-1">Understand where your money goes by recipient</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('insights.subtitle')}</p>
         </div>
         {excludedRecipientIds.size > 0 && (
           <Badge variant="secondary" className="gap-1.5">
             <Filter className="h-3 w-3" />
-            {excludedRecipientIds.size} excluded
+            {t('insights.excluded', { n: excludedRecipientIds.size })}
           </Badge>
         )}
       </div>
@@ -174,34 +177,34 @@ export default function RecipientInsightsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Top Recipient</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{top10[0]?.name || "—"}</div>
             <p className="text-xs text-muted-foreground">
-              {top10[0] ? formatCurrency(top10[0].totalSpend) : "No data"}
+              {top10[0] ? formatCurrency(top10[0].totalSpend) : t('insights.noDataFallback')}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Top 10 Total</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalTopSpend)}</div>
-            <p className="text-xs text-muted-foreground">{totalTopTx} transactions</p>
+            <p className="text-xs text-muted-foreground">{t('insights.txCount', { n: totalTopTx })}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Transaction</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('insights.avgTxn')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(avgTopAmount)}</div>
-            <p className="text-xs text-muted-foreground">across top 10 recipients</p>
+            <p className="text-xs text-muted-foreground">{t('insights.acrossTop10')}</p>
           </CardContent>
         </Card>
       </div>
@@ -209,8 +212,8 @@ export default function RecipientInsightsPage() {
       {/* Top 10 Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Top 10 Recipients by Spend</CardTitle>
-          <CardDescription>Total spending per recipient across all time</CardDescription>
+          <CardTitle>{t('insights.topBySpend')}</CardTitle>
+          <CardDescription>{t('insights.topBySpendDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={400}>
@@ -219,7 +222,7 @@ export default function RecipientInsightsPage() {
               <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} className="text-xs" />
               <YAxis type="category" dataKey="name" width={140} className="text-xs" />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), "Total Spend"]}
+                formatter={(value: number) => [formatCurrency(value), t('insights.col.totalSpend')]}
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
                 labelStyle={{ color: "hsl(var(--popover-foreground))" }}
@@ -238,8 +241,8 @@ export default function RecipientInsightsPage() {
       {filteredData.monthOverMonth.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Month-over-Month Changes</CardTitle>
-            <CardDescription>How your spending at top recipients changed vs. last month</CardDescription>
+            <CardTitle>{t('insights.momChanges')}</CardTitle>
+            <CardDescription>{t('insights.momDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {increases.length > 0 && (
@@ -249,8 +252,7 @@ export default function RecipientInsightsPage() {
                     <TrendingUp className="h-5 w-5 text-destructive shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        You spent <span className="font-bold text-destructive">{m.changePercent.toFixed(1)}% more</span> at{" "}
-                        <span className="font-bold">{m.name}</span> this month
+                        {t('insights.spentMoreAt', { n: m.changePercent.toFixed(1), name: m.name })}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatCurrency(m.previousSpend, 2)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend, 2)}
@@ -267,8 +269,7 @@ export default function RecipientInsightsPage() {
                     <TrendingDown className="h-5 w-5 text-primary shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        You spent <span className="font-bold text-primary">{Math.abs(m.changePercent).toFixed(1)}% less</span> at{" "}
-                        <span className="font-bold">{m.name}</span> this month
+                        {t('insights.spentLessAt', { n: Math.abs(m.changePercent).toFixed(1), name: m.name })}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatCurrency(m.previousSpend, 2)} <ArrowRight className="inline h-3 w-3" /> {formatCurrency(m.currentSpend, 2)}
@@ -283,11 +284,11 @@ export default function RecipientInsightsPage() {
       )}
 
       <VirtualDataTable
-        title="Recipient Details"
-        subtitle="Spending frequency and average transaction size"
+        title={t('insights.detailsTitle')}
+        subtitle={t('insights.detailsSubtitle')}
         columns={recipientDetailsColumns}
         data={filteredData.topMerchants}
-        emptyMessage="No recipient details available."
+        emptyMessage={t('insights.detailsEmpty')}
         maxHeight={700}
         rowHeight={48}
       />

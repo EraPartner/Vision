@@ -2,6 +2,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
 import type {RecipientCreate, RecipientUpdate} from '@/types/api';
 import {toast} from 'sonner';
+import {useLanguage} from '@/contexts/LanguageContext';
 
 export function useRecipients(params?: {
     limit?: number;
@@ -21,25 +22,27 @@ export function useRecipients(params?: {
 
 export function useCreateRecipient() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: (recipient: RecipientCreate) => apiClient.createRecipient(recipient),
         onSuccess: (data) => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             if (data.wasCreated) {
-                toast.success('Recipient created successfully');
+                toast.success(t('recipients.created'));
             } else {
-                toast.info('Recipient already exists');
+                toast.info(t('recipients.exists'));
             }
         },
         onError: (error: Error) => {
-            toast.error(`Failed to create recipient: ${error.message}`);
+            toast.error(t('recipients.createFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useUpdateRecipient() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: ({id, data}: { id: number; data: RecipientUpdate }) =>
@@ -48,28 +51,30 @@ export function useUpdateRecipient() {
             queryClient.invalidateQueries({queryKey: ['recipients']});
         },
         onError: (error: Error) => {
-            toast.error(`Failed to update recipient: ${error.message}`);
+            toast.error(t('recipients.updateFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useDeleteRecipient() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteRecipient(id),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
-            toast.success('Recipient deleted successfully');
+            toast.success(t('recipients.deleted'));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to delete recipient: ${error.message}`);
+            toast.error(t('recipients.deleteFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useMergeRecipients() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: ({primaryId, aliasIds}: { primaryId: number; aliasIds: number[] }) =>
@@ -77,26 +82,27 @@ export function useMergeRecipients() {
         onSuccess: (data) => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             queryClient.invalidateQueries({queryKey: ['transactions']});
-            toast.success(`Merged ${data.merged_ids.length} recipient(s) into "${data.primary.name}"`);
+            toast.success(t('recipients.merged', { n: String(data.merged_ids.length), name: data.primary.name }));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to merge recipients: ${error.message}`);
+            toast.error(t('recipients.mergeFailedTitle'), { description: error.message });
         },
     });
 }
 
 export function useUnmergeRecipient() {
     const queryClient = useQueryClient();
+    const { t } = useLanguage();
 
     return useMutation({
         mutationFn: (id: number) => apiClient.unmergeRecipient(id),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             queryClient.invalidateQueries({queryKey: ['transactions']});
-            toast.success('Recipient unmerged successfully');
+            toast.success(t('recipients.unmerged'));
         },
         onError: (error: Error) => {
-            toast.error(`Failed to unmerge recipient: ${error.message}`);
+            toast.error(t('recipients.unmergeFailedTitle'), { description: error.message });
         },
     });
 }

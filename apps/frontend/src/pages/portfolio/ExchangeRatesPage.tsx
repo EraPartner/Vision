@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { formatCurrency } from "@/utils/currency";
 import { toast } from "sonner";
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ExchangeRate {
     currency: string;
@@ -21,6 +22,7 @@ interface ExchangeRatesData {
 }
 
 export default function ExchangeRatesPage() {
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
@@ -33,10 +35,10 @@ export default function ExchangeRatesPage() {
         mutationFn: () => apiClient.request("/api/info/exchange-rates/refresh", { method: "POST" }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
-            toast.success("Exchange rates refreshed from ECB");
+            toast.success(t('exchangeRates.refreshSuccess'));
         },
         onError: () => {
-            toast.error("Failed to refresh exchange rates");
+            toast.error(t('exchangeRates.refreshError'));
         },
     });
 
@@ -54,7 +56,7 @@ export default function ExchangeRatesPage() {
         return (
             <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
-                    Failed to load exchange rates.
+                    {t('exchangeRates.failedToLoad')}
                 </CardContent>
             </Card>
         );
@@ -79,10 +81,10 @@ export default function ExchangeRatesPage() {
             <table className="w-full text-sm">
                 <thead>
                     <tr className="border-b text-muted-foreground">
-                        <th className="text-left py-2 px-3 font-medium">Currency</th>
-                        <th className="text-right py-2 px-3 font-medium">1 unit → EUR</th>
-                        <th className="text-right py-2 px-3 font-medium">1 EUR →</th>
-                        <th className="text-right py-2 px-3 font-medium">100 units in EUR</th>
+                        <th className="text-left py-2 px-3 font-medium">{t('exchangeRates.col.currency')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.unitToEur')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.eurToUnit')}</th>
+                        <th className="text-right py-2 px-3 font-medium">{t('exchangeRates.col.hundredInEur')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -97,9 +99,7 @@ export default function ExchangeRatesPage() {
                 </tbody>
             </table>
             {showFallbackNote && (
-                <p className="text-xs text-muted-foreground mt-3 px-3">
-                    Fallback rates are updated in-memory whenever a successful ECB fetch occurs and match the live rates above.
-                </p>
+                <p className="text-xs text-muted-foreground mt-3 px-3">{t('exchangeRates.fallbackNote')}</p>
             )}
         </div>
     );
@@ -108,12 +108,12 @@ export default function ExchangeRatesPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground">Exchange Rates</h1>
-                    <p className="text-muted-foreground mt-1">Latest ECB rates — fallback updated automatically on each successful fetch</p>
+                    <h1 className="text-3xl font-bold text-foreground">{t('exchangeRates.title')}</h1>
+                    <p className="text-muted-foreground mt-1">{t('exchangeRates.subtitle')}</p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
                     <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                    Refresh
+                    {t('exchangeRates.refresh')}
                 </Button>
             </div>
 
@@ -122,37 +122,35 @@ export default function ExchangeRatesPage() {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Database className="h-4 w-4" /> Stored Rates
+                            <Database className="h-4 w-4" /> {t('exchangeRates.storedRates')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold">{data?.total_rates ?? 0}</p>
-                        <p className="text-xs text-muted-foreground">Latest values only — no history</p>
+                        <p className="text-xs text-muted-foreground">{t('exchangeRates.storedRatesDesc')}</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Globe className="h-4 w-4" /> Fallback Currencies
+                            <Globe className="h-4 w-4" /> {t('exchangeRates.fallbackCurrencies')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold">{fallbackEntries.length}</p>
-                        <p className="text-xs text-muted-foreground">Mirror live rates after each fetch</p>
+                        <p className="text-xs text-muted-foreground">{t('exchangeRates.fallbackCurrenciesDesc')}</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <RefreshCw className="h-4 w-4" /> Latest Fetch
+                            <RefreshCw className="h-4 w-4" /> {t('exchangeRates.latestFetch')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-2xl font-bold">{rateDate ?? "—"}</p>
                         <p className="text-xs text-muted-foreground">
-                            {fetchedAt
-                                ? `Fetched ${new Date(fetchedAt).toLocaleString()}`
-                                : "No data fetched yet"}
+                            {fetchedAt ? t('exchangeRates.fetchedAt', { date: new Date(fetchedAt).toLocaleString() }) : t('exchangeRates.noDataFetched')}
                         </p>
                     </CardContent>
                 </Card>
@@ -161,10 +159,10 @@ export default function ExchangeRatesPage() {
             <Tabs defaultValue="live" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="live">
-                        <Database className="h-4 w-4 mr-1.5" /> Live Rates
+                        <Database className="h-4 w-4 mr-1.5" /> {t('exchangeRates.liveRates')}
                     </TabsTrigger>
                     <TabsTrigger value="fallback">
-                        <Globe className="h-4 w-4 mr-1.5" /> Fallback Rates
+                        <Globe className="h-4 w-4 mr-1.5" /> {t('exchangeRates.fallbackRates')}
                     </TabsTrigger>
                 </TabsList>
 
@@ -172,16 +170,15 @@ export default function ExchangeRatesPage() {
                     {liveRates.length === 0 ? (
                         <Card>
                             <CardContent className="py-8 text-center text-muted-foreground">
-                                No exchange rates stored yet. They will be fetched automatically from ECB on startup.
+                                {t('exchangeRates.noRates')}
                             </CardContent>
                         </Card>
                     ) : (
                         <Card>
                             <CardHeader>
-                                <CardTitle className="text-lg">Latest ECB Rates</CardTitle>
+                                <CardTitle className="text-lg">{t('exchangeRates.latestEcbRates')}</CardTitle>
                                 <CardDescription>
-                                    {liveRates.length} currencies • Rate date: {rateDate} •{" "}
-                                    {fetchedAt ? `Fetched ${new Date(fetchedAt).toLocaleString()}` : ""}
+                                    {t('exchangeRates.latestEcbDesc', { count: liveRates.length, date: rateDate ?? '', fetchedAt: fetchedAt ? new Date(fetchedAt).toLocaleString() : '' })}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -194,10 +191,9 @@ export default function ExchangeRatesPage() {
                 <TabsContent value="fallback">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Fallback Rates</CardTitle>
+                            <CardTitle className="text-lg">{t('exchangeRates.fallbackRates')}</CardTitle>
                             <CardDescription>
-                                Used only when the ECB API and database are both unavailable.
-                                Updated in-memory to match live rates after every successful ECB fetch.
+                                {t('exchangeRates.fallbackDesc')}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

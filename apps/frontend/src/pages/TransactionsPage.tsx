@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import logger from "@/lib/logger";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ type TableTransaction = {
 };
 
 export default function TransactionsPage() {
+    const { t } = useLanguage();
     const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
@@ -126,9 +128,9 @@ export default function TransactionsPage() {
 
     const handleDelete = async (id: number, description?: string) => {
         const ok = await confirm({
-            title: "Delete Transaction",
-            description: `Are you sure you want to delete${description ? ` "${description}"` : " this transaction"}? This action cannot be undone.`,
-            confirmLabel: "Delete",
+            title: t('txPage.delete.title'),
+            description: t('txPage.delete.desc', { desc: description ?? '' }),
+            confirmLabel: t('txPage.delete.confirm'),
             variant: "destructive",
         });
         if (ok) deleteMutation.mutate(id);
@@ -159,8 +161,8 @@ export default function TransactionsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
-                    <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('txPage.subtitle')}</p>
                 </div>
                 <Card>
                     <CardHeader className="pb-3">
@@ -181,8 +183,8 @@ export default function TransactionsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
-                    <p className="text-destructive mt-1">Error loading transactions: {error.message}</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
+                    <p className="text-destructive mt-1">{t('txPage.error', { msg: error.message })}</p>
                 </div>
             </div>
         );
@@ -192,9 +194,9 @@ export default function TransactionsPage() {
         id: t.id,
         date: t.transaction_date || t.date || '',
         memo: t.memo || '',
-        category: t.category_name || 'Uncategorized',
+        category: t.category_name || t('txPage.field.uncategorized'),
         categoryId: t.category_id,
-        recipient: t.recipient_name || 'Unknown',
+        recipient: t.recipient_name || t('txPage.field.unknown'),
         recipientId: t.recipient_id || 0,
         bank: t.bank_account,
         amount: t.amount,
@@ -207,7 +209,7 @@ export default function TransactionsPage() {
     const columns = [
         {
             key: "date",
-            header: "Date",
+            header: t('txPage.col.date'),
             editable: true,
             type: "date" as const,
             render: (row: TableTransaction) => (
@@ -218,7 +220,7 @@ export default function TransactionsPage() {
         },
         {
             key: "category",
-            header: "Category",
+            header: t('txPage.col.category'),
             editable: false,
             render: (row: TableTransaction, isEditing: boolean) => {
                 if (isEditing) {
@@ -243,7 +245,7 @@ export default function TransactionsPage() {
         },
         {
             key: "recipient",
-            header: "Recipient",
+            header: t('txPage.col.recipient'),
             editable: false,
             render: (row: TableTransaction, isEditing: boolean) => {
                 if (isEditing) {
@@ -266,9 +268,11 @@ export default function TransactionsPage() {
         },
         {
             key: "amount",
-            header: "Amount",
+            header: t('txPage.col.amount'),
             editable: true,
             type: "number" as const,
+            defaultWidth: 90,
+            minWidth: 70,
             render: (row: TableTransaction) => (
                 <span className={`font-mono font-medium whitespace-nowrap ${row.amount >= 0 ? 'text-accent' : 'text-destructive'
                     } ${!row.is_active ? 'opacity-50 line-through' : ''}`}>
@@ -278,7 +282,7 @@ export default function TransactionsPage() {
         },
         {
             key: "info",
-            header: "Info",
+            header: t('txPage.col.info'),
             editable: false,
             sortable: false,
             filterable: false,
@@ -304,8 +308,10 @@ export default function TransactionsPage() {
         },
         {
             key: "is_active",
-            header: "Status",
+            header: t('txPage.col.status'),
             editable: false,
+            defaultWidth: 145,
+            minWidth: 130,
             render: (row: TableTransaction) => (
                 <Button
                     variant="ghost"
@@ -315,7 +321,7 @@ export default function TransactionsPage() {
                     disabled={updateMutation.isPending}
                 >
                     {row.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                    {row.is_active ? 'Active' : 'Inactive'}
+                    {row.is_active ? t('txPage.statusActive') : t('txPage.statusInactive')}
                 </Button>
             ),
         },
@@ -349,7 +355,7 @@ export default function TransactionsPage() {
                 className="gap-1.5"
             >
                 {showAll ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                {showAll ? "Showing All" : "Active Only"}
+                {showAll ? t('txPage.showingAll') : t('txPage.activeOnly')}
             </Button>
             <AddTransactionDialog />
         </div>
@@ -363,14 +369,14 @@ export default function TransactionsPage() {
         <>
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Transactions</h2>
-                    <p className="text-muted-foreground mt-1">View and manage all your transactions</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('txPage.subtitle')}</p>
                 </div>
 
                 {(recipientIdFilter || categoryIdFilter) && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
                         <span className="text-sm text-foreground">
-                            Filtered by {filterLabel || (recipientIdFilter ? `recipient #${recipientIdFilter}` : `category #${categoryIdFilter}`)}
+                            {t('txPage.filteredBy', { label: filterLabel || (recipientIdFilter ? `recipient #${recipientIdFilter}` : `category #${categoryIdFilter}`) })}
                         </span>
                         <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={clearFilters}>
                             <X className="h-4 w-4" />
@@ -379,21 +385,21 @@ export default function TransactionsPage() {
                 )}
 
                 <VirtualDataTable
-                    title="All Transactions"
-                    subtitle={`${totalItems} transactions`}
+                    title={t('txPage.tableTitle')}
+                    subtitle={t('txPage.tableSubtitle', { n: totalItems })}
                     columns={columns}
                     data={transactions}
                     onRowUpdate={handleUpdate}
                     emptyMessage={(
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <Import className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                            <p className="text-sm font-medium text-foreground mb-1">No transactions found</p>
+                            <p className="text-sm font-medium text-foreground mb-1">{t('txPage.empty')}</p>
                             <p className="text-xs text-muted-foreground mb-4">
-                                {search ? "Try a different search term or clear the filter." : "Import a CSV file to get started."}
+                                {search ? t('txPage.emptySearch') : t('transactions.noTransactions')}
                             </p>
                             {!search && (
                                 <Button asChild size="sm" variant="outline">
-                                    <Link to="/import">Import transactions</Link>
+                                    <Link to="/import">{t('txPage.importLink')}</Link>
                                 </Button>
                             )}
                         </div>
@@ -412,42 +418,42 @@ export default function TransactionsPage() {
             </div>
             <ConfirmDialog />
             <Dialog open={!!infoTransaction} onOpenChange={(open) => { if (!open) setInfoTransaction(null); }}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Info className="h-4 w-4 text-muted-foreground" />
-                            Transaction Details
-                        </DialogTitle>
-                    </DialogHeader>
-                    {infoTransaction && (() => {
-                        const t = infoTransaction;
-                        const fields = [
-                            { label: "ID", value: String(t.id) },
-                            { label: "Date", value: t.date ? t.date.split('T')[0] : '—' },
-                            { label: "Description", value: t.memo || undefined },
-                            { label: "Recipient", value: t.recipient !== 'Unknown' ? t.recipient : undefined },
-                            { label: "Category", value: t.category !== 'Uncategorized' ? t.category : undefined },
-                            { label: "Amount", value: `${t.amount >= 0 ? '+' : '-'}${formatCurrency(Math.abs(t.amount), t.currency)}` },
-                            { label: "Currency", value: t.currency },
-                            { label: "Bank Account", value: t.bank },
-                            { label: "Balance", value: t.balance != null ? formatCurrency(t.balance, t.currency) : undefined },
-                            { label: "Comment", value: t.comment || undefined },
-                            { label: "Status", value: t.is_active ? 'Active' : 'Inactive' },
-                        ];
-                        return (
-                            <div className="divide-y divide-border">
-                                {fields.map(({ label, value }) => (
-                                    value ? (
-                                        <div key={label} className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-                                            <span className="text-sm text-muted-foreground shrink-0">{label}</span>
-                                            <span className="text-sm font-medium text-right break-all">{value}</span>
-                                        </div>
-                                    ) : null
-                                ))}
-                            </div>
-                        );
-                    })()}
-                </DialogContent>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Info className="h-4 w-4 text-muted-foreground" />
+                                {t('txPage.detailsTitle')}
+                            </DialogTitle>
+                        </DialogHeader>
+                        {infoTransaction && (() => {
+                            const txn = infoTransaction;
+                            const fields = [
+                                { label: t('txPage.field.id'), value: String(txn.id) },
+                                { label: t('txPage.field.date'), value: txn.date ? txn.date.split('T')[0] : '—' },
+                                { label: t('txPage.field.description'), value: txn.memo || undefined },
+                                { label: t('txPage.field.recipient'), value: txn.recipient !== t('txPage.field.unknown') ? txn.recipient : undefined },
+                                { label: t('txPage.field.category'), value: txn.category !== t('txPage.field.uncategorized') ? txn.category : undefined },
+                                { label: t('txPage.field.amount'), value: `${txn.amount >= 0 ? '+' : '-'}${formatCurrency(Math.abs(txn.amount), txn.currency)}` },
+                                { label: t('txPage.field.currency'), value: txn.currency },
+                                { label: t('txPage.field.bankAccount'), value: txn.bank },
+                                { label: t('txPage.field.balance'), value: txn.balance != null ? formatCurrency(txn.balance, txn.currency) : undefined },
+                                { label: t('txPage.field.comment'), value: txn.comment || undefined },
+                                { label: t('txPage.field.status'), value: txn.is_active ? t('txPage.statusActive') : t('txPage.statusInactive') },
+                            ];
+                            return (
+                                <div className="divide-y divide-border">
+                                    {fields.map(({ label, value }) => (
+                                        value ? (
+                                            <div key={String(label)} className="flex justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+                                                <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+                                                <span className="text-sm font-medium text-right break-all">{value}</span>
+                                            </div>
+                                        ) : null
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                    </DialogContent>
             </Dialog>
         </>
     );

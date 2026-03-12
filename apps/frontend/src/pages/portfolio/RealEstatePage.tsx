@@ -8,15 +8,21 @@ import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDia
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-
-function fmt(val: number, currency = 'EUR', decimals = 0) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-}
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 
 export default function RealEstatePage() {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
+
+  function fmt(val: number, currency = 'EUR', decimals = 0) {
+    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
+  }
 
   const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
   const totalCost = properties.reduce((s, p) => s + p.totalBuyCost, 0);
@@ -41,15 +47,15 @@ export default function RealEstatePage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">Real Estate</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
           <AddInvestmentDialog />
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">No properties</h3>
+            <h3 className="text-lg font-semibold mb-1">{t('realestate.noProperties')}</h3>
             <p className="text-muted-foreground text-sm mb-4">
-              Track real estate with purchase price, appreciation, rental income, and expenses.
+              {t('realestate.noPropertiesDesc')}
             </p>
             <AddInvestmentDialog />
           </CardContent>
@@ -62,7 +68,7 @@ export default function RealEstatePage() {
     <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Real Estate</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
         <AddInvestmentDialog />
       </div>
 
@@ -71,7 +77,7 @@ export default function RealEstatePage() {
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> Total Value
+              <DollarSign className="h-3 w-3" /> {t('portfolio.totalValue')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -82,7 +88,7 @@ export default function RealEstatePage() {
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Home className="h-3 w-3" /> Total Cost
+              <Home className="h-3 w-3" /> {t('portfolio.totalCost')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -93,7 +99,7 @@ export default function RealEstatePage() {
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Appreciation
+              <TrendingUp className="h-3 w-3" /> {t('portfolio.appreciation')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -105,35 +111,35 @@ export default function RealEstatePage() {
         
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Rental Income</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalRentIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}/mo</p>
+            <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}{t('realestate.perMonth')}</p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Percent className="h-3 w-3" /> Yield
+              <Percent className="h-3 w-3" /> {t('portfolio.yield')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-foreground tabular-nums">{annualYield.toFixed(1)}%</p>
-            <p className="text-xs text-muted-foreground mt-0.5">annual</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('portfolio.annual')}</p>
           </CardContent>
         </Card>
         
         <Card className={cn("border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Return</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className={cn("text-xl font-bold tabular-nums", totalReturn >= 0 ? "text-accent" : "text-destructive")}>
               {totalReturn >= 0 ? "+" : ""}{fmt(totalReturn)}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{roi >= 0 ? "+" : ""}{roi.toFixed(1)}% ROI</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{roi >= 0 ? "+" : ""}{roi.toFixed(1)}% {t('portfolio.totalROI')}</p>
           </CardContent>
         </Card>
       </div>
@@ -174,12 +180,12 @@ export default function RealEstatePage() {
                       }
                     />
                     <AddPortfolioTxnDialog investment={p} />
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={async () => { 
                         const ok = await confirm({ 
-                          title: "Delete Property", 
-                          description: `Delete "${p.name}"? All transaction history will be removed.`, 
-                          confirmLabel: "Delete", 
+                          title: t('realestate.deleteProperty'), 
+                          description: t('realestate.deletePropertyDesc', { name: p.name }), 
+                          confirmLabel: t('common.delete'), 
                           variant: "destructive" 
                         }); 
                         if (ok) deleteInvestment(p.id); 
@@ -192,63 +198,63 @@ export default function RealEstatePage() {
               
               <CardContent className="pt-4 space-y-4">
                 {/* Value Summary */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Purchase Price</p>
-                    <p className="text-xl font-bold tabular-nums">{fmt(p.totalBuyCost, p.currency)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-1">Current Value</p>
-                    <p className="text-xl font-bold text-primary tabular-nums">{fmt(p.currentValue, p.currency)}</p>
-                  </div>
-                </div>
+                  <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.purchasePrice')}</p>
+                     <p className="text-xl font-bold tabular-nums">{fmt(p.totalBuyCost, p.currency)}</p>
+                   </div>
+                   <div className="text-right">
+                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.currentValue')}</p>
+                     <p className="text-xl font-bold text-primary tabular-nums">{fmt(p.currentValue, p.currency)}</p>
+                   </div>
+                 </div>
 
-                {/* Returns Breakdown */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-xs text-muted-foreground mb-1">Appreciation</p>
-                    <p className={cn(
-                      "text-lg font-bold tabular-nums",
-                      p.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
-                    )}>
-                      {p.totalAppreciation >= 0 ? "+" : ""}{fmt(p.totalAppreciation, p.currency)}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-xs text-muted-foreground mb-1">Rental Income</p>
-                    <p className="text-lg font-bold text-accent tabular-nums">
-                      +{fmt(p.totalIncome, p.currency)}
-                    </p>
-                    {monthlyRent > 0 && (
-                      <p className="text-xs text-muted-foreground">~{fmt(monthlyRent, p.currency)}/mo</p>
-                    )}
-                  </div>
-                </div>
+                 {/* Returns Breakdown */}
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="p-3 rounded-lg bg-muted/50">
+                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.appreciation')}</p>
+                     <p className={cn(
+                       "text-lg font-bold tabular-nums",
+                       p.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
+                     )}>
+                       {p.totalAppreciation >= 0 ? "+" : ""}{fmt(p.totalAppreciation, p.currency)}
+                     </p>
+                   </div>
+                   <div className="p-3 rounded-lg bg-muted/50">
+                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.rentalIncome')}</p>
+                     <p className="text-lg font-bold text-accent tabular-nums">
+                       +{fmt(p.totalIncome, p.currency)}
+                     </p>
+                     {monthlyRent > 0 && (
+                       <p className="text-xs text-muted-foreground">~{fmt(monthlyRent, p.currency)}{t('realestate.perMonth')}</p>
+                     )}
+                   </div>
+                 </div>
 
-                {/* Yield & ROI */}
-                <div className="flex items-center justify-between py-3 border-t border-border">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Yield</p>
-                    <p className="text-sm font-medium">{propertyYield.toFixed(1)}% annual</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Total ROI</p>
-                    <p className={cn(
-                      "text-sm font-bold",
-                      propertyROI >= 0 ? "text-accent" : "text-destructive"
-                    )}>
-                      {propertyROI >= 0 ? "+" : ""}{propertyROI.toFixed(1)}%
-                    </p>
-                  </div>
-                </div>
+                 {/* Yield & ROI */}
+                 <div className="flex items-center justify-between py-3 border-t border-border">
+                   <div>
+                     <p className="text-xs text-muted-foreground">{t('portfolio.yield')}</p>
+                     <p className="text-sm font-medium">{propertyYield.toFixed(1)}% {t('portfolio.annual')}</p>
+                   </div>
+                   <div className="text-right">
+                     <p className="text-xs text-muted-foreground">{t('portfolio.totalROI')}</p>
+                     <p className={cn(
+                       "text-sm font-bold",
+                       propertyROI >= 0 ? "text-accent" : "text-destructive"
+                     )}>
+                       {propertyROI >= 0 ? "+" : ""}{propertyROI.toFixed(1)}%
+                     </p>
+                   </div>
+                 </div>
 
-                {/* Expenses */}
-                {(p.totalFees > 0 || p.totalTaxes > 0) && (
-                  <div className="flex justify-between text-sm border-t border-border pt-3">
-                    <span className="text-muted-foreground">Fees & Taxes</span>
-                    <span className="font-medium text-destructive">-{fmt(p.totalFees + p.totalTaxes, p.currency)}</span>
-                  </div>
-                )}
+                 {/* Expenses */}
+                 {(p.totalFees > 0 || p.totalTaxes > 0) && (
+                   <div className="flex justify-between text-sm border-t border-border pt-3">
+                     <span className="text-muted-foreground">{t('portfolio.feesAndTaxes')}</span>
+                     <span className="font-medium text-destructive">-{fmt(p.totalFees + p.totalTaxes, p.currency)}</span>
+                   </div>
+                 )}
               </CardContent>
             </Card>
           );
@@ -258,12 +264,7 @@ export default function RealEstatePage() {
       {/* Info Card */}
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground">
-            <strong>How it works:</strong> Record the purchase as a "Buy" transaction. 
-            Track rental income with "Rent Income" transactions. 
-            Use "Appreciation" to update property value over time. 
-            Include closing costs, maintenance, and property taxes as "Fee" or "Tax" transactions.
-          </p>
+          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('realestate.howItWorks') }} />
         </CardContent>
       </Card>
     </div>

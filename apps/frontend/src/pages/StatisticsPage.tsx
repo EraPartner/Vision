@@ -20,17 +20,20 @@ import { CustomCategoryChart } from "@/components/statistics/CustomCategoryChart
 import { useSavedCharts } from "@/hooks/useSavedCharts";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 
-const STATISTICS_WIDGETS: WidgetDefinition[] = [
-  { id: "summaryCards",      label: "Summary Cards",          defaultVisible: true },
-  { id: "monthly",           label: "Monthly Income vs Spending", defaultVisible: true },
-  { id: "netTrend",          label: "Net Balance Trend",      defaultVisible: true },
-  { id: "categoryPie",       label: "Spending by Category",   defaultVisible: true },
-  { id: "categoryTrend",     label: "Top Category Trends",    defaultVisible: true },
-  { id: "pivotTable",        label: "Category Pivot Table",   defaultVisible: true },
-  { id: "topRecipients",     label: "Top Recipients",         defaultVisible: true },
-  { id: "yearlyComparison",  label: "Year-over-Year Chart",   defaultVisible: true },
-  { id: "yearlySummary",     label: "Yearly Summary Table",   defaultVisible: true },
+const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey?: string }> = [
+  { id: "summaryCards",      labelKey: 'statsPage.widget.summaryCards',      defaultVisible: true },
+  { id: "monthly",           labelKey: 'statsPage.widget.monthly',            defaultVisible: true },
+  { id: "netTrend",          labelKey: 'statsPage.widget.netTrend',           defaultVisible: true },
+  { id: "categoryPie",       labelKey: 'statsPage.widget.categoryPie',        defaultVisible: true },
+  { id: "categoryTrend",     labelKey: 'statsPage.widget.categoryTrend',      defaultVisible: true },
+  { id: "pivotTable",        labelKey: 'statsPage.widget.pivotTable',        defaultVisible: true },
+  { id: "topRecipients",     labelKey: 'statsPage.widget.topRecipients',     defaultVisible: true },
+  { id: "yearlyComparison",  labelKey: 'statsPage.widget.yearlyComparison',  defaultVisible: true },
+  { id: "yearlySummary",     labelKey: 'statsPage.widget.yearlySummary',     defaultVisible: true },
 ];
 
 const CHART_COLORS = [
@@ -53,15 +56,6 @@ const RECHARTS_TOOLTIP_STYLE = {
   color: "hsl(var(--card-foreground))",
 };
 
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
-}
-
 function formatPeriodLabel(period: string) {
   try {
     return format(parseISO(`${period}-01`), "MMM yyyy");
@@ -81,33 +75,43 @@ function formatPeriodShort(period: string) {
 
 // ─── Summary Cards ────────────────────────────────────────
 function SummaryCards({ data }: { data: StatisticsData }) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
+
   const cards = [
     {
-      title: "Total Income",
+      title: t('statsPage.totalIncome'),
       value: formatCurrency(data.totalIncome),
       icon: TrendingUp,
-      description: `Avg ${formatCurrency(data.averageMonthlyIncome)}/mo`,
+      description: t('statsPage.avgPerMonth', { amount: formatCurrency(data.averageMonthlyIncome) }),
       className: "text-accent",
     },
     {
-      title: "Total Spending",
+      title: t('statsPage.totalSpending'),
       value: formatCurrency(data.totalSpending),
       icon: TrendingDown,
-      description: `Avg ${formatCurrency(data.averageMonthlySpending)}/mo`,
+      description: t('statsPage.avgPerMonth', { amount: formatCurrency(data.averageMonthlySpending) }),
       className: "text-destructive",
     },
     {
-      title: "Net Balance",
+      title: t('statsPage.netBalance'),
       value: formatCurrency(data.totalIncome - data.totalSpending),
       icon: DollarSign,
-      description: `Over ${data.monthlyData.length} months`,
+      description: t('statsPage.overMonths', { n: data.monthlyData.length }),
       className: data.totalIncome - data.totalSpending >= 0 ? "text-accent" : "text-destructive",
     },
     {
-      title: "Months Tracked",
+      title: t('statsPage.monthsTracked'),
       value: data.monthlyData.length.toString(),
       icon: BarChart3,
-      description: `${data.allYears.length} year(s)`,
+      description: t('statsPage.years', { n: data.allYears.length }),
       className: "text-primary",
     },
   ];
@@ -132,11 +136,19 @@ function SummaryCards({ data }: { data: StatisticsData }) {
 
 // ─── Monthly Income/Expense Chart ─────────────────────────
 function MonthlyChart({ data }: { data: StatisticsData }) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const chartData = data.monthlyData.map((m) => ({
     period: formatPeriodShort(m.period),
-    Income: Math.round(m.income),
-    Spending: Math.round(m.spending),
-    Net: Math.round(m.net),
+    [t('statsPage.income')]: Math.round(m.income),
+    [t('statsPage.spending')]: Math.round(m.spending),
   }));
 
   return (
@@ -147,8 +159,8 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
         <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <Legend />
-        <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey={t('statsPage.spending')} fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -156,9 +168,18 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
 
 // ─── Net Balance Trend ────────────────────────────────────
 function NetTrendChart({ data }: { data: StatisticsData }) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const chartData = data.monthlyData.map((m) => ({
     period: formatPeriodShort(m.period),
-    Net: Math.round(m.net),
+    [t('statsPage.net')]: Math.round(m.net),
   }));
 
   return (
@@ -174,7 +195,7 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
             <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <Area type="monotone" dataKey="Net" stroke="hsl(217, 91%, 60%)" fill="url(#netGradient)" strokeWidth={2} />
+        <Area type="monotone" dataKey={t('statsPage.net')} stroke="hsl(217, 91%, 60%)" fill="url(#netGradient)" strokeWidth={2} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -182,11 +203,19 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
 
 // ─── Year-over-Year Comparison ────────────────────────────
 function YearlyComparisonChart({ data }: { data: StatisticsData }) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const chartData = data.yearlyComparison.map((y) => ({
     year: y.year.toString(),
-    Income: Math.round(y.totalIncome),
-    Spending: Math.round(y.totalSpending),
-    Net: Math.round(y.net),
+    [t('statsPage.income')]: Math.round(y.totalIncome),
+    [t('statsPage.spending')]: Math.round(y.totalSpending),
   }));
 
   return (
@@ -197,8 +226,8 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
         <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <Legend />
-        <Bar dataKey="Income" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="Spending" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey={t('statsPage.spending')} fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -206,6 +235,14 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
 
 // ─── Top Recipients ───────────────────────────────────────
 function TopRecipientsChart({ data }: { data: StatisticsData }) {
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const chartData = data.topRecipients.slice(0, 10).map((r) => ({
     name: r.name.length > 20 ? r.name.substring(0, 20) + "…" : r.name,
     fullName: r.name,
@@ -232,6 +269,14 @@ function TopRecipientsChart({ data }: { data: StatisticsData }) {
 
 // ─── Category Spending Pie ────────────────────────────────
 function CategoryPieChart({ data }: { data: StatisticsData }) {
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const pieData = data.categoryPivot.slice(0, 10).map((c, i) => ({
     name: c.categoryName,
     value: Math.round(c.total),
@@ -276,6 +321,15 @@ function CategoryPivotTable({
   exclusionsApply: boolean;
 }) {
   const [yearFilter, setYearFilter] = useState<string>("all");
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
 
   const filteredPeriods = useMemo(() => {
     if (yearFilter === "all") return data.allPeriods;
@@ -302,8 +356,8 @@ function CategoryPivotTable({
     }>();
 
     for (const cat of filteredCategories) {
-      const [rawGeneral, ...detailParts] = String(cat.categoryName || "Uncategorized").split(":");
-      const general = rawGeneral || "Uncategorized";
+      const [rawGeneral, ...detailParts] = String(cat.categoryName || t('txPage.field.uncategorized')).split(":");
+      const general = rawGeneral || t('txPage.field.uncategorized');
       const detailName = detailParts.length > 0 ? detailParts.join(":") : general;
 
       if (!grouped.has(general)) {
@@ -348,16 +402,17 @@ function CategoryPivotTable({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
         <div>
-          <CardTitle>Category Pivot Table</CardTitle>
-          <CardDescription>Category spending broken down by month</CardDescription>
+          {/** translation */}
+          <CardTitle>{t('statsPage.pivotTitle')}</CardTitle>
+          <CardDescription>{t('statsPage.pivotDesc')}</CardDescription>
         </div>
         <div className="flex items-center gap-2">
           <Select value={yearFilter} onValueChange={setYearFilter}>
             <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Year" />
+              <SelectValue placeholder={t('statistics.selectYear')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Years</SelectItem>
+              <SelectItem value="all">{t('statsPage.allYears')}</SelectItem>
               {data.allYears.map((y) => (
                 <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
               ))}
@@ -377,20 +432,20 @@ function CategoryPivotTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 bg-card z-10">Category</th>
+                  <th className="text-left py-2 px-3 font-medium text-muted-foreground sticky left-0 bg-card z-10">{t('statsPage.category')}</th>
                   {filteredPeriods.map((p) => (
                     <th key={p} className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">
                       {formatPeriodShort(p)}
                     </th>
                   ))}
-                  <th className="text-right py-2 px-3 font-bold text-foreground">Total</th>
+                  <th className="text-right py-2 px-3 font-bold text-foreground">{t('statsPage.total')}</th>
                 </tr>
               </thead>
               <tbody>
                 {hierarchicalCategories.map((group) => (
                   <Fragment key={`group-${group.general}`}>
                     <tr key={`group-${group.general}`} className="border-b border-border/50 bg-muted/30">
-                      <td className="py-2 px-3 font-semibold sticky left-0 bg-card z-10 whitespace-nowrap">{group.general}</td>
+                        <td className="py-2 px-3 font-semibold sticky left-0 bg-card z-10 whitespace-nowrap">{group.general}</td>
                       {filteredPeriods.map((p) => {
                         const val = group.months[p] || 0;
                         return (
@@ -410,10 +465,10 @@ function CategoryPivotTable({
                           const val = cat.months[p] || 0;
                           return (
                             <td key={p} className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""}`}>
-                              {val === 0 ? "—" : formatCurrency(val)}
-                            </td>
-                          );
-                        })}
+                            {val === 0 ? "—" : formatCurrency(val)}
+                          </td>
+                        );
+                      })}
                         <td className="text-right py-2 px-3 font-medium tabular-nums">{formatCurrency(cat.filteredTotal)}</td>
                       </tr>
                     ))}
@@ -422,7 +477,7 @@ function CategoryPivotTable({
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border font-bold">
-                  <td className="py-2 px-3 sticky left-0 bg-card z-10">Total</td>
+                  <td className="py-2 px-3 sticky left-0 bg-card z-10">{t('statsPage.total')}</td>
                   {filteredPeriods.map((p) => (
                     <td key={p} className="text-right py-2 px-3 tabular-nums">{formatCurrency(columnTotals[p] || 0)}</td>
                   ))}
@@ -442,6 +497,14 @@ function CategoryPivotTable({
 
 // ─── Spending Trend by Category ───────────────────────────
 function CategoryTrendChart({ data }: { data: StatisticsData }) {
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
   const topCategories = data.categoryPivot.slice(0, 5);
   const chartData = data.allPeriods.map((period) => {
     const point: Record<string, any> = { period: formatPeriodShort(period) };
@@ -562,13 +625,26 @@ export default function StatisticsPage() {
     data, isLoading, isError, error,
     getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply,
   } = useStatistics();
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
 
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('statistics', STATISTICS_WIDGETS);
+  const widgets = useMemo(
+    () => widgetDefs.map((w) => ({ ...w, label: (w as typeof w & { labelKey?: string }).labelKey ? t((w as typeof w & { labelKey?: string }).labelKey!) : (w.label ?? w.id) })),
+    [widgetDefs, t],
+  );
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}><CardContent className="pt-6"><Skeleton className="h-20 w-full" /></CardContent></Card>
@@ -582,10 +658,10 @@ export default function StatisticsPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-destructive">Failed to load statistics: {error?.message}</p>
+            <p className="text-destructive">{t('statsPage.error', { msg: error?.message })}</p>
           </CardContent>
         </Card>
       </div>
@@ -597,11 +673,11 @@ export default function StatisticsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
-            <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+            <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('statsPage.subtitle')}</p>
           </div>
           <WidgetVisibilityDialog
-              widgets={widgetDefs}
+              widgets={widgets}
               isVisible={isVisible}
               setWidgetVisible={setWidgetVisible}
               setAllVisible={setAllVisible}
@@ -611,12 +687,10 @@ export default function StatisticsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No data yet</h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-sm">
-              Import your bank transactions to start seeing statistics about your income, spending, and financial trends.
-            </p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t('statsPage.noDataTitle')}</h3>
+            <p className="text-sm text-muted-foreground mb-4 max-w-sm">{t('statsPage.noDataDesc')}</p>
             <Button asChild size="sm">
-              <Link to="/import"><Import className="h-4 w-4 mr-2" />Import transactions</Link>
+              <Link to="/import"><Import className="h-4 w-4 mr-2" />{t('statsPage.importBtn')}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -629,12 +703,12 @@ export default function StatisticsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Statistics</h1>
-          <p className="text-muted-foreground mt-1">Income, spending and net balance over time</p>
+      <div>
+          <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('statsPage.subtitle')}</p>
         </div>
         <WidgetVisibilityDialog
-          widgets={widgetDefs}
+          widgets={widgets}
           isVisible={isVisible}
           setWidgetVisible={setWidgetVisible}
           setAllVisible={setAllVisible}
@@ -645,35 +719,35 @@ export default function StatisticsPage() {
       {isVisible('summaryCards') && <SummaryCards data={data} />}
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="recipients">Recipients</TabsTrigger>
-          <TabsTrigger value="yearly">Yearly</TabsTrigger>
-        </TabsList>
+          <TabsList>
+            <TabsTrigger value="overview">{t('statsPage.tab.overview')}</TabsTrigger>
+            <TabsTrigger value="categories">{t('statsPage.tab.categories')}</TabsTrigger>
+            <TabsTrigger value="recipients">{t('statsPage.tab.recipients')}</TabsTrigger>
+            <TabsTrigger value="yearly">{t('statsPage.tab.yearly')}</TabsTrigger>
+          </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {isVisible('monthly') && (
-              <ChartCard title="Monthly Income vs Spending" description="Track your cash flow over time" graphKey="monthly" {...chartCardProps}>
-                {(d) => <MonthlyChart data={d} />}
-              </ChartCard>
-          )}
-          {isVisible('netTrend') && (
-              <ChartCard title="Net Balance Trend" description="Monthly net (income − spending)" graphKey="netTrend" {...chartCardProps}>
-                {(d) => <NetTrendChart data={d} />}
-              </ChartCard>
-          )}
+            {isVisible('monthly') && (
+                <ChartCard title={t('statsPage.chart.monthlyTitle')} description={t('statsPage.chart.monthlyDesc')} graphKey="monthly" {...chartCardProps}>
+                  {(d) => <MonthlyChart data={d} />}
+                </ChartCard>
+            )}
+            {isVisible('netTrend') && (
+                <ChartCard title={t('statsPage.chart.netTitle')} description={t('statsPage.chart.netDesc')} graphKey="netTrend" {...chartCardProps}>
+                  {(d) => <NetTrendChart data={d} />}
+                </ChartCard>
+            )}
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {isVisible('categoryPie') && (
-                <ChartCard title="Spending by Category" description="Overall distribution across categories" graphKey="categoryPie" {...chartCardProps}>
+                <ChartCard title={t('statsPage.chart.categoryPieTitle')} description={t('statsPage.chart.categoryPieDesc')} graphKey="categoryPie" {...chartCardProps}>
                   {(d) => <CategoryPieChart data={d} />}
                 </ChartCard>
             )}
             {isVisible('categoryTrend') && (
-                <ChartCard title="Top Category Trends" description="Monthly spending for top 5 categories" graphKey="categoryTrend" {...chartCardProps}>
+                <ChartCard title={t('statsPage.chart.categoryTrendTitle')} description={t('statsPage.chart.categoryTrendDesc')} graphKey="categoryTrend" {...chartCardProps}>
                   {(d) => <CategoryTrendChart data={d} />}
                 </ChartCard>
             )}
@@ -689,38 +763,38 @@ export default function StatisticsPage() {
           )}
         </TabsContent>
         <TabsContent value="recipients" className="space-y-6">
-          {isVisible('topRecipients') && (
-              <RecipientInsightsTab
-                  statisticsTopRecipientsChart={
-                    <ChartCard title="Top Recipients by Spending" description="Where your money goes most (from statistics)" graphKey="topRecipients" {...chartCardProps}>
-                      {(d) => <TopRecipientsChart data={d} />}
-                    </ChartCard>
-                  }
-              />
-          )}
+            {isVisible('topRecipients') && (
+                <RecipientInsightsTab
+                    statisticsTopRecipientsChart={
+                      <ChartCard title={t('statsPage.chart.topRecipientsTitle')} description={t('statsPage.chart.topRecipientsDesc')} graphKey="topRecipients" {...chartCardProps}>
+                        {(d) => <TopRecipientsChart data={d} />}
+                      </ChartCard>
+                    }
+                />
+            )}
         </TabsContent>
         <TabsContent value="yearly" className="space-y-6">
-          {isVisible('yearlyComparison') && (
-              <ChartCard title="Year-over-Year Comparison" description="Annual totals compared" graphKey="yearlyComparison" {...chartCardProps}>
-                {(d) => <YearlyComparisonChart data={d} />}
-            </ChartCard>
-          )}
-          {isVisible('yearlySummary') && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Yearly Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <table className="w-full text-sm">
-                    <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">Year</th>
-                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Income</th>
-                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Spending</th>
-                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Net</th>
-                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">Transactions</th>
-                    </tr>
-                    </thead>
+            {isVisible('yearlyComparison') && (
+                <ChartCard title={t('statsPage.chart.yearlyTitle')} description={t('statsPage.chart.yearlyDesc')} graphKey="yearlyComparison" {...chartCardProps}>
+                  {(d) => <YearlyComparisonChart data={d} />}
+              </ChartCard>
+            )}
+            {isVisible('yearlySummary') && (
+                <Card>
+                  <CardHeader>
+                  <CardTitle>{t('statsPage.yearly.title')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <table className="w-full text-sm">
+                      <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">{t('statsPage.yearly.year')}</th>
+                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">{t('statsPage.yearly.income')}</th>
+                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">{t('statsPage.yearly.spending')}</th>
+                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">{t('statsPage.yearly.net')}</th>
+                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">{t('statsPage.yearly.transactions')}</th>
+                      </tr>
+                      </thead>
                     <tbody>
                     {data.yearlyComparison.map((y) => (
                         <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">

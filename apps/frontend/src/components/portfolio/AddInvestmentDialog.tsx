@@ -9,10 +9,11 @@ import { Switch } from '@/components/ui/switch';
 import { Plus, TrendingUp, Bitcoin, Building2, PiggyBank, BarChart3, ArrowRight } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
-import { ASSET_CLASS_LABELS } from '@/types/portfolio';
+import { ASSET_CLASS_LABELS, getAssetClassLabel } from '@/types/portfolio';
 import type { PriceProvider } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   stock: TrendingUp,
@@ -23,24 +24,8 @@ const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   bond: PiggyBank,
 };
 
-const ASSET_DESCRIPTIONS: Record<AssetClass, string> = {
-  stock: 'Track individual stocks with weighted average cost basis and dividend tracking.',
-  etf: 'Track ETF holdings with automatic cost basis and performance calculations.',
-  crypto: 'Track cryptocurrency with live price updates and capital gains.',
-  real_estate: 'Track properties with purchase price, appreciation, and rental income.',
-  savings: 'Track savings accounts with interest rate projections.',
-  bond: 'Track bonds with maturity dates and interest payments.',
-};
-
-const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
-  { key: 'manual', name: 'Manual', hint: 'Set price manually' },
-  { key: 'coingecko', name: 'CoinGecko', hint: 'Coin ID (e.g. bitcoin, ethereum)' },
-  { key: 'yahoo', name: 'Yahoo Finance', hint: 'Ticker (e.g. AAPL, VWCE.DE)' },
-  { key: 'kraken', name: 'Kraken', hint: 'Pair (e.g. XBTUSD, ETHUSD)' },
-  { key: 'custom', name: 'Custom JSON', hint: 'JSON path to price (e.g. data.price)' },
-];
-
 export function AddInvestmentDialog() {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'type' | 'details'>('type');
   const { addInvestment, addTransaction } = usePortfolio();
@@ -57,7 +42,6 @@ export function AddInvestmentDialog() {
     priceProvider: 'manual' as PriceProvider,
     priceProviderId: '',
     priceProviderUrl: '',
-    // Initial purchase fields
     addInitialPurchase: true,
     initialAmount: '',
     initialUnits: '',
@@ -65,12 +49,29 @@ export function AddInvestmentDialog() {
     initialFees: '',
   });
 
+  const ASSET_DESCRIPTIONS: Record<AssetClass, string> = {
+    stock: t('addInv.desc.stock'),
+    etf: t('addInv.desc.etf'),
+    crypto: t('addInv.desc.crypto'),
+    real_estate: t('addInv.desc.real_estate'),
+    savings: t('addInv.desc.savings'),
+    bond: t('addInv.desc.bond'),
+  };
+
+  const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
+    { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
+    { key: 'coingecko', name: 'CoinGecko', hint: t('addInv.provider.hint.coingecko') },
+    { key: 'yahoo', name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
+    { key: 'kraken', name: 'Kraken', hint: t('addInv.provider.hint.kraken') },
+    { key: 'custom', name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
+  ];
+
   const reset = () => {
-    setForm({ 
-      assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '', 
-      interestRate: '', maturityDate: '', location: '', notes: '', 
+    setForm({
+      assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '',
+      interestRate: '', maturityDate: '', location: '', notes: '',
       priceProvider: 'manual', priceProviderId: '', priceProviderUrl: '',
-      addInitialPurchase: true, initialAmount: '', initialUnits: '', 
+      addInitialPurchase: true, initialAmount: '', initialUnits: '',
       initialDate: new Date().toISOString().slice(0, 10), initialFees: '',
     });
     setStep('type');
@@ -96,12 +97,11 @@ export function AddInvestmentDialog() {
         price_provider_url: form.priceProviderUrl.trim() || undefined,
       });
 
-      // Add initial purchase transaction if specified
       if (form.addInitialPurchase && form.initialAmount && investment) {
         const amount = parseFloat(form.initialAmount);
         const units = form.initialUnits ? parseFloat(form.initialUnits) : undefined;
         const fees = form.initialFees ? parseFloat(form.initialFees) : undefined;
-        
+
         if (amount > 0) {
           await addTransaction({
             investmentId: investment.id,
@@ -112,12 +112,12 @@ export function AddInvestmentDialog() {
             price_per_unit: units ? amount / units : undefined,
             fees,
             currency: form.currency || 'EUR',
-            note: 'Initial purchase',
+            note: t('addInv.initialPurchaseNote'),
           });
         }
       }
 
-      toast.success(`${ASSET_CLASS_LABELS[form.assetClass]} "${form.name}" added`);
+      toast.success(t('addInv.toast.added', { assetClass: getAssetClassLabel(t, form.assetClass), name: form.name }));
       reset();
       setOpen(false);
     } catch {
@@ -130,7 +130,6 @@ export function AddInvestmentDialog() {
   const isRealEstate = form.assetClass === 'real_estate';
   const selectedProvider = PRICE_PROVIDERS.find(p => p.key === form.priceProvider);
 
-  // Calculate price per unit for display
   const computedPricePerUnit = form.initialAmount && form.initialUnits
     ? (parseFloat(form.initialAmount) / parseFloat(form.initialUnits)).toFixed(4)
     : '';
@@ -139,25 +138,26 @@ export function AddInvestmentDialog() {
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" /> Add Investment
+          <Plus className="h-4 w-4" /> {t('addInv.title')}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {step === 'type' ? 'Choose Asset Type' : `Add ${form.assetClass ? ASSET_CLASS_LABELS[form.assetClass] : 'Investment'}`}
+            {step === 'type' ? t('addInv.chooseType') : t('addInv.assetTitle', { assetClass: form.assetClass ? getAssetClassLabel(t, form.assetClass) : t('addInv.title') })}
           </DialogTitle>
           {step === 'type' && (
             <DialogDescription>
-              Select the type of investment you want to track
+              {t('addInv.chooseTypeDesc')}
             </DialogDescription>
           )}
         </DialogHeader>
 
         {step === 'type' ? (
           <div className="grid grid-cols-2 gap-3">
-            {(Object.entries(ASSET_CLASS_LABELS) as [AssetClass, string][]).map(([key, label]) => {
+            {(Object.keys(ASSET_CLASS_LABELS) as AssetClass[]).map((key) => {
               const Icon = ASSET_ICONS[key];
+              const label = getAssetClassLabel(t, key);
               return (
                 <button
                   key={key}
@@ -190,38 +190,38 @@ export function AddInvestmentDialog() {
             {/* Basic Info */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="inv-name">Name *</Label>
-                <Input 
-                  id="inv-name" 
+                <Label htmlFor="inv-name">{t('addInv.label.name')}</Label>
+                <Input
+                  id="inv-name"
                   placeholder={
-                    isUnitBased ? 'e.g. Apple Inc. or Vanguard FTSE' : 
-                    isRealEstate ? 'e.g. Downtown Apartment' : 
-                    'e.g. Emergency Fund'
-                  } 
-                  value={form.name} 
-                  onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} 
-                  maxLength={100} 
-                  required 
+                    isUnitBased ? t('addInv.placeholder.name.stock') :
+                    isRealEstate ? t('addInv.placeholder.name.property') :
+                    t('addInv.placeholder.name.savings')
+                  }
+                  value={form.name}
+                  onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                  maxLength={100}
+                  required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 {isUnitBased && (
                   <div className="space-y-2">
-                    <Label htmlFor="inv-symbol">Ticker / Symbol</Label>
-                    <Input 
-                      id="inv-symbol" 
-                      placeholder="e.g. AAPL, BTC" 
-                      value={form.symbol} 
-                      onChange={(e) => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))} 
-                      maxLength={20} 
-                      className="font-mono" 
+                    <Label htmlFor="inv-symbol">{t('addInv.label.ticker')}</Label>
+                    <Input
+                      id="inv-symbol"
+                      placeholder={t('addInv.placeholder.ticker')}
+                      value={form.symbol}
+                      onChange={(e) => setForm(f => ({ ...f, symbol: e.target.value.toUpperCase() }))}
+                      maxLength={20}
+                      className="font-mono"
                     />
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="inv-currency">Currency</Label>
+                  <Label htmlFor="inv-currency">{t('addInv.label.currency')}</Label>
                   <Select value={form.currency} onValueChange={(v) => setForm(f => ({ ...f, currency: v }))}>
                     <SelectTrigger id="inv-currency"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -236,25 +236,25 @@ export function AddInvestmentDialog() {
               {isFixedIncome && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="inv-rate">Interest Rate (% p.a.)</Label>
-                    <Input 
-                      id="inv-rate" 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      max="100" 
-                      placeholder="3.50" 
-                      value={form.interestRate} 
-                      onChange={(e) => setForm(f => ({ ...f, interestRate: e.target.value }))} 
+                    <Label htmlFor="inv-rate">{t('addInv.label.interestRate')}</Label>
+                    <Input
+                      id="inv-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      placeholder="3.50"
+                      value={form.interestRate}
+                      onChange={(e) => setForm(f => ({ ...f, interestRate: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="inv-maturity">Maturity Date</Label>
-                    <Input 
-                      id="inv-maturity" 
-                      type="date" 
-                      value={form.maturityDate} 
-                      onChange={(e) => setForm(f => ({ ...f, maturityDate: e.target.value }))} 
+                    <Label htmlFor="inv-maturity">{t('addInv.label.maturityDate')}</Label>
+                    <Input
+                      id="inv-maturity"
+                      type="date"
+                      value={form.maturityDate}
+                      onChange={(e) => setForm(f => ({ ...f, maturityDate: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -262,13 +262,13 @@ export function AddInvestmentDialog() {
 
               {isRealEstate && (
                 <div className="space-y-2">
-                  <Label htmlFor="inv-location">Location</Label>
-                  <Input 
-                    id="inv-location" 
-                    placeholder="e.g. Brussels, Belgium" 
-                    value={form.location} 
-                    onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))} 
-                    maxLength={200} 
+                  <Label htmlFor="inv-location">{t('addInv.label.location')}</Label>
+                  <Input
+                    id="inv-location"
+                    placeholder={t('addInv.placeholder.location')}
+                    value={form.location}
+                    onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))}
+                    maxLength={200}
                   />
                 </div>
               )}
@@ -278,14 +278,20 @@ export function AddInvestmentDialog() {
             <div className="rounded-lg border border-border p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium">Initial {isRealEstate ? 'Purchase' : isFixedIncome ? 'Deposit' : 'Buy'}</Label>
+                  <Label className="text-sm font-medium">
+                    {t('addInv.initial.label', {
+                      txType: isRealEstate ? t('addInv.initial.purchase') : isFixedIncome ? t('addInv.initial.deposit') : t('addInv.initial.buy')
+                    })}
+                  </Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Record your first {isRealEstate ? 'purchase' : isFixedIncome ? 'deposit' : 'transaction'} now
+                    {t('addInv.initial.desc', {
+                      txWord: isRealEstate ? t('addInv.initial.purchaseWord') : isFixedIncome ? t('addInv.initial.depositWord') : t('addInv.initial.transactionWord')
+                    })}
                   </p>
                 </div>
-                <Switch 
-                  checked={form.addInitialPurchase} 
-                  onCheckedChange={(v) => setForm(f => ({ ...f, addInitialPurchase: v }))} 
+                <Switch
+                  checked={form.addInitialPurchase}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, addInitialPurchase: v }))}
                 />
               </div>
 
@@ -293,28 +299,28 @@ export function AddInvestmentDialog() {
                 <div className="space-y-3 pt-2 border-t border-border">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label htmlFor="init-date" className="text-xs">Date</Label>
-                      <Input 
-                        id="init-date" 
-                        type="date" 
+                      <Label htmlFor="init-date" className="text-xs">{t('addInv.label.date')}</Label>
+                      <Input
+                        id="init-date"
+                        type="date"
                         className="h-9"
-                        value={form.initialDate} 
-                        onChange={(e) => setForm(f => ({ ...f, initialDate: e.target.value }))} 
+                        value={form.initialDate}
+                        onChange={(e) => setForm(f => ({ ...f, initialDate: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="init-amount" className="text-xs">
-                        {isRealEstate ? 'Purchase Price' : isFixedIncome ? 'Deposit Amount' : 'Total Cost'} *
+                        {isRealEstate ? t('addInv.label.purchasePrice') : isFixedIncome ? t('addInv.label.depositAmount') : t('addInv.label.totalCost')} *
                       </Label>
-                      <Input 
-                        id="init-amount" 
-                        type="number" 
-                        step="0.01" 
-                        min="0" 
+                      <Input
+                        id="init-amount"
+                        type="number"
+                        step="0.01"
+                        min="0"
                         className="h-9"
-                        placeholder="10000.00" 
-                        value={form.initialAmount} 
-                        onChange={(e) => setForm(f => ({ ...f, initialAmount: e.target.value }))} 
+                        placeholder="10000.00"
+                        value={form.initialAmount}
+                        onChange={(e) => setForm(f => ({ ...f, initialAmount: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -322,20 +328,20 @@ export function AddInvestmentDialog() {
                   {isUnitBased && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <Label htmlFor="init-units" className="text-xs">Units / Shares</Label>
-                        <Input 
-                          id="init-units" 
-                          type="number" 
-                          step="0.000001" 
-                          min="0" 
+                        <Label htmlFor="init-units" className="text-xs">{t('addInv.label.units')}</Label>
+                        <Input
+                          id="init-units"
+                          type="number"
+                          step="0.000001"
+                          min="0"
                           className="h-9"
-                          placeholder="100" 
-                          value={form.initialUnits} 
-                          onChange={(e) => setForm(f => ({ ...f, initialUnits: e.target.value }))} 
+                          placeholder="100"
+                          value={form.initialUnits}
+                          onChange={(e) => setForm(f => ({ ...f, initialUnits: e.target.value }))}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs">Price per Unit</Label>
+                        <Label className="text-xs">{t('addInv.label.pricePerUnit')}</Label>
                         <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/50 text-sm text-muted-foreground font-mono">
                           {computedPricePerUnit || '—'}
                         </div>
@@ -344,26 +350,26 @@ export function AddInvestmentDialog() {
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="init-fees" className="text-xs">Fees (optional)</Label>
-                    <Input 
-                      id="init-fees" 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
+                    <Label htmlFor="init-fees" className="text-xs">{t('addInv.label.fees')}</Label>
+                    <Input
+                      id="init-fees"
+                      type="number"
+                      step="0.01"
+                      min="0"
                       className="h-9"
-                      placeholder="0.00" 
-                      value={form.initialFees} 
-                      onChange={(e) => setForm(f => ({ ...f, initialFees: e.target.value }))} 
+                      placeholder="0.00"
+                      value={form.initialFees}
+                      onChange={(e) => setForm(f => ({ ...f, initialFees: e.target.value }))}
                     />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Price Provider Section - Unit Based Only */}
+            {/* Price Provider Section */}
             {isUnitBased && (
               <div className="space-y-3 pt-2 border-t border-border">
-                <Label className="text-sm font-medium">Live Price Provider</Label>
+                <Label className="text-sm font-medium">{t('addInv.label.priceProvider')}</Label>
                 <Select value={form.priceProvider} onValueChange={(v) => setForm(f => ({ ...f, priceProvider: v as PriceProvider, priceProviderId: '' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -379,7 +385,7 @@ export function AddInvestmentDialog() {
                 {form.priceProvider !== 'manual' && (
                   <div className="space-y-2">
                     <Label htmlFor="inv-provider-id" className="text-xs">
-                      {form.priceProvider === 'custom' ? 'JSON Price Path' : 'Provider ID'}
+                      {form.priceProvider === 'custom' ? t('addInv.label.jsonPath') : t('addInv.label.providerId')}
                     </Label>
                     <Input
                       id="inv-provider-id"
@@ -394,11 +400,11 @@ export function AddInvestmentDialog() {
 
                 {form.priceProvider === 'custom' && (
                   <div className="space-y-2">
-                    <Label htmlFor="inv-provider-url" className="text-xs">JSON Endpoint URL</Label>
+                    <Label htmlFor="inv-provider-url" className="text-xs">{t('addInv.label.jsonEndpoint')}</Label>
                     <Input
                       id="inv-provider-url"
                       type="url"
-                      placeholder="https://api.example.com/price"
+                      placeholder={t('addInv.placeholder.jsonEndpoint')}
                       value={form.priceProviderUrl}
                       onChange={(e) => setForm(f => ({ ...f, priceProviderUrl: e.target.value }))}
                       maxLength={500}
@@ -409,15 +415,15 @@ export function AddInvestmentDialog() {
 
                 {isUnitBased && form.priceProvider === 'manual' && (
                   <div className="space-y-2">
-                    <Label htmlFor="inv-price" className="text-xs">Current Price per Unit</Label>
-                    <Input 
-                      id="inv-price" 
-                      type="number" 
-                      step="0.0001" 
-                      min="0" 
-                      placeholder="0.00" 
-                      value={form.currentPrice} 
-                      onChange={(e) => setForm(f => ({ ...f, currentPrice: e.target.value }))} 
+                    <Label htmlFor="inv-price" className="text-xs">{t('addInv.label.currentPrice')}</Label>
+                    <Input
+                      id="inv-price"
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      placeholder="0.00"
+                      value={form.currentPrice}
+                      onChange={(e) => setForm(f => ({ ...f, currentPrice: e.target.value }))}
                     />
                   </div>
                 )}
@@ -426,22 +432,22 @@ export function AddInvestmentDialog() {
 
             {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="inv-notes">Notes</Label>
-              <Textarea 
-                id="inv-notes" 
-                placeholder="Optional notes…" 
-                rows={2} 
-                value={form.notes} 
-                onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} 
-                maxLength={500} 
+              <Label htmlFor="inv-notes">{t('addInv.label.notes')}</Label>
+              <Textarea
+                id="inv-notes"
+                placeholder={t('addInv.placeholder.notes')}
+                rows={2}
+                value={form.notes}
+                onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
+                maxLength={500}
               />
             </div>
 
             {/* Actions */}
             <div className="flex justify-between pt-2">
-              <Button type="button" variant="outline" onClick={() => setStep('type')}>Back</Button>
+              <Button type="button" variant="outline" onClick={() => setStep('type')}>{t('addInv.back')}</Button>
               <Button type="submit" className="gap-1.5">
-                Create <ArrowRight className="h-4 w-4" />
+                {t('addInv.create')} <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </form>

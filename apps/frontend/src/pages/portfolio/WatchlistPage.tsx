@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -20,6 +21,7 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
 };
 
 export default function WatchlistPage() {
+  const { t } = useLanguage();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const { toast } = useToast();
@@ -57,7 +59,7 @@ export default function WatchlistPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: "Removed from watchlist" });
+      toast({ title: t('watchlist.removedSuccess') });
     },
   });
 
@@ -69,14 +71,12 @@ export default function WatchlistPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Watchlist</h1>
-          <p className="text-muted-foreground mt-1">
-            Track prospective investments with target buy prices
-          </p>
+          <h1 className="text-3xl font-bold text-foreground">{t('watchlist.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('watchlist.subtitle')}</p>
         </div>
         <Button onClick={() => setAddDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add to Watchlist
+          {t('watchlist.addButton')}
         </Button>
       </div>
 
@@ -91,8 +91,12 @@ export default function WatchlistPage() {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Target className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground text-center">
-              No prospective investments yet.<br />
-              Add stocks, ETFs, or crypto you're watching.
+              {t('watchlist.empty').split('\n').map((line, i) => (
+                <span key={i}>
+                  {line}
+                  {i < t('watchlist.empty').split('\n').length - 1 && <br />}
+                </span>
+              ))}
             </p>
           </CardContent>
         </Card>
@@ -131,14 +135,14 @@ export default function WatchlistPage() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">Target Price</p>
+                       <p className="text-xs text-muted-foreground">{t('watchlist.targetPrice')}</p>
                       <p className="text-xl font-semibold text-primary">
                         {item.currency} {item.target_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                     {currentPrice != null && (
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Current</p>
+                         <p className="text-xs text-muted-foreground">{t('watchlist.currentPrice')}</p>
                         <p className="text-lg font-medium">
                           {item.currency} {currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
@@ -147,7 +151,7 @@ export default function WatchlistPage() {
                           priceDiff! > 0 ? "text-red-500" : "text-green-500"
                         )}>
                           {priceDiff! > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                          {Math.abs(priceDiff!).toFixed(1)}% {priceDiff! > 0 ? "above" : "below"} target
+                           {Math.abs(priceDiff!).toFixed(1)}% {t(priceDiff! > 0 ? 'watchlist.aboveTarget' : 'watchlist.belowTarget')}
                         </div>
                       </div>
                     )}
@@ -155,7 +159,7 @@ export default function WatchlistPage() {
 
                   {isBelowTarget && (
                     <div className="bg-green-500/10 text-green-600 dark:text-green-400 text-xs px-2 py-1 rounded text-center font-medium">
-                      ✓ Price is at or below your target!
+                      {t('watchlist.atTarget')}
                     </div>
                   )}
 
@@ -164,7 +168,7 @@ export default function WatchlistPage() {
                   )}
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground">Double-click for chart</p>
+                      <p className="text-xs text-muted-foreground">{t('watchlist.doubleClickChart')}</p>
                     <Button
                       variant="ghost"
                       size="icon"

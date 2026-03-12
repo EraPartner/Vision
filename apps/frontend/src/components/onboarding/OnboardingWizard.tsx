@@ -3,13 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
     Wallet, Upload, Tags, Sparkles, ArrowRight, ArrowLeft,
     CheckCircle2, CloudUpload, Loader2, BarChart3, Receipt,
@@ -17,15 +12,14 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
 export function useOnboarding() {
-    const [isComplete, setIsComplete] = useState(true); // Default true to avoid flash
+    const [isComplete, setIsComplete] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load from database on mount
     useEffect(() => {
         let cancelled = false;
         apiClient.getSetting(ONBOARDING_KEY)
@@ -33,7 +27,6 @@ export function useOnboarding() {
                 if (!cancelled) setIsComplete(result?.value === true);
             })
             .catch(() => {
-                // Setting not found = first run = not complete
                 if (!cancelled) setIsComplete(false);
             })
             .finally(() => {
@@ -60,15 +53,8 @@ interface OnboardingWizardProps {
     onComplete: () => void;
 }
 
-const STEPS = [
-    { key: "welcome", label: "Welcome", icon: Sparkles },
-    { key: "bank", label: "Bank Setup", icon: Wallet },
-    { key: "import", label: "Import Data", icon: Upload },
-    { key: "categories", label: "Categories", icon: Tags },
-    { key: "tour", label: "Feature Tour", icon: BarChart3 },
-] as const;
-
-type StepKey = (typeof STEPS)[number]["key"];
+const STEP_KEYS = ["welcome", "bank", "import", "categories", "tour"] as const;
+type StepKey = (typeof STEP_KEYS)[number];
 
 interface BankAdapter {
     key: string;
@@ -76,105 +62,74 @@ interface BankAdapter {
 }
 
 const SUGGESTED_CATEGORIES = [
-    { general: "FOOD", detail: "Groceries", emoji: "🛒" },
-    { general: "FOOD", detail: "Restaurants", emoji: "🍽️" },
-    { general: "HOUSING", detail: "Rent", emoji: "🏠" },
-    { general: "HOUSING", detail: "Utilities", emoji: "💡" },
-    { general: "TRANSPORT", detail: "Fuel", emoji: "⛽" },
-    { general: "TRANSPORT", detail: "Public Transport", emoji: "🚌" },
-    { general: "ENTERTAINMENT", detail: "Subscriptions", emoji: "📺" },
-    { general: "ENTERTAINMENT", detail: "Hobbies", emoji: "🎮" },
-    { general: "HEALTH", detail: "Insurance", emoji: "🏥" },
-    { general: "HEALTH", detail: "Pharmacy", emoji: "💊" },
-    { general: "INCOME", detail: "Salary", emoji: "💰" },
-    { general: "INCOME", detail: "Freelance", emoji: "💻" },
-    { general: "SAVINGS", detail: "Investments", emoji: "📈" },
-    { general: "PERSONAL", detail: "Clothing", emoji: "👕" },
-    { general: "PERSONAL", detail: "Gifts", emoji: "🎁" },
-];
-
-const FEATURES = [
-    {
-        icon: Receipt,
-        title: "Transactions",
-        desc: "View, filter, and manage all your transactions in one place",
-        path: "/transactions",
-    },
-    {
-        icon: Tags,
-        title: "Categories",
-        desc: "Organize spending with hierarchical categories",
-        path: "/categories",
-    },
-    {
-        icon: CalendarClock,
-        title: "Planned Payments",
-        desc: "Track recurring bills and upcoming payments with auto-detection",
-        path: "/planned",
-    },
-    {
-        icon: BarChart3,
-        title: "Statistics",
-        desc: "Deep analytics with pivot tables, trends, and breakdowns",
-        path: "/statistics",
-    },
-    {
-        icon: TrendingUp,
-        title: "Portfolio",
-        desc: "Track investments, stocks, crypto, and real estate",
-        path: "/portfolio",
-    },
-    {
-        icon: LineChart,
-        title: "Market Lookup",
-        desc: "Search any ticker for real-time quotes and charts",
-        path: "/portfolio/market",
-    },
-];
+    { general: "FOOD",          detail: "Groceries",        detailKey: "onboarding.cat.groceries",      emoji: "🛒" },
+    { general: "FOOD",          detail: "Restaurants",      detailKey: "onboarding.cat.restaurants",    emoji: "🍽️" },
+    { general: "HOUSING",       detail: "Rent",             detailKey: "onboarding.cat.rent",           emoji: "🏠" },
+    { general: "HOUSING",       detail: "Utilities",        detailKey: "onboarding.cat.utilities",      emoji: "💡" },
+    { general: "TRANSPORT",     detail: "Fuel",             detailKey: "onboarding.cat.fuel",           emoji: "⛽" },
+    { general: "TRANSPORT",     detail: "Public Transport", detailKey: "onboarding.cat.publicTransport",emoji: "🚌" },
+    { general: "ENTERTAINMENT", detail: "Subscriptions",    detailKey: "onboarding.cat.subscriptions",  emoji: "📺" },
+    { general: "ENTERTAINMENT", detail: "Hobbies",          detailKey: "onboarding.cat.hobbies",        emoji: "🎮" },
+    { general: "HEALTH",        detail: "Insurance",        detailKey: "onboarding.cat.insurance",      emoji: "🏥" },
+    { general: "HEALTH",        detail: "Pharmacy",         detailKey: "onboarding.cat.pharmacy",       emoji: "💊" },
+    { general: "INCOME",        detail: "Salary",           detailKey: "onboarding.cat.salary",         emoji: "💰" },
+    { general: "INCOME",        detail: "Freelance",        detailKey: "onboarding.cat.freelance",      emoji: "💻" },
+    { general: "SAVINGS",       detail: "Investments",      detailKey: "onboarding.cat.investments",    emoji: "📈" },
+    { general: "PERSONAL",      detail: "Clothing",         detailKey: "onboarding.cat.clothing",       emoji: "👕" },
+    { general: "PERSONAL",      detail: "Gifts",            detailKey: "onboarding.cat.gifts",          emoji: "🎁" },
+] as const;
 
 export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const [step, setStep] = useState<StepKey>("welcome");
-    const stepIdx = STEPS.findIndex((s) => s.key === step);
+    const stepIdx = STEP_KEYS.indexOf(step);
 
-    // Bank setup state
+    const STEPS = [
+        { key: "welcome", label: t('onboarding.step.welcome.label'), icon: Sparkles },
+        { key: "bank",    label: t('onboarding.step.bank.label'),    icon: Wallet },
+        { key: "import",  label: t('onboarding.step.import.label'),  icon: Upload },
+        { key: "categories", label: t('onboarding.step.categories.label'), icon: Tags },
+        { key: "tour",    label: t('onboarding.step.tour.label'),    icon: BarChart3 },
+    ];
+
+    const FEATURES = [
+        { icon: Receipt,      title: t('onboarding.feature.transactions.title'), desc: t('onboarding.feature.transactions.desc'), path: "/transactions" },
+        { icon: Tags,         title: t('onboarding.feature.categories.title'),   desc: t('onboarding.feature.categories.desc'),   path: "/categories" },
+        { icon: CalendarClock,title: t('onboarding.feature.planned.title'),      desc: t('onboarding.feature.planned.desc'),      path: "/planned" },
+        { icon: BarChart3,    title: t('onboarding.feature.statistics.title'),   desc: t('onboarding.feature.statistics.desc'),   path: "/statistics" },
+        { icon: TrendingUp,   title: t('onboarding.feature.portfolio.title'),    desc: t('onboarding.feature.portfolio.desc'),    path: "/portfolio" },
+        { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/portfolio/market" },
+    ];
+
     const [adapters, setAdapters] = useState<BankAdapter[]>([]);
     const [selectedBank, setSelectedBank] = useState("");
     const [adaptersLoading, setAdaptersLoading] = useState(false);
 
-    // Import state
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<{ imported: number; duplicates: number } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Category state
     const [selectedCategories, setSelectedCategories] = useState<Set<number>>(
         new Set(SUGGESTED_CATEGORIES.map((_, i) => i))
     );
     const [creatingCategories, setCreatingCategories] = useState(false);
     const [categoriesCreated, setCategoriesCreated] = useState(false);
 
-    // Load adapters
     useEffect(() => {
         if (!open) return;
         let mounted = true;
         setAdaptersLoading(true);
         apiClient.getSupportedParsers()
-            .then((res) => {
-                if (mounted) setAdapters(res.adapters || []);
-            })
+            .then((res) => { if (mounted) setAdapters(res.adapters || []); })
             .catch(() => { })
             .finally(() => { if (mounted) setAdaptersLoading(false); });
         return () => { mounted = false; };
     }, [open]);
 
-    const goNext = () => {
-        if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1].key);
-    };
-    const goBack = () => {
-        if (stepIdx > 0) setStep(STEPS[stepIdx - 1].key);
-    };
+    const goNext = () => { if (stepIdx < STEP_KEYS.length - 1) setStep(STEP_KEYS[stepIdx + 1]); };
+    const goBack = () => { if (stepIdx > 0) setStep(STEP_KEYS[stepIdx - 1]); };
 
     const handleImport = async () => {
         if (!file || !selectedBank) return;
@@ -182,9 +137,9 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
         try {
             const result = await apiClient.importCSV(file, selectedBank);
             setImportResult({ imported: result.imported, duplicates: result.duplicates });
-            toast.success(`Imported ${result.imported} transactions!`);
+            toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
         } catch (err: any) {
-            toast.error(`Import failed: ${err.message}`);
+            toast.error(t('onboarding.toast.importFailed', { msg: err.message }));
         } finally {
             setImporting(false);
         }
@@ -197,26 +152,17 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
             for (const idx of selectedCategories) {
                 const cat = SUGGESTED_CATEGORIES[idx];
                 try {
-                    await apiClient.createCategory({
-                        general: cat.general,
-                        detail: cat.detail,
-                    });
+                    await apiClient.createCategory({ general: cat.general, detail: cat.detail });
                     created++;
-                } catch {
-                    // May already exist, skip
-                }
+                } catch { /* already exists, skip */ }
             }
             setCategoriesCreated(true);
-            toast.success(`Created ${created} categories!`);
+            toast.success(t('onboarding.toast.categoriesCreated', { n: String(created) }));
         } catch (err: any) {
-            toast.error(`Failed: ${err.message}`);
+            toast.error(t('onboarding.toast.categoriesFailed', { msg: err.message }));
         } finally {
             setCreatingCategories(false);
         }
-    };
-
-    const handleFinish = () => {
-        onComplete();
     };
 
     const handleNavigate = (path: string) => {
@@ -227,7 +173,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onComplete(); }}>
             <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0 [&>button]:hidden">
-                <VisuallyHidden><DialogTitle>Setup Wizard</DialogTitle></VisuallyHidden>
+                <VisuallyHidden><DialogTitle>{t('onboarding.wizard.title')}</DialogTitle></VisuallyHidden>
                 {/* Progress header */}
                 <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
                     <div className="flex items-center justify-between mb-4">
@@ -241,50 +187,42 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
-                    {/* Step indicators */}
                     <div className="flex gap-1.5">
                         {STEPS.map((s, i) => (
                             <div
                                 key={s.key}
-                                className={cn(
-                                    "h-1.5 flex-1 rounded-full transition-colors",
-                                    i <= stepIdx ? "bg-primary" : "bg-muted"
-                                )}
+                                className={cn("h-1.5 flex-1 rounded-full transition-colors", i <= stepIdx ? "bg-primary" : "bg-muted")}
                             />
                         ))}
                     </div>
                     <div className="flex items-center gap-2 mt-3">
                         {(() => { const StepIcon = STEPS[stepIdx].icon; return <StepIcon className="h-4 w-4 text-primary" />; })()}
                         <span className="text-sm font-medium text-muted-foreground">
-                            Step {stepIdx + 1} of {STEPS.length} · {STEPS[stepIdx].label}
+                            {t('onboarding.stepOf', { n: String(stepIdx + 1), total: String(STEPS.length), label: STEPS[stepIdx].label })}
                         </span>
                     </div>
                 </div>
 
                 {/* Step content */}
                 <div className="px-6 py-6 min-h-[340px] flex flex-col">
+
                     {/* Welcome */}
                     {step === "welcome" && (
                         <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
                             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
                                 <Sparkles className="h-8 w-8 text-primary-foreground" />
                             </div>
-                            <h2 className="text-2xl font-bold text-foreground">
-                                Welcome to Vision!
-                            </h2>
-                            <p className="text-muted-foreground max-w-md">
-                                Let's get you set up in just a few steps. We'll help you connect your bank,
-                                import your first transactions, and organize your spending categories.
-                            </p>
+                            <h2 className="text-2xl font-bold text-foreground">{t('onboarding.welcome.title')}</h2>
+                            <p className="text-muted-foreground max-w-md">{t('onboarding.welcome.desc')}</p>
                             <div className="flex gap-2 mt-2">
                                 <Badge variant="secondary" className="gap-1">
-                                    <Upload className="h-3 w-3" /> Import CSV
+                                    <Upload className="h-3 w-3" /> {t('onboarding.importCSV')}
                                 </Badge>
                                 <Badge variant="secondary" className="gap-1">
-                                    <Tags className="h-3 w-3" /> Categories
+                                    <Tags className="h-3 w-3" /> {t('onboarding.step.categories.label')}
                                 </Badge>
                                 <Badge variant="secondary" className="gap-1">
-                                    <BarChart3 className="h-3 w-3" /> Analytics
+                                    <BarChart3 className="h-3 w-3" /> {t('onboarding.analytics')}
                                 </Badge>
                             </div>
                         </div>
@@ -294,10 +232,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     {step === "bank" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">Select your bank</h2>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Choose your bank so we can parse your CSV exports correctly.
-                                </p>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.bank.title')}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{t('onboarding.bank.desc')}</p>
                             </div>
                             {adaptersLoading ? (
                                 <div className="flex-1 flex items-center justify-center">
@@ -316,23 +252,15 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                                     : "border-border hover:border-primary/40"
                                             )}
                                         >
-                                            <Wallet className={cn(
-                                                "h-6 w-6",
-                                                selectedBank === adapter.key ? "text-primary" : "text-muted-foreground"
-                                            )} />
-                                            <span className={cn(
-                                                "text-sm font-medium",
-                                                selectedBank === adapter.key ? "text-foreground" : "text-muted-foreground"
-                                            )}>
+                                            <Wallet className={cn("h-6 w-6", selectedBank === adapter.key ? "text-primary" : "text-muted-foreground")} />
+                                            <span className={cn("text-sm font-medium", selectedBank === adapter.key ? "text-foreground" : "text-muted-foreground")}>
                                                 {adapter.name}
                                             </span>
                                         </button>
                                     ))}
                                 </div>
                             )}
-                            <p className="text-xs text-muted-foreground mt-auto">
-                                Don't see your bank? You can still use the custom CSV importer later.
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-auto">{t('onboarding.bank.notListed')}</p>
                         </div>
                     )}
 
@@ -340,10 +268,9 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     {step === "import" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">Import your transactions</h2>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.import.title')}</h2>
                                 <p className="text-sm text-muted-foreground mt-1">
-                                    Upload a CSV export from {selectedBank ? adapters.find(a => a.key === selectedBank)?.name || "your bank" : "your bank"}.
-                                    You can always import more later.
+                                    {t('onboarding.import.desc', { bank: selectedBank ? adapters.find(a => a.key === selectedBank)?.name || t('onboarding.import.yourBank') : t('onboarding.import.yourBank') })}
                                 </p>
                             </div>
 
@@ -353,11 +280,11 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                         <CheckCircle2 className="h-7 w-7 text-accent" />
                                     </div>
                                     <p className="text-lg font-semibold text-foreground">
-                                        {importResult.imported} transactions imported!
+                                        {t('onboarding.import.success', { n: String(importResult.imported) })}
                                     </p>
                                     {importResult.duplicates > 0 && (
                                         <p className="text-sm text-muted-foreground">
-                                            {importResult.duplicates} duplicates skipped
+                                            {t('onboarding.import.duplicates', { n: String(importResult.duplicates) })}
                                         </p>
                                     )}
                                 </div>
@@ -381,40 +308,26 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                             <>
                                                 <File className="h-8 w-8 text-primary" />
                                                 <span className="text-sm font-medium text-foreground">{file.name}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {(file.size / 1024).toFixed(1)} KB
-                                                </span>
+                                                <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} {t('common.kb')}</span>
                                             </>
                                         ) : (
                                             <>
                                                 <CloudUpload className="h-8 w-8 text-muted-foreground" />
-                                                <span className="text-sm text-muted-foreground">
-                                                    Click to select or drop your CSV file
-                                                </span>
+                                                <span className="text-sm text-muted-foreground">{t('onboarding.import.dropHint')}</span>
                                             </>
                                         )}
                                     </button>
 
                                     {file && (
-                                        <Button
-                                            onClick={handleImport}
-                                            disabled={importing || !selectedBank}
-                                            className="gap-2"
-                                        >
-                                            {importing ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Upload className="h-4 w-4" />
-                                            )}
-                                            {importing ? "Importing..." : "Import Transactions"}
+                                        <Button onClick={handleImport} disabled={importing || !selectedBank} className="gap-2">
+                                            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                            {importing ? t('onboarding.import.importing') : t('onboarding.import.button')}
                                         </Button>
                                     )}
                                 </>
                             )}
 
-                            <p className="text-xs text-muted-foreground">
-                                You can skip this step and import later from the Import page.
-                            </p>
+                            <p className="text-xs text-muted-foreground">{t('onboarding.import.skipHint')}</p>
                         </div>
                     )}
 
@@ -422,10 +335,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     {step === "categories" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">Set up categories</h2>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Select the spending categories you'd like to use. You can always add more later.
-                                </p>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.categories.title')}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{t('onboarding.categories.desc')}</p>
                             </div>
 
                             {categoriesCreated ? (
@@ -433,12 +344,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                     <div className="h-14 w-14 rounded-full bg-accent/20 flex items-center justify-center">
                                         <CheckCircle2 className="h-7 w-7 text-accent" />
                                     </div>
-                                    <p className="text-lg font-semibold text-foreground">
-                                        Categories created!
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        You can manage them anytime from the Categories page.
-                                    </p>
+                                    <p className="text-lg font-semibold text-foreground">{t('onboarding.categories.created')}</p>
+                                    <p className="text-sm text-muted-foreground">{t('onboarding.categories.manage')}</p>
                                 </div>
                             ) : (
                                 <>
@@ -450,32 +357,22 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                                     key={idx}
                                                     onClick={() => {
                                                         const next = new Set(selectedCategories);
-                                                        if (selected) next.delete(idx);
-                                                        else next.add(idx);
+                                                        if (selected) next.delete(idx); else next.add(idx);
                                                         setSelectedCategories(next);
                                                     }}
                                                     className={cn(
                                                         "flex items-center gap-2 p-2.5 rounded-lg border transition-all text-left",
-                                                        selected
-                                                            ? "border-primary bg-primary/5"
-                                                            : "border-border hover:border-primary/40"
+                                                        selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
                                                     <span className="text-base">{cat.emoji}</span>
                                                     <div className="min-w-0">
-                                                        <p className={cn(
-                                                            "text-xs font-medium truncate",
-                                                            selected ? "text-foreground" : "text-muted-foreground"
-                                                        )}>
-                                                            {cat.detail}
+                                                        <p className={cn("text-xs font-medium truncate", selected ? "text-foreground" : "text-muted-foreground")}>
+                                                            {t(cat.detailKey)}
                                                         </p>
-                                                        <p className="text-xs text-muted-foreground/60 truncate">
-                                                            {cat.general}
-                                                        </p>
+                                                        <p className="text-xs text-muted-foreground/60 truncate">{cat.general}</p>
                                                     </div>
-                                                    {selected && (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />
-                                                    )}
+                                                    {selected && <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />}
                                                 </button>
                                             );
                                         })}
@@ -487,12 +384,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                             disabled={creatingCategories || selectedCategories.size === 0}
                                             className="gap-2"
                                         >
-                                            {creatingCategories ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Tags className="h-4 w-4" />
-                                            )}
-                                            Create {selectedCategories.size} Categories
+                                            {creatingCategories ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tags className="h-4 w-4" />}
+                                            {t('onboarding.categories.create', { n: String(selectedCategories.size) })}
                                         </Button>
                                         <Button
                                             variant="ghost"
@@ -505,7 +398,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                                 }
                                             }}
                                         >
-                                            {selectedCategories.size === SUGGESTED_CATEGORIES.length ? "Deselect All" : "Select All"}
+                                            {selectedCategories.size === SUGGESTED_CATEGORIES.length ? t('onboarding.categories.deselectAll') : t('onboarding.categories.selectAll')}
                                         </Button>
                                     </div>
                                 </>
@@ -517,10 +410,8 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     {step === "tour" && (
                         <div className="flex-1 flex flex-col gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-foreground">You're all set! 🎉</h2>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Here's a quick look at what you can do with Vision.
-                                </p>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.tour.title')}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{t('onboarding.tour.desc')}</p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {FEATURES.map((feat) => (
@@ -548,24 +439,20 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     <div>
                         {stepIdx > 0 ? (
                             <Button variant="ghost" size="sm" onClick={goBack} className="gap-1.5">
-                                <ArrowLeft className="h-3.5 w-3.5" />
-                                Back
+                                <ArrowLeft className="h-3.5 w-3.5" /> {t('onboarding.back')}
                             </Button>
                         ) : (
-                            <Button variant="ghost" size="sm" onClick={onComplete}>
-                                Skip setup
-                            </Button>
+                            <Button variant="ghost" size="sm" onClick={onComplete}>{t('onboarding.skipSetup')}</Button>
                         )}
                     </div>
                     <div>
                         {step === "tour" ? (
-                            <Button onClick={handleFinish} className="gap-1.5">
-                                Go to Dashboard
-                                <ArrowRight className="h-3.5 w-3.5" />
+                            <Button onClick={onComplete} className="gap-1.5">
+                                {t('onboarding.goToDashboard')} <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         ) : (
                             <Button onClick={goNext} className="gap-1.5">
-                                {step === "welcome" ? "Get Started" : "Next"}
+                                {step === "welcome" ? t('onboarding.getStarted') : t('onboarding.nextStep')}
                                 <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         )}

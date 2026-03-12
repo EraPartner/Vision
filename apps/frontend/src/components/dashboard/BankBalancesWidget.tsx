@@ -6,6 +6,7 @@ import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--primary))",
@@ -25,6 +26,7 @@ function shortAccountName(account: string): string {
 }
 
 export function BankBalancesWidget() {
+    const { t } = useLanguage();
     const { data, isLoading, error } = useQuery({
         queryKey: ["bankBalances"],
         queryFn: () => apiClient.getBankBalances(),
@@ -36,7 +38,7 @@ export function BankBalancesWidget() {
             <Card>
                 <CardHeader className="flex flex-row items-center gap-2 pb-3">
                     <Landmark className="h-5 w-5 text-primary" />
-                    <CardTitle>Bank Account Balances</CardTitle>
+                    <CardTitle>{t('bankWidget.title')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <Skeleton className="h-24 w-full rounded-xl" />
@@ -57,11 +59,11 @@ export function BankBalancesWidget() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Landmark className="h-5 w-5 text-primary" />
-                        Bank Account Balances
+                        {t('bankWidget.title')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">Unable to load balances.</p>
+                    <p className="text-sm text-muted-foreground">{t('bankWidget.unableToLoad')}</p>
                 </CardContent>
             </Card>
         );
@@ -96,7 +98,7 @@ export function BankBalancesWidget() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
-                        Total Net Liquid Position
+                        {t('bankWidget.netPosition')}
                     </CardTitle>
                     <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10 shadow-sm">
                         <Wallet className="h-5 w-5 text-primary" />
@@ -108,7 +110,7 @@ export function BankBalancesWidget() {
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        Across {visibleAccounts.length} account{visibleAccounts.length !== 1 ? "s" : ""}
+                        {t('bankWidget.acrossAccounts', { n: visibleAccounts.length.toString() })}
                     </p>
                 </CardContent>
             </Card>
@@ -138,7 +140,7 @@ export function BankBalancesWidget() {
                                         {formatCurrency(acct.balance, "EUR")}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
-                                        {acct.transaction_count.toLocaleString()} transactions
+                                        {t('bankWidget.transactions', { n: acct.transaction_count.toLocaleString() })}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -153,9 +155,9 @@ export function BankBalancesWidget() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Landmark className="h-5 w-5 text-primary" />
-                            Balance History
+                            {t('bankWidget.balanceHistory')}
                         </CardTitle>
-                        <CardDescription>Cumulative balance over the last 12 months</CardDescription>
+                        <CardDescription>{t('bankWidget.balanceHistoryDesc')}</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={320}>

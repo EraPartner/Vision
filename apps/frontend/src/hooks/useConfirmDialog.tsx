@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,29 +44,31 @@ export function useConfirmDialog() {
     resolveRef.current = null;
   }, []);
 
+  const { t } = useLanguage();
+
   const ConfirmDialog = useCallback(
     () => (
       <AlertDialog open={open} onOpenChange={(v) => { if (!v) handleCancel(); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{options.title || "Are you sure?"}</AlertDialogTitle>
+            <AlertDialogTitle>{options.title ?? t('common.confirm')}</AlertDialogTitle>
             <AlertDialogDescription>{options.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancel}>
-              {options.cancelLabel || "Cancel"}
+              {options.cancelLabel ?? t('common.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirm}
               className={options.variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
-              {options.confirmLabel || "Continue"}
+              {options.confirmLabel ?? t('common.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     ),
-    [open, options, handleConfirm, handleCancel]
+    [open, options, handleConfirm, handleCancel, t]
   );
 
   return { confirm, ConfirmDialog };

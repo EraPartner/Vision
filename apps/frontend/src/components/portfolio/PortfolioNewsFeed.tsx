@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock } from "lucide-react";
+import { useLanguage } from '@/contexts/LanguageContext';
 import { formatDistanceToNow } from "date-fns";
 
 interface PortfolioNewsFeedProps {
@@ -12,6 +13,7 @@ interface PortfolioNewsFeedProps {
 }
 
 export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
+  const { t } = useLanguage();
   const { data, isLoading, error } = useQuery({
     queryKey: ["market-news", symbols],
     queryFn: () => apiClient.getMarketNews(symbols.length > 0 ? symbols : undefined, 25),
@@ -24,13 +26,13 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
 
   return (
     <Card className="h-full">
-      <CardHeader className="pb-3">
+          <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Newspaper className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg">Market News</CardTitle>
+          <CardTitle className="text-lg">{t('newsFeed.title')}</CardTitle>
           {articles.length > 0 && (
             <Badge variant="secondary" className="ml-auto text-xs">
-              {articles.length} articles
+              {t('newsFeed.articles', { n: String(articles.length) })}
             </Badge>
           )}
         </div>
@@ -52,13 +54,13 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
             )}
 
             {!isLoading && articles.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Newspaper className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {error ? "Unable to load news" : "No news available"}
-                </p>
-              </div>
-            )}
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Newspaper className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {error ? t('newsFeed.unableToLoad') : t('newsFeed.noNews')}
+                  </p>
+                </div>
+                )}
 
             {articles.map((article, idx) => (
               <NewsItem key={`${article.title}-${idx}`} article={article} />

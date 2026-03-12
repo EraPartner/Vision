@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContext';
 import { useOnboarding } from '@/components/onboarding/OnboardingWizard';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import {
@@ -40,24 +41,25 @@ const CURRENCIES = [
 ];
 
 const DATE_FORMATS = [
-    { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY (31/12/2024)' },
-    { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (12/31/2024)' },
-    { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (2024-12-31)' },
-    { value: 'DD.MM.YYYY', label: 'DD.MM.YYYY (31.12.2024)' },
-    { value: 'DD-MM-YYYY', label: 'DD-MM-YYYY (31-12-2024)' },
+    { value: 'DD/MM/YYYY', labelKey: 'settings.dateFormat.ddmmyyyy' },
+    { value: 'MM/DD/YYYY', labelKey: 'settings.dateFormat.mmddyyyy' },
+    { value: 'YYYY-MM-DD', labelKey: 'settings.dateFormat.yyyymmdd' },
+    { value: 'DD.MM.YYYY', labelKey: 'settings.dateFormat.ddmmyyyy2' },
+    { value: 'DD-MM-YYYY', labelKey: 'settings.dateFormat.ddmmyyyy3' },
 ];
 
 const NUMBER_FORMATS = [
-    { value: 'eu', label: '1.234,56 (European)' },
-    { value: 'us', label: '1,234.56 (US/UK)' },
-    { value: 'ch', label: "1'234.56 (Swiss)" },
-    { value: 'in', label: '1,23,456.78 (Indian)' },
+    { value: 'eu', labelKey: 'settings.numberFormat.eu' },
+    { value: 'us', labelKey: 'settings.numberFormat.us' },
+    { value: 'ch', labelKey: 'settings.numberFormat.ch' },
+    { value: 'in', labelKey: 'settings.numberFormat.in' },
 ];
 
 export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSettingsDialogProps) {
     const { settings, updateSettings, resetSettings } = useSettings();
     const { appSettings, updateAppSettings, resetAppSettings } = useAppSettings();
     const { reset: resetOnboarding } = useOnboarding();
+    const { t } = useLanguage();
 
     // Dashboard tab local state
     const [localExcludedCategories, setLocalExcludedCategories] = useState<number[]>([]);
@@ -122,7 +124,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
         });
         updateAppSettings(localAppSettings);
         onOpenChange(false);
-        toast.success('Settings saved');
+        toast.success(t('settings.saved'));
     };
 
     const handleCheckForUpdates = async () => {
@@ -131,12 +133,12 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             const result = await apiClient.checkForUpdates();
             setUpdateStatus(result);
             if (result.up_to_date) {
-                toast.success('App is up to date');
+                toast.success(t('settings.app.upToDate'));
             } else {
-                toast.info(`Update available — ${result.latest_version}`);
+                toast.info(`${t('settings.app.updateAvailable')} ${result.latest_version}`);
             }
         } catch {
-            toast.error('Failed to check for updates');
+            toast.error(t('settings.app.updateFailed'));
         } finally {
             setCheckingUpdate(false);
         }
@@ -149,17 +151,17 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             if (result === null) {
                 // Not running inside Electron — shouldn't happen since the button is
                 // only shown in Electron, but guard anyway.
-                toast.info('Updates are applied automatically when the app restarts.');
+                toast.info(t('settings.app.updateAutoApply'));
                 setApplyPhase('idle');
                 return;
             }
             if (!result.success) {
-                toast.error('Update failed', { description: result.error });
+                toast.error(t('settings.app.updateFailed'), { description: result.error });
                 setApplyPhase('idle');
                 return;
             }
             if (!result.wasNew) {
-                toast.success('Already on the latest version');
+                toast.success(t('settings.app.alreadyLatest'));
                 setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true } : null);
                 setApplyPhase('done');
                 return;
@@ -167,25 +169,25 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
             // Container was replaced with the new image; migrations ran via entrypoint.
             // Poll /api/admin/update/check until the new version is reported.
             setApplyPhase('restarting');
-            toast.success('New image pulled — waiting for the app to restart…', { duration: 10000 });
+            toast.success(t('settings.app.newImagePulled'), { duration: 10000 });
             const poll = async (attempts: number) => {
                 try {
                     const status = await apiClient.checkForUpdates();
                     setUpdateStatus(status);
                     setApplyPhase('done');
-                    toast.success('Update complete', { description: `Now running ${status.current_version}` });
+                    toast.success(t('settings.app.updateComplete'), { description: t('settings.app.nowRunning', { version: status.current_version ?? '' }) });
                 } catch {
                     if (attempts > 0) setTimeout(() => poll(attempts - 1), 2000);
                     else {
                         setApplyPhase('done');
-                        toast.info('App restarted. You may need to reload the page.');
+                        toast.info(t('settings.app.appRestarted'));
                     }
                 }
             };
             setTimeout(() => poll(20), 3000);
         } catch (err: unknown) {
-            const msg = (err as { message?: string })?.message ?? 'Update failed';
-            toast.error(msg);
+            const msg = (err as { message?: string })?.message ?? t('settings.app.updateFailedDesc');
+            toast.error(t('settings.app.updateFailed'), { description: msg });
             setApplyPhase('idle');
         }
     };
@@ -196,13 +198,13 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
         setLocalExcludedRecipients([]);
         setLocalExcludeHidden(true);
         setLocalAppSettings(defaultAppSettings);
-        toast.info('Settings reset to defaults');
+        toast.info(t('settings.resetToDefaults'));
     };
 
     const handleRestartOnboarding = () => {
         resetOnboarding();
         onOpenChange(false);
-        toast.success('Onboarding wizard will restart on next page load');
+        toast.success(t('settings.app.onboardingRestarted'));
         // Small delay then reload to trigger onboarding
         setTimeout(() => window.location.reload(), 500);
     };
@@ -229,17 +231,17 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Settings</DialogTitle>
+                    <DialogTitle>{t('settings.title')}</DialogTitle>
                     <DialogDescription>
-                        Configure your application preferences and dashboard statistics.
+                        {t('settings.description')}
                     </DialogDescription>
                 </DialogHeader>
 
                 <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
                     <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="general">General</TabsTrigger>
-                        <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-                        <TabsTrigger value="app">App</TabsTrigger>
+                        <TabsTrigger value="general">{t('settings.tab.general')}</TabsTrigger>
+                        <TabsTrigger value="dashboard">{t('settings.tab.dashboard')}</TabsTrigger>
+                        <TabsTrigger value="app">{t('settings.tab.app')}</TabsTrigger>
                     </TabsList>
 
                     {/* ── General Tab ── */}
@@ -248,7 +250,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                             <div className="space-y-6 py-4">
                                 {/* Currency */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Default Currency</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.currency')}</Label>
                                     <Select
                                         value={localAppSettings.defaultCurrency}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, defaultCurrency: v })}
@@ -263,7 +265,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Used as default for new transactions and display
+                                        {t('settings.general.currencyHint')}
                                     </p>
                                 </div>
 
@@ -271,7 +273,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Date Format */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Date Format</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.dateFormat')}</Label>
                                     <Select
                                         value={localAppSettings.dateFormat}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, dateFormat: v })}
@@ -281,7 +283,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                         </SelectTrigger>
                                         <SelectContent>
                                             {DATE_FORMATS.map((f) => (
-                                                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey as any)}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -291,7 +293,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Number Format */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Number Format</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.numberFormat')}</Label>
                                     <Select
                                         value={localAppSettings.numberFormat}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, numberFormat: v })}
@@ -301,7 +303,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                         </SelectTrigger>
                                         <SelectContent>
                                             {NUMBER_FORMATS.map((f) => (
-                                                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey as any)}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -311,7 +313,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Decimal Places */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Decimal Places</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.decimalPlaces')}</Label>
                                     <Select
                                         value={String(localAppSettings.showDecimalPlaces)}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, showDecimalPlaces: Number(v) })}
@@ -332,7 +334,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Start of Week */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Start of Week</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.startOfWeek')}</Label>
                                     <Select
                                         value={localAppSettings.startOfWeek}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, startOfWeek: v as 'monday' | 'sunday' })}
@@ -341,8 +343,8 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="monday">Monday</SelectItem>
-                                            <SelectItem value="sunday">Sunday</SelectItem>
+                                            <SelectItem value="monday">{t('settings.general.monday')}</SelectItem>
+                                            <SelectItem value="sunday">{t('settings.general.sunday')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -351,7 +353,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Page Size */}
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-semibold">Default Page Size</Label>
+                                    <Label className="text-sm font-semibold">{t('settings.general.pageSize')}</Label>
                                     <Select
                                         value={String(localAppSettings.defaultPageSize)}
                                         onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, defaultPageSize: Number(v) })}
@@ -360,14 +362,36 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="25">25 rows</SelectItem>
-                                            <SelectItem value="50">50 rows</SelectItem>
-                                            <SelectItem value="100">100 rows</SelectItem>
-                                            <SelectItem value="200">200 rows</SelectItem>
+                                            <SelectItem value="25">25 {t('settings.general.rows')}</SelectItem>
+                                            <SelectItem value="50">50 {t('settings.general.rows')}</SelectItem>
+                                            <SelectItem value="100">100 {t('settings.general.rows')}</SelectItem>
+                                            <SelectItem value="200">200 {t('settings.general.rows')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Number of items shown per page in tables
+                                        {t('settings.general.pageSizeHint')}
+                                    </p>
+                                </div>
+
+                                <Separator />
+
+                                {/* Language */}
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-semibold">{t('settings.general.language')}</Label>
+                                    <Select
+                                        value={localAppSettings.language ?? 'en'}
+                                        onValueChange={(v) => setLocalAppSettings({ ...localAppSettings, language: v as 'en' | 'nl' })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="en">{t('settings.general.lang.en')}</SelectItem>
+                                            <SelectItem value="nl">{t('settings.general.lang.nl')}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        {t('settings.general.languageHint')}
                                     </p>
                                 </div>
                             </div>
@@ -385,9 +409,9 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                 <div className="space-y-6 py-4">
                                     {/* Exclusion Scope */}
                                     <div className="space-y-3">
-                                        <h3 className="text-sm font-semibold text-foreground">Exclusion Scope</h3>
+                                        <h3 className="text-sm font-semibold text-foreground">{t('settings.dashboard.exclusionScope')}</h3>
                                         <p className="text-xs text-muted-foreground">
-                                            Choose where category and recipient exclusions are applied
+                                            {t('settings.dashboard.exclusionScopeHint')}
                                         </p>
                                         <Select
                                             value={localExclusionScope}
@@ -397,9 +421,9 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="everywhere">Everywhere (Dashboard + Statistics)</SelectItem>
-                                                <SelectItem value="dashboard">Dashboard only</SelectItem>
-                                                <SelectItem value="statistics">Statistics only</SelectItem>
+                                                <SelectItem value="everywhere">{t('settings.dashboard.scope.everywhere')}</SelectItem>
+                                                <SelectItem value="dashboard">{t('settings.dashboard.scope.dashboard')}</SelectItem>
+                                                <SelectItem value="statistics">{t('settings.dashboard.scope.statistics')}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -408,7 +432,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                     {/* General Settings */}
                                     <div className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-foreground">Exclusion Settings</h3>
+                                        <h3 className="text-sm font-semibold text-foreground">{t('settings.dashboard.exclusionSettings')}</h3>
                                         <div className="flex items-center space-x-3 rounded-lg border p-4">
                                             <Checkbox
                                                 id="exclude-hidden"
@@ -420,10 +444,10 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     htmlFor="exclude-hidden"
                                                     className="text-sm font-medium cursor-pointer"
                                                 >
-                                                    Exclude hidden categories
+                                                    {t('settings.dashboard.excludeHidden')}
                                                 </Label>
                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                    Categories marked as inactive will be excluded based on the scope above
+                                                    {t('settings.dashboard.excludeHiddenHint')}
                                                 </p>
                                             </div>
                                         </div>
@@ -434,16 +458,16 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                     {/* Categories Section */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-semibold text-foreground">Excluded Categories</h3>
+                                            <h3 className="text-sm font-semibold text-foreground">{t('settings.dashboard.excludedCategories')}</h3>
                                             <Badge variant="secondary" className="text-xs">
-                                                {localExcludedCategories.length} excluded
+                                                {localExcludedCategories.length} {t('settings.dashboard.excluded')}
                                             </Badge>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Select categories to exclude from statistics
+                                            {t('settings.dashboard.excludedCategoriesHint')}
                                         </p>
                                         <Input
-                                            placeholder="Search categories…"
+                                            placeholder={t('settings.dashboard.searchCategories')}
                                             value={categorySearch}
                                             onChange={(e) => setCategorySearch(e.target.value)}
                                             className="h-8 text-sm"
@@ -452,7 +476,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             <div className="space-y-1">
                                                 {categories.length === 0 ? (
                                                     <p className="text-sm text-muted-foreground text-center py-4">
-                                                        No categories found
+                                                        {t('settings.dashboard.noCategories')}
                                                     </p>
                                                 ) : (() => {
                                                     // Group by general, filter by search
@@ -471,7 +495,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     if (grouped.size === 0) {
                                                         return (
                                                             <p className="text-sm text-muted-foreground text-center py-4">
-                                                                No matching categories
+                                                                {t('settings.dashboard.noMatchingCategories')}
                                                             </p>
                                                         );
                                                     }
@@ -531,7 +555,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                                                     <span>{category.detail}</span>
                                                                                     {!category.active && (
                                                                                         <Badge variant="outline" className="ml-2 text-xs">
-                                                                                            Hidden
+                                                                                            {t('settings.dashboard.hidden')}
                                                                                         </Badge>
                                                                                     )}
                                                                                 </Label>
@@ -550,16 +574,16 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                     {/* Recipients Section */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-semibold text-foreground">Excluded Recipients</h3>
+                                            <h3 className="text-sm font-semibold text-foreground">{t('settings.dashboard.excludedRecipients')}</h3>
                                             <Badge variant="secondary" className="text-xs">
-                                                {localExcludedRecipients.length} excluded
+                                                {localExcludedRecipients.length} {t('settings.dashboard.excluded')}
                                             </Badge>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Select recipients to exclude from statistics
+                                            {t('settings.dashboard.excludedRecipientsHint')}
                                         </p>
                                         <Input
-                                            placeholder="Search recipients…"
+                                            placeholder={t('settings.dashboard.searchRecipients')}
                                             value={recipientSearch}
                                             onChange={(e) => setRecipientSearch(e.target.value)}
                                             className="h-8 text-sm"
@@ -573,7 +597,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     if (filtered.length === 0) {
                                                         return (
                                                             <p className="text-sm text-muted-foreground text-center py-4">
-                                                                {recipientSearch ? 'No matching recipients' : 'No recipients found'}
+                                                                {recipientSearch ? t('settings.dashboard.noMatchingRecipients') : t('settings.dashboard.noRecipients')}
                                                             </p>
                                                         );
                                                     }
@@ -601,7 +625,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                                 <span>{recipient.name}</span>
                                                                 {!recipient.active && (
                                                                     <Badge variant="outline" className="ml-2 text-xs">
-                                                                        Hidden
+                                                                        {t('settings.dashboard.hidden')}
                                                                     </Badge>
                                                                 )}
                                                             </Label>
@@ -622,15 +646,15 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                             <div className="space-y-6 py-4">
                                 {/* Restart Onboarding */}
                                 <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-foreground">Setup Wizard</h3>
+                                    <h3 className="text-sm font-semibold text-foreground">{t('settings.app.setupWizard')}</h3>
                                     <div className="flex items-center justify-between rounded-lg border p-4">
                                         <div className="flex-1">
                                             <p className="text-sm font-medium text-foreground flex items-center gap-2">
                                                 <Sparkles className="h-4 w-4 text-primary" />
-                                                Onboarding Wizard
+                                                {t('settings.app.onboardingWizard')}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                Re-run the initial setup wizard to configure banks, import data, and set up categories
+                                                {t('settings.app.onboardingWizardHint')}
                                             </p>
                                         </div>
                                         <Button
@@ -640,7 +664,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             className="ml-4 shrink-0"
                                         >
                                             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                                            Restart
+                                            {t('settings.app.restart')}
                                         </Button>
                                     </div>
                                 </div>
@@ -649,11 +673,11 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* App Updates */}
                                 <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-foreground">App Updates</h3>
+                                    <h3 className="text-sm font-semibold text-foreground">{t('settings.app.updates')}</h3>
                                     <p className="text-xs text-muted-foreground">
                                         {apiClient.isElectron()
-                                            ? 'Check for a new release and pull the latest Docker image. Database migrations run automatically on restart.'
-                                            : 'Updates are applied automatically when the desktop app restarts.'}
+                                            ? t('settings.app.updatesHintElectron')
+                                            : t('settings.app.updatesHintWeb')}
                                     </p>
 
                                     {/* Status banner */}
@@ -669,16 +693,16 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             }
                                             <div className="flex-1 min-w-0">
                                                 {updateStatus.up_to_date ? (
-                                                    <p>Running the latest version{updateStatus.current_version ? ` (${updateStatus.current_version})` : ''}.</p>
+                                                    <p>{t('settings.app.runningLatest')}{updateStatus.current_version ? ` (${updateStatus.current_version})` : ''}.</p>
                                                 ) : (
                                                     <>
                                                         <p className="font-medium">
-                                                            Version {updateStatus.latest_version} is available
-                                                            {updateStatus.current_version ? ` (current: ${updateStatus.current_version})` : ''}.
+                                                            {t('settings.app.versionAvailable', { version: updateStatus.latest_version ?? '' })}
+                                                            {updateStatus.current_version ? ` (${t('settings.app.current')} ${updateStatus.current_version})` : ''}.
                                                         </p>
                                                         {updateStatus.published_at && (
                                                             <p className="text-xs mt-0.5 opacity-80">
-                                                                Released {new Date(updateStatus.published_at).toLocaleDateString()}
+                                                                {t('settings.app.released')} {new Date(updateStatus.published_at).toLocaleDateString()}
                                                             </p>
                                                         )}
                                                         {updateStatus.release_notes && (
@@ -696,7 +720,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
-                                                    title="View release notes"
+                                                    title={t('update.releaseNotes')}
                                                 >
                                                     <ExternalLink className="h-3.5 w-3.5" />
                                                 </a>
@@ -708,7 +732,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                     {(applyPhase === 'pulling' || applyPhase === 'restarting') && (
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            {applyPhase === 'pulling' ? 'Pulling latest image…' : 'Waiting for app to restart…'}
+                                            {applyPhase === 'pulling' ? t('settings.app.pulling') : t('settings.app.restarting')}
                                         </div>
                                     )}
 
@@ -723,7 +747,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                 ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                                                 : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                                             }
-                                            Check for updates
+                                            {t('settings.app.checkForUpdates')}
                                         </Button>
 
                                         {/* Only shown inside Electron when an update is available */}
@@ -737,7 +761,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                                     ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                                                     : <Download className="h-3.5 w-3.5 mr-1.5" />
                                                 }
-                                                {applyPhase === 'restarting' ? 'Restarting…' : 'Install update'}
+                                                {applyPhase === 'restarting' ? t('settings.app.restarting2') : t('settings.app.installUpdate')}
                                             </Button>
                                         )}
                                     </div>
@@ -747,12 +771,12 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                                 {/* Reset All Settings */}
                                 <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-foreground">Reset</h3>
+                                    <h3 className="text-sm font-semibold text-foreground">{t('settings.app.reset')}</h3>
                                     <div className="flex items-center justify-between rounded-lg border border-destructive/20 p-4">
                                         <div className="flex-1">
-                                            <p className="text-sm font-medium text-foreground">Reset All Settings</p>
+                                            <p className="text-sm font-medium text-foreground">{t('settings.app.resetAll')}</p>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                Restore all preferences to their default values
+                                                {t('settings.app.resetAllHint')}
                                             </p>
                                         </div>
                                         <Button
@@ -761,7 +785,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                                             onClick={handleReset}
                                             className="ml-4 shrink-0 text-destructive hover:text-destructive"
                                         >
-                                            Reset
+                                            {t('settings.app.reset')}
                                         </Button>
                                     </div>
                                 </div>
@@ -772,10 +796,10 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
 
                 <DialogFooter className="gap-2">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('settings.cancel')}
                     </Button>
                     <Button onClick={handleSave}>
-                        Save Changes
+                        {t('settings.save')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -49,6 +50,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
   const debouncedQuery = useDebounce(searchQuery, 300);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t } = useLanguage();
 
   const { data: searchResults, isLoading: isSearching } = useQuery({
     queryKey: ["market-search", debouncedQuery],
@@ -106,10 +108,10 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
       if (!res.ok) throw new Error("Failed to add to watchlist");
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: "Added to watchlist" });
+      toast({ title: t('addWatchlist.success') });
       handleClose();
     } catch (err) {
-      toast({ title: "Error", description: "Failed to add to watchlist", variant: "destructive" });
+      toast({ title: t('addWatchlist.error'), description: t('addWatchlist.failed'), variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -127,17 +129,17 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add to Watchlist</DialogTitle>
+          <DialogTitle>{t('addWatchlist.title')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {!selectedAsset ? (
-            <div className="space-y-2">
-              <Label>Search for a stock, ETF, or crypto</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or symbol..."
+              <div className="space-y-2">
+                <Label>{t('addWatchlist.searchLabel')}</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                  placeholder={t('addWatchlist.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9"
@@ -183,34 +185,34 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                       {selectedAsset.symbol}
                     </Badge>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedAsset(null)}>
-                    Change
-                  </Button>
-                </div>
-                {quoteData && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Current price: <span className="font-medium text-foreground">${quoteData.price?.toFixed(2)}</span>
-                  </p>
-                )}
-              </div>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedAsset(null)}>
+                        {t('addWatchlist.change')}
+                      </Button>
+                    </div>
+                    {quoteData && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {t('addWatchlist.currentPrice', { price: quoteData.price?.toFixed(2) })}
+                      </p>
+                    )}
+                  </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Asset Class</Label>
+                    <Label>{t('addWatchlist.assetClass')}</Label>
                   <Select value={assetClass} onValueChange={(v) => setAssetClass(v as any)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="stock">Stock</SelectItem>
-                      <SelectItem value="etf">ETF</SelectItem>
-                      <SelectItem value="crypto">Crypto</SelectItem>
+                      <SelectItem value="stock">{t('addWatchlist.stock')}</SelectItem>
+                      <SelectItem value="etf">{t('addWatchlist.etf')}</SelectItem>
+                      <SelectItem value="crypto">{t('addWatchlist.crypto')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Currency</Label>
+                  <Label>{t('addWatchlist.currency')}</Label>
                   <Select value={currency} onValueChange={setCurrency}>
                     <SelectTrigger>
                       <SelectValue />
@@ -224,28 +226,28 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Target Buy Price</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder={quoteData ? `Current: ${quoteData.price?.toFixed(2)}` : "Enter target price"}
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <Label>{t('addWatchlist.targetPrice')}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder={quoteData ? t('addWatchlist.currentPrice', { price: quoteData.price?.toFixed(2) }) : t('addWatchlist.targetPlaceholder')}
+                    value={targetPrice}
+                    onChange={(e) => setTargetPrice(e.target.value)}
+                  />
                 {quoteData && targetPrice && (
                   <p className="text-xs text-muted-foreground">
                     {parseFloat(targetPrice) < quoteData.price
-                      ? `${((1 - parseFloat(targetPrice) / quoteData.price) * 100).toFixed(1)}% below current price`
-                      : `${((parseFloat(targetPrice) / quoteData.price - 1) * 100).toFixed(1)}% above current price`}
+                      ? t('addWatchlist.belowCurrent', { n: ((1 - parseFloat(targetPrice) / quoteData.price) * 100).toFixed(1) })
+                      : t('addWatchlist.aboveCurrent', { n: ((parseFloat(targetPrice) / quoteData.price - 1) * 100).toFixed(1) })}
                   </p>
                 )}
-              </div>
+                </div>
 
               <div className="space-y-2">
-                <Label>Notes (optional)</Label>
+                <Label>{t('addWatchlist.notesOptional')}</Label>
                 <Textarea
-                  placeholder="Why are you watching this asset?"
+                  placeholder={t('addWatchlist.notesPlaceholder')}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
@@ -258,7 +260,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                 disabled={!targetPrice || isSubmitting}
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Add to Watchlist
+                {t('addWatchlist.submit')}
               </Button>
             </>
           )}

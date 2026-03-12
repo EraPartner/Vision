@@ -6,6 +6,7 @@ import {Badge} from "@/components/ui/badge";
 import {Check, X, Link2} from "lucide-react";
 import {cn} from "@/lib/utils";
 import {useMergeRecipients} from "@/hooks/useRecipients";
+import {useLanguage} from "@/contexts/LanguageContext";
 import type {Recipient} from "@/types/api";
 
 interface MergeRecipientsDialogProps {
@@ -15,6 +16,7 @@ interface MergeRecipientsDialogProps {
 }
 
 export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRecipientsDialogProps) {
+    const { t } = useLanguage();
     const [primaryId, setPrimaryId] = useState<number | null>(null);
     const [aliasIds, setAliasIds] = useState<number[]>([]);
     const mergeMutation = useMergeRecipients();
@@ -50,11 +52,10 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Link2 className="h-5 w-5" />
-                        Merge Recipients
+                        {t('merge.title')}
                     </DialogTitle>
                     <DialogDescription>
-                        Select a primary recipient, then choose aliases to merge into it. 
-                        Transactions from aliases will display the primary recipient's name.
+                        {t('merge.description')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -62,7 +63,7 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                     {/* Step 1: Select primary */}
                     <div>
                         <label className="text-sm font-medium text-foreground mb-1 block">
-                            1. Primary Recipient
+                            {t('merge.primaryRecipient')}
                         </label>
                         {primary ? (
                             <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
@@ -76,9 +77,9 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                             </div>
                         ) : (
                             <Command className="border border-border rounded-md">
-                                <CommandInput placeholder="Search for primary recipient…" />
+                                <CommandInput placeholder={t('merge.searchPrimary')} />
                                 <CommandList className="max-h-32">
-                                    <CommandEmpty>No recipients found.</CommandEmpty>
+                                    <CommandEmpty>{t('merge.noResults')}</CommandEmpty>
                                     <CommandGroup>
                                         {availableRecipients.map(r => (
                                             <CommandItem key={r.id} value={r.name} onSelect={() => setPrimaryId(r.id)}>
@@ -95,7 +96,7 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                     {primaryId && (
                         <div>
                             <label className="text-sm font-medium text-foreground mb-1 block">
-                                2. Select Aliases ({aliasIds.length} selected)
+                                {t('merge.selectAliases', { n: String(aliasIds.length) })}
                             </label>
 
                             {aliasIds.length > 0 && (
@@ -113,9 +114,9 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                             )}
 
                             <Command className="border border-border rounded-md">
-                                <CommandInput placeholder="Search for aliases…" />
+                                <CommandInput placeholder={t('merge.searchAliases')} />
                                 <CommandList className="max-h-40">
-                                    <CommandEmpty>No recipients found.</CommandEmpty>
+                                    <CommandEmpty>{t('merge.noResults')}</CommandEmpty>
                                     <CommandGroup>
                                         {recipients
                                             .filter(r => r.id !== primaryId)
@@ -131,7 +132,7 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
                                                     </span>
                                                     {r.primary_recipient_id && (
                                                         <span className="ml-2 text-xs text-muted-foreground">
-                                                            (alias of {r.primary_recipient_name})
+                                                            {t('merge.aliasOf', { name: r.primary_recipient_name! })}
                                                         </span>
                                                     )}
                                                 </CommandItem>
@@ -145,13 +146,13 @@ export function MergeRecipientsDialog({open, onOpenChange, recipients}: MergeRec
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
-                        Cancel
+                        {t('merge.cancel')}
                     </Button>
                     <Button
                         onClick={handleMerge}
                         disabled={!primaryId || aliasIds.length === 0 || mergeMutation.isPending}
                     >
-                        {mergeMutation.isPending ? "Merging…" : `Merge ${aliasIds.length} recipient(s)`}
+                        {mergeMutation.isPending ? t('merge.merging') : t('merge.mergeCount', { n: String(aliasIds.length) })}
                     </Button>
                 </DialogFooter>
             </DialogContent>

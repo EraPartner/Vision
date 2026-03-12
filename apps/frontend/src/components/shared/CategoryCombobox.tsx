@@ -5,6 +5,7 @@ import {Button} from "@/components/ui/button";
 import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from "@/components/ui/command";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {useCategories} from "@/hooks/useCategories";
+import {useLanguage} from "@/contexts/LanguageContext";
 
 interface CategoryComboboxProps {
     value?: number | null;
@@ -14,12 +15,13 @@ interface CategoryComboboxProps {
 }
 
 export function CategoryCombobox({value, onSelect, disabled, className}: CategoryComboboxProps) {
+    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const {data} = useCategories({limit: 500, active: true});
 
     const categories = data?.items ?? [];
     const selected = categories.find((c) => c.id === value);
-    const displayLabel = selected ? `${selected.general}: ${selected.detail}` : "Select category…";
+    const displayLabel = selected ? `${selected.general}: ${selected.detail}` : t('combobox.category.placeholder');
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -37,9 +39,9 @@ export function CategoryCombobox({value, onSelect, disabled, className}: Categor
             </PopoverTrigger>
             <PopoverContent className="w-[280px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
                 <Command>
-                    <CommandInput placeholder="Search categories…" />
+                    <CommandInput placeholder={t('combobox.category.search')} />
                     <CommandList>
-                        <CommandEmpty>No categories found.</CommandEmpty>
+                        <CommandEmpty>{t('combobox.category.empty')}</CommandEmpty>
                         <CommandGroup>
                             <CommandItem
                                 value="__none__"
@@ -49,7 +51,7 @@ export function CategoryCombobox({value, onSelect, disabled, className}: Categor
                                 }}
                             >
                                 <Check className={cn("mr-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
-                                <span className="text-muted-foreground italic">None</span>
+                                <span className="text-muted-foreground italic">{t('combobox.category.none')}</span>
                             </CommandItem>
                             {categories.map((cat) => {
                                 const label = `${cat.general}: ${cat.detail}`;

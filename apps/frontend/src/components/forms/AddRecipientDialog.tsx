@@ -6,8 +6,10 @@ import {Label} from "@/components/ui/label";
 import {Textarea} from "@/components/ui/textarea";
 import {Plus, Loader2} from "lucide-react";
 import {useCreateRecipient} from "@/hooks/useRecipients";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function AddRecipientDialog() {
+    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const createMutation = useCreateRecipient();
     const [form, setForm] = useState({name: "", notes: ""});
@@ -34,27 +36,27 @@ export function AddRecipientDialog() {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> Add Recipient
+                    <Plus className="h-4 w-4" /> {t('form.addRecipient.title')}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Add Recipient</DialogTitle>
+                    <DialogTitle>{t('form.addRecipient.title')}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Name</Label>
-                        <Input id="name" placeholder="Recipient name" maxLength={200} value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
+                        <Label htmlFor="name">{t('form.addRecipient.name')}</Label>
+                        <Input id="name" placeholder={t('addRec.namePlaceholder')} maxLength={200} value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} required />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="notes">Notes (optional)</Label>
-                        <Textarea id="notes" placeholder="Additional notes..." maxLength={1000} value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
+                        <Label htmlFor="notes">{t('addRec.notesOptional')}</Label>
+                        <Textarea id="notes" placeholder={t('addRec.notesPlaceholder')} maxLength={1000} value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
                     </div>
                     <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Create
+                            {t('common.create')}
                         </Button>
                     </div>
                 </form>

@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { formatCurrency } from "@/utils/currency";
 import { Link } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function UpcomingPaymentsNotification() {
+  const { t } = useLanguage();
   const [dismissed, setDismissed] = useState(false);
 
   const { data: upcoming } = useQuery({
@@ -37,13 +39,15 @@ export function UpcomingPaymentsNotification() {
       <CalendarClock className="h-4 w-4 text-primary" />
       <AlertTitle className="flex items-center gap-2 text-primary font-semibold">
         <Bell className="h-4 w-4" />
-        {upcoming.length} upcoming payment{upcoming.length > 1 ? "s" : ""} due this week
+        {upcoming.length === 1
+          ? t('upcoming.countSingle', { count: String(upcoming.length) })
+          : t('upcoming.countPlural', { count: String(upcoming.length) })}
       </AlertTitle>
       <AlertDescription className="mt-2 space-y-1">
         {upcoming.slice(0, 5).map((pt) => (
           <div key={pt.id} className="flex items-center justify-between text-sm">
             <span className="font-medium">
-              {pt.memo || pt.recipient_name || "Unnamed"}
+              {pt.memo || pt.recipient_name || t('upcoming.unnamed')}
             </span>
             <span className="flex items-center gap-3 text-muted-foreground">
               <span>{pt.planned_date?.split("T")[0]}</span>
@@ -55,7 +59,7 @@ export function UpcomingPaymentsNotification() {
         ))}
         {upcoming.length > 5 && (
           <p className="text-xs text-muted-foreground">
-            +{upcoming.length - 5} more
+            {t('upcoming.more', { n: String(upcoming.length - 5) })}
           </p>
         )}
         <div className="mt-2">
@@ -63,7 +67,7 @@ export function UpcomingPaymentsNotification() {
             to="/planned"
             className="text-xs text-primary hover:underline font-medium"
           >
-            View all planned payments →
+            {t('upcoming.viewAllLink')}
           </Link>
         </div>
       </AlertDescription>

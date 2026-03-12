@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ArrowUpCircle, Download, ExternalLink, Loader2 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -26,6 +27,7 @@ interface UpdateStatus {
 type ApplyPhase = "idle" | "pulling" | "restarting" | "done";
 
 export function UpdateNotification() {
+    const { t } = useLanguage();
     const [status, setStatus] = useState<UpdateStatus | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [phase, setPhase] = useState<ApplyPhase>("idle");
@@ -59,21 +61,20 @@ export function UpdateNotification() {
             const result = await apiClient.triggerDockerUpdate();
 
             if (result === null) {
-                // Running in a browser, not inside Electron — update is automatic on restart
-                toast.info("Close and reopen the app to apply the update.");
+                toast.info(t('update.reloadHint'));
                 setPhase("idle");
                 setDialogOpen(false);
                 return;
             }
 
             if (!result.success) {
-                toast.error("Update failed", { description: result.error });
+                toast.error(t('update.failed'), { description: result.error });
                 setPhase("idle");
                 return;
             }
 
             if (!result.wasNew) {
-                toast.success("Already on the latest version");
+                toast.success(t('update.alreadyLatest'));
                 setPhase("done");
                 await check();
                 setDialogOpen(false);
@@ -89,8 +90,8 @@ export function UpdateNotification() {
                     setStatus(updated);
                     setPhase("done");
                     setDialogOpen(false);
-                    toast.success("Update complete", {
-                        description: `Now running ${updated.current_version}`,
+                    toast.success(t('update.complete'), {
+                        description: t('update.nowRunning', { version: updated.current_version }),
                         duration: 6000,
                     });
                 } catch {
@@ -99,14 +100,14 @@ export function UpdateNotification() {
                     } else {
                         setPhase("done");
                         setDialogOpen(false);
-                        toast.info("App updated. Reload the page if anything looks off.");
+                        toast.info(t('update.appUpdated'));
                     }
                 }
             };
             setTimeout(() => poll(20), 3000);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Update failed";
-            toast.error(msg);
+            const msg = err instanceof Error ? err.message : t('update.failed');
+            toast.error(t('update.failed'), { description: msg });
             setPhase("idle");
         }
     };
@@ -124,10 +125,10 @@ export function UpdateNotification() {
                 size="sm"
                 onClick={() => { setPhase("idle"); setDialogOpen(true); }}
                 className="gap-1.5 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-medium text-xs h-8 px-2.5"
-                title={`Version ${status.latest_version} is available`}
+                title={t('update.versionAvailable', { version: status.latest_version ?? '' })}
             >
                 <ArrowUpCircle className="h-4 w-4" />
-                <span className="hidden sm:inline">Update available</span>
+                <span className="hidden sm:inline">{t('update.badge')}</span>
             </Button>
 
             {/* Update dialog */}
@@ -136,25 +137,23 @@ export function UpdateNotification() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <ArrowUpCircle className="h-5 w-5 text-amber-500" />
-                            Update available
+                            {t('update.title')}
                         </DialogTitle>
                         <DialogDescription>
-                            Version{" "}
-                            <span className="font-semibold text-foreground">{status.latest_version}</span>{" "}
-                            is available
-                            {status.current_version ? ` (current: ${status.current_version})` : ""}.
+                            {t('update.versionAvailable', { version: status.latest_version ?? '' })}
+                            {status.current_version ? ` ${t('update.current', { version: status.current_version })}` : ""}
                         </DialogDescription>
                     </DialogHeader>
 
                     {status.published_at && (
                         <p className="text-xs text-muted-foreground -mt-2">
-                            Released {new Date(status.published_at).toLocaleDateString()}
+                            {t('update.released')} {new Date(status.published_at).toLocaleDateString()}
                         </p>
                     )}
 
                     {status.release_notes && (
                         <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-                            <p className="text-xs text-muted-foreground mb-1">What's new</p>
+                            <p className="text-xs text-muted-foreground mb-1">{t('update.whatsNew')}</p>
                             <p className="text-foreground whitespace-pre-line line-clamp-6">
                                 {status.release_notes}
                             </p>
@@ -165,9 +164,7 @@ export function UpdateNotification() {
                     {isApplying && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            {phase === "pulling"
-                                ? "Pulling latest image…"
-                                : "Restarting — applying database migrations…"}
+                            {phase === "pulling" ? t('update.pulling') : t('update.restarting')}
                         </div>
                     )}
 
@@ -181,7 +178,7 @@ export function UpdateNotification() {
                             >
                                 <a href={status.html_url} target="_blank" rel="noopener noreferrer">
                                     <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                                    Release notes
+                                    {t('update.releaseNotes')}
                                 </a>
                             </Button>
                         )}
@@ -190,13 +187,13 @@ export function UpdateNotification() {
                             onClick={() => setDialogOpen(false)}
                             disabled={isApplying}
                         >
-                            Later
+                            {t('update.later')}
                         </Button>
                         <Button onClick={handleInstall} disabled={isApplying} className="gap-2">
                             {isApplying ? (
-                                <><Loader2 className="h-4 w-4 animate-spin" /> {phase === "restarting" ? "Restarting…" : "Pulling…"}</>
+                                <><Loader2 className="h-4 w-4 animate-spin" /> {phase === "restarting" ? t('update.restarting') : t('update.pulling')}</>
                             ) : (
-                                <><Download className="h-4 w-4" /> Install update</>
+                                <><Download className="h-4 w-4" /> {t('update.install')}</>
                             )}
                         </Button>
                     </DialogFooter>

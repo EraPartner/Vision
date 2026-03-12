@@ -6,6 +6,34 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+// Small i18n loader for main process dialogs
+const I18N_DIR = path.join(__dirname, 'i18n');
+function loadI18n() {
+  const locale = (app && app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en';
+  const lang = locale && locale.startsWith('nl') ? 'nl' : 'en';
+  try {
+    const p = path.join(I18N_DIR, `${lang}.json`);
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  } catch (e) {
+    // fallthrough
+  }
+  try {
+    const p2 = path.join(I18N_DIR, 'en.json');
+    if (fs.existsSync(p2)) return JSON.parse(fs.readFileSync(p2, 'utf8'));
+  } catch (e) {}
+  return {};
+}
+
+const i18n = loadI18n();
+function t(key, vars) {
+  let txt = i18n[key] || key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) txt = txt.replace(`{${k}}`, v);
+  }
+  return txt;
+}
 
 // electron-updater is a production dependency — loaded only in packaged builds
 // to avoid errors during development where it isn't installed via npm.
@@ -86,9 +114,9 @@ async function resolveWorkDir() {
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',
-      buttons: ['OK'],
+      buttons: [t('common.ok')],
       title: APP_NAME,
-      message: 'Failed to prepare embedded resources.',
+      message: t('app.failedPrepareEmbedded'),
       detail: String(err),
     });
     app.quit();
@@ -247,29 +275,29 @@ function setupAutoUpdater() {
   autoUpdater.on('update-available', async (info) => {
     const { response } = await dialog.showMessageBox({
       type: 'info',
-      buttons: ['Download update', 'Later'],
+      buttons: [t('update.download'), t('update.later')],
       defaultId: 0,
       cancelId: 1,
-      title: `${APP_NAME} update available`,
-      message: `Version ${info.version} is available.`,
-      detail: 'The update will download in the background and install when you next quit Vision.',
+      title: t('update.availableTitle', { app: APP_NAME }),
+      message: t('update.versionAvailable', { version: info.version }),
+      detail: t('update.detailDownload'),
     });
 
     if (response === 0) {
       autoUpdater.downloadUpdate();
-      notify('Downloading Vision update…');
+      notify(t('update.downloading'));
     }
   });
 
   autoUpdater.on('update-downloaded', async (info) => {
     const { response } = await dialog.showMessageBox({
       type: 'info',
-      buttons: ['Restart now', 'Later'],
+      buttons: [t('update.restartNow'), t('update.later')],
       defaultId: 0,
       cancelId: 1,
-      title: `${APP_NAME} ready to update`,
-      message: `Version ${info.version} has been downloaded.`,
-      detail: 'Restart Vision to apply the update.',
+      title: t('update.readyTitle', { app: APP_NAME }),
+      message: t('update.versionDownloaded', { version: info.version }),
+      detail: t('update.detailRestart'),
     });
 
     if (response === 0) {
@@ -292,12 +320,12 @@ function setupAutoUpdater() {
 // ── Docker image update (called after new Electron version detected) ──────────
 async function applyDockerImageUpdate(cwd, extraFiles = []) {
   try {
-    notify('Pulling latest Vision image…');
+    notify(t('app.pullingLatestImage'));
     const wasNew = await pullLatestImage(cwd);
     if (wasNew) {
       await restartAppContainer(cwd, extraFiles);
       await pollHealth().catch(() => {});
-      notify('Vision image updated and restarted.');
+      notify(t('app.imageUpdated'));
     }
   } catch (err) {
     console.warn('Docker image update failed (non-fatal):', err);
@@ -398,11 +426,11 @@ async function launch() {
   if (!(await checkDockerInstalled(workDir))) {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
-      buttons: ['Open docker.com', 'Cancel'],
+      buttons: [t('app.openDockerSite'), t('common.cancel')],
       defaultId: 0,
       title: APP_NAME,
-      message: 'Docker Desktop is required but is not installed.',
-      detail: 'Please download and install Docker Desktop, then relaunch Vision.',
+      message: t('app.dockerRequired'),
+      detail: t('app.dockerRequiredDetail'),
     });
     if (response === 0) shell.openExternal('https://www.docker.com/products/docker-desktop/');
     app.quit();
@@ -413,11 +441,11 @@ async function launch() {
   if (!(await checkDockerRunning(workDir))) {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
-      buttons: ['Open Docker Desktop', 'Cancel'],
+      buttons: [t('app.openDockerApp'), t('common.cancel')],
       defaultId: 0,
       title: APP_NAME,
-      message: 'Docker Desktop is installed but not running.',
-      detail: 'Please open Docker Desktop, wait for the whale icon to appear in the menu bar, then relaunch Vision.',
+      message: t('app.dockerNotRunning'),
+      detail: t('app.dockerNotRunningDetail'),
     });
     if (response === 0) shell.openPath('/Applications/Docker.app');
     app.quit();
@@ -430,10 +458,10 @@ async function launch() {
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',
-      buttons: ['OK'],
+      buttons: [t('common.ok')],
       title: APP_NAME,
-      message: 'Failed to start Vision.',
-      detail: `Check Docker Desktop for logs.\n\n${err}`,
+      message: t('app.failedStart'),
+      detail: `${t('app.checkDockerLogs')}\n\n${String(err)}`,
     });
     app.quit();
     return;
@@ -443,14 +471,14 @@ async function launch() {
   try {
     await pollHealth();
     createWindow();
-    notify('Vision is running.');
+    notify(t('app.running'));
   } catch (_) {
     await dialog.showMessageBox({
       type: 'warning',
-      buttons: ['OK'],
+      buttons: [t('common.ok')],
       title: APP_NAME,
-      message: 'App is taking longer than expected to start.',
-      detail: `Try opening ${APP_URL} in your browser in a moment, or check Docker Desktop for logs.`,
+      message: t('app.startSlow'),
+      detail: t('app.startSlowDetail', { url: APP_URL }),
     });
     createWindow();
   }
@@ -470,7 +498,7 @@ app.on('will-quit', (e) => {
   stopContainers(workDir, overrideFiles)
     .catch((err) => console.error('docker compose down failed:', err))
     .finally(() => {
-      notify('Vision has been stopped.');
+      notify(t('app.stopped'));
       app.exit(0);
     });
 });

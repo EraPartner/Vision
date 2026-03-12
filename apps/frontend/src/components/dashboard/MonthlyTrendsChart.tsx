@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { TrendingUp } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MonthlyTrendsChartProps {
   data: Array<{
@@ -17,11 +18,12 @@ interface MonthlyTrendsChartProps {
 }
 
 export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChartProps) {
+  const { t } = useLanguage();
   // Transform data for the chart
   const chartData = data.map((monthData) => {
     const date = new Date(monthData.year, monthData.month - 1, 1);
-    const monthName = date.toLocaleDateString("en-US", { month: "short" });
-    const year = date.toLocaleDateString("en-US", { year: "2-digit" });
+    const monthName = date.toLocaleDateString(undefined, { month: "short" });
+    const year = date.toLocaleDateString(undefined, { year: "2-digit" });
 
     return {
       month: `${monthName} ${year}`,
@@ -70,7 +72,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             }}
             formatter={(value: number, name: string) => {
               const formattedValue = `€${value.toFixed(2)}`;
-              const label = name === "income" ? "Income" : name === "spending" ? "Spending" : "Transactions";
+              const label = name === "income" ? t('monthlyTrends.income') : name === "spending" ? t('monthlyTrends.spending') : t('monthlyTrends.transactions');
               return [formattedValue, label];
             }}
             labelStyle={{ fontWeight: "600", marginBottom: "4px" }}
@@ -79,7 +81,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             verticalAlign="top"
             height={36}
             iconType="square"
-            formatter={(value) => (value === "income" ? "Income" : "Spending")}
+            formatter={(value) => (value === "income" ? t('monthlyTrends.income') : t('monthlyTrends.spending'))}
           />
           <Bar dataKey="income" fill="url(#incomeGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} />
           <Bar dataKey="spending" fill="url(#spendingGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} />
@@ -90,14 +92,14 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
         <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/10 border border-accent/30">
           <div className="w-3 h-3 rounded-full flex-shrink-0 bg-accent"></div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-accent">Total Income</p>
+            <p className="text-xs font-medium text-accent">{t('monthlyTrends.totalIncome')}</p>
             <p className="text-sm font-bold text-accent">€{totalIncome.toFixed(2)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
           <div className="w-3 h-3 rounded-full flex-shrink-0 bg-destructive"></div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-destructive">Total Spending</p>
+            <p className="text-xs font-medium text-destructive">{t('monthlyTrends.totalSpending')}</p>
             <p className="text-sm font-bold text-destructive">€{totalSpending.toFixed(2)}</p>
           </div>
         </div>
@@ -118,9 +120,9 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             <TrendingUp className="h-6 w-6" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-xl">6-Month Trends</CardTitle>
+            <CardTitle className="text-xl">{t('monthlyTrends.title')}</CardTitle>
             <CardDescription className="text-base">
-              Income vs Spending over the last 6 months
+              {t('monthlyTrends.desc')}
             </CardDescription>
           </div>
         </div>

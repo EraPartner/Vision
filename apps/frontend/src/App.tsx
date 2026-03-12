@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
-import { AppSettingsProvider } from "@/contexts/AppSettingsContext";
+import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -52,25 +53,38 @@ function PageLoader() {
     );
 }
 
+// Bridge: reads language from AppSettings and provides it to LanguageContext
+function LanguageBridge({ children }: { children: React.ReactNode }) {
+    const { appSettings, updateAppSettings } = useAppSettings();
+    const language: Language = (appSettings.language as Language) ?? 'en';
+    const setLanguage = (lang: Language) => updateAppSettings({ language: lang });
+    return (
+        <LanguageProvider language={language} setLanguage={setLanguage}>
+            {children}
+        </LanguageProvider>
+    );
+}
+
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
             <ThemeProvider>
                 <SettingsProvider>
                     <AppSettingsProvider>
-                        <TooltipProvider>
-                            <ErrorBoundary>
-                                <Toaster />
-                                <Sonner />
-                                <BrowserRouter
-                                    future={{
-                                        v7_startTransition: true,
-                                        v7_relativeSplatPath: true,
-                                    }}
-                                >
-                                    <AppLayout>
-                                        <Suspense fallback={<PageLoader />}>
-                                            <Routes>
+                        <LanguageBridge>
+                            <TooltipProvider>
+                                <ErrorBoundary>
+                                    <Toaster />
+                                    <Sonner />
+                                    <BrowserRouter
+                                        future={{
+                                            v7_startTransition: true,
+                                            v7_relativeSplatPath: true,
+                                        }}
+                                    >
+                                        <AppLayout>
+                                            <Suspense fallback={<PageLoader />}>
+                                                <Routes>
                                                 {/* Budgeting */}
                                                 <Route path="/" element={<DashboardPage />} />
                                                 <Route path="/transactions" element={<TransactionsPage />} />
@@ -92,12 +106,13 @@ const App = () => {
                                                 <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
                                                 <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
                                                 <Route path="*" element={<NotFound />} />
-                                            </Routes>
-                                        </Suspense>
-                                    </AppLayout>
-                                </BrowserRouter>
-                            </ErrorBoundary>
-                        </TooltipProvider>
+                                                </Routes>
+                                            </Suspense>
+                                        </AppLayout>
+                                    </BrowserRouter>
+                                </ErrorBoundary>
+                            </TooltipProvider>
+                        </LanguageBridge>
                     </AppSettingsProvider>
                 </SettingsProvider>
             </ThemeProvider>

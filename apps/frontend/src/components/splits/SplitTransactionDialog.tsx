@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useCreateSplits } from "@/hooks/useSplits";
 import { Split, Plus, Trash2, Users } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { formatCurrency } from "@/utils/currency";
 
 interface SplitEntry {
@@ -30,6 +31,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     ]);
     const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
     const createSplits = useCreateSplits();
+    const { t } = useLanguage();
 
     const absAmount = Math.abs(transactionAmount);
 
@@ -71,7 +73,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Split transaction">
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title={t('splitDialog.buttonTitle')}>
                     <Users className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
@@ -81,10 +83,10 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Split className="h-5 w-5" />
-                        Split Transaction
+                        {t('splitDialog.buttonTitle')}
                     </DialogTitle>
                     <p className="text-sm text-muted-foreground">
-                        Total: {formatCurrency(absAmount, transactionCurrency)}
+                        {t('splitDialog.total', { amount: formatCurrency(absAmount, transactionCurrency) })}
                     </p>
                 </DialogHeader>
 
@@ -96,21 +98,20 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                             size="sm"
                             onClick={() => setSplitType("equal")}
                         >
-                            Equal Split
+                            {t('splitDialog.equalSplit')}
                         </Button>
                         <Button
                             variant={splitType === "custom" ? "default" : "outline"}
                             size="sm"
                             onClick={() => setSplitType("custom")}
                         >
-                            Custom Amounts
+                            {t('splitDialog.customAmounts')}
                         </Button>
                     </div>
 
                     {splitType === "equal" && validEntries.length > 0 && (
                         <div className="text-sm text-muted-foreground rounded-md bg-muted p-3">
-                            Each person pays: <span className="font-semibold text-foreground">{formatCurrency(equalShare, transactionCurrency)}</span>
-                            {" "}({totalPeople} people including you)
+                            {t('splitDialog.eachPays', { amount: formatCurrency(equalShare, transactionCurrency), n: totalPeople })}
                         </div>
                     )}
 
@@ -129,13 +130,13 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                                         <Input
                                             type="number"
                                             step="0.01"
-                                            placeholder="Amount owed"
+                                            placeholder={t('splitDialog.amountOwed')}
                                             value={entry.amount}
                                             onChange={(e) => updateEntry(idx, "amount", e.target.value)}
                                         />
                                     )}
                                     <Input
-                                        placeholder="Note (optional)"
+                                        placeholder={t('splitDialog.noteOptional')}
                                         value={entry.note}
                                         onChange={(e) => updateEntry(idx, "note", e.target.value)}
                                     />
@@ -151,23 +152,23 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                     </div>
 
                     <Button variant="outline" size="sm" onClick={addEntry} className="gap-1.5">
-                        <Plus className="h-4 w-4" /> Add Person
+                        <Plus className="h-4 w-4" /> {t('splitDialog.addPerson')}
                     </Button>
 
                     {splitType === "custom" && validEntries.length > 0 && (
                         <p className="text-sm text-muted-foreground">
-                            Others owe: {formatCurrency(customTotal, transactionCurrency)} of {formatCurrency(absAmount, transactionCurrency)}
+                            {t('splitDialog.othersOwe', { x: formatCurrency(customTotal, transactionCurrency), total: formatCurrency(absAmount, transactionCurrency) })}
                         </p>
                     )}
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                     <Button
                         onClick={handleSubmit}
                         disabled={validEntries.length === 0 || createSplits.isPending}
                     >
-                        {createSplits.isPending ? "Splitting..." : "Split"}
+                        {createSplits.isPending ? t('splitDialog.splitting') : t('splitDialog.split')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

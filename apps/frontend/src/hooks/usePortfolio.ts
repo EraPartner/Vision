@@ -8,6 +8,7 @@ import type {
 } from '@/types/api';
 import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
 import { toast } from 'sonner';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ---- queries ----
 
@@ -144,6 +145,7 @@ function calculateProjectedAnnualInterest(principal: number, interestRate: numbe
 
 export function usePortfolio() {
   const queryClient = useQueryClient();
+  const { t } = useLanguage();
   const { data: invData } = useInvestmentsQuery();
   const investments = invData?.items ?? [];
   const investmentIds = useMemo(() => investments.map((i) => i.id), [investments]);
@@ -156,36 +158,36 @@ export function usePortfolio() {
 
   // ---- mutations ----
 
-  const addInvestmentMutation = useMutation({
+    const addInvestmentMutation = useMutation({
     mutationFn: (data: InvestmentCreate) => apiClient.createInvestment(data),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) => toast.error(`Failed to create investment: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.createInvestmentFailedTitle'), { description: err.message }),
+    });
 
-  const updateInvestmentMutation = useMutation({
+    const updateInvestmentMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: InvestmentUpdate }) => apiClient.updateInvestment(id, data),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) => toast.error(`Failed to update investment: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.updateInvestmentFailedTitle'), { description: err.message }),
+    });
 
-  const deleteInvestmentMutation = useMutation({
+    const deleteInvestmentMutation = useMutation({
     mutationFn: (id: number) => apiClient.deleteInvestment(id),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) => toast.error(`Failed to delete investment: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.deleteInvestmentFailedTitle'), { description: err.message }),
+    });
 
-  const addTxnMutation = useMutation({
+    const addTxnMutation = useMutation({
     mutationFn: ({ investmentId, data }: { investmentId: number; data: PortfolioTransactionCreate }) =>
       apiClient.createPortfolioTransaction(investmentId, data),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) => toast.error(`Failed to record transaction: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.recordTxnFailedTitle'), { description: err.message }),
+    });
 
-  const deleteTxnMutation = useMutation({
+    const deleteTxnMutation = useMutation({
     mutationFn: (id: number) => apiClient.deletePortfolioTransaction(id),
     onSuccess: () => invalidateAll(),
-    onError: (err: Error) => toast.error(`Failed to delete transaction: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.deleteTxnFailedTitle'), { description: err.message }),
+    });
 
   // ---- wrapper functions (keep same interface for pages) ----
 
@@ -223,14 +225,14 @@ export function usePortfolio() {
     deleteTxnMutation.mutate(id);
   }, [deleteTxnMutation]);
 
-  const refreshPricesMutation = useMutation({
+    const refreshPricesMutation = useMutation({
     mutationFn: () => apiClient.refreshInvestmentPrices(),
     onSuccess: (data) => {
       invalidateAll();
-      toast.success(`Updated prices for ${data.updated} investment(s)`);
+      toast.success(t('portfolio.refreshedPrices', { n: String(data.updated) }));
     },
-    onError: (err: Error) => toast.error(`Failed to refresh prices: ${err.message}`),
-  });
+    onError: (err: Error) => toast.error(t('portfolio.refreshPricesFailedTitle'), { description: err.message }),
+    });
 
   const refreshPrices = useCallback(() => {
     refreshPricesMutation.mutate();

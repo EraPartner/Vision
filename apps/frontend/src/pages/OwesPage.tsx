@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useOwedSummary, useOwedByRecipient, useRecordPayment, useSettleSplit, useDeleteSplit } from "@/hooks/useSplits";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,14 @@ export default function OwesPage() {
     const { data: summary, isLoading } = useOwedSummary();
     const [selectedRecipient, setSelectedRecipient] = useState<{ id: number; name: string } | null>(null);
 
+    const { t } = useLanguage();
+
     if (isLoading) {
         return (
             <div className="space-y-8 animate-in">
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground">Who Owes You</h2>
-                    <p className="text-muted-foreground mt-1">Track shared expenses and payments</p>
+                    <h2 className="text-3xl font-bold text-foreground">{t('owesPage.title')}</h2>
+                    <p className="text-muted-foreground mt-1">{t('owesPage.subtitle')}</p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
@@ -40,20 +43,20 @@ export default function OwesPage() {
     return (
         <div className="space-y-8 animate-in">
             <div>
-                <h2 className="text-3xl font-bold text-foreground">Who Owes You</h2>
-                <p className="text-muted-foreground mt-1">Track shared expenses and payments</p>
+                <h2 className="text-3xl font-bold text-foreground">{t('owesPage.title')}</h2>
+                <p className="text-muted-foreground mt-1">{t('owesPage.subtitle')}</p>
             </div>
 
             {totalOwed > 0 && (
                 <Card className="bg-primary/5 border-primary/20">
                     <CardContent className="pt-6">
                         <div className="text-center">
-                            <p className="text-sm text-muted-foreground">Total Outstanding</p>
+                            <p className="text-sm text-muted-foreground">{t('owesPage.totalOutstanding')}</p>
                             <p className="text-3xl font-bold text-primary mt-1">
                                 {formatCurrency(totalOwed, "EUR")}
                             </p>
                             <p className="text-sm text-muted-foreground mt-1">
-                                from {items.length} {items.length === 1 ? "person" : "people"}
+                                {items.length === 1 ? t('owesPage.fromPerson', { n: items.length }) : t('owesPage.fromPeople', { n: items.length })}
                             </p>
                         </div>
                     </CardContent>
@@ -64,9 +67,9 @@ export default function OwesPage() {
                 <Card>
                     <CardContent className="py-12 text-center">
                         <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-foreground mb-1">No outstanding debts</p>
+                        <p className="text-sm font-medium text-foreground mb-1">{t('owesPage.noDebts')}</p>
                         <p className="text-xs text-muted-foreground">
-                            Split a transaction to start tracking who owes you
+                            {t('owesPage.splitToTrack')}
                         </p>
                     </CardContent>
                 </Card>
@@ -83,20 +86,20 @@ export default function OwesPage() {
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base flex items-center justify-between">
                                         <span>{item.recipient_name}</span>
-                                        <Badge variant="secondary">{item.split_count} splits</Badge>
+                                        <Badge variant="secondary">{t('owesPage.splits', { n: item.split_count })}</Badge>
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Remaining</span>
+                                        <span className="text-muted-foreground">{t('owesPage.remaining')}</span>
                                         <span className="font-semibold text-primary">
                                             {formatCurrency(item.remaining, "EUR")}
                                         </span>
                                     </div>
                                     <Progress value={progress} className="h-2" />
                                     <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span>Paid: {formatCurrency(item.total_paid, "EUR")}</span>
-                                        <span>Total: {formatCurrency(item.total_owed, "EUR")}</span>
+                                        <span>{t('owesPage.paid', { amount: formatCurrency(item.total_paid, "EUR") })}</span>
+                                        <span>{t('owesPage.totalLabel', { amount: formatCurrency(item.total_owed, "EUR") })}</span>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -136,7 +139,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                 </Button>
                 <div>
                     <h2 className="text-2xl font-bold text-foreground">{recipient.name}</h2>
-                    <p className="text-muted-foreground text-sm">Outstanding splits</p>
+                    <p className="text-muted-foreground text-sm">{t('owesPage.outstandingSplits')}</p>
                 </div>
             </div>
 
@@ -147,7 +150,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
             ) : items.length === 0 ? (
                 <Card>
                     <CardContent className="py-8 text-center">
-                        <p className="text-sm text-muted-foreground">All settled! 🎉</p>
+                        <p className="text-sm text-muted-foreground">{t('owesPage.allSettled')}</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -161,14 +164,14 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                         <div className="flex-1 space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium text-foreground">
-                                                    {split.transaction_memo || "Transaction"}
+                                                    {split.transaction_memo || t('owesPage.transaction')}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {split.transaction_date?.split("T")[0]}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-muted-foreground">
-                                                Original: {formatCurrency(Math.abs(split.transaction_amount), split.transaction_currency || "EUR")}
+                                                {t('owesPage.original', { amount: formatCurrency(Math.abs(split.transaction_amount), split.transaction_currency || "EUR") })}
                                                 {split.note && ` · ${split.note}`}
                                             </p>
                                             <div className="flex items-center gap-3 mt-2">
@@ -184,21 +187,21 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                             </span>
                                             <Button
                                                 variant="ghost" size="icon" className="h-8 w-8 text-accent hover:text-accent"
-                                                title="Record payment"
+                                                title={t('owesPage.recordPayment')}
                                                 onClick={() => { setPayDialog({ splitId: split.id, remaining: split.remaining }); setPayAmount(String(split.remaining)); }}
                                             >
                                                 <DollarSign className="h-4 w-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-accent"
-                                                title="Mark as settled"
+                                                title={t('owesPage.markSettled')}
                                                 onClick={() => settleSplit.mutate(split.id)}
                                             >
                                                 <Check className="h-4 w-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                title="Delete split"
+                                                title={t('owesPage.deleteSplit')}
                                                 onClick={() => deleteSplit.mutate(split.id)}
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -216,29 +219,29 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
             <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Record Payment</DialogTitle>
+                        <DialogTitle>{t('owesPage.recordDialog.title')}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3">
                         <div>
-                            <label className="text-sm text-muted-foreground">Amount</label>
+                            <label className="text-sm text-muted-foreground">{t('owesPage.recordDialog.amount')}</label>
                             <Input
                                 type="number"
                                 step="0.01"
                                 value={payAmount}
                                 onChange={(e) => setPayAmount(e.target.value)}
-                                placeholder="Payment amount"
+                                placeholder={t('owesPage.recordDialog.placeholder')}
                             />
                             {payDialog && (
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Remaining: {formatCurrency(payDialog.remaining, "EUR")}
+                                    {t('owesPage.recordDialog.remaining', { amount: formatCurrency(payDialog.remaining, "EUR") })}
                                 </p>
                             )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setPayDialog(null)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setPayDialog(null)}>{t('owesPage.recordDialog.cancel')}</Button>
                         <Button onClick={handlePay} disabled={recordPayment.isPending}>
-                            {recordPayment.isPending ? "Recording..." : "Record Payment"}
+                            {recordPayment.isPending ? t('owesPage.recordDialog.recording') : t('owesPage.recordDialog.submit')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
