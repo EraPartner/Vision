@@ -11,41 +11,86 @@ import { logger } from '../config/logger.js';
 
 const settings = getSettings();
 
+// pool.max should be the true ceiling for concurrent DB connections.
+// settings.database.poolSize is the sustained pool size;
+// settings.database.maxOverflow is kept for configuration parity but we use
+// the larger of the two so burst traffic is absorbed without exhausting the DB.
+const poolMax = Math.max(settings.database.poolSize, settings.database.maxOverflow)
+  || settings.database.poolSize
+  || 10;
+
 const pool = new pg.Pool({
   connectionString: settings.database.url,
-  max: settings.database.poolSize + settings.database.maxOverflow,
-  idleTimeoutMillis: 30_000,     // close idle connections after 30s
-  connectionTimeoutMillis: 5_000, // fail fast if can't connect in 5s
-  statement_timeout: 30_000,      // kill queries running > 30s
+  max: poolMax,
+  idleTimeoutMillis: 30_000,      // close idle connections after 30s
+  connectionTimeoutMillis: 5_000,  // fail fast if can't connect in 5s
+  statement_timeout: 30_000,       // kill queries running > 30s
 });
 
 pool.on('error', (err) => {
   logger.error('Unexpected error on idle database client', err);
 });
 
-// Prepared statement cache for frequently used queries
+// Cache for named prepared statements (name -> SQL text).
+// Pass a { name, text, values } object to queryPrepared() to use.
 const preparedStatements = new Map();
 
 /**
- * Execute a query against the database.
+ * Execute a query against the database with optional retry on transient errors.
  * @param {string} text - SQL query
- * @param {any[]} params - Query parameters
+ * @param {any[]} [params] - Query parameters
+ * @param {{ retries?: number }} [opts]
  * @returns {Promise<pg.QueryResult>}
  */
-export async function query(text, params) {
-  const start = Date.now();
-  try {
-    const result = await pool.query(text, params);
-    const duration = Date.now() - start;
-    if (settings.database.echo || duration > 1000) {
-      logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
+export async function query(text, params, opts = {}) {
+  const maxRetries = opts.retries ?? 0;
+  let attempt = 0;
+
+  while (true) {
+    const start = Date.now();
+    try {
+      const result = await pool.query(text, params);
+      const duration = Date.now() - start;
+      if (settings.database.echo || duration > 1000) {
+        logger.debug(`Query executed in ${duration}ms: ${text.slice(0, 100)}`);
+      }
+      return result;
+    } catch (err) {
+      const duration = Date.now() - start;
+      const isTransient =
+        err.code === 'ECONNRESET' ||
+        err.code === '57P01' || // admin_shutdown
+        err.code === '08006' || // connection_failure
+        err.code === '08001' || // sqlclient_unable_to_establish_sqlconnection
+        err.message?.includes('Connection terminated');
+
+      if (isTransient && attempt < maxRetries) {
+        attempt++;
+        const backoff = Math.min(200 * attempt, 2000);
+        logger.warn(`Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${err.message}`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+
+      logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, { error: err.message });
+      throw err;
     }
-    return result;
-  } catch (err) {
-    const duration = Date.now() - start;
-    logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, { error: err.message });
-    throw err;
   }
+}
+
+/**
+ * Execute a named prepared statement. Prepared statements are parsed by
+ * PostgreSQL only once per connection, reducing per-query planning overhead
+ * for hot query paths.
+ *
+ * @param {string} name      - Unique statement name (stable across calls)
+ * @param {string} text      - SQL text (only used on first invocation per name)
+ * @param {any[]}  [values]  - Bound parameters
+ * @returns {Promise<pg.QueryResult>}
+ */
+export async function queryPrepared(name, text, values) {
+  preparedStatements.set(name, text);
+  return pool.query({ name, text, values });
 }
 
 /**
@@ -89,6 +134,7 @@ export function getPoolStats() {
     totalCount: pool.totalCount,
     idleCount: pool.idleCount,
     waitingCount: pool.waitingCount,
+    maxConnections: poolMax,
   };
 }
 

@@ -62,17 +62,21 @@ router.post('/refresh-prices', async (req, res) => {
     }
 
     const prices = await fetchLivePrices(toRefresh);
-    let updated = 0;
 
-    for (const [investmentId, price] of Object.entries(prices)) {
-      if (price != null && !isNaN(price)) {
-        await investmentRepository.update(parseInt(investmentId, 10), {
-          current_price: price,
-          price_updated_at: new Date().toISOString(),
-        });
-        updated++;
-      }
-    }
+    // Update all investments in parallel — each update targets a different row
+    const updateResults = await Promise.all(
+      Object.entries(prices).map(async ([investmentId, price]) => {
+        if (price != null && !isNaN(price)) {
+          await investmentRepository.update(parseInt(investmentId, 10), {
+            current_price: price,
+            price_updated_at: new Date().toISOString(),
+          });
+          return 1;
+        }
+        return 0;
+      })
+    );
+    const updated = updateResults.reduce((sum, n) => sum + n, 0);
 
     logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
     res.json({ updated, total: toRefresh.length, prices });

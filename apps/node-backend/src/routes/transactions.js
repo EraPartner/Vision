@@ -41,18 +41,23 @@ router.get('/', async (req, res) => {
       sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     };
 
-    let items;
+    // Fetch items and total count in parallel — they're fully independent queries
+    let items, total;
     if (uncategorised === 'true') {
-      items = await transactionRepository.getUncategorised(opts);
+      [items, total] = await Promise.all([
+        transactionRepository.getUncategorised(opts),
+        transactionRepository.getCount(opts),
+      ]);
     } else {
-      items = await transactionRepository.getAll(opts);
+      [items, total] = await Promise.all([
+        transactionRepository.getAll(opts),
+        transactionRepository.getCount(opts),
+      ]);
     }
 
     if (normalize_to_eur === 'true') {
       items = await convertRowsToEur(items);
     }
-
-    const total = await transactionRepository.getCount(opts);
 
     // Map date field to transaction_date for frontend compatibility
     const mappedItems = items.map(formatTransaction);

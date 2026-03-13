@@ -133,20 +133,32 @@ async function loadFromDatabase() {
  * Replace all stored rates with the freshly-fetched set.
  * Wipes every existing row and inserts the new rates so the table always
  * contains exactly one row per currency (the latest values).
+ * Uses a single multi-row INSERT instead of N individual queries.
  */
 async function saveToDatabase(rates) {
   try {
     await query(`DELETE FROM exchange_rates`);
 
     const today = new Date().toISOString().split('T')[0];
-    for (const [currency, rate] of Object.entries(rates)) {
-      if (currency === 'EUR') continue;
-      await query(
-        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-         VALUES ($1, $2, $3, true)`,
-        [currency, rate, today]
-      );
+    const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
+    if (entries.length === 0) return;
+
+    // Build a single parameterised multi-row INSERT
+    // e.g. INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+    //      VALUES ($1,$2,$3,true), ($4,$5,$6,true), ...
+    const placeholders = [];
+    const values = [];
+    let idx = 1;
+    for (const [currency, rate] of entries) {
+      placeholders.push(`($${idx++}, $${idx++}, $${idx++}, true)`);
+      values.push(currency, rate, today);
     }
+
+    await query(
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+       VALUES ${placeholders.join(', ')}`,
+      values
+    );
     logger.info(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
   } catch (err) {
     logger.error('Failed to save exchange rates to database', { error: err.message });

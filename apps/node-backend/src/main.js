@@ -200,10 +200,15 @@ async function start() {
       }
     }
 
-    // Wait for PostgreSQL to be fully ready
+    // Wait for PostgreSQL to be fully ready.
+    // With depends_on removed from docker-compose, both containers start in
+    // parallel. On a cold first-ever start postgres can take up to ~30s to
+    // initialise its data directory, so we give it 40 attempts (40 seconds)
+    // rather than the previous 20. On warm starts postgres is up in <2s so
+    // the extra headroom costs nothing.
     let dbReady = false;
     let attemptCount = 0;
-    const maxAttempts = 20; // 20 seconds max wait
+    const maxAttempts = 40;
 
     while (!dbReady && attemptCount < maxAttempts) {
       const isConnected = await checkConnection();

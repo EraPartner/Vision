@@ -261,7 +261,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  mainWindow.loadURL(APP_URL);
+  // Caller is responsible for loading the initial URL.
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -336,6 +336,46 @@ async function applyDockerImageUpdate(cwd, extraFiles = []) {
   } catch (err) {
     console.warn('Docker image update failed (non-fatal):', err);
   }
+}
+
+// ── HTTP helpers (main-process API calls) ─────────────────────────────────────
+// Lightweight wrappers around Node's built-in `http` module so the main process
+// can talk to the running backend without importing a heavy fetch polyfill.
+
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, { headers: { 'Content-Type': 'application/json' } }, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
+function httpPut(url, payload) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload);
+    const parsed = new URL(url);
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || 80,
+      path: parsed.pathname,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    };
+    const req = http.request(options, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); } catch (e) { resolve(body); }
+      });
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
 }
 
 // ── Backup helpers ────────────────────────────────────────────────────────────
@@ -599,12 +639,34 @@ ipcMain.handle('backup:select-dir', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:save-settings', (_event, { backupDir, backupOnQuit }) => {
-  saveSettings({ ...loadSettings(), backupDir: backupDir || '', backupOnQuit: !!backupOnQuit });
+ipcMain.handle('backup:save-settings', async (_event, { backupDir, backupOnQuit }) => {
+  // Persist to database via the running backend API (source of truth).
+  // Also mirror to local settings.json as a fallback for the will-quit handler
+  // in case the backend is already shutting down.
+  const payload = { backupDir: backupDir || '', backupOnQuit: !!backupOnQuit };
+  saveSettings({ ...loadSettings(), backupDir: payload.backupDir, backupOnQuit: payload.backupOnQuit });
+  try {
+    await httpPut(`http://localhost:${appPort}/api/settings/backup_settings`, { value: payload });
+  } catch (err) {
+    console.warn('backup:save-settings: could not persist to DB, kept in local settings.json', err.message);
+  }
   return { success: true };
 });
 
-ipcMain.handle('backup:load-settings', () => {
+ipcMain.handle('backup:load-settings', async () => {
+  // Prefer reading from the database; fall back to settings.json if the backend
+  // is not yet available (e.g. during very early startup).
+  try {
+    const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+    if (data && data.value) {
+      const v = data.value;
+      // Mirror back to local settings.json so will-quit always has a fresh copy.
+      saveSettings({ ...loadSettings(), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
+      return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
+    }
+  } catch (err) {
+    console.warn('backup:load-settings: could not read from DB, falling back to settings.json', err.message);
+  }
   const s = loadSettings();
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
@@ -660,6 +722,15 @@ let workDir = null;
 let overrideFiles = [];
 
 async function launch() {
+  // 0. Open the loading window IMMEDIATELY so the user sees something straight
+  //    away — before any Docker I/O, which can take seconds or even minutes on
+  //    a cold start. The window will navigate to APP_URL once the backend is ready.
+  createWindow();
+  mainWindow.loadURL(
+    'data:text/html,<html><body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh">' +
+    '<p style="color:#94a3b8;font-family:system-ui,sans-serif;font-size:1rem">Starting Vision\u2026</p></body></html>'
+  );
+
   // 1. Resolve project folder
   workDir = await resolveWorkDir();
   if (!workDir) return;
@@ -667,16 +738,36 @@ async function launch() {
   // 1b. Resolve any compose override requested via env var (dev flows only)
   overrideFiles = resolveOverrideFiles(workDir);
 
-  // 1c. Find a free host port for the backend (default 3002, auto-increment if taken)
-  appPort = await findFreePort(DEFAULT_APP_PORT);
-  APP_URL = `http://localhost:${appPort}`;
-  HEALTH_URL = `http://localhost:${appPort}/health`;
+  // 1c–2. Find a free port, generate .env, check Docker health, and (in dev) check
+  //        if the app image already exists — all are independent so run in parallel.
+  let skipBuild = false;
+  let dockerStatus = 'ok';
+  await Promise.all([
+    // Find a free host port for the backend (default 3002, auto-increment if taken)
+    findFreePort(DEFAULT_APP_PORT).then(port => {
+      appPort = port;
+      APP_URL = `http://localhost:${appPort}`;
+      HEALTH_URL = `http://localhost:${appPort}/health`;
+    }),
 
-  // 2. First run: generate .env if missing
-  ensureEnv(workDir);
+    // First run: generate .env if missing (synchronous file I/O, wrapped to fit Promise.all)
+    Promise.resolve(ensureEnv(workDir)),
 
-  // 3. Check Docker is installed and running (single docker info call)
-  const dockerStatus = await checkDocker(workDir);
+    // Check Docker is installed and running — overlaps with port scan and env init
+    checkDocker(workDir).then(status => { dockerStatus = status; }),
+
+    // In dev, skip --build if the app image already exists (speeds up cold start).
+    // docker compose images -q lists image IDs for running/built services.
+    !app.isPackaged
+      ? run('docker', [
+          'compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app',
+        ], workDir, { timeout: 10000 })
+          .then(imageId => { skipBuild = imageId.trim().length > 0; })
+          .catch(() => { /* treat as not built */ })
+      : Promise.resolve(),
+  ]);
+
+  // 3. Handle Docker not being available
   if (dockerStatus === 'not-installed') {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
@@ -713,9 +804,9 @@ async function launch() {
       workDir, { timeout: 60000 }).catch(() => {});
   }
 
-  // 6. docker compose up  (packaged: --pull always; dev: --build)
+  // 7. docker compose up
   try {
-    await startContainers(workDir, overrideFiles);
+    await startContainers(workDir, overrideFiles, skipBuild);
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',
@@ -728,23 +819,25 @@ async function launch() {
     return;
   }
 
-  // 6. Poll /health
-  try {
-    await pollHealth();
-    createWindow();
-    notify(t('app.running'));
-  } catch (_) {
-    await dialog.showMessageBox({
-      type: 'warning',
-      buttons: [t('common.ok')],
-      title: APP_NAME,
-      message: t('app.startSlow'),
-      detail: t('app.startSlowDetail', { url: APP_URL }),
+  // 8. Backend is being polled — poll /health in the background; navigate once ready.
+  pollHealth()
+    .then(() => {
+      if (mainWindow) mainWindow.loadURL(APP_URL);
+      notify(t('app.running'));
+    })
+    .catch(() => {
+      // Timed out — navigate anyway and let the user see the error in the UI.
+      if (mainWindow) mainWindow.loadURL(APP_URL);
+      dialog.showMessageBox({
+        type: 'warning',
+        buttons: [t('common.ok')],
+        title: APP_NAME,
+        message: t('app.startSlow'),
+        detail: t('app.startSlowDetail', { url: APP_URL }),
+      });
     });
-    createWindow();
-  }
 
-  // 7. Set up electron-updater (non-blocking — runs in background after window opens)
+  // 10. Set up electron-updater (non-blocking — runs in background after window opens)
   setupAutoUpdater();
 }
 
@@ -756,34 +849,57 @@ app.on('will-quit', (e) => {
   e.preventDefault();
   isQuitting = true;
 
+  // Hard-kill safeguard: if backup + docker compose down haven't finished in
+  // 45 seconds, force-exit so the app never hangs forever on quit.
+  const forceQuitTimer = setTimeout(() => {
+    console.warn('will-quit: hard timeout reached — forcing exit');
+    app.exit(0);
+  }, 45_000);
+  forceQuitTimer.unref(); // don't prevent Node from exiting if nothing else is running
+
   // Run backup-on-quit if the user has configured a backup directory.
-  const settings = loadSettings();
-  const backupOnQuit = settings.backupOnQuit === true;
-  const backupDir = settings.backupDir || '';
+  // Prefer reading from the database (more up-to-date); fall back to the local
+  // settings.json mirror that is kept in sync by backup:save-settings / backup:load-settings.
+  async function resolveBackupSettings() {
+    try {
+      const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
+      if (data && data.value) return data.value;
+    } catch { /* backend may already be down, use local mirror */ }
+    return loadSettings();
+  }
 
-  const doBackup = backupOnQuit && backupDir
-    ? runBackup(backupDir)
-        .then(() => notify(t('backup.done')))
-        .catch((err) => {
-          console.error('Backup on quit failed:', err);
-          notify(t('backup.failed'));
-        })
-    : Promise.resolve();
+  resolveBackupSettings().then((s) => {
+    const backupOnQuit = s.backupOnQuit === true;
+    const backupDir = s.backupDir || '';
 
-  doBackup
-    .then(() => stopContainers(workDir, overrideFiles))
-    .catch((err) => console.error('docker compose down failed:', err))
-    .finally(() => {
-      notify(t('app.stopped'));
-      app.exit(0);
-    });
+    const doBackup = backupOnQuit && backupDir
+      ? runBackup(backupDir)
+          .then(() => notify(t('backup.done')))
+          .catch((err) => {
+            console.error('Backup on quit failed:', err);
+            notify(t('backup.failed'));
+          })
+      : Promise.resolve();
+
+    doBackup
+      .then(() => stopContainers(workDir, overrideFiles))
+      .catch((err) => console.error('docker compose down failed:', err))
+      .finally(() => {
+        clearTimeout(forceQuitTimer);
+        notify(t('app.stopped'));
+        app.exit(0);
+      });
+  });
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(launch);
 
 app.on('activate', () => {
-  if (mainWindow === null) createWindow();
+  if (mainWindow === null) {
+    createWindow();
+    mainWindow.loadURL(APP_URL);
+  }
 });
 
 app.on('window-all-closed', () => {

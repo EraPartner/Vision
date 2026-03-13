@@ -5,6 +5,16 @@
  * materialized views exist on startup.
  * Uses IF NOT EXISTS / DO $$ blocks so it's safe to run repeatedly (idempotent).
  *
+ * SCHEMA VERSION GUARD
+ * On a warm start (database already fully initialised), running 50+ sequential
+ * CREATE IF NOT EXISTS / DROP + RECREATE queries is unnecessary overhead.
+ * We store a schema version in a `schema_version` table.  If the stored version
+ * matches CURRENT_SCHEMA_VERSION we skip the full DDL suite and only refresh
+ * materialized views (which need fresh data on every start).
+ *
+ * Bump CURRENT_SCHEMA_VERSION whenever you make a schema change that needs DDL
+ * to be re-applied (new table, altered column, new index, etc.).
+ *
  * Table creation order respects foreign key dependencies:
  *   1. categories (no FK deps)
  *   2. recipients (FK → categories, self-ref)
@@ -26,53 +36,138 @@ import { logger } from '../config/logger.js';
 import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterializedViews } from '../services/materializedViewService.js';
 
 /**
+ * Increment this whenever schema changes require DDL to be re-applied on existing DBs.
+ * Format: YYYYMMDD_N (N = change number on that date, starting at 1).
+ */
+const CURRENT_SCHEMA_VERSION = '20260312_1';
+
+/**
+ * Check the stored schema version.  Returns null if the table doesn't exist yet.
+ */
+async function getStoredSchemaVersion() {
+  try {
+    const result = await query(
+      `SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1`
+    );
+    return result.rows[0]?.version ?? null;
+  } catch {
+    // Table doesn't exist — first ever run
+    return null;
+  }
+}
+
+/**
+ * Persist the current schema version.
+ */
+async function setSchemaVersion(version) {
+  // Create the tracking table if it doesn't exist yet
+  await query(`
+    CREATE TABLE IF NOT EXISTS schema_version (
+      id          SERIAL PRIMARY KEY,
+      version     TEXT NOT NULL,
+      applied_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(
+    `INSERT INTO schema_version (version) VALUES ($1)`,
+    [version]
+  );
+}
+
+/**
  * Run the full schema initialisation. Safe to call on every startup.
+ *
+ * On warm starts where the schema version already matches, only the
+ * materialized view refresh is performed (skipping all CREATE TABLE/INDEX DDL).
  */
 export async function initializeSchema() {
   const start = Date.now();
-  logger.info('Running database schema initialisation (idempotent)…');
+
+  const storedVersion = await getStoredSchemaVersion();
+  const isWarmStart = storedVersion === CURRENT_SCHEMA_VERSION;
+
+  if (isWarmStart) {
+    logger.info(`Schema version ${CURRENT_SCHEMA_VERSION} already applied — skipping DDL, running mat-view refresh only.`);
+    try {
+      await refreshMaterializedViews();
+      logger.info(`Mat-view refresh complete in ${Date.now() - start}ms`);
+    } catch (err) {
+      // Refresh failure is non-fatal; stale views are preferable to a broken start
+      logger.warn('Materialized view refresh failed on warm start (non-fatal)', { error: err.message });
+    }
+    return;
+  }
+
+  logger.info(`Running full schema initialisation (version ${CURRENT_SCHEMA_VERSION})…`);
 
   try {
-    // --- Enums ---
-    await ensureEnums();
+    // --- Enums + extension + helper function ---
+    // All three are fully independent — run in parallel.
+    await Promise.all([
+      ensureEnums(),
+      // pg_trgm enables GIN trigram indexes for fast ILIKE / full-text search
+      query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`),
+      query(`
+        CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `),
+    ]);
 
-    // --- Extensions ---
-    // pg_trgm enables GIN trigram indexes for fast ILIKE / full-text search
-    await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+    // --- Tables (in dependency order, with parallelism where safe) ---
 
-    // --- Helper function ---
-    await query(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-    `);
-
-    // --- Tables (in dependency order) ---
+    // Level 1: no FK deps
     await createCategories();
+
+    // Level 2: depends on categories
     await createRecipients();
+
+    // Level 3: depends on recipients
     await createRecipientBankAccounts();
+
+    // Level 4: depends on recipients + recipient_bank_accounts + categories
     await createTransactions();
+
+    // Level 5: depends on transactions (+ recipients, categories)
     await createPlannedTransactions();
-    await createPlannedTransactionExecutions();
-    await createTransactionRawReferences();
-    await createBelfiusRaw();
-    await createRevolutRaw();
-    await createKbcRaw();
-    await createSABBRaw();
-    await createWiseRaw();
-    await createVisionRaw();
-    await createCustomRaw();
-    await createManualRaw();
-    await createExchangeRates();
-    await createInvestments();
+
+    // Level 6: planned_transaction_executions and transaction_raw_references
+    // both depend on transactions/planned_transactions but not on each other
+    await Promise.all([
+      createPlannedTransactionExecutions(),
+      createTransactionRawReferences(),
+    ]);
+
+    // Level 7: raw bank tables — all independent of each other and of the
+    // core transaction chain above (no FK references into it)
+    await Promise.all([
+      createBelfiusRaw(),
+      createRevolutRaw(),
+      createKbcRaw(),
+      createSABBRaw(),
+      createWiseRaw(),
+      createVisionRaw(),
+      createCustomRaw(),
+      createManualRaw(),
+    ]);
+
+    // Level 8: supporting tables — all independent of each other
+    // Note: createPortfolioTransactions depends on createInvestments, so
+    // investments must finish first; the others are fully independent.
+    await Promise.all([
+      createExchangeRates(),
+      createInvestments(),
+      createWatchlist(),
+      createUserSettings(),
+      createSavedCharts(),
+    ]);
+
+    // Level 9: depends on investments (FK investment_id)
     await createPortfolioTransactions();
-    await createWatchlist();
-    await createUserSettings();
-    await createSavedCharts();
 
     // --- Materialized views ---
     await createMaterializedViews();
@@ -81,8 +176,11 @@ export async function initializeSchema() {
     // Initial population
     await refreshMaterializedViews();
 
+    // --- Stamp the schema version so warm starts are fast ---
+    await setSchemaVersion(CURRENT_SCHEMA_VERSION);
+
     const duration = Date.now() - start;
-    logger.info(`Schema initialisation complete in ${duration}ms`);
+    logger.info(`Schema initialisation complete in ${duration}ms (version ${CURRENT_SCHEMA_VERSION})`);
   } catch (err) {
     logger.error('Schema initialisation failed', { error: err.message });
     throw err;
@@ -102,15 +200,14 @@ async function ensureEnums() {
     { name: 'revolut_state', values: "'COMPLETED','PENDING','REVERTED','DECLINED'" },
   ];
 
-  for (const e of enums) {
-    await query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '${e.name}') THEN
-          CREATE TYPE ${e.name} AS ENUM (${e.values});
-        END IF;
-      END $$;
-    `);
-  }
+  // All enum checks are independent — run in parallel
+  await Promise.all(enums.map(e => query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '${e.name}') THEN
+        CREATE TYPE ${e.name} AS ENUM (${e.values});
+      END IF;
+    END $$;
+  `)));
 }
 
 // ─────────────────────────────────────────────
@@ -152,6 +249,10 @@ async function createRecipients() {
   await safeIndex('idx_recipients_name', 'recipients', 'name');
   await safeIndex('idx_recipients_normalized_name', 'recipients', 'normalized_name');
   await safeIndex('idx_recipients_primary_recipient_id', 'recipients', 'primary_recipient_id');
+  // default_category_id is used in uncategorized-recipient queries
+  await safeIndex('idx_recipients_default_category_id', 'recipients', 'default_category_id');
+  // GIN trigram index for fast ILIKE search on recipient name
+  await safeGinIndex('idx_recipients_name_trgm', 'recipients', 'name gin_trgm_ops');
   await safeTrigger('update_recipients_updated_at', 'recipients');
 }
 
@@ -198,6 +299,12 @@ async function createTransactions() {
   await safeIndex('idx_transactions_category_id', 'transactions', 'category_id');
   await safeIndex('idx_transactions_bank_account', 'transactions', 'bank_account');
   await safeIndex('idx_transaction_date_recipient', 'transactions', 'date, recipient_id');
+  // Partial index on active transactions — most queries filter is_active = true
+  await query(`CREATE INDEX IF NOT EXISTS idx_transactions_active ON transactions (date DESC, id DESC) WHERE is_active = true;`);
+  // Composite indexes for common per-recipient and per-category ordered queries
+  await safeIndex('idx_transactions_recipient_date', 'transactions', 'recipient_id, date DESC');
+  await safeIndex('idx_transactions_category_date', 'transactions', 'category_id, date DESC');
+  await safeIndex('idx_transactions_bank_date', 'transactions', 'bank_account, date DESC');
   // GIN trigram indexes for fast ILIKE search on free-text columns
   await safeGinIndex('idx_transactions_memo_trgm', 'transactions', 'memo gin_trgm_ops');
   await safeGinIndex('idx_transactions_comment_trgm', 'transactions', 'comment gin_trgm_ops');

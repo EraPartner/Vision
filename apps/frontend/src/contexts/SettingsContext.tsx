@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
+import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 
 export type ExclusionScope = 'everywhere' | 'dashboard' | 'statistics';
 
@@ -34,39 +35,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Load settings from database on mount
-    useEffect(() => {
-        let cancelled = false;
+    // Consume the single preloaded settings fetch instead of making our own request.
+    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
 
-        async function load() {
+    // Load settings from preload on mount
+    useEffect(() => {
+        if (preloadLoading) return;
+        if (preloaded) {
+            setSettings({ ...defaultSettings, ...preloaded });
+        } else {
+            // Fallback: try localStorage for migration from older versions
             try {
-                const result = await apiClient.getSetting(SETTINGS_KEY);
-                if (!cancelled && result?.value) {
-                    setSettings({ ...defaultSettings, ...result.value });
+                const stored = localStorage.getItem('vision_dashboardSettings');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    setSettings({ ...defaultSettings, ...parsed });
+                    // Migrate to database
+                    apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => { });
+                    localStorage.removeItem('vision_dashboardSettings');
                 }
             } catch {
-                // Setting not found or backend unreachable — use defaults
-                // Try localStorage as fallback for migration
-                try {
-                    const stored = localStorage.getItem('vision_dashboardSettings');
-                    if (!cancelled && stored) {
-                        const parsed = JSON.parse(stored);
-                        setSettings({ ...defaultSettings, ...parsed });
-                        // Migrate to database
-                        apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => { });
-                        localStorage.removeItem('vision_dashboardSettings');
-                    }
-                } catch {
-                    // ignore
-                }
-            } finally {
-                if (!cancelled) setIsLoading(false);
+                // ignore
             }
         }
-
-        load();
-        return () => { cancelled = true; };
-    }, []);
+        setIsLoading(false);
+    }, [preloaded, preloadLoading]);
 
     // Debounced save to database whenever settings change (skip initial load)
     const isFirstRender = useRef(true);

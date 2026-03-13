@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 import type { Language } from '@/contexts/LanguageContext';
+import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 
 export interface AppSettings {
     defaultCurrency: string;
@@ -42,18 +43,16 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstRender = useRef(true);
 
+    // Consume the single preloaded settings fetch instead of making our own request.
+    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<AppSettings>(SETTINGS_KEY);
+
     useEffect(() => {
-        let cancelled = false;
-        apiClient.getSetting(SETTINGS_KEY)
-            .then((result) => {
-                if (!cancelled && result?.value) {
-                    setAppSettings({ ...defaultAppSettings, ...result.value });
-                }
-            })
-            .catch(() => { })
-            .finally(() => { if (!cancelled) setIsLoading(false); });
-        return () => { cancelled = true; };
-    }, []);
+        if (preloadLoading) return; // wait for preload
+        if (preloaded) {
+            setAppSettings({ ...defaultAppSettings, ...preloaded });
+        }
+        setIsLoading(false);
+    }, [preloaded, preloadLoading]);
 
     useEffect(() => {
         if (isFirstRender.current) {

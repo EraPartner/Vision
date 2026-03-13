@@ -48,6 +48,10 @@ const SETTING_DEFAULTS = {
     theme: 'system',
     accentColor: 'default',
   },
+  backup_settings: {
+    backupDir: '',
+    backupOnQuit: false,
+  },
 };
 
 // GET /api/settings/:key — single setting (returns default if not found)

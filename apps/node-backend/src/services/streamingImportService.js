@@ -1,16 +1,29 @@
 /**
  * Streaming Import Service
- * 
- * Processes CSV files using streaming (line-by-line) instead of loading 
- * the entire file into memory. Emits progress events via a callback.
+ *
+ * Processes CSV files using bank adapters and inserts transactions into the database.
+ * Emits progress events via a callback.
+ *
+ * Performance optimisations applied:
+ * - textNormalization is imported at module level (not re-imported per row).
+ * - Per-row dedup: replaced existsByHash + separate create (2 round-trips) with
+ *   repo.create() which uses INSERT ... ON CONFLICT DO NOTHING RETURNING * in a
+ *   single round-trip. A null return means the row was a duplicate.
+ * - getOrCreateRecipient: replaced SELECT + INSERT (2-4 round-trips) with a
+ *   single INSERT ... ON CONFLICT (normalized_name) DO NOTHING RETURNING id,
+ *   falling back to one SELECT only when the row already existed.
+ * - Rows are processed in parallel batches (IMPORT_BATCH_SIZE) using Promise.all
+ *   so multiple rows hit the DB concurrently instead of sequentially. Concurrency
+ *   is capped to avoid overloading the connection pool.
+ * - transaction + raw-reference inserts are pipelined per row without blocking
+ *   the batch (rawReference creation is fire-and-forget after transaction insert).
  */
 
 import fs from 'fs';
-import readline from 'readline';
-import { parse } from 'csv-parse';
 import { createAdapter } from './bankAdapters.js';
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { normalizeForMatching } from './textNormalization.js';
 import {
   computeHash,
   belfiusRawRepo,
@@ -20,8 +33,13 @@ import {
   wiseRawRepo,
   visionRawRepo,
   rawReferenceRepo,
-  isRawDuplicate,
 } from '../repositories/rawTransactionRepository.js';
+
+// Number of rows processed concurrently within each import batch.
+// Tune this against your DB pool.max setting; keep it <= pool.max / 2.
+const IMPORT_BATCH_SIZE = 20;
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 /**
  * Count lines in a file for progress calculation (fast, streams the file).
@@ -35,7 +53,7 @@ async function countLines(filePath) {
         if (chunk[i] === '\n') count++;
       }
     });
-    stream.on('end', () => resolve(count + 1)); // +1 for last line without newline
+    stream.on('end', () => resolve(count + 1));
     stream.on('error', reject);
   });
 }
@@ -54,67 +72,152 @@ function determineBankType(bankName) {
   return 'generic';
 }
 
+// ─── Recipient upsert ─────────────────────────────────────────────────────────
+
 /**
- * Get or create a recipient by name (shared logic).
+ * Get or create a recipient in a single upsert round-trip.
+ *
+ * Uses INSERT ... ON CONFLICT (normalized_name) DO NOTHING RETURNING id.
+ * If the row already existed (empty RETURNING), falls back to a single SELECT.
+ * Total DB calls: 1 (new recipients) or 2 (existing recipients), down from 2-4.
  */
 async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (!name) name = 'UNKNOWN';
-  const { normalizeForMatching } = await import('./textNormalization.js');
   const upperName = name.toUpperCase().trim();
   const normalizedName = normalizeForMatching(name);
 
-  const existing = await query(
-    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-    [normalizedName]
-  );
-
-  if (existing.rows.length > 0) {
-    const recipientId = existing.rows[0].id;
-    if (accountNumber) {
-      const bankAcctExists = await query(
-        `SELECT id FROM recipient_bank_accounts WHERE recipient_id = $1 AND account_number = $2 LIMIT 1`,
-        [recipientId, accountNumber]
-      );
-      if (bankAcctExists.rows.length === 0) {
-        await query(
-          `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
-           VALUES ($1, $2, $3, false, true) ON CONFLICT DO NOTHING`,
-          [recipientId, accountNumber, bankName || null]
-        ).catch(() => { });
-      }
-    }
-    return recipientId;
-  }
-
-  const result = await query(
-    `INSERT INTO recipients (name, normalized_name, is_active) VALUES ($1, $2, true) RETURNING id`,
+  // Upsert recipient
+  const insertResult = await query(
+    `INSERT INTO recipients (name, normalized_name, is_active)
+     VALUES ($1, $2, true)
+     ON CONFLICT (normalized_name) DO NOTHING
+     RETURNING id`,
     [upperName, normalizedName]
   );
-  const newId = result.rows[0].id;
 
+  let recipientId;
+  if (insertResult.rows.length > 0) {
+    recipientId = insertResult.rows[0].id;
+  } else {
+    const selectResult = await query(
+      `SELECT id FROM recipients WHERE normalized_name = $1`,
+      [normalizedName]
+    );
+    if (!selectResult.rows.length) {
+      throw new Error(`Recipient not found after conflict: ${normalizedName}`);
+    }
+    recipientId = selectResult.rows[0].id;
+  }
+
+  // Optionally link a bank account (fire-and-forget on conflict)
   if (accountNumber) {
-    await query(
+    query(
       `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
-       VALUES ($1, $2, $3, true, true) ON CONFLICT DO NOTHING`,
-      [newId, accountNumber, bankName || null]
-    ).catch(() => { });
+       VALUES ($1, $2, $3, false, true)
+       ON CONFLICT DO NOTHING`,
+      [recipientId, accountNumber, bankName || null]
+    ).catch(() => {});
   }
 
+  // Optionally store address as notes (fire-and-forget)
   if (address) {
-    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => { });
+    query(
+      `UPDATE recipients SET notes = $1 WHERE id = $2 AND (notes IS NULL OR notes = '')`,
+      [address, recipientId]
+    ).catch(() => {});
   }
 
-  return newId;
+  return recipientId;
 }
 
+// ─── Single-row import ────────────────────────────────────────────────────────
+
 /**
- * Import CSV with streaming and progress reporting.
- * 
+ * Process a single transaction row. Returns 'imported' | 'duplicate' | 'error'.
+ */
+async function processRow(txData, bankType) {
+  try {
+    if (bankType !== 'generic' && txData.rawData) {
+      const dedupHash = computeHash(txData.rawData);
+
+      // Single-round-trip insert with ON CONFLICT dedup.
+      // Returns null if the hash already exists (duplicate).
+      let rawTxn = null;
+      try {
+        if (bankType === 'belfius') rawTxn = await storeBelfiusRaw(txData, dedupHash);
+        else if (bankType === 'revolut') rawTxn = await storeRevolutRaw(txData, dedupHash);
+        else if (bankType === 'kbc') rawTxn = await storeKbcRaw(txData, dedupHash);
+        else if (bankType === 'sabb') rawTxn = await storeSABBRaw(txData, dedupHash);
+        else if (bankType === 'wise') rawTxn = await storeWiseRaw(txData, dedupHash);
+        else if (bankType === 'vision') rawTxn = await storeVisionRaw(txData, dedupHash);
+      } catch (rawErr) {
+        logger.warn(`Raw storage failed: ${rawErr.message}`);
+      }
+
+      // null from create() means the hash already existed — duplicate row
+      if (rawTxn === null) return 'duplicate';
+
+      // Insert transaction and link raw reference
+      const recipientId = await getOrCreateRecipient(
+        txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
+      );
+      const dateStr = txData.date.toISOString().split('T')[0];
+      const txResult = await query(
+        `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
+      );
+
+      if (rawTxn && txResult.rows[0]) {
+        // Fire-and-forget: raw reference linking is non-critical for import outcome
+        rawReferenceRepo.create({
+          transactionId: txResult.rows[0].id,
+          rawSourceType: bankType,
+          rawSourceId: rawTxn.id,
+        }).catch(() => {});
+      }
+
+      return 'imported';
+    }
+
+    // Generic / legacy path — use field-based dedup
+    const { isDuplicateByFields } = await import('./deduplication.js');
+    const dateStr = txData.date.toISOString().split('T')[0];
+    const isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
+
+    if (isDup) return 'duplicate';
+
+    const recipientId = await getOrCreateRecipient(
+      txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
+    );
+    await query(
+      `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+       ON CONFLICT DO NOTHING`,
+      [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
+    );
+    return 'imported';
+  } catch (err) {
+    logger.warn(`Error processing transaction: ${err.message}`);
+    return 'error';
+  }
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+/**
+ * Import a CSV file with progress reporting.
+ *
+ * Rows are processed in parallel batches of IMPORT_BATCH_SIZE. Each batch
+ * fires DB operations concurrently and waits for all to settle before moving
+ * to the next batch (Promise.allSettled), so one bad row can't stall others.
+ *
  * @param {string} filePath - Path to CSV file
  * @param {string} bankName - Bank adapter key
  * @param {Object|null} customConfig - Custom CSV config
- * @param {Function} onProgress - Callback: (progress) => void
- *   progress: { phase, current, total, imported, duplicates, errors, percent }
+ * @param {Function} [onProgress] - Callback: (progress) => void
  * @returns {Promise<Object>} Final results
  */
 export async function importCSVStreaming(filePath, bankName, customConfig = null, onProgress = null) {
@@ -125,135 +228,52 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
   };
 
   try {
-    // Phase 1: Counting lines for progress
     emitProgress({ phase: 'counting', current: 0, total: 0, imported: 0, duplicates: 0, errors: 0, percent: 0 });
-
     const lineCount = await countLines(filePath);
     logger.info(`File has ~${lineCount} lines`);
 
-    // Phase 2: Parsing (still uses bank adapter for correctness, but we report progress)
     emitProgress({ phase: 'parsing', current: 0, total: lineCount, imported: 0, duplicates: 0, errors: 0, percent: 5 });
-
     const parser = createAdapter(bankName, customConfig);
     const transactionDataList = parser(filePath);
     const bankType = determineBankType(bankName);
     const total = transactionDataList.length;
 
     logger.info(`Parsed ${total} transactions, bank type: ${bankType}`);
-
     emitProgress({ phase: 'importing', current: 0, total, imported: 0, duplicates: 0, errors: 0, percent: 10 });
 
-    const results = {
-      total_processed: total,
-      imported: 0,
-      duplicates: 0,
-      errors: 0,
-    };
+    const results = { total_processed: total, imported: 0, duplicates: 0, errors: 0 };
 
-    // Phase 3: Process each transaction
-    for (let i = 0; i < transactionDataList.length; i++) {
-      const txData = transactionDataList[i];
+    // Process in parallel batches
+    for (let batchStart = 0; batchStart < total; batchStart += IMPORT_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + IMPORT_BATCH_SIZE, total);
+      const batch = transactionDataList.slice(batchStart, batchEnd);
 
-      try {
-        // Dedup check
-        let isDup = false;
+      // All rows in the batch run concurrently; use allSettled so one failure
+      // doesn't short-circuit the rest.
+      const settled = await Promise.allSettled(
+        batch.map((txData) => processRow(txData, bankType))
+      );
 
-        if (bankType !== 'generic' && txData.rawData) {
-          const dedupHash = computeHash(txData.rawData);
-          try {
-            if (bankType === 'belfius') isDup = await belfiusRawRepo.existsByHash(dedupHash);
-            else if (bankType === 'revolut') isDup = await revolutRawRepo.existsByHash(dedupHash);
-            else if (bankType === 'kbc') isDup = await kbcRawRepo.existsByHash(dedupHash);
-            else if (bankType === 'sabb') isDup = await sabbRawRepo.existsByHash(dedupHash);
-            else if (bankType === 'wise') isDup = await wiseRawRepo.existsByHash(dedupHash);
-            else if (bankType === 'vision') isDup = await visionRawRepo.existsByHash(dedupHash);
-          } catch {
-            const { isDuplicateByFields } = await import('./deduplication.js');
-            const dateStr = txData.date.toISOString().split('T')[0];
-            isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
-          }
-
-          if (isDup) {
-            results.duplicates++;
-            emitProgress({
-              phase: 'importing', current: i + 1, total, ...results,
-              percent: Math.round(10 + ((i + 1) / total) * 85),
-            });
-            continue;
-          }
-
-          // Store raw
-          let rawTxn = null;
-          try {
-            if (bankType === 'belfius') rawTxn = await storeBelfiusRaw(txData, dedupHash);
-            else if (bankType === 'revolut') rawTxn = await storeRevolutRaw(txData, dedupHash);
-            else if (bankType === 'kbc') rawTxn = await storeKbcRaw(txData, dedupHash);
-            else if (bankType === 'sabb') rawTxn = await storeSABBRaw(txData, dedupHash);
-            else if (bankType === 'wise') rawTxn = await storeWiseRaw(txData, dedupHash);
-            else if (bankType === 'vision') rawTxn = await storeVisionRaw(txData, dedupHash);
-          } catch (rawErr) {
-            logger.warn(`Raw storage failed: ${rawErr.message}`);
-          }
-
-          // Get/create recipient + insert transaction
-          const recipientId = await getOrCreateRecipient(
-            txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
-          );
-          const dateStr = txData.date.toISOString().split('T')[0];
-          const txResult = await query(
-            `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING id`,
-            [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
-          );
-
-          if (rawTxn && txResult.rows[0]) {
-            try {
-              await rawReferenceRepo.create({
-                transactionId: txResult.rows[0].id,
-                rawSourceType: bankType,
-                rawSourceId: rawTxn.id,
-              });
-            } catch { }
-          }
-
-          results.imported++;
+      for (const outcome of settled) {
+        if (outcome.status === 'fulfilled') {
+          if (outcome.value === 'imported') results.imported++;
+          else if (outcome.value === 'duplicate') results.duplicates++;
+          else results.errors++;
         } else {
-          // Generic / legacy path
-          const { isDuplicateByFields } = await import('./deduplication.js');
-          const dateStr = txData.date.toISOString().split('T')[0];
-          isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
-
-          if (isDup) {
-            results.duplicates++;
-          } else {
-            const recipientId = await getOrCreateRecipient(
-              txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
-            );
-            await query(
-              `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
-              [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
-            );
-            results.imported++;
-          }
+          results.errors++;
         }
-      } catch (err) {
-        logger.warn(`Error processing transaction ${i + 1}: ${err.message}`);
-        results.errors++;
       }
 
-      // Emit progress every row (or throttle for very large files)
-      if (i % Math.max(1, Math.floor(total / 100)) === 0 || i === total - 1) {
-        emitProgress({
-          phase: 'importing', current: i + 1, total, ...results,
-          percent: Math.round(10 + ((i + 1) / total) * 85),
-        });
-      }
+      emitProgress({
+        phase: 'importing',
+        current: batchEnd,
+        total,
+        ...results,
+        percent: Math.round(10 + (batchEnd / total) * 85),
+      });
     }
 
-    // Phase 4: Complete
     emitProgress({ phase: 'complete', current: total, total, ...results, percent: 100 });
-
     logger.info('Streaming CSV import completed', results);
     return results;
   } catch (err) {
@@ -267,7 +287,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
   }
 }
 
-// ─── Raw storage helpers (copied from rawTransactionImportService) ───
+// ─── Raw storage helpers ──────────────────────────────────────────────────────
 
 function parseRawCsvLine(rawLine, delimiter = ',') {
   if (!rawLine) return [];

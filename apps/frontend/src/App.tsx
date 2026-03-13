@@ -8,6 +8,7 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
+import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -68,9 +69,10 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
-            <ThemeProvider>
-                <SettingsProvider>
-                    <AppSettingsProvider>
+            <SettingsPreloadProvider>
+                <ThemeProvider>
+                    <SettingsProvider>
+                        <AppSettingsProvider>
                         <LanguageBridge>
                             <TooltipProvider>
                                 <ErrorBoundary>
@@ -116,6 +118,7 @@ const App = () => {
                     </AppSettingsProvider>
                 </SettingsProvider>
             </ThemeProvider>
+        </SettingsPreloadProvider>
         </QueryClientProvider>
     );
 };

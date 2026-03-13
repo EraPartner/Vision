@@ -110,8 +110,8 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
 }
 
 export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDay, month, year, embedded = false }: CashFlowComparisonProps) {
-  const { t } = useLanguage();
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const { t, language } = useLanguage();
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString(language, { month: "long", year: "numeric" }).replace(/^\w/, c => c.toUpperCase());
 
   const chartContent = (
     <Tabs defaultValue="without" className="w-full">

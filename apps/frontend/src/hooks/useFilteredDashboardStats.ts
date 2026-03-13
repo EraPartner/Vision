@@ -19,8 +19,19 @@ export function useFilteredDashboardStats() {
   // Check if exclusions should apply to dashboard
   const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard';
 
+  // Derive a stable, minimal cache key that only includes the settings fields that
+  // actually affect this query's output.  Using the entire `settings` object caused
+  // cache misses on every unrelated setting change (language, theme, etc.).
+  const queryKey = [
+    'filteredDashboardStats',
+    exclusionsApply,
+    exclusionsApply ? settings.excludedCategoryIds : [],
+    exclusionsApply ? settings.excludedRecipientIds : [],
+    exclusionsApply ? settings.excludeHiddenCategories : false,
+  ] as const;
+
   return useQuery<FilteredDashboardStats>({
-    queryKey: ['filteredDashboardStats', settings],
+    queryKey,
     queryFn: async () => {
       // Fetch total transaction count from the transaction-count endpoint
       const countData = await apiClient.getTransactionCount();
@@ -133,6 +144,8 @@ export function useFilteredDashboardStats() {
       };
     },
     staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchOnWindowFocus: true,
+    // Do not refetch on window focus — the dashboard has its own staleTime and
+    // refetching on every alt-tab creates unnecessary API load.
+    refetchOnWindowFocus: false,
   });
 }

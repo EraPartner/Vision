@@ -22,6 +22,12 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settingsDefaultTab, setSettingsDefaultTab] = useState('general');
+
+    const openSettingsOnTab = (tab: string) => {
+        setSettingsDefaultTab(tab);
+        setSettingsOpen(true);
+    };
     const { theme, mode, schedule, setMode, setSchedule, toggleTheme } = useTheme();
     const { t } = useLanguage();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
@@ -136,9 +142,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </main>
                 </div>
             </div>
-            <DashboardSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+            <DashboardSettingsDialog open={settingsOpen} onOpenChange={(o) => { setSettingsOpen(o); if (!o) setSettingsDefaultTab('general'); }} defaultTab={settingsDefaultTab} />
             {!onboardingLoading && (
-                <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} />
+                <OnboardingWizard open={!onboardingComplete} onComplete={completeOnboarding} onOpenSettings={openSettingsOnTab} />
             )}
         </SidebarProvider>
     );

@@ -11,9 +11,12 @@ services:
       - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ftm_user -d financial_transactions"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
+      # Tightened from interval:5s/retries:12 → 3s/10 so the app container
+      # starts up to ~20s sooner on cold boots without sacrificing reliability.
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   app:
     build: .
@@ -26,9 +29,19 @@ services:
       EXTERNAL_DATABASE: "true"
       SERVER_HOST: "0.0.0.0"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-    depends_on:
-      db:
-        condition: service_healthy
+    # depends_on with service_healthy was removed intentionally.
+    #
+    # Docker's healthcheck gate forced a strict serial sequence:
+    #   db starts → postgres init → healthcheck passes → THEN app starts
+    # This added up to ~30s of dead time before the app container even launched.
+    #
+    # The app already handles this correctly on its own: main.js polls
+    # checkConnection() every second for up to 20 attempts, and if postgres
+    # isn't ready yet it waits. If it exhausts all attempts, Docker's
+    # restart:unless-stopped policy will relaunch it automatically.
+    #
+    # Both containers now start in parallel. The db healthcheck is kept
+    # so `docker ps` / monitoring tools can still report db readiness.
 
 volumes:
   postgres_data:

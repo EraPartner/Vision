@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +13,8 @@ import {
     Wallet, Upload, Tags, Sparkles, ArrowRight, ArrowLeft,
     CheckCircle2, CloudUpload, Loader2, BarChart3, Receipt,
     CalendarClock, TrendingUp, LineChart, File, X,
+    HardDrive, ShieldCheck, FolderOpen, PiggyBank, CreditCard,
+    LayoutDashboard, Database,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
@@ -51,9 +57,10 @@ export function useOnboarding() {
 interface OnboardingWizardProps {
     open: boolean;
     onComplete: () => void;
+    onOpenSettings?: (tab: string) => void;
 }
 
-const STEP_KEYS = ["welcome", "bank", "import", "categories", "tour"] as const;
+const STEP_KEYS = ["welcome", "overview", "bank", "import", "categories", "tour", "backup"] as const;
 type StepKey = (typeof STEP_KEYS)[number];
 
 interface BankAdapter {
@@ -79,18 +86,20 @@ const SUGGESTED_CATEGORIES = [
     { general: "PERSONAL",      detail: "Gifts",            detailKey: "onboarding.cat.gifts",          emoji: "🎁" },
 ] as const;
 
-export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
+export function OnboardingWizard({ open, onComplete, onOpenSettings }: OnboardingWizardProps) {
     const { t } = useLanguage();
     const navigate = useNavigate();
     const [step, setStep] = useState<StepKey>("welcome");
     const stepIdx = STEP_KEYS.indexOf(step);
 
     const STEPS = [
-        { key: "welcome", label: t('onboarding.step.welcome.label'), icon: Sparkles },
-        { key: "bank",    label: t('onboarding.step.bank.label'),    icon: Wallet },
-        { key: "import",  label: t('onboarding.step.import.label'),  icon: Upload },
+        { key: "welcome",    label: t('onboarding.step.welcome.label'),    icon: Sparkles },
+        { key: "overview",   label: t('onboarding.step.overview.label'),   icon: LayoutDashboard },
+        { key: "bank",       label: t('onboarding.step.bank.label'),       icon: Wallet },
+        { key: "import",     label: t('onboarding.step.import.label'),     icon: Upload },
         { key: "categories", label: t('onboarding.step.categories.label'), icon: Tags },
-        { key: "tour",    label: t('onboarding.step.tour.label'),    icon: BarChart3 },
+        { key: "tour",       label: t('onboarding.step.tour.label'),       icon: BarChart3 },
+        { key: "backup",     label: t('onboarding.step.backup.label'),     icon: HardDrive },
     ];
 
     const FEATURES = [
@@ -100,6 +109,29 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
         { icon: BarChart3,    title: t('onboarding.feature.statistics.title'),   desc: t('onboarding.feature.statistics.desc'),   path: "/statistics" },
         { icon: TrendingUp,   title: t('onboarding.feature.portfolio.title'),    desc: t('onboarding.feature.portfolio.desc'),    path: "/portfolio" },
         { icon: LineChart,    title: t('onboarding.feature.market.title'),       desc: t('onboarding.feature.market.desc'),       path: "/portfolio/market" },
+    ];
+
+    const OVERVIEW_SECTIONS = [
+        {
+            label: t('onboarding.overview.budgeting.label'),
+            color: "from-blue-500/20 to-blue-500/5 border-blue-500/20",
+            iconColor: "text-blue-500",
+            items: [
+                { icon: CreditCard,     title: t('onboarding.feature.transactions.title'), desc: t('onboarding.feature.transactions.desc') },
+                { icon: Tags,           title: t('onboarding.feature.categories.title'),   desc: t('onboarding.feature.categories.desc') },
+                { icon: CalendarClock,  title: t('onboarding.feature.planned.title'),      desc: t('onboarding.feature.planned.desc') },
+                { icon: PiggyBank,      title: t('onboarding.feature.statistics.title'),   desc: t('onboarding.feature.statistics.desc') },
+            ],
+        },
+        {
+            label: t('onboarding.overview.portfolio.label'),
+            color: "from-emerald-500/20 to-emerald-500/5 border-emerald-500/20",
+            iconColor: "text-emerald-500",
+            items: [
+                { icon: TrendingUp, title: t('onboarding.feature.portfolio.title'), desc: t('onboarding.feature.portfolio.desc') },
+                { icon: LineChart,  title: t('onboarding.feature.market.title'),    desc: t('onboarding.feature.market.desc') },
+            ],
+        },
     ];
 
     const [adapters, setAdapters] = useState<BankAdapter[]>([]);
@@ -116,6 +148,38 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     );
     const [creatingCategories, setCreatingCategories] = useState(false);
     const [categoriesCreated, setCategoriesCreated] = useState(false);
+
+    // Restore state
+    const [restoreFile, setRestoreFile] = useState<string | null>(null);
+    const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+    const [restoreRunning, setRestoreRunning] = useState(false);
+
+    const handleSelectRestoreFile = async () => {
+        const file = await apiClient.selectBackupFile();
+        if (file) {
+            setRestoreFile(file);
+            setRestoreConfirmOpen(true);
+        }
+    };
+
+    const handleRestoreConfirmed = async () => {
+        if (!restoreFile) return;
+        setRestoreRunning(true);
+        try {
+            const result = await apiClient.restoreBackup(restoreFile);
+            if (result?.success) {
+                toast.success(t('onboarding.restore.success'));
+                window.location.reload();
+            } else {
+                toast.error(t('onboarding.restore.failed', { msg: result?.error ?? 'Unknown error' }));
+                setRestoreRunning(false);
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(t('onboarding.restore.failed', { msg }));
+            setRestoreRunning(false);
+        }
+    };
 
     useEffect(() => {
         if (!open) return;
@@ -171,6 +235,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     };
 
     return (
+        <>
         <Dialog open={open} onOpenChange={(o) => { if (!o) onComplete(); }}>
             <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0 [&>button]:hidden">
                 <VisuallyHidden><DialogTitle>{t('onboarding.wizard.title')}</DialogTitle></VisuallyHidden>
@@ -224,6 +289,38 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                                 <Badge variant="secondary" className="gap-1">
                                     <BarChart3 className="h-3 w-3" /> {t('onboarding.analytics')}
                                 </Badge>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Overview */}
+                    {step === "overview" && (
+                        <div className="flex-1 flex flex-col gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.overview.title')}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{t('onboarding.overview.desc')}</p>
+                            </div>
+                            <div className="flex flex-col gap-3 overflow-y-auto">
+                                {OVERVIEW_SECTIONS.map((section) => (
+                                    <div key={section.label} className={cn("rounded-xl border bg-gradient-to-br p-4", section.color)}>
+                                        <p className={cn("text-xs font-semibold uppercase tracking-wide mb-3", section.iconColor)}>
+                                            {section.label}
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {section.items.map((item) => (
+                                                <div key={item.title} className="flex items-start gap-2.5">
+                                                    <div className={cn("h-7 w-7 rounded-md bg-background/60 flex items-center justify-center shrink-0 mt-0.5")}>
+                                                        <item.icon className={cn("h-3.5 w-3.5", section.iconColor)} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                                                        <p className="text-xs text-muted-foreground line-clamp-2">{item.desc}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -432,6 +529,80 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                             </div>
                         </div>
                     )}
+
+                    {/* Backup */}
+                    {step === "backup" && (
+                        <div className="flex-1 flex flex-col gap-5">
+                            <div>
+                                <h2 className="text-xl font-bold text-foreground">{t('onboarding.backup.title')}</h2>
+                                <p className="text-sm text-muted-foreground mt-1">{t('onboarding.backup.desc')}</p>
+                            </div>
+
+                            {/* Why backup matters */}
+                            <div className="flex flex-col gap-2.5">
+                                {[
+                                    { icon: ShieldCheck, labelKey: 'onboarding.backup.reason.safe' },
+                                    { icon: HardDrive,   labelKey: 'onboarding.backup.reason.local' },
+                                    { icon: FolderOpen,  labelKey: 'onboarding.backup.reason.restore' },
+                                ].map(({ icon: Icon, labelKey }) => (
+                                    <div key={labelKey} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                                        <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                            <Icon className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <p className="text-sm text-foreground leading-relaxed">{t(labelKey)}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* CTA */}
+                            <div className="mt-auto pt-2 flex flex-col gap-2">
+                                <p className="text-xs text-muted-foreground">{t('onboarding.backup.hint')}</p>
+                                <Button
+                                    className="gap-2 w-full sm:w-auto"
+                                    onClick={() => {
+                                        onComplete();
+                                        onOpenSettings?.('backup');
+                                    }}
+                                >
+                                    <FolderOpen className="h-4 w-4" />
+                                    {t('onboarding.backup.openSettings')}
+                                </Button>
+                            </div>
+
+                            {/* Restore divider */}
+                            {apiClient.isElectron() && (
+                                <>
+                                    <div className="flex items-center gap-3 my-1">
+                                        <div className="h-px flex-1 bg-border" />
+                                        <span className="text-xs text-muted-foreground">{t('onboarding.restore.orTitle')}</span>
+                                        <div className="h-px flex-1 bg-border" />
+                                    </div>
+
+                                    <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30">
+                                        <div className="h-8 w-8 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                            <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                        </div>
+                                        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                                            <p className="text-sm font-medium text-foreground">{t('onboarding.restore.title')}</p>
+                                            <p className="text-xs text-muted-foreground leading-relaxed">{t('onboarding.restore.desc')}</p>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="mt-1 gap-1.5 self-start"
+                                                disabled={restoreRunning}
+                                                onClick={handleSelectRestoreFile}
+                                            >
+                                                {restoreRunning
+                                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    : <Upload className="h-3.5 w-3.5" />}
+                                                {t('onboarding.restore.button')}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer navigation */}
@@ -446,9 +617,13 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                         )}
                     </div>
                     <div>
-                        {step === "tour" ? (
+                        {step === "backup" ? (
                             <Button onClick={onComplete} className="gap-1.5">
                                 {t('onboarding.goToDashboard')} <ArrowRight className="h-3.5 w-3.5" />
+                            </Button>
+                        ) : step === "tour" ? (
+                            <Button onClick={goNext} className="gap-1.5">
+                                {t('onboarding.nextStep')} <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         ) : (
                             <Button onClick={goNext} className="gap-1.5">
@@ -460,5 +635,28 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                 </div>
             </DialogContent>
         </Dialog>
+
+        <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{t('onboarding.restore.confirm.title')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {t('onboarding.restore.confirm.desc')}
+                        {restoreFile && (
+                            <span className="block mt-1 font-medium text-foreground truncate">
+                                {restoreFile.split('/').pop()}
+                            </span>
+                        )}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRestoreConfirmed}>
+                        {t('onboarding.restore.confirm.action')}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        </>
     );
 }

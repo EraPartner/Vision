@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
+import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 
 type Theme = 'dark' | 'light';
 type ThemeMode = 'light' | 'dark' | 'system' | 'schedule';
@@ -55,29 +56,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const [loaded, setLoaded] = useState(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Load from database
+    // Consume the single preloaded settings fetch instead of making our own request.
+    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<{ mode?: ThemeMode; schedule?: ThemeSchedule }>(SETTINGS_KEY);
+
     useEffect(() => {
-        let cancelled = false;
-        apiClient.getSetting(SETTINGS_KEY)
-            .then((result) => {
-                if (!cancelled && result?.value) {
-                    const v = result.value;
-                    if (v.mode) setModeState(v.mode);
-                    if (v.schedule) setScheduleState(v.schedule);
+        if (preloadLoading) return;
+        if (preloaded) {
+            if (preloaded.mode) setModeState(preloaded.mode);
+            if (preloaded.schedule) setScheduleState(preloaded.schedule);
+        } else {
+            // Fallback: try localStorage for migration from older versions
+            try {
+                const stored = localStorage.getItem('vision_theme');
+                if (stored === 'light' || stored === 'dark') {
+                    setModeState(stored as ThemeMode);
                 }
-            })
-            .catch(() => {
-                // Try localStorage migration
-                try {
-                    const stored = localStorage.getItem('vision_theme');
-                    if (!cancelled && (stored === 'light' || stored === 'dark')) {
-                        setModeState(stored as ThemeMode);
-                    }
-                } catch { }
-            })
-            .finally(() => { if (!cancelled) setLoaded(true); });
-        return () => { cancelled = true; };
-    }, []);
+            } catch { }
+        }
+        setLoaded(true);
+    }, [preloaded, preloadLoading]);
 
     // Persist to database (debounced)
     const persist = useCallback((m: ThemeMode, s: ThemeSchedule) => {

@@ -2,6 +2,12 @@
  * Transaction Repository - data access for transactions table.
  *
  * Mirrors: apps/backend/repositories/transaction_repository.py
+ *
+ * Performance notes:
+ * - create() uses a CTE to INSERT and immediately JOIN in a single round-trip,
+ *   eliminating the old INSERT RETURNING + separate getById pattern.
+ * - getAllWithCount() uses COUNT(*) OVER () window function so pagination callers
+ *   get rows and total count in one DB call instead of two.
  */
 
 import { query } from '../database/connection.js';
@@ -218,13 +224,29 @@ export const transactionRepository = {
   },
 
   /**
-   * Create a new transaction.
+   * Create a new transaction and return the full enriched row in a single round-trip.
+   *
+   * Uses a CTE to INSERT the row and immediately JOIN with recipients/categories so
+   * callers get the complete representation without a second SELECT (getById) call.
    */
   async create({ transaction_date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment }) {
     const sql = `
-      INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
-      RETURNING *
+      WITH inserted AS (
+        INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, category_id, comment, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+        RETURNING *
+      )
+      SELECT t.*,
+             r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM inserted t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
     `;
     const params = [
       transaction_date,
@@ -238,8 +260,62 @@ export const transactionRepository = {
       comment,
     ];
     const result = await query(sql, params);
-    // Re-fetch with joins to get names
-    return this.getById(result.rows[0].id);
+    return result.rows[0] || null;
+  },
+
+  /**
+   * Get transactions AND total count in a single DB round-trip using COUNT(*) OVER ().
+   * Use this instead of calling getAll() + getCount() separately in paginated views.
+   *
+   * Returns: { rows: [...], total: number }
+   */
+  async getAllWithCount({
+    limit = 50,
+    offset = 0,
+    startDate = null,
+    endDate = null,
+    bankAccount = null,
+    categoryId = null,
+    recipientId = null,
+    recipientName = null,
+    search = null,
+    active = true,
+    sortBy = null,
+    sortDir = null,
+  } = {}) {
+    const { where, params, nextParam: p } = buildWhereClause({
+      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+    });
+
+    const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
+    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
+    const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
+      ? `${sortCol} ${sortDirection}, t.date DESC`
+      : `t.date DESC`;
+
+    const sql = `
+      SELECT t.*,
+             COALESCE(pr.name, r.name) AS recipient_name,
+             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name,
+             COUNT(*) OVER () AS total_count
+      FROM transactions t
+      ${TRANSACTION_JOINS}
+      WHERE ${where}
+      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
+    `;
+    params.push(limit, offset);
+
+    const result = await query(sql, params);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    // Strip total_count from each row before returning
+    const rows = result.rows.map(({ total_count, ...row }) => row);
+    return { rows, total };
   },
 
   /**

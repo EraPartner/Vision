@@ -26,6 +26,8 @@ export async function createMaterializedViews() {
 
   // 1. Monthly income / spending / net per month (last 12 months)
   //    Drop and recreate if the column list changed (e.g. category_id_key added).
+  //    This must run first — DROP CASCADE would destroy the other views if they
+  //    happened to depend on it, so we serialise this one step.
   await query(`DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE`);
   await query(`
     CREATE MATERIALIZED VIEW mv_monthly_summary AS
@@ -56,72 +58,70 @@ export async function createMaterializedViews() {
     ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
 
-  // 2. Category totals (all-time)
-  await query(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
-    SELECT
-      COALESCE(c.id, -1) AS category_id,
-      COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
-      COUNT(*) AS count,
-      SUM(t.amount) AS total,
-      t.currency
-    FROM transactions t
-    LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
-    WHERE t.is_active = true
-    GROUP BY
-      COALESCE(c.id, -1),
-      COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
-      t.currency
-    ORDER BY count DESC
-  `);
+  // 2-4. Category totals, daily cashflow, and bank balances are fully independent
+  //      of each other — create them in parallel.
+  await Promise.all([
+    // 2. Category totals (all-time)
+    query(`
+      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals AS
+      SELECT
+        COALESCE(c.id, -1) AS category_id,
+        COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
+        COUNT(*) AS count,
+        SUM(t.amount) AS total,
+        t.currency
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      WHERE t.is_active = true
+      GROUP BY
+        COALESCE(c.id, -1),
+        COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED'),
+        t.currency
+      ORDER BY count DESC
+    `).then(() => query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS mv_category_totals_idx
+      ON mv_category_totals (category_id, currency)
+    `)),
 
-  await query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS mv_category_totals_idx
-    ON mv_category_totals (category_id, currency)
-  `);
+    // 3. Daily cashflow (last 7 months – 6 complete + current)
+    query(`
+      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily AS
+      SELECT
+        t.date,
+        EXTRACT(DAY FROM t.date)::int AS day_of_month,
+        date_trunc('month', t.date)::date AS month_start,
+        t.currency,
+        SUM(t.amount) AS net
+      FROM transactions t
+      WHERE t.is_active = true
+        AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
+      GROUP BY t.date, day_of_month, month_start, t.currency
+      ORDER BY t.date
+    `).then(() => query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
+      ON mv_cashflow_daily (date, currency)
+    `)),
 
-  // 3. Daily cashflow (last 7 months – 6 complete + current)
-  await query(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily AS
-    SELECT
-      t.date,
-      EXTRACT(DAY FROM t.date)::int AS day_of_month,
-      date_trunc('month', t.date)::date AS month_start,
-      t.currency,
-      SUM(t.amount) AS net
-    FROM transactions t
-    WHERE t.is_active = true
-      AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
-    GROUP BY t.date, day_of_month, month_start, t.currency
-    ORDER BY t.date
-  `);
-
-  await query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS mv_cashflow_daily_idx
-    ON mv_cashflow_daily (date, currency)
-  `);
-
-  // 4. Bank account balances (running totals)
-  await query(`
-    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances AS
-    SELECT
-      bank_account,
-      t.currency,
-      COUNT(*) AS transaction_count,
-      MIN(t.date) AS first_transaction,
-      MAX(t.date) AS last_transaction,
-      SUM(t.amount) AS balance
-    FROM transactions t
-    WHERE t.is_active = true AND bank_account IS NOT NULL
-    GROUP BY bank_account, t.currency
-    ORDER BY bank_account
-  `);
-
-  await query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx
-    ON mv_bank_balances (bank_account, currency)
-  `);
+    // 4. Bank account balances (running totals)
+    query(`
+      CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances AS
+      SELECT
+        bank_account,
+        t.currency,
+        COUNT(*) AS transaction_count,
+        MIN(t.date) AS first_transaction,
+        MAX(t.date) AS last_transaction,
+        SUM(t.amount) AS balance
+      FROM transactions t
+      WHERE t.is_active = true AND bank_account IS NOT NULL
+      GROUP BY bank_account, t.currency
+      ORDER BY bank_account
+    `).then(() => query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS mv_bank_balances_idx
+      ON mv_bank_balances (bank_account, currency)
+    `)),
+  ]);
 
   logger.info('Materialized views ready');
 }
@@ -152,13 +152,14 @@ export async function ensureMaterializedViewIndexes() {
     },
   ];
 
-  for (const { name, view, columns } of indexes) {
-    try {
-      await query(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`);
-    } catch (err) {
-      logger.warn(`Could not create index ${name} on ${view}`, { error: err.message });
-    }
-  }
+  // All three indexes are on independent views — create them in parallel
+  await Promise.all(
+    indexes.map(({ name, view, columns }) =>
+      query(`CREATE UNIQUE INDEX IF NOT EXISTS ${name} ON ${view} ${columns}`).catch(err => {
+        logger.warn(`Could not create index ${name} on ${view}`, { error: err.message });
+      })
+    )
+  );
 }
 let refreshInFlight = false;
 let refreshQueued = false;

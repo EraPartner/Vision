@@ -5,11 +5,16 @@
  *
  * Each bank has its own immutable, append-only table for preserving original CSV data.
  * Uses SHA256 hash-based deduplication at the source level.
+ *
+ * Performance notes:
+ * - All create() methods use INSERT ... ON CONFLICT (deduplication_hash) DO NOTHING RETURNING *
+ *   to collapse the old existsByHash + create two-round-trip pattern into a single query.
+ *   If the hash already exists the insert is skipped and null is returned (caller treats as duplicate).
+ * - existsByHash() is retained for callers that need a boolean check without inserting.
  */
 
 import crypto from 'crypto';
 import { query } from '../database/connection.js';
-import { logger } from '../config/logger.js';
 
 /**
  * Compute SHA256 hash for raw CSV line deduplication.
@@ -21,6 +26,10 @@ export function computeHash(rawCsvLine) {
 // ─── Belfius Raw Transaction Repository ───
 
 export const belfiusRawRepo = {
+  /**
+   * Insert a new raw row. Returns the inserted row, or null if the hash already exists.
+   * Single DB round-trip via ON CONFLICT DO NOTHING.
+   */
   async create(data) {
     const sql = `
       INSERT INTO belfius_raw_transactions (
@@ -29,6 +38,7 @@ export const belfiusRawRepo = {
         recipient_location, recipient_bic, recipient_country, transaction_description,
         value_date, amount, currency, balance, additional_message, raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -39,7 +49,7 @@ export const belfiusRawRepo = {
       data.value_date, data.amount, data.currency, data.balance,
       data.additional_message, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null; // null means duplicate skipped
   },
 
   async existsByHash(hash) {
@@ -81,6 +91,7 @@ export const revolutRawRepo = {
         completed_date, description, amount, fee, currency, state,
         balance, raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -89,7 +100,7 @@ export const revolutRawRepo = {
       data.amount, data.fee, data.currency, data.state,
       data.balance, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async existsByHash(hash) {
@@ -134,6 +145,7 @@ export const kbcRawRepo = {
         counterparty_address, structured_communication, free_communication,
         raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -145,7 +157,7 @@ export const kbcRawRepo = {
       data.counterparty_address, data.structured_communication,
       data.free_communication, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async existsByHash(hash) {
@@ -186,6 +198,7 @@ export const sabbRawRepo = {
         deduplication_hash, transaction_date, posting_date, description,
         amount, currency, status, amount_other_currency, raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -193,7 +206,7 @@ export const sabbRawRepo = {
       data.description, data.amount, data.currency, data.status,
       data.amount_other_currency, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async existsByHash(hash) {
@@ -217,6 +230,7 @@ export const wiseRawRepo = {
         exchange_rate, source_fee_amount, source_fee_currency,
         reference, batch, raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -226,7 +240,7 @@ export const wiseRawRepo = {
       data.exchange_rate, data.source_fee_amount, data.source_fee_currency,
       data.reference, data.batch, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async existsByHash(hash) {
@@ -247,6 +261,7 @@ export const visionRawRepo = {
         deduplication_hash, transaction_date, bank_account, recipient,
         memo, amount, currency, balance, category, comment, raw_csv_line
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ON CONFLICT (deduplication_hash) DO NOTHING
       RETURNING *
     `;
     const result = await query(sql, [
@@ -254,7 +269,7 @@ export const visionRawRepo = {
       data.recipient, data.memo, data.amount, data.currency,
       data.balance, data.category, data.comment, data.raw_csv_line,
     ]);
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async existsByHash(hash) {
@@ -272,10 +287,12 @@ export const rawReferenceRepo = {
   async create({ transactionId, rawSourceType, rawSourceId }) {
     const result = await query(
       `INSERT INTO transaction_raw_references (transaction_id, raw_source_type, raw_source_id)
-       VALUES ($1, $2, $3) RETURNING *`,
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [transactionId, rawSourceType, rawSourceId]
     );
-    return result.rows[0];
+    return result.rows[0] ?? null;
   },
 
   async getByTransactionId(transactionId) {

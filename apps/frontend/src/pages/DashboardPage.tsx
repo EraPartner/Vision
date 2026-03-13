@@ -25,7 +25,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
 
     const DASHBOARD_WIDGETS: WidgetDefinition[] = [
         { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
@@ -66,7 +66,8 @@ export default function DashboardPage() {
     });
 
     // Build complete excluded category IDs list (including hidden categories)
-    const allExcludedCategoryIds = (() => {
+    // Memoized — only recomputes when the relevant settings or categories change.
+    const allExcludedCategoryIds = useMemo(() => {
         if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
             return [];
         }
@@ -78,7 +79,7 @@ export default function DashboardPage() {
             ids.push(...hiddenIds);
         }
         return [...new Set(ids)];
-    })();
+    }, [settings.exclusionScope, settings.excludedCategoryIds, settings.excludeHiddenCategories, categoriesData]);
 
     // Recipient exclusions
     const excludedRecipientIds = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
@@ -100,10 +101,15 @@ export default function DashboardPage() {
     });
 
     // Fetch monthly summary — UNFILTERED version (stable query key)
+    // Only needed when exclusions are not active, or as fallback for per-graph toggle.
     const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useQuery({
         queryKey: ['monthlySummary', 'unfiltered'],
         queryFn: () => apiClient.getMonthlyFinancialSummary({}),
         staleTime: 30000,
+        // Skip this fetch when exclusions are active — filtered data is used instead.
+        // Still needed when users toggle a graph back to "unfiltered" mode, so we
+        // keep the query enabled if the exclusion toggles might need it.
+        enabled: !exclusionsApply,
     });
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
@@ -117,10 +123,12 @@ export default function DashboardPage() {
     });
 
     // Fetch cashflow comparison — UNFILTERED version (stable query key)
+    // Only needed when no exclusions are active, or for per-graph toggle back to raw data.
     const { data: cashflowDataUnfiltered, isLoading: cashflowUnfilteredLoading } = useQuery({
         queryKey: ['cashflowComparison', 'unfiltered'],
         queryFn: () => apiClient.getCashflowComparison({}),
         staleTime: 30000,
+        enabled: !exclusionsApply,
     });
 
     const cashflowLoading = cashflowFilteredLoading || cashflowUnfilteredLoading;
@@ -277,7 +285,7 @@ export default function DashboardPage() {
         const topCategories = sorted.slice(0, 5);
 
         // Sum up the rest as "Other"
-        const otherCount = sorted.slice(7).reduce((sum, cat) => sum + cat.count, 0);
+        const otherCount = sorted.slice(5).reduce((sum, cat) => sum + cat.count, 0);
 
         // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
         const extractDetail = (categoryName: string): string => {
@@ -513,7 +521,7 @@ export default function DashboardPage() {
                             <div>
                                 <CardTitle className="text-xl">{t('cashflow.title')}</CardTitle>
                                 <CardDescription className="text-base">
-                                    {new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })} — {t('cashflow.chartDesc', { monthName: new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(undefined, { month: 'long' }) })}
+                                    {t('cashflow.chartDesc', { monthName: new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(language, { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase()) })}
                                 </CardDescription>
                             </div>
                         </div>

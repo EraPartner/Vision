@@ -565,20 +565,33 @@ class ApiClient {
     }
 
     /**
-     * Persist backup settings to Electron settings.json (survives container restart).
-     * Only available inside the Electron desktop app.
+     * Persist backup settings to the database via the backend API.
+     * This ensures settings survive Docker container restarts and are the single
+     * source of truth. Also mirrors to Electron settings.json (via IPC) as a
+     * fallback for the will-quit backup handler in case the backend is already down.
      */
     async saveBackupSettings(settings: { backupDir: string; backupOnQuit: boolean }): Promise<void> {
+        // Primary: persist to DB
+        await this.saveSetting('backup_settings', settings);
+        // Secondary: mirror to Electron settings.json (best-effort, non-blocking)
         const backup = (window as Window & { electronBackup?: { saveSettings: (s: { backupDir: string; backupOnQuit: boolean }) => Promise<void> } }).electronBackup;
-        if (!backup) return;
-        await backup.saveSettings(settings);
+        if (backup) backup.saveSettings(settings).catch(() => {});
     }
 
     /**
-     * Load backup settings from Electron settings.json.
-     * Only available inside the Electron desktop app.
+     * Load backup settings from the database via the backend API.
+     * Falls back to Electron settings.json (via IPC) if the backend is not yet available.
      */
     async loadBackupSettings(): Promise<{ backupDir: string; backupOnQuit: boolean } | null> {
+        try {
+            const result = await this.getSetting('backup_settings');
+            if (result?.value) {
+                const v = result.value as { backupDir?: string; backupOnQuit?: boolean };
+                return { backupDir: v.backupDir ?? '', backupOnQuit: v.backupOnQuit ?? false };
+            }
+        } catch {
+            // fall through to Electron IPC fallback
+        }
         const backup = (window as Window & { electronBackup?: { loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }> } }).electronBackup;
         if (!backup) return null;
         return backup.loadSettings();

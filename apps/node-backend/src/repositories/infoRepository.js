@@ -9,20 +9,41 @@
  */
 
 import { query } from '../database/connection.js';
-import { convertToEur } from '../services/currencyConversionService.js';
+import { convertRowsToEur } from '../services/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 
 /**
+ * Module-level cache for materialized view availability checks.
+ * Views persist for the lifetime of the process — once confirmed available
+ * we never need to probe again, eliminating one DB round-trip per hot-path call.
+ * The cache is keyed by view name and cleared when a refresh is triggered
+ * (e.g. after bulk import) via clearMvCache().
+ */
+const mvCache = new Map();
+
+/**
  * Helper: check if a materialized view exists and has rows.
+ * Result is cached in-process after the first successful check.
  * Returns false if the view doesn't exist (first startup before schema init).
  */
 async function mvAvailable(viewName) {
+  if (mvCache.has(viewName)) return mvCache.get(viewName);
   try {
     const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
-    return r.rows.length > 0;
+    const available = r.rows.length > 0;
+    if (available) mvCache.set(viewName, true);
+    return available;
   } catch {
     return false;
   }
+}
+
+/**
+ * Clear the materialized-view availability cache.
+ * Call after schema changes or when views are known to have been recreated.
+ */
+export function clearMvCache() {
+  mvCache.clear();
 }
 
 export const infoRepository = {
@@ -31,14 +52,15 @@ export const infoRepository = {
     if (await mvAvailable('mv_category_totals')) {
       const countResult = await query('SELECT count(*) FROM transactions WHERE is_active = true');
 
-      // Category totals from MV (already grouped)
+      // Category totals from MV (already grouped) — batch-convert all rows at once
       const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const convertedRows = await convertRowsToEur(catResult.rows.map(r => ({ ...r, amount: parseFloat(r.total || 0) })));
+
       const categories = [];
       let totalEur = 0;
 
-      for (const row of catResult.rows) {
-        const total = parseFloat(row.total || 0);
-        const eur = await convertToEur(total, row.currency, new Date().toISOString().split('T')[0]);
+      for (const row of convertedRows) {
+        const eur = row.amount_eur;
         totalEur += eur;
         // Merge same category across currencies
         const existing = categories.find(c => c.id === (row.category_id === -1 ? null : row.category_id));
@@ -71,12 +93,12 @@ export const infoRepository = {
       WHERE t.is_active = true
     `);
 
-    let totalEur = 0;
-    for (const row of txResult.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      totalEur += await convertToEur(amt, row.currency, dateStr);
-    }
+    // Batch-convert all rows in one rates fetch
+    const txConverted = await convertRowsToEur(txResult.rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.amount),
+    })));
+    let totalEur = txConverted.reduce((s, r) => s + r.amount_eur, 0);
 
     const categoryAmountResult = await query(`
       SELECT COALESCE(c.id, -1) AS category_id,
@@ -90,13 +112,17 @@ export const infoRepository = {
       WHERE t.is_active = true
     `);
 
+    // Batch-convert category rows
+    const catConverted = await convertRowsToEur(categoryAmountResult.rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.amount),
+    })));
+
     const categories = [];
     const catMap = {};
-    for (const row of categoryAmountResult.rows) {
+    for (const row of catConverted) {
       const catId = row.category_id === -1 ? null : parseInt(row.category_id, 10);
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+      const eur = row.amount_eur;
       const key = catId ?? 'null';
       if (!catMap[key]) {
         catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
@@ -147,13 +173,13 @@ export const infoRepository = {
       return { total_count: 0, total_amount: 0, average: 0, min: null, max: null };
     }
 
+    // Batch-convert all rows in a single rates fetch
+    const converted = await convertRowsToEur(result.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
     let total = 0;
     let min = Infinity;
     let max = -Infinity;
-    for (const row of result.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of converted) {
+      const eur = row.amount_eur;
       total += eur;
       if (eur < min) min = eur;
       if (eur > max) max = eur;
@@ -188,24 +214,49 @@ export const infoRepository = {
       `);
 
       const monthMap = {};
-      for (const row of mvResult.rows) {
-        const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+      // Batch-convert all MV rows in one rates fetch
+      const mvConverted = await convertRowsToEur(mvResult.rows.map(r => ({
+        ...r,
+        // Use month_start as a representative date for the rate lookup
+        currency: r.currency,
+        amount: parseFloat(r.total_income),
+        _spending: parseFloat(r.total_spending),
+      })));
+
+      // convertRowsToEur only converts 'amount', so we need a second pass for spending
+      // Use the same rates by calling getRates once - instead batch both into separate rows
+      // More efficient: merge income+spending into one array, convert all, then split
+      const mergedRows = [];
+      for (const r of mvResult.rows) {
+        const dateStr = r.month_start instanceof Date ? r.month_start.toISOString().split('T')[0] : String(r.month_start);
+        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_income), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'income', _row: r, date: dateStr });
+        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_spending), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'spending', _row: r, date: dateStr });
+      }
+      const mergedConverted = await convertRowsToEur(mergedRows);
+
+      for (const conv of mergedConverted) {
+        const key = conv._key;
+        const r = conv._row;
         if (!monthMap[key]) {
           monthMap[key] = {
-            month: row.month, year: row.year,
-            period_start: row.month_start,
+            month: r.month, year: r.year,
+            period_start: r.month_start,
             period_end: null,
             total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0,
           };
         }
-        const dateStr = row.month_start instanceof Date ? row.month_start.toISOString().split('T')[0] : String(row.month_start);
-        const income = await convertToEur(parseFloat(row.total_income), row.currency, dateStr);
-        const spending = await convertToEur(parseFloat(row.total_spending), row.currency, dateStr);
+        if (conv._type === 'income') {
+          monthMap[key].total_income += conv.amount_eur;
+        } else {
+          monthMap[key].total_spending += conv.amount_eur;
+        }
+        monthMap[key].net_amount = monthMap[key].total_income + monthMap[key].total_spending;
+        monthMap[key].transaction_count += parseInt(r.transaction_count, 10);
+      }
 
-        monthMap[key].total_income += income;
-        monthMap[key].total_spending += spending;
-        monthMap[key].net_amount += income + spending;
-        monthMap[key].transaction_count += parseInt(row.transaction_count, 10);
+      // Deduplicate transaction_count (it was added twice per row above)
+      for (const m of Object.values(monthMap)) {
+        m.transaction_count = Math.round(m.transaction_count / 2);
       }
 
       const months = Object.values(monthMap)
@@ -270,8 +321,14 @@ export const infoRepository = {
     const result = await query(sql, validIds);
     logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
-    // Group by month and convert amounts
+    // Group by month and convert amounts — batch all in one rates fetch
+    const liveConverted = await convertRowsToEur(result.rows
+      .filter(r => r.txn_id != null)
+      .map(r => ({ ...r, amount: parseFloat(r.amount) }))
+    );
+
     const monthMap = {};
+    // Pre-populate all months (including empty ones) from the full result set
     for (const row of result.rows) {
       const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
       if (!monthMap[key]) {
@@ -286,11 +343,11 @@ export const infoRepository = {
           transaction_count: 0,
         };
       }
-      if (row.txn_id == null) continue;
+    }
 
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of liveConverted) {
+      const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+      const eur = row.amount_eur;
 
       monthMap[key].transaction_count++;
       monthMap[key].net_amount += eur;
@@ -351,17 +408,22 @@ export const infoRepository = {
       monthAfter.toISOString().split('T')[0],
     ]);
 
-    // Group by date, converting amounts to EUR
+    // Batch-convert all planned rows in one rates fetch
+    const plannedConverted = await convertRowsToEur(result.rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.amount),
+    })));
+
+    // Group by date
     const dailyMap = {};
-    for (const row of result.rows) {
+    for (const row of plannedConverted) {
       const dateStr = row.planned_date instanceof Date
         ? row.planned_date.toISOString().split('T')[0]
         : String(row.planned_date);
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { date: dateStr, total_income: 0, total_expenses: 0, transactions: [] };
       }
-      const amt = parseFloat(row.amount);
-      const eur = await convertToEur(amt, row.currency, dateStr);
+      const eur = row.amount_eur;
       if (eur >= 0) dailyMap[dateStr].total_income += eur;
       else dailyMap[dateStr].total_expenses += eur;
       dailyMap[dateStr].transactions.push({
@@ -405,13 +467,15 @@ export const infoRepository = {
     `;
     const past6Result = await query(sql6m);
 
+    // Batch-convert all past-6-months rows in one rates fetch
+    const past6Converted = await convertRowsToEur(past6Result.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     // Convert and group by month
     const monthlySpending = {};
     const monthlyDays = {};
-    for (const row of past6Result.rows) {
-      const amt = parseFloat(row.amount);
+    for (const row of past6Converted) {
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+      const eur = row.amount_eur;
       const monthKey = dateStr.substring(0, 7);
       if (!monthlySpending[monthKey]) { monthlySpending[monthKey] = 0; monthlyDays[monthKey] = new Set(); }
       if (eur < 0) monthlySpending[monthKey] += Math.abs(eur);
@@ -435,11 +499,13 @@ export const infoRepository = {
     `;
     const currentResult = await query(sqlCurrent);
 
+    // Batch-convert current month rows in one rates fetch
+    const currentConverted = await convertRowsToEur(currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     const dailyMap = {};
-    for (const row of currentResult.rows) {
-      const amt = parseFloat(row.amount);
+    for (const row of currentConverted) {
       const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+      const eur = row.amount_eur;
       if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
       if (eur < 0) dailyMap[dateStr].spending += Math.abs(eur);
       else dailyMap[dateStr].income += eur;
@@ -537,12 +603,13 @@ export const infoRepository = {
     `;
     const pastResult = await query(sqlPast, excludeParams);
 
+    // Batch-convert all historical rows in one rates fetch
+    const pastConverted = await convertRowsToEur(pastResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     // Group by month → day → net EUR
     const monthDayNet = {};
-    for (const row of pastResult.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of pastConverted) {
+      const eur = row.amount_eur;
       const mk = row.month_key;
       if (!monthDayNet[mk]) monthDayNet[mk] = {};
       monthDayNet[mk][row.day_of_month] = (monthDayNet[mk][row.day_of_month] || 0) + eur;
@@ -579,11 +646,12 @@ export const infoRepository = {
     `;
     const currentResult = await query(sqlCurrent, excludeParams);
 
+    // Batch-convert current month rows
+    const currentCashflowConverted = await convertRowsToEur(currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     const currentDayNet = {};
-    for (const row of currentResult.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of currentCashflowConverted) {
+      const eur = row.amount_eur;
       currentDayNet[row.day_of_month] = (currentDayNet[row.day_of_month] || 0) + eur;
     }
 
@@ -605,11 +673,12 @@ export const infoRepository = {
     `;
     const plannedCurrentResult = await query(sqlPlannedCurrent);
 
+    // Batch-convert planned current month rows
+    const plannedCurrentConverted = await convertRowsToEur(plannedCurrentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     const plannedCurrentByDay = {};
-    for (const row of plannedCurrentResult.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.planned_date instanceof Date ? row.planned_date.toISOString().split('T')[0] : String(row.planned_date);
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of plannedCurrentConverted) {
+      const eur = row.amount_eur;
       plannedCurrentByDay[row.day_of_month] = (plannedCurrentByDay[row.day_of_month] || 0) + eur;
     }
 
@@ -625,11 +694,12 @@ export const infoRepository = {
     `;
     const plannedHistResult = await query(sqlPlannedHist);
 
+    // Batch-convert historical planned rows
+    const plannedHistConverted = await convertRowsToEur(plannedHistResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })));
+
     const plannedHistMonthDay = {};
-    for (const row of plannedHistResult.rows) {
-      const amt = parseFloat(row.amount);
-      const dateStr = row.planned_date instanceof Date ? row.planned_date.toISOString().split('T')[0] : String(row.planned_date);
-      const eur = await convertToEur(amt, row.currency, dateStr);
+    for (const row of plannedHistConverted) {
+      const eur = row.amount_eur;
       const mk = row.month_key;
       if (!plannedHistMonthDay[mk]) plannedHistMonthDay[mk] = {};
       plannedHistMonthDay[mk][row.day_of_month] = (plannedHistMonthDay[mk][row.day_of_month] || 0) + eur;
@@ -712,11 +782,17 @@ export const infoRepository = {
       ORDER BY bank_account, date DESC, id DESC
     `);
 
-    for (const row of latestBalanceResult.rows) {
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const currency = row.currency || 'EUR';
-      const eur = await convertToEur(parseFloat(row.balance), currency, dateStr);
-      const balance = Math.round(eur * 100) / 100;
+    // Batch-convert current balances in one rates fetch
+    const currentBalancesConverted = await convertRowsToEur(
+      latestBalanceResult.rows.map(r => ({
+        ...r,
+        amount: parseFloat(r.balance),
+        currency: r.currency || 'EUR',
+      }))
+    );
+
+    for (const row of currentBalancesConverted) {
+      const balance = Math.round(row.amount_eur * 100) / 100;
 
       accounts.push({
         bank_account: row.bank_account,
@@ -766,23 +842,29 @@ export const infoRepository = {
       ORDER BY bank_account, month_start
     `);
 
-    // Group monthly history by account, converting to EUR
+    // Batch-convert all history rows in one rates fetch
+    const historyConverted = await convertRowsToEur(
+      historyResult.rows
+        .filter(r => r.bank_account)
+        .map(r => ({
+          ...r,
+          amount: parseFloat(r.balance),
+          currency: r.currency || 'EUR',
+        }))
+    );
+
+    // Group monthly history by account
     const historyMap = {};
-    for (const row of historyResult.rows) {
-      if (!row.bank_account) continue;
+    for (const row of historyConverted) {
       const key = row.bank_account;
       if (!historyMap[key]) historyMap[key] = [];
 
-      const currency = row.currency || 'EUR';
       const monthStr = row.month_start instanceof Date
         ? row.month_start.toISOString().split('T')[0]
         : row.month_start;
-      const dateForRate = row.date instanceof Date ? row.date.toISOString().split('T')[0] : (row.date || monthStr);
-
-      const eur = await convertToEur(parseFloat(row.balance), currency, dateForRate);
 
       const monthKey = monthStr.substring(0, 7);
-      historyMap[key].push({ month: monthKey, balance: Math.round(eur * 100) / 100 });
+      historyMap[key].push({ month: monthKey, balance: Math.round(row.amount_eur * 100) / 100 });
     }
 
     // Sort each account's history
@@ -945,29 +1027,37 @@ export const infoRepository = {
    * - month-over-month comparison alerts ("You spent X% more at …")
    */
   async getRecipientInsights() {
-    // Fetch raw rows with currency for EUR conversion
+    // Push aggregation to SQL — group by recipient and currency so we need far fewer
+    // EUR conversions (one per currency per recipient, not one per transaction).
     const topRawResult = await query(`
       SELECT
-        COALESCE(pr.name, r.name) AS recipient_name,
-        COALESCE(pr.id, r.id)     AS recipient_id,
-        ABS(t.amount)             AS abs_amount,
+        COALESCE(pr.name, r.name)   AS recipient_name,
+        COALESCE(pr.id, r.id)       AS recipient_id,
         t.currency,
-        t.date,
-        MIN(t.date) OVER (PARTITION BY COALESCE(pr.id, r.id)) AS first_seen,
-        MAX(t.date) OVER (PARTITION BY COALESCE(pr.id, r.id)) AS last_seen
+        SUM(ABS(t.amount))          AS total_abs_amount,
+        COUNT(*)                    AS tx_count,
+        MIN(t.date)                 AS first_seen,
+        MAX(t.date)                 AS last_seen
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
     `);
 
-    // Convert and aggregate by recipient
+    // Batch-convert all rows (one per recipient+currency) in a single rates fetch
+    const topConverted = await convertRowsToEur(topRawResult.rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.total_abs_amount),
+    })));
+
+    // Aggregate by recipient across currencies
     const recipientAgg = {};
-    for (const row of topRawResult.rows) {
+    for (const row of topConverted) {
       const rid = row.recipient_id;
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(parseFloat(row.abs_amount), row.currency, dateStr);
+      const eur = row.amount_eur;
+      const count = parseInt(row.tx_count, 10);
 
       if (!recipientAgg[rid]) {
         recipientAgg[rid] = {
@@ -980,7 +1070,10 @@ export const infoRepository = {
         };
       }
       recipientAgg[rid].totalSpend += eur;
-      recipientAgg[rid].transactionCount++;
+      recipientAgg[rid].transactionCount += count;
+      // Expand date ranges across currencies
+      if (row.first_seen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = row.first_seen;
+      if (row.last_seen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = row.last_seen;
     }
 
     // Keep full recipient detail set for searchable/scrollable insights table.
@@ -993,22 +1086,28 @@ export const infoRepository = {
         avgAmount: Math.round((r.totalSpend / r.transactionCount) * 100) / 100,
       }));
 
-    // Month-over-month comparison (current vs previous month) with EUR conversion
+    // Month-over-month comparison (current vs previous month) — also group by recipient+currency
     const momRawResult = await query(`
       SELECT
-        COALESCE(pr.id, r.id) AS recipient_id,
-        COALESCE(pr.name, r.name) AS recipient_name,
-        TO_CHAR(t.date, 'YYYY-MM') AS period,
-        ABS(t.amount) AS abs_amount,
+        COALESCE(pr.id, r.id)       AS recipient_id,
+        COALESCE(pr.name, r.name)   AS recipient_name,
+        TO_CHAR(t.date, 'YYYY-MM')  AS period,
         t.currency,
-        t.date
+        SUM(ABS(t.amount))          AS abs_amount
       FROM transactions t
       JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.amount < 0
         AND t.is_active = true
         AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
     `);
+
+    // Batch-convert MoM rows in one rates fetch
+    const momConverted = await convertRowsToEur(momRawResult.rows.map(r => ({
+      ...r,
+      amount: parseFloat(r.abs_amount),
+    })));
 
     const currentPeriod = new Date().toISOString().substring(0, 7);
     const prevDate = new Date();
@@ -1016,10 +1115,9 @@ export const infoRepository = {
     const prevPeriod = prevDate.toISOString().substring(0, 7);
 
     const momAgg = {}; // { recipientId: { name, current: eurTotal, previous: eurTotal } }
-    for (const row of momRawResult.rows) {
+    for (const row of momConverted) {
       const rid = row.recipient_id;
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
-      const eur = await convertToEur(parseFloat(row.abs_amount), row.currency, dateStr);
+      const eur = row.amount_eur;
 
       if (!momAgg[rid]) momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
       if (row.period === currentPeriod) momAgg[rid].current += eur;

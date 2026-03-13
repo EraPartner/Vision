@@ -43,6 +43,7 @@ import { toast } from 'sonner';
 interface DashboardSettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    defaultTab?: string;
 }
 
 const CURRENCIES = [
@@ -66,13 +67,16 @@ const NUMBER_FORMATS = [
     { value: 'in', labelKey: 'settings.numberFormat.in' },
 ];
 
-export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSettingsDialogProps) {
+export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'general' }: DashboardSettingsDialogProps) {
     const { settings, updateSettings, resetSettings } = useSettings();
     const { appSettings, updateAppSettings, resetAppSettings } = useAppSettings();
     const { reset: resetOnboarding } = useOnboarding();
     const { t } = useLanguage();
 
     // Dashboard tab local state
+    const [activeTab, setActiveTab] = useState(defaultTab);
+    useEffect(() => { setActiveTab(defaultTab); }, [defaultTab]);
+
     const [localExcludedCategories, setLocalExcludedCategories] = useState<number[]>([]);
     const [localExcludedRecipients, setLocalExcludedRecipients] = useState<number[]>([]);
     const [localExcludeHidden, setLocalExcludeHidden] = useState(true);
@@ -83,7 +87,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
     // General tab local state
     const [localAppSettings, setLocalAppSettings] = useState(appSettings);
 
-    // Backup tab state (Electron-only; stored in settings.json, not DB)
+    // Backup tab state (Electron-only; stored in the database via backup_settings key)
     const [backupDir, setBackupDir] = useState('');
     const [backupOnQuit, setBackupOnQuit] = useState(false);
     const [backupLoading, setBackupLoading] = useState(false);
@@ -331,7 +335,7 @@ export function DashboardSettingsDialog({ open, onOpenChange }: DashboardSetting
                     </DialogDescription>
                 </DialogHeader>
 
-                <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                     <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="general">{t('settings.tab.general')}</TabsTrigger>
                         <TabsTrigger value="dashboard">{t('settings.tab.dashboard')}</TabsTrigger>

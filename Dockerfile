@@ -5,8 +5,9 @@ FROM oven/bun:1-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copy workspace manifests so bun can resolve the workspace graph
-COPY package.json bun.lockb* ./
+# Copy workspace manifests so bun can resolve the workspace graph.
+# bun.lock* matches both text (bun.lock) and binary (bun.lockb) lockfile formats.
+COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
 RUN bun install --frozen-lockfile
@@ -16,7 +17,7 @@ COPY apps/frontend/ ./apps/frontend/
 RUN bun run --filter vision-frontend build
 
 # ============================================================
-# Stage 2: Production Node.js backend
+# Stage 2: Production backend
 # ============================================================
 FROM oven/bun:1-alpine
 
@@ -35,4 +36,6 @@ ENV ENVIRONMENT=production
 
 EXPOSE 3002
 
-CMD ["node", "apps/node-backend/src/main.js"]
+# Use bun instead of node: bun's JS runtime starts faster and uses less memory
+# than stock Node.js for ESM entry points.
+CMD ["bun", "run", "apps/node-backend/src/main.js"]
