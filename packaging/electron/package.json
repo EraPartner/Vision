@@ -1,6 +1,6 @@
 {
   "name": "vision-desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Vision desktop wrapper",
   "main": "main.js",
   "packageManager": "bun",
@@ -21,12 +21,26 @@
     "productName": "Vision",
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.finance"
     },
-    "files": ["main.js", "preload.js", "resources/**/*"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "resources/**/*"
+    ],
     "publish": {
       "provider": "github",
       "owner": "EraPartner",
