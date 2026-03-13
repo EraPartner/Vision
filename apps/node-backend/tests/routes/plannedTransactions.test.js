@@ -6,10 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const routeHandlers = {};
 const mockRouter = {
-  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
-  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
-  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
-  delete: vi.fn((path, handler) => { routeHandlers[`delete:${path}`] = handler; }),
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
+  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
+  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
   use: vi.fn(),
 };
 
@@ -26,7 +26,25 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
     update: vi.fn(),
     hardDelete: vi.fn(),
     addExecution: vi.fn(),
+    replaceLoanSchedule: vi.fn(),
   },
+}));
+
+vi.mock('../../src/services/loanRepaymentService.js', () => ({
+  generateLoanRepaymentSchedule: vi.fn(() => ({
+    regular_payment_amount: 850,
+    first_due_date: '2026-04-01',
+    schedule: [
+      {
+        installment_number: 1,
+        due_date: '2026-04-01',
+        payment_amount: 850,
+        principal_amount: 700,
+        interest_amount: 150,
+        remaining_principal: 9300,
+      },
+    ],
+  })),
 }));
 
 vi.mock('../../src/config/logger.js', () => ({
@@ -122,6 +140,42 @@ describe('Planned Transaction Routes', () => {
       await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('should create loan payment and overwrite amount/date from schedule', async () => {
+      plannedTransactionRepository.create.mockResolvedValue({
+        id: 2,
+        planned_date: '2026-04-01',
+        amount: '850.00',
+        bank_account: 'Mortgage',
+        is_loan: true,
+        is_recurring: true,
+        is_executed: false,
+      });
+
+      const req = {
+        body: {
+          bank_account: 'Mortgage',
+          is_loan: true,
+          loan_type: 'amortizing',
+          loan_principal: 10000,
+          loan_annual_interest_rate: 6,
+          loan_term_months: 12,
+          loan_start_date: '2026-04-01',
+          loan_payment_day: 1,
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_loan: true,
+          amount: -850,
+          planned_date: '2026-04-01',
+        })
+      );
     });
   });
 

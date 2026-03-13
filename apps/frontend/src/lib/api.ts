@@ -521,12 +521,12 @@ class ApiClient {
     // ==================== Backup Methods (Electron only) ====================
 
     /**
-     * Run a pg_dump backup immediately, writing a .sql file to the configured directory.
+     * Run a pg_dump backup immediately, writing a backup file to the configured directory.
      * Only available inside the Electron desktop app.
      * Returns null when called from a browser context.
      */
-    async runBackup(destDir: string): Promise<{ success: boolean; file?: string; error?: string } | null> {
-        const backup = (window as Window & { electronBackup?: { runBackup: (d: string) => Promise<{ success: boolean; file?: string; error?: string }> } }).electronBackup;
+    async runBackup(destDir: string): Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string } | null> {
+        const backup = (window as Window & { electronBackup?: { runBackup: (d: string) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }> } }).electronBackup;
         if (!backup) return null;
         return backup.runBackup(destDir);
     }
@@ -583,6 +583,14 @@ class ApiClient {
      * Falls back to Electron settings.json (via IPC) if the backend is not yet available.
      */
     async loadBackupSettings(): Promise<{ backupDir: string; backupOnQuit: boolean } | null> {
+        const backup = (window as Window & { electronBackup?: { loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }> } }).electronBackup;
+        if (backup) {
+            try {
+                return await backup.loadSettings();
+            } catch {
+                // fall through to backend API read
+            }
+        }
         try {
             const result = await this.getSetting('backup_settings');
             if (result?.value) {
@@ -590,11 +598,29 @@ class ApiClient {
                 return { backupDir: v.backupDir ?? '', backupOnQuit: v.backupOnQuit ?? false };
             }
         } catch {
-            // fall through to Electron IPC fallback
+            // fall through
         }
-        const backup = (window as Window & { electronBackup?: { loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }> } }).electronBackup;
-        if (!backup) return null;
-        return backup.loadSettings();
+        return null;
+    }
+
+    async getBackupEncryptionStatus(): Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean } | null> {
+        const backup = (window as Window & {
+            electronBackup?: {
+                getEncryptionStatus: () => Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>
+            }
+        }).electronBackup;
+        if (!backup?.getEncryptionStatus) return null;
+        return backup.getEncryptionStatus();
+    }
+
+    async setBackupPassphrase(passphrase: string): Promise<{ success: boolean; available: boolean; error?: string } | null> {
+        const backup = (window as Window & {
+            electronBackup?: {
+                setPassphrase: (p: string) => Promise<{ success: boolean; available: boolean; error?: string }>
+            }
+        }).electronBackup;
+        if (!backup?.setPassphrase) return null;
+        return backup.setPassphrase(passphrase);
     }
 
     // ==================== Info/Statistics Methods ====================

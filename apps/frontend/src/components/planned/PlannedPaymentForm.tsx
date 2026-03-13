@@ -18,6 +18,7 @@ import type { Recipient, Category } from "@/types/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type Frequency = PlannedPayment["frequency"];
+type LoanType = NonNullable<PlannedPayment["loan_type"]>;
 
 interface Props {
   open: boolean;
@@ -40,6 +41,12 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   const [dueDate, setDueDate] = useState<Date | undefined>(initial?.due_date ? parseLocalDate(initial.due_date) : undefined);
   const [isRecurring, setIsRecurring] = useState(initial?.is_recurring ?? false);
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? "monthly");
+  const [isLoan, setIsLoan] = useState(initial?.is_loan ?? false);
+  const [loanType, setLoanType] = useState<LoanType>(initial?.loan_type ?? "amortizing");
+  const [loanPrincipal, setLoanPrincipal] = useState(initial?.loan_principal?.toString() ?? "");
+  const [loanRate, setLoanRate] = useState(initial?.loan_annual_interest_rate?.toString() ?? "");
+  const [loanTermMonths, setLoanTermMonths] = useState(initial?.loan_term_months?.toString() ?? "");
+  const [loanPaymentDay, setLoanPaymentDay] = useState(initial?.loan_payment_day?.toString() ?? "");
   const [customDays, setCustomDays] = useState(initial?.custom_interval_days?.toString() ?? "");
   const [endDate, setEndDate] = useState<Date | undefined>(initial?.end_date ? parseLocalDate(initial.end_date) : undefined);
   const [maxOccurrences, setMaxOccurrences] = useState(initial?.max_occurrences?.toString() ?? "");
@@ -75,9 +82,21 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
   }, [open]);
 
   const handleSubmit = () => {
-    if (!name.trim() || !amount || !dueDate) {
+    if (!name.trim() || !dueDate || (!isLoan && !amount)) {
       alert(t('plannedForm.requiredFieldsHint'));
       return;
+    }
+
+    if (isLoan) {
+      if (!loanPrincipal || !loanRate || !loanTermMonths) {
+        alert(t('plannedForm.loanRequiredHint'));
+        return;
+      }
+      const term = parseInt(loanTermMonths, 10);
+      if (!Number.isInteger(term) || term < 1 || term > 600) {
+        alert(t('plannedForm.loanTermInvalid'));
+        return;
+      }
     }
 
     const year = dueDate.getFullYear();
@@ -93,25 +112,47 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       endDateStr = `${eYear}-${eMonth}-${eDay}`;
     }
 
-    onSubmit({
+    // If loan is enabled, clear recurrence inputs before submitting - loans drive their own schedule
+    const payload: any = {
       name: name.trim(),
-      amount: parseFloat(amount),
+      amount: parseFloat(amount || "0"),
       currency,
       due_date: dueDateStr,
       url: url?.trim() || undefined,
-      is_recurring: isRecurring,
+      is_recurring: isLoan ? true : isRecurring,
+      is_loan: isLoan,
+      ...(isLoan && {
+        loan_type: loanType,
+        loan_principal: parseFloat(loanPrincipal),
+        loan_annual_interest_rate: parseFloat(loanRate),
+        loan_term_months: parseInt(loanTermMonths, 10),
+        loan_start_date: dueDateStr,
+        loan_payment_day: loanPaymentDay ? parseInt(loanPaymentDay, 10) : dueDate.getDate(),
+        // keep recurrence_pattern undefined here; recurrence display for loans is handled client-side
+      }),
       recipient_id: recipientId || undefined,
       category_id: categoryId,
       bank_account: bankAccount || undefined,
       notes: notes || undefined,
-      ...(isRecurring && {
+      ...(!isLoan && isRecurring && {
         frequency,
         ...(frequency === "custom" && customDays ? { custom_interval_days: parseInt(customDays) } : {}),
         ...(endDateStr ? { end_date: endDateStr } : {}),
         ...(maxOccurrences ? { max_occurrences: parseInt(maxOccurrences) } : {}),
       }),
       is_active: initial?.is_active ?? true,
-    });
+    };
+
+    if (isLoan) {
+      // Ensure recurrence-related fields are not sent for loans
+      delete payload.frequency;
+      delete payload.custom_interval_days;
+      delete payload.end_date;
+      delete payload.max_occurrences;
+      delete payload.recurrence_pattern;
+    }
+
+    onSubmit(payload);
   };
 
   return (
@@ -211,14 +252,58 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
             {/* Recurring toggle */}
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
+                <Label htmlFor="pp-loan" className="font-medium">{t('plannedForm.loan')}</Label>
+                <p className="text-xs text-muted-foreground">{t('plannedForm.loanDesc')}</p>
+              </div>
+              <Switch id="pp-loan" checked={isLoan} onCheckedChange={setIsLoan} />
+            </div>
+
+            {isLoan && (
+              <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
+                <div className="grid gap-1.5">
+                  <Label>{t('plannedForm.loanType')}</Label>
+                  <Select value={loanType} onValueChange={(v) => setLoanType(v as LoanType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="amortizing">{t('plannedForm.loanType.amortizing')}</SelectItem>
+                      <SelectItem value="fixed_principal">{t('plannedForm.loanType.fixedPrincipal')}</SelectItem>
+                      <SelectItem value="interest_only">{t('plannedForm.loanType.interestOnly')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="pp-loan-principal">{t('plannedForm.loanPrincipal')}</Label>
+                    <Input id="pp-loan-principal" type="number" step="0.01" min={0.01} value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="pp-loan-rate">{t('plannedForm.loanRate')}</Label>
+                    <Input id="pp-loan-rate" type="number" step="0.01" min={0} max={100} value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="pp-loan-term">{t('plannedForm.loanTermMonths')}</Label>
+                    <Input id="pp-loan-term" type="number" min={1} value={loanTermMonths} onChange={(e) => setLoanTermMonths(e.target.value)} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="pp-loan-payment-day">{t('plannedForm.loanPaymentDay')}</Label>
+                    <Input id="pp-loan-payment-day" type="number" min={1} max={31} value={loanPaymentDay} onChange={(e) => setLoanPaymentDay(e.target.value)} placeholder={dueDate ? String(dueDate.getDate()) : '1'} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
                 <Label htmlFor="pp-recurring" className="font-medium">{t('plannedForm.recurring')}</Label>
                 <p className="text-xs text-muted-foreground">{t('plannedForm.recurringDesc')}</p>
               </div>
-              <Switch id="pp-recurring" checked={isRecurring} onCheckedChange={setIsRecurring} />
+              <Switch id="pp-recurring" checked={isLoan ? true : isRecurring} onCheckedChange={setIsRecurring} disabled={isLoan} />
             </div>
 
             {/* Recurring options */}
-            {isRecurring && (
+            {!isLoan && isRecurring && (
               <div className="grid gap-3 rounded-lg border p-3 bg-muted/30">
                 <div className="grid gap-1.5">
                   <Label>{t('plannedForm.frequency')}</Label>
@@ -283,7 +368,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('plannedForm.cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !amount || !dueDate}>
+          <Button onClick={handleSubmit} disabled={loading || !name.trim() || !dueDate || (!isLoan && !amount)}>
             {initial ? t('plannedForm.saveChanges') : t('plannedForm.createPayment')}
           </Button>
         </DialogFooter>

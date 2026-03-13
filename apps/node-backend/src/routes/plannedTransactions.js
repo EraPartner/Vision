@@ -9,6 +9,7 @@ import plannedTransactionRepository from '../repositories/plannedTransactionRepo
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
+import { generateLoanRepaymentSchedule } from '../services/loanRepaymentService.js';
 
 const router = Router();
 
@@ -54,16 +55,44 @@ router.get('/', async (req, res) => {
 // POST /api/planned-transactions
 router.post('/', async (req, res) => {
   try {
-    const data = req.body;
-    if (!data.planned_date || !data.bank_account || data.amount == null) {
-      return res.status(400).json({ detail: 'Missing required fields: planned_date, bank_account, amount' });
+    const data = { ...req.body };
+    if (!data.bank_account) {
+      return res.status(400).json({ detail: 'Missing required field: bank_account' });
+    }
+
+    if (!data.is_loan && (!data.planned_date || data.amount == null)) {
+      return res.status(400).json({ detail: 'Missing required fields: planned_date, amount' });
+    }
+
+    if (data.is_loan) {
+      // Ensure loan_term_months is reasonable
+      if (data.loan_term_months && (data.loan_term_months < 1 || data.loan_term_months > 600)) {
+        return res.status(400).json({ detail: 'loan_term_months must be between 1 and 600 months' });
+      }
+
+      const generated = generateLoanRepaymentSchedule(data);
+      data.loan_regular_payment_amount = generated.regular_payment_amount;
+      data.loan_first_payment_date = generated.first_due_date;
+      data.loan_schedule = generated.schedule;
+      data.amount = -Math.abs(generated.regular_payment_amount);
+      data.planned_date = generated.first_due_date;
+
+      // Ensure loans are treated as recurring internally but do not accept recurrence pattern data
+      data.is_recurring = true;
+      // Clear recurrence pattern to prevent conflicting/nonsense recurrence data
+      if (data.recurrence_pattern) delete data.recurrence_pattern;
+      if (data.frequency) delete data.frequency;
+      if (data.custom_interval_days) delete data.custom_interval_days;
+      if (data.end_date) delete data.end_date;
+      if (data.max_occurrences) delete data.max_occurrences;
     }
 
     const created = await plannedTransactionRepository.create(data);
     res.status(201).json(formatPlannedTransaction(created));
   } catch (err) {
-    logger.error('Error creating planned transaction', { error: err.message });
-    res.status(500).json({ detail: `Failed to create planned transaction: ${err.message}` });
+    const statusCode = Number(err.statusCode) || 500;
+    logger.error('Error creating planned transaction', { error: err.message, statusCode });
+    res.status(statusCode).json({ detail: `Failed to create planned transaction: ${err.message}` });
   }
 });
 
@@ -136,11 +165,62 @@ router.patch(
     }
     delete fields.category_name;
 
+    let generatedLoanSchedule = null;
+    const loanFieldsChanged = [
+      'loan_type', 'loan_principal', 'loan_annual_interest_rate',
+      'loan_term_months', 'loan_start_date', 'loan_payment_day',
+    ].some((k) => fields[k] !== undefined);
+    const resultingIsLoan = fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
+
+    if (resultingIsLoan && (loanFieldsChanged || fields.is_loan === true)) {
+    
+      generatedLoanSchedule = generateLoanRepaymentSchedule({
+        loan_type: fields.loan_type ?? existing.loan_type,
+        loan_principal: fields.loan_principal ?? existing.loan_principal,
+        loan_annual_interest_rate: fields.loan_annual_interest_rate ?? existing.loan_annual_interest_rate,
+        loan_term_months: fields.loan_term_months ?? existing.loan_term_months,
+        loan_start_date: fields.loan_start_date ?? existing.loan_start_date,
+        loan_payment_day: fields.loan_payment_day ?? existing.loan_payment_day,
+      });
+      fields.loan_regular_payment_amount = generatedLoanSchedule.regular_payment_amount;
+      fields.loan_first_payment_date = generatedLoanSchedule.first_due_date;
+      if (fields.amount === undefined) {
+        fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
+      }
+      if (fields.planned_date === undefined) {
+        fields.planned_date = generatedLoanSchedule.first_due_date;
+      }
+      if (fields.is_recurring === undefined) {
+        fields.is_recurring = true;
+      }
+      if (fields.recurrence_pattern === undefined) {
+        fields.recurrence_pattern = 'monthly';
+      }
+    } else if (fields.is_loan === false && existing.is_loan) {
+      fields.loan_type = null;
+      fields.loan_principal = null;
+      fields.loan_annual_interest_rate = null;
+      fields.loan_term_months = null;
+      fields.loan_start_date = null;
+      fields.loan_payment_day = null;
+      fields.loan_regular_payment_amount = null;
+      fields.loan_first_payment_date = null;
+    }
+
     const updated = await plannedTransactionRepository.update(id, fields);
-    res.json(formatPlannedTransaction(updated));
+
+    if (generatedLoanSchedule) {
+      await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
+    } else if (fields.is_loan === false && existing.is_loan) {
+      await plannedTransactionRepository.replaceLoanSchedule(id, []);
+    }
+
+    const withSchedule = await plannedTransactionRepository.getById(id);
+    res.json(formatPlannedTransaction(withSchedule || updated));
   } catch (err) {
-    logger.error('Error updating planned transaction', { error: err.message });
-    res.status(500).json({ detail: `Failed to update planned transaction: ${err.message}` });
+    const statusCode = Number(err.statusCode) || 500;
+    logger.error('Error updating planned transaction', { error: err.message, statusCode });
+    res.status(statusCode).json({ detail: `Failed to update planned transaction: ${err.message}` });
   }
 });
 
@@ -223,6 +303,23 @@ function formatPlannedTransaction(row) {
     recurrence_pattern: row.recurrence_pattern,
     is_executed: row.is_executed,
     last_executed_date: row.last_executed_date,
+    is_loan: row.is_loan || false,
+    loan_type: row.loan_type || null,
+    loan_principal: row.loan_principal != null ? parseFloat(row.loan_principal) : null,
+    loan_annual_interest_rate: row.loan_annual_interest_rate != null ? parseFloat(row.loan_annual_interest_rate) : null,
+    loan_term_months: row.loan_term_months != null ? parseInt(row.loan_term_months, 10) : null,
+    loan_start_date: row.loan_start_date || null,
+    loan_payment_day: row.loan_payment_day != null ? parseInt(row.loan_payment_day, 10) : null,
+    loan_regular_payment_amount: row.loan_regular_payment_amount != null ? parseFloat(row.loan_regular_payment_amount) : null,
+    loan_first_payment_date: row.loan_first_payment_date || null,
+    loan_schedule: (row.loan_schedule || []).map((entry) => ({
+      installment_number: parseInt(entry.installment_number, 10),
+      due_date: entry.due_date,
+      payment_amount: parseFloat(entry.payment_amount),
+      principal_amount: parseFloat(entry.principal_amount),
+      interest_amount: parseFloat(entry.interest_amount),
+      remaining_principal: parseFloat(entry.remaining_principal),
+    })),
     executed_transaction_id: row.executed_transaction_id || null,
     execution_count: row.execution_count || 0,
     executions: (row.executions || []).map(e => ({

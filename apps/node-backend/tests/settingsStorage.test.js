@@ -27,13 +27,12 @@ describe('Settings storage and retrieval', () => {
     const res = await settingsRepository.set(key, value);
     expect(res).toEqual({ key, value });
 
-    // Ensure DB was called with the key and a JSON string for the value
+    // Ensure DB was called with the key and the value (driver should accept JS object)
     expect(query).toHaveBeenCalled();
     const calledWith = query.mock.calls[0];
     expect(calledWith[1][0]).toBe(key);
-    // Second param should be a JSON string containing our keys
-    expect(typeof calledWith[1][1]).toBe('string');
-    expect(calledWith[1][1]).toContain('excludedCategoryIds');
+    expect(typeof calledWith[1][1]).toBe('object');
+    expect(calledWith[1][1].excludedCategoryIds).toEqual([1, 2]);
   });
 
   it('settingsRepository.get should return parsed value from DB', async () => {

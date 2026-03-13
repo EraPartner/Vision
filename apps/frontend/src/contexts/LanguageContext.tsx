@@ -1,3 +1,4 @@
+// @refresh reset
 /**
  * Language / i18n context.
  *

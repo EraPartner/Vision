@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
-import { Check, ChevronsUpDown, Plus, Settings2, X, Bookmark, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Settings2, X, Bookmark, Pencil, Trash2, CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
@@ -15,7 +15,8 @@ import {
 import { format, parseISO } from "date-fns";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
-import { useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart, type SavedChart } from "@/hooks/useSavedCharts";
+import { useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart, useSavedCharts, type SavedChart } from "@/hooks/useSavedCharts";
+import { apiClient } from "@/lib/api";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -61,6 +62,12 @@ interface CustomCategoryChartProps {
   exclusionsApply: boolean;
   /** When provided, the chart is in "saved" mode — pre-loaded from a persisted config */
   savedChart?: SavedChart;
+  /** Hide save / rename / delete controls (embedding mode) */
+  hideSaveControls?: boolean;
+  /** Persist user selection locally (localStorage) under graphKey */
+  persistSelection?: boolean;
+  /** Optional tooltip text shown in the header */
+  headerTooltip?: string;
 }
 
 export function CustomCategoryChart({
@@ -70,6 +77,9 @@ export function CustomCategoryChart({
   onToggle,
   exclusionsApply,
   savedChart,
+  hideSaveControls = false,
+  persistSelection = false,
+  headerTooltip,
 }: CustomCategoryChartProps) {
   const isSavedMode = !!savedChart;
 
@@ -121,6 +131,50 @@ export function CustomCategoryChart({
     return () => { if (pendingUpdate.current) clearTimeout(pendingUpdate.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartType, selectedCategoryIds]);
+
+  // Persist selection in DB when requested (auto-create/update a hidden saved chart)
+  const savedChartsQuery = useSavedCharts();
+  const autoSavedIdRef = useRef<number | null>(null);
+
+  // On load, try to find an existing auto-saved chart for this graphKey and load it
+  useEffect(() => {
+    if (!persistSelection) return;
+    if (!savedChartsQuery.data) return;
+    const name = `autochart:${graphKey}`;
+    const found = (savedChartsQuery.data || []).find((c) => c.name === name);
+    if (found) {
+      autoSavedIdRef.current = found.id;
+      // If not provided by prop, adopt stored selection
+      if (!savedChart) {
+        setSelectedCategoryIds(found.category_ids || []);
+        setChartType(found.chart_type ?? chartType);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedChartsQuery.data, persistSelection]);
+
+  // When selection changes, create or update the stored chart in DB
+  useEffect(() => {
+    if (!persistSelection) return;
+    // only persist when user has actually selected categories
+    if (!selectedCategoryIds || selectedCategoryIds.length === 0) return;
+
+    const name = `autochart:${graphKey}`;
+
+    if (autoSavedIdRef.current) {
+      // update existing
+      apiClient.updateSavedChart(autoSavedIdRef.current, { chartType, categoryIds: selectedCategoryIds }).catch(() => {
+        // ignore errors for now
+      });
+    } else {
+      // create new
+      apiClient.createSavedChart({ name, chartType, categoryIds: selectedCategoryIds }).then((res) => {
+        if (res && res.id) autoSavedIdRef.current = res.id;
+      }).catch(() => {
+        // ignore
+      });
+    }
+  }, [selectedCategoryIds, chartType, persistSelection, graphKey]);
 
   const availableCategories = useMemo(() => {
     return data.categoryPivot.map(c => ({
@@ -210,26 +264,34 @@ export function CustomCategoryChart({
                   {t('common.cancel')}
                 </Button>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <CardTitle className="truncate">{title}</CardTitle>
-                {isSavedMode && (
-                  <button
-                    onClick={() => { setRenameValue(savedChart!.name); setIsRenaming(true); }}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    title={t('customChart.rename')}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-            <CardDescription>{description}</CardDescription>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CardTitle className="truncate">{title}</CardTitle>
+                  {/* Show rename only when saved mode AND save controls are allowed */}
+                  {isSavedMode && !hideSaveControls && (
+                    <button
+                      onClick={() => { setRenameValue(savedChart!.name); setIsRenaming(true); }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title={t('customChart.rename')}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            <div className="flex items-center gap-2">
+              <CardDescription className="flex-1">{description}</CardDescription>
+              {headerTooltip && (
+                <div title={headerTooltip} className="text-muted-foreground/80">
+                  <CircleHelp className="h-4 w-4" />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             {/* Save button — builder mode only, shown when categories selected */}
-            {!isSavedMode && selectedCategories.length > 0 && (
+            {!isSavedMode && selectedCategories.length > 0 && !hideSaveControls && (
               <Button
                 variant="outline"
                 size="sm"
@@ -240,7 +302,7 @@ export function CustomCategoryChart({
               </Button>
             )}
             {/* Delete button — saved mode */}
-            {isSavedMode && (
+            {isSavedMode && !hideSaveControls && (
               <Button
                 variant="ghost"
                 size="sm"

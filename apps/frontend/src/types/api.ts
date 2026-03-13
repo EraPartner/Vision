@@ -150,6 +150,17 @@ export interface PlannedTransactionExecution {
     created_at: string;
 }
 
+export type PlannedLoanType = 'amortizing' | 'fixed_principal' | 'interest_only';
+
+export interface PlannedLoanScheduleEntry {
+    installment_number: number;
+    due_date: string;
+    payment_amount: number;
+    principal_amount: number;
+    interest_amount: number;
+    remaining_principal: number;
+}
+
 export interface PlannedTransaction {
     id: number;
     planned_date: string; // YYYY-MM-DD format
@@ -165,6 +176,16 @@ export interface PlannedTransaction {
     url?: string; // Optional URL associated with planned expense
     is_recurring: boolean;
     recurrence_pattern?: string;
+    is_loan?: boolean;
+    loan_type?: PlannedLoanType | null;
+    loan_principal?: number | null;
+    loan_annual_interest_rate?: number | null;
+    loan_term_months?: number | null;
+    loan_start_date?: string | null;
+    loan_payment_day?: number | null;
+    loan_regular_payment_amount?: number | null;
+    loan_first_payment_date?: string | null;
+    loan_schedule?: PlannedLoanScheduleEntry[];
     is_executed: boolean;
     last_executed_date?: string; // YYYY-MM-DD format
     executed_transaction_id?: number;
@@ -196,6 +217,13 @@ export interface PlannedTransactionCreate {
     url?: string;
     is_recurring?: boolean;
     recurrence_pattern?: string;
+    is_loan?: boolean;
+    loan_type?: PlannedLoanType;
+    loan_principal?: number;
+    loan_annual_interest_rate?: number;
+    loan_term_months?: number;
+    loan_start_date?: string;
+    loan_payment_day?: number;
 }
 
 export interface PlannedTransactionUpdate {
@@ -212,6 +240,13 @@ export interface PlannedTransactionUpdate {
     url?: string;
     is_recurring?: boolean;
     recurrence_pattern?: string;
+    is_loan?: boolean;
+    loan_type?: PlannedLoanType | null;
+    loan_principal?: number | null;
+    loan_annual_interest_rate?: number | null;
+    loan_term_months?: number | null;
+    loan_start_date?: string | null;
+    loan_payment_day?: number | null;
     is_executed?: boolean;
     is_active?: boolean;
 }

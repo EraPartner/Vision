@@ -62,6 +62,19 @@ export const settingsRepository = {
   async set(key, value) {
     await ensureUserSettingsTable();
     // Pass JS value directly so the Postgres driver stores it as JSONB
+    // Normalize any nested arrays of numeric IDs to arrays of integers
+    try {
+      if (value && typeof value === 'object') {
+        if (Array.isArray(value.excludedCategoryIds)) {
+          value.excludedCategoryIds = value.excludedCategoryIds.map(Number);
+        }
+        if (Array.isArray(value.excludedRecipientIds)) {
+          value.excludedRecipientIds = value.excludedRecipientIds.map(Number);
+        }
+      }
+    } catch (e) {
+      // ignore normalization errors — DB will still store original value
+    }
     await query(
       `INSERT INTO user_settings (key, value, updated_at)
        VALUES ($1, $2, NOW())

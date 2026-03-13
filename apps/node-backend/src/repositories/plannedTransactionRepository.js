@@ -4,7 +4,7 @@
  * Mirrors: apps/backend/repositories/planned_transaction_repository.py
  */
 
-import { query } from '../database/connection.js';
+import { getClient, query } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 
 export const plannedTransactionRepository = {
@@ -73,6 +73,18 @@ export const plannedTransactionRepository = {
       );
       row.executions = execResult.rows;
       row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
+      if (row.is_loan) {
+        const scheduleResult = await query(
+          `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
+             FROM planned_transaction_loan_schedule
+            WHERE planned_transaction_id = $1
+            ORDER BY installment_number ASC`,
+          [row.id]
+        );
+        row.loan_schedule = scheduleResult.rows;
+      } else {
+        row.loan_schedule = [];
+      }
     }
 
     return { items: result.rows, total };
@@ -105,15 +117,67 @@ export const plannedTransactionRepository = {
     row.execution_count = execResult.rows.length;
     row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
 
+    if (row.is_loan) {
+      const scheduleResult = await query(
+        `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
+           FROM planned_transaction_loan_schedule
+          WHERE planned_transaction_id = $1
+          ORDER BY installment_number ASC`,
+        [id]
+      );
+      row.loan_schedule = scheduleResult.rows;
+    } else {
+      row.loan_schedule = [];
+    }
+
     return row;
   },
 
-  async create({ planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url, is_recurring, recurrence_pattern }) {
+  async create({
+    planned_date,
+    bank_account,
+    recipient_id,
+    amount,
+    memo,
+    currency,
+    category_id,
+    comment,
+    url,
+    is_recurring,
+    recurrence_pattern,
+    is_loan,
+    loan_type,
+    loan_principal,
+    loan_annual_interest_rate,
+    loan_term_months,
+    loan_start_date,
+    loan_payment_day,
+    loan_regular_payment_amount,
+    loan_first_payment_date,
+    loan_schedule,
+  }) {
     const sql = `
-      INSERT INTO planned_transactions (planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url, is_recurring, recurrence_pattern, is_executed, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, true)
+      INSERT INTO planned_transactions (
+        planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
+        is_recurring, recurrence_pattern, is_executed, is_active,
+        is_loan, loan_type, loan_principal, loan_annual_interest_rate,
+        loan_term_months, loan_start_date, loan_payment_day,
+        loan_regular_payment_amount, loan_first_payment_date
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11, false, true,
+        $12, $13, $14, $15,
+        $16, $17, $18,
+        $19, $20
+      )
       RETURNING *
     `;
+    // sanitize recurrence data: loans should not store recurrence_pattern or related fields
+    if (is_loan) {
+      recurrence_pattern = null;
+    }
+
     const params = [
       planned_date,
       bank_account ? bank_account.toUpperCase() : null,
@@ -123,9 +187,50 @@ export const plannedTransactionRepository = {
       category_id, comment, url || null,
       is_recurring || false,
       recurrence_pattern || null,
+      is_loan || false,
+      loan_type || null,
+      loan_principal != null ? Number(loan_principal) : null,
+      loan_annual_interest_rate != null ? Number(loan_annual_interest_rate) : null,
+      loan_term_months != null ? Number(loan_term_months) : null,
+      loan_start_date || null,
+      loan_payment_day != null ? Number(loan_payment_day) : null,
+      loan_regular_payment_amount != null ? Number(loan_regular_payment_amount) : null,
+      loan_first_payment_date || null,
     ];
-    const result = await query(sql, params);
-    return this.getById(result.rows[0].id);
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(sql, params);
+      const plannedId = result.rows[0].id;
+
+      if (is_loan && Array.isArray(loan_schedule) && loan_schedule.length > 0) {
+        for (const installment of loan_schedule) {
+          await client.query(
+            `INSERT INTO planned_transaction_loan_schedule (
+               planned_transaction_id, installment_number, due_date,
+               payment_amount, principal_amount, interest_amount, remaining_principal
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              plannedId,
+              installment.installment_number,
+              installment.due_date,
+              installment.payment_amount,
+              installment.principal_amount,
+              installment.interest_amount,
+              installment.remaining_principal,
+            ]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      return this.getById(plannedId);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 
   async update(id, fields) {
@@ -161,6 +266,42 @@ export const plannedTransactionRepository = {
        VALUES ($1, $2, $3)`,
       [plannedTransactionId, executedTransactionId, executionDate || new Date().toISOString().split('T')[0]]
     );
+  },
+
+  async replaceLoanSchedule(plannedTransactionId, scheduleEntries = []) {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
+        [plannedTransactionId]
+      );
+
+      for (const installment of scheduleEntries) {
+        await client.query(
+          `INSERT INTO planned_transaction_loan_schedule (
+             planned_transaction_id, installment_number, due_date,
+             payment_amount, principal_amount, interest_amount, remaining_principal
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            plannedTransactionId,
+            installment.installment_number,
+            installment.due_date,
+            installment.payment_amount,
+            installment.principal_amount,
+            installment.interest_amount,
+            installment.remaining_principal,
+          ]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 };
 

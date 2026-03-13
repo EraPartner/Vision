@@ -1,7 +1,14 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
-import type { PlannedTransaction, PlannedTransactionCreate, PlannedTransactionUpdate } from "@/types/api";
+import type {
+  PlannedTransaction,
+  PlannedTransactionCreate,
+  PlannedTransactionUpdate,
+  PlannedTransactionExecuteRequest,
+  PlannedLoanType,
+  PlannedLoanScheduleEntry,
+} from "@/types/api";
 
 export interface PlannedPayment {
   id: number;
@@ -11,6 +18,16 @@ export interface PlannedPayment {
   due_date: string; // ISO date
   is_recurring: boolean;
   frequency?: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly" | "custom";
+  is_loan?: boolean;
+  loan_type?: PlannedLoanType;
+  loan_principal?: number;
+  loan_annual_interest_rate?: number;
+  loan_term_months?: number;
+  loan_start_date?: string;
+  loan_payment_day?: number;
+  loan_regular_payment_amount?: number;
+  loan_first_payment_date?: string;
+  loan_schedule?: PlannedLoanScheduleEntry[];
   custom_interval_days?: number;
   end_date?: string;
   max_occurrences?: number;
@@ -63,6 +80,16 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     due_date: normalizedDate,
     url: pt.url,
     is_recurring: pt.is_recurring,
+    is_loan: !!pt.is_loan,
+    loan_type: pt.loan_type ?? undefined,
+    loan_principal: pt.loan_principal ?? undefined,
+    loan_annual_interest_rate: pt.loan_annual_interest_rate ?? undefined,
+    loan_term_months: pt.loan_term_months ?? undefined,
+    loan_start_date: pt.loan_start_date ?? undefined,
+    loan_payment_day: pt.loan_payment_day ?? undefined,
+    loan_regular_payment_amount: pt.loan_regular_payment_amount ?? undefined,
+    loan_first_payment_date: pt.loan_first_payment_date ?? undefined,
+    loan_schedule: pt.loan_schedule || [],
     frequency: pt.is_recurring ? frequency : undefined,
     custom_interval_days,
     recipient: pt.recipient_name,
@@ -92,6 +119,11 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     }
   }
 
+  // For display: if this is a loan, show loan(term) in recurrence_pattern so UI lists can display it
+  if (payment.is_loan && payment.loan_term_months) {
+    recurrence_pattern = `loan(${payment.loan_term_months} months)`;
+  }
+
   return {
     planned_date: payment.due_date,
     bank_account: payment.bank_account || undefined,
@@ -104,6 +136,13 @@ function mapToCreateAPI(payment: Omit<PlannedPayment, "id" | "created_at">): Pla
     url: payment.url,
     is_recurring: payment.is_recurring,
     recurrence_pattern,
+    is_loan: !!payment.is_loan,
+    loan_type: payment.loan_type,
+    loan_principal: payment.loan_principal,
+    loan_annual_interest_rate: payment.loan_annual_interest_rate,
+    loan_term_months: payment.loan_term_months,
+    loan_start_date: payment.loan_start_date,
+    loan_payment_day: payment.loan_payment_day,
   };
 }
 
@@ -121,6 +160,13 @@ function mapToUpdateAPI(updates: Partial<PlannedPayment>): PlannedTransactionUpd
   if (updates.notes !== undefined) result.comment = updates.notes;
   if (updates.url !== undefined) result.url = updates.url;
   if (updates.is_recurring !== undefined) result.is_recurring = updates.is_recurring;
+  if (updates.is_loan !== undefined) result.is_loan = updates.is_loan;
+  if (updates.loan_type !== undefined) result.loan_type = updates.loan_type;
+  if (updates.loan_principal !== undefined) result.loan_principal = updates.loan_principal;
+  if (updates.loan_annual_interest_rate !== undefined) result.loan_annual_interest_rate = updates.loan_annual_interest_rate;
+  if (updates.loan_term_months !== undefined) result.loan_term_months = updates.loan_term_months;
+  if (updates.loan_start_date !== undefined) result.loan_start_date = updates.loan_start_date;
+  if (updates.loan_payment_day !== undefined) result.loan_payment_day = updates.loan_payment_day;
   if (updates.is_active !== undefined) result.is_active = updates.is_active;
 
   // Handle recurrence_pattern

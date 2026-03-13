@@ -92,6 +92,14 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     const [backupOnQuit, setBackupOnQuit] = useState(false);
     const [backupLoading, setBackupLoading] = useState(false);
     const [backupRunning, setBackupRunning] = useState(false);
+    const [encryptionStatus, setEncryptionStatus] = useState<{
+        secureStorageAvailable: boolean;
+        hasStoredPassphrase: boolean;
+        hasEnvPassphrase: boolean;
+    } | null>(null);
+    const [backupPassphrase, setBackupPassphrase] = useState('');
+    const [savingBackupPassphrase, setSavingBackupPassphrase] = useState(false);
+    const [reminderDismissed, setReminderDismissed] = useState(false);
 
     // Restore state
     const [restoreFile, setRestoreFile] = useState('');
@@ -171,12 +179,29 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
             // Load backup settings from Electron settings.json
             if (apiClient.isElectron()) {
                 setBackupLoading(true);
-                apiClient.loadBackupSettings().then((bs) => {
+                Promise.all([
+                    apiClient.loadBackupSettings(),
+                    apiClient.getBackupEncryptionStatus(),
+                ]).then(([bs, enc]) => {
                     if (bs) {
                         setBackupDir(bs.backupDir || '');
                         setBackupOnQuit(bs.backupOnQuit ?? false);
                     }
+                    if (enc?.success) {
+                        setEncryptionStatus({
+                            secureStorageAvailable: enc.secureStorageAvailable,
+                            hasStoredPassphrase: enc.hasStoredPassphrase,
+                            hasEnvPassphrase: enc.hasEnvPassphrase,
+                        });
+                    }
                 }).finally(() => setBackupLoading(false));
+            }
+            // load dismissal state for passphrase reminder (persist across sessions)
+            try {
+                const v = window.localStorage.getItem('vision.backup.passphrase.reminder.dismissed');
+                setReminderDismissed(v === '1');
+            } catch {
+                // ignore
             }
         }
     }, [open, settings, appSettings]);
@@ -215,6 +240,12 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                 toast.success(t('settings.backup.success'), {
                     description: t('settings.backup.successDesc').replace('{file}', result.file ?? ''),
                 });
+                if (result.warning) {
+                    toast.info(result.warning);
+                }
+                if ((result.cleanupRemoved ?? 0) > 0) {
+                    toast.info(t('settings.backup.cleanupRemoved').replace('{count}', String(result.cleanupRemoved ?? 0)));
+                }
             } else {
                 toast.error(t('settings.backup.failed'), { description: result.error });
             }
@@ -239,6 +270,75 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
             toast.error(t('settings.app.updateFailed'));
         } finally {
             setCheckingUpdate(false);
+        }
+    };
+
+    const handleSaveBackupPassphrase = async () => {
+        setSavingBackupPassphrase(true);
+            try {
+                const result = await apiClient.setBackupPassphrase(backupPassphrase);
+            if (!result) {
+                toast.error(t('settings.backup.passphrase.unavailable'));
+                return;
+            }
+            if (!result.success) {
+                toast.error(t('settings.backup.passphrase.saveFailed'), { description: result.error });
+                return;
+            }
+
+            const refreshed = await apiClient.getBackupEncryptionStatus();
+            if (refreshed?.success) {
+                setEncryptionStatus({
+                    secureStorageAvailable: refreshed.secureStorageAvailable,
+                    hasStoredPassphrase: refreshed.hasStoredPassphrase,
+                    hasEnvPassphrase: refreshed.hasEnvPassphrase,
+                });
+            }
+
+            const trimmed = backupPassphrase.trim();
+            setBackupPassphrase('');
+            toast.success(trimmed ? t('settings.backup.passphrase.saved') : t('settings.backup.passphrase.cleared'));
+            // Remind the user to store the passphrase safely when they save one
+            if (trimmed) {
+                toast.info(t('settings.backup.passphrase.reminderTitle'), {
+                    description: t('settings.backup.passphrase.reminderDesc'),
+                    duration: 10000,
+                });
+                // show inline banner unless previously dismissed
+                try {
+                    window.localStorage.removeItem('vision.backup.passphrase.reminder.dismissed');
+                    setReminderDismissed(false);
+                } catch {}
+            }
+        } catch (err: unknown) {
+            toast.error(t('settings.backup.passphrase.saveFailed'), { description: String(err) });
+        } finally {
+            setSavingBackupPassphrase(false);
+        }
+    };
+
+    const handleClearBackupPassphrase = async () => {
+        setSavingBackupPassphrase(true);
+        try {
+            const result = await apiClient.setBackupPassphrase('');
+            if (!result?.success) {
+                toast.error(t('settings.backup.passphrase.saveFailed'), { description: result?.error });
+                return;
+            }
+            const refreshed = await apiClient.getBackupEncryptionStatus();
+            if (refreshed?.success) {
+                setEncryptionStatus({
+                    secureStorageAvailable: refreshed.secureStorageAvailable,
+                    hasStoredPassphrase: refreshed.hasStoredPassphrase,
+                    hasEnvPassphrase: refreshed.hasEnvPassphrase,
+                });
+            }
+            setBackupPassphrase('');
+            toast.success(t('settings.backup.passphrase.cleared'));
+        } catch (err: unknown) {
+            toast.error(t('settings.backup.passphrase.saveFailed'), { description: String(err) });
+        } finally {
+            setSavingBackupPassphrase(false);
         }
     };
 
@@ -961,6 +1061,87 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                                                     disabled={!backupDir}
                                                     className="ml-4 shrink-0"
                                                 />
+                                            </div>
+                                        </div>
+
+                                        <Separator />
+
+                                        {/* Optional encryption passphrase */}
+                                        <div className="space-y-3">
+                                            <h3 className="text-sm font-semibold text-foreground">{t('settings.backup.passphrase.title')}</h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                {t('settings.backup.passphrase.description')}
+                                            </p>
+                                            <div className="rounded-lg border p-4 space-y-3">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-medium">{t('settings.backup.passphrase.label')}</Label>
+                                                    <Input
+                                                        type="password"
+                                                        value={backupPassphrase}
+                                                        onChange={(e) => setBackupPassphrase(e.target.value)}
+                                                        placeholder={t('settings.backup.passphrase.placeholder')}
+                                                        disabled={backupLoading || savingBackupPassphrase || !encryptionStatus?.secureStorageAvailable}
+                                                    />
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {!encryptionStatus
+                                                            ? t('settings.backup.passphrase.statusUnknown')
+                                                            : encryptionStatus.hasEnvPassphrase
+                                                                ? t('settings.backup.passphrase.statusEnv')
+                                                                : encryptionStatus.hasStoredPassphrase
+                                                                    ? t('settings.backup.passphrase.statusStored')
+                                                                    : t('settings.backup.passphrase.statusMissing')}
+                                                    </p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={handleSaveBackupPassphrase}
+                                                        disabled={backupLoading || savingBackupPassphrase || !encryptionStatus?.secureStorageAvailable}
+                                                    >
+                                                        {savingBackupPassphrase
+                                                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                            : <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                                                        }
+                                                        {t('settings.backup.passphrase.save')}
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={handleClearBackupPassphrase}
+                                                        disabled={backupLoading || savingBackupPassphrase || !encryptionStatus?.secureStorageAvailable}
+                                                    >
+                                                        {t('settings.backup.passphrase.clear')}
+                                                    </Button>
+                                                </div>
+                                                {!encryptionStatus?.secureStorageAvailable && (
+                                                    <p className="text-xs text-destructive">{t('settings.backup.passphrase.unavailable')}</p>
+                                                )}
+
+                                                {/* Inline reminder banner (dismissible) */}
+                                                {(encryptionStatus && (encryptionStatus.hasEnvPassphrase || encryptionStatus.hasStoredPassphrase) && !reminderDismissed) && (
+                                                    <div className="mt-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm bg-amber-50 border-amber-200">
+                                                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+                                                        <div className="flex-1">
+                                                            <div className="font-medium text-foreground">{t('settings.backup.passphrase.reminderTitle')}</div>
+                                                            <div className="text-xs text-muted-foreground mt-1">{t('settings.backup.passphrase.reminderDesc')}</div>
+                                                        </div>
+                                                        <div className="flex-shrink-0 ml-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    try {
+                                                                        window.localStorage.setItem('vision.backup.passphrase.reminder.dismissed', '1');
+                                                                    } catch {}
+                                                                    setReminderDismissed(true);
+                                                                }}
+                                                            >
+                                                                {t('settings.backup.passphrase.bannerDismiss')}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 

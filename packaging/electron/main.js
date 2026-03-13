@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Notification, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage } = require('electron');
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -49,6 +49,10 @@ const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = 120;  // 120 × 300ms = 36s max
 const HEALTH_POLL_INTERVAL_MS = 300;
+const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
+const BACKUP_ENC_IV_BYTES = 16;
+const BACKUP_RETENTION_KEEP = 7;
+const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
 
 // Resolved at launch — see findFreePort() below
 let appPort = DEFAULT_APP_PORT;
@@ -162,6 +166,247 @@ function notify(body) {
   if (Notification.isSupported()) {
     new Notification({ title: APP_NAME, body }).show();
   }
+}
+
+function getDefaultICloudBackupDir() {
+  const root = path.join(app.getPath('home'), 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  if (!fs.existsSync(root)) return '';
+  return path.join(root, APP_NAME, 'Backups');
+}
+
+function resolveBackupSettingsWithDefaults(raw = {}) {
+  const configuredDir = typeof raw.backupDir === 'string' ? raw.backupDir.trim() : '';
+  const fallbackDir = getDefaultICloudBackupDir();
+  const backupDir = configuredDir || fallbackDir || '';
+  const backupOnQuit = configuredDir
+    ? raw.backupOnQuit === true
+    : Boolean(fallbackDir);
+  return { backupDir, backupOnQuit };
+}
+
+function getBackupDeviceId() {
+  const settings = loadSettings();
+  if (typeof settings.backupDeviceId === 'string' && settings.backupDeviceId) {
+    return settings.backupDeviceId;
+  }
+  const machineToken = [
+    process.platform,
+    process.arch,
+    require('os').hostname(),
+    app.getPath('userData'),
+  ].join('|');
+  const backupDeviceId = crypto.createHash('sha1').update(machineToken).digest('hex').slice(0, 8);
+  saveSettings({ ...settings, backupDeviceId });
+  return backupDeviceId;
+}
+
+function getBackupPassphrase() {
+  const envPassphrase = process.env.VISION_BACKUP_PASSPHRASE;
+  if (envPassphrase) return envPassphrase;
+  if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
+    return null;
+  }
+  try {
+    const settings = loadSettings();
+    const encoded = settings.backupPassphraseEncrypted;
+    if (!encoded || typeof encoded !== 'string') return null;
+    const raw = Buffer.from(encoded, 'base64');
+    return safeStorage.decryptString(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setBackupPassphrase(passphrase) {
+  const settings = loadSettings();
+  const next = { ...settings };
+  if (!passphrase) {
+    delete next.backupPassphraseEncrypted;
+    saveSettings(next);
+    return { success: true, available: true };
+  }
+  if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
+    return { success: false, available: false, error: 'OS secure storage is not available on this device.' };
+  }
+  try {
+    const encrypted = safeStorage.encryptString(passphrase);
+    next.backupPassphraseEncrypted = encrypted.toString('base64');
+    saveSettings(next);
+    return { success: true, available: true };
+  } catch (err) {
+    return { success: false, available: true, error: String(err) };
+  }
+}
+
+function getBackupPassphraseStatus() {
+  const settings = loadSettings();
+  return {
+    hasEnvPassphrase: Boolean(process.env.VISION_BACKUP_PASSPHRASE),
+    hasStoredPassphrase: typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0,
+    secureStorageAvailable: Boolean(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable()),
+  };
+}
+
+function getBackupEncryptionKey() {
+  const passphrase = getBackupPassphrase();
+  if (!passphrase) return null;
+  return crypto.scryptSync(passphrase, `${APP_NAME.toLowerCase()}-backup-v1`, 32);
+}
+
+async function cleanupOldBackups(destDir, deviceId, keep = BACKUP_RETENTION_KEEP, graceMs = BACKUP_RETENTION_GRACE_MS) {
+  const prefix = `vision_backup_${deviceId}_`;
+  const now = Date.now();
+  let names = [];
+  try {
+    names = await fs.promises.readdir(destDir);
+  } catch {
+    return { removed: 0 };
+  }
+
+  const files = await Promise.all(names
+    .filter((name) => name.startsWith(prefix) && (name.endsWith('.sql') || name.endsWith('.sql.enc')))
+    .map(async (name) => {
+      const fullPath = path.join(destDir, name);
+      try {
+        const stat = await fs.promises.stat(fullPath);
+        return { fullPath, mtimeMs: stat.mtimeMs };
+      } catch {
+        return null;
+      }
+    }));
+
+  const ordered = files.filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const stale = ordered.slice(keep).filter((f) => (now - f.mtimeMs) > graceMs);
+
+  let removed = 0;
+  for (const file of stale) {
+    try {
+      await fs.promises.unlink(file.fullPath);
+      removed += 1;
+    } catch {
+      // ignore individual file deletion errors
+    }
+  }
+  return { removed };
+}
+
+function isEncryptedBackupFile(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const magic = Buffer.alloc(BACKUP_ENC_MAGIC.length);
+      const bytesRead = fs.readSync(fd, magic, 0, magic.length, 0);
+      if (bytesRead !== BACKUP_ENC_MAGIC.length) return false;
+      return magic.equals(BACKUP_ENC_MAGIC);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
+async function encryptBackupFile(sqlFilePath) {
+  const key = getBackupEncryptionKey();
+  if (!key) {
+    return { file: sqlFilePath, encrypted: false, warning: 'Backup encryption skipped: VISION_BACKUP_PASSPHRASE is not set.' };
+  }
+
+  const encPath = `${sqlFilePath}.enc`;
+  const iv = crypto.randomBytes(BACKUP_ENC_IV_BYTES);
+
+  await new Promise((resolve, reject) => {
+    const input = fs.createReadStream(sqlFilePath);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const output = fs.createWriteStream(encPath);
+
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      input.destroy();
+      cipher.destroy();
+      output.destroy();
+      fs.unlink(encPath, () => {});
+      reject(err);
+    };
+
+    input.on('error', fail);
+    cipher.on('error', fail);
+    output.on('error', fail);
+
+    output.write(BACKUP_ENC_MAGIC);
+    output.write(iv);
+
+    input.pipe(cipher).pipe(output);
+
+    output.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    });
+  });
+
+  fs.unlink(sqlFilePath, () => {});
+  return { file: encPath, encrypted: true };
+}
+
+async function decryptBackupFileToTemp(encryptedFilePath) {
+  const key = getBackupEncryptionKey();
+  if (!key) {
+    throw new Error('This backup is encrypted. Set VISION_BACKUP_PASSPHRASE to restore it.');
+  }
+
+  const headerLen = BACKUP_ENC_MAGIC.length + BACKUP_ENC_IV_BYTES;
+  const header = Buffer.alloc(headerLen);
+  const fd = fs.openSync(encryptedFilePath, 'r');
+  try {
+    const bytesRead = fs.readSync(fd, header, 0, headerLen, 0);
+    if (bytesRead !== headerLen) {
+      throw new Error('Invalid encrypted backup header.');
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const magic = header.subarray(0, BACKUP_ENC_MAGIC.length);
+  if (!magic.equals(BACKUP_ENC_MAGIC)) {
+    throw new Error('Backup is not in a supported encrypted format.');
+  }
+
+  const iv = header.subarray(BACKUP_ENC_MAGIC.length, headerLen);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  const tempSqlPath = path.join(app.getPath('temp'), `vision_restore_${Date.now()}_${process.pid}.sql`);
+
+  await new Promise((resolve, reject) => {
+    const input = fs.createReadStream(encryptedFilePath, { start: headerLen });
+    const output = fs.createWriteStream(tempSqlPath);
+
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      input.destroy();
+      decipher.destroy();
+      output.destroy();
+      fs.unlink(tempSqlPath, () => {});
+      reject(err);
+    };
+
+    input.on('error', fail);
+    decipher.on('error', fail);
+    output.on('error', fail);
+
+    input.pipe(decipher).pipe(output);
+
+    output.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    });
+  });
+
+  return tempSqlPath;
 }
 
 // Poll /health until success or timeout
@@ -393,9 +638,10 @@ async function runBackup(destDir) {
     if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
   } catch { /* use defaults */ }
 
+  const deviceId = getBackupDeviceId();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-  const filename = `vision_backup_${timestamp}.sql`;
-  const destFile = path.join(destDir, filename);
+  const filename = `vision_backup_${deviceId}_${timestamp}.sql`;
+  const sqlFile = path.join(destDir, filename);
 
   fs.mkdirSync(destDir, { recursive: true });
 
@@ -408,7 +654,7 @@ async function runBackup(destDir) {
 
   await new Promise((resolve, reject) => {
     const child = spawn('docker', args, { env: dockerEnv, cwd: workDir });
-    const out = fs.createWriteStream(destFile);
+    const out = fs.createWriteStream(sqlFile);
 
     child.stdout.pipe(out);
 
@@ -417,7 +663,7 @@ async function runBackup(destDir) {
 
     child.on('error', (err) => {
       out.destroy();
-      fs.unlink(destFile, () => {});
+      fs.unlink(sqlFile, () => {});
       reject(err);
     });
 
@@ -426,13 +672,21 @@ async function runBackup(destDir) {
         out.end(() => resolve());
       } else {
         out.destroy();
-        fs.unlink(destFile, () => {});
+        fs.unlink(sqlFile, () => {});
         reject(new Error(Buffer.concat(stderr).toString().trim() || `pg_dump exited with code ${code}`));
       }
     });
   });
 
-  return { success: true, file: destFile };
+  const encryptedResult = await encryptBackupFile(sqlFile);
+  const cleanup = await cleanupOldBackups(destDir, deviceId);
+  return {
+    success: true,
+    file: encryptedResult.file,
+    encrypted: encryptedResult.encrypted,
+    warning: encryptedResult.warning,
+    cleanupRemoved: cleanup.removed,
+  };
 }
 
 // ── IPC: renderer can request a Docker image update ──────────────────────────
@@ -474,6 +728,13 @@ ipcMain.handle('update:check-github', async () => {
 async function runRestore(sqlFilePath) {
   if (!sqlFilePath) throw new Error('No backup file specified');
   if (!fs.existsSync(sqlFilePath)) throw new Error(`File not found: ${sqlFilePath}`);
+
+  let restoreSource = sqlFilePath;
+  let cleanupRestoreSource = () => {};
+  if (isEncryptedBackupFile(sqlFilePath)) {
+    restoreSource = await decryptBackupFileToTemp(sqlFilePath);
+    cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
+  }
 
   let dbName = 'financial_transactions';
   let dbUser = 'ftm_user';
@@ -538,8 +799,8 @@ async function runRestore(sqlFilePath) {
       'inspect', '--format', '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}', dbContainerName,
     ], workDir, { timeout: 10000 }).then(s => s.trim().split('\n')[0]).catch(() => '');
 
-    const hostDir = path.dirname(sqlFilePath);
-    const sqlFilename = path.basename(sqlFilePath);
+    const hostDir = path.dirname(restoreSource);
+    const sqlFilename = path.basename(restoreSource);
 
     const dockerRunArgs = [
       'run', '--rm',
@@ -574,6 +835,7 @@ async function runRestore(sqlFilePath) {
     });
 
   } finally {
+    cleanupRestoreSource();
     // 4. Always restart the app container
     const env = { ...dockerEnv, PORT: String(appPort) };
     await run('docker', [
@@ -593,7 +855,7 @@ ipcMain.handle('backup:select-file', async () => {
     title: 'Select Backup File to Restore',
     buttonLabel: 'Restore',
     filters: [
-      { name: 'SQL Backup Files', extensions: ['sql'] },
+      { name: 'Vision Backup Files', extensions: ['sql', 'enc'] },
       { name: 'All Files', extensions: ['*'] },
     ],
   });
@@ -630,10 +892,12 @@ ipcMain.handle('backup:run', async (_event, destDir) => {
 });
 
 ipcMain.handle('backup:select-dir', async () => {
+  const defaultPath = getDefaultICloudBackupDir() || app.getPath('documents');
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
     title: 'Select Backup Directory',
     buttonLabel: 'Choose',
+    defaultPath,
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
@@ -653,13 +917,22 @@ ipcMain.handle('backup:save-settings', async (_event, { backupDir, backupOnQuit 
   return { success: true };
 });
 
+ipcMain.handle('backup:get-encryption-status', async () => {
+  return { success: true, ...getBackupPassphraseStatus() };
+});
+
+ipcMain.handle('backup:set-passphrase', async (_event, passphrase) => {
+  const value = typeof passphrase === 'string' ? passphrase : '';
+  return setBackupPassphrase(value.trim());
+});
+
 ipcMain.handle('backup:load-settings', async () => {
   // Prefer reading from the database; fall back to settings.json if the backend
   // is not yet available (e.g. during very early startup).
   try {
     const data = await httpGet(`http://localhost:${appPort}/api/settings/backup_settings`);
     if (data && data.value) {
-      const v = data.value;
+      const v = resolveBackupSettingsWithDefaults(data.value);
       // Mirror back to local settings.json so will-quit always has a fresh copy.
       saveSettings({ ...loadSettings(), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
@@ -667,7 +940,7 @@ ipcMain.handle('backup:load-settings', async () => {
   } catch (err) {
     console.warn('backup:load-settings: could not read from DB, falling back to settings.json', err.message);
   }
-  const s = loadSettings();
+  const s = resolveBackupSettingsWithDefaults(loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
@@ -943,12 +1216,16 @@ app.on('will-quit', (e) => {
   }
 
   resolveBackupSettings().then((s) => {
-    const backupOnQuit = s.backupOnQuit === true;
-    const backupDir = s.backupDir || '';
+    const effective = resolveBackupSettingsWithDefaults(s);
+    const backupOnQuit = effective.backupOnQuit === true;
+    const backupDir = effective.backupDir || '';
 
     const doBackup = backupOnQuit && backupDir
       ? runBackup(backupDir)
-          .then(() => notify(t('backup.done')))
+          .then((result) => {
+            if (result && result.warning) console.warn(result.warning);
+            notify(t('backup.done'));
+          })
           .catch((err) => {
             console.error('Backup on quit failed:', err);
             notify(t('backup.failed'));

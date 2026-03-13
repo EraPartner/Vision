@@ -7,7 +7,11 @@ const savedChartsRepository = {
        FROM saved_charts
        ORDER BY created_at ASC`
     );
-    return result.rows;
+    // Convert Postgres integer[] (returned as array) into JS arrays of numbers
+    return result.rows.map(r => ({
+      ...r,
+      category_ids: Array.isArray(r.category_ids) ? r.category_ids.map(Number) : (r.category_ids || []),
+    }));
   },
 
   async getById(id) {
@@ -16,7 +20,9 @@ const savedChartsRepository = {
        FROM saved_charts WHERE id = $1`,
       [id]
     );
-    return result.rows[0] || null;
+    const r = result.rows[0];
+    if (!r) return null;
+    return { ...r, category_ids: Array.isArray(r.category_ids) ? r.category_ids.map(Number) : (r.category_ids || []) };
   },
 
   async create({ name, chartType, categoryIds }) {
@@ -24,7 +30,8 @@ const savedChartsRepository = {
       `INSERT INTO saved_charts (name, chart_type, category_ids)
        VALUES ($1, $2, $3)
        RETURNING id, name, chart_type, category_ids, created_at, updated_at`,
-      [name, chartType, JSON.stringify(categoryIds)]
+      // Pass JS array directly; driver will send as SQL array
+      [name, chartType, categoryIds]
     );
     return result.rows[0];
   },
@@ -36,7 +43,7 @@ const savedChartsRepository = {
 
     if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
     if (chartType !== undefined) { fields.push(`chart_type = $${idx++}`); values.push(chartType); }
-    if (categoryIds !== undefined) { fields.push(`category_ids = $${idx++}`); values.push(JSON.stringify(categoryIds)); }
+    if (categoryIds !== undefined) { fields.push(`category_ids = $${idx++}`); values.push(categoryIds); }
 
     if (fields.length === 0) return this.getById(id);
 

@@ -31,6 +31,12 @@ const FREQ_LABEL_KEYS: Record<string, string> = {
   custom: 'plannedPage.freq.custom',
 };
 
+const LOAN_TYPE_LABEL_KEYS: Record<string, string> = {
+  amortizing: 'plannedPage.loanType.amortizing',
+  fixed_principal: 'plannedPage.loanType.fixedPrincipal',
+  interest_only: 'plannedPage.loanType.interestOnly',
+};
+
 function dueBadge(t: any, dateStr?: string | null) {
   if (!dateStr || typeof dateStr !== "string") {
     return <Badge variant="secondary">{t('plannedPage.due.noDate')}</Badge>;
@@ -205,6 +211,9 @@ export default function PlannedPaymentsPage() {
             }`}>
             <div className="flex items-center gap-2">
               <span>{row.name}</span>
+              {row.is_loan && (
+                <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{t('plannedPage.loanBadge')}</Badge>
+              )}
               {row.url && (
                 <a href={row.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('plannedPage.openLink')} className="text-muted-foreground hover:text-primary">
                   {/* small link icon */}
@@ -246,8 +255,22 @@ export default function PlannedPaymentsPage() {
       header: t('plannedPage.col.recurrence'),
       editable: false,
       defaultWidth: 160,
-      render: (row: TableRow) =>
-        row.is_recurring ? (
+      render: (row: TableRow) => {
+        if (row.is_loan && row.loan_term_months) {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <Repeat className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm">{`loan(${row.loan_term_months} months)`}</span>
+              </div>
+              {row.execution_count > 0 && (
+                <span className="text-xs text-muted-foreground">{t('plannedPage.executedCount', { n: row.execution_count })}</span>
+              )}
+            </div>
+          );
+        }
+
+        return row.is_recurring ? (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <Repeat className="h-3.5 w-3.5 text-primary" />
@@ -265,8 +288,10 @@ export default function PlannedPaymentsPage() {
           </div>
         ) : (
             <span className="text-sm text-muted-foreground">{t('plannedPage.oneTime')}</span>
-        ),
+        );
+      },
     },
+    
     {
       key: "category",
       header: t('plannedPage.col.category'),

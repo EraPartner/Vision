@@ -39,7 +39,7 @@ import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterial
  * Increment this whenever schema changes require DDL to be re-applied on existing DBs.
  * Format: YYYYMMDD_N (N = change number on that date, starting at 1).
  */
-const CURRENT_SCHEMA_VERSION = '20260312_1';
+const CURRENT_SCHEMA_VERSION = '20260313_3';
 
 /**
  * Check the stored schema version.  Returns null if the table doesn't exist yet.
@@ -140,6 +140,7 @@ export async function initializeSchema() {
     await Promise.all([
       createPlannedTransactionExecutions(),
       createTransactionRawReferences(),
+      createPlannedTransactionLoanSchedule(),
     ]);
 
     // Level 7: raw bank tables — all independent of each other and of the
@@ -247,7 +248,7 @@ async function createRecipients() {
     );
   `);
   await safeIndex('idx_recipients_name', 'recipients', 'name');
-  await safeIndex('idx_recipients_normalized_name', 'recipients', 'normalized_name');
+  // `normalized_name` is declared UNIQUE which creates an index; avoid a redundant duplicate index
   await safeIndex('idx_recipients_primary_recipient_id', 'recipients', 'primary_recipient_id');
   // default_category_id is used in uncategorized-recipient queries
   await safeIndex('idx_recipients_default_category_id', 'recipients', 'default_category_id');
@@ -298,6 +299,8 @@ async function createTransactions() {
   await safeIndex('idx_transactions_recipient_id', 'transactions', 'recipient_id');
   await safeIndex('idx_transactions_category_id', 'transactions', 'category_id');
   await safeIndex('idx_transactions_bank_account', 'transactions', 'bank_account');
+  // Index FK for joins on recipient bank account
+  await safeIndex('idx_transactions_recipient_bank_account_id', 'transactions', 'recipient_bank_account_id');
   await safeIndex('idx_transaction_date_recipient', 'transactions', 'date, recipient_id');
   // Partial index on active transactions — most queries filter is_active = true
   await query(`CREATE INDEX IF NOT EXISTS idx_transactions_active ON transactions (date DESC, id DESC) WHERE is_active = true;`);
@@ -305,6 +308,10 @@ async function createTransactions() {
   await safeIndex('idx_transactions_recipient_date', 'transactions', 'recipient_id, date DESC');
   await safeIndex('idx_transactions_category_date', 'transactions', 'category_id, date DESC');
   await safeIndex('idx_transactions_bank_date', 'transactions', 'bank_account, date DESC');
+  // Partial variants optimized for the common case: active rows per-entity ordered by date
+  await query(`CREATE INDEX IF NOT EXISTS idx_transactions_recipient_date_active ON transactions (recipient_id, date DESC) WHERE is_active = true;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_transactions_category_date_active ON transactions (category_id, date DESC) WHERE is_active = true;`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_transactions_bank_date_active ON transactions (bank_account, date DESC) WHERE is_active = true;`);
   // GIN trigram indexes for fast ILIKE search on free-text columns
   await safeGinIndex('idx_transactions_memo_trgm', 'transactions', 'memo gin_trgm_ops');
   await safeGinIndex('idx_transactions_comment_trgm', 'transactions', 'comment gin_trgm_ops');
@@ -326,6 +333,15 @@ async function createPlannedTransactions() {
       category_id INTEGER REFERENCES categories(id),
       is_recurring BOOLEAN NOT NULL DEFAULT false,
       recurrence_pattern TEXT,
+      is_loan BOOLEAN NOT NULL DEFAULT false,
+      loan_type TEXT,
+      loan_principal NUMERIC(15,2),
+      loan_annual_interest_rate NUMERIC(8,4),
+      loan_term_months INTEGER,
+      loan_start_date DATE,
+      loan_payment_day INTEGER,
+      loan_regular_payment_amount NUMERIC(15,2),
+      loan_first_payment_date DATE,
       is_executed BOOLEAN NOT NULL DEFAULT false,
       last_executed_date DATE,
       is_active BOOLEAN NOT NULL DEFAULT true,
@@ -333,6 +349,15 @@ async function createPlannedTransactions() {
       updated_at TIMESTAMPTZ
     );
   `);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS is_loan BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_type TEXT;`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_principal NUMERIC(15,2);`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_annual_interest_rate NUMERIC(8,4);`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_term_months INTEGER;`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_start_date DATE;`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_payment_day INTEGER;`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_regular_payment_amount NUMERIC(15,2);`);
+  await query(`ALTER TABLE planned_transactions ADD COLUMN IF NOT EXISTS loan_first_payment_date DATE;`);
   await safeIndex('idx_pt_planned_date', 'planned_transactions', 'planned_date');
   await safeIndex('idx_pt_bank_account', 'planned_transactions', 'bank_account');
   await safeIndex('idx_pt_recipient_id', 'planned_transactions', 'recipient_id');
@@ -340,6 +365,7 @@ async function createPlannedTransactions() {
   await safeIndex('idx_pt_is_active', 'planned_transactions', 'is_active');
   await safeIndex('idx_pt_is_executed', 'planned_transactions', 'is_executed');
   await safeIndex('idx_pt_is_recurring', 'planned_transactions', 'is_recurring');
+  await safeIndex('idx_pt_is_loan', 'planned_transactions', 'is_loan');
   await safeTrigger('update_pt_updated_at', 'planned_transactions');
 }
 
@@ -354,6 +380,29 @@ async function createPlannedTransactionExecutions() {
     );
   `);
   await safeIndex('idx_pte_planned_id', 'planned_transaction_executions', 'planned_transaction_id');
+  // Support reverse lookup: find the planned execution(s) for a given executed transaction
+  await safeIndex('idx_pte_executed_tx_id', 'planned_transaction_executions', 'executed_transaction_id');
+}
+
+async function createPlannedTransactionLoanSchedule() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS planned_transaction_loan_schedule (
+      id SERIAL PRIMARY KEY,
+      planned_transaction_id INTEGER NOT NULL REFERENCES planned_transactions(id) ON DELETE CASCADE,
+      installment_number INTEGER NOT NULL,
+      due_date DATE NOT NULL,
+      payment_amount NUMERIC(15,2) NOT NULL,
+      principal_amount NUMERIC(15,2) NOT NULL,
+      interest_amount NUMERIC(15,2) NOT NULL,
+      remaining_principal NUMERIC(15,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ,
+      CONSTRAINT uq_ptls_planned_installment UNIQUE (planned_transaction_id, installment_number)
+    );
+  `);
+  await safeIndex('idx_ptls_planned_transaction_id', 'planned_transaction_loan_schedule', 'planned_transaction_id');
+  await safeIndex('idx_ptls_due_date', 'planned_transaction_loan_schedule', 'due_date');
+  await safeTrigger('update_ptls_updated_at', 'planned_transaction_loan_schedule');
 }
 
 async function createTransactionRawReferences() {
@@ -573,6 +622,8 @@ async function createManualRaw() {
   `);
   await safeIndex('idx_manual_hash', 'manual_raw_transactions', 'deduplication_hash');
   await safeIndex('idx_manual_date_amount', 'manual_raw_transactions', 'date, amount');
+  // Index the transaction_id column to speed joins/lookups; consider converting to a FK if referential integrity is desired
+  await safeIndex('idx_manual_transaction_id', 'manual_raw_transactions', 'transaction_id');
 }
 
 // ─────────────────────────────────────────────
@@ -684,16 +735,40 @@ async function createUserSettings() {
 }
 
 async function createSavedCharts() {
+  // Create table using integer[] for category_ids by default for new DBs.
   await query(`
     CREATE TABLE IF NOT EXISTS saved_charts (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       chart_type TEXT NOT NULL DEFAULT 'line',
-      category_ids JSONB NOT NULL DEFAULT '[]',
+      category_ids INTEGER[] NOT NULL DEFAULT '{}',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // If an existing DB had category_ids as JSONB (legacy), migrate safely to integer[]
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS(
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'saved_charts' AND column_name = 'category_ids' AND data_type = 'jsonb'
+      ) THEN
+        -- add a temporary integer[] column
+        ALTER TABLE saved_charts ADD COLUMN IF NOT EXISTS category_ids_tmp INTEGER[] DEFAULT '{}';
+
+        -- populate converting jsonb array elements to integers; coalesce to empty array when absent
+        UPDATE saved_charts SET category_ids_tmp = COALESCE((
+          SELECT array_agg((e)::text::integer) FROM jsonb_array_elements(category_ids) e
+        ), ARRAY[]::integer[]);
+
+        -- drop old jsonb column and rename tmp
+        ALTER TABLE saved_charts DROP COLUMN category_ids;
+        ALTER TABLE saved_charts RENAME COLUMN category_ids_tmp TO category_ids;
+      END IF;
+    END $$;
+  `);
+
   await safeTrigger('update_saved_charts_updated_at', 'saved_charts');
 }
 

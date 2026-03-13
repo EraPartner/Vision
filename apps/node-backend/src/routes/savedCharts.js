@@ -30,8 +30,12 @@ router.post('/', async (req, res) => {
     const { name, chartType, categoryIds } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length === 0)
       return res.status(400).json({ detail: 'Missing or invalid "name"' });
-    if (!Array.isArray(categoryIds))
-      return res.status(400).json({ detail: '"categoryIds" must be an array' });
+    // categoryIds must be an array of positive integers
+    const { validateIntArray } = await import('../middleware/validation.js');
+    const validated = validateIntArray(categoryIds, 'categoryIds');
+    if (!validated.valid) return res.status(400).json({ detail: validated.error });
+    // use normalized numeric array
+    const normalizedCategoryIds = validated.value;
     const validTypes = ['line', 'bar', 'area'];
     if (chartType && !validTypes.includes(chartType))
       return res.status(400).json({ detail: `"chartType" must be one of: ${validTypes.join(', ')}` });
@@ -39,7 +43,7 @@ router.post('/', async (req, res) => {
     const chart = await savedChartsRepository.create({
       name: name.trim(),
       chartType: chartType || 'line',
-      categoryIds,
+      categoryIds: normalizedCategoryIds,
     });
     res.status(201).json(chart);
   } catch (err) {
@@ -54,14 +58,21 @@ router.patch('/:id', async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ detail: 'Invalid chart id' });
 
-    const { name, chartType, categoryIds } = req.body;
+    const { name, chartType } = req.body;
+    let { categoryIds } = req.body;
     if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0))
       return res.status(400).json({ detail: 'Invalid "name"' });
     const validTypes = ['line', 'bar', 'area'];
     if (chartType !== undefined && !validTypes.includes(chartType))
       return res.status(400).json({ detail: `"chartType" must be one of: ${validTypes.join(', ')}` });
-    if (categoryIds !== undefined && !Array.isArray(categoryIds))
-      return res.status(400).json({ detail: '"categoryIds" must be an array' });
+    // If provided, categoryIds must be an array of positive integers
+    if (categoryIds !== undefined) {
+      const { validateIntArray } = await import('../middleware/validation.js');
+      const validated = validateIntArray(categoryIds, 'categoryIds');
+      if (!validated.valid) return res.status(400).json({ detail: validated.error });
+      // replace with normalized array
+      categoryIds = validated.value;
+    }
 
     const updated = await savedChartsRepository.update(id, {
       name: name?.trim(),

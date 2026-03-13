@@ -1,0 +1,395 @@
+{
+  "total": 65,
+  "changes": [
+    {
+      "key": "portfolio.annual",
+      "oldValue": "annual",
+      "newValue": "Annual",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "portfolio.accrued",
+      "oldValue": "accrued",
+      "newValue": "Accrued",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "networth.thisMonth",
+      "oldValue": "this month",
+      "newValue": "This month",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "networth.allTime",
+      "oldValue": "all time",
+      "newValue": "All time",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "savings.pa",
+      "oldValue": "p.a.",
+      "newValue": "P.a.",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "realestate.perMonth",
+      "oldValue": "/mo",
+      "newValue": "/Mo",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "watchlist.aboveTarget",
+      "oldValue": "above target",
+      "newValue": "Above target",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "watchlist.belowTarget",
+      "oldValue": "below target",
+      "newValue": "Below target",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "cashflow.better",
+      "oldValue": "better",
+      "newValue": "Better",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "cashflow.worse",
+      "oldValue": "worse",
+      "newValue": "Worse",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "categoryPie.desc",
+      "oldValue": "s breakdown\",\n",
+      "newValue": "S breakdown\",\n",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "update.current",
+      "oldValue": "(current: {version})",
+      "newValue": "(Current: {version})",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "update.whatsNew",
+      "oldValue": "s new\",\n",
+      "newValue": "S new\",\n",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "onboarding.tour.title",
+      "oldValue": "re all set!\",\n",
+      "newValue": "Re all set!\",\n",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "onboarding.import.yourBank",
+      "oldValue": "your bank",
+      "newValue": "Your bank",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "recurring.seen",
+      "oldValue": "× seen",
+      "newValue": "× Seen",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "customChart.category",
+      "oldValue": "category",
+      "newValue": "Category",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "customChart.categories",
+      "oldValue": "categories",
+      "newValue": "Categories",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "addInv.initial.purchaseWord",
+      "oldValue": "purchase",
+      "newValue": "Purchase",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "addInv.initial.depositWord",
+      "oldValue": "deposit",
+      "newValue": "Deposit",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "addInv.initial.transactionWord",
+      "oldValue": "transaction",
+      "newValue": "Transaction",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "tax.profile.field.children",
+      "oldValue": "children",
+      "newValue": "Children",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "tax.profile.field.others",
+      "oldValue": "others",
+      "newValue": "Others",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "tax.profile.field.children.singular",
+      "oldValue": "child",
+      "newValue": "Child",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "tax.profile.field.others.singular",
+      "oldValue": "person",
+      "newValue": "Person",
+      "file": "apps/frontend/src/locales/en.ts"
+    },
+    {
+      "key": "settings.general.rows",
+      "oldValue": "rijen",
+      "newValue": "Rijen",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "settings.dashboard.excluded",
+      "oldValue": "uitgesloten",
+      "newValue": "Uitgesloten",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "settings.app.current",
+      "oldValue": "huidig:",
+      "newValue": "Huidig:",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "dashboard.accounts",
+      "oldValue": "rekeningen",
+      "newValue": "Rekeningen",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "transactions.total",
+      "oldValue": "totaal",
+      "newValue": "Totaal",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "transactions.of",
+      "oldValue": "van",
+      "newValue": "Van",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "categories.transactions",
+      "oldValue": "transacties",
+      "newValue": "Transacties",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "recipients.transactions",
+      "oldValue": "transacties",
+      "newValue": "Transacties",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "import.rows",
+      "oldValue": "rijen",
+      "newValue": "Rijen",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "onboarding.restore.orTitle",
+      "oldValue": "of",
+      "newValue": "Of",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "common.or",
+      "oldValue": "of",
+      "newValue": "Of",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "common.and",
+      "oldValue": "en",
+      "newValue": "En",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "common.of",
+      "oldValue": "van",
+      "newValue": "Van",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "common.results",
+      "oldValue": "resultaten",
+      "newValue": "Resultaten",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "table.of",
+      "oldValue": "van",
+      "newValue": "Van",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "recurring.avgAmount",
+      "oldValue": "gem. {amount}",
+      "newValue": "Gem. {amount}",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "portfolio.annual",
+      "oldValue": "jaarlijks",
+      "newValue": "Jaarlijks",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "portfolio.accrued",
+      "oldValue": "toegerekend",
+      "newValue": "Toegerekend",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "networth.thisMonth",
+      "oldValue": "deze maand",
+      "newValue": "Deze maand",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "networth.allTime",
+      "oldValue": "alle tijden",
+      "newValue": "Alle tijden",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "savings.pa",
+      "oldValue": "p.j.",
+      "newValue": "P.j.",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "realestate.perMonth",
+      "oldValue": "/mnd",
+      "newValue": "/Mnd",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "watchlist.aboveTarget",
+      "oldValue": "boven doel",
+      "newValue": "Boven doel",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "watchlist.belowTarget",
+      "oldValue": "onder doel",
+      "newValue": "Onder doel",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "cashflow.better",
+      "oldValue": "beter",
+      "newValue": "Beter",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "cashflow.worse",
+      "oldValue": "slechter",
+      "newValue": "Slechter",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "update.current",
+      "oldValue": "(huidig: {version})",
+      "newValue": "(Huidig: {version})",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "onboarding.cat.hobbies",
+      "oldValue": "s\",\n",
+      "newValue": "S\",\n",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "onboarding.import.yourBank",
+      "oldValue": "uw bank",
+      "newValue": "Uw bank",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "recurring.seen",
+      "oldValue": "× gezien",
+      "newValue": "× Gezien",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "customChart.category",
+      "oldValue": "categorie",
+      "newValue": "Categorie",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "customChart.categories",
+      "oldValue": "categorieën",
+      "newValue": "Categorieën",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "addInv.initial.purchaseWord",
+      "oldValue": "aankoop",
+      "newValue": "Aankoop",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "addInv.initial.depositWord",
+      "oldValue": "storting",
+      "newValue": "Storting",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "addInv.initial.transactionWord",
+      "oldValue": "transactie",
+      "newValue": "Transactie",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "portfolio.assetGroup.stocksEtfs",
+      "oldValue": "s\",\n",
+      "newValue": "S\",\n",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "tax.profile.field.children",
+      "oldValue": "kinderen",
+      "newValue": "Kinderen",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "tax.profile.field.others",
+      "oldValue": "anderen",
+      "newValue": "Anderen",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "tax.profile.field.children.singular",
+      "oldValue": "kind",
+      "newValue": "Kind",
+      "file": "apps/frontend/src/locales/nl.ts"
+    },
+    {
+      "key": "tax.profile.field.others.singular",
+      "oldValue": "persoon",
+      "newValue": "Persoon",
+      "file": "apps/frontend/src/locales/nl.ts"
+    }
+  ]
+}

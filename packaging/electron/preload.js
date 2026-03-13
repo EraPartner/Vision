@@ -34,9 +34,9 @@ contextBridge.exposeInMainWorld('electronUpdater', {
  */
 contextBridge.exposeInMainWorld('electronBackup', {
   /**
-   * Run a pg_dump backup immediately, writing a .sql file to destDir.
+   * Run a pg_dump backup immediately, writing a backup file to destDir.
    * @param {string} destDir  Absolute path to the destination directory.
-   * @returns {Promise<{ success: boolean, file?: string, error?: string }>}
+   * @returns {Promise<{ success: boolean, file?: string, encrypted?: boolean, warning?: string, cleanupRemoved?: number, error?: string }>}
    */
   runBackup: (destDir) => ipcRenderer.invoke('backup:run', destDir),
 
@@ -71,4 +71,17 @@ contextBridge.exposeInMainWorld('electronBackup', {
    * @returns {Promise<{ backupDir: string, backupOnQuit: boolean }>}
    */
   loadSettings: () => ipcRenderer.invoke('backup:load-settings'),
+
+  /**
+   * Get backup encryption capability + passphrase presence.
+   * @returns {Promise<{ success: boolean, secureStorageAvailable: boolean, hasStoredPassphrase: boolean, hasEnvPassphrase: boolean }>}
+   */
+  getEncryptionStatus: () => ipcRenderer.invoke('backup:get-encryption-status'),
+
+  /**
+   * Store or clear optional backup passphrase in OS secure storage.
+   * @param {string} passphrase Empty string clears the stored passphrase.
+   * @returns {Promise<{ success: boolean, available: boolean, error?: string }>}
+   */
+  setPassphrase: (passphrase) => ipcRenderer.invoke('backup:set-passphrase', passphrase),
 });
