@@ -79,7 +79,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   dmg-arm64:
     name: Build DMG (arm64)
-    runs-on: macos-13-arm64
+    runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
 
