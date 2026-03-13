@@ -3,42 +3,55 @@
 A self-hosted, privacy-first personal finance manager. All your financial data stays on your machine — no cloud sync, no third-party access, no subscriptions.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Docker-lightgrey)
+![Platform](https://img.shields.io/badge/platform-macOS%20(tested)-lightgrey)
 ![Languages](https://img.shields.io/badge/EN%20%7C%20NL-i18n-green)
+
+> **Platform note:** Vision is primarily developed and tested on **macOS (Apple Silicon)**. The Docker Compose path should work on Linux and Windows, but those platforms are not actively tested.
 
 ---
 
 ## Features
 
-- **Transaction management** — Import, categorize, and search all your bank transactions
-- **Bank CSV import** — Supports Belfius, Revolut, KBC, SABB, Wise, and a generic CSV format
-- **Categories & recipients** — Organize transactions with custom categories and payee profiles
-- **Planned payments** — Track recurring and scheduled payments with cash flow forecasting
+### Transactions
+- **Transaction management** — Import, categorize, filter, and search all your bank transactions
+- **Bank CSV import** — Dedicated adapters for Belfius, Revolut, KBC, SABB, Wise, and a fully configurable generic CSV format
+- **Manual entry** — Create transactions directly from the UI without importing a file
+- **Deduplication** — Automatic detection and prevention of duplicate imported transactions
+- **Recurring detection** — Automatically identifies recurring transaction patterns
+
+### Budget & Planning
+- **Categories & recipients** — Organize transactions with custom categories, payee profiles, hidden categories, and exclusion rules
+- **Planned payments** — Track recurring and scheduled payments with cash flow forecasting and execution history
+
+### Investments
 - **Investment portfolio** — Stocks, ETFs, crypto, real estate, savings, and bonds with live price feeds
-- **Net worth & performance** — Full portfolio overview with performance tracking
-- **Market lookup & watchlist** — Look up any ticker/asset and track price targets
+- **Net worth & performance** — Full portfolio overview with performance history tracking
+- **Market lookup & watchlist** — Search any ticker or asset and track price targets
+- **Exchange rates** — Live and cached rates via ECB XML feed and open.er-api.com, auto-refreshed every 12 hours
+
+### Other
 - **Shared expenses** — Split transactions and track who owes you what
 - **Statistics & charts** — Rich dashboards with customizable saved charts
-- **Exchange rates** — Live and cached rates via ECB and open.er-api.com
 - **Bilingual UI** — English and Dutch (Nederlands)
+- **Desktop app** — macOS native app via Electron with auto-updates
 
 ---
 
 ## Installation
 
-Vision runs as a **macOS desktop app** or as a **Docker Compose stack** on any platform.
+Vision runs as a **macOS desktop app** or as a **Docker Compose stack**.
 
 ### Option 1: macOS Desktop App (recommended)
 
 Download the latest `.dmg` from the [Releases](https://github.com/EraPartner/Vision/releases) page, open it, and drag Vision to your Applications folder.
 
-On first launch, the app automatically sets up its Docker environment (Docker Desktop must be installed and running).
+On first launch, the app automatically sets up its Docker environment.
 
-> **Requirements:** macOS (Apple Silicon), Docker Desktop
+> **Requirements:** macOS (Apple Silicon), Docker Desktop installed and running
 
 ### Option 2: Docker Compose
 
-**Requirements:** Docker and Docker Compose
+> **Requirements:** Docker and Docker Compose
 
 ```bash
 # 1. Clone the repository
@@ -61,13 +74,11 @@ open http://localhost:3002
 
 The app and PostgreSQL database start automatically. Data is persisted in a Docker volume (`postgres_data`) and survives container restarts.
 
-To stop:
 ```bash
+# Stop the stack
 docker compose down
-```
 
-To stop and remove all data:
-```bash
+# Stop and remove all data
 docker compose down -v
 ```
 
@@ -84,14 +95,22 @@ docker compose down -v
 ### Setup
 
 ```bash
-# Install all dependencies (monorepo)
+# 1. Clone the repository
+git clone https://github.com/EraPartner/Vision.git
+cd Vision
+
+# 2. Install all dependencies (monorepo)
 bun install
 
-# Start a local PostgreSQL instance
-bun run db:setup   # first time only
+# 3. Initialize and start a local PostgreSQL instance (first time only)
+bun run db:setup
 bun run db:start
 
-# Run frontend + backend in parallel
+# 4. Copy and configure your environment file
+cp .env.example .env
+# Edit .env and set DATABASE_URL to your local PostgreSQL connection string
+
+# 5. Run frontend + backend in parallel
 bun run dev
 ```
 
@@ -104,6 +123,7 @@ The frontend dev server starts at `http://localhost:5174` and the backend API at
 | `bun run dev` | Start frontend + backend in watch mode |
 | `bun run build` | Production build (frontend + backend) |
 | `bun run test` | Run backend test suite (Vitest) |
+| `bun run test:watch` | Run Vitest in watch mode |
 | `bun run backend` | Start only the backend |
 | `bun run db:setup` | Initialize local PostgreSQL instance |
 | `bun run db:start` | Start local PostgreSQL |
@@ -112,7 +132,9 @@ The frontend dev server starts at `http://localhost:5174` and the backend API at
 | `bun run docker:build` | Build Docker image locally |
 | `bun run docker:up` | Start Docker Compose stack |
 | `bun run docker:down` | Stop Docker Compose stack |
+| `bun run docker:logs` | Tail app container logs |
 | `bun run electron:dev` | Start desktop app in development mode |
+| `bun run electron:clean` | Start desktop app with a clean stack |
 
 ### Project Structure
 
@@ -121,11 +143,12 @@ Vision/
 ├── apps/
 │   ├── frontend/          # React + TypeScript SPA (Vite)
 │   └── node-backend/      # Express REST API (Node.js / ESM)
+│       └── tests/         # 30 Vitest test files
 ├── packaging/
 │   └── electron/          # macOS desktop wrapper (Electron)
 ├── scripts/
 │   └── db/                # Local PostgreSQL helper scripts
-├── alembic/               # Database migration history
+├── alembic/               # Legacy database migration history
 ├── Dockerfile             # Multi-stage production build
 ├── docker-compose.yml     # Production stack
 └── .env.example           # Environment variable reference
@@ -180,6 +203,35 @@ Vision/
 | Wise | CSV export |
 | Generic | CSV (configurable column mapping) |
 | Manual | Direct entry via the UI |
+
+---
+
+## Contributing
+
+Contributions are welcome. Here are a few guidelines to keep things consistent:
+
+### Getting Started
+
+1. Fork the repository and create a branch from `main`.
+2. Follow the [Development](#development) setup instructions above.
+3. Make your changes and write or update tests where relevant.
+4. Run the test suite before submitting: `bun run test`
+5. Open a pull request with a clear description of what changed and why.
+
+### Guidelines
+
+- **Backend tests:** The backend has a Vitest suite covering services, repositories, and routes. New backend logic should include tests.
+- **Code style:** The frontend uses ESLint. Run `bun run lint` inside `apps/frontend` before committing.
+- **Commits:** Keep commits focused and use clear, descriptive messages.
+- **New bank adapters:** CSV adapters live in `apps/node-backend/src/services/` and follow the existing adapter pattern. Include at least one unit test with a real-world-shaped sample CSV.
+- **Environment variables:** Any new env vars should be documented in both `.env.example` and the table in this README.
+
+### Reporting Issues
+
+Please open a GitHub issue with:
+- A clear description of the problem or feature request
+- Steps to reproduce (for bugs)
+- Your platform and Vision version
 
 ---
 
