@@ -756,14 +756,38 @@ async function launch() {
     // Check Docker is installed and running — overlaps with port scan and env init
     checkDocker(workDir).then(status => { dockerStatus = status; }),
 
-    // In dev, skip --build if the app image already exists (speeds up cold start).
-    // docker compose images -q lists image IDs for running/built services.
+    // In dev, decide whether to skip --build. We prefer to skip when an image
+    // already exists and the source hasn't changed since it was built. To do
+    // that we inspect the composed app image and compare its creation time to
+    // the latest git commit time — and also respect uncommitted local changes.
     !app.isPackaged
-      ? run('docker', [
-          'compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app',
-        ], workDir, { timeout: 10000 })
-          .then(imageId => { skipBuild = imageId.trim().length > 0; })
-          .catch(() => { /* treat as not built */ })
+      ? (async () => {
+          try {
+            const imageIds = (await run('docker', [
+              'compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app',
+            ], workDir, { timeout: 10000 })).trim();
+            if (!imageIds) { skipBuild = false; return; }
+            // Use first image id returned (compose may list multiple lines)
+            const imageId = imageIds.split(/\s+/)[0];
+            // If there are local uncommitted changes, force rebuild so dev sees them
+            const por = (await run('git', ['status', '--porcelain'], workDir).catch(() => '')).trim();
+            if (por.length > 0) { skipBuild = false; return; }
+            // Get last commit time (unix seconds)
+            const commitTsStr = (await run('git', ['log', '-1', '--format=%ct'], workDir).catch(() => '')).trim();
+            if (!commitTsStr) { skipBuild = false; return; }
+            const commitTs = parseInt(commitTsStr, 10) * 1000;
+            // Inspect image creation time
+            const createdStr = (await run('docker', ['image', 'inspect', imageId, '--format', '{{.Created}}'], workDir).catch(() => '')).trim();
+            if (!createdStr) { skipBuild = false; return; }
+            const createdTs = Date.parse(createdStr);
+            if (isNaN(createdTs) || isNaN(commitTs)) { skipBuild = false; return; }
+            // If the latest commit is newer than the image creation, rebuild.
+            skipBuild = commitTs <= createdTs;
+          } catch (e) {
+            // Any failure here means we conservatively do not skip the build.
+            skipBuild = false;
+          }
+        })()
       : Promise.resolve(),
   ]);
 
@@ -839,6 +863,56 @@ async function launch() {
 
   // 10. Set up electron-updater (non-blocking — runs in background after window opens)
   setupAutoUpdater();
+
+  // Dev-mode: watch source files and trigger a docker rebuild+restart when
+  // local sources change. This ensures the electron dev wrapper picks up
+  // code edits without requiring manual docker-compose rebuilds.
+  if (!app.isPackaged && overrideFiles.length > 0) {
+    try {
+      let fileChangeTimer = null;
+      let isBuildingOnChange = false;
+      const watchTargets = ['apps/frontend', 'apps/node-backend', 'package.json', 'bun.lock', 'bun.lockb'];
+      const scheduleRebuild = () => {
+        if (isBuildingOnChange) return;
+        if (fileChangeTimer) clearTimeout(fileChangeTimer);
+        fileChangeTimer = setTimeout(async () => {
+          fileChangeTimer = null;
+          if (isBuildingOnChange) return;
+          isBuildingOnChange = true;
+          notify('Rebuilding app image (dev)...');
+          try {
+            // Build only the app service image, then restart that container
+            await run('docker', ['compose', ...composeArgs(workDir, overrideFiles), 'build', 'app'], workDir, { timeout: 0 });
+            await restartAppContainer(workDir, overrideFiles);
+            await pollHealth().catch(() => {});
+            notify('Rebuild complete');
+          } catch (err) {
+            console.warn('Dev rebuild failed:', err);
+            notify('Rebuild failed — check logs');
+          } finally {
+            isBuildingOnChange = false;
+          }
+        }, 1500);
+      };
+
+      watchTargets.forEach((p) => {
+        const full = path.join(workDir, p);
+        if (!fs.existsSync(full)) return;
+        try {
+          const w = fs.watch(full, { recursive: true }, (evt, fname) => {
+            // Ignore temporary editor swap files
+            if (fname && /(^\.|~$|\.swp$|\.swx$)/.test(fname)) return;
+            scheduleRebuild();
+          });
+          // Do not keep the watcher references — they live for the app lifetime
+        } catch (e) {
+          // fs.watch may throw on some filesystems; ignore and continue
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to set up dev rebuild watcher:', e);
+    }
+  }
 }
 
 // ── Shutdown flow ─────────────────────────────────────────────────────────────

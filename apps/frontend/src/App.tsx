@@ -5,14 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
-import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
+import PortfolioTaxPage from "@/pages/portfolio/PortfolioTaxPage.tsx";
 
 // Lazy-loaded pages for code splitting
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -69,12 +71,12 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
-            <SettingsPreloadProvider>
-                <ThemeProvider>
+            <ThemeProvider>
+                <SettingsPreloadProvider>
                     <SettingsProvider>
                         <AppSettingsProvider>
-                        <LanguageBridge>
-                            <TooltipProvider>
+                            <LanguageBridge>
+                                <TooltipProvider>
                                 <ErrorBoundary>
                                     <Toaster />
                                     <Sonner />
@@ -96,6 +98,7 @@ const App = () => {
                                                 <Route path="/statistics" element={<StatisticsPage />} />
                                                 <Route path="/import" element={<ImportPage />} />
                                                 <Route path="/owes" element={<OwesPage />} />
+                                                <Route path="/tax" element={<TaxOverviewPage />} />
                                                 {/* Portfolio */}
                                                 <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                 <Route path="/portfolio/market" element={<MarketLookupPage />} />
@@ -107,18 +110,19 @@ const App = () => {
                                                 <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
                                                 <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
                                                 <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
+                                                <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
                                                 <Route path="*" element={<NotFound />} />
                                                 </Routes>
                                             </Suspense>
                                         </AppLayout>
                                     </BrowserRouter>
                                 </ErrorBoundary>
-                            </TooltipProvider>
-                        </LanguageBridge>
-                    </AppSettingsProvider>
-                </SettingsProvider>
+                                </TooltipProvider>
+                            </LanguageBridge>
+                        </AppSettingsProvider>
+                    </SettingsProvider>
+                </SettingsPreloadProvider>
             </ThemeProvider>
-        </SettingsPreloadProvider>
         </QueryClientProvider>
     );
 };

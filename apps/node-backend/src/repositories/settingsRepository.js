@@ -32,7 +32,12 @@ export const settingsRepository = {
     await ensureUserSettingsTable();
     const result = await query('SELECT value FROM user_settings WHERE key = $1', [key]);
     if (result.rows.length === 0) return null;
-    return result.rows[0].value;
+    const v = result.rows[0].value;
+    // Some DB versions or legacy rows might store a JSON string; normalize.
+    if (typeof v === 'string') {
+      try { return JSON.parse(v); } catch { return v; }
+    }
+    return v;
   },
 
   /**
@@ -43,7 +48,10 @@ export const settingsRepository = {
     const result = await query('SELECT key, value FROM user_settings ORDER BY key');
     const settings = {};
     for (const row of result.rows) {
-      settings[row.key] = row.value;
+      const v = row.value;
+      settings[row.key] = (typeof v === 'string') ? (() => {
+        try { return JSON.parse(v); } catch { return v; }
+      })() : v;
     }
     return settings;
   },
@@ -53,11 +61,12 @@ export const settingsRepository = {
    */
   async set(key, value) {
     await ensureUserSettingsTable();
+    // Pass JS value directly so the Postgres driver stores it as JSONB
     await query(
       `INSERT INTO user_settings (key, value, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-      [key, JSON.stringify(value)]
+      [key, value]
     );
     return { key, value };
   },
@@ -84,7 +93,7 @@ export const settingsRepository = {
         `INSERT INTO user_settings (key, value, updated_at)
          VALUES ($1, $2, NOW())
          ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-        [key, JSON.stringify(value)]
+        [key, value]
       );
     }
   },

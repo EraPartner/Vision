@@ -15,6 +15,7 @@ import {
 import {
   BarChart3,
   Briefcase,
+  Landmark,
   Building2,
   CalendarClock,
   Coins,
@@ -69,6 +70,7 @@ export function AppSidebar() {
         { title: t('nav.statistics'), url: "/statistics", icon: BarChart3 },
         { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
         { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
+        { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
       ],
     },
     {
@@ -108,6 +110,7 @@ export function AppSidebar() {
         { title: t('nav.marketLookup'), url: "/portfolio/market", icon: LineChart },
         { title: t('nav.watchlist'), url: "/portfolio/watchlist", icon: Target },
         { title: t('nav.exchangeRates'), url: "/portfolio/exchange-rates", icon: ArrowLeftRight },
+        { title: t('nav.taxOverview'), url: "/portfolio/tax", icon: Landmark },
       ],
     },
   ];
