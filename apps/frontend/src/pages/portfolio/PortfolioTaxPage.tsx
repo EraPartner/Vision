@@ -1,57 +1,129 @@
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Receipt, TrendingDown, Landmark, PieChart as PieChartIcon, AlertTriangle, DollarSign } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { usePortfolio } from "@/hooks/usePortfolio";
-import { ASSET_CLASS_LABELS } from "@/types/portfolio";
-import { cn } from "@/lib/utils";
-import { useMemo } from "react";
-import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
-import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+import { useMemo } from 'react';
+import { Landmark, Receipt, TrendingDown, AlertTriangle, Info, SlidersHorizontal, Calculator } from 'lucide-react';
+import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
+import { usePortfolio } from '@/hooks/usePortfolio';
+import { usePortfolioTaxAdjustments } from '@/hooks/usePortfolioTaxAdjustments';
+import { getAssetClassLabel, type InvestmentSummary } from '@/types/portfolio';
+import { numberFormatToLocale } from '@/utils/currency';
+import { cn } from '@/lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { TaxProfileDialog } from '@/components/tax/TaxProfileDialog';
+import { PortfolioTaxAdjustmentsDialog } from '@/components/portfolio/PortfolioTaxAdjustmentsDialog';
+import { WidgetVisibilityDialog } from '@/components/shared/WidgetVisibilityDialog';
+import { useWidgetVisibility, type WidgetDefinition } from '@/hooks/useWidgetVisibility';
 
-function getPortfolioTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
+type TxnLite = {
+  type: string;
+  date?: string;
+  amount?: number;
+  taxes?: number;
+  fees?: number;
+};
+
+function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) => string): WidgetDefinition[] {
   return [
-    { id: "summaryCards",    label: t('tax.widget.summaryCards'),    defaultVisible: true },
-    { id: "taxByAssetClass", label: t('tax.widget.taxByAssetClass'), defaultVisible: true },
-    { id: "taxTypes",        label: t('tax.widget.taxTypes'),        defaultVisible: true },
-    { id: "investmentBreakdown", label: t('tax.widget.investmentBreakdown'), defaultVisible: true },
+    { id: 'summaryCards', label: t('tax.widget.summaryCards'), defaultVisible: true },
+    { id: 'taxByAssetClass', label: t('tax.widget.taxByAssetClass'), defaultVisible: true },
+    { id: 'taxTypes', label: t('tax.widget.taxTypes'), defaultVisible: true },
+    { id: 'yearlyTaxFeeTrend', label: t('tax.widget.yearlyTaxFeeTrend'), defaultVisible: true },
+    { id: 'investmentBreakdown', label: t('tax.widget.investmentBreakdown'), defaultVisible: true },
+    { id: 'profileInputs', label: t('tax.widget.profileInputs'), defaultVisible: true },
+    { id: 'belgianRules', label: t('tax.widget.belgianRules'), defaultVisible: true },
   ];
 }
-const COLORS = [
-  "hsl(217, 91%, 60%)", "hsl(142, 76%, 36%)", "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)", "hsl(340, 82%, 52%)", "hsl(200, 80%, 50%)",
-];
+
+function yearOf(date?: string): number | null {
+  if (!date) return null;
+  const n = Number.parseInt(date.slice(0, 4), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function PortfolioTaxPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const { profile, calculation } = useBelgianTaxProfile();
   const { summaries } = usePortfolio();
+  const { getAdjustment } = usePortfolioTaxAdjustments();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const txYear = profile.taxYear;
+
   const WIDGETS = getPortfolioTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolioTax', WIDGETS);
+
   function fmt(val: number, currency = 'EUR') {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(val);
   }
-  // Aggregate totals
-  const totalTaxes = summaries.reduce((s, i) => s + i.totalTaxes, 0);
-  const totalFees = summaries.reduce((s, i) => s + i.totalFees, 0);
+
+  const enrichedInvestments = useMemo(
+    () =>
+      summaries.map((inv) => {
+        const yearlyRecordedTaxes = inv.transactions.reduce((sum: number, txn: TxnLite) => {
+          const y = yearOf(txn.date);
+          if (y !== txYear) return sum;
+          const explicit = txn.type === 'tax' ? Number(txn.amount) || 0 : 0;
+          return sum + explicit + (Number(txn.taxes) || 0);
+        }, 0);
+
+        const yearlyRecordedFees = inv.transactions.reduce((sum: number, txn: TxnLite) => {
+          const y = yearOf(txn.date);
+          if (y !== txYear) return sum;
+          const explicit = txn.type === 'fee' ? Number(txn.amount) || 0 : 0;
+          return sum + explicit + (Number(txn.fees) || 0);
+        }, 0);
+
+        const manual = getAdjustment(txYear, inv.id);
+        const taxes = yearlyRecordedTaxes + manual.taxes;
+        const fees = yearlyRecordedFees + manual.fees;
+
+        return {
+          ...inv,
+          assetClassLabel: getAssetClassLabel(t, inv.assetClass),
+          recordedTaxes: yearlyRecordedTaxes,
+          recordedFees: yearlyRecordedFees,
+          manualTaxes: manual.taxes,
+          manualFees: manual.fees,
+          taxes,
+          fees,
+          total: taxes + fees,
+        };
+      }),
+    [summaries, txYear, getAdjustment, t],
+  );
+
+  const totalTaxes = enrichedInvestments.reduce((s, i) => s + i.taxes, 0);
+  const totalFees = enrichedInvestments.reduce((s, i) => s + i.fees, 0);
   const totalTaxesAndFees = totalTaxes + totalFees;
+  const totalRecordedTaxes = enrichedInvestments.reduce((s, i) => s + i.recordedTaxes, 0);
+  const totalRecordedFees = enrichedInvestments.reduce((s, i) => s + i.recordedFees, 0);
+  const totalManualTaxes = enrichedInvestments.reduce((s, i) => s + i.manualTaxes, 0);
+  const totalManualFees = enrichedInvestments.reduce((s, i) => s + i.manualFees, 0);
+
   const totalRealizedGain = summaries.reduce((s, i) => s + i.realizedGain, 0);
   const totalUnrealizedGain = summaries.reduce((s, i) => s + i.unrealizedGain, 0);
-  // Effective tax rate on realized gains
   const effectiveTaxRate = totalRealizedGain > 0 ? (totalTaxes / totalRealizedGain) * 100 : 0;
-  // Tax breakdown by type from transactions
+  const portfolioTaxesPlusPIT = calculation.totalPIT + totalTaxes;
+
   const taxBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {
       [t('tax.capitalGainsTax')]: 0,
       [t('tax.dividendWithholding')]: 0,
       [t('tax.transactionTax')]: 0,
       [t('tax.otherTaxes')]: 0,
+      [t('tax.manualTaxAdjustments')]: totalManualTaxes,
     };
-    summaries.forEach(inv => {
-      inv.transactions.forEach((txn: any) => {
+    summaries.forEach((inv) => {
+      inv.transactions.forEach((txn: TxnLite) => {
+        if (yearOf(txn.date) !== txYear) return;
         const txnTaxes = Number(txn.taxes) || 0;
         if (txn.type === 'sell' && txnTaxes > 0) {
           breakdown[t('tax.capitalGainsTax')] += txnTaxes;
@@ -68,17 +140,19 @@ export default function PortfolioTaxPage() {
     });
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
-      .filter(d => d.value > 0);
-  }, [summaries, t]);
-  // Fee breakdown by type
+      .filter((d) => d.value > 0);
+  }, [summaries, t, totalManualTaxes, txYear]);
+
   const feeBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {
       [t('tax.brokerFees')]: 0,
       [t('tax.managementFees')]: 0,
       [t('tax.otherFees')]: 0,
+      [t('tax.manualFeeAdjustments')]: totalManualFees,
     };
-    summaries.forEach(inv => {
-      inv.transactions.forEach((txn: any) => {
+    summaries.forEach((inv) => {
+      inv.transactions.forEach((txn: TxnLite) => {
+        if (yearOf(txn.date) !== txYear) return;
         const txnFees = Number(txn.fees) || 0;
         if (['buy', 'sell'].includes(txn.type) && txnFees > 0) {
           breakdown[t('tax.brokerFees')] += txnFees;
@@ -91,86 +165,187 @@ export default function PortfolioTaxPage() {
     });
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
-      .filter(d => d.value > 0);
-  }, [summaries, t]);
-  // By asset class
+      .filter((d) => d.value > 0);
+  }, [summaries, t, totalManualFees, txYear]);
+
   const taxByAssetClass = useMemo(() => {
     const map: Record<string, { taxes: number; fees: number }> = {};
-    summaries.forEach(inv => {
-      const label = ASSET_CLASS_LABELS[inv.assetClass] || inv.assetClass;
+    enrichedInvestments.forEach((inv) => {
+      const label = inv.assetClassLabel || inv.assetClass;
       if (!map[label]) map[label] = { taxes: 0, fees: 0 };
-      map[label].taxes += inv.totalTaxes;
-      map[label].fees += inv.totalFees;
+      map[label].taxes += inv.taxes;
+      map[label].fees += inv.fees;
     });
     return Object.entries(map)
       .map(([name, { taxes, fees }]) => ({ name, taxes, fees, total: taxes + fees }))
-      .filter(d => d.total > 0)
+      .filter((d) => d.total > 0)
       .sort((a, b) => b.total - a.total);
-  }, [summaries]);
-  // Per-investment breakdown sorted by total taxes+fees
-  const investmentBreakdown = useMemo(() =>
-    summaries
-      .map(inv => ({
-        id: inv.id,
-        name: inv.name,
-        symbol: inv.symbol,
-        assetClass: ASSET_CLASS_LABELS[inv.assetClass],
-        taxes: inv.totalTaxes,
-        fees: inv.totalFees,
-        total: inv.totalTaxes + inv.totalFees,
-        realizedGain: inv.realizedGain,
-        currency: inv.currency,
-      }))
-      .filter(i => i.total > 0)
-      .sort((a, b) => b.total - a.total),
-    [summaries]
+  }, [enrichedInvestments]);
+
+  const investmentBreakdown = useMemo(
+    () =>
+      enrichedInvestments
+        .map((inv) => ({
+          id: inv.id,
+          name: inv.name,
+          symbol: inv.symbol,
+          assetClass: inv.assetClassLabel,
+          recordedTaxes: inv.recordedTaxes,
+          recordedFees: inv.recordedFees,
+          manualTaxes: inv.manualTaxes,
+          manualFees: inv.manualFees,
+          taxes: inv.taxes,
+          fees: inv.fees,
+          total: inv.total,
+          realizedGain: inv.realizedGain,
+          currency: inv.currency,
+        }))
+        .filter((i) => i.total > 0)
+        .sort((a, b) => b.total - a.total),
+    [enrichedInvestments],
   );
+
+  const yearlyCostTrend = useMemo(() => {
+    const map: Record<string, { period: string; taxes: number; fees: number }> = {};
+    summaries.forEach((inv) => {
+      inv.transactions.forEach((txn: TxnLite) => {
+        if (yearOf(txn.date) !== txYear || !txn.date) return;
+        const month = txn.date.slice(0, 7);
+        if (!map[month]) map[month] = { period: month, taxes: 0, fees: 0 };
+        if (txn.type === 'tax') map[month].taxes += Number(txn.amount) || 0;
+        map[month].taxes += Number(txn.taxes) || 0;
+        if (txn.type === 'fee') map[month].fees += Number(txn.amount) || 0;
+        map[month].fees += Number(txn.fees) || 0;
+      });
+    });
+    return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
+  }, [summaries, txYear]);
+
+  const totalDividendIncome = useMemo(
+    () =>
+      summaries.reduce(
+        (sum, inv) =>
+          sum +
+          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
+            if (yearOf(txn.date) !== txYear) return txSum;
+            return txSum + (txn.type === 'dividend' ? Number(txn.amount) || 0 : 0);
+          }, 0),
+        0,
+      ),
+    [summaries, txYear],
+  );
+
+  const belgianDividendExemptAmount = 859;
+  const taxableDividendEstimate = Math.max(0, totalDividendIncome - belgianDividendExemptAmount);
+  const dividendWhtEstimate = taxableDividendEstimate * 0.30;
+
+  const tobRecorded = useMemo(
+    () =>
+      summaries.reduce(
+        (sum, inv) =>
+          sum +
+          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
+            if (yearOf(txn.date) !== txYear) return txSum;
+            return txSum + (txn.type === 'buy' ? Number(txn.taxes) || 0 : 0);
+          }, 0),
+        0,
+      ),
+    [summaries, txYear],
+  );
+
   const isEmpty = summaries.length === 0;
+  const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
+
   const cards = [
     {
       title: t('tax.totalTaxesPaid'),
       value: fmt(totalTaxes),
       icon: Landmark,
-      desc: t('tax.acrossAllInvestments'),
-      cls: "text-destructive"
+      desc: t('tax.acrossAllInvestmentsYear', { year: String(txYear) }),
+      cls: 'text-destructive',
     },
     {
       title: t('tax.totalFeesPaid'),
       value: fmt(totalFees),
       icon: Receipt,
-      desc: t('tax.brokerAndMgmtFees'),
-      cls: "text-destructive"
+      desc: t('tax.brokerAndMgmtFeesYear', { year: String(txYear) }),
+      cls: 'text-destructive',
     },
     {
       title: t('tax.totalCosts'),
       value: fmt(totalTaxesAndFees),
       icon: TrendingDown,
-      desc: t('tax.combinedTaxesAndFees'),
-      cls: "text-destructive"
+      desc: t('tax.combinedTaxesAndFeesYear', { year: String(txYear) }),
+      cls: 'text-destructive',
     },
     {
       title: t('tax.effectiveTaxRate'),
       value: `${effectiveTaxRate.toFixed(1)}%`,
       icon: AlertTriangle,
       desc: t('tax.onRealizedGains'),
-      cls: effectiveTaxRate > 25 ? "text-destructive" : "text-muted-foreground"
+      cls: effectiveTaxRate > 25 ? 'text-destructive' : 'text-muted-foreground',
+    },
+    {
+      title: t('tax.totalWithPIT'),
+      value: fmt(portfolioTaxesPlusPIT),
+      icon: Landmark,
+      desc: t('tax.totalWithPITDesc'),
+      cls: 'text-primary',
+    },
+    {
+      title: t('tax.manualAdjustments'),
+      value: fmt(totalManualTaxes + totalManualFees),
+      icon: SlidersHorizontal,
+      desc: t('tax.manualAdjustmentsDescShort'),
+      cls: 'text-muted-foreground',
     },
   ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold text-foreground">{t('tax.portfolioTitle')}</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('tax.portfolioDesc')}</p>
+          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+            <Badge variant="secondary">Tax year {txYear}</Badge>
+            <Badge variant="outline">{t('tax.taxes')}: {fmt(totalTaxes)}</Badge>
+            <Badge variant="outline">{t('tax.fees')}: {fmt(totalFees)}</Badge>
+          </div>
         </div>
-        <WidgetVisibilityDialog
-          widgets={widgetDefs}
-          isVisible={isVisible}
-          setWidgetVisible={setWidgetVisible}
-          setAllVisible={setAllVisible}
-          resetToDefaults={resetToDefaults}
-        />
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <TaxProfileDialog
+            trigger={
+              <Button variant="default" size="sm" className="gap-2">
+                <Calculator className="h-4 w-4" />
+                {hasProfile ? t('tax.profile.edit') : t('tax.profile.setup')}
+              </Button>
+            }
+          />
+          <PortfolioTaxAdjustmentsDialog investments={summaries as InvestmentSummary[]} />
+          <WidgetVisibilityDialog
+            widgets={widgetDefs}
+            isVisible={isVisible}
+            setWidgetVisible={setWidgetVisible}
+            setAllVisible={setAllVisible}
+            resetToDefaults={resetToDefaults}
+          />
+        </div>
       </div>
+
+      {!isEmpty && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex items-start gap-3 py-4">
+            <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-foreground">{t('tax.portfolioDisclaimerTitle')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('tax.portfolioDisclaimerText')}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isEmpty ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -181,9 +356,8 @@ export default function PortfolioTaxPage() {
         </Card>
       ) : (
         <>
-          {/* Summary Cards */}
           {isVisible('summaryCards') && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {cards.map((c) => (
                 <Card key={c.title}>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -198,8 +372,8 @@ export default function PortfolioTaxPage() {
               ))}
             </div>
           )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Tax by Asset Class */}
             {isVisible('taxByAssetClass') && taxByAssetClass.length > 0 && (
               <Card>
                 <CardHeader>
@@ -210,10 +384,15 @@ export default function PortfolioTaxPage() {
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={taxByAssetClass}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                      <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                      <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: 'var(--radius)',
+                          color: 'hsl(var(--card-foreground))',
+                        }}
                         formatter={(v: number) => fmt(v)}
                       />
                       <Bar dataKey="taxes" name={t('tax.taxes')} fill="hsl(340, 82%, 52%)" radius={[4, 4, 0, 0]} />
@@ -223,7 +402,7 @@ export default function PortfolioTaxPage() {
                 </CardContent>
               </Card>
             )}
-            {/* Tax Type Breakdown */}
+
             {isVisible('taxTypes') && (taxBreakdown.length > 0 || feeBreakdown.length > 0) && (
               <Card>
                 <CardHeader>
@@ -257,20 +436,21 @@ export default function PortfolioTaxPage() {
                       </div>
                     </div>
                   )}
-                  {/* Gains context */}
                   <div className="pt-2 border-t border-border">
                     <h4 className="text-sm font-semibold text-foreground mb-2">{t('tax.gainsContext')}</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between items-center py-1.5">
                         <span className="text-sm text-muted-foreground">{t('portfolio.realizedGains')}</span>
-                        <span className={cn("text-sm font-semibold tabular-nums", totalRealizedGain >= 0 ? "text-accent" : "text-destructive")}>
-                          {totalRealizedGain >= 0 ? '+' : ''}{fmt(totalRealizedGain)}
+                        <span className={cn('text-sm font-semibold tabular-nums', totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive')}>
+                          {totalRealizedGain >= 0 ? '+' : ''}
+                          {fmt(totalRealizedGain)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center py-1.5">
                         <span className="text-sm text-muted-foreground">{t('portfolio.unrealizedGains')}</span>
-                        <span className={cn("text-sm font-semibold tabular-nums", totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
-                          {totalUnrealizedGain >= 0 ? '+' : ''}{fmt(totalUnrealizedGain)}
+                        <span className={cn('text-sm font-semibold tabular-nums', totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive')}>
+                          {totalUnrealizedGain >= 0 ? '+' : ''}
+                          {fmt(totalUnrealizedGain)}
                         </span>
                       </div>
                     </div>
@@ -278,8 +458,126 @@ export default function PortfolioTaxPage() {
                 </CardContent>
               </Card>
             )}
+
+            {isVisible('profileInputs') && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('tax.profile.currentInputs')}</CardTitle>
+                  <CardDescription>{t('tax.portfolioProfileInputsDesc')}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.employmentType')}</span>
+                    <Badge variant="secondary">{profile.employmentType.replaceAll('_', ' ')}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.grossAnnualIncome')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(profile.grossAnnualIncome)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.otherTaxableIncome')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(profile.otherTaxableIncome)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.personalExemption')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(calculation.personalExemptionAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.dependents')}</span>
+                    <span className="font-semibold">
+                      {profile.dependentChildren} {t('tax.profile.field.children')} / {profile.dependentOtherPersons} {t('tax.profile.field.others')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.disabilityExemptions')}</span>
+                    <span className="font-semibold">{profile.isDisabled || profile.isSpouseDisabled ? t('common.applied') : t('common.none')}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-          {/* Per-Investment Breakdown */}
+
+          {isVisible('yearlyTaxFeeTrend') && yearlyCostTrend.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('tax.yearlyTaxFeeTrendTitle', { year: String(txYear) })}</CardTitle>
+                <CardDescription>{t('tax.yearlyTaxFeeTrendDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={yearlyCostTrend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="period" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: 'var(--radius)',
+                        color: 'hsl(var(--card-foreground))',
+                      }}
+                      formatter={(v: number) => fmt(v)}
+                    />
+                    <Bar dataKey="taxes" name={t('tax.taxes')} stackId="a" fill="hsl(340, 82%, 52%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="fees" name={t('tax.fees')} stackId="a" fill="hsl(45, 93%, 47%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('tax.recordedVsManual')}</CardTitle>
+                <CardDescription>{t('tax.recordedVsManualDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.recordedTaxes')}</span>
+                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalRecordedTaxes)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.recordedFees')}</span>
+                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalRecordedFees)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.manualTaxAdjustments')}</span>
+                  <span className="font-semibold tabular-nums text-muted-foreground">{fmt(totalManualTaxes)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.manualFeeAdjustments')}</span>
+                  <span className="font-semibold tabular-nums text-muted-foreground">{fmt(totalManualFees)}</span>
+                </div>
+                <div className="flex justify-between text-sm pt-2 border-t border-border">
+                  <span className="text-muted-foreground">{t('tax.totalCosts')}</span>
+                  <span className="font-bold tabular-nums text-primary">{fmt(totalTaxesAndFees)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('tax.budgetTitle')}</CardTitle>
+                <CardDescription>{t('tax.portfolioBudgetLikeDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.card.totalPIT')}</span>
+                  <span className="font-semibold tabular-nums text-destructive">{fmt(calculation.totalPIT)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.totalTaxesPaid')}</span>
+                  <span className="font-semibold tabular-nums text-destructive">{fmt(totalTaxes)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('tax.totalWithPIT')}</span>
+                  <span className="font-bold tabular-nums text-primary">{fmt(portfolioTaxesPlusPIT)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {isVisible('investmentBreakdown') && investmentBreakdown.length > 0 && (
             <Card>
               <CardHeader>
@@ -296,11 +594,15 @@ export default function PortfolioTaxPage() {
                           <span className="font-medium text-sm truncate">{inv.name}</span>
                           <Badge variant="secondary" className="text-[10px] shrink-0">{inv.assetClass}</Badge>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                          <span>{t('tax.taxes')}: {fmt(inv.taxes, inv.currency)}</span>
-                          <span>{t('tax.fees')}: {fmt(inv.fees, inv.currency)}</span>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                          <span>
+                            {t('tax.taxes')}: {fmt(inv.recordedTaxes, inv.currency)} + {fmt(inv.manualTaxes, inv.currency)}
+                          </span>
+                          <span>
+                            {t('tax.fees')}: {fmt(inv.recordedFees, inv.currency)} + {fmt(inv.manualFees, inv.currency)}
+                          </span>
                           {inv.realizedGain !== 0 && (
-                            <span className={inv.realizedGain >= 0 ? "text-accent" : "text-destructive"}>
+                            <span className={inv.realizedGain >= 0 ? 'text-accent' : 'text-destructive'}>
                               {t('tax.realized')}: {inv.realizedGain >= 0 ? '+' : ''}{fmt(inv.realizedGain, inv.currency)}
                             </span>
                           )}
@@ -312,6 +614,58 @@ export default function PortfolioTaxPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {isVisible('belgianRules') && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('tax.widget.belgianRules')}</CardTitle>
+                <CardDescription>{t('tax.belgianRulesDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{t('tax.dividendIncomeTracked')}</p>
+                    <p className="text-lg font-bold tabular-nums">{fmt(totalDividendIncome)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('tax.fromDividendTransactions')}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{t('tax.dividendExemptionUsed')}</p>
+                    <p className="text-lg font-bold tabular-nums">{fmt(belgianDividendExemptAmount)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('tax.firstExemptBelgianDividends')}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{t('tax.estimatedDividendWht')}</p>
+                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(dividendWhtEstimate)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('tax.estimateBasedOnThreshold')}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-foreground">{t('tax.tobRecorded')}</p>
+                    <Badge variant="outline">{t('tax.transactionTax')}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{t('tax.tobTrackedFromBuyTaxes')}</p>
+                  <p className="text-base font-bold tabular-nums mt-2 text-destructive">{fmt(tobRecorded)}</p>
+                </div>
+
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <p>
+                    <span className="font-semibold text-foreground">{t('tax.currentlyAutomaticLabel')}</span>{' '}
+                    {t('tax.currentlyAutomaticPortfolio')}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-foreground">{t('tax.manualAdjustmentsLabel')}</span>{' '}
+                    {t('tax.manualAdjustmentsDesc')}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-foreground">{t('tax.notAutomaticLabel')}</span>{' '}
+                    {t('tax.notAutomaticPortfolio')}
+                  </p>
                 </div>
               </CardContent>
             </Card>

@@ -1,251 +1,543 @@
+import { useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Landmark, TrendingUp, TrendingDown, Receipt, PiggyBank, Home, Briefcase, Info } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Landmark,
+  TrendingUp,
+  TrendingDown,
+  PiggyBank,
+  Info,
+  SlidersHorizontal,
+  Calculator,
+  CircleHelp,
+  BadgePercent,
+} from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useStatistics } from "@/hooks/useStatistics";
-import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
-import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
-    { id: "summaryCards",    label: t('tax.widget.summaryCards'),    defaultVisible: true },
-    { id: "incomeBreakdown", label: t('tax.widget.incomeBreakdown'), defaultVisible: true },
-    { id: "taxCategories",   label: t('tax.widget.taxCategories'),   defaultVisible: true },
-    { id: "yearlyOverview",  label: t('tax.widget.yearlyOverview'),  defaultVisible: true },
+    { id: "summaryCards", label: t("tax.widget.summaryCards"), defaultVisible: true },
+    { id: "incomeBreakdown", label: t("tax.widget.incomeBreakdown"), defaultVisible: true },
+    { id: "pitBreakdown", label: t("tax.widget.pitBreakdown"), defaultVisible: true },
+    { id: "taxRules", label: t("tax.widget.belgianRulesTitle"), defaultVisible: true },
+    { id: "yearlyOverview", label: t("tax.widget.yearlyOverview"), defaultVisible: true },
   ];
 }
-const COLORS = [
-  "hsl(217, 91%, 60%)", "hsl(142, 76%, 36%)", "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)", "hsl(340, 82%, 52%)", "hsl(200, 80%, 50%)",
-];
+
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const { profile, calculation } = useBelgianTaxProfile();
   const stats = useStatistics();
+  const { summaries } = usePortfolio();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const WIDGETS = getBudgetTaxWidgets(t);
-  const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('budgetTax', WIDGETS);
+  const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
+    useWidgetVisibility("budgetTax", WIDGETS);
+
   function fmt(val: number) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency: appSettings.defaultCurrency || 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: appSettings.defaultCurrency || "EUR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(val);
   }
+
   const totalIncome = stats?.totalIncome ?? 0;
-  const totalSpending = stats?.totalSpending ?? 0;
-  const monthlyData = stats?.monthlyData ?? [];
-  const yearlyData = stats?.yearlyComparison ?? [];
-  // Tax-relevant category data
-  const taxRelevantCategories = useMemo(() => {
-    const categories = [
-      { key: t('tax.incomeTax'), desc: t('tax.incomeTaxDesc'), type: 'estimated' as const, amount: totalIncome * 0.3, basis: totalIncome, icon: Landmark },
-      { key: t('tax.socialSecurity'), desc: t('tax.socialSecurityDesc'), type: 'estimated' as const, amount: totalIncome * 0.13, basis: totalIncome, icon: PiggyBank },
-      { key: t('tax.vat'), desc: t('tax.vatDesc'), type: 'estimated' as const, amount: totalSpending * 0.21 * 0.6, basis: totalSpending, icon: Receipt },
-      { key: t('tax.propertyTax'), desc: t('tax.propertyTaxDesc'), type: 'info' as const, amount: 0, basis: 0, icon: Home },
-      { key: t('tax.municipalTax'), desc: t('tax.municipalTaxDesc'), type: 'info' as const, amount: 0, basis: 0, icon: Briefcase },
-    ];
-    return categories;
-  }, [totalIncome, totalSpending, t]);
-  // Yearly income for chart
-  const yearlyIncome = useMemo(() =>
-    yearlyData.map(y => ({
-      year: y.year.toString(),
-      income: y.totalIncome,
-      estimatedTax: y.totalIncome * 0.3,
-      netAfterTax: y.totalIncome * 0.7,
-    })).filter(y => y.income > 0),
-    [yearlyData]
+  const monthlyData = stats?.monthlyData;
+  const yearlyData = stats?.yearlyComparison;
+
+  const portfolioTaxesForYear = useMemo(() => {
+    const year = profile.taxYear;
+    return summaries.reduce((sum, inv) => {
+      const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number }) => {
+        const date = txn.date;
+        if (!date) return txnSum;
+
+        const txnYear = Number.parseInt(date.slice(0, 4), 10);
+        if (Number.isNaN(txnYear) || txnYear !== year) return txnSum;
+
+        const explicitTaxTxn = txn.type === "tax" ? Number(txn.amount) || 0 : 0;
+        const taxField = Number(txn.taxes) || 0;
+        return txnSum + explicitTaxTxn + taxField;
+      }, 0);
+
+      return sum + yearlyInvestmentTaxes;
+    }, 0);
+  }, [summaries, profile.taxYear]);
+
+  const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
+
+  const yearlyIncome = useMemo(
+    () =>
+      (yearlyData ?? [])
+        .map((y) => {
+          const ratio = profile.grossAnnualIncome > 0 ? y.totalIncome / profile.grossAnnualIncome : 1;
+          const estimatedPIT = calculation.totalPIT * Math.max(ratio, 0);
+          return {
+            year: y.year.toString(),
+            income: y.totalIncome,
+            estimatedTax: estimatedPIT,
+            netAfterTax: y.totalIncome - estimatedPIT,
+          };
+        })
+        .filter((y) => y.income > 0),
+    [yearlyData, profile.grossAnnualIncome, calculation.totalPIT]
   );
-  // Monthly income vs estimated tax
-  const monthlyIncomeTax = useMemo(() =>
-    monthlyData
-      .filter(m => m.income > 0)
-      .slice(-12)
-      .map(m => ({
-        period: m.period,
-        income: m.income,
-        estimatedTax: m.income * 0.3,
-      })),
-    [monthlyData]
+
+  const monthlyIncomeTax = useMemo(
+    () =>
+      (monthlyData ?? [])
+        .filter((m) => m.income > 0)
+        .slice(-12)
+        .map((m) => {
+          const annualizedIncome = m.income * 12;
+          const profileBase = profile.grossAnnualIncome > 0 ? profile.grossAnnualIncome : annualizedIncome;
+          const ratio = profileBase > 0 ? annualizedIncome / profileBase : 1;
+          const monthlyPIT = (calculation.totalPIT * Math.max(ratio, 0)) / 12;
+          return {
+            period: m.period,
+            income: m.income,
+            estimatedTax: monthlyPIT,
+          };
+        }),
+    [monthlyData, calculation.totalPIT, profile.grossAnnualIncome]
   );
-  const estimatedAnnualTax = totalIncome * 0.3;
-  const estimatedMonthlySavings = estimatedAnnualTax / 12;
-  const netIncome = totalIncome - estimatedAnnualTax;
+
   const cards = [
     {
-      title: t('tax.totalIncome'),
-      value: fmt(totalIncome),
+      title: t("tax.card.profileGrossIncome"),
+      value: fmt(calculation.grossIncome),
       icon: TrendingUp,
-      desc: t('tax.allTimeIncome'),
-      cls: "text-accent"
+      desc: t("tax.card.profileGrossIncome.desc"),
+      cls: "text-accent",
     },
     {
-      title: t('tax.estimatedIncomeTax'),
-      value: fmt(estimatedAnnualTax),
+      title: t("tax.card.totalPIT"),
+      value: fmt(calculation.totalPIT),
       icon: Landmark,
-      desc: t('tax.approx30Percent'),
-      cls: "text-destructive"
+      desc: t("tax.card.totalPIT.desc",),
+      cls: "text-destructive",
     },
     {
-      title: t('tax.netAfterTax'),
-      value: fmt(netIncome),
+      title: t("tax.card.netTakeHome"),
+      value: fmt(calculation.netTakeHome),
       icon: TrendingDown,
-      desc: t('tax.afterEstimatedTax'),
-      cls: netIncome >= 0 ? "text-accent" : "text-destructive"
+      desc: t("tax.card.netTakeHome.desc"),
+      cls: calculation.netTakeHome >= 0 ? "text-accent" : "text-destructive",
     },
     {
-      title: t('tax.monthlySavingsNeeded'),
-      value: fmt(estimatedMonthlySavings),
+      title: t("tax.card.monthlyTaxReserve"),
+      value: fmt(calculation.monthlyTaxReserve),
       icon: PiggyBank,
-      desc: t('tax.setAsideMonthly'),
-      cls: "text-primary"
+      desc: t("tax.card.monthlyTaxReserve.desc"),
+      cls: "text-primary",
+    },
+    {
+      title: t("tax.card.portfolioTaxesYear", { year: String(profile.taxYear) }),
+      value: fmt(portfolioTaxesForYear),
+      icon: Landmark,
+      desc: t("tax.card.portfolioTaxesYear.desc"),
+      cls: "text-destructive",
+    },
+    {
+      title: t("tax.card.totalWithPortfolio"),
+      value: fmt(totalTaxIncludingPortfolio),
+      icon: Landmark,
+      desc: t("tax.card.totalWithPortfolio.desc"),
+      cls: "text-primary",
     },
   ];
-  const isEmpty = totalIncome === 0 && totalSpending === 0;
+
+  const pitBreakdownRows = [
+    { label: t("tax.pit.row.taxableIncome"), value: calculation.taxableIncome, type: "base" as const },
+    { label: t("tax.pit.row.bracket1"), value: calculation.federalPITBracket1, type: "tax" as const, bracket: t("tax.pit.bracketRange1") },
+    { label: t("tax.pit.row.bracket2"), value: calculation.federalPITBracket2, type: "tax" as const, bracket: t("tax.pit.bracketRange2") },
+    { label: t("tax.pit.row.bracket3"), value: calculation.federalPITBracket3, type: "tax" as const, bracket: t("tax.pit.bracketRange3") },
+    { label: t("tax.pit.row.bracket4"), value: calculation.federalPITBracket4, type: "tax" as const, bracket: t("tax.pit.bracketRange4") },
+    { label: t("tax.pit.row.federalBefore"), value: calculation.federalPITTotal, type: "total" as const },
+    { label: t("tax.pit.row.personalExemptionBenefit"), value: calculation.taxReductions, type: "reduction" as const },
+    { label: t("tax.pit.row.federalAfter"), value: calculation.federalPITAfterReductions, type: "total" as const },
+    { label: t("tax.pit.row.communalSurcharge",), value: calculation.communalSurcharge, type: "tax" as const },
+    { label: t("tax.pit.row.specialSS"), value: calculation.specialSocialSecurityContribution, type: "tax" as const },
+    { label: t("tax.pit.row.totalPIT"), value: calculation.totalPIT, type: "grand" as const },
+    { label: t("tax.pit.row.portfolioTaxesYear", { year: String(profile.taxYear) }), value: portfolioTaxesForYear, type: "tax" as const },
+    { label: t("tax.pit.row.totalTaxInclPortfolio"), value: totalTaxIncludingPortfolio, type: "grand" as const },
+  ];
+
+  const taxRuleCards = [
+    {
+      title: t("tax.rules.federalBracketsTitle"),
+      items: [t("tax.rules.federalBrackets.1"), t("tax.rules.federalBrackets.2"), t("tax.rules.federalBrackets.3"), t("tax.rules.federalBrackets.4")],
+    },
+    {
+      title: t("tax.rules.socialSecurityTitle"),
+      items: [t("tax.rules.ss.employee"), t("tax.rules.ss.special"), t("tax.rules.ss.employer"), t("tax.rules.ss.selfEmployed")],
+    },
+    {
+      title: t("tax.rules.investmentTitle"),
+      items: [t("tax.rules.investment.savings"), t("tax.rules.investment.dividends"), t("tax.rules.investment.foreign")],
+    },
+    {
+      title: t("tax.rules.otherTaxesTitle"),
+      items: [t("tax.rules.other.vat"), t("tax.rules.other.tob"), t("tax.rules.other.property")],
+    },
+  ];
+
+  const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
+  const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
+  const isEmpty = !hasProfile && !hasStatsData;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('tax.budgetTitle')}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{t('tax.budgetDesc')}</p>
-        </div>
-        <WidgetVisibilityDialog
-          widgets={widgetDefs}
-          isVisible={isVisible}
-          setWidgetVisible={setWidgetVisible}
-          setAllVisible={setAllVisible}
-          resetToDefaults={resetToDefaults}
-        />
-      </div>
-      {/* Disclaimer */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex items-start gap-3 py-4">
-          <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-foreground">{t('tax.disclaimerTitle')}</p>
-            <p className="text-xs text-muted-foreground mt-1">{t('tax.disclaimerText')}</p>
+    <TooltipProvider>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">{t("tax.page.title")}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t("tax.page.subtitle")}</p>
+              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                <Badge variant="secondary">Tax year {profile.taxYear}</Badge>
+                <Badge variant="outline">Region: {profile.region}</Badge>
+                <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
+                <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
+              </div>
+            </div>
+                <div className="flex items-center gap-2">
+                  <TaxProfileDialog
+                    trigger={
+                      <Button variant="default" size="sm" className="gap-2">
+                        <SlidersHorizontal className="h-4 w-4" />
+                        {hasProfile ? t("tax.profile.edit") : t("tax.profile.setup")}
+                      </Button>
+                    }
+                  />
+            <WidgetVisibilityDialog
+              widgets={widgetDefs}
+              isVisible={isVisible}
+              setWidgetVisible={setWidgetVisible}
+              setAllVisible={setAllVisible}
+              resetToDefaults={resetToDefaults}
+            />
           </div>
-        </CardContent>
-      </Card>
-      {isEmpty ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">{t('tax.noData')}</h3>
-            <p className="text-muted-foreground text-sm max-w-sm">{t('tax.noDataBudgetDesc')}</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Summary Cards */}
-          {isVisible('summaryCards') && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cards.map((c) => (
-                <Card key={c.title}>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                    <c.icon className={`h-4 w-4 ${c.cls}`} />
+        </div>
+
+        <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="flex items-start gap-3 py-4">
+                      <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                      <div>
+                <p className="text-sm font-medium text-foreground">{t('tax.belgianRulesDesc')}</p>
+               <p className="text-xs text-muted-foreground mt-1">{t('tax.disclaimerTitle')}: {t('tax.disclaimerText')}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+        {isEmpty ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-1">{t('tax.noProfile.title')}</h3>
+               <p className="text-muted-foreground text-sm max-w-sm mb-4">{t('tax.noProfile.desc')}</p>
+               <TaxProfileDialog
+                 trigger={
+                   <Button size="sm" className="gap-2">
+                     <Calculator className="h-4 w-4" />
+                     {t('tax.profile.setup')}
+                   </Button>
+                 }
+               />
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {isVisible("summaryCards") && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cards.map((c) => (
+                  <Card key={c.title}>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
+                      <c.icon className={`h-4 w-4 ${c.cls}`} />
+                    </CardHeader>
+                    <CardContent>
+                      <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {isVisible("pitBreakdown") && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {t('tax.pit.title')}
+                      <UITooltip>
+                        <TooltipTrigger asChild>
+                          <CircleHelp className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs">
+                          {t('tax.pit.tooltip')}
+                        </TooltipContent>
+                      </UITooltip>
+                    </CardTitle>
+                    <CardDescription>{t('tax.pit.description')}</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                  <CardContent className="space-y-3">
+                    <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t('tax.pit.table.component')}</TableHead>
+                            <TableHead className="text-right">{t('tax.pit.table.amount')}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                      <TableBody>
+                        {pitBreakdownRows.map((row) => (
+                          <TableRow key={row.label}>
+                            <TableCell>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm">{row.label}</span>
+                                {row.bracket && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {row.bracket}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "text-right font-medium tabular-nums",
+                                row.type === "tax" && "text-destructive",
+                                row.type === "reduction" && "text-accent",
+                                row.type === "grand" && "text-primary font-bold"
+                              )}
+                            >
+                              {row.type === "reduction" ? "+" : ""}
+                              {fmt(row.value)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
-              ))}
+              )}
+
+              {isVisible("taxRules") && (
+                <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                       {t('tax.rules.title')}
+                       <BadgePercent className="h-4 w-4 text-muted-foreground" />
+                     </CardTitle>
+                    <CardDescription>{t('tax.rules.description')}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {taxRuleCards.map((rule) => (
+                      <div key={rule.title} className="p-3 rounded-lg border border-border bg-card/50">
+                        <p className="text-sm font-semibold text-foreground mb-2">{rule.title}</p>
+                        <ul className="space-y-1">
+                          {rule.items.map((item) => (
+                            <li key={item} className="text-xs text-muted-foreground leading-relaxed">
+                              - {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          )}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Income vs Estimated Tax chart */}
-            {isVisible('incomeBreakdown') && monthlyIncomeTax.length > 0 && (
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {isVisible("incomeBreakdown") && monthlyIncomeTax.length > 0 && (
+                <Card>
+                    <CardHeader>
+                    <CardTitle>{t('tax.incomeBreakdown.title')}</CardTitle>
+                    <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={monthlyIncomeTax}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="period" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                        <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "var(--radius)",
+                            color: "hsl(var(--card-foreground))",
+                          }}
+                          formatter={(v: number) => fmt(v)}
+                        />
+                        <Bar dataKey="income" name={t('tax.chart.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+                        <Bar
+                          dataKey="estimatedTax"
+                          name={t('tax.chart.pitReserve')}
+                          fill="hsl(340, 82%, 52%)"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader>
-                  <CardTitle>{t('tax.widget.incomeBreakdown')}</CardTitle>
-                  <CardDescription>{t('tax.incomeBreakdownDesc')}</CardDescription>
+                      <CardTitle>{t('tax.profile.currentInputs')}</CardTitle>
+                   <CardDescription>{t('tax.profile.currentInputs.desc')}</CardDescription>
+                   </CardHeader>
+                  <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.employmentType')}</span>
+                    <Badge variant="secondary">{profile.employmentType.replaceAll("_", " ")}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.grossAnnualIncome')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(profile.grossAnnualIncome)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.otherTaxableIncome')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(profile.otherTaxableIncome)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.professionalExpenses')}</span>
+                    <span className="font-semibold tabular-nums">
+                      {profile.professionalExpenseMethod === "lump_sum"
+                        ? t('tax.profile.field.professionalExpenses.lump')
+                        : fmt(profile.actualProfessionalExpenses)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.dependents')}</span>
+                    <span className="font-semibold">
+                      {profile.dependentChildren} {t('tax.profile.field.children')} / {profile.dependentOtherPersons} {t('tax.profile.field.others')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.personalExemption')}</span>
+                    <span className="font-semibold tabular-nums">{fmt(calculation.personalExemptionAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('tax.profile.field.disabilityExemptions')}</span>
+                    <span className="font-semibold">
+                      {profile.isDisabled || profile.isSpouseDisabled ? t('common.applied') : t('common.none')}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Federal PIT after reductions</span>
+                    <span className="font-semibold tabular-nums text-destructive">
+                      {fmt(calculation.federalPITAfterReductions)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Communal surcharge</span>
+                    <span className="font-semibold tabular-nums text-destructive">{fmt(calculation.communalSurcharge)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Employee social security</span>
+                    <span className="font-semibold tabular-nums text-destructive">
+                      {fmt(calculation.employeeSocialSecurity)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Special social security</span>
+                    <span className="font-semibold tabular-nums text-destructive">
+                      {fmt(calculation.specialSocialSecurityContribution)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total burden (PIT + SS)</span>
+                    <span className="font-bold tabular-nums text-primary">{fmt(calculation.totalTaxBurden)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {isVisible("yearlyOverview") && yearlyIncome.length > 0 && (
+              <Card>
+                <CardHeader>
+                   <CardTitle>{t('tax.yearly.title')}</CardTitle>
+                   <CardDescription>{t('tax.yearly.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={monthlyIncomeTax}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={yearlyIncome}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="period" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                      <XAxis dataKey="year" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
                       <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
                       <Tooltip
-                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "var(--radius)",
+                          color: "hsl(var(--card-foreground))",
+                        }}
                         formatter={(v: number) => fmt(v)}
                       />
-                      <Bar dataKey="income" name={t('tax.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="estimatedTax" name={t('tax.estimatedTax')} fill="hsl(340, 82%, 52%)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                       <Bar
+                         dataKey="netAfterTax"
+                         name={t('tax.chart.netAfterTax')}
+                         stackId="a"
+                         fill="hsl(142, 76%, 36%)"
+                         radius={[0, 0, 0, 0]}
+                       />
+                       <Bar
+                         dataKey="estimatedTax"
+                         name={t('tax.chart.pit')}
+                         stackId="a"
+                         fill="hsl(340, 82%, 52%)"
+                         radius={[4, 4, 0, 0]}
+                       />
+                      </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
-            {/* Tax Categories */}
-            {isVisible('taxCategories') && (
-              <Card>
+
+            <Card className="border-border/70">
                 <CardHeader>
-                  <CardTitle>{t('tax.widget.taxCategories')}</CardTitle>
-                  <CardDescription>{t('tax.taxCategoriesDesc')}</CardDescription>
+                <CardTitle className="text-base">{t('tax.automation.title')}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {taxRelevantCategories.map(({ key, desc, type, amount, icon: Icon }) => (
-                      <div key={key} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
-                        <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{key}</span>
-                            {type === 'estimated' && (
-                              <Badge variant="secondary" className="text-[10px]">{t('tax.estimated')}</Badge>
-                            )}
-                            {type === 'info' && (
-                              <Badge variant="outline" className="text-[10px]">{t('tax.informational')}</Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          {type === 'estimated' && amount > 0 ? (
-                            <p className="font-bold text-sm tabular-nums text-destructive">{fmt(amount)}</p>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">—</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          {/* Yearly Overview */}
-          {isVisible('yearlyOverview') && yearlyIncome.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('tax.widget.yearlyOverview')}</CardTitle>
-                <CardDescription>{t('tax.yearlyOverviewDesc')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={yearlyIncome}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="year" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }}
-                      formatter={(v: number) => fmt(v)}
-                    />
-                    <Bar dataKey="netAfterTax" name={t('tax.netAfterTax')} stackId="a" fill="hsl(142, 76%, 36%)" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="estimatedTax" name={t('tax.estimatedTax')} stackId="a" fill="hsl(340, 82%, 52%)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">Automatic:</span> Bracket math, social security
+                  (employee + estimated special contribution), federal PIT, communal surcharge, personal-exemption
+                  effect based on dependents, monthly reserve guidance.
+                </p>
+                <p className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">Manual input needed:</span> Your gross income,
+                  exemption situation, professional expense method, and municipality surcharge.
+                </p>
+                <p className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">Investment taxes:</span> Annual portfolio taxes are
+                  now included in this overview as a single total. For details per investment and tax type, use the
+                  portfolio tax page.
+                </p>
               </CardContent>
             </Card>
-          )}
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }

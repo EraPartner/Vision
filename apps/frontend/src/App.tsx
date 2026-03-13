@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
 
@@ -75,50 +76,52 @@ const App = () => {
                 <SettingsPreloadProvider>
                     <SettingsProvider>
                         <AppSettingsProvider>
-                            <LanguageBridge>
-                                <TooltipProvider>
-                                <ErrorBoundary>
-                                    <Toaster />
-                                    <Sonner />
-                                    <BrowserRouter
-                                        future={{
-                                            v7_startTransition: true,
-                                            v7_relativeSplatPath: true,
-                                        }}
-                                    >
-                                        <AppLayout>
-                                            <Suspense fallback={<PageLoader />}>
-                                                <Routes>
-                                                {/* Budgeting */}
-                                                <Route path="/" element={<DashboardPage />} />
-                                                <Route path="/transactions" element={<TransactionsPage />} />
-                                                <Route path="/categories" element={<CategoriesPage />} />
-                                                <Route path="/recipients" element={<RecipientsPage />} />
-                                                <Route path="/planned" element={<PlannedPaymentsPage />} />
-                                                <Route path="/statistics" element={<StatisticsPage />} />
-                                                <Route path="/import" element={<ImportPage />} />
-                                                <Route path="/owes" element={<OwesPage />} />
-                                                <Route path="/tax" element={<TaxOverviewPage />} />
-                                                {/* Portfolio */}
-                                                <Route path="/portfolio" element={<PortfolioOverviewPage />} />
-                                                <Route path="/portfolio/market" element={<MarketLookupPage />} />
-                                                <Route path="/portfolio/stocks" element={<StocksPage />} />
-                                                <Route path="/portfolio/crypto" element={<CryptoPage />} />
-                                                <Route path="/portfolio/real-estate" element={<RealEstatePage />} />
-                                                <Route path="/portfolio/savings" element={<SavingsPage />} />
-                                                <Route path="/portfolio/performance" element={<PerformancePage />} />
-                                                <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
-                                                <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
-                                                <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
-                                                <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
-                                                <Route path="*" element={<NotFound />} />
-                                                </Routes>
-                                            </Suspense>
-                                        </AppLayout>
-                                    </BrowserRouter>
-                                </ErrorBoundary>
-                                </TooltipProvider>
-                            </LanguageBridge>
+                            <BelgianTaxProfileProvider>
+                                <LanguageBridge>
+                                    <TooltipProvider>
+                                    <ErrorBoundary>
+                                        <Toaster />
+                                        <Sonner />
+                                        <BrowserRouter
+                                            future={{
+                                                v7_startTransition: true,
+                                                v7_relativeSplatPath: true,
+                                            }}
+                                        >
+                                            <AppLayout>
+                                                <Suspense fallback={<PageLoader />}>
+                                                    <Routes>
+                                                    {/* Budgeting */}
+                                                    <Route path="/" element={<DashboardPage />} />
+                                                    <Route path="/transactions" element={<TransactionsPage />} />
+                                                    <Route path="/categories" element={<CategoriesPage />} />
+                                                    <Route path="/recipients" element={<RecipientsPage />} />
+                                                    <Route path="/planned" element={<PlannedPaymentsPage />} />
+                                                    <Route path="/statistics" element={<StatisticsPage />} />
+                                                    <Route path="/import" element={<ImportPage />} />
+                                                    <Route path="/owes" element={<OwesPage />} />
+                                                    <Route path="/tax" element={<TaxOverviewPage />} />
+                                                    {/* Portfolio */}
+                                                    <Route path="/portfolio" element={<PortfolioOverviewPage />} />
+                                                    <Route path="/portfolio/market" element={<MarketLookupPage />} />
+                                                    <Route path="/portfolio/stocks" element={<StocksPage />} />
+                                                    <Route path="/portfolio/crypto" element={<CryptoPage />} />
+                                                    <Route path="/portfolio/real-estate" element={<RealEstatePage />} />
+                                                    <Route path="/portfolio/savings" element={<SavingsPage />} />
+                                                    <Route path="/portfolio/performance" element={<PerformancePage />} />
+                                                    <Route path="/portfolio/net-worth" element={<NetWorthPage />} />
+                                                    <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
+                                                    <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
+                                                    <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
+                                                    <Route path="*" element={<NotFound />} />
+                                                    </Routes>
+                                                </Suspense>
+                                            </AppLayout>
+                                        </BrowserRouter>
+                                    </ErrorBoundary>
+                                    </TooltipProvider>
+                                </LanguageBridge>
+                            </BelgianTaxProfileProvider>
                         </AppSettingsProvider>
                     </SettingsProvider>
                 </SettingsPreloadProvider>
