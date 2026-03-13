@@ -50,7 +50,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Extract Docker metadata (tags & labels)
         id: meta
@@ -80,6 +80,8 @@ jobs:
   dmg-arm64:
     name: Build DMG (arm64)
     runs-on: macos-13-arm64
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
 
     steps:
       - name: Checkout
@@ -141,6 +143,8 @@ jobs:
     name: Create GitHub Release
     needs: [docker, dmg-arm64]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
     permissions:
       contents: write
       packages: read
@@ -164,4 +168,3 @@ jobs:
           files: |
             dist/dmg-arm64/*.dmg
             dist/latest-mac-yml/latest-mac.yml
-
