@@ -180,6 +180,27 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
                           <span className="font-medium tabular-nums">{fmtNum(investment.interestRate)}%</span>
                         </div>
                       )}
+
+                      {isRealEstate && investment.municipality && (
+                        <div className="flex justify-between py-1.5 border-b border-border/50">
+                          <span className="text-muted-foreground">{t('invDetail.municipality')}</span>
+                          <span className="font-medium tabular-nums">{investment.municipality}</span>
+                        </div>
+                      )}
+
+                      {isRealEstate && (investment.cadastral_income || investment.cadastral_income === 0) && (
+                        <div className="flex justify-between py-1.5 border-b border-border/50">
+                          <span className="text-muted-foreground">{t('invDetail.cadastralIncome')}</span>
+                          <span className="font-medium tabular-nums">{fmt(investment.cadastral_income || 0, investment.currency)}</span>
+                        </div>
+                      )}
+
+                      {isRealEstate && (investment.municipality_tax_rate || investment.municipality_tax_rate === 0) && (
+                        <div className="flex justify-between py-1.5 border-b border-border/50">
+                          <span className="text-muted-foreground">{t('invDetail.municipalityTaxRate')}</span>
+                          <span className="font-medium tabular-nums">{fmtNum(investment.municipality_tax_rate || 0)}%</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">

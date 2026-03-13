@@ -22,7 +22,8 @@ const ALLOWED_COLUMNS = {
   ]),
   investments: new Set([
     'name', 'symbol', 'asset_class', 'currency', 'current_price',
-    'interest_rate', 'maturity_date', 'location', 'notes', 'is_active',
+    'interest_rate', 'maturity_date', 'location', 'municipality',
+    'cadastral_income', 'municipality_tax_rate', 'notes', 'is_active',
   ]),
   portfolio_transactions: new Set([
     'type', 'date', 'amount', 'units', 'price_per_unit', 'fees', 'taxes',

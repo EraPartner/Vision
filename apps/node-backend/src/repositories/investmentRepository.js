@@ -40,18 +40,19 @@ export const investmentRepository = {
     return result.rows[0] || null;
   },
 
-  async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, notes, price_provider, price_provider_id, price_provider_url }) {
+  async create({ name, symbol, asset_class, currency = 'EUR', current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url }) {
     const result = await query(
-      `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, notes, price_provider, price_provider_id, price_provider_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-      [name, symbol || null, asset_class, currency, current_price || null, interest_rate || null, maturity_date || null, location || null, notes || null,
+      `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+      [name, symbol || null, asset_class, currency, current_price || null, interest_rate || null, maturity_date || null, location || null,
+       municipality || null, cadastral_income ?? null, municipality_tax_rate ?? null, notes || null,
        price_provider || 'manual', price_provider_id || null, price_provider_url || null]
     );
     return result.rows[0];
   },
 
   async update(id, fields) {
-    const allowed = ['name', 'symbol', 'asset_class', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'notes', 'is_active', 'price_provider', 'price_provider_id', 'price_provider_url', 'price_updated_at'];
+    const allowed = ['name', 'symbol', 'asset_class', 'currency', 'current_price', 'interest_rate', 'maturity_date', 'location', 'municipality', 'cadastral_income', 'municipality_tax_rate', 'notes', 'is_active', 'price_provider', 'price_provider_id', 'price_provider_url', 'price_updated_at'];
     const setClauses = [];
     const params = [];
     let idx = 1;

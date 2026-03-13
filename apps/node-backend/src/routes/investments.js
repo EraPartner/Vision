@@ -35,9 +35,9 @@ router.get('/', async (req, res) => {
 // POST /api/investments
 router.post('/', async (req, res) => {
   try {
-    const { name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, notes, price_provider, price_provider_id, price_provider_url } = req.body;
+    const { name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url } = req.body;
     if (!name || !asset_class) return res.status(400).json({ detail: 'name and asset_class are required' });
-    const inv = await investmentRepository.create({ name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, notes, price_provider, price_provider_id, price_provider_url });
+    const inv = await investmentRepository.create({ name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url });
     res.status(201).json(inv);
   } catch (err) {
     logger.error('Failed to create investment', { error: err.message });

@@ -1,5 +1,6 @@
 // Auto-generated — do not edit manually. Edit LanguageContext.tsx instead.
 const nl: Record<string, string> = {
+
     // Sidebar / Navigation
     'nav.overview': 'Overzicht',
     'nav.organization': 'Organisatie',
@@ -194,18 +195,6 @@ const nl: Record<string, string> = {
     'dashboard.cashOut': 'Uitgaven',
     'dashboard.accounts': 'rekeningen',
     // Dashboard stats (nl)
-    'dashboard.stat.totalTransactions': 'Totale transacties',
-    'dashboard.stat.lastMonthSpending': 'Afgelopen maand — Uitgaven',
-    'dashboard.stat.lastMonthIncome': 'Afgelopen maand — Inkomsten',
-    'dashboard.stat.lastMonthNet': 'Afgelopen maand — Netto',
-    'dashboard.stat.mostRecentMonth': 'Meest recente maand',
-    'dashboard.stat.positiveCashFlow': 'Positieve kasstroom',
-    'dashboard.stat.negativeCashFlow': 'Negatieve kasstroom',
-    'dashboard.recentTransactionsSubtitle': 'Laatste {n} transacties',
-    'dashboard.recentTransactions.empty': 'Nog geen transacties. Importeer een CSV om te beginnen.',
-    'dashboard.loadingData': 'Dashboard-gegevens laden…',
-    'dashboard.errorLoading': 'Fout bij laden dashboard: {msg}',
-    'dashboard.subtitle': 'Overzicht van uw financiën',
 
     // Transactions page
     'transactions.title': 'Transacties',
@@ -1174,7 +1163,6 @@ const nl: Record<string, string> = {
      'onboarding.cat.gifts': 'Cadeaus',
      'onboarding.tour.title': 'U bent klaar!',
     'onboarding.tour.desc': 'Hier is een snelle blik op wat u kunt doen.',
-    'onboarding.back': 'Terug',
     'onboarding.skipSetup': 'Installatie overslaan',
     'onboarding.goToDashboard': 'Naar Dashboard',
     'onboarding.getStarted': 'Aan de slag',
@@ -1194,7 +1182,6 @@ const nl: Record<string, string> = {
     'onboarding.feature.statistics.title': 'Statistieken',
     'onboarding.feature.statistics.desc': 'Diepgaande analyses — maandtrends, categorieoverzichten, jaar-op-jaar.',
     'onboarding.feature.portfolio.title': 'Portfolio',
-    'onboarding.feature.portfolio.desc': 'Volg beleggingen: aandelen, ETF\'s, crypto, vastgoed en spaargeld.',
     'onboarding.feature.market.title': 'Marktopzoeker',
     'onboarding.feature.market.desc': 'Zoek elke ticker voor live koersgegevens en analistbeoordelingen.',
     'onboarding.import.title': 'Uw transacties importeren',
@@ -1228,7 +1215,6 @@ const nl: Record<string, string> = {
     'plannedForm.freq.yearly': 'Jaarlijks',
     'plannedForm.freq.custom': 'Aangepast interval',
     'plannedForm.repeatEvery': 'Herhaal elke N dagen',
-    'plannedForm.endDate': 'Einddatum',
     'plannedForm.maxOccurrences': 'Max. herhalingen',
     'plannedForm.notesPlaceholder2': 'Aanvullende details…',
     'plannedForm.link': 'Link (optioneel)',
@@ -1357,11 +1343,17 @@ const nl: Record<string, string> = {
     'addInv.label.interestRate': 'Rentevoet (% p.j.)',
     'addInv.label.maturityDate': 'Vervaldatum',
     'addInv.label.location': 'Locatie',
+    'addInv.label.municipality': 'Gemeente',
+    'addInv.label.cadastralIncome': 'Kadastraal inkomen',
+    'addInv.label.municipalityTaxRate': 'Gemeentelijk belastingtarief (%)',
     'addInv.placeholder.name.stock': 'bijv. Apple Inc. of Vanguard FTSE',
     'addInv.placeholder.name.property': 'bijv. Appartement centrum',
     'addInv.placeholder.name.savings': 'bijv. Noodfonds',
     'addInv.placeholder.ticker': 'bijv. AAPL, BTC',
     'addInv.placeholder.location': 'bijv. Brussel, België',
+    'addInv.placeholder.municipality': 'bijv. Gent',
+    'addInv.placeholder.cadastralIncome': 'bijv. 1250',
+    'addInv.placeholder.municipalityTaxRate': 'bijv. 7,5',
     'addInv.initial.label': 'Initiële {txType}',
     'addInv.initial.desc': 'Registreer uw eerste {txWord} nu',
     'addInv.initial.purchase': 'Aankoop',
@@ -1444,6 +1436,9 @@ const nl: Record<string, string> = {
     'invDetail.unitsHeld': 'Gehouden eenheden',
     'invDetail.avgCostPerUnit': 'Gem. kostprijs/eenheid',
     'invDetail.currentPrice': 'Huidige koers',
+    'invDetail.municipality': 'Gemeente',
+    'invDetail.cadastralIncome': 'Kadastraal inkomen',
+    'invDetail.municipalityTaxRate': 'Gemeentelijk belastingtarief',
     'invDetail.interestRate': 'Rentevoet',
     'invDetail.realizedGain': 'Gerealiseerde winst',
     'invDetail.unrealizedGain': 'Ongerealiseerde winst',
@@ -2019,6 +2014,7 @@ const nl: Record<string, string> = {
     'tax.pit.bracketRange4': '> EUR 49.840',
     'tax.pit.row.federalBefore': 'Federale PIT (voor verminderingen)',
     'tax.pit.row.personalExemptionBenefit': 'Belastingsvrije som voordeel',
+    'tax.pit.row.federalTaxCredits': 'Federale belastingverminderingen',
     'tax.pit.row.federalAfter': 'Federale PIT (na verminderingen)',
     'tax.pit.row.communalSurcharge': 'Gemeentelijke opcentiemen',
     'tax.pit.row.specialSS': 'Speciale sociale zekerheidsbijdrage',
@@ -2126,6 +2122,11 @@ const nl: Record<string, string> = {
     'tax.profile.flag.charitableDonationsEligible': 'Donaties in aanmerking (erkende instelling)',
     'tax.profile.flag.childcareEligible': 'Kinderopvang in aanmerking',
     'tax.profile.flag.domesticHelpEligible': 'Hulp huishouden in aanmerking',
+    'tax.profile.flag.employeeGroupInsuranceEligible': 'Groepsverzekering in aanmerking',
+    'tax.profile.field.employeeGroupInsuranceContributions': 'Werknemersbijdragen groepsverzekering (jaarlijks EUR)',
+    'tax.profile.placeholder.employeeGroupInsuranceContributions': 'bijv. 600',
+    'tax.profile.field.childcareEligibleDays': 'In aanmerking komende opvangdagen (inkomstenjaar)',
+    'tax.profile.placeholder.childcareEligibleDays': 'bijv. 120',
     'tax.profile.field.domesticHelpCosts': 'Kosten huishoudhulp / personeel (jaarlijks EUR)',
     'tax.profile.placeholder.domesticHelpCosts': 'bv. 4000',
     'tax.profile.field.lifeInsurancePremiums': 'Levens-/lange-termijn verzekeringspremies (jaarlijks EUR)',
@@ -2209,7 +2210,10 @@ const nl: Record<string, string> = {
     'tax.currentlyAutomaticLabel': 'Automatisch vandaag:',
     'tax.currentlyAutomaticPortfolio': 'optelling van geregistreerde belastingen, kosten, TOB-achtige posten en context van gerealiseerde vs niet-gerealiseerde winst.',
     'tax.notAutomaticLabel': 'Niet automatisch:',
-    'tax.notAutomaticPortfolio': 'definitieve aangiftelogica (buitenlandse belastingkredieten, verdragclaims, precieze vrijstellingsbehandeling en afstemming met brokeroverzichten).'
+    'tax.notAutomaticPortfolio': 'definitieve aangiftelogica (buitenlandse belastingkredieten, verdragclaims, precieze vrijstellingsbehandeling en afstemming met brokeroverzichten).',
+
+
 
 };
+
 export default nl;

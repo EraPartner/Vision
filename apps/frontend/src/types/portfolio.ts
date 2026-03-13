@@ -73,6 +73,9 @@ export interface InvestmentSummary {
   maturityDate?: string;
   maturity_date?: string;
   location?: string;
+  municipality?: string;
+  cadastral_income?: number;
+  municipality_tax_rate?: number;
   notes?: string;
   is_active: boolean;
   created_at: string;

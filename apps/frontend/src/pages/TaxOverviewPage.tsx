@@ -24,6 +24,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useStatistics } from "@/hooks/useStatistics";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { TaxProfileDialog } from "@/components/tax/TaxProfileDialog";
+import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,8 @@ export default function TaxOverviewPage() {
   }, [summaries, profile.taxYear]);
 
   const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
+  // include estimated property tax in an alternate total (informational)
+  const totalTaxIncludingPropertyEstimate = totalTaxIncludingPortfolio + calculation.propertyTaxEstimate;
 
   const yearlyIncome = useMemo(
     () =>
@@ -162,6 +165,13 @@ export default function TaxOverviewPage() {
       desc: t("tax.card.totalWithPortfolio.desc"),
       cls: "text-primary",
     },
+    {
+      title: t("tax.card.totalWithPropertyEstimate", { year: String(profile.taxYear) }),
+      value: fmt(totalTaxIncludingPropertyEstimate),
+      icon: Landmark,
+      desc: t("tax.card.totalWithPropertyEstimate.desc"),
+      cls: "text-primary",
+    },
   ];
 
   const pitBreakdownRows = [
@@ -171,13 +181,17 @@ export default function TaxOverviewPage() {
     { label: t("tax.pit.row.bracket3"), value: calculation.federalPITBracket3, type: "tax" as const, bracket: t("tax.pit.bracketRange3") },
     { label: t("tax.pit.row.bracket4"), value: calculation.federalPITBracket4, type: "tax" as const, bracket: t("tax.pit.bracketRange4") },
     { label: t("tax.pit.row.federalBefore"), value: calculation.federalPITTotal, type: "total" as const },
-    { label: t("tax.pit.row.personalExemptionBenefit"), value: calculation.taxReductions, type: "reduction" as const },
+    { label: t("tax.pit.row.personalExemptionBenefit"), value: calculation.personalExemptionBenefit, type: "reduction" as const },
+    { label: t("tax.pit.row.federalTaxCredits"), value: calculation.federalTaxCredits, type: "reduction" as const },
     { label: t("tax.pit.row.federalAfter"), value: calculation.federalPITAfterReductions, type: "total" as const },
     { label: t("tax.pit.row.communalSurcharge",), value: calculation.communalSurcharge, type: "tax" as const },
     { label: t("tax.pit.row.specialSS"), value: calculation.specialSocialSecurityContribution, type: "tax" as const },
     { label: t("tax.pit.row.totalPIT"), value: calculation.totalPIT, type: "grand" as const },
     { label: t("tax.pit.row.portfolioTaxesYear", { year: String(profile.taxYear) }), value: portfolioTaxesForYear, type: "tax" as const },
     { label: t("tax.pit.row.totalTaxInclPortfolio"), value: totalTaxIncludingPortfolio, type: "grand" as const },
+    // Property tax estimate is informational and shown separately
+    { label: t('tax.pit.row.propertyTaxEstimate'), value: calculation.propertyTaxEstimate, type: 'tax' as const },
+    { label: t("tax.pit.row.totalWithPropertyEstimate"), value: totalTaxIncludingPropertyEstimate, type: "grand" as const },
   ];
 
   const taxRuleCards = [
@@ -469,8 +483,11 @@ export default function TaxOverviewPage() {
                     <span className="text-muted-foreground">Total burden (PIT + SS)</span>
                     <span className="font-bold tabular-nums text-primary">{fmt(calculation.totalTaxBurden)}</span>
                   </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+               </Card>
+              <div>
+                <SuggestedDeductionsCard />
+              </div>
             </div>
 
             {isVisible("yearlyOverview") && yearlyIncome.length > 0 && (

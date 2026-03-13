@@ -38,6 +38,9 @@ export function AddInvestmentDialog() {
     interestRate: '',
     maturityDate: '',
     location: '',
+    municipality: '',
+    cadastralIncome: '',
+    municipalityTaxRate: '',
     notes: '',
     priceProvider: 'manual' as PriceProvider,
     priceProviderId: '',
@@ -69,7 +72,7 @@ export function AddInvestmentDialog() {
   const reset = () => {
     setForm({
       assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '',
-      interestRate: '', maturityDate: '', location: '', notes: '',
+      interestRate: '', maturityDate: '', location: '', municipality: '', cadastralIncome: '', municipalityTaxRate: '', notes: '',
       priceProvider: 'manual', priceProviderId: '', priceProviderUrl: '',
       addInitialPurchase: true, initialAmount: '', initialUnits: '',
       initialDate: new Date().toISOString().slice(0, 10), initialFees: '',
@@ -91,6 +94,9 @@ export function AddInvestmentDialog() {
         interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
         maturity_date: form.maturityDate || undefined,
         location: form.location.trim() || undefined,
+        municipality: form.municipality.trim() || undefined,
+        cadastral_income: form.cadastralIncome ? parseFloat(form.cadastralIncome) : undefined,
+        municipality_tax_rate: form.municipalityTaxRate ? parseFloat(form.municipalityTaxRate) : undefined,
         notes: form.notes.trim() || undefined,
         price_provider: form.priceProvider,
         price_provider_id: form.priceProviderId.trim() || undefined,
@@ -261,15 +267,55 @@ export function AddInvestmentDialog() {
               )}
 
               {isRealEstate && (
-                <div className="space-y-2">
-                  <Label htmlFor="inv-location">{t('addInv.label.location')}</Label>
-                  <Input
-                    id="inv-location"
-                    placeholder={t('addInv.placeholder.location')}
-                    value={form.location}
-                    onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))}
-                    maxLength={200}
-                  />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-location">{t('addInv.label.location')}</Label>
+                      <Input
+                        id="inv-location"
+                        placeholder={t('addInv.placeholder.location')}
+                        value={form.location}
+                        onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))}
+                        maxLength={200}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-municipality">{t('addInv.label.municipality')}</Label>
+                      <Input
+                        id="inv-municipality"
+                        placeholder={t('addInv.placeholder.municipality')}
+                        value={form.municipality}
+                        onChange={(e) => setForm(f => ({ ...f, municipality: e.target.value }))}
+                        maxLength={200}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-cadastral-income">{t('addInv.label.cadastralIncome')}</Label>
+                      <Input
+                        id="inv-cadastral-income"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder={t('addInv.placeholder.cadastralIncome')}
+                        value={form.cadastralIncome}
+                        onChange={(e) => setForm(f => ({ ...f, cadastralIncome: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-municipality-tax-rate">{t('addInv.label.municipalityTaxRate')}</Label>
+                      <Input
+                        id="inv-municipality-tax-rate"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={t('addInv.placeholder.municipalityTaxRate')}
+                        value={form.municipalityTaxRate}
+                        onChange={(e) => setForm(f => ({ ...f, municipalityTaxRate: e.target.value }))}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

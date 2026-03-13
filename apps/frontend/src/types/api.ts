@@ -238,6 +238,9 @@ export interface Investment {
     interest_rate?: number;
     maturity_date?: string;
     location?: string;
+    municipality?: string;
+    cadastral_income?: number;
+    municipality_tax_rate?: number;
     notes?: string;
     price_provider: PriceProvider;
     price_provider_id?: string;
@@ -265,6 +268,9 @@ export interface InvestmentCreate {
     interest_rate?: number;
     maturity_date?: string;
     location?: string;
+    municipality?: string;
+    cadastral_income?: number;
+    municipality_tax_rate?: number;
     notes?: string;
     price_provider?: PriceProvider;
     price_provider_id?: string;
@@ -280,6 +286,9 @@ export interface InvestmentUpdate {
     interest_rate?: number;
     maturity_date?: string;
     location?: string;
+    municipality?: string;
+    cadastral_income?: number;
+    municipality_tax_rate?: number;
     notes?: string;
     is_active?: boolean;
     price_provider?: PriceProvider;

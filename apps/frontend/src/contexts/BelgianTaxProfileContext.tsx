@@ -59,6 +59,8 @@ export interface BelgianTaxProfile {
     isSpouseDisabled: boolean;
     /** Annual cadastral income for owned property (EUR) */
     cadastralIncome: number;
+    /** Additional residences (other properties) */
+    additionalResidences?: { label?: string; cadastralIncome: number; region?: BelgianRegion }[];
     /** Other annual taxable income (rental, misc.) */
     otherTaxableIncome: number;
     /** Alimony paid (annual, EUR) - deductible in many cases */
@@ -81,8 +83,14 @@ export interface BelgianTaxProfile {
     charitableDonationsEligible?: boolean;
     /** Childcare costs (annual, EUR) */
     childcareCosts: number;
+    /** Number of eligible childcare days (children under 14, income year 2025) */
+    childcareEligibleDays?: number;
     /** Whether the taxpayer is eligible for the child custody/tax credit (45% up to €16.90/day per child) */
     childcareEligible?: boolean;
+    /** Employee contributions to group insurance (annual, EUR) */
+    employeeGroupInsuranceContributions?: number;
+    /** Whether employee group-insurance contributions qualify for the federal 30% reduction */
+    employeeGroupInsuranceEligible?: boolean;
     /** Union or professional dues (annual, EUR) */
     unionDues: number;
     /** Medical expenses (annual, EUR) */
@@ -110,6 +118,8 @@ export interface BelgianTaxCalculation {
     federalPITBracket3: number;
     federalPITBracket4: number;
     federalPITTotal: number;
+    personalExemptionBenefit: number;
+    federalTaxCredits: number;
     taxReductions: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;
@@ -119,6 +129,8 @@ export interface BelgianTaxCalculation {
     marginalRate: number;
     netTakeHome: number;
     monthlyTaxReserve: number;
+    /** Estimated annual property tax from all residences (informational, regional estimate) */
+    propertyTaxEstimate: number;
     breakdown: {
         label: string;
         amount: number;
@@ -153,6 +165,8 @@ export const EMPLOYEE_SS_RATE = 0.1307;
 export const LUMP_SUM_PROFESSIONAL_EXPENSE_RATE = 0.30;
 export const LUMP_SUM_PROFESSIONAL_EXPENSE_CAP = 5_930;
 export const LUMP_SUM_PROFESSIONAL_EXPENSE_MIN = 0;
+export const DIRECTOR_PROFESSIONAL_EXPENSE_RATE = 0.03;
+export const DIRECTOR_PROFESSIONAL_EXPENSE_CAP = 3_130;
 
 /** Personal tax-free allowance and dependent exemption increases (income year 2025) */
 export const BASIC_PERSONAL_EXEMPTION = 10_910;
@@ -174,20 +188,19 @@ export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = {
     brussels: 7,
 };
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Deduction caps / pragmatic placeholders
-// These are conservative placeholder caps to make the calculator behave
-// sensibly. They should be verified against official PwC / FPS documentation
-// and adjusted to exact legal ceilings. See: https://taxsummaries.pwc.com/belgium/individual/deductions
-//
-export const CAP_PERSONAL_PENSION_CONTRIBUTIONS = 3_200; // placeholder — verify
-export const CAP_LIFE_INSURANCE_PREMIUMS = 2_000; // placeholder — verify
-export const CAP_MORTGAGE_INTEREST = 6_000; // placeholder — verify (main residence)
-export const CAP_CHARITABLE_DONATIONS = 15_000; // placeholder — verify
-export const CAP_CHILDCARE_COSTS = 12_000; // placeholder — verify
-export const CAP_UNION_DUES = 1_500; // placeholder — verify
-export const CAP_MEDICAL_EXPENSES = 5_000; // placeholder — verify
-export const ALIMONY_MAX_FRACTION_OF_GROSS = 0.5; // alimony capped at 50% of gross as pragmatic guard
+// Region multipliers used as pragmatic estimates to convert cadastral income -> annual property tax
+export const REGION_CADASTRAL_MULTIPLIER: Record<BelgianRegion, number> = {
+    flanders: 1.6,
+    wallonia: 1.7,
+    brussels: 1.8,
+};
+
+// PwC Belgium (individual deductions, reviewed 13 Feb 2026)
+export const PENSION_SAVINGS_CAP_STANDARD = 1_050;
+export const PENSION_SAVINGS_CAP_ALTERNATIVE = 1_350;
+export const LIFE_INSURANCE_CAP = 2_530;
+export const CHARITABLE_DONATION_MIN = 40;
+export const CHILDCARE_DAILY_CAP_2025 = 16.90;
 
 
 const SETTINGS_KEY = 'belgian_tax_profile';
@@ -209,6 +222,7 @@ const defaultProfile: BelgianTaxProfile = {
     isDisabled: false,
     isSpouseDisabled: false,
     cadastralIncome: 0,
+    additionalResidences: [],
     otherTaxableIncome: 0,
     alimonyPaid: 0,
     personalPensionContributions: 0,
@@ -220,7 +234,10 @@ const defaultProfile: BelgianTaxProfile = {
     charitableDonations: 0,
     charitableDonationsEligible: false,
     childcareCosts: 0,
+    childcareEligibleDays: 0,
     childcareEligible: false,
+    employeeGroupInsuranceContributions: 0,
+    employeeGroupInsuranceEligible: false,
     unionDues: 0,
     medicalExpenses: 0,
     domesticHelpCosts: 0,
@@ -247,35 +264,31 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     if (profile.professionalExpenseMethod === 'actual') {
         profExpenses = Math.max(profile.actualProfessionalExpenses, 0);
     } else {
-        profExpenses = Math.min(profile.grossAnnualIncome * LUMP_SUM_PROFESSIONAL_EXPENSE_RATE, LUMP_SUM_PROFESSIONAL_EXPENSE_CAP);
+        // PwC: employees can claim 30% with ceiling EUR 5,930.
+        // PwC: remunerated directors can claim 3% with ceiling EUR 3,130.
+        // We map the "self_employed" profile bucket to the director-style forfait.
+        if (profile.employmentType === 'self_employed') {
+            profExpenses = Math.min(profile.grossAnnualIncome * DIRECTOR_PROFESSIONAL_EXPENSE_RATE, DIRECTOR_PROFESSIONAL_EXPENSE_CAP);
+        } else {
+            profExpenses = Math.min(profile.grossAnnualIncome * LUMP_SUM_PROFESSIONAL_EXPENSE_RATE, LUMP_SUM_PROFESSIONAL_EXPENSE_CAP);
+        }
     }
 
     // 3. Taxable income before personal exemptions
-    // Include other deductible items (alimony, pension contributions, life insurance, mortgage interest,
-    // charitable donations, childcare costs, union dues, medical expenses) as pragmatic deductions.
-    // Apply pragmatic caps where relevant
-    const cappedPension = Math.min(profile.personalPensionContributions || 0, CAP_PERSONAL_PENSION_CONTRIBUTIONS);
-    // Pension contributions are treated as a tax reduction (credit) under PwC guidance rather than
-    // a deduction from taxable income. We compute the credit below and therefore do not include
-    // pension contributions in otherDeductions. CAP_PERSONAL_PENSION_CONTRIBUTIONS is a placeholder
-    // retained for backwards compatibility; exact legal ceilings are applied when pensionScheme is set.
-    const cappedLifeIns = Math.min(profile.lifeInsurancePremiums || 0, CAP_LIFE_INSURANCE_PREMIUMS);
-    // Mortgage interest (main residence) and several items are regional tax reductions and
-    // should not be applied to the federal PIT by default. We keep them in the profile for
-    // display as regional adjustments but exclude from federal deductions here.
-    const cappedMortgage = 0; // profile mortgageInterestPaid is treated as regional adjustment
-    // Charitable donations, childcare costs, life insurance and pension savings are treated
-    // by PwC as tax reductions (credits). We therefore exclude them from the federal
-    // taxable-base deductions and compute credits separately below.
+    // PwC classifies pension savings, life insurance, donations, group insurance, childcare,
+    // and domestic personnel as tax reductions (credits), not deductions from taxable basis.
+    // Therefore only true deductible amounts are included here.
+    const cappedPension = 0;
+    const cappedLifeIns = 0;
+    const cappedMortgage = 0; // regional adjustment, not auto-applied federally
     const cappedDonations = 0;
     const cappedChildcare = 0;
-    const cappedUnion = Math.min(profile.unionDues || 0, CAP_UNION_DUES);
-    const cappedMedical = Math.min(profile.medicalExpenses || 0, CAP_MEDICAL_EXPENSES);
+    const cappedUnion = Math.max(profile.unionDues || 0, 0);
+    const cappedMedical = Math.max(profile.medicalExpenses || 0, 0);
     // Alimony: PwC indicates that alimony payments are deductible at 80% for the payer in many cases.
-    // We apply an 80% deductible treatment here while retaining a pragmatic cap (ALIMONY_MAX_FRACTION_OF_GROSS)
-    // to avoid unrealistic inputs. Source: PwC — Belgium — Individual — Deductions (saved tool output).
-    const cappedAlimonyRaw = Math.min(profile.alimonyPaid || 0, (profile.grossAnnualIncome || 0) * ALIMONY_MAX_FRACTION_OF_GROSS);
-    const cappedAlimony = cappedAlimonyRaw * 0.80; // 80% deductible portion
+    // We apply the legal percentage directly (80%) without a synthetic fraction cap.
+    // Source: PwC — Belgium — Individual — Deductions (reviewed 13 Feb 2026).
+    const cappedAlimony = Math.max(profile.alimonyPaid || 0, 0) * 0.80;
 
     // Note: pension, life insurance, donations, childcare and domestic help are handled as tax
     // reductions (credits) below and are therefore NOT included in otherDeductions for the federal PIT.
@@ -324,9 +337,6 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     }
 
     // Compute progressive tax before and after applying personal exemptions.
-    // Correct approach: reduce the taxable base by the personal exemption amount
-    // and compute tax on both the original and reduced bases to obtain the
-    // explicit tax reduction amount.
     const pitBeforeExemptions = computeProgressiveTax(taxableIncome);
     const taxableAfterPersonalExemptions = Math.max(taxableIncome - personalExemptionTotal, 0);
     const pitAfterExemptions = computeProgressiveTax(taxableAfterPersonalExemptions);
@@ -336,13 +346,17 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     const bracket3 = pitBeforeExemptions.b3;
     const bracket4 = pitBeforeExemptions.b4;
 
-    // federal PIT before applying tax credits (but after personal exemptions which reduce the base)
-    const federalPITBeforeCredits = pitAfterExemptions.total;
+    // Federal PIT before federal tax reductions.
+    // Keep this as tax on taxable income before personal exemptions so that the personal exemption
+    // benefit remains explicit and correctly displayed as its own reduction line.
+    const federalPITBeforeCredits = pitBeforeExemptions.total;
+    const personalExemptionBenefit = Math.max(0, pitBeforeExemptions.total - pitAfterExemptions.total);
+    const pitAfterPersonalExemptions = pitAfterExemptions.total;
 
     // --- Compute tax credits (reductions) per PwC guidance ---
     // Pension savings: two ceilings (EUR 1,050 @30% or EUR 1,350 @25%) depending on the chosen scheme.
     // Source: PwC — Belgium — Individual — Deductions (reviewed 13 Feb 2026).
-    const pensionCeiling = profile.pensionScheme === '1350' ? 1_350 : 1_050;
+    const pensionCeiling = profile.pensionScheme === '1350' ? PENSION_SAVINGS_CAP_ALTERNATIVE : PENSION_SAVINGS_CAP_STANDARD;
     const pensionRate = profile.pensionScheme === '1350' ? 0.25 : 0.30;
     const pensionCredit = profile.pensionEligible
         ? Math.min(profile.personalPensionContributions || 0, pensionCeiling) * pensionRate
@@ -350,12 +364,17 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
 
     // Life insurance: 30% tax reduction up to EUR 2,530 (PwC). Treated as a tax credit.
     const lifeInsuranceCredit = profile.lifeInsuranceEligible
-        ? Math.min(profile.lifeInsurancePremiums || 0, 2_530) * 0.30
+        ? Math.min(profile.lifeInsurancePremiums || 0, LIFE_INSURANCE_CAP) * 0.30
+        : 0;
+
+    // Employee contributions to group insurance: 30% tax reduction (PwC).
+    const groupInsuranceCredit = profile.employeeGroupInsuranceEligible
+        ? Math.max(profile.employeeGroupInsuranceContributions || 0, 0) * 0.30
         : 0;
 
     // Charitable donations: minimum donation EUR 40 and must be to recognised EEA institution to qualify;
     // tax reduction typically 45% (PwC). We require the user to mark eligibility (recognised charity).
-    const donationCredit = profile.charitableDonationsEligible && (profile.charitableDonations || 0) >= 40
+    const donationCredit = profile.charitableDonationsEligible && (profile.charitableDonations || 0) >= CHARITABLE_DONATION_MIN
         ? 0.45 * (profile.charitableDonations || 0)
         : 0;
 
@@ -364,13 +383,9 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
     // childcareCosts as the amount claimed and cap it by an assumed annual days multiplier when the user
     // hasn't provided day counts. This assumption is documented and should be refined with more input.
     // See note below and in UI for assumptions. Source: PwC.
-    const CHILDCARE_DAILY_CAP = 16.90; // EUR per day (2025)
-    // Conservative default: assume 250 qualifying days per child when days not provided (approx. working days)
-    const DEFAULT_QUALIFYING_DAYS_PER_CHILD = 250;
-    const childcareAnnualCapPerChild = CHILDCARE_DAILY_CAP * DEFAULT_QUALIFYING_DAYS_PER_CHILD;
-    const childcareAnnualCap = (profile.dependentChildren || 0) * childcareAnnualCapPerChild;
+    const childcareAnnualCap = Math.max(profile.childcareEligibleDays || 0, 0) * CHILDCARE_DAILY_CAP_2025;
     const childcareCredit = profile.childcareEligible
-        ? 0.45 * Math.min(profile.childcareCosts || 0, childcareAnnualCap || 0)
+        ? 0.45 * Math.min(profile.childcareCosts || 0, childcareAnnualCap)
         : 0;
 
     // Domestic personnel / household help: PwC indicates a 30% tax reduction when eligible; exact caps
@@ -380,11 +395,11 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         ? 0.30 * (profile.domesticHelpCosts || 0)
         : 0;
 
-    const totalTaxCredits = pensionCredit + lifeInsuranceCredit + donationCredit + childcareCredit + domesticHelpCredit;
+    const totalTaxCredits = pensionCredit + lifeInsuranceCredit + groupInsuranceCredit + donationCredit + childcareCredit + domesticHelpCredit;
 
     const federalPIT = federalPITBeforeCredits;
-    const federalPITAfterReductions = Math.max(0, federalPITBeforeCredits - totalTaxCredits);
-    const effectiveTaxReductions = totalTaxCredits;
+    const federalPITAfterReductions = Math.max(0, pitAfterPersonalExemptions - totalTaxCredits);
+    const effectiveTaxReductions = personalExemptionBenefit + totalTaxCredits;
 
     // 6. Communal surcharge
     const communalSurcharge = federalPITAfterReductions * (profile.communalSurchargePercent / 100);
@@ -400,7 +415,16 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
 
     // 8. Totals
     const totalPIT = federalPITAfterReductions + communalSurcharge;
-    const totalTaxBurden = totalPIT + employeeSS + specialSocialSecurityContribution;
+
+    // Property tax — aggregate main residence and any additional residences as an informational estimate.
+    const residences = [{ cadastralIncome: profile.cadastralIncome || 0, region: profile.region }, ...(profile.additionalResidences || [])];
+    const propertyTaxEstimate = residences.reduce((sum, r) => {
+        const mult = REGION_CADASTRAL_MULTIPLIER[r.region || profile.region];
+        return sum + (r.cadastralIncome || 0) * mult;
+    }, 0);
+
+    // Total burden: federal PIT + communal surcharge + social security + estimated property tax (informational)
+    const totalTaxBurden = totalPIT + communalSurcharge + employeeSS + specialSocialSecurityContribution + propertyTaxEstimate;
     const effectiveRate = gross > 0 ? (totalTaxBurden / gross) * 100 : 0;
 
     // Marginal rate: which bracket does taxable income fall in?
@@ -433,6 +457,9 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         ...(bracket2 > 0 ? [{ label: 'Bracket 2 (40%)', amount: -bracket2, rate: 40, bracket: '€16,320 – €28,800' }] : []),
         ...(bracket3 > 0 ? [{ label: 'Bracket 3 (45%)', amount: -bracket3, rate: 45, bracket: '€28,800 – €49,840' }] : []),
         ...(bracket4 > 0 ? [{ label: 'Bracket 4 (50%)', amount: -bracket4, rate: 50, bracket: '€49,840+' }] : []),
+        ...(personalExemptionBenefit > 0 ? [
+            { label: 'Personal exemption benefit', amount: -personalExemptionBenefit },
+        ] : []),
         ...(totalTaxCredits > 0 ? [
             { label: 'Tax Credits (reductions) — detail', amount: -totalTaxCredits },
         ] : []),
@@ -469,6 +496,8 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         federalPITBracket3: bracket3,
         federalPITBracket4: bracket4,
         federalPITTotal: federalPIT,
+        personalExemptionBenefit,
+        federalTaxCredits: totalTaxCredits,
         taxReductions: effectiveTaxReductions,
         federalPITAfterReductions,
         communalSurcharge,
@@ -478,6 +507,7 @@ export function computeBelgianPIT(profile: BelgianTaxProfile): BelgianTaxCalcula
         marginalRate,
         netTakeHome,
         monthlyTaxReserve,
+        propertyTaxEstimate,
         breakdown,
     };
 }

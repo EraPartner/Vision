@@ -1,5 +1,6 @@
 // Auto-generated — do not edit manually. Edit LanguageContext.tsx instead.
 const en: Record<string, string> = {
+
     // Sidebar / Navigation
     'nav.overview': 'Overview',
     'nav.organization': 'Organization',
@@ -1157,7 +1158,6 @@ const en: Record<string, string> = {
      'onboarding.cat.gifts': 'Gifts',
      'onboarding.tour.title': "You're all set!",
     'onboarding.tour.desc': "Here's a quick look at what you can do.",
-    'onboarding.back': 'Back',
     'onboarding.skipSetup': 'Skip setup',
     'onboarding.goToDashboard': 'Go to Dashboard',
     'onboarding.getStarted': 'Get Started',
@@ -1177,7 +1177,6 @@ const en: Record<string, string> = {
     'onboarding.feature.statistics.title': 'Statistics',
     'onboarding.feature.statistics.desc': 'Deep analytics — monthly trends, category breakdowns, year-over-year.',
     'onboarding.feature.portfolio.title': 'Portfolio',
-    'onboarding.feature.portfolio.desc': 'Track investments: stocks, ETFs, crypto, real estate, and savings.',
     'onboarding.feature.market.title': 'Market Lookup',
     'onboarding.feature.market.desc': 'Search any ticker for live price data and analyst ratings.',
     'onboarding.import.title': 'Import Your Transactions',
@@ -1219,7 +1218,6 @@ const en: Record<string, string> = {
     'plannedForm.freq.yearly': 'Yearly',
     'plannedForm.freq.custom': 'Custom interval',
     'plannedForm.repeatEvery': 'Repeat every N days',
-    'plannedForm.endDate': 'End Date',
     'plannedForm.maxOccurrences': 'Max occurrences',
     'plannedForm.notesPlaceholder2': 'Any additional details…',
     'plannedForm.link': 'Link (optional)',
@@ -1348,11 +1346,17 @@ const en: Record<string, string> = {
     'addInv.label.interestRate': 'Interest Rate (% p.a.)',
     'addInv.label.maturityDate': 'Maturity Date',
     'addInv.label.location': 'Location',
+    'addInv.label.municipality': 'Municipality',
+    'addInv.label.cadastralIncome': 'Cadastral Income',
+    'addInv.label.municipalityTaxRate': 'Municipal Tax Rate (%)',
     'addInv.placeholder.name.stock': 'e.g. Apple Inc. or Vanguard FTSE',
     'addInv.placeholder.name.property': 'e.g. Downtown Apartment',
     'addInv.placeholder.name.savings': 'e.g. Emergency Fund',
     'addInv.placeholder.ticker': 'e.g. AAPL, BTC',
     'addInv.placeholder.location': 'e.g. Brussels, Belgium',
+    'addInv.placeholder.municipality': 'e.g. Ghent',
+    'addInv.placeholder.cadastralIncome': 'e.g. 1250',
+    'addInv.placeholder.municipalityTaxRate': 'e.g. 7.5',
     'addInv.initial.label': 'Initial {txType}',
     'addInv.initial.desc': 'Record your first {txWord} now',
     'addInv.initial.purchase': 'Purchase',
@@ -1435,6 +1439,9 @@ const en: Record<string, string> = {
     'invDetail.unitsHeld': 'Units Held',
     'invDetail.avgCostPerUnit': 'Avg Cost/Unit',
     'invDetail.currentPrice': 'Current Price',
+    'invDetail.municipality': 'Municipality',
+    'invDetail.cadastralIncome': 'Cadastral Income',
+    'invDetail.municipalityTaxRate': 'Municipal Tax Rate',
     'invDetail.interestRate': 'Interest Rate',
     'invDetail.realizedGain': 'Realized Gain',
     'invDetail.unrealizedGain': 'Unrealized Gain',
@@ -1985,6 +1992,48 @@ const en: Record<string, string> = {
     'tax.page.title': 'Belgian Personal Tax Overview',
     'tax.page.subtitle': 'Profile-driven PIT estimate with progressive brackets, reductions, and communal surcharge.',
 
+    // Suggested deductions card
+    'tax.suggestions.title': 'Possible deductions / credits you may qualify for',
+    'tax.suggestions.none': 'No obvious missing deductions detected. Review regional items below or open your tax profile to confirm inputs.',
+    'tax.suggestions.pwcLink': 'PwC — Belgium: Individual — Deductions',
+    'tax.suggestions.estimateNote': 'Estimated',
+    'tax.suggestions.cta': 'Add / Edit',
+    'tax.suggestions.regionalTitle': 'Regional items you may qualify for',
+    'tax.suggestions.regionalDesc': 'Examples: mortgage capital repayment relief, service-checks, security investments, renovation/maintenance incentives. These are region-specific and not auto-applied to federal PIT.',
+    'tax.suggestions.multipleResidencesNote': 'If you own multiple properties, the portfolio tax page shows estimated regional property taxes per residence; an aggregated estimate is included in the general tax totals as informational only.',
+    'tax.suggestions.regionalNote': 'Regional deductions are listed for your reference and are not automatically applied to federal PIT.',
+
+    // Pension
+    'tax.suggestions.pension.noAmount': 'You marked pension contributions as eligible but did not enter an amount. PwC: up to €1,050 @30% (standard) or €1,350 @25% (alternative).',
+    'tax.suggestions.pension.notMarked': 'You entered pension contributions but did not mark them eligible. Mark as eligible to apply the federal tax credit.',
+    'tax.suggestions.pension.suggest': 'Pension savings may provide a federal tax credit. Consider contributing (PwC ceilings apply).',
+
+    // Life
+    'tax.suggestions.life.noAmount': 'You marked life insurance as eligible but did not enter a premium amount. PwC cap: €2,530 @30%.',
+    'tax.suggestions.life.notMarked': 'You entered life insurance premiums but did not mark them eligible. Mark to apply the 30% federal credit (up to cap).',
+
+    // Group insurance
+    'tax.suggestions.group.noAmount': 'You marked group insurance eligible but did not enter a contribution amount. Employee group insurance often qualifies for a federal credit.',
+    'tax.suggestions.group.notMarked': 'You entered group insurance contributions but did not mark them eligible. Mark to apply the federal credit (~30%).',
+    'tax.suggestions.group.suggest': 'If you are an employee, employee group insurance contributions may entitle you to a federal credit (30%).',
+
+    // Donations
+    'tax.suggestions.donations.noAmount': 'You marked charitable donations eligible but did not enter an amount. PwC: 45% reduction for qualifying donations (minimum €40 to recognised EEA institutions).',
+    'tax.suggestions.donations.notMarked': 'You entered donations but did not mark them eligible. Mark as qualifying donations to apply the 45% reduction.',
+    'tax.suggestions.donations.note': '45% credit for qualifying donations ≥ €40 to recognised EEA institutions (PwC).',
+
+    // Childcare
+    'tax.suggestions.childcare.noAmount': 'You marked childcare eligible but did not enter costs. The credit is 45% up to €16.90/day (2025) per eligible child — provide eligible days for a tighter cap.',
+    'tax.suggestions.childcare.notMarked': 'You entered childcare costs but did not mark them eligible. Mark to apply the 45% federal credit up to the daily cap.',
+    'tax.suggestions.childcare.suggest': 'You have dependents; childcare costs may qualify for a 45% credit. Example used: {days} eligible days.',
+
+    // Domestic
+    'tax.suggestions.domestic.noAmount': 'You marked domestic help eligible but did not enter costs. PwC: 30% credit when eligible (caps and conditions vary).',
+    'tax.suggestions.domestic.notMarked': 'You entered domestic help costs but did not mark them eligible. Mark to apply the 30% credit.',
+
+    // Alimony
+    'tax.suggestions.alimony.applied': 'Alimony is treated as an 80% deductible item from taxable base; estimated tax saving shown using your marginal rate (illustrative).',
+
     // Cards
     'tax.card.profileGrossIncome': 'Profile Gross Income',
     'tax.card.profileGrossIncome.desc': 'Annual gross income used in profile',
@@ -2011,6 +2060,7 @@ const en: Record<string, string> = {
     'tax.pit.bracketRange4': '> EUR 49,840',
     'tax.pit.row.federalBefore': 'Federal PIT (before reductions)',
     'tax.pit.row.personalExemptionBenefit': 'Belastingsvrije som benefit',
+    'tax.pit.row.federalTaxCredits': 'Federal tax credits',
     'tax.pit.row.federalAfter': 'Federal PIT (after reductions)',
     'tax.pit.row.communalSurcharge': 'Communal surcharge',
     'tax.pit.row.specialSS': 'Special social security contribution',
@@ -2130,6 +2180,11 @@ const en: Record<string, string> = {
     'tax.profile.flag.charitableDonationsEligible': 'Donations eligible (recognised charity)',
     'tax.profile.flag.childcareEligible': 'Childcare eligible',
     'tax.profile.flag.domesticHelpEligible': 'Domestic help eligible',
+    'tax.profile.flag.employeeGroupInsuranceEligible': 'Group insurance eligible',
+    'tax.profile.field.employeeGroupInsuranceContributions': 'Employee group insurance contributions (annual EUR)',
+    'tax.profile.placeholder.employeeGroupInsuranceContributions': 'e.g. 600',
+    'tax.profile.field.childcareEligibleDays': 'Eligible childcare days (income year)',
+    'tax.profile.placeholder.childcareEligibleDays': 'e.g. 120',
     'tax.profile.field.domesticHelpCosts': 'Domestic help / household staff costs (annual EUR)',
     'tax.profile.placeholder.domesticHelpCosts': 'e.g. 4000',
     'tax.profile.field.lifeInsurancePremiums': 'Life / long-term insurance premiums (annual EUR)',
@@ -2217,5 +2272,8 @@ const en: Record<string, string> = {
     'tax.notAutomaticLabel': 'Not automatic:',
     'tax.notAutomaticPortfolio': 'final personal filing logic (foreign tax credits, treaty claims, precise exemption treatment, and broker statement reconciliation).',
 
+
+
 };
+
 export default en;

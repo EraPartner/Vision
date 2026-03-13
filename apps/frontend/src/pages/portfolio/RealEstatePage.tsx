@@ -24,6 +24,10 @@ export default function RealEstatePage() {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
+  function fmtNum(val: number, decimals = 2) {
+    return new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
+  }
+
   const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
   const totalCost = properties.reduce((s, p) => s + p.totalBuyCost, 0);
   const totalAppreciation = properties.reduce((s, p) => s + p.totalAppreciation, 0);
@@ -209,8 +213,8 @@ export default function RealEstatePage() {
                    </div>
                  </div>
 
-                 {/* Returns Breakdown */}
-                 <div className="grid grid-cols-2 gap-3">
+                  {/* Returns Breakdown */}
+                  <div className="grid grid-cols-2 gap-3">
                    <div className="p-3 rounded-lg bg-muted/50">
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.appreciation')}</p>
                      <p className={cn(
@@ -219,7 +223,33 @@ export default function RealEstatePage() {
                      )}>
                        {p.totalAppreciation >= 0 ? "+" : ""}{fmt(p.totalAppreciation, p.currency)}
                      </p>
-                   </div>
+                  </div>
+
+                  {/* Municipality / cadastral info for real estate */}
+                  {(p.municipality || p.cadastral_income || p.cadastral_income === 0 || p.municipality_tax_rate || p.municipality_tax_rate === 0) && (
+                    <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                      {p.municipality && (
+                        <div className="p-2 rounded-lg bg-muted/50">
+                          <p className="text-xs text-muted-foreground">{t('invDetail.municipality')}</p>
+                          <p className="font-medium truncate">{p.municipality}</p>
+                        </div>
+                      )}
+
+                      {(p.cadastral_income || p.cadastral_income === 0) && (
+                        <div className="p-2 rounded-lg bg-muted/50">
+                          <p className="text-xs text-muted-foreground">{t('invDetail.cadastralIncome')}</p>
+                          <p className="font-medium tabular-nums">{fmt(p.cadastral_income || 0, p.currency)}</p>
+                        </div>
+                      )}
+
+                      {(p.municipality_tax_rate || p.municipality_tax_rate === 0) && (
+                        <div className="p-2 rounded-lg bg-muted/50">
+                          <p className="text-xs text-muted-foreground">{t('invDetail.municipalityTaxRate')}</p>
+                          <p className="font-medium tabular-nums">{fmtNum(p.municipality_tax_rate || 0)}%</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                    <div className="p-3 rounded-lg bg-muted/50">
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.rentalIncome')}</p>
                      <p className="text-lg font-bold text-accent tabular-nums">
