@@ -132,6 +132,7 @@ jobs:
 
           cd dist/source-launcher
           ditto -c -k --sequesterRsrc --keepParent unsigned "Vision-source-launcher-${TAG}-arm64.zip"
+          mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
           mv "Vision-source-launcher-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
 
       - name: Upload source launcher zip
