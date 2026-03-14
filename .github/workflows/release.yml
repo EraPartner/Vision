@@ -95,7 +95,9 @@ jobs:
   # run the app locally without needing Apple Developer signing/notarization.
   package-mac:
     name: Package mac app (unsigned)
-    runs-on: macos-14
+    runs-on: macos-26
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -147,13 +149,12 @@ jobs:
           name: vision-unsigned-zip
           path: dist/unsigned/Vision-unsigned-${{ github.ref_name }}-arm64.zip
 
-
   # ─────────────────────────────────────────────────────────────────────────────
   # 2b. Build macOS DMG (arm64) — unsigned (restores electron-updater artifacts)
   # ─────────────────────────────────────────────────────────────────────────────
   dmg-arm64:
     name: Build DMG (arm64)
-    runs-on: macos-13-arm64
+    runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
 
