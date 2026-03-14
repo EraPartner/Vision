@@ -3,8 +3,8 @@ name: Release
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
 #   1. Build & push multi-arch Docker image to GHCR (linux/amd64 + linux/arm64)
-#   2. Build unsigned macOS ZIP for arm64 (Apple Silicon)
-#   3. Publish a GitHub Release with the unsigned ZIP attached
+#   2. Build source launcher ZIP for source-based production startup
+#   3. Publish a GitHub Release with the source launcher ZIP attached
 
 on:
   push:
@@ -87,13 +87,12 @@ jobs:
           path: dist/docker-image-tag.txt
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # 2. Build unsigned macOS ZIP (arm64 — Apple Silicon only)
+  # 2. Build source launcher ZIP (arm64 — Apple Silicon only)
   # ─────────────────────────────────────────────────────────────────────────────
-  # Create an unsigned mac package (no signing, no notarization). This produces
-  # an unsigned zip containing Vision.app and the launch.command so users can
-  # run the app locally without needing Apple Developer signing/notarization.
+  # Create a source launcher package (no .app binary distribution). This
+  # produces a zip containing the Vision source tree + launch.command.
   package-mac:
-    name: Package mac app (unsigned)
+    name: Package mac source launcher
     runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
@@ -107,59 +106,39 @@ jobs:
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
         shell: bash
 
-      - name: Build Electron (unsigned .app)
+      - name: Create source launcher zip (ditto)
         run: |
           set -euo pipefail
-          cd packaging/electron
-          bun install
-          # build the arm64 mac artifact (use existing dist:arm64 script)
-          bun run dist:arm64
-        shell: bash
-
-      - name: Create unsigned portable zip (ditto)
-        run: |
-          set -euo pipefail
-          cd packaging/electron/dist
-          # Copy the app into a clean folder and generate a launch.command helper
-          mkdir -p unsigned
-          cp -R *.app unsigned/ 2>/dev/null || true
-          # Generate a simple launcher that removes quarantine and opens the app
-          cat > unsigned/launch.command <<'LAUNCH'
-          #!/bin/bash
-          set -euo pipefail
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          SRC_APP="$DIR/Vision.app"
-          if [ ! -d "$SRC_APP" ]; then
-            echo "Vision.app not found in $DIR"
-            exit 1
-          fi
-
-          TARGET_DIR="/Applications"
-          TARGET_APP="$TARGET_DIR/Vision.app"
-
-          if [ ! -w "$TARGET_DIR" ]; then
-            TARGET_DIR="$HOME/Applications"
-            TARGET_APP="$TARGET_DIR/Vision.app"
-            mkdir -p "$TARGET_DIR"
-          fi
-
-          rm -rf "$TARGET_APP"
-          cp -R "$SRC_APP" "$TARGET_APP"
-          xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
-          open "$TARGET_APP" || { echo "Failed to open $TARGET_APP — try right-click -> Open in Finder to bypass Gatekeeper."; exit 2; }
-          LAUNCH
-          chmod +x unsigned/launch.command
+          cd "$GITHUB_WORKSPACE"
           TAG="${{ github.ref_name }}"
-          # Use ditto to preserve macOS metadata
-          ditto -c -k --sequesterRsrc --keepParent unsigned "Vision-unsigned-${TAG}-arm64.zip"
-          mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
-          mv "Vision-unsigned-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
+          mkdir -p dist/source-launcher/unsigned
 
-      - name: Upload unsigned portable zip
+          # Package source tree (without .git and heavy transient dirs)
+          rsync -a ./ dist/source-launcher/unsigned/Vision/ \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'apps/frontend/node_modules' \
+            --exclude 'apps/node-backend/node_modules' \
+            --exclude 'packaging/electron/node_modules' \
+            --exclude 'dist' \
+            --exclude 'postgres_data' \
+            --exclude 'venv' \
+            --exclude '.idea' \
+            --exclude '.pytest_cache' \
+            --exclude '.DS_Store'
+
+          cp packaging/electron/unsigned/launch.command dist/source-launcher/unsigned/launch.command
+          chmod +x dist/source-launcher/unsigned/launch.command
+
+          cd dist/source-launcher
+          ditto -c -k --sequesterRsrc --keepParent unsigned "Vision-source-launcher-${TAG}-arm64.zip"
+          mv "Vision-source-launcher-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
+
+      - name: Upload source launcher zip
         uses: actions/upload-artifact@v4
         with:
-          name: vision-unsigned-zip
-          path: dist/unsigned/Vision-unsigned-${{ github.ref_name }}-arm64.zip
+          name: vision-source-launcher-zip
+          path: dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
@@ -175,10 +154,10 @@ jobs:
       packages: read
 
     steps:
-      - name: Download unsigned portable zip
+      - name: Download source launcher zip
         uses: actions/download-artifact@v4
         with:
-          name: vision-unsigned-zip
+          name: vision-source-launcher-zip
           path: dist/unsigned
 
       - name: Download docker metadata artifact

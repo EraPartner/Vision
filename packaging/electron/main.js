@@ -569,54 +569,75 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function getCurrentBundlePath() {
-  // process.execPath = .../Vision.app/Contents/MacOS/Vision
-  return path.resolve(process.execPath, '..', '..', '..');
+function getCurrentVersionTag() {
+  const candidates = [
+    workDir ? path.join(workDir, 'package.json') : null,
+    path.resolve(__dirname, '..', '..', 'package.json'),
+  ].filter(Boolean);
+
+  for (const pkgPath of candidates) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (typeof pkg.version === 'string' && pkg.version.trim()) {
+        return normalizeVersionTag(pkg.version.trim());
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return normalizeVersionTag(app.getVersion());
 }
 
 function shellEscape(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
 }
 
-function writeInstallerScript({ scriptPath, srcAppPath, srcLaunchPath, destAppPath, hostPid }) {
-  const destDir = path.dirname(destAppPath);
-  const dstName = path.basename(destAppPath);
+function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, destRootPath, hostPid }) {
   const script = [
     '#!/bin/bash',
     'set -euo pipefail',
-    `SRC_APP=${shellEscape(srcAppPath)}`,
-    `SRC_LAUNCH=${shellEscape(srcLaunchPath || '')}`,
-    `DEST_APP=${shellEscape(destAppPath)}`,
-    `DEST_DIR=${shellEscape(destDir)}`,
-    `DEST_NAME=${shellEscape(dstName)}`,
+    `SRC_ROOT=${shellEscape(sourceRootPath)}`,
+    `SRC_LAUNCH=${shellEscape(sourceLaunchPath || '')}`,
+    `DEST_ROOT=${shellEscape(destRootPath)}`,
     `HOST_PID=${hostPid}`,
     '',
-    '# Wait until the running app exits before replacing the bundle.',
+    '# Wait until the running app exits before replacing source files.',
     'for i in {1..120}; do',
     '  if ! kill -0 "$HOST_PID" 2>/dev/null; then break; fi',
     '  sleep 0.5',
     'done',
     '',
-    'install_into() {',
-    '  local target_dir="$1"',
-    '  local target_app="$target_dir/$DEST_NAME"',
-    '  mkdir -p "$target_dir"',
-    '  rm -rf "$target_app"',
-    '  cp -R "$SRC_APP" "$target_app"',
-    '  xattr -dr com.apple.quarantine "$target_app" 2>/dev/null || true',
-    '  if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
-    '    cp "$SRC_LAUNCH" "$target_dir/launch.command" 2>/dev/null || true',
-    '    chmod +x "$target_dir/launch.command" 2>/dev/null || true',
-    '  fi',
-    '  open "$target_app"',
-    '}',
+    'mkdir -p "$DEST_ROOT"',
+    'rsync -a --delete --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$SRC_ROOT/" "$DEST_ROOT/"',
     '',
-    'if install_into "$DEST_DIR"; then',
+    '# Install bun if missing (non-interactive).',
+    'if ! command -v bun >/dev/null 2>&1; then',
+    '  export BUN_INSTALL="$HOME/.bun"',
+    '  curl -fsSL https://bun.sh/install | bash',
+    '  export PATH="$BUN_INSTALL/bin:$PATH"',
+    'fi',
+    '',
+    'cd "$DEST_ROOT"',
+    'bun install',
+    '',
+    'if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
+    '  cp "$SRC_LAUNCH" "$DEST_ROOT/launch.command" 2>/dev/null || true',
+    '  chmod +x "$DEST_ROOT/launch.command" 2>/dev/null || true',
+    'fi',
+    '',
+    'if [ -f "$DEST_ROOT/packaging/electron/unsigned/launch.command" ]; then',
+    '  open "$DEST_ROOT/packaging/electron/unsigned/launch.command"',
     '  exit 0',
     'fi',
     '',
-    '# Fallback when /Applications is not writable (no admin prompt flow).',
-    'install_into "$HOME/Applications"',
+    'if [ -f "$DEST_ROOT/launch.command" ]; then',
+    '  open "$DEST_ROOT/launch.command"',
+    '  exit 0',
+    'fi',
+    '',
+    'cd "$DEST_ROOT"',
+    'exec bun run electron:prod',
   ].join('\n');
 
   fs.writeFileSync(scriptPath, `${script}\n`, { mode: 0o755 });
@@ -646,19 +667,19 @@ function readGitHubRelease() {
   });
 }
 
-function pickMacArmUnsignedZip(release) {
+function pickSourceLauncherZip(release) {
   const assets = Array.isArray(release?.assets) ? release.assets : [];
-  return assets.find((a) => /vision-unsigned-.*-arm64\.zip$/i.test(a?.name || '')) || null;
+  return assets.find((a) => /vision-source-launcher-.*-arm64\.zip$/i.test(a?.name || '')) || null;
 }
 
 async function prepareShellUpdateInstaller() {
   const release = await readGitHubRelease();
   const latestVersion = normalizeVersionTag(release?.tag_name);
-  const currentVersion = normalizeVersionTag(app.getVersion());
-  const zipAsset = pickMacArmUnsignedZip(release);
+  const currentVersion = getCurrentVersionTag();
+  const sourceLauncherAsset = pickSourceLauncherZip(release);
 
-  if (!latestVersion || !zipAsset?.browser_download_url) {
-    return { up_to_date: true, error: 'No compatible unsigned macOS update asset found.' };
+  if (!latestVersion || !sourceLauncherAsset?.browser_download_url) {
+    return { up_to_date: true, error: 'No compatible source launcher update asset found.' };
   }
 
   if (compareVersions(latestVersion, currentVersion) <= 0) {
@@ -669,17 +690,18 @@ async function prepareShellUpdateInstaller() {
       html_url: release?.html_url,
       release_notes: release?.body || '',
       published_at: release?.published_at,
+      source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
     };
   }
 
   const tempRoot = path.join(app.getPath('temp'), `vision_shell_update_${Date.now()}_${process.pid}`);
-  const zipPath = path.join(tempRoot, zipAsset.name);
+  const zipPath = path.join(tempRoot, sourceLauncherAsset.name);
   const extractDir = path.join(tempRoot, 'extract');
   fs.mkdirSync(extractDir, { recursive: true });
 
   await new Promise((resolve, reject) => {
     const file = fs.createWriteStream(zipPath);
-    const req = https.get(zipAsset.browser_download_url, {
+    const req = https.get(sourceLauncherAsset.browser_download_url, {
       headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
     }, (res) => {
       if (res.statusCode !== 200) {
@@ -705,20 +727,20 @@ async function prepareShellUpdateInstaller() {
 
   await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: process.env });
 
-  const sourceDir = path.join(extractDir, 'unsigned');
-  const sourceAppPath = path.join(sourceDir, 'Vision.app');
-  const sourceLaunchPath = path.join(sourceDir, 'launch.command');
-  if (!fs.existsSync(sourceAppPath)) {
-    throw new Error('Downloaded update ZIP does not contain Vision.app');
+  const sourceDir = path.join(extractDir, 'unsigned', 'Vision');
+  const sourceLaunchPath = path.join(extractDir, 'unsigned', 'launch.command');
+  const sourcePackageJson = path.join(sourceDir, 'package.json');
+  if (!fs.existsSync(sourcePackageJson)) {
+    throw new Error('Downloaded update ZIP does not contain Vision source files');
   }
 
-  const destAppPath = getCurrentBundlePath();
+  const destRootPath = workDir || path.resolve(__dirname, '..', '..');
   const installerPath = path.join(tempRoot, 'install-update.command');
   writeInstallerScript({
     scriptPath: installerPath,
-    srcAppPath: sourceAppPath,
-    srcLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : '',
-    destAppPath,
+    sourceRootPath: sourceDir,
+    sourceLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : '',
+    destRootPath,
     hostPid: process.pid,
   });
 
@@ -729,26 +751,19 @@ async function prepareShellUpdateInstaller() {
     html_url: release?.html_url,
     release_notes: release?.body || '',
     published_at: release?.published_at,
+    source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
     installerPath,
   };
 }
 
 async function checkForShellUpdate() {
-  if (!app.isPackaged) {
-    return {
-      up_to_date: true,
-      current_version: normalizeVersionTag(app.getVersion()),
-      latest_version: normalizeVersionTag(app.getVersion()),
-    };
-  }
-
   const release = await readGitHubRelease();
   const latestVersion = normalizeVersionTag(release?.tag_name);
-  const currentVersion = normalizeVersionTag(app.getVersion());
-  const zipAsset = pickMacArmUnsignedZip(release);
+  const currentVersion = getCurrentVersionTag();
+  const sourceLauncherAsset = pickSourceLauncherZip(release);
 
-  if (!latestVersion || !zipAsset?.browser_download_url) {
-    return { up_to_date: true, current_version: currentVersion, latest_version: null, error: 'No compatible unsigned macOS update asset found.' };
+  if (!latestVersion || !sourceLauncherAsset?.browser_download_url) {
+    return { up_to_date: true, current_version: currentVersion, latest_version: null, error: 'No compatible source launcher update asset found.' };
   }
 
   return {
@@ -758,14 +773,11 @@ async function checkForShellUpdate() {
     html_url: release?.html_url,
     release_notes: release?.body || '',
     published_at: release?.published_at,
+    source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
   };
 }
 
 async function installPreparedShellUpdate() {
-  if (!app.isPackaged) {
-    return { success: false, error: 'Shell updates are only available in packaged builds.' };
-  }
-
   if (!pendingShellUpdate?.installerPath) {
     if (shellUpdateCheckInFlight) {
       return { success: false, error: 'An update download is already in progress.' };
@@ -795,7 +807,6 @@ async function installPreparedShellUpdate() {
 }
 
 function setupManualShellUpdater() {
-  if (!app.isPackaged) return;
   setTimeout(async () => {
     try {
       const update = await checkForShellUpdate();

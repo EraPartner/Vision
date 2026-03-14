@@ -1,21 +1,26 @@
-# Vision unsigned portable bundle
+# Vision source launcher bundle
 
-This folder contains a simple unsigned distribution bundle for Vision. It is
-meant for testing and internal distribution only. Unsigned bundles will trigger
-macOS Gatekeeper warnings for end users — use at your own risk.
+This folder now represents a source-based distribution path for Vision on macOS.
+It is meant for trusted/internal distribution where users can run the app from
+source using Bun + Docker, without signed/notarized Apple binaries.
 
 Contents
-- `Vision.app` — the application bundle (unsigned)
-- `launch.command` — double-clickable launcher that removes quarantine and opens the app
+- `launch.command` — double-clickable launcher that:
+  - verifies Docker is present and opens Docker Desktop
+  - installs Bun automatically when missing
+  - runs `bun run electron:prod` from the Vision source folder
 
 How to use
-1. Unzip the downloaded archive.
-2. Double-click `launch.command`. It installs `Vision.app` into `/Applications`
-   (or `~/Applications` if needed), removes quarantine, and starts the app.
-3. If macOS still prevents opening, right-click `Vision.app` in Applications,
-   choose `Open`, then confirm once.
+1. Ensure you have the Vision source folder on disk (`Vision/` with `package.json`).
+2. Place `launch.command` either:
+   - inside the `Vision/` repo root, or
+   - next to a sibling `Vision/` folder.
+3. Double-click `launch.command` in Finder.
+
+Requirements
+- macOS (Apple Silicon)
+- Docker Desktop installed
 
 Security note
-- This bundle is unsigned and not notarized. Only install/run it on machines
-  you trust. For public distribution you must sign with a Developer ID and
-  notarize the app bundle.
+- This setup intentionally avoids Apple signing/notarization. Distribute only
+  to users and machines you trust.

@@ -1,32 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-# launch.command - double-click this in Finder to install/open Vision.app
+# launch.command - source-based launcher (double-click in Finder)
 DIR="$(cd "$(dirname "$0")" && pwd)"
-SRC_APP="$DIR/Vision.app"
 
-if [ ! -d "$SRC_APP" ]; then
-  echo "Vision.app not found in $DIR"
+if [ -d "$DIR/.git" ] && [ -f "$DIR/package.json" ]; then
+  ROOT_DIR="$DIR"
+elif [ -d "$DIR/Vision/.git" ] && [ -f "$DIR/Vision/package.json" ]; then
+  ROOT_DIR="$DIR/Vision"
+else
+  osascript -e 'display dialog "Could not find the Vision source folder. Place this launch.command inside the Vision repository (or next to a Vision folder)." buttons {"OK"} default button "OK"'
   exit 1
 fi
 
-TARGET_DIR="/Applications"
-TARGET_APP="$TARGET_DIR/Vision.app"
-
-# Install to /Applications when writable; otherwise use ~/Applications.
-if [ ! -w "$TARGET_DIR" ]; then
-  TARGET_DIR="$HOME/Applications"
-  TARGET_APP="$TARGET_DIR/Vision.app"
-  mkdir -p "$TARGET_DIR"
+if ! command -v bun >/dev/null 2>&1; then
+  osascript -e 'display dialog "Bun was not found. Vision will install Bun automatically now." buttons {"OK"} default button "OK"'
+  export BUN_INSTALL="$HOME/.bun"
+  curl -fsSL https://bun.sh/install | bash
+  export PATH="$BUN_INSTALL/bin:$PATH"
 fi
 
-rm -rf "$TARGET_APP"
-cp -R "$SRC_APP" "$TARGET_APP"
+open -a Docker || true
 
-# Remove quarantine from the installed app (safe on files you trust).
-xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
-
-open "$TARGET_APP" || {
-  echo "Failed to open $TARGET_APP — try right-click -> Open in Finder to bypass Gatekeeper."
-  exit 2
-}
+cd "$ROOT_DIR"
+exec bun run electron:prod

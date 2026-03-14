@@ -1,7 +1,7 @@
 {
   "name": "vision",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Financial transaction management application",
   "license": "AGPL-3.0-only",
   "workspaces": [
@@ -40,6 +40,7 @@
     "docker:clean:down": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down",
     "docker:clean:reset": "npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build",
     "electron:dev": "npm run generate-locales-if-not-ci && VISION_COMPOSE_OVERRIDE=docker-compose.dev.yml packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
+    "electron:prod": "npm run generate-locales-if-not-ci && packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
     "electron:clean": "npm run generate-locales-if-not-ci && VISION_COMPOSE_OVERRIDE=docker-compose.clean.yml packaging/electron/node_modules/.bin/electron packaging/electron/main.js",
     "docker:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app",
     "update": "bun update"

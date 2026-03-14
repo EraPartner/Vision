@@ -41,9 +41,11 @@ A self-hosted, privacy-first personal finance manager. All your financial data s
 
 Vision runs as a **macOS desktop app** or as a **Docker Compose stack**.
 
-### Option 1: macOS Desktop App (recommended)
+### Option 1: macOS Source Launcher (recommended)
 
-Download the latest unsigned `.zip` from the [Releases](https://github.com/EraPartner/Vision/releases) page, unzip it, and double-click `launch.command`.
+Download `Vision-source-launcher-<tag>-arm64.zip` from the [Releases](https://github.com/EraPartner/Vision/releases) page, unzip it, and double-click `launch.command`.
+
+The launcher runs Vision from source, opens Docker Desktop, and starts `bun run electron:prod`. If Bun is missing, it installs Bun automatically.
 
 On first launch, the app automatically sets up its Docker environment.
 
@@ -53,11 +55,11 @@ On first launch, the app automatically sets up its Docker environment.
 
 These quick steps cover both end-users (running the macOS desktop app) and maintainers who need to publish a new release.
 
-- **End users — macOS (recommended)**
-  - Download `Vision-unsigned-<tag>-arm64.zip` from the Releases page and unzip it.
-  - Double-click `launch.command` in Finder (single-click flow after unzip).
-  - The launcher installs `Vision.app` into `/Applications` (or `~/Applications` when needed), removes quarantine, and opens it.
-  - In-app shell updates are delivered as unsigned ZIP packages (no DMG, no blockmaps).
+- **End users — macOS source launcher (recommended)**
+  - Download `Vision-source-launcher-<tag>-arm64.zip` from the Releases page and unzip it.
+  - Double-click `launch.command` in Finder.
+  - The launcher starts Docker Desktop, installs Bun automatically when missing, and runs `bun run electron:prod`.
+  - In-app updates are source-launcher ZIP based (no DMG, no .app installer path, no blockmaps).
 
 - **End users — Docker Compose (server/self-hosted)**
   - Follow the Docker Compose instructions in the Installation → Option 2 section above. In short:
@@ -72,27 +74,27 @@ These quick steps cover both end-users (running the macOS desktop app) and maint
 - **Maintainers — publish a new macOS release (CI-assisted)**
   1. Ensure repository secrets exist (Settings → Secrets → Actions):
      - `GHCR_PAT` — for pushing container images (if used)
-     - `GH_RELEASE_PAT` — a GitHub PAT with `repo` or `public_repo` scope (used by electron-builder to upload release assets)
+     - `GH_RELEASE_PAT` — a GitHub PAT with `repo` or `public_repo` scope (used by the release workflow to publish assets)
   2. Bump the release version and create a tag (use semver `vX.Y.Z`):
      ```bash
      git tag -a v0.1.0 -m "Release v0.1.0"
      git push origin v0.1.0
      ```
-  3. The repository's GitHub Actions workflow will run on tag push and produce this desktop release artifact: `Vision-unsigned-<tag>-arm64.zip`.
-  4. Verify the release on GitHub Releases and ensure the unsigned arm64 ZIP is attached (this is used by the in-app updater).
+  3. The repository's GitHub Actions workflow will run on tag push and produce this desktop release artifact: `Vision-source-launcher-<tag>-arm64.zip`.
+  4. Verify the release on GitHub Releases and ensure the source launcher ZIP is attached.
 
-Security note: This project currently produces unsigned macOS artifacts by design (no Apple Developer notarization). The unsigned ZIP includes a launcher which removes quarantine — distribute it only to trusted recipients.
+Security note: This project intentionally avoids Apple signing/notarization. The release ZIP runs Vision from source via a launcher script — distribute it only to trusted recipients.
 
-### One-click dev launcher (macOS)
+### One-click source launcher (macOS)
 
-If you run Vision locally with the Electron development flow, you can place a clickable launcher on your Desktop:
+If you run Vision locally from source, you can place a clickable launcher on your Desktop:
 
 ```bash
 cp scripts/vision-desktop.command ~/Desktop/Vision.command
 chmod +x ~/Desktop/Vision.command
 ```
 
-Double-click `~/Desktop/Vision.command` to run `bun run electron:dev` (Docker is opened automatically if installed).
+Double-click `~/Desktop/Vision.command` to run `bun run electron:prod` (Docker is opened automatically if installed).
 
 ### Option 2: Docker Compose
 
