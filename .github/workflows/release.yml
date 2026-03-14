@@ -111,7 +111,8 @@ jobs:
           set -euo pipefail
           cd packaging/electron
           bun install
-          bun run dist:mac
+          # build the arm64 mac artifact (use existing dist:arm64 script)
+          bun run dist:arm64
         shell: bash
 
       - name: Create unsigned portable zip (ditto)
@@ -134,12 +135,82 @@ jobs:
           name: vision-unsigned-zip
           path: dist/unsigned/Vision-unsigned-${{ github.ref_name }}-arm64.zip
 
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 2b. Build macOS DMG (arm64) — unsigned (restores electron-updater artifacts)
+  # ─────────────────────────────────────────────────────────────────────────────
+  dmg-arm64:
+    name: Build DMG (arm64)
+    runs-on: macos-13-arm64
+    env:
+      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+        shell: bash
+
+      - name: Stamp version into electron package.json
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            VERSION="$INPUT_TAG"
+          else
+            VERSION="$REF_NAME"
+          fi
+          VERSION="${VERSION#v}"
+          node -e "
+            const fs = require('fs');
+            const p = 'packaging/electron/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p));
+            pkg.version = '${VERSION}';
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build Electron DMG (arm64)
+        run: |
+          set -euo pipefail
+          cd packaging/electron
+          bun install
+          bun run dist:arm64
+        shell: bash
+
+      - name: Find generated artifacts
+        id: artifacts_dmg
+        run: |
+          DMG=$(find packaging/electron/dist -name '*.dmg' -print -quit)
+          YML=$(find packaging/electron/dist -name 'latest-mac.yml' -print -quit || true)
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+          echo "yml=$YML" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Upload DMG (arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmg-arm64
+          path: ${{ steps.artifacts_dmg.outputs.dmg }}
+
+      - name: Upload latest-mac.yml
+        if: steps.artifacts_dmg.outputs.yml != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-mac-yml
+          path: ${{ steps.artifacts_dmg.outputs.yml }}
+
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [docker, package-mac]
+    needs: [docker, package-mac, dmg-arm64]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
@@ -153,6 +224,18 @@ jobs:
         with:
           name: vision-unsigned-zip
           path: dist/unsigned
+
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dmg-arm64
+          path: dist/dmg-arm64
+
+      - name: Download latest-mac.yml artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: latest-mac-yml
+          path: dist/latest-mac-yml
 
       - name: Download docker metadata artifact
         uses: actions/download-artifact@v4
@@ -171,4 +254,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
+            dist/dmg-arm64/*.dmg
+            dist/latest-mac-yml/latest-mac.yml
             dist/unsigned/*.zip
