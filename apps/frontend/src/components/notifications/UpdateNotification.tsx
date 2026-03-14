@@ -58,7 +58,7 @@ export function UpdateNotification() {
     const handleInstall = async () => {
         setPhase("pulling");
         try {
-            const result = await apiClient.triggerDockerUpdate();
+            const result = await apiClient.installShellUpdate();
 
             if (result === null) {
                 toast.info(t('update.reloadHint'));
@@ -73,38 +73,12 @@ export function UpdateNotification() {
                 return;
             }
 
-            if (!result.wasNew) {
-                toast.success(t('update.alreadyLatest'));
-                setPhase("done");
-                await check();
-                setDialogOpen(false);
-                return;
-            }
-
-            // New image pulled — container is restarting, migrations running via entrypoint.
             setPhase("restarting");
-
-            const poll = async (attempts: number) => {
-                try {
-                    const updated = await apiClient.checkForUpdates();
-                    setStatus(updated);
-                    setPhase("done");
-                    setDialogOpen(false);
-                    toast.success(t('update.complete'), {
-                        description: t('update.nowRunning', { version: updated.current_version }),
-                        duration: 6000,
-                    });
-                } catch {
-                    if (attempts > 0) {
-                        setTimeout(() => poll(attempts - 1), 2000);
-                    } else {
-                        setPhase("done");
-                        setDialogOpen(false);
-                        toast.info(t('update.appUpdated'));
-                    }
-                }
-            };
-            setTimeout(() => poll(20), 3000);
+            setDialogOpen(false);
+            toast.success(t('update.complete'), {
+                description: t('update.nowRunning', { version: result.version ?? (status?.latest_version ?? '') }),
+                duration: 6000,
+            });
         } catch (err) {
             const msg = err instanceof Error ? err.message : t('update.failed');
             toast.error(t('update.failed'), { description: msg });

@@ -6,12 +6,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 // Small i18n loader for main process dialogs
 function loadI18n() {
   const locale = (app && app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en';
   const lang = locale && locale.startsWith('nl') ? 'nl' : 'en';
 
-  // Prefer i18n shipped in the app resources (packaged .app/.dmg).
+  // Prefer i18n shipped in the app resources (packaged .app).
   const resourceI18nDir = path.join(process.resourcesPath || '', 'i18n');
   const fallbackI18nDir = path.join(__dirname, 'i18n');
 
@@ -53,25 +54,17 @@ function t(key, vars) {
   return txt;
 }
 
-// electron-updater is a production dependency — loaded only in packaged builds
-// to avoid errors during development where it isn't installed via npm.
-let autoUpdater = null;
-try {
-  autoUpdater = require('electron-updater').autoUpdater;
-} catch {
-  // Running in dev without electron-updater installed — no-op
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = 120;  // 120 × 300ms = 36s max
 const HEALTH_POLL_INTERVAL_MS = 300;
-const GITHUB_UPDATE_CHECK_DELAY_MS = 30_000;
+const MANUAL_UPDATE_CHECK_DELAY_MS = 30_000;
 const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
 const BACKUP_ENC_IV_BYTES = 16;
 const BACKUP_RETENTION_KEEP = 7;
 const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
+const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Resolved at launch — see findFreePort() below
 let appPort = DEFAULT_APP_PORT;
@@ -550,62 +543,298 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-// ── electron-updater (Electron shell update) ─────────────────────────────────
-// This handles updating the macOS .app wrapper itself.
-// The app binary update and the Docker image update are independent:
-//   • Docker image: pulled on every launch (--pull always) + on demand below
-//   • Electron shell: downloaded in background; user prompted to install & restart
+// ── Manual shell updater (.zip-only, no blockmaps) ───────────────────────────
+// We intentionally avoid electron-updater metadata (latest-mac.yml / blockmaps)
+// and install from the unsigned GitHub release ZIP.
 
-function setupAutoUpdater() {
-  if (!autoUpdater || !app.isPackaged) return;
+let shellUpdateCheckInFlight = false;
+let pendingShellUpdate = null;
 
-  // Disable the default auto-download so we control the UX
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+function normalizeVersionTag(version) {
+  if (!version) return '';
+  const s = String(version).trim();
+  return s.startsWith('v') ? s : `v${s}`;
+}
 
-  autoUpdater.on('update-available', async (info) => {
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      buttons: [t('update.download'), t('update.later')],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update.availableTitle', { app: APP_NAME }),
-      message: t('update.versionAvailable', { version: info.version }),
-      detail: t('update.detailDownload'),
+function compareVersions(a, b) {
+  const pa = String(a || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
+}
+
+function getCurrentBundlePath() {
+  // process.execPath = .../Vision.app/Contents/MacOS/Vision
+  return path.resolve(process.execPath, '..', '..', '..');
+}
+
+function shellEscape(value) {
+  return `'${String(value).replace(/'/g, `'"'"'`)}'`;
+}
+
+function writeInstallerScript({ scriptPath, srcAppPath, srcLaunchPath, destAppPath, hostPid }) {
+  const destDir = path.dirname(destAppPath);
+  const dstName = path.basename(destAppPath);
+  const script = [
+    '#!/bin/bash',
+    'set -euo pipefail',
+    `SRC_APP=${shellEscape(srcAppPath)}`,
+    `SRC_LAUNCH=${shellEscape(srcLaunchPath || '')}`,
+    `DEST_APP=${shellEscape(destAppPath)}`,
+    `DEST_DIR=${shellEscape(destDir)}`,
+    `DEST_NAME=${shellEscape(dstName)}`,
+    `HOST_PID=${hostPid}`,
+    '',
+    '# Wait until the running app exits before replacing the bundle.',
+    'for i in {1..120}; do',
+    '  if ! kill -0 "$HOST_PID" 2>/dev/null; then break; fi',
+    '  sleep 0.5',
+    'done',
+    '',
+    'install_into() {',
+    '  local target_dir="$1"',
+    '  local target_app="$target_dir/$DEST_NAME"',
+    '  mkdir -p "$target_dir"',
+    '  rm -rf "$target_app"',
+    '  cp -R "$SRC_APP" "$target_app"',
+    '  xattr -dr com.apple.quarantine "$target_app" 2>/dev/null || true',
+    '  if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
+    '    cp "$SRC_LAUNCH" "$target_dir/launch.command" 2>/dev/null || true',
+    '    chmod +x "$target_dir/launch.command" 2>/dev/null || true',
+    '  fi',
+    '  open "$target_app"',
+    '}',
+    '',
+    'if install_into "$DEST_DIR"; then',
+    '  exit 0',
+    'fi',
+    '',
+    '# Fallback when /Applications is not writable (no admin prompt flow).',
+    'install_into "$HOME/Applications"',
+  ].join('\n');
+
+  fs.writeFileSync(scriptPath, `${script}\n`, { mode: 0o755 });
+}
+
+function readGitHubRelease() {
+  return new Promise((resolve, reject) => {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+    const opts = {
+      headers: {
+        'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
+        'Accept': 'application/vnd.github+json',
+      },
+    };
+    https.get(url, opts, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(err);
+        }
+      });
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+function pickMacArmUnsignedZip(release) {
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  return assets.find((a) => /vision-unsigned-.*-arm64\.zip$/i.test(a?.name || '')) || null;
+}
+
+async function prepareShellUpdateInstaller() {
+  const release = await readGitHubRelease();
+  const latestVersion = normalizeVersionTag(release?.tag_name);
+  const currentVersion = normalizeVersionTag(app.getVersion());
+  const zipAsset = pickMacArmUnsignedZip(release);
+
+  if (!latestVersion || !zipAsset?.browser_download_url) {
+    return { up_to_date: true, error: 'No compatible unsigned macOS update asset found.' };
+  }
+
+  if (compareVersions(latestVersion, currentVersion) <= 0) {
+    return {
+      up_to_date: true,
+      current_version: currentVersion,
+      latest_version: latestVersion,
+      html_url: release?.html_url,
+      release_notes: release?.body || '',
+      published_at: release?.published_at,
+    };
+  }
+
+  const tempRoot = path.join(app.getPath('temp'), `vision_shell_update_${Date.now()}_${process.pid}`);
+  const zipPath = path.join(tempRoot, zipAsset.name);
+  const extractDir = path.join(tempRoot, 'extract');
+  fs.mkdirSync(extractDir, { recursive: true });
+
+  await new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(zipPath);
+    const req = https.get(zipAsset.browser_download_url, {
+      headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        file.close(() => fs.unlink(zipPath, () => {}));
+        reject(new Error(`Download failed (${res.statusCode})`));
+        return;
+      }
+      res.pipe(file);
+      file.on('finish', () => file.close(resolve));
     });
+    req.setTimeout(UPDATE_DOWNLOAD_TIMEOUT_MS, () => {
+      req.destroy(new Error('Update download timed out'));
+    });
+    req.on('error', (err) => {
+      file.close(() => fs.unlink(zipPath, () => {}));
+      reject(err);
+    });
+    file.on('error', (err) => {
+      req.destroy(err);
+      reject(err);
+    });
+  });
 
-    if (response === 0) {
-      autoUpdater.downloadUpdate();
+  await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: process.env });
+
+  const sourceDir = path.join(extractDir, 'unsigned');
+  const sourceAppPath = path.join(sourceDir, 'Vision.app');
+  const sourceLaunchPath = path.join(sourceDir, 'launch.command');
+  if (!fs.existsSync(sourceAppPath)) {
+    throw new Error('Downloaded update ZIP does not contain Vision.app');
+  }
+
+  const destAppPath = getCurrentBundlePath();
+  const installerPath = path.join(tempRoot, 'install-update.command');
+  writeInstallerScript({
+    scriptPath: installerPath,
+    srcAppPath: sourceAppPath,
+    srcLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : '',
+    destAppPath,
+    hostPid: process.pid,
+  });
+
+  return {
+    up_to_date: false,
+    current_version: currentVersion,
+    latest_version: latestVersion,
+    html_url: release?.html_url,
+    release_notes: release?.body || '',
+    published_at: release?.published_at,
+    installerPath,
+  };
+}
+
+async function checkForShellUpdate() {
+  if (!app.isPackaged) {
+    return {
+      up_to_date: true,
+      current_version: normalizeVersionTag(app.getVersion()),
+      latest_version: normalizeVersionTag(app.getVersion()),
+    };
+  }
+
+  const release = await readGitHubRelease();
+  const latestVersion = normalizeVersionTag(release?.tag_name);
+  const currentVersion = normalizeVersionTag(app.getVersion());
+  const zipAsset = pickMacArmUnsignedZip(release);
+
+  if (!latestVersion || !zipAsset?.browser_download_url) {
+    return { up_to_date: true, current_version: currentVersion, latest_version: null, error: 'No compatible unsigned macOS update asset found.' };
+  }
+
+  return {
+    up_to_date: compareVersions(latestVersion, currentVersion) <= 0,
+    current_version: currentVersion,
+    latest_version: latestVersion,
+    html_url: release?.html_url,
+    release_notes: release?.body || '',
+    published_at: release?.published_at,
+  };
+}
+
+async function installPreparedShellUpdate() {
+  if (!app.isPackaged) {
+    return { success: false, error: 'Shell updates are only available in packaged builds.' };
+  }
+
+  if (!pendingShellUpdate?.installerPath) {
+    if (shellUpdateCheckInFlight) {
+      return { success: false, error: 'An update download is already in progress.' };
+    }
+    shellUpdateCheckInFlight = true;
+    try {
+      const prepared = await prepareShellUpdateInstaller();
+      if (prepared.up_to_date || !prepared.installerPath) {
+        return { success: false, error: 'No newer shell update is currently available.' };
+      }
+      pendingShellUpdate = prepared;
+    } finally {
+      shellUpdateCheckInFlight = false;
+    }
+  }
+
+  try {
+    const installerPath = pendingShellUpdate.installerPath;
+    const latestVersion = pendingShellUpdate.latest_version || '';
+    spawn('open', [installerPath], { detached: true, stdio: 'ignore' }).unref();
+    isQuitting = true;
+    setImmediate(() => app.quit());
+    return { success: true, version: latestVersion };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+function setupManualShellUpdater() {
+  if (!app.isPackaged) return;
+  setTimeout(async () => {
+    try {
+      const update = await checkForShellUpdate();
+      if (update.up_to_date || !update.latest_version) return;
+
+      const { response } = await dialog.showMessageBox({
+        type: 'info',
+        buttons: [t('update.download'), t('update.later')],
+        defaultId: 0,
+        cancelId: 1,
+        title: t('update.availableTitle', { app: APP_NAME }),
+        message: t('update.versionAvailable', { version: update.latest_version }),
+        detail: t('update.detailDownload'),
+      });
+
+      if (response !== 0) return;
+
       notify(t('update.downloading'));
+      const prepared = await prepareShellUpdateInstaller();
+      if (prepared.up_to_date || !prepared.installerPath) return;
+      pendingShellUpdate = prepared;
+
+      const { response: restartNow } = await dialog.showMessageBox({
+        type: 'info',
+        buttons: [t('update.restartNow'), t('update.later')],
+        defaultId: 0,
+        cancelId: 1,
+        title: t('update.readyTitle', { app: APP_NAME }),
+        message: t('update.versionDownloaded', { version: prepared.latest_version }),
+        detail: t('update.detailRestart'),
+      });
+
+      if (restartNow === 0) {
+        await installPreparedShellUpdate();
+      }
+    } catch (err) {
+      console.warn('Manual shell updater failed (non-fatal):', err?.message || err);
     }
-  });
-
-  autoUpdater.on('update-downloaded', async (info) => {
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      buttons: [t('update.restartNow'), t('update.later')],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update.readyTitle', { app: APP_NAME }),
-      message: t('update.versionDownloaded', { version: info.version }),
-      detail: t('update.detailRestart'),
-    });
-
-    if (response === 0) {
-      isQuitting = true;
-      autoUpdater.quitAndInstall();
-    }
-  });
-
-  autoUpdater.on('error', (err) => {
-    console.warn('Auto-updater error (non-fatal):', err.message);
-  });
-
-  // Check for a new Electron shell update silently in the background.
-  // Delay this longer so cold-start Docker I/O stays prioritized.
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((e) => console.warn('Update check failed:', e.message));
-  }, GITHUB_UPDATE_CHECK_DELAY_MS);
+  }, MANUAL_UPDATE_CHECK_DELAY_MS);
 }
 
 // ── Docker image update (called after new Electron version detected) ──────────
@@ -746,10 +975,17 @@ ipcMain.handle('update:pull-image', async () => {
 
 ipcMain.handle('update:check-github', async () => {
   try {
-    const result = await checkGitHubRelease();
-    return result;
+    return await checkForShellUpdate();
   } catch (err) {
     return { error: String(err) };
+  }
+});
+
+ipcMain.handle('update:install-shell', async () => {
+  try {
+    return await installPreparedShellUpdate();
+  } catch (err) {
+    return { success: false, error: String(err) };
   }
 });
 
@@ -984,40 +1220,6 @@ ipcMain.handle('backup:load-settings', async () => {
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
-// ── GitHub Releases API helper ────────────────────────────────────────────────
-// Used by both the renderer (via IPC) and the Docker image update check.
-function checkGitHubRelease() {
-  return new Promise((resolve, reject) => {
-    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-    const opts = {
-      headers: {
-        'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}`,
-        'Accept': 'application/vnd.github+json',
-      },
-    };
-    require('https').get(url, opts, (res) => {
-      let body = '';
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => {
-        try {
-          const data = JSON.parse(body);
-          resolve({
-            latest_version: data.tag_name,
-            current_version: `v${app.getVersion()}`,
-            up_to_date: data.tag_name === `v${app.getVersion()}`,
-            release_notes: data.body || '',
-            published_at: data.published_at,
-            html_url: data.html_url,
-          });
-        } catch (e) {
-          reject(e);
-        }
-      });
-      res.on('error', reject);
-    }).on('error', reject);
-  });
-}
-
 // ── Compose override (dev modes) ─────────────────────────────────────────────
 // Set VISION_COMPOSE_OVERRIDE to a filename (relative to workDir) to layer an
 // additional compose file on top of the base — e.g. docker-compose.dev.yml.
@@ -1174,8 +1376,8 @@ async function launch() {
       });
     });
 
-  // 10. Set up electron-updater (non-blocking — runs in background after window opens)
-  setupAutoUpdater();
+  // 10. Set up manual shell updater (non-blocking — runs in background)
+  setupManualShellUpdater();
 
   // Dev-mode: watch source files and trigger a docker rebuild+restart when
   // local sources change. This ensures the electron dev wrapper picks up

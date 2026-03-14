@@ -1,6 +1,6 @@
-name: Build DMG (legacy)
+name: Build macOS ZIP (legacy)
 
-# This workflow is superseded by release.yml which builds the arm64 DMG,
+# This workflow is superseded by release.yml which builds the arm64 unsigned ZIP,
 # pushes the Docker image to GHCR, and creates a GitHub Release.
 #
 # Kept here only to avoid breaking any external references; it immediately

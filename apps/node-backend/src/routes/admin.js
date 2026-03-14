@@ -2,14 +2,14 @@
  * Admin routes.
  *
  * Update strategy (packaged desktop app):
- *   - Electron shell updates: handled by electron-updater checking GitHub Releases
+ *   - Electron shell updates: handled by the Electron wrapper (manual unsigned ZIP install)
  *   - Docker image updates: Electron calls `docker compose pull` + `docker compose up -d`
  *   - Alembic migrations: run automatically via docker-entrypoint.sh on every container start
  *
  * The git-pull based update approach has been removed. The Node backend running
  * inside the Docker container has no git repo, so those endpoints were only
  * applicable to bare self-hosted installs (which can still use git manually).
- * Version information is now read from the GitHub Releases API.
+ * This endpoint is focused on backend/container update metadata.
  */
 
 import { Router } from 'express';
@@ -110,8 +110,8 @@ router.post('/database/reset', async (req, res) => {
 });
 
 // GET /api/admin/update/check
-// Queries the GitHub Releases API for the latest published release.
-// Works in any environment (Docker, bare-metal) — no git required.
+// Queries the GitHub Releases API for the latest published release tag.
+// Used for backend/container update visibility.
 router.get('/update/check', async (req, res) => {
   try {
     const release = await fetchLatestRelease();
@@ -158,7 +158,7 @@ router.post('/update/apply', async (req, res) => {
 router.post('/update/apply-and-restart', async (req, res) => {
   res.json({
     success: true,
-    note: 'Updates are managed by the Vision desktop app via Docker image pulls and electron-updater. No manual action is required.',
+    note: 'Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required.',
   });
 });
 

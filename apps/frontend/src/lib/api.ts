@@ -499,6 +499,22 @@ class ApiClient {
         html_url?: string;
         error?: string;
     }> {
+        const updater = (window as Window & {
+            electronUpdater?: {
+                checkRelease?: () => Promise<{
+                    up_to_date: boolean;
+                    current_version: string;
+                    latest_version: string | null;
+                    published_at?: string;
+                    release_notes?: string;
+                    html_url?: string;
+                    error?: string;
+                }>;
+            };
+        }).electronUpdater;
+        if (updater?.checkRelease) {
+            return updater.checkRelease();
+        }
         return this.request('/api/admin/update/check');
     }
 
@@ -511,6 +527,16 @@ class ApiClient {
         const updater = (window as Window & { electronUpdater?: { pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }> } }).electronUpdater;
         if (!updater) return null;
         return updater.pullImage();
+    }
+
+    async installShellUpdate(): Promise<{ success: boolean; version?: string; error?: string } | null> {
+        const updater = (window as Window & {
+            electronUpdater?: {
+                installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
+            }
+        }).electronUpdater;
+        if (!updater?.installShellUpdate) return null;
+        return updater.installShellUpdate();
     }
 
     /** Whether the app is running inside the Electron desktop wrapper. */

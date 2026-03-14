@@ -15,18 +15,15 @@ contextBridge.exposeInMainWorld('electronUpdater', {
   pullImage: () => ipcRenderer.invoke('update:pull-image'),
 
   /**
-   * Query the GitHub Releases API for the latest version.
-   * @returns {Promise<{
-   *   latest_version: string,
-   *   current_version: string,
-   *   up_to_date: boolean,
-   *   release_notes: string,
-   *   published_at: string,
-   *   html_url: string,
-   *   error?: string
-   * }>}
+   * Query and (if needed) pre-download the latest shell update from GitHub.
    */
   checkRelease: () => ipcRenderer.invoke('update:check-github'),
+
+  /**
+   * Install a previously prepared shell update and restart the app.
+   * @returns {Promise<{ success: boolean, version?: string, error?: string }>}
+   */
+  installShellUpdate: () => ipcRenderer.invoke('update:install-shell'),
 });
 
 /**

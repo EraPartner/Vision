@@ -9,9 +9,7 @@
     "dist": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
     "dist:arm64": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64"
   },
-  "dependencies": {
-    "electron-updater": "^6.3.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "electron": "^41.0.0",
     "electron-builder": "^25.0.0"
@@ -21,12 +19,6 @@
     "productName": "Vision",
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        },
         {
           "target": "zip",
           "arch": [

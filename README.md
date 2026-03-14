@@ -33,7 +33,7 @@ A self-hosted, privacy-first personal finance manager. All your financial data s
 - **Shared expenses** — Split transactions and track who owes you what
 - **Statistics & charts** — Rich dashboards with customizable saved charts
 - **Bilingual UI** — English and Dutch (Nederlands)
-- **Desktop app** — macOS native app via Electron with auto-updates
+- **Desktop app** — macOS native app via Electron with in-app update flow
 
 ---
 
@@ -43,11 +43,56 @@ Vision runs as a **macOS desktop app** or as a **Docker Compose stack**.
 
 ### Option 1: macOS Desktop App (recommended)
 
-Download the latest `.dmg` from the [Releases](https://github.com/EraPartner/Vision/releases) page, open it, and drag Vision to your Applications folder.
+Download the latest unsigned `.zip` from the [Releases](https://github.com/EraPartner/Vision/releases) page, unzip it, and double-click `launch.command`.
 
 On first launch, the app automatically sets up its Docker environment.
 
 > **Requirements:** macOS (Apple Silicon), Docker Desktop installed and running
+
+## Deployment
+
+These quick steps cover both end-users (running the macOS desktop app) and maintainers who need to publish a new release.
+
+- **End users — macOS (recommended)**
+  - Download `Vision-unsigned-<tag>-arm64.zip` from the Releases page and unzip it.
+  - Double-click `launch.command` in Finder (single-click flow after unzip).
+  - The launcher installs `Vision.app` into `/Applications` (or `~/Applications` when needed), removes quarantine, and opens it.
+  - In-app shell updates are delivered as unsigned ZIP packages (no DMG, no blockmaps).
+
+- **End users — Docker Compose (server/self-hosted)**
+  - Follow the Docker Compose instructions in the Installation → Option 2 section above. In short:
+    ```bash
+    git clone https://github.com/EraPartner/Vision.git
+    cd Vision
+    cp .env.example .env
+    # set a secure DB password in .env
+    docker compose up -d
+    ```
+
+- **Maintainers — publish a new macOS release (CI-assisted)**
+  1. Ensure repository secrets exist (Settings → Secrets → Actions):
+     - `GHCR_PAT` — for pushing container images (if used)
+     - `GH_RELEASE_PAT` — a GitHub PAT with `repo` or `public_repo` scope (used by electron-builder to upload release assets)
+  2. Bump the release version and create a tag (use semver `vX.Y.Z`):
+     ```bash
+     git tag -a v0.1.0 -m "Release v0.1.0"
+     git push origin v0.1.0
+     ```
+  3. The repository's GitHub Actions workflow will run on tag push and produce this desktop release artifact: `Vision-unsigned-<tag>-arm64.zip`.
+  4. Verify the release on GitHub Releases and ensure the unsigned arm64 ZIP is attached (this is used by the in-app updater).
+
+Security note: This project currently produces unsigned macOS artifacts by design (no Apple Developer notarization). The unsigned ZIP includes a launcher which removes quarantine — distribute it only to trusted recipients.
+
+### One-click dev launcher (macOS)
+
+If you run Vision locally with the Electron development flow, you can place a clickable launcher on your Desktop:
+
+```bash
+cp scripts/vision-desktop.command ~/Desktop/Vision.command
+chmod +x ~/Desktop/Vision.command
+```
+
+Double-click `~/Desktop/Vision.command` to run `bun run electron:dev` (Docker is opened automatically if installed).
 
 ### Option 2: Docker Compose
 

@@ -345,7 +345,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     const handleApplyUpdate = async () => {
         setApplyPhase('pulling');
         try {
-            const result = await apiClient.triggerDockerUpdate();
+            const result = await apiClient.installShellUpdate();
             if (result === null) {
                 // Not running inside Electron — shouldn't happen since the button is
                 // only shown in Electron, but guard anyway.
@@ -358,31 +358,11 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                 setApplyPhase('idle');
                 return;
             }
-            if (!result.wasNew) {
-                toast.success(t('settings.app.alreadyLatest'));
-                setUpdateStatus((prev) => prev ? { ...prev, up_to_date: true } : null);
-                setApplyPhase('done');
-                return;
-            }
-            // Container was replaced with the new image; migrations ran via entrypoint.
-            // Poll /api/admin/update/check until the new version is reported.
             setApplyPhase('restarting');
-            toast.success(t('settings.app.newImagePulled'), { duration: 10000 });
-            const poll = async (attempts: number) => {
-                try {
-                    const status = await apiClient.checkForUpdates();
-                    setUpdateStatus(status);
-                    setApplyPhase('done');
-                    toast.success(t('settings.app.updateComplete'), { description: t('settings.app.nowRunning', { version: status.current_version ?? '' }) });
-                } catch {
-                    if (attempts > 0) setTimeout(() => poll(attempts - 1), 2000);
-                    else {
-                        setApplyPhase('done');
-                        toast.info(t('settings.app.appRestarted'));
-                    }
-                }
-            };
-            setTimeout(() => poll(20), 3000);
+            toast.success(t('settings.app.updateComplete'), {
+                description: t('settings.app.nowRunning', { version: result.version ?? (updateStatus?.latest_version ?? '') }),
+                duration: 8000,
+            });
         } catch (err: unknown) {
             const msg = (err as { message?: string })?.message ?? t('settings.app.updateFailedDesc');
             toast.error(t('settings.app.updateFailed'), { description: msg });
