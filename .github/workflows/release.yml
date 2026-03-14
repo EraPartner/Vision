@@ -90,12 +90,12 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Build macOS DMG (arm64 — Apple Silicon only)
   # ─────────────────────────────────────────────────────────────────────────────
-  dmg-arm64:
-    name: Build DMG (arm64)
-    runs-on: macos-26
-    env:
-      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
-
+  # Create an unsigned mac package (no signing, no notarization). This produces
+  # an unsigned zip containing Vision.app and the launch.command so users can
+  # run the app locally without needing Apple Developer signing/notarization.
+  package-mac:
+    name: Package mac app (unsigned)
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,79 +106,27 @@ jobs:
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
         shell: bash
 
-      - name: Stamp version into electron package.json
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          # Use explicit workflow_dispatch input.tag when provided; otherwise use
-          # the ref_name (for tag pushes). This prevents branch names like
-          # 'main' from being written into package.json as the version.
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
-            VERSION="$INPUT_TAG"
-          else
-            VERSION="$REF_NAME"
-          fi
-          # Strip leading 'v' for package.json
-          VERSION="${VERSION#v}"
-          node -e "
-            const fs = require('fs');
-            const p = 'packaging/electron/package.json';
-            const pkg = JSON.parse(fs.readFileSync(p));
-            pkg.version = '${VERSION}';
-            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
-          "
-
-      - name: Build Electron DMG (arm64)
+      - name: Build Electron (unsigned .app)
         run: |
           set -euo pipefail
           cd packaging/electron
           bun install
-          bun run dist:arm64
+          bun run dist:mac
         shell: bash
 
-      - name: Create unsigned portable zip
-        shell: bash
+      - name: Create unsigned portable zip (ditto)
         run: |
           set -euo pipefail
           cd packaging/electron/dist
+          # Copy the app into a clean folder and add the launch.command we already committed
           mkdir -p unsigned
-          # Copy any produced .app into the unsigned folder (if present)
           cp -R *.app unsigned/ 2>/dev/null || true
-
-          # If no .app was produced directly, try extracting from the generated .dmg
-          if [ -z "$(ls -A unsigned 2>/dev/null || true)" ]; then
-            DMG=$(ls *.dmg 2>/dev/null | head -n1 || true)
-            if [ -n "$DMG" ]; then
-              MNT=$(mktemp -d)
-              hdiutil attach "$DMG" -mountpoint "$MNT" -nobrowse -quiet || true
-              cp -R "$MNT"/*.app unsigned/ 2>/dev/null || true
-              hdiutil detach "$MNT" -quiet || true
-              rmdir "$MNT" || true
-            fi
-          fi
-
-          # Create a small double-clickable launcher that removes quarantine and opens the app
-          cat > unsigned/launch.command <<'EOF'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$DIR/Vision.app"
-if [ ! -d "$APP" ]; then
-  echo "Vision.app not found in $DIR"
-  exit 1
-fi
-xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
-open "$APP" || { echo "Failed to open $APP — try right-click → Open in Finder to bypass Gatekeeper."; exit 2; }
-EOF
-
-          chmod +x unsigned/launch.command
-
-          ZIPNAME="Vision-unsigned-${{ github.ref_name }}-arm64.zip"
-          zip -r "$ZIPNAME" unsigned
-
+          cp -R ../unsigned/* unsigned/ 2>/dev/null || true
+          TAG="${{ github.ref_name }}"
+          # Use ditto to preserve macOS metadata
+          ditto -c -k --sequesterRsrc --keepParent unsigned "Vision-unsigned-${TAG}-arm64.zip"
           mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
-          mv "$ZIPNAME" "$GITHUB_WORKSPACE/dist/unsigned/"
+          mv "Vision-unsigned-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
 
       - name: Upload unsigned portable zip
         uses: actions/upload-artifact@v4
@@ -186,34 +134,12 @@ EOF
           name: vision-unsigned-zip
           path: dist/unsigned/Vision-unsigned-${{ github.ref_name }}-arm64.zip
 
-      - name: Find generated artifacts
-        id: artifacts
-        run: |
-          DMG=$(find packaging/electron/dist -name '*.dmg' -print -quit)
-          YML=$(find packaging/electron/dist -name 'latest-mac.yml' -print -quit || true)
-          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
-          echo "yml=$YML" >> "$GITHUB_OUTPUT"
-        shell: bash
-
-      - name: Upload DMG (arm64)
-        uses: actions/upload-artifact@v4
-        with:
-          name: dmg-arm64
-          path: ${{ steps.artifacts.outputs.dmg }}
-
-      - name: Upload latest-mac.yml
-        if: steps.artifacts.outputs.yml != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: latest-mac-yml
-          path: ${{ steps.artifacts.outputs.yml }}
-
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [docker, dmg-arm64]
+    needs: [docker, package-mac]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
@@ -222,17 +148,11 @@ EOF
       packages: read
 
     steps:
-      - name: Download DMG artifact
+      - name: Download unsigned portable zip
         uses: actions/download-artifact@v4
         with:
-          name: dmg-arm64
-          path: dist/dmg-arm64
-
-      - name: Download latest-mac.yml artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: latest-mac-yml
-          path: dist/latest-mac-yml
+          name: vision-unsigned-zip
+          path: dist/unsigned
 
       - name: Download docker metadata artifact
         uses: actions/download-artifact@v4
@@ -251,6 +171,4 @@ EOF
           prerelease: false
           generate_release_notes: true
           files: |
-            dist/dmg-arm64/*.dmg
-            dist/latest-mac-yml/latest-mac.yml
             dist/unsigned/*.zip
