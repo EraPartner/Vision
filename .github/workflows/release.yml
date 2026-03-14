@@ -74,6 +74,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Write docker metadata file
+        run: |
+          mkdir -p dist
+          # Write the resolved image version/tag and raw tags for later jobs
+          echo "version=${{ steps.meta.outputs.version }}" > dist/docker-image-tag.txt
+          echo "tags=${{ steps.meta.outputs.tags }}" >> dist/docker-image-tag.txt
+
+      - name: Upload docker metadata artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerbuild
+          path: dist/docker-image-tag.txt
+
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Build macOS DMG (arm64 — Apple Silicon only)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -161,10 +174,23 @@ jobs:
       packages: read
 
     steps:
-      - name: Download all artifacts
+      - name: Download DMG artifact
         uses: actions/download-artifact@v4
         with:
-          path: dist/
+          name: dmg-arm64
+          path: dist/dmg-arm64
+
+      - name: Download latest-mac.yml artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: latest-mac-yml
+          path: dist/latest-mac-yml
+
+      - name: Download docker metadata artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dockerbuild
+          path: dist/dockerbuild
 
       - name: List downloaded artifacts
         run: find dist/ -type f | sort
