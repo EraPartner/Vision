@@ -138,6 +138,54 @@ jobs:
           bun run dist:arm64
         shell: bash
 
+      - name: Create unsigned portable zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packaging/electron/dist
+          mkdir -p unsigned
+          # Copy any produced .app into the unsigned folder (if present)
+          cp -R *.app unsigned/ 2>/dev/null || true
+
+          # If no .app was produced directly, try extracting from the generated .dmg
+          if [ -z "$(ls -A unsigned 2>/dev/null || true)" ]; then
+            DMG=$(ls *.dmg 2>/dev/null | head -n1 || true)
+            if [ -n "$DMG" ]; then
+              MNT=$(mktemp -d)
+              hdiutil attach "$DMG" -mountpoint "$MNT" -nobrowse -quiet || true
+              cp -R "$MNT"/*.app unsigned/ 2>/dev/null || true
+              hdiutil detach "$MNT" -quiet || true
+              rmdir "$MNT" || true
+            fi
+          fi
+
+          # Create a small double-clickable launcher that removes quarantine and opens the app
+          cat > unsigned/launch.command <<'EOF'
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+APP="$DIR/Vision.app"
+if [ ! -d "$APP" ]; then
+  echo "Vision.app not found in $DIR"
+  exit 1
+fi
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+open "$APP" || { echo "Failed to open $APP — try right-click → Open in Finder to bypass Gatekeeper."; exit 2; }
+EOF
+
+          chmod +x unsigned/launch.command
+
+          ZIPNAME="Vision-unsigned-${{ github.ref_name }}-arm64.zip"
+          zip -r "$ZIPNAME" unsigned
+
+          mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
+          mv "$ZIPNAME" "$GITHUB_WORKSPACE/dist/unsigned/"
+
+      - name: Upload unsigned portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-unsigned-zip
+          path: dist/unsigned/Vision-unsigned-${{ github.ref_name }}-arm64.zip
+
       - name: Find generated artifacts
         id: artifacts
         run: |
@@ -205,3 +253,4 @@ jobs:
           files: |
             dist/dmg-arm64/*.dmg
             dist/latest-mac-yml/latest-mac.yml
+            dist/unsigned/*.zip
