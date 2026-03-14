@@ -38,3 +38,4 @@ Backups/
 *.csv
 *.db*
 htmlcov/
+*.tmp

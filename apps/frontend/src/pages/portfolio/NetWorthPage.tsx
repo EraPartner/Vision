@@ -13,14 +13,15 @@ import {
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function fmtMonth(month: string, locale: string) {
+function fmtMonth(month: string, lang: string) {
   const [y, m] = month.split("-");
   const date = new Date(Number(y), Number(m) - 1);
-  return date.toLocaleDateString(locale, { month: "short", year: "2-digit" });
+  // Use language (eg. 'en'|'nl') for month localization while preserving numeric locale for currency elsewhere
+  return date.toLocaleDateString(lang, { month: "short", year: "2-digit" });
 }
 
 export default function NetWorthPage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { data, isLoading, error } = useQuery({
@@ -160,7 +161,7 @@ export default function NetWorthPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="month"
-                tickFormatter={(v: string) => fmtMonth(v, locale)}
+                tickFormatter={(v: string) => fmtMonth(v, language)}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
                 axisLine={{ stroke: "hsl(var(--border))" }}
               />
@@ -177,7 +178,7 @@ export default function NetWorthPage() {
                   borderRadius: "var(--radius)",
                   color: "hsl(var(--card-foreground))",
                 }}
-                labelFormatter={(v: string) => fmtMonth(v, locale)}
+                 labelFormatter={(v: string) => fmtMonth(v, language)}
                 formatter={(value: number, name: string) => [fmt(value), name]}
               />
               <Legend />
@@ -268,7 +269,7 @@ export default function NetWorthPage() {
                     const change = prev ? s.netWorth - prev.netWorth : 0;
                     return (
                       <tr key={s.month} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-3 font-medium">{fmtMonth(s.month, locale)}</td>
+                        <td className="py-2 px-3 font-medium">{fmtMonth(s.month, language)}</td>
                         <td className="text-right py-2 px-3 tabular-nums">{fmt(s.liquid)}</td>
                         <td className="text-right py-2 px-3 tabular-nums">{fmt(s.investments)}</td>
                         <td className="text-right py-2 px-3 tabular-nums font-bold">{fmt(s.netWorth)}</td>

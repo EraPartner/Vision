@@ -281,11 +281,7 @@ export function CustomCategoryChart({
               )}
             <div className="flex items-center gap-2">
               <CardDescription className="flex-1">{description}</CardDescription>
-              {headerTooltip && (
-                <div title={headerTooltip} className="text-muted-foreground/80">
-                  <CircleHelp className="h-4 w-4" />
-                </div>
-              )}
+              {/* headerTooltip intentionally omitted — showing a tooltip here caused layout/behavior issues */}
             </div>
           </div>
 

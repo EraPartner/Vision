@@ -43,7 +43,7 @@ export default function StocksPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-foreground">{t('stocks.title')}</h1>
-          <AddInvestmentDialog />
+          <AddInvestmentDialog allowedAssetClasses={[ 'stock', 'etf' ]} />
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -52,7 +52,7 @@ export default function StocksPage() {
             <p className="text-muted-foreground text-sm mb-4">
               {t('stocks.noStocksDesc')}
             </p>
-            <AddInvestmentDialog />
+            <AddInvestmentDialog allowedAssetClasses={[ 'stock', 'etf' ]} />
           </CardContent>
         </Card>
       </div>

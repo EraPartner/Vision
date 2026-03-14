@@ -7,22 +7,40 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 // Small i18n loader for main process dialogs
-const I18N_DIR = path.join(__dirname, 'i18n');
 function loadI18n() {
   const locale = (app && app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en';
   const lang = locale && locale.startsWith('nl') ? 'nl' : 'en';
-  try {
-    const p = path.join(I18N_DIR, `${lang}.json`);
-    if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
+
+  // Prefer i18n shipped in the app resources (packaged .app/.dmg).
+  const resourceI18nDir = path.join(process.resourcesPath || '', 'i18n');
+  const fallbackI18nDir = path.join(__dirname, 'i18n');
+
+  const tryLoad = (dir) => {
+    try {
+      const p = path.join(dir, `${lang}.json`);
+      if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch (e) {
+      // ignore
     }
-  } catch (e) {
-    // fallthrough
-  }
+    return null;
+  };
+
+  const byResources = resourceI18nDir && tryLoad(resourceI18nDir);
+  if (byResources) return byResources;
+
+  const byFallback = tryLoad(fallbackI18nDir);
+  if (byFallback) return byFallback;
+
+  // Last resort: try English in resources then fallback dir
   try {
-    const p2 = path.join(I18N_DIR, 'en.json');
+    const p2 = path.join(resourceI18nDir, 'en.json');
     if (fs.existsSync(p2)) return JSON.parse(fs.readFileSync(p2, 'utf8'));
   } catch (e) {}
+  try {
+    const p3 = path.join(fallbackI18nDir, 'en.json');
+    if (fs.existsSync(p3)) return JSON.parse(fs.readFileSync(p3, 'utf8'));
+  } catch (e) {}
+
   return {};
 }
 
@@ -49,6 +67,7 @@ const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
 const HEALTH_POLL_ATTEMPTS = 120;  // 120 × 300ms = 36s max
 const HEALTH_POLL_INTERVAL_MS = 300;
+const GITHUB_UPDATE_CHECK_DELAY_MS = 30_000;
 const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
 const BACKUP_ENC_IV_BYTES = 16;
 const BACKUP_RETENTION_KEEP = 7;
@@ -97,6 +116,27 @@ function saveSettings(data) {
 async function resolveWorkDir() {
   if (!app.isPackaged) {
     return path.resolve(__dirname, '..', '..');
+  }
+
+  // Ensure the generated i18n is present in the packaged app resources
+  try {
+    const packagedI18n = path.join(process.resourcesPath, 'i18n');
+    if (!fs.existsSync(packagedI18n)) {
+      // If it's missing, attempt to copy from the repo i18n/source (best effort)
+      const repoI18n = path.join(__dirname, '..', 'i18n');
+      if (fs.existsSync(repoI18n)) {
+        fs.mkdirSync(packagedI18n, { recursive: true });
+        const files = fs.readdirSync(repoI18n);
+        for (const f of files) {
+          const src = path.join(repoI18n, f);
+          const dst = path.join(packagedI18n, f);
+          try { fs.copyFileSync(src, dst); } catch (e) { /* ignore */ }
+        }
+      }
+    }
+  } catch (e) {
+    // Non-fatal — packaged app should include i18n via build step. If not,
+    // dialogs will fallback to internal defaults.
   }
 
   // If we've already set up the embedded compose, reuse it.
@@ -562,10 +602,10 @@ function setupAutoUpdater() {
   });
 
   // Check for a new Electron shell update silently in the background.
-  // A 10-second delay avoids competing with startup I/O.
+  // Delay this longer so cold-start Docker I/O stays prioritized.
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((e) => console.warn('Update check failed:', e.message));
-  }, 10_000);
+  }, GITHUB_UPDATE_CHECK_DELAY_MS);
 }
 
 // ── Docker image update (called after new Electron version detected) ──────────

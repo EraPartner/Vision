@@ -24,7 +24,13 @@ const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   bond: PiggyBank,
 };
 
-export function AddInvestmentDialog() {
+type Props = {
+  // when provided, only these asset classes are shown; if exactly one is provided
+  // the dialog will open directly to the details form for that class
+  allowedAssetClasses?: AssetClass[];
+};
+
+export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'type' | 'details'>('type');
@@ -140,8 +146,29 @@ export function AddInvestmentDialog() {
     ? (parseFloat(form.initialAmount) / parseFloat(form.initialUnits)).toFixed(4)
     : '';
 
+  const visibleAssetClasses = (allowedAssetClasses && allowedAssetClasses.length > 0)
+    ? allowedAssetClasses
+    : (Object.keys(ASSET_CLASS_LABELS) as AssetClass[]);
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) { reset(); return; }
+        // fresh state on open
+        reset();
+        // if only one allowed asset class, auto-select and jump to details
+        if (allowedAssetClasses && allowedAssetClasses.length === 1) {
+          const key = allowedAssetClasses[0];
+          const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf'].includes(key) ? 'yahoo' : 'manual';
+          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
+          setStep('details');
+        } else {
+          setStep('type');
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
           <Plus className="h-4 w-4" /> {t('addInv.title')}
@@ -161,7 +188,7 @@ export function AddInvestmentDialog() {
 
         {step === 'type' ? (
           <div className="grid grid-cols-2 gap-3">
-            {(Object.keys(ASSET_CLASS_LABELS) as AssetClass[]).map((key) => {
+            {visibleAssetClasses.map((key) => {
               const Icon = ASSET_ICONS[key];
               const label = getAssetClassLabel(t, key);
               return (

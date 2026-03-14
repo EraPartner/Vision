@@ -10,10 +10,13 @@ WORKDIR /app
 COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
+COPY i18n/source ./i18n/source
+COPY scripts/generate-locales.js ./scripts/generate-locales.js
 RUN bun install --frozen-lockfile
 
 # Copy frontend source and build
 COPY apps/frontend/ ./apps/frontend/
+RUN node scripts/generate-locales.js
 RUN bun run --filter vision-frontend build
 
 # ============================================================

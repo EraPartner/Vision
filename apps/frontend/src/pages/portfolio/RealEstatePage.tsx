@@ -52,7 +52,7 @@ export default function RealEstatePage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
-          <AddInvestmentDialog />
+          <AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -61,7 +61,7 @@ export default function RealEstatePage() {
             <p className="text-muted-foreground text-sm mb-4">
               {t('realestate.noPropertiesDesc')}
             </p>
-            <AddInvestmentDialog />
+            <AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />
           </CardContent>
         </Card>
       </div>

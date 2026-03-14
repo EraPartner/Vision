@@ -5,9 +5,9 @@
   "main": "main.js",
   "packageManager": "bun",
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --mac --arm64",
-    "dist:arm64": "electron-builder --mac --arm64"
+    "start": "node ../../scripts/generate-locales.js && electron .",
+    "dist": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
+    "dist:arm64": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64"
   },
   "dependencies": {
     "electron-updater": "^6.3.0"
@@ -39,6 +39,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "i18n/**/*",
       "resources/**/*"
     ],
     "publish": {

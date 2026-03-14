@@ -7,8 +7,10 @@
  * means only the user's active locale is downloaded and parsed on startup.
  *
  * To add a new locale:
- *  1. Create apps/frontend/src/locales/<code>.ts with a default-exported Record<string,string>.
- *  2. Add the code to the `Language` union type and the `loaders` map below.
+ *  1. Edit i18n/source/<code>.json (the canonical source of translations).
+ *  2. Run `node scripts/generate-locales.js` (or add it to your build) to emit
+ *     generated frontend TS modules and packaging JSON files.
+ *  3. Add the code to the `Language` union type and the `loaders` map below.
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
@@ -17,10 +19,14 @@ import type { ReactNode } from 'react';
 export type Language = 'en' | 'nl';
 
 // Vite will code-split each dynamic import into its own chunk.
+// Generated TS modules (apps/frontend/src/locales/*.ts) are code-split so only
+// the active locale is downloaded and parsed. Run the generator to update them.
 const loaders: Record<Language, () => Promise<{ default: Record<string, string> }>> = {
     en: () => import('../locales/en'),
     nl: () => import('../locales/nl'),
 };
+
+const englishLoader = loaders.en;
 
 // Type-safe key is derived from the English dictionary at compile time.
 // We keep a static reference only to en for TypeScript — it is not bundled at runtime.
@@ -46,6 +52,17 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
     // We start with an empty dict so the app renders immediately and keys fall
     // back to themselves (visible for <1 render cycle on cold load).
     const [dicts, setDicts] = useState<Partial<Record<Language, Record<string, string>>>>({});
+
+    useEffect(() => {
+        if (dicts.en) return;
+        englishLoader()
+            .then((mod) => {
+                setDicts((prev) => (prev.en ? prev : { ...prev, en: mod.default }));
+            })
+            .catch((err) => {
+                console.error('Failed to preload fallback locale "en":', err);
+            });
+    }, [dicts.en]);
 
     useEffect(() => {
         // If we already loaded this locale, nothing to do.
