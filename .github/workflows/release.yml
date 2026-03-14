@@ -124,16 +124,16 @@ jobs:
           cp -R *.app unsigned/ 2>/dev/null || true
           # Generate a simple launcher that removes quarantine and opens the app
           cat > unsigned/launch.command <<'LAUNCH'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$DIR/Vision.app"
-if [ ! -d "$APP" ]; then
-  echo "Vision.app not found in $DIR"
-  exit 1
-fi
- xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
-open "$APP" || { echo "Failed to open $APP — try right-click → Open in Finder to bypass Gatekeeper."; exit 2; }
-LAUNCH
+          #!/bin/bash
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          APP="$DIR/Vision.app"
+          if [ ! -d "$APP" ]; then
+            echo "Vision.app not found in $DIR"
+            exit 1
+          fi
+          xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+          open "$APP" || { echo "Failed to open $APP — try right-click → Open in Finder to bypass Gatekeeper."; exit 2; }
+          LAUNCH
           chmod +x unsigned/launch.command
           TAG="${{ github.ref_name }}"
           # Use ditto to preserve macOS metadata
