@@ -86,7 +86,9 @@ export default function OwesPage() {
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base flex items-center justify-between">
                                         <span>{item.recipient_name}</span>
-                                        <Badge variant="secondary">{t('owesPage.splits', { n: item.split_count })}</Badge>
+                                        <Badge variant="secondary">
+                                            {item.split_count === 1 ? t('owesPage.split', { n: item.split_count }) : t('owesPage.splits', { n: item.split_count })}
+                                        </Badge>
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
@@ -118,6 +120,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
     const deleteSplit = useDeleteSplit();
     const [payDialog, setPayDialog] = useState<{ splitId: number; remaining: number } | null>(null);
     const [payAmount, setPayAmount] = useState("");
+    const { t } = useLanguage();
 
     const items = data?.items || [];
 
