@@ -1,0 +1,269 @@
+{
+  "main": {
+    "id": "a967404602dab561",
+    "type": "split",
+    "children": [
+      {
+        "id": "7a95953177bef529",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "40de2397a2407032",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "docs/adr/002-database-schema.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "002-database-schema"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "f3d894299ae36f11",
+    "type": "split",
+    "children": [
+      {
+        "id": "2517f531a5a8d890",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "953f6087c9ac9a49",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "267faaaff5f9e3e0",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "897c2d048516c420",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8a8e1dba37d03938",
+    "type": "split",
+    "children": [
+      {
+        "id": "b67394108c55130a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d859608aec75c586",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "617993fdc9558493",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "7e8bdf8826cf34ba",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "a6da5aa11b6ea16b",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "11b7d536820cedab",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          },
+          {
+            "id": "6e9995d97ff5d09a",
+            "type": "leaf",
+            "state": {
+              "type": "footnotes",
+              "state": {},
+              "icon": "lucide-file-signature",
+              "title": "Footnotes"
+            }
+          },
+          {
+            "id": "0e0f872b1b008975",
+            "type": "leaf",
+            "state": {
+              "type": "smart-connections-view",
+              "state": {},
+              "icon": "smart-connections",
+              "title": "Connections"
+            }
+          },
+          {
+            "id": "352a46788767af32",
+            "type": "leaf",
+            "state": {
+              "type": "smart-lookup-view",
+              "state": {},
+              "icon": "smart-lookup",
+              "title": "Lookup"
+            }
+          }
+        ],
+        "currentTab": 7
+      }
+    ],
+    "direction": "horizontal",
+    "width": 653.5,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false,
+      "smart-connections:Smart Connections: Open connections view": false,
+      "smart-connections:Smart Lookup: Open lookup view": false,
+      "smart-connections:Smart Connections: Open random connection": false
+    }
+  },
+  "active": "40de2397a2407032",
+  "lastOpenFiles": [
+    "config/requirements.txt",
+    "alembic/versions/__pycache__/0012_add_indexes.cpython-314.pyc",
+    "alembic/versions/__pycache__/0011_planned_loans.cpython-314.pyc",
+    "alembic/versions/__pycache__/0010_investments_municipality_tax_fields.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/view.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/utils.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/query_chain.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/proxy_dict.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/path.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/operators.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/observer.cpython-314.pyc",
+    "venv/lib/python3.14/site-packages/pip-26.0.1.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
+    "venv/lib/python3.14/site-packages/~ip/_vendor/idna/LICENSE.md",
+    "venv/lib/python3.14/site-packages/~ip-26.0.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
+    "venv/lib/python3.14/site-packages/pip-26.0.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
+    "venv/lib/python3.14/site-packages/pip/_vendor/idna/LICENSE.md",
+    "Untitled.canvas",
+    "docs/diagrams/Database Schema - ERD.png",
+    "docs/diagrams/API Route Layer Architecture.png",
+    "docs/architecture/frontend-architecture.md",
+    "Chats/New Chat.md",
+    "docs/guides/contributing.md",
+    "docs/guides/deployment.md",
+    "docs/guides/setup.md",
+    "docs/features/transactions.md",
+    "docs/features/portfolio.md",
+    "docs/features/plannedTransactions.md",
+    "docs/features/index.md",
+    "docs/features/import.md",
+    "docs/features/views.md",
+    "docs/testing/testing.md",
+    "docs/testing/index.md",
+    "docs/i18n/translations.md",
+    "docs/i18n/index.md",
+    "packaging/electron/node_modules/node-addon-api/README.md",
+    "docs/components/hooks.md",
+    "docs/components/ui-components.md",
+    "docs/components/portfolio.md",
+    "docs/components/layout.md"
+  ]
+}
