@@ -1,0 +1,70 @@
+@startuml PlannedTransaction State Diagram
+title PlannedTransaction Lifecycle
+
+!theme plain
+skinparam linetype ortho
+skinparam stateDimension 120, 80
+skinparam noteDimension 100, 60
+
+state "PlannedTransaction States" as states {
+
+  [*] --> Active : create()
+
+  state Active : is_active = true
+  state Pending : is_executed = false
+  state Executed : is_executed = true
+
+  Active : is_recurring = false
+  Active : is_loan = false
+
+  state Recurring : is_recurring = true
+  Recurring : recurrence_pattern set
+
+  state Loan : is_loan = true
+  Loan : loan_schedule[] populated
+  Loan : loan_type defined
+
+  Pending --> Executed : execute(transactionId)
+  Executed --> Pending : [if recurring] next occurrence
+
+  Recurring --> Pending : recurrence detected
+  Recurring --> Executed : execute()
+  Executed --> Recurring : [auto] next occurrence
+
+  Loan --> Executed : execute()\n(payment made)
+  Loan --> Loan : next installment
+
+  Active --> [*] : delete() / hardDelete()
+
+  state Executed {
+    [*] --> LastExecuted
+    LastExecuted : last_executed_date set
+    LastExecuted --> [*] : (final payment)
+  }
+
+}
+
+note right of Pending
+  Awaiting execution
+  on planned_date
+end note
+
+note right of Recurring
+  Automatically generates
+  future occurrences based on
+  recurrence_pattern
+end note
+
+note right of Loan
+  Loan types:
+  - amortizing
+  - fixed_principal
+  - interest_only
+end note
+
+note left of Executed
+  Linked to real Transaction
+  via executed_transaction_id
+end note
+
+@enduml

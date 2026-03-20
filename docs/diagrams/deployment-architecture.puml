@@ -1,0 +1,90 @@
+@startuml Deployment Architecture
+title Deployment Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+package "Development Environment" {
+  node "Local Machine" as Dev {
+    component "Frontend (Vite)" as FrontendDev
+    component "Node.js (Bun)" as BackendDev
+    component "PostgreSQL" as PostgresDev
+    component "Hot Reload" as HMR
+  }
+}
+
+package "Production Environment (Docker)" {
+  node "Docker Host" as DockerHost {
+    rectangle "Docker Network" as Network {
+      container "app" as AppContainer {
+        node "Node.js Server" as NodeProd
+        node "Static Files (dist)" as Dist
+      }
+      
+      container "db" as DBContainer {
+        node "PostgreSQL 18" as PostgresProd
+        node "Data Volume" as DataVol
+      }
+    }
+  }
+  
+  node "Load Balancer" as LB
+  node "SSL/TLS Termination" as SSL
+}
+
+package "Desktop Application (Electron)" as Desktop {
+  node "Electron Main" as ElectronMain
+  node "Electron Renderer" as ElectronRenderer
+  node "Local Storage" as LocalStorage
+}
+
+cloud "External Services" as External {
+  node "ECB API" as ECB
+  node "CoinGecko" as CoinGecko
+  node "Yahoo Finance" as Yahoo
+}
+
+actor "User" as User
+
+package "Development Environment" {
+  User --> Dev : Development Access
+  Dev --> PostgresDev : localhost:5432
+  Dev --> External : Direct
+}
+
+package "Production Environment" {
+  User --> SSL : HTTPS
+  SSL --> LB : HTTP
+  LB --> AppContainer : Forward
+  AppContainer --> DBContainer : Database
+  AppContainer --> External : API Calls
+  AppContainer --> DBContainer : internal:5432
+  NodeProd --> Dist : Static Files
+}
+
+package "Desktop Application" {
+  User --> Desktop : Desktop App
+  Desktop --> AppContainer : API Calls (embedded)
+}
+
+note right of AppContainer
+  Image: custom build (.)
+  Port: 3002
+  Environment: Production
+end note
+
+note right of DBContainer
+  Image: postgres:18-alpine
+  Volume: postgres_data
+  Healthcheck: enabled
+end note
+
+note right of Desktop
+  Packaging: electron-builder
+  Mode: bun run electron:dev / bun run electron:prod
+  Embedded frontend + Node.js backend
+end note
+
+@enduml

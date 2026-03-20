@@ -1,0 +1,93 @@
+@startuml Import Flow Sequence Diagram
+title Import Flow Sequence Diagram
+
+!theme plain
+skinparam participantSpacing 10
+skinparam ranksep 50
+skinparam linetype ortho
+
+actor "User" as User
+
+participant "ImportPage" as Page
+participant "useImport" as Hook
+participant "ApiClient" as API
+participant "Express" as Express
+participant "ImportRouter" as Router
+participant "RawTransactionImportService" as ImportService
+participant "BankAdapters" as Adapter
+participant "DeduplicationService" as Dedup
+participant "RecipientRepository" as RecipientRepo
+participant "TransactionRepository" as TransRepo
+participant "RawTransactionRepository" as RawRepo
+participant "PostgreSQL" as DB
+
+group Step 1: User uploads CSV
+  User -> Page : Upload CSV File
+  Page -> Hook : selectBank(bankName)
+  Page -> Hook : importCSV(file)
+end
+
+group Step 2: API call
+  Hook -> API : POST /api/import/csv
+  API -> Express : multipart/form-data
+  Express -> Router : route to /import/csv
+end
+
+group Step 3: Raw transaction import service
+  Router -> ImportService : importCSVWithRawStorage(filePath, bankName, config)
+  ImportService -> Adapter : createAdapter(bankName)
+
+  alt Supported Bank
+    Adapter -> Adapter : parse(filePath)
+    Adapter -> ImportService : TransactionData[]
+  else Custom Config
+    ImportService -> Adapter : parse with custom config
+  end
+end
+
+group Step 4: Raw storage + deduplication
+  loop For each transaction
+    ImportService -> RawRepo : insert(rawData, hash)
+    ImportService -> Dedup : isDuplicateByFields(date, amount, recipient, memo)
+    Dedup -> DB : check existing hash
+   
+    alt Not duplicate
+      ImportService -> RecipientRepo : getOrCreateRecipient(name)
+      RecipientRepo -> DB : INSERT ON CONFLICT
+      DB -> RecipientRepo : recipient_id
+      RecipientRepo -> ImportService : recipientId
+    else Duplicate
+      Dedup -> ImportService : skip
+    end
+  end
+end
+
+group Step 5: Batch Insert
+  ImportService -> TransRepo : batchInsert(transactions)
+  TransRepo -> DB : INSERT (250 rows/batch)
+  DB -> TransRepo : inserted_count
+end
+
+group Step 6: Response
+  TransRepo -> ImportService : results {imported, duplicates, errors}
+  ImportService -> Router : ImportResult
+  Router -> API : JSON
+  API -> Hook : ImportResult
+  Hook -> Page : update UI
+  Page -> User : Show Summary
+end
+
+note over ImportService
+  Phase 1: Dedup + Recipient Resolution
+  Phase 2: Raw storage (audit/re-import)
+  Phase 3: Batch Insert (250 rows)
+end note
+
+note over Adapter
+  Supported: Belfius, Revolut, KBC
+  SABB, Wise, Vision, Custom
+  Custom: User-defined column mapping
+  Stores in custom_raw_transactions
+end note
+
+@enduml

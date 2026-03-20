@@ -1,0 +1,82 @@
+@startuml Recurring Transaction Detection Flow
+title Recurring Transaction Detection Flow
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 50
+
+actor "User" as User
+
+package "Frontend" {
+  class PlannedPaymentsPage
+  class usePlannedPayments
+}
+
+package "Backend Services" {
+  class RecurringDetectionService {
+    +detectRecurring(): Promise<RecurringPattern[]>
+    +detectRecurringPatterns(): Promise<RecurringPattern[]>
+  }
+
+  class TransactionRepository {
+    +getAll(opts): Promise<Transaction[]>
+  }
+
+  class PlannedTransactionRepository {
+    +create(data): Promise<PlannedTransaction>
+    +update(id, data): Promise<PlannedTransaction>
+  }
+}
+
+package "Detection Logic" as Logic {
+  class PatternAnalyzer {
+    +analyzeAmount(transactions): number
+    +analyzeInterval(transactions): interval
+    +analyzeRecipient(transactions): recipient
+  }
+
+  class RecurrenceService {
+    +generateOccurrences(start, pattern, end): Date[]
+    +getNextOccurrence(date, pattern): Date
+    +calculateNextDate(date, pattern): Date
+  }
+}
+
+database "PostgreSQL" as DB {
+  table "transactions"
+  table "planned_transactions"
+}
+
+package "Detection Flow" {
+  User --> PlannedPaymentsPage : "Detect Recurring"
+  PlannedPaymentsPage --> usePlannedPayments : detectRecurring()
+  usePlannedPayments --> RecurringDetectionService : detectRecurring()
+
+  RecurringDetectionService --> TransactionRepository : getLastNTransactions(n=1000)
+  TransactionRepository --> DB : SELECT
+  DB --> TransactionRepository : transactions
+
+  RecurringDetectionService --> Logic : group by (recipient, amount)
+  Logic --> RecurringDetectionService : candidate patterns
+
+  RecurringDetectionService --> PlannedTransactionRepository : create planned
+  PlannedTransactionRepository --> DB : INSERT
+  DB --> PlannedTransactionRepository : created
+  PlannedTransactionRepository --> PlannedPaymentsPage : created planned transactions
+}
+
+note right of Logic
+  Detection criteria:
+  - Same recipient, same amount
+  - Regular interval (25% tolerance)
+  - Min 3 occurrences, Consistency >= 60%
+end note
+
+note right of RecurrenceService
+  Supported intervals:
+  - weekly, biweekly, monthly
+  - quarterly, yearly, custom
+end note
+
+@enduml

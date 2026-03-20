@@ -1,0 +1,226 @@
+@startuml Frontend State Management
+title Frontend State Management
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+package "React Contexts" {
+  class ThemeContext {
+    +theme: "light" | "dark" | "system" | "schedule"
+    +scheduleStartTime: string
+    +scheduleEndTime: string
+    +effectiveTheme: "light" | "dark"
+    +setTheme(theme): void
+    +setScheduleTimes(start, end): void
+    +toggleTheme(): void
+  }
+
+  class SettingsPreloadContext {
+    +preloadedSettings: Settings | null
+    +isPreloaded: boolean
+  }
+
+  class SettingsContext {
+    +settings: UserSettings
+    +updateSettings(updates): Promise<void>
+    +isLoading: boolean
+  }
+
+  class AppSettingsContext {
+    +appSettings: AppSettings
+    +updateAppSettings(updates): Promise<void>
+    +language: Language
+    +setLanguage(lang): void
+  }
+
+  class BelgianTaxProfileContext {
+    +taxProfile: TaxProfile
+    +taxYear: number
+    +calculations: TaxCalculations
+    +updateProfile(updates): Promise<void>
+    +setTaxYear(year): void
+    +isLoading: boolean
+  }
+
+  class WorkspaceHook {
+    +workspaceId: string
+    +workspaceName: string
+    +navigate: NavigateFunction
+  }
+}
+
+package "React Query (Server State)" {
+  class QueryClient {
+    +defaultOptions: QueryOptions
+    +staleTime: 30000ms
+    +gcTime: 5min
+  }
+
+  class QueryKeys {
+    +TRANSACTIONS: ["transactions"]
+    +CATEGORIES: ["categories"]
+    +RECIPIENTS: ["recipients"]
+    +PLANNED_PAYMENTS: ["planned-payments"]
+    +INVESTMENTS: ["investments"]
+    +PORTFOLIO: ["portfolio"]
+    +STATISTICS: ["statistics"]
+    +SETTINGS: ["settings"]
+    +WATCHLIST: ["watchlist"]
+  }
+}
+
+package "Custom Hooks (Business Logic)" {
+  class useTransactions {
+    +transactions: Transaction[]
+    +isLoading: boolean
+    +create(data): Promise<Transaction>
+    +update(id, data): Promise<Transaction>
+    +delete(id): Promise<void>
+    +refetch(): void
+  }
+
+  class useCategories {
+    +categories: Category[]
+    +create(data): Promise<Category>
+    +update(id, data): Promise<Category>
+    +delete(id): Promise<void>
+  }
+
+  class useRecipients {
+    +recipients: Recipient[]
+    +create(data): Promise<Recipient>
+    +update(id, data): Promise<Recipient>
+    +delete(id): Promise<void>
+    +merge(primaryId, aliasIds): Promise<void>
+    +unmerge(aliasId): Promise<void>
+  }
+
+  class usePlannedPayments {
+    +plannedPayments: PlannedTransaction[]
+    +create(data): Promise<PlannedTransaction>
+    +update(id, data): Promise<PlannedTransaction>
+    +execute(id, transactionId): Promise<void>
+    +delete(id): Promise<void>
+  }
+
+  class usePortfolio {
+    +investments: Investment[]
+    +portfolioTransactions: PortfolioTransaction[]
+    +createInvestment(data): Promise<Investment>
+    +updateInvestment(id, data): Promise<Investment>
+    +deleteInvestment(id): Promise<void>
+    +createPortfolioTransaction(data): Promise<PortfolioTransaction>
+  }
+
+  class useStatistics {
+    +data: StatisticsData
+    +unfilteredData: StatisticsData
+    +getGraphData(key): StatisticsData
+    +graphExclusions: GraphExclusions
+    +toggleGraphExclusion(key): void
+    +exclusionsApply: boolean
+    +isLoading: boolean
+    +isError: boolean
+    +error: Error | null
+  }
+
+  class useOwedSummary {
+    +summary: OwedSummary[]
+    +isLoading: boolean
+  }
+
+  class useOwedByRecipient {
+    +owedData: OwedData
+    +recipientId: number
+  }
+
+  class useSplitsByTransaction {
+    +splits: Split[]
+    +transactionId: number
+  }
+
+  class useCreateSplits {
+    +create(transactionId, splits): Promise<Split[]>
+  }
+
+  class useRecordPayment {
+    +addPayment(splitId, amount, note): Promise<Payment>
+  }
+
+  class useSettleSplit {
+    +settle(id): Promise<Split>
+  }
+
+  class useDeleteSplit {
+    +delete(id): Promise<void>
+  }
+
+  class useSavedCharts {
+    +charts: SavedChart[]
+    +create(data): Promise<SavedChart>
+    +update(id, data): Promise<SavedChart>
+    +delete(id): Promise<void>
+  }
+
+  class usePortfolioTaxAdjustments {
+    +adjustments: TaxAdjustment[]
+    +byYear(year): TaxAdjustment[]
+    +setManyForYear(year, adjustments): Promise<void>
+    +saveManyForYear(year, adjustments): Promise<void>
+    +create(data): Promise<TaxAdjustment>
+    +delete(id): Promise<void>
+  }
+
+  class useFilteredDashboardStats {
+    +filteredStats: StatisticsData
+    +isLoading: boolean
+  }
+}
+
+package "Utility Hooks" {
+  class useDebounce
+  class useToast
+  class useWidgetVisibility
+  class useIsMobile
+  class useConfirmDialog
+}
+
+' Provider Hierarchy (React Context nesting)
+package "Provider Stack" {
+  QueryClientProvider
+  ThemeContext
+  SettingsPreloadContext
+  SettingsContext
+  AppSettingsContext
+  BelgianTaxProfileContext
+  LanguageBridge
+}
+
+' Hooks consume Query Client (dependency relationship)
+useTransactions ..> QueryClient : uses
+useCategories ..> QueryClient : uses
+useRecipients ..> QueryClient : uses
+usePlannedPayments ..> QueryClient : uses
+usePortfolio ..> QueryClient : uses
+useStatistics ..> QueryClient : uses
+useOwedSummary ..> QueryClient : uses
+useOwedByRecipient ..> QueryClient : uses
+useSplitsByTransaction ..> QueryClient : uses
+useCreateSplits ..> QueryClient : uses
+useRecordPayment ..> QueryClient : uses
+useSettleSplit ..> QueryClient : uses
+useDeleteSplit ..> QueryClient : uses
+useSavedCharts ..> QueryClient : uses
+usePortfolioTaxAdjustments ..> QueryClient : uses
+useFilteredDashboardStats ..> QueryClient : uses
+
+' Some hooks consume Settings Context
+useStatistics ..> SettingsContext : uses
+useFilteredDashboardStats ..> SettingsContext : uses
+
+' WorkspaceHook consumes router
+WorkspaceHook ..> BrowserRouter : uses
+
+@enduml

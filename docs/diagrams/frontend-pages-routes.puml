@@ -1,0 +1,186 @@
+@startuml Frontend Page & Route Structure
+title Frontend Page & Route Structure
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 50
+
+package "Routing (React Router)" {
+  class BrowserRouter
+  class Routes
+}
+
+package "Budgeting Pages" {
+  class DashboardPage {
+    +Stats Overview
+    +Recent Transactions
+    +Category Breakdown
+    +Upcoming Payments
+  }
+
+  class TransactionsPage {
+    +Transaction List
+    +Filters
+    +Pagination
+    +Transaction Form
+  }
+
+  class CategoriesPage {
+    +Category List
+    +Category Form
+  }
+
+  class RecipientsPage {
+    +Recipient List
+    +Recipient Form
+    +Merge Dialog
+  }
+
+  class PlannedPaymentsPage {
+    +Planned Transactions List
+    +Planned Transaction Form
+    +Loan Calculator
+    +Execution History
+  }
+
+  class StatisticsPage {
+    +Monthly Trend
+    +Category Breakdown
+    +Recipient Insights
+    +Custom Charts
+  }
+
+  class ImportPage {
+    +Bank Selector
+    +CSV Preview
+    +Import Progress
+    +Import Results
+  }
+
+  class OwesPage {
+    +Owed Amounts
+  }
+}
+
+package "Portfolio Pages" {
+  class PortfolioOverviewPage {
+    +Asset Allocation
+    +Total Value
+    +Performance Summary
+  }
+
+  class MarketLookupPage {
+    +Search
+    +Price Display
+  }
+
+  class StocksPage {
+    +Stock Holdings
+    +Stock Transactions
+  }
+
+  class CryptoPage {
+    +Crypto Holdings
+    +Crypto Transactions
+  }
+
+  class RealEstatePage {
+    +Properties
+    +Property Details
+    +Rental Income
+  }
+
+  class SavingsPage {
+    +Savings Accounts
+    +Interest Rates
+  }
+
+  class PerformancePage {
+    +Performance Charts
+    +Historical Returns
+    +Benchmark Comparison
+  }
+
+  class NetWorthPage {
+    +Net Worth Chart
+    +Assets vs Liabilities
+    +Time Series
+  }
+
+  class ExchangeRatesPage {
+    +Current Rates
+    +Historical Chart
+  }
+
+  class WatchlistPage {
+    +Watchlist Items
+    +Price Alerts
+  }
+
+  class PortfolioTaxPage {
+    +Tax Lots
+    +Capital Gains
+    +Withholding Tax
+  }
+}
+
+package "Tax Pages" {
+  class TaxOverviewPage {
+    +Tax Summary
+    +Deductions List
+    +Tax Profile
+  }
+}
+
+package "Error Pages" {
+  class NotFound {
+    +404 Page
+  }
+}
+
+package "Shared Components" {
+  class AppLayout {
+    +Sidebar
+    +Header
+    +Footer
+  }
+}
+
+' Route Hierarchy
+BrowserRouter --> Routes
+Routes --> AppLayout
+
+AppLayout --> DashboardPage : "/"
+AppLayout --> TransactionsPage : "/transactions"
+AppLayout --> CategoriesPage : "/categories"
+AppLayout --> RecipientsPage : "/recipients"
+AppLayout --> PlannedPaymentsPage : "/planned"
+AppLayout --> StatisticsPage : "/statistics"
+AppLayout --> ImportPage : "/import"
+AppLayout --> OwesPage : "/owes"
+AppLayout --> TaxOverviewPage : "/tax"
+
+AppLayout --> PortfolioOverviewPage : "/portfolio"
+PortfolioOverviewPage --> MarketLookupPage : "/portfolio/market"
+PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
+PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"
+PortfolioOverviewPage --> RealEstatePage : "/portfolio/real-estate"
+PortfolioOverviewPage --> SavingsPage : "/portfolio/savings"
+PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"
+PortfolioOverviewPage --> NetWorthPage : "/portfolio/net-worth"
+PortfolioOverviewPage --> ExchangeRatesPage : "/portfolio/exchange-rates"
+PortfolioOverviewPage --> WatchlistPage : "/portfolio/watchlist"
+PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
+
+note right of TaxOverviewPage
+  Not lazy-loaded
+  Imported directly
+end note
+
+note right of PortfolioTaxPage
+  Not lazy-loaded
+  Imported directly
+end note
+
+@enduml

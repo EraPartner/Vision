@@ -1,0 +1,308 @@
+---
+title: Splits API
+type: api
+status: active
+date: 2025-03-18
+tags: [api, splits, transactions, debt]
+description: API endpoints for transaction splitting and debt tracking between recipients
+related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js"]
+---
+
+# Splits API
+
+Endpoints for transaction splitting and debt tracking. Allows splitting expenses between recipients and tracking who owes whom.
+
+## Base URL
+
+```
+/api/splits
+```
+
+## Endpoints
+
+### GET /api/splits/owed
+
+Get a summary of who owes what across all recipients.
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "recipient_id": 1,
+      "recipient_name": "John Doe",
+      "total_owed": 150.00,
+      "currency": "EUR"
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/splits/owed/:id
+
+Get detailed splits owed by a specific recipient.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Recipient ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "transaction_id": 100,
+      "recipient_id": 2,
+      "amount": 50.00,
+      "note": "Dinner split",
+      "is_settled": false,
+      "created_at": "2025-01-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/splits/transaction/:id
+
+Get all splits for a specific transaction.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Transaction ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "transaction_id": 100,
+      "recipient_id": 2,
+      "amount": 50.00,
+      "note": "Lunch",
+      "is_settled": false
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/splits
+
+Create a new split for a transaction.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `transaction_id` | number | Yes | ID of the transaction to split |
+| `recipient_id` | number | Yes | ID of the recipient who owes |
+| `amount` | number | Yes | Amount owed |
+| `note` | string | No | Optional note |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "transaction_id": 100,
+  "recipient_id": 2,
+  "amount": 50.00,
+  "note": "Dinner split",
+  "is_settled": false,
+  "created_at": "2025-01-15T10:00:00Z"
+}
+```
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "detail": "Missing required fields: transaction_id, recipient_id, amount"
+}
+```
+
+---
+
+### POST /api/splits/batch
+
+Create multiple splits for a transaction at once.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `transaction_id` | number | Yes | ID of the transaction to split |
+| `splits` | array | Yes | Array of split objects |
+
+**Split Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `recipient_id` | number | Yes | ID of the recipient |
+| `amount` | number | Yes | Amount owed |
+| `note` | string | No | Optional note |
+
+**Response:** `201 Created`
+
+```json
+{
+  "items": [
+    { "id": 1, "transaction_id": 100, "recipient_id": 2, "amount": 25.00 },
+    { "id": 2, "transaction_id": 100, "recipient_id": 3, "amount": 25.00 }
+  ]
+}
+```
+
+---
+
+### POST /api/splits/:id/pay
+
+Record a payment towards a split.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Split ID (positive integer) |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | Yes | Payment amount (positive number) |
+| `note` | string | No | Optional note |
+| `paid_at` | string | No | Payment date (ISO 8601) |
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": 1,
+  "split_id": 1,
+  "amount": 25.00,
+  "note": "Partial payment",
+  "paid_at": "2025-01-20T00:00:00Z"
+}
+```
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "detail": "Amount must be a positive number"
+}
+```
+
+---
+
+### GET /api/splits/:id/payments
+
+Get all payments for a specific split.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Split ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "split_id": 1,
+      "amount": 25.00,
+      "note": "Payment 1",
+      "paid_at": "2025-01-20T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/splits/:id/settle
+
+Mark a split as fully settled.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Split ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": 1,
+  "transaction_id": 100,
+  "recipient_id": 2,
+  "amount": 50.00,
+  "is_settled": true
+}
+```
+
+**Error Response:** `404 Not Found`
+
+```json
+{
+  "detail": "Split not found"
+}
+```
+
+---
+
+### DELETE /api/splits/:id
+
+Delete a split.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Split ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "message": "Split deleted"
+}
+```
+
+**Error Response:** `404 Not Found`
+
+```json
+{
+  "detail": "Split not found"
+}
+```
+
+## Use Cases
+
+- **Shared expenses**: Split a restaurant bill or group purchase among friends
+- **Roommate finances**: Track rent and utility splits
+- **Business expenses**: Allocate shared business costs
+
+## See Also
+
+- [[docs/api/index]] - API Index
+- [[docs/api/transactions]] - Transactions API
+- [[docs/api/recipients]] - Recipients API

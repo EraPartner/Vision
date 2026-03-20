@@ -1,0 +1,144 @@
+@startuml Service Layer Architecture
+title Service Layer Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 70
+
+package "Import Services" {
+  class ImportService {
+    +importCSV(filePath, bankName, config): Promise<ImportResult>
+    -parseCSV(filePath, bankName, config): TransactionData[]
+    -resolveRecipients(batch): Promise<ResolvedRecipient[]>
+    -batchInsert(transactions): Promise<InsertResult>
+  }
+
+  class DataImportService {
+    +importRecipientsCSV(path, opts): Promise<ImportResult>
+    +importCategoriesCSV(path, opts): Promise<ImportResult>
+  }
+
+  class StreamingImportService {
+    +streamImport(stream, handler): Promise<void>
+    +processBatch(items): Promise<void>
+  }
+
+  class RawTransactionImportService {
+    +importCSVWithRawStorage(filePath, bankName, config): Promise<ImportResult>
+    +deduplicate(data): Promise<DedupeResult>
+  }
+}
+
+package "Business Logic Services" {
+  class RecurringDetectionService {
+    +detectRecurring(): Promise<RecurringPattern[]>
+    +detectRecurringPatterns(): Promise<RecurringPattern[]>
+    -analyzePatterns(transactions): Pattern[]
+    -groupByRecipientAmount(transactions): Group[]
+  }
+
+  class RecurrenceService {
+    +generateOccurrences(startDate, pattern, endDate): Date[]
+    +getNextOccurrence(date, pattern): Date
+    +parseRecurrencePattern(patternStr): RecurrenceConfig
+    +formatRecurrence(config): string
+    +calculateNextDate(date, pattern): Date
+  }
+
+  class LoanRepaymentService {
+    +generateLoanRepaymentSchedule(config): LoanSchedule
+    +validateLoanConfig(config): ValidationResult
+    +calculateMonthlyPayment(principal, rate, months): number
+    +calculateTotalInterest(principal, rate, months): number
+    +calculateEarlyRepayment(remaining, prepaymentAmount): RepaymentResult
+  }
+
+  class DeduplicationService {
+    +isDuplicateByFields(date, amount, recipient, memo): Promise<boolean>
+    +findDuplicates(criteria): Promise<Transaction[]>
+    +markAsDuplicate(id, originalId): Promise<void>
+  }
+}
+
+package "External Services" {
+  class CurrencyConversionService {
+    +convert(amount, from, to): Promise<number>
+    +getExchangeRate(from, to): Promise<number>
+    +warmCache(): Promise<void>
+    +clearMemoryCache(): void
+  }
+
+  class PriceProviderService {
+    +fetchPrice(provider, symbol): Promise<PriceData>
+    +updateInvestmentPrices(): Promise<UpdateResult>
+    +fetchLivePrices(investments): Promise<PriceMap>
+  }
+
+  class BankAdapters {
+    +createAdapter(bankName, config): BankParser
+    +getSupportedBanks(): string[]
+    -createBelfiusAdapter(): BelfiusParser
+    -createRevolutAdapter(): RevolutParser
+    -createKbcAdapter(): KbcParser
+    -createSabbAdapter(): SABBParser
+    -createWiseAdapter(): WiseParser
+    -createVisionAdapter(): VisionParser
+    -createCustomAdapter(): CustomParser
+  }
+}
+
+package "Supporting Services" {
+  class TextNormalization {
+    +normalizeForMatching(text): string
+    +normalizeAmount(amount): number
+    +parseDate(dateStr): Date
+    +cleanRecipientName(name): string
+    +cleanKbcRecipientName(name): string
+  }
+
+  class IBANService {
+    +validate(iban): boolean
+    +format(iban): string
+    +extractCountry(iban): string
+    +extractBankCode(iban): string
+  }
+
+  class MaterializedViewService {
+    +refreshMaterializedViews(): Promise<void>
+    +createMaterializedViews(): Promise<void>
+    +ensureMaterializedViewIndexes(): Promise<void>
+    +scheduleRefresh(): void
+  }
+}
+
+' Relationships
+ImportService --> BankAdapters
+ImportService --> DeduplicationService
+ImportService --> RecipientRepository
+ImportService --> TransactionRepository
+
+DataImportService --> TextNormalization
+
+StreamingImportService --> ImportService
+
+RawTransactionImportService --> TransactionRepository
+RawTransactionImportService --> RawTransactionRepository
+RawTransactionImportService --> DeduplicationService
+RawTransactionImportService --> RecipientRepository
+
+RecurringDetectionService --> TransactionRepository
+RecurringDetectionService --> PlannedTransactionRepository
+
+RecurrenceService --> PlannedTransactionRepository
+
+LoanRepaymentService --> PlannedTransactionRepository
+LoanRepaymentService --> TransactionRepository
+
+DeduplicationService --> TransactionRepository
+
+CurrencyConversionService --> TransactionRepository
+
+PriceProviderService --> InvestmentRepository
+
+@enduml

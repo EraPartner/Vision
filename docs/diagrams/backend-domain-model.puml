@@ -1,0 +1,253 @@
+@startuml Backend Domain Model
+title Backend Domain Model
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 80
+
+package "Core Entities" {
+  class Transaction {
+    +id: integer
+    +date: date
+    +amount: numeric(15,2)
+    +currency: varchar(3)
+    +balance: numeric(15,2)
+    +memo: text
+    +comment: text
+    +bank_account: text
+    +recipient_id: integer <<FK>>
+    +recipient_bank_account_id: integer <<FK>>
+    +category_id: integer <<FK>>
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class Recipient {
+    +id: integer
+    +name: text
+    +normalized_name: text
+    +default_category_id: integer <<FK>>
+    +primary_recipient_id: integer <<FK>>
+    +notes: text
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class Category {
+    +id: integer
+    +general: text
+    +detail: text
+    +description: text
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class RecipientBankAccount {
+    +id: integer
+    +recipient_id: integer
+    +account_number: varchar(34)
+    +bank_name: text
+    +account_label: text
+    +address: text
+    +is_primary: boolean
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class PlannedTransaction {
+    +id: integer
+    +planned_date: date
+    +amount: numeric(15,2)
+    +currency: varchar(3)
+    +memo: text
+    +comment: text
+    +url: text
+    +bank_account: text
+    +recipient_id: integer <<FK>>
+    +category_id: integer <<FK>>
+    +is_recurring: boolean
+    +recurrence_pattern: text
+    +is_loan: boolean
+    +loan_type: text
+    +loan_principal: numeric(15,2)
+    +loan_annual_interest_rate: numeric(8,4)
+    +loan_term_months: integer
+    +loan_start_date: date
+    +loan_payment_day: integer
+    +loan_regular_payment_amount: numeric(15,2)
+    +loan_first_payment_date: date
+    +is_executed: boolean
+    +last_executed_date: date
+    +is_active: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class PlannedTransactionExecution {
+    +id: integer
+    +planned_transaction_id: integer <<FK>>
+    +executed_transaction_id: integer <<FK>>
+    +execution_date: date
+    +created_at: timestamptz
+  }
+
+  class PlannedTransactionLoanSchedule {
+    +id: integer
+    +planned_transaction_id: integer <<FK>>
+    +installment_number: integer
+    +due_date: date
+    +payment_amount: numeric(15,2)
+    +principal_amount: numeric(15,2)
+    +interest_amount: numeric(15,2)
+    +remaining_principal: numeric(15,2)
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+}
+
+package "Split Entities" {
+  class TransactionSplit {
+    +id: integer
+    +transaction_id: integer <<FK>>
+    +recipient_id: integer <<FK>>
+    +amount: numeric(15,2)
+    +note: text
+    +is_settled: boolean
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class SplitPayment {
+    +id: integer
+    +split_id: integer <<FK>>
+    +amount: numeric(15,2)
+    +paid_at: date
+    +note: text
+    +created_at: timestamptz
+  }
+}
+
+package "Investment & Portfolio" {
+  class Investment {
+    +id: integer
+    +name: varchar(200)
+    +symbol: varchar(20)
+    +asset_class: asset_class
+    +currency: varchar(10)
+    +current_price: numeric(18,6)
+    +interest_rate: numeric(8,4)
+    +maturity_date: date
+    +location: varchar(300)
+    +municipality: varchar(200)
+    +cadastral_income: numeric(12,2)
+    +municipality_tax_rate: numeric(8,4)
+    +notes: text
+    +is_active: boolean
+    +price_provider: price_provider
+    +price_provider_id: varchar(200)
+    +price_provider_url: varchar(500)
+    +price_updated_at: timestamptz
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class PortfolioTransaction {
+    +id: integer
+    +investment_id: integer <<FK>>
+    +type: portfolio_txn_type
+    +date: date
+    +amount: numeric(18,4)
+    +units: numeric(18,8)
+    +price_per_unit: numeric(18,6)
+    +fees: numeric(18,4)
+    +taxes: numeric(18,4)
+    +currency: varchar(10)
+    +note: text
+    +is_recurring: boolean
+    +recurrence_interval: recurrence_interval
+    +recurrence_end_date: date
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class Watchlist {
+    +id: integer
+    +name: varchar(200)
+    +symbol: varchar(20)
+    +asset_class: asset_class
+    +target_price: numeric(18,6)
+    +currency: varchar(10)
+    +notes: text
+    +price_provider_id: varchar(200)
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+}
+
+package "Supporting Entities" {
+  class ExchangeRate {
+    +id: integer
+    +currency_code: varchar(3)
+    +rate_to_eur: numeric(20,10)
+    +rate_date: date
+    +is_latest: boolean
+    +fetched_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class UserSetting {
+    +key: text
+    +value: jsonb
+    +updated_at: timestamptz
+  }
+
+  class SavedChart {
+    +id: integer
+    +name: text
+    +chart_type: text
+    +category_ids: integer[]
+    +created_at: timestamptz
+    +updated_at: timestamptz
+  }
+
+  class TransactionRawReference {
+    +id: integer
+    +transaction_id: integer <<FK>>
+    +raw_source_type: varchar(20)
+    +raw_source_id: integer
+    +created_at: timestamptz
+  }
+}
+
+' Relationships (using UML standard notation)
+Recipient "1" --> "0..1" Recipient : primary_recipient_id
+Recipient "1" --> "0..1" Category : default_category_id
+Recipient "1" o-- "*" RecipientBankAccount : has
+Recipient "1" o-- "*" Transaction : has
+
+Transaction "*" --> "1" Category : belongs to
+PlannedTransaction "*" --> "1" Category : belongs to
+Category "1" <-- "*" Recipient : default_category
+
+Transaction "1" --> "0..1" RecipientBankAccount : uses
+
+PlannedTransaction "1" --> "0..1" Recipient : for
+PlannedTransaction "1" --> "0..1" Category : for
+PlannedTransaction "1" o-- "*" PlannedTransactionExecution : tracks
+PlannedTransaction "1" o-- "*" PlannedTransactionLoanSchedule : has
+PlannedTransactionExecution "1" --> "0..1" Transaction : executes
+
+Investment "1" o-- "*" PortfolioTransaction : records
+
+Transaction "1" o-- "*" TransactionSplit : has
+TransactionSplit "1" --> "1" Recipient : owed to
+TransactionSplit "1" o-- "*" SplitPayment : payments
+
+Transaction "1" --> "0..1" TransactionRawReference : references
+
+@enduml

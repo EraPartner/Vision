@@ -1,0 +1,232 @@
+@startuml API Communication - Frontend to Backend
+title API Communication - Frontend to Backend
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 80
+
+actor "User" as User
+
+package "Frontend (React)" {
+  class Browser {
+    +React App
+    +React Router v6
+    +TanStack Query
+  }
+
+  package "Pages" {
+    class DashboardPage
+    class TransactionsPage
+    class CategoriesPage
+    class RecipientsPage
+    class PortfolioOverviewPage
+    class ImportPage
+  }
+
+  package "Hooks (React Query)" {
+    class useTransactions
+    class useCategories
+    class useRecipients
+    class usePortfolio
+    class usePlannedPayments
+    class useStatistics
+  }
+
+  package "API Client" {
+    class ApiClient {
+      +baseUrl: string
+      +timeout: 30s
+      +retry: 2 attempts
+      +request<T>(endpoint, config): Promise<T>
+    }
+  }
+}
+
+cloud "HTTP/JSON" as Network {
+}
+
+package "Backend (Node.js/Express)" {
+  class ExpressApp {
+    +Middleware: CORS, Compression, Rate Limiter, Security Headers
+  }
+
+  package "Routes" {
+    class TransactionsRouter
+    class CategoriesRouter
+    class RecipientsRouter
+    class PlannedTransactionsRouter
+    class InvestmentsRouter
+    class ImportRouter
+    class SettingsRouter
+    class MarketLookupRouter
+    class AdminRouter
+    class InfoRouter
+    class SplitsRouter
+    class SavedChartsRouter
+    class WatchlistRouter
+  }
+
+  package "Nested Routes" {
+    class RecipientBankAccountsRouter <<nested under Recipients>>
+  }
+
+  package "Services" {
+    class ImportService
+    class RawTransactionImportService
+    class StreamingImportService
+    class DataImportService
+    class CurrencyConversionService
+    class PriceProviderService
+    class LoanRepaymentService
+    class RecurringDetectionService
+    class MaterializedViewService
+  }
+
+  package "Repositories" {
+    class TransactionRepository
+    class CategoryRepository
+    class RecipientRepository
+    class InvestmentRepository
+    class PortfolioTransactionRepository
+    class PlannedTransactionRepository
+    class RecipientBankAccountRepository
+    class SplitRepository
+    class WatchlistRepository
+    class SavedChartsRepository
+    class InfoRepository
+  }
+}
+
+database "PostgreSQL" as DB {
+  package "Tables" {
+    class transactions
+    class categories
+    class recipients
+    class recipient_bank_accounts
+    class planned_transactions
+    class planned_transaction_executions
+    class planned_transaction_loan_schedule
+    class investments
+    class portfolio_transactions
+    class exchange_rates
+    class user_settings
+    class saved_charts
+    class watchlist
+    class transaction_splits
+    class split_payments
+    class transaction_raw_references
+  }
+  
+  package "Raw Transaction Tables" {
+    class belfius_raw_transactions
+    class revolut_raw_transactions
+    class kbc_raw_transactions
+    class sabb_raw_transactions
+    class wise_raw_transactions
+    class vision_raw_transactions
+    class custom_raw_transactions <<Custom CSV imports>>
+    class manual_raw_transactions <<Manual entry dedup>>
+  }
+}
+
+cloud "External APIs" as External {
+  class ECB_API <<Exchange Rate>>
+  class CoinGecko_API <<Crypto Prices>>
+  class YahooFinance_API <<Stock Prices>>
+  class Kraken_API <<Crypto Prices>>
+}
+
+package "Frontend Interactions" {
+  User --> Browser : User Action
+  Browser --> ApiClient : API Call
+  ApiClient --> Network : HTTP POST/GET/PATCH/DELETE
+  Network --> ExpressApp : Request
+}
+
+package "Backend Routes" {
+  ExpressApp --> TransactionsRouter
+  ExpressApp --> CategoriesRouter
+  ExpressApp --> RecipientsRouter
+  ExpressApp --> PlannedTransactionsRouter
+  ExpressApp --> InvestmentsRouter
+  ExpressApp --> ImportRouter
+  ExpressApp --> SettingsRouter
+  ExpressApp --> MarketLookupRouter
+  ExpressApp --> WatchlistRouter
+  ExpressApp --> SplitsRouter
+  ExpressApp --> SavedChartsRouter
+  ExpressApp --> InfoRouter
+  ExpressApp --> AdminRouter
+  RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts
+}
+
+package "Router to Repository/Service" {
+  TransactionsRouter --> TransactionRepository
+  CategoriesRouter --> CategoryRepository
+  RecipientsRouter --> RecipientRepository
+  RecipientsRouter --> RecipientBankAccountRepository
+  RecipientBankAccountsRouter --> RecipientBankAccountRepository
+  PlannedTransactionsRouter --> PlannedTransactionRepository
+  InvestmentsRouter --> InvestmentRepository
+  InvestmentsRouter --> PortfolioTransactionRepository
+  ImportRouter --> ImportService
+  SettingsRouter --> SR2 as SettingsRepository
+  WatchlistRouter --> WatchlistRepository
+  SplitsRouter --> SplitRepository
+  SavedChartsRouter --> SavedChartsRepository
+  MarketLookupRouter --> PriceProviderService
+  InfoRouter --> InfoRepository
+}
+
+package "Repository to Database" {
+  TransactionRepository --> transactions
+  CategoryRepository --> categories
+  RecipientRepository --> recipients
+  RecipientBankAccountRepository --> recipient_bank_accounts
+  InvestmentRepository --> investments
+  PortfolioTransactionRepository --> portfolio_transactions
+  PlannedTransactionRepository --> planned_transactions
+  SplitRepository --> transaction_splits
+  WatchlistRepository --> watchlist
+  SavedChartsRepository --> saved_charts
+  InfoRepository --> transactions
+}
+
+package "External APIs" {
+  CurrencyConversionService --> ECB_API
+  PriceProviderService --> CoinGecko_API
+  PriceProviderService --> YahooFinance_API
+  PriceProviderService --> Kraken_API
+}
+
+package "Response Flow" {
+  transactions --> TransactionRepository
+  TransactionRepository --> TransactionsRouter
+  TransactionsRouter --> ExpressApp
+  ExpressApp --> Network : JSON Response
+  Network --> ApiClient : HTTP 200 OK
+  ApiClient --> Browser : Data
+  Browser --> User : UI Update
+}
+
+' Note
+note right of Network
+  Request Format: JSON
+  Response Format: JSON
+  Authentication: None (current)
+  Rate Limiting: 200 req/min global
+end note
+
+note right of External
+  Exchange Rates: ECB (daily)
+  Crypto Prices: CoinGecko, Kraken
+  Stock Prices: Yahoo Finance
+end note
+
+note right of RecipientBankAccountsRouter
+  Nested under /api/recipients
+  Routes: /recipients/:id/bank-accounts
+end note
+
+@enduml

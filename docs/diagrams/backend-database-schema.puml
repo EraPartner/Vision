@@ -1,0 +1,338 @@
+@startuml Database Schema - ERD
+title Database Schema - Entity Relationship Diagram
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 50
+hide circle
+
+' Core Tables
+entity "categories" as categories {
+  * id : serial <<PK>>
+  * general : text
+  * detail : text
+  description : text
+  * is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+  ---
+  UNIQUE(general, detail)
+}
+
+entity "recipients" as recipients {
+  * id : serial <<PK>>
+  * name : text
+  * normalized_name : text <<UQ>>
+  default_category_id : integer <<FK>>
+  primary_recipient_id : integer <<FK>>
+  notes : text
+  * is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "recipient_bank_accounts" as recipient_bank_accounts {
+  * id : serial <<PK>>
+  * recipient_id : integer
+  * account_number : varchar(34) <<UQ>>
+  bank_name : text
+  account_label : text
+  address : text
+  is_primary : boolean
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "transactions" as transactions {
+  * id : serial <<PK>>
+  * date : date
+  * amount : numeric(15,2)
+  currency : varchar(3)
+  balance : numeric(15,2)
+  memo : text
+  comment : text
+  bank_account : text
+  * recipient_id : integer <<FK>>
+  recipient_bank_account_id : integer <<FK>>
+  * category_id : integer <<FK>>
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "planned_transactions" as planned_transactions {
+  * id : serial <<PK>>
+  * planned_date : date
+  * amount : numeric(15,2)
+  currency : varchar(3)
+  memo : text
+  comment : text
+  url : text
+  bank_account : text
+  recipient_id : integer <<FK>>
+  category_id : integer <<FK>>
+  is_recurring : boolean
+  recurrence_pattern : text
+  is_loan : boolean
+  loan_type : text
+  loan_principal : numeric(15,2)
+  loan_annual_interest_rate : numeric(8,4)
+  loan_term_months : integer
+  loan_start_date : date
+  loan_payment_day : integer
+  loan_regular_payment_amount : numeric(15,2)
+  loan_first_payment_date : date
+  is_executed : boolean
+  last_executed_date : date
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "planned_transaction_executions" as pte {
+  * id : serial <<PK>>
+  * planned_transaction_id : integer <<FK>>
+  * executed_transaction_id : integer <<FK>>
+  * execution_date : date
+  created_at : timestamptz
+}
+
+entity "planned_transaction_loan_schedule" as ptls {
+  * id : serial <<PK>>
+  * planned_transaction_id : integer <<FK>>
+  * installment_number : integer
+  * due_date : date
+  * payment_amount : numeric(15,2)
+  * principal_amount : numeric(15,2)
+  * interest_amount : numeric(15,2)
+  * remaining_principal : numeric(15,2)
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+' Split Tables
+entity "transaction_splits" as transaction_splits {
+  * id : serial <<PK>>
+  * transaction_id : integer <<FK>>
+  * recipient_id : integer <<FK>>
+  * amount : numeric(15,2)
+  note : text
+  * is_settled : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "split_payments" as split_payments {
+  * id : serial <<PK>>
+  * split_id : integer <<FK>>
+  * amount : numeric(15,2)
+  * paid_at : date
+  note : text
+  created_at : timestamptz
+}
+
+' Investment Tables
+entity "investments" as investments {
+  * id : serial <<PK>>
+  * name : varchar(200)
+  symbol : varchar(20)
+  * asset_class : asset_class
+  * currency : varchar(10)
+  current_price : numeric(18,6)
+  interest_rate : numeric(8,4)
+  maturity_date : date
+  location : varchar(300)
+  municipality : varchar(200)
+  cadastral_income : numeric(12,2)
+  municipality_tax_rate : numeric(8,4)
+  notes : text
+  is_active : boolean
+  * price_provider : price_provider
+  price_provider_id : varchar(200)
+  price_provider_url : varchar(500)
+  price_updated_at : timestamptz
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "portfolio_transactions" as portfolio_transactions {
+  * id : serial <<PK>>
+  * investment_id : integer <<FK>>
+  * type : portfolio_txn_type
+  * date : date
+  * amount : numeric(18,4)
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
+  fees : numeric(18,4)
+  taxes : numeric(18,4)
+  * currency : varchar(10)
+  note : text
+  * is_recurring : boolean
+  recurrence_interval : recurrence_interval
+  recurrence_end_date : date
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "watchlist" as watchlist {
+  * id : serial <<PK>>
+  * name : varchar(200)
+  symbol : varchar(20)
+  * asset_class : asset_class
+  * target_price : numeric(18,6)
+  * currency : varchar(10)
+  notes : text
+  price_provider_id : varchar(200)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+' Supporting Tables
+entity "exchange_rates" as exchange_rates {
+  * id : serial <<PK>>
+  * currency_code : varchar(3)
+  * rate_to_eur : numeric(20,10)
+  * rate_date : date
+  is_latest : boolean
+  fetched_at : timestamptz
+  updated_at : timestamptz
+  ---
+  UNIQUE(currency_code, rate_date)
+}
+
+entity "user_settings" as user_settings {
+  * key : text <<PK>>
+  * value : jsonb
+  updated_at : timestamptz
+}
+
+entity "saved_charts" as saved_charts {
+  * id : serial <<PK>>
+  * name : text
+  * chart_type : text
+  * category_ids : integer[]
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+' Raw Import Tables
+entity "transaction_raw_references" as transaction_raw_references {
+  * id : serial <<PK>>
+  * transaction_id : integer <<FK>>
+  * raw_source_type : varchar(20)
+  * raw_source_id : integer
+  created_at : timestamptz
+}
+
+entity "belfius_raw_transactions" as belfius_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "revolut_raw_transactions" as revolut_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "kbc_raw_transactions" as kbc_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "sabb_raw_transactions" as sabb_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "wise_raw_transactions" as wise_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "vision_raw_transactions" as vision_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  * raw_data : jsonb
+  created_at : timestamptz
+}
+
+entity "custom_raw_transactions" as custom_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  created_at : timestamptz
+  -- Custom CSV Import --
+  date : timestamptz
+  description : text
+  * amount : numeric(15,2)
+  * currency : varchar(3)
+  counterparty_name : text
+  counterparty_account : varchar(34)
+  balance : numeric(15,2)
+  category_name : text
+  comments : text
+  raw_csv_line : text
+  raw_metadata : jsonb
+}
+note right of custom_raw_transactions
+  Stores transactions imported
+  via Custom bank adapter
+  (user-defined column mapping)
+end note
+
+entity "manual_raw_transactions" as manual_raw_transactions {
+  * id : serial <<PK>>
+  * deduplication_hash : varchar(64)
+  created_at : timestamptz
+  transaction_id : integer
+  * date : date
+  bank_account : varchar(100)
+  recipient_id : integer
+  * amount : numeric(15,2)
+  memo : text
+  currency : varchar(3)
+  category_id : integer
+  comment : text
+}
+note right of manual_raw_transactions
+  Stores manually entered
+  transactions for deduplication
+  (before creating real transaction)
+end note
+
+' Relationships (using standard UML crow's foot notation)
+' One-to-One / One-to-Many relationships
+recipients ||--o{ categories : default_category_id
+recipients ||--o| recipients : primary_recipient_id
+recipient_bank_accounts }o--|| recipients
+transactions }o--|| recipients
+transactions }o--|| recipient_bank_accounts
+transactions }o--|| categories
+
+planned_transactions }o--|| recipients
+planned_transactions }o--|| categories
+
+pte }o--|| planned_transactions
+pte }o--|| transactions
+ptls }o--|| planned_transactions
+
+investments ||--o{ portfolio_transactions
+
+transaction_splits }o--|| transactions
+transaction_splits }o--|| recipients
+split_payments }o--|| transaction_splits
+
+transaction_raw_references }o--|| transactions
+
+@enduml

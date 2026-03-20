@@ -1,0 +1,107 @@
+@startuml Frontend Data Flow & API Layer
+title Frontend Data Flow & API Layer
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+package "Frontend" {
+  class Pages <<React Component>>
+  
+  class Hooks {
+    useTransactions
+    useCategories
+    useRecipients
+    usePlannedPayments
+    usePortfolio
+    useStatistics
+  }
+  
+  package "API Client" {
+    class ApiClient {
+      -baseUrl: string
+      -request<T>(config): Promise<T>
+      -retry(maxAttempts): Promise<T>
+      -cancelAll(): void
+    }
+    
+    class API_BASE_URL
+    
+    class DEFAULT_TIMEOUT_MS
+    class MAX_RETRIES
+    class RETRYABLE_STATUS_CODES
+  }
+  
+  package "Types" {
+    class Transaction
+    class Category
+    class Recipient
+    class PlannedTransaction
+    class Investment
+    class PortfolioTransaction
+    class ExchangeRate
+    class Watchlist
+    class SavedChart
+    class Split
+    
+    class TransactionCreate
+    class TransactionUpdate
+    class CategoryCreate
+    class CategoryUpdate
+    class RecipientCreate
+    class RecipientUpdate
+    class PlannedTransactionCreate
+    class InvestmentCreate
+    class InvestmentUpdate
+    class PortfolioTransactionCreate
+  }
+  
+  package "Utilities" {
+    class formatCurrency
+    class numberFormatToLocale
+    class categoryColors
+  }
+  
+  package "i18n" {
+    class en (English)
+    class nl (Dutch)
+  }
+}
+
+package "Backend (Node.js)" {
+  class RESTEndpoints
+  class ExpressRoutes
+  class Repositories
+  class Services
+  class Database (PostgreSQL)
+}
+
+package "External Services" {
+  class ECB (Exchange Rates)
+  class CoinGecko (Crypto Prices)
+  class Yahoo Finance (Stock Prices)
+  class Kraken (Crypto Prices)
+}
+
+' Relationships
+Hooks --> ApiClient
+ApiClient --> RESTEndpoints
+
+Types --> ApiClient
+ApiClient --> Types
+
+formatCurrency --> locale
+
+Pages --> Hooks
+Pages --> Components
+
+RESTEndpoints --> Repositories
+Repositories --> Database
+
+CurrencyConversionService --> ECB
+PriceProviderService --> CoinGecko
+PriceProviderService --> YahooFinance
+PriceProviderService --> Kraken
+
+@enduml

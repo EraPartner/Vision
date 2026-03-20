@@ -1,0 +1,59 @@
+@startuml Transaction Creation Sequence
+title Transaction Creation Sequence
+
+!theme plain
+skinparam linetype ortho
+skinparam participantSpacing 15
+skinparam ranksep 40
+
+actor "User" as User
+
+participant "TransactionPage" as Page
+participant "useTransactions" as Hook
+participant "ApiClient" as API
+participant "Express Routes" as Routes
+participant "Transaction Service" as Service
+participant "TransactionRepository" as Repo
+participant "RecipientRepository" as RecipientRepo
+participant "CategoryRepository" as CategoryRepo
+participant "PostgreSQL" as DB
+
+group Create Transaction
+  User -> Page : Submit Transaction Form
+  Page -> Hook : createTransaction(data)
+
+  Hook -> API : POST /api/transactions
+  API -> Routes : /api/transactions (POST)
+  Routes -> Service : process transaction
+  
+  Service -> RecipientRepo : getOrCreate(name)
+  RecipientRepo -> DB : INSERT or SELECT
+  DB -> RecipientRepo : recipient
+   
+  alt New Category
+    Service -> CategoryRepo : getOrCreate(general, detail)
+    CategoryRepo -> DB : INSERT or SELECT
+    DB -> CategoryRepo : category
+  end
+   
+  Service -> Repo : create(transaction)
+  Repo -> DB : INSERT transactions RETURNING *
+  DB -> Repo : created transaction
+   
+  Repo -> Service : transaction
+  Service -> Routes : response
+  Routes -> API : JSON
+  API -> Hook : Transaction
+  Hook -> Page : update UI
+  Page -> User : Show success
+end
+
+note right of Service
+  Transaction creation flow:
+  1. Resolve recipient (create if new)
+  2. Resolve category (create if new)
+  3. Insert transaction
+  4. Return enriched transaction
+end note
+
+@enduml

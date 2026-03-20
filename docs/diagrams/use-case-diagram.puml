@@ -1,0 +1,115 @@
+@startuml Use Case Diagram
+title Use Case Diagram
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+left to right direction
+
+actor "User" as User
+
+package "Budgeting" {
+  usecase "View Dashboard" as UC_DASHBOARD
+  usecase "Manage Transactions" as UC_TRANS
+  usecase "Categorize Transactions" as UC_CATEGORIZE
+  usecase "View Statistics" as UC_STATS
+  usecase "Import CSV" as UC_IMPORT
+  usecase "View Uncategorised" as UC_UNCAT
+}
+
+package "Recipients" {
+  usecase "Manage Recipients" as UC_RECIP
+  usecase "Merge Recipients" as UC_MERGE
+  usecase "View Aliases" as UC_ALIASES
+  usecase "Manage Bank Accounts" as UC_BANK_ACCT
+}
+
+package "Categories" {
+  usecase "Manage Categories" as UC_CATS
+  usecase "Assign Category to Recipients" as UC_ASSIGN_CAT
+}
+
+package "Planning" {
+  usecase "Manage Planned Payments" as UC_PLANNED
+  usecase "Create Recurring" as UC_RECURRING
+  usecase "Execute Planned" as UC_EXECUTE
+  usecase "Calculate Loan Amortization" as UC_LOAN
+  usecase "Detect Recurring" as UC_DETECT
+}
+
+package "Portfolio" {
+  usecase "Manage Investments" as UC_INVEST
+  usecase "Record Transactions" as UC_PORTFOLIO_TX
+  usecase "Update Prices" as UC_PRICES
+  usecase "View Watchlist" as UC_WATCH
+  usecase "Calculate Net Worth" as UC_NETWORTH
+  usecase "View Performance" as UC_PERF
+  usecase "Exchange Rates" as UC_EXCHANGE
+}
+
+package "Tax" {
+  usecase "View Tax Overview" as UC_TAX
+  usecase "Manage Tax Profile" as UC_TAX_PROFILE
+  usecase "View Deductions" as UC_DEDUCTIONS
+}
+
+package "Settings" {
+  usecase "Manage Settings" as UC_SETTINGS
+  usecase "Import Settings" as UC_IMPORT_SETTINGS
+  usecase "Export Data" as UC_EXPORT
+}
+
+' User relationships
+User --> UC_DASHBOARD
+User --> UC_TRANS
+User --> UC_CATEGORIZE
+User --> UC_STATS
+User --> UC_IMPORT
+User --> UC_UNCAT
+
+User --> UC_RECIP
+User --> UC_MERGE
+User --> UC_ALIASES
+User --> UC_BANK_ACCT
+
+User --> UC_CATS
+User --> UC_ASSIGN_CAT
+
+User --> UC_PLANNED
+User --> UC_RECURRING
+User --> UC_EXECUTE
+User --> UC_LOAN
+User --> UC_DETECT
+
+User --> UC_INVEST
+User --> UC_PORTFOLIO_TX
+User --> UC_PRICES
+User --> UC_WATCH
+User --> UC_NETWORTH
+User --> UC_PERF
+User --> UC_EXCHANGE
+
+User --> UC_TAX
+User --> UC_TAX_PROFILE
+User --> UC_DEDUCTIONS
+
+User --> UC_SETTINGS
+User --> UC_IMPORT_SETTINGS
+User --> UC_EXPORT
+
+' Include relationships
+UC_TRANS ..> UC_CATEGORIZE : <<includes>>
+UC_IMPORT ..> UC_CATEGORIZE : <<includes>>
+UC_PLANNED ..> UC_RECURRING : <<extends>>
+UC_PLANNED ..> UC_LOAN : <<extends>>
+UC_TAX ..> UC_DEDUCTIONS : <<includes>>
+UC_INVEST ..> UC_PRICES : <<includes>>
+
+note right of UC_DETECT
+  AI-assisted detection of
+  recurring patterns
+end note
+
+@enduml

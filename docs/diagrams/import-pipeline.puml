@@ -1,0 +1,124 @@
+@startuml Import Pipeline - CSV Processing
+title Import Pipeline - CSV Processing
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 50
+
+actor "User" as User
+
+package "Frontend" {
+  class ImportPage {
+    +Bank Selector
+    +CSV Upload
+    +Preview
+    +Progress Display
+    +Results Summary
+  }
+
+  class ImportForm {
+    +file: File
+    +bankName: string
+    +customConfig?: CSVConfig
+  }
+}
+
+package "Backend - Import Services" {
+  class ImportService {
+    +importCSV(filePath, bankName, config): ImportResult
+  }
+
+  class RawTransactionImportService {
+    +importRawTransactions(bankName, data): Promise<RawImportResult>
+    +deduplicate(data): Promise<DedupeResult>
+  }
+
+  class StreamingImportService {
+    +streamImport(stream, handler): Promise<void>
+    +processBatch(items): Promise<void>
+  }
+
+  class DataImportService {
+    +importRecipientsCSV(path, opts): Promise<ImportResult>
+    +importCategoriesCSV(path, opts): Promise<ImportResult>
+  }
+
+  class BankAdapters {
+    +createAdapter(bankName, config): BankParser
+  }
+
+  class CSVParser {
+    +parse(filePath): TransactionData[]
+  }
+
+  class DeduplicationService {
+    +isDuplicateByFields(date, amount, recipient, memo): boolean
+  }
+
+  class RecipientRepository {
+    +getOrCreate(data): Promise<{recipient, created}>
+  }
+}
+
+package "Database Tables" {
+  class RawTransactionsTable {
+    +id: serial PK
+    +bank_name: text
+    +deduplication_hash: varchar(64)
+    +raw_data: jsonb
+    +created_at: timestamptz
+  }
+
+  class TransactionTable {
+    +Final transaction storage
+  }
+
+  class RecipientTable {
+    +Recipient storage
+  }
+}
+
+package "Import Flow" {
+  User --> ImportPage : Upload CSV
+  ImportPage --> ImportForm : Select Bank
+  ImportForm --> Backend : POST /api/import/csv
+
+  Backend --> BankAdapters : bankName
+  BankAdapters --> CSVParser : Parse CSV
+  CSVParser --> DeduplicationService : Check Duplicates
+  DeduplicationService --> RawTransactionsTable : Store Raw First
+
+  RawTransactionsTable --> DeduplicationService : Mark Duplicates
+
+  DeduplicationService --> ImportService : Insert New
+  ImportService --> RecipientRepository : getOrCreate(name)
+  ImportService --> TransactionTable : INSERT transactions
+}
+
+note right of ImportService
+  Phase 1: Dedup + Recipient Resolution (20 concurrent)
+  Phase 2: Batch Insert (250 rows per batch)
+  Phase 3: Raw storage for audit/re-import
+end note
+
+note right of BankAdapters
+  Supported Banks:
+  - Belfius, Revolut, KBC
+  - SABB, Wise, Vision
+  - Custom: User-defined column mapping
+end note
+
+note right of RawTransactionsTable
+  Bank-specific raw tables:
+  - belfius_raw_transactions
+  - revolut_raw_transactions
+  - kbc_raw_transactions
+  - sabb_raw_transactions
+  - wise_raw_transactions
+  - vision_raw_transactions
+  - custom_raw_transactions
+  (Custom adapter storage)
+end note
+
+@enduml

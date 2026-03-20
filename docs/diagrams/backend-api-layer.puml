@@ -1,0 +1,276 @@
+@startuml API Route Layer Architecture
+title API Route Layer Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 70
+
+package "Express Application" {
+  class Main {
+    -app: Express
+    +start(): Promise<void>
+  }
+}
+
+package "Middleware" {
+  class RateLimiter {
+    +rateLimiter(opts): middleware
+    +adminRateLimiter(opts): middleware
+    +importRateLimiter(opts): middleware
+  }
+
+  class Validation {
+    +sanitizeUpdateFields(table, fields): SanitizedFields
+    +validateId(id): ValidationResult
+    +sanitizeString(value): string
+    +validateNumber(value): ValidationResult
+    +validateDateString(value): ValidationResult
+    +validatePagination(opts): PaginationResult
+    +validateIdParam(param): number
+    +validateIntArray(value): number[]
+  }
+
+  class Security {
+    +cors: cors middleware
+    +securityHeaders: middleware (inline in main.js)
+    +requestLogger: middleware (inline in main.js)
+  }
+}
+
+package "Routes" {
+  class TransactionsRouter {
+    +GET / : list transactions
+    +GET /export/csv : export transactions
+    +GET /:id : get transaction
+    +POST / : create transaction
+    +PATCH /:id : update transaction
+    +DELETE /:id : delete transaction
+  }
+
+  class CategoriesRouter {
+    +GET / : list categories
+    +GET /:id : get category
+    +POST / : create category
+    +PATCH /:id : update category
+    +DELETE /:id : delete category
+    +POST /assign : assign category to recipients
+    +POST /:id/assign : assign recipients to category
+  }
+
+  class RecipientsRouter {
+    +GET / : list recipients
+    +GET /:id : get recipient
+    +POST / : create recipient
+    +PATCH /:id : update recipient
+    +DELETE /:id : delete recipient
+    +POST /:id/merge : merge recipients
+    +POST /:id/unmerge : unmerge recipient
+    +GET /:id/aliases : get aliases
+  }
+
+  class RecipientBankAccountsRouter <<nested under /api/recipients>> {
+    +GET /:id/bank-accounts : list bank accounts
+    +POST /:id/bank-accounts : create bank account
+    +PATCH /:id/bank-accounts/:accountId : update
+    +DELETE /:id/bank-accounts/:accountId : soft delete
+    +POST /:id/bank-accounts/:accountId/set-primary : set primary
+  }
+
+  class PlannedTransactionsRouter {
+    +GET / : list planned transactions
+    +GET /:id : get planned transaction
+    +POST / : create planned transaction
+    +PATCH /:id : update planned transaction
+    +DELETE /:id : delete planned transaction
+    +POST /:id/execute : execute planned transaction
+  }
+
+  class InvestmentsRouter {
+    +GET / : list investments
+    +GET /providers : list price providers
+    +POST /refresh-prices : bulk refresh prices
+    +GET /:id : get investment
+    +POST / : create investment
+    +PATCH /:id : update investment
+    +DELETE /:id : delete investment
+    +GET /:id/transactions : list portfolio transactions
+    +POST /:id/transactions : create portfolio transaction
+    +GET /:id/summary : get investment summary
+    +DELETE /transactions/:txnId : delete portfolio transaction
+  }
+
+  class ImportRouter {
+    +POST /csv : import CSV
+    +POST /csv/custom : import with custom config
+    +POST /csv/stream : SSE streaming import
+    +GET /supported-banks : list supported banks
+    +POST /recipients : bulk import recipients
+    +POST /categories : bulk import categories
+  }
+
+  class SettingsRouter {
+    +GET / : get all settings
+    +GET /:key : get single setting
+    +PUT /:key : upsert single setting
+    +PUT / : bulk upsert
+    +DELETE /:key : delete setting
+  }
+
+  class WatchlistRouter {
+    +GET / : list watchlist
+    +GET /:id : get item
+    +POST / : add item
+    +PATCH /:id : update item
+    +DELETE /:id : remove item
+  }
+
+  class SavedChartsRouter {
+    +GET / : list charts
+    +GET /:id : get chart
+    +POST / : create chart
+    +PATCH /:id : update chart
+    +DELETE /:id : delete chart
+  }
+
+  class SplitsRouter {
+    +GET /owed : get owed summary
+    +GET /owed/:id : get owed by recipient
+    +GET /transaction/:id : get splits for transaction
+    +POST / : create split
+    +POST /batch : create batch splits
+    +POST /:id/pay : record payment
+    +POST /:id/settle : settle split
+    +GET /:id/payments : get payments for split
+    +DELETE /:id : delete split
+  }
+
+  class MarketLookupRouter {
+    +GET /search : search tickers
+    +GET /quote : get quotes
+    +GET /chart : historical chart data
+    +GET /news : market news
+  }
+
+  class InfoRouter {
+    +GET / : get statistics
+    +GET /banks : list supported banks
+    +GET /supported-adapters : list supported adapters
+    +GET /transaction-count : get transaction count
+    +GET /transaction-summary : get transaction summary
+    +GET /monthly-summary : get monthly summary
+    +GET /planned-expenses-next-month : get planned expenses
+    +GET /average-vs-current-spending : compare spending
+    +GET /cashflow-comparison : compare cashflow
+    +GET /category-breakdown : get category breakdown
+    +GET /bank-balances : get bank balances
+    +GET /recurring-patterns : get recurring patterns
+    +GET /net-worth : get net worth
+    +GET /recipient-insights : get recipient insights
+    +GET /exchange-rates : get exchange rates
+    +POST /refresh-views : refresh materialized views
+  }
+
+  class AdminRouter {
+    +GET / : admin status
+    +POST /database/init : init check
+    +POST /database/reset : reset DB
+    +GET /update/check : check for updates
+    +POST /update/apply : apply update
+    +POST /update/apply-and-restart : apply and restart
+  }
+}
+
+package "Repositories" {
+  class TransactionRepository as TR
+  class CategoryRepository as CR
+  class RecipientRepository as RR
+  class PlannedTransactionRepository as PTR
+  class InvestmentRepository as IR
+  class PortfolioTransactionRepository as PTR2
+  class WatchlistRepository as WR
+  class SavedChartsRepository as SCR
+  class SplitRepository as SR
+  class SettingsRepository as SR2
+  class RecipientBankAccountRepository as RBAR
+  class InfoRepository as IFR
+}
+
+package "Database" {
+  class Connection {
+    +checkConnection(): Promise<boolean>
+    +getTableCount(): Promise<number>
+  }
+}
+
+package "Services" {
+  class ImportService
+  class RawTransactionImportService
+  class StreamingImportService
+  class DataImportService
+  class LoanRepaymentService
+  class CurrencyConversionService
+  class PriceProviderService
+  class MaterializedViewService
+  class RecurringDetectionService
+  class RecurrenceService
+  class DeduplicationService
+  class TextNormalization
+  class IBANService
+  class BankAdapters
+}
+
+' Route to Repository/Service connections
+Main --> TransactionsRouter
+Main --> CategoriesRouter
+Main --> RecipientsRouter
+Main --> RecipientBankAccountsRouter
+Main --> PlannedTransactionsRouter
+Main --> InvestmentsRouter
+Main --> ImportRouter
+Main --> SettingsRouter
+Main --> WatchlistRouter
+Main --> SavedChartsRouter
+Main --> SplitsRouter
+Main --> MarketLookupRouter
+Main --> InfoRouter
+Main --> AdminRouter
+
+' Nested route (RecipientsRouter mounts RecipientBankAccountsRouter at /recipients/:id/bank-accounts)
+RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts
+
+TransactionsRouter --> TR
+CategoriesRouter --> CR
+RecipientsRouter --> RR
+RecipientBankAccountsRouter --> RBAR
+PlannedTransactionsRouter --> PTR
+InvestmentsRouter --> IR
+InvestmentsRouter --> PTR2
+ImportRouter --> ImportService
+ImportRouter --> RawTransactionImportService
+ImportRouter --> StreamingImportService
+ImportRouter --> DataImportService
+SettingsRouter --> SR2
+WatchlistRouter --> WR
+SavedChartsRouter --> SCR
+SplitsRouter --> SR
+MarketLookupRouter --> PriceProviderService
+InfoRouter --> IFR
+InfoRouter --> MaterializedViewService
+InfoRouter --> CurrencyConversionService
+InfoRouter --> RecurringDetectionService
+AdminRouter ..> TR : <<accesses>>
+
+' Service dependencies
+ImportService --> BankAdapters
+ImportService --> DeduplicationService
+ImportService --> RR
+ImportService --> TR
+
+RawTransactionImportService --> TR
+RawTransactionImportService --> RR
+RawTransactionImportService --> DeduplicationService
+
+CurrencyConversionService --> TR
+
+@enduml

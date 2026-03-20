@@ -1,0 +1,279 @@
+@startuml Repository Layer Architecture
+title Repository Layer Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+
+package "Database" {
+  class "connection.js" as DB {
+    +query(sql, params): Promise
+    +getClient(): Promise
+    +checkConnection(): Promise<boolean>
+    +closePool(): Promise
+  }
+}
+
+package "Repositories" {
+  class TransactionRepository {
+    +getAll(opts): Promise<Transaction[]>
+    +getCount(opts): Promise<number>
+    +getAllWithCount(opts): Promise<{rows, total}>
+    +getUncategorised(opts): Promise<Transaction[]>
+    +getById(id): Promise<Transaction | null>
+    +create(data): Promise<Transaction>
+    +update(id, fields): Promise<Transaction>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class RecipientRepository {
+    +getAll(opts): Promise<Recipient[]>
+    +getCount(opts): Promise<number>
+    +getById(id): Promise<Recipient | null>
+    +getByName(name): Promise<Recipient | null>
+    +createOrGet(data): Promise<{recipient, created}>
+    +update(id, fields): Promise<Recipient>
+    +hardDelete(id): Promise<boolean>
+    +mergeRecipients(primaryId, aliasIds): Promise<number[]>
+    +unmergeRecipient(id): Promise<boolean>
+    +getAliases(primaryId): Promise<Recipient[]>
+  }
+
+  class CategoryRepository {
+    +getAll(opts): Promise<Category[]>
+    +getCount(opts): Promise<number>
+    +getById(id): Promise<Category | null>
+    +getByGeneralDetail(general, detail): Promise<Category | null>
+    +createOrGet(data): Promise<{category, created}>
+    +update(id, fields): Promise<Category>
+    +hardDelete(id): Promise<boolean>
+    +assignToRecipients(categoryId, recipientIds): Promise<number>
+  }
+
+  class PlannedTransactionRepository {
+    +getAll(opts): Promise<{items, total}>
+    +getById(id): Promise<PlannedTransaction | null>
+    +create(data): Promise<PlannedTransaction>
+    +update(id, fields): Promise<PlannedTransaction>
+    +hardDelete(id): Promise<boolean>
+    +addExecution(plannedTransactionId, txId, date): Promise<void>
+    +replaceLoanSchedule(id, schedule): Promise<void>
+  }
+
+  class RecipientBankAccountRepository {
+    +getAll(opts): Promise<RecipientBankAccount[]>
+    +getById(id): Promise<RecipientBankAccount | null>
+    +getByRecipient(recipientId): Promise<RecipientBankAccount[]>
+    +create(data): Promise<RecipientBankAccount>
+    +update(id, fields): Promise<RecipientBankAccount>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class InvestmentRepository {
+    +getAll(opts): Promise<Investment[]>
+    +getCount(opts): Promise<number>
+    +getById(id): Promise<Investment | null>
+    +create(data): Promise<Investment>
+    +update(id, fields): Promise<Investment>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class PortfolioTransactionRepository {
+    +getAll(opts): Promise<PortfolioTransaction[]>
+    +getById(id): Promise<PortfolioTransaction | null>
+    +getByInvestment(investmentId): Promise<PortfolioTransaction[]>
+    +create(data): Promise<PortfolioTransaction>
+    +update(id, fields): Promise<PortfolioTransaction>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class WatchlistRepository {
+    +getAll(opts): Promise<Watchlist[]>
+    +getById(id): Promise<Watchlist | null>
+    +create(data): Promise<Watchlist>
+    +update(id, fields): Promise<Watchlist>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class SplitRepository {
+    +createSplit({ transaction_id, recipient_id, amount, note }): Promise<Split>
+    +getSplitsByTransaction(transactionId): Promise<Split[]>
+    +getOwedSummary(): Promise<OwedSummary[]>
+    +getOwedByRecipient(recipientId): Promise<OwedData>
+    +addPayment({ split_id, amount, note, paid_at }): Promise<Payment>
+    +getPayments(splitId): Promise<Payment[]>
+    +settleSplit(splitId): Promise<Split>
+    +deleteSplit(splitId): Promise<boolean>
+  }
+
+  class SettingsRepository {
+    +get(key): Promise<any>
+    +set(key, value): Promise<void>
+    +setMany(settings): Promise<void>
+    +getAll(): Promise<object>
+    +delete(key): Promise<boolean>
+  }
+
+  class SavedChartsRepository {
+    +getAll(): Promise<SavedChart[]>
+    +getById(id): Promise<SavedChart | null>
+    +create(data): Promise<SavedChart>
+    +update(id, fields): Promise<SavedChart>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class RawTransactionRepository {
+    +getAll(opts): Promise<RawTransaction[]>
+    +getByHash(hash): Promise<RawTransaction | null>
+    +insert(data): Promise<RawTransaction>
+    +hardDelete(id): Promise<boolean>
+  }
+
+  class InfoRepository {
+    +getStatistics(): Promise<Statistics>
+    +getBanks(): Promise<Bank[]>
+    +getTransactionSummary(): Promise<TransactionSummary>
+    +getMonthlySummary(): Promise<MonthlySummary>
+    +getCategoryBreakdown(): Promise<CategoryBreakdown>
+    +getBankBalances(): Promise<BankBalance[]>
+    +getNetWorth(): Promise<NetWorth>
+    +getRecipientInsights(): Promise<RecipientInsight[]>
+    +getExchangeRates(): Promise<ExchangeRate[]>
+  }
+}
+
+package "Services" {
+  class ImportService {
+    +importCSV(filePath, bankName, config): Promise<ImportResult>
+  }
+
+  class DataImportService {
+    +importRecipientsCSV(path, opts): Promise<ImportResult>
+    +importCategoriesCSV(path, opts): Promise<ImportResult>
+  }
+
+  class StreamingImportService {
+    +streamImport(stream, handler): Promise<void>
+    +processBatch(items): Promise<void>
+  }
+
+  class RawTransactionImportService {
+    +importCSVWithRawStorage(filePath, bankName, config): Promise<ImportResult>
+    +deduplicate(data): Promise<DedupeResult>
+  }
+
+  class RecurringDetectionService {
+    +detectRecurring(): Promise<RecurringPattern[]>
+    +detectRecurringPatterns(): Promise<RecurringPattern[]>
+  }
+
+  class RecurrenceService {
+    +generateOccurrences(startDate, pattern, endDate): Date[]
+    +getNextOccurrence(date, pattern): Date
+    +parseRecurrencePattern(patternStr): RecurrenceConfig
+    +formatRecurrence(config): string
+    +calculateNextDate(date, pattern): Date
+  }
+
+  class LoanRepaymentService {
+    +generateLoanRepaymentSchedule(config): LoanSchedule
+    +validateLoanConfig(config): ValidationResult
+    +calculateMonthlyPayment(principal, rate, months): number
+    +calculateTotalInterest(principal, rate, months): number
+    +calculateEarlyRepayment(remaining, prepaymentAmount): RepaymentResult
+  }
+
+  class DeduplicationService {
+    +isDuplicateByFields(date, amount, recipient, memo): Promise<boolean>
+    +findDuplicates(criteria): Promise<Transaction[]>
+    +markAsDuplicate(id, originalId): Promise<void>
+  }
+
+  class CurrencyConversionService {
+    +convert(amount, fromCurrency, toCurrency): Promise<number>
+    +getExchangeRate(fromCurrency, toCurrency): Promise<number>
+    +warmCache(): Promise<void>
+    +clearMemoryCache(): void
+  }
+
+  class PriceProviderService {
+    +fetchPrice(provider, symbol): Promise<PriceData>
+    +updateInvestmentPrices(): Promise<UpdateResult>
+    +fetchLivePrices(investments): Promise<PriceMap>
+  }
+
+  class MaterializedViewService {
+    +refreshMaterializedViews(): Promise<void>
+    +createMaterializedViews(): Promise<void>
+    +ensureMaterializedViewIndexes(): Promise<void>
+    +scheduleRefresh(): void
+  }
+
+  class TextNormalization {
+    +normalizeForMatching(text): string
+    +normalizeAmount(amount): number
+    +parseDate(dateStr): Date
+    +cleanRecipientName(name): string
+    +cleanKbcRecipientName(name): string
+  }
+
+  class IBANService {
+    +validate(iban): boolean
+    +format(iban): string
+    +extractCountry(iban): string
+    +extractBankCode(iban): string
+  }
+
+  class BankAdapters {
+    +createAdapter(bankName, config): BankParser
+    +getSupportedBanks(): string[]
+  }
+}
+
+' Relationships
+DB <.. TransactionRepository
+DB <.. RecipientRepository
+DB <.. CategoryRepository
+DB <.. PlannedTransactionRepository
+DB <.. RecipientBankAccountRepository
+DB <.. InvestmentRepository
+DB <.. PortfolioTransactionRepository
+DB <.. WatchlistRepository
+DB <.. SplitRepository
+DB <.. SettingsRepository
+DB <.. SavedChartsRepository
+DB <.. RawTransactionRepository
+DB <.. InfoRepository
+
+' Import service dependencies
+ImportService --> BankAdapters
+ImportService --> DeduplicationService
+ImportService --> RecipientRepository
+ImportService --> TransactionRepository
+
+DataImportService --> TextNormalization
+
+StreamingImportService --> ImportService
+
+RawTransactionImportService --> TransactionRepository
+RawTransactionImportService --> RawTransactionRepository
+RawTransactionImportService --> DeduplicationService
+RawTransactionImportService --> RecipientRepository
+
+' Business logic dependencies
+RecurringDetectionService --> TransactionRepository
+RecurringDetectionService --> PlannedTransactionRepository
+
+RecurrenceService --> PlannedTransactionRepository
+
+LoanRepaymentService --> PlannedTransactionRepository
+LoanRepaymentService --> TransactionRepository
+
+DeduplicationService --> TransactionRepository
+
+CurrencyConversionService --> TransactionRepository
+
+PriceProviderService --> InvestmentRepository
+
+@enduml

@@ -1,0 +1,166 @@
+@startuml System Architecture Overview
+title System Architecture Overview
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 70
+
+actor "User" as User
+
+package "Client" {
+  rectangle "Browser (React App)" {
+    node "React 18 + TypeScript" as ReactApp
+    node "Vite (Build Tool)" as Vite
+    node "Tailwind CSS + Radix UI" as UI
+    node "React Router v6" as Router
+    node "TanStack Query" as ReactQuery
+    node "React Context" as Context
+  }
+}
+
+cloud "Load Balancer / Reverse Proxy" as Proxy
+
+package "Server" {
+  rectangle "Node.js Backend" {
+    node "Express.js" as Express
+    node "Middleware Stack" as Middleware {
+      - CORS
+      - Compression
+      - Rate Limiter
+      - Security Headers
+      - Request Logging
+    }
+    node "Routes" as Routes {
+      - Transactions
+      - Categories
+      - Recipients
+      - RecipientBankAccounts
+      - Planned Transactions
+      - Investments
+      - Portfolio Transactions
+      - Import
+      - Splits
+      - Settings
+      - Watchlist
+      - Saved Charts
+      - Info/Statistics
+      - Market Lookup
+      - Admin
+    }
+    node "Services" as Services {
+      - ImportService
+      - CurrencyConversionService
+      - PriceProviderService
+      - LoanRepaymentService
+      - RecurringDetectionService
+    }
+    node "Repositories" as Repos {
+      - TransactionRepo
+      - CategoryRepo
+      - RecipientRepo
+      - InvestmentRepo
+      - PlannedTransactionRepo
+    }
+  }
+}
+
+database "PostgreSQL 18" as DB {
+  node "Schema Init" as SchemaInit
+  node "Tables" as Tables {
+    - transactions
+    - categories
+    - recipients
+    - recipient_bank_accounts
+    - planned_transactions
+    - planned_transaction_executions
+    - planned_transaction_loan_schedule
+    - investments
+    - portfolio_transactions
+    - exchange_rates
+    - transaction_raw_references
+    - belfius_raw_transactions
+    - revolut_raw_transactions
+    - kbc_raw_transactions
+    - sabb_raw_transactions
+    - wise_raw_transactions
+    - vision_raw_transactions
+    - custom_raw_transactions
+    - manual_raw_transactions
+    - user_settings
+    - saved_charts
+    - watchlist
+    - transaction_splits
+    - split_payments
+  }
+  node "Materialized Views" as MatViews
+  node "Indexes" as Indexes
+}
+
+cloud "External Services" as External {
+  node "ECB (Exchange Rates)" as ECB
+  node "CoinGecko (Crypto)" as CoinGecko
+  node "Yahoo Finance (Stocks)" as Yahoo
+  node "Kraken (Crypto)" as Kraken
+}
+
+cloud "Development Tools" as DevTools {
+  node "Docker" as Docker
+  node "Bun (Runtime)" as Bun
+  node "ESLint" as ESLint
+  node "Vitest (Testing)" as Vitest
+}
+
+package "Client to Server" {
+  User --> ReactApp : HTTPS
+  ReactApp --> Proxy : REST API
+  Proxy --> Express : Forward
+}
+
+package "Server Components" {
+  Express --> Middleware
+  Middleware --> Routes
+  Routes --> Services
+  Services --> Repos
+}
+
+package "Database Access" {
+  Repos --> DB : SQL Queries
+  DB --> Repos : Results
+}
+
+package "External Services" {
+  Services --> External : API Calls
+  External --> Services : JSON Response
+}
+
+note right of External
+  - Exchange rates refreshed every 12h
+  - Price providers: manual, coingecko, yahoo, kraken
+end note
+
+note right of Tables
+  Raw Transactions Tables:
+  - Bank-specific: Belfius, Revolut, KBC, SABB, Wise, Vision
+  - custom_raw_transactions: Custom CSV imports
+  - manual_raw_transactions: Manual entry deduplication
+end note
+
+note right of Middleware
+  Rate limiting: 200 req/min global
+  CORS: configurable origins
+  Security: CSP, HSTS (production)
+end note
+
+note right of ReactQuery
+  staleTime: 30s
+  gcTime: 5min
+  Server state management
+end note
+
+note right of Docker
+  Production: docker-compose
+  Dev: docker-compose.dev.yml
+end note
+
+@enduml

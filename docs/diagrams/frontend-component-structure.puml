@@ -1,0 +1,189 @@
+@startuml Frontend Component Architecture
+title Frontend Component Architecture
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 60
+
+package "Root" {
+  class App {
+    +QueryClient: QueryClient
+    +render(): ReactElement
+  }
+}
+
+package "UI Components (Radix + Tailwind)" {
+  class Button
+  class Dialog
+  class Select
+  class Input
+  class Checkbox
+  class RadioGroup
+  class Toggle
+  class Switch
+  class Table
+  class Calendar
+  class Toast
+  class Tooltip
+  class DropdownMenu
+  class Command
+  class Sidebar
+  class Carousel
+  class Skeleton
+  class Badge
+  class Avatar
+  class Separator
+  class Collapsible
+  class Breadcrumb
+  class Textarea
+  class Form
+  class Tabs
+  class Progress
+  class Slider
+  class Sheet
+  class AlertDialog
+  class Accordion
+  class Popover
+  class ContextMenu
+  class NavigationMenu
+  class Resizable
+  class Pagination
+  class AspectRatio
+  class Alert
+  class HoverCard
+  class InputOTP
+  class Drawer
+  class Menubar
+  class ToggleGroup
+  class ScrollArea
+  class Card
+  class Label
+  class Sonner
+}
+
+package "Layout Components" {
+  class AppLayout {
+    +Sidebar: AppSidebar
+    +Header: header
+    +Content: Outlet
+  }
+
+  class AppSidebar {
+    +Navigation: nav items
+    +Collapsible: boolean
+  }
+}
+
+package "Shared Components" {
+  class ErrorBoundary {
+    +Error Fallback UI
+  }
+
+  class CategoryCombobox {
+    +category selection
+  }
+
+  class RecipientCombobox {
+    +recipient selection
+  }
+
+  class VirtualDataTable {
+    +virtualized rows
+  }
+
+  class DataTable {
+    +sortable/filterable table
+  }
+
+  class ExclusionToggle {
+    +exclude categories/recipients
+  }
+
+  class WidgetVisibilityDialog {
+    +manage widget visibility
+  }
+}
+
+package "Feature Components - Dashboard" {
+  class StatCard
+  class MonthlyTrendsChart
+  class MonthlySpendingChart
+  class CategoryPieChart
+  class BankBalancesWidget
+  class CashFlowComparisonChart
+}
+
+package "Feature Components - Forms" {
+  class AddTransactionDialog
+  class AddCategoryDialog
+  class AddRecipientDialog
+  class AddInvestmentDialog
+  class AddPortfolioTxnDialog
+  class AddInvestmentFromMarketDialog
+  class AddToWatchlistDialog
+  class PlannedPaymentForm
+}
+
+package "Feature Components - Portfolio" {
+  class PortfolioOverview
+  class PortfolioTaxAdjustmentsDialog
+  class PortfolioNewsFeed
+  class InvestmentDetailDialog
+  class WatchlistChartDialog
+}
+
+package "Feature Components - Statistics" {
+  class RecipientInsightsTab
+  class CustomCategoryChart
+}
+
+package "Feature Components - Planning" {
+  class RecurringDetectionPanel
+}
+
+package "Feature Components - Recipients" {
+  class MergeRecipientsDialog
+  class SplitTransactionDialog
+}
+
+package "Feature Components - Settings" {
+  class DashboardSettingsDialog
+}
+
+package "Feature Components - Tax" {
+  class TaxProfileDialog
+  class SuggestedDeductionsCard
+}
+
+package "Feature Components - Import" {
+  class ImportPage
+}
+
+package "Feature Components - Notifications" {
+  class UpdateNotification
+  class UpcomingPaymentsNotification
+}
+
+package "Feature Components - Onboarding" {
+  class OnboardingWizard
+}
+
+' Relationships
+App --> AppLayout
+App --> QueryClientProvider
+App --> ThemeProvider
+App --> SettingsProvider
+App --> ErrorBoundary
+
+AppLayout --> AppSidebar
+
+AddTransactionDialog --> CategoryCombobox
+AddTransactionDialog --> RecipientCombobox
+
+note right of ImportPage
+  Import wizard integrated
+  in ImportPage component
+end note
+
+@enduml

@@ -1,0 +1,76 @@
+@startuml Recipient Merge Sequence Diagram
+title Recipient Merge Sequence Diagram
+
+!theme plain
+skinparam participantSpacing 10
+skinparam ranksep 45
+skinparam linetype ortho
+
+actor "User" as User
+
+participant "RecipientsPage" as Page
+participant "useRecipients" as Hook
+participant "ApiClient" as API
+participant "RecipientsRouter" as Router
+participant "RecipientRepository" as Repo
+participant "PostgreSQL" as DB
+
+group View aliases
+  User -> Page : View Recipient Details
+  Page -> Hook : getRecipients({search})
+  Hook -> API : GET /api/recipients
+  API -> Router : /recipients
+  Router -> Repo : getAll()
+  Repo -> DB : SELECT recipients
+  DB -> Repo : recipients with aliases
+  Repo -> Router : list
+  Router -> API : JSON
+  API -> Hook : RecipientsResponse
+  Hook -> Page : display list
+end
+
+group Merge action
+  User -> Page : Select Aliases + Click "Merge Selected"
+  Page -> Hook : mergeRecipients(primaryId, aliasIds)
+  Hook -> API : POST /api/recipients/:id/merge
+
+  API -> Router : POST /recipients/:id/merge { alias_ids: [...] }
+  Router -> Repo : mergeRecipients(primaryId, aliasIds)
+
+  Repo -> DB : UPDATE recipients SET primary_recipient_id = primaryId WHERE id = ANY(alias_ids)
+  DB -> Repo : updated count
+
+  Repo -> DB : SELECT aliases WHERE primary_recipient_id = primaryId
+  DB -> Repo : updated aliases list
+
+  Repo -> Router : {primary, merged_ids, aliases}
+  Router -> API : JSON
+  API -> Hook : { primary, merged_ids, aliases }
+  Hook -> Hook : invalidate useRecipients cache
+  Hook -> Page : refresh
+  Page -> User : Show Success Message
+end
+
+group Unmerge action
+  User -> Page : Click "Unmerge"
+  Page -> Hook : unmergeRecipient(aliasId)
+  Hook -> API : POST /api/recipients/:aliasId/unmerge
+
+  API -> Router : POST /recipients/:aliasId/unmerge
+  Router -> Repo : unmergeRecipient(aliasId)
+
+  Repo -> DB : UPDATE recipients SET primary_recipient_id = NULL WHERE id = aliasId
+  DB -> Repo : updated
+
+  Repo -> Router : unmerged recipient
+  Router -> API : JSON
+  API -> Hook : Recipient
+  Hook -> Page : refresh list
+end
+
+note over Page
+  Merge: Aliases -> Primary
+  Unmerge: Alias becomes independent
+end note
+
+@enduml

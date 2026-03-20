@@ -1,0 +1,92 @@
+@startuml Price Provider Flow
+title Price Provider Flow
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 50
+
+actor "User" as User
+
+package "Frontend" {
+  class PortfolioPage
+  class usePortfolio
+  class InvestmentCard
+}
+
+package "Backend Services" {
+  class PriceProviderService {
+    +fetchPrice(provider, symbol): Promise<PriceData>
+    +updateInvestmentPrices(): Promise<UpdateResult>
+    +fetchLivePrices(investments): Promise<PriceMap>
+  }
+
+  class InvestmentsRouter {
+    +POST /refresh-prices : bulk refresh prices
+  }
+
+  class InvestmentRepository {
+    +getAll(opts): Promise<Investment[]>
+    +update(id, fields): Promise<Investment>
+  }
+}
+
+cloud "Price Providers" as Providers {
+  class CoinGecko <<Crypto Prices>>
+  class YahooFinance <<Stock Prices>>
+  class Kraken <<Crypto Prices>>
+  class Manual <<User Entry>>
+}
+
+database "PostgreSQL" as DB {
+  table "investments"
+}
+
+package "Manual Flow" {
+  User --> PortfolioPage : View Portfolio
+  PortfolioPage --> usePortfolio : Load investments
+  usePortfolio --> InvestmentRepository : GET /investments
+  InvestmentRepository --> DB : SELECT
+  DB --> InvestmentRepository : investments
+  InvestmentRepository --> PortfolioPage : display
+
+  User --> InvestmentCard : Update Price
+  InvestmentCard --> InvestmentsRouter : PATCH /investments/:id
+  InvestmentsRouter --> InvestmentRepository : update(price)
+  InvestmentRepository --> DB : UPDATE current_price
+  DB --> InvestmentRepository : updated
+  InvestmentRepository --> InvestmentsRouter : updated
+  InvestmentsRouter --> InvestmentCard : confirmation
+}
+
+package "Bulk Refresh Flow" {
+  User --> PortfolioPage : Click "Refresh Prices"
+  PortfolioPage --> InvestmentsRouter : POST /refresh-prices
+  InvestmentsRouter --> PriceProviderService : fetchLivePrices(investments)
+  PriceProviderService --> DB : SELECT investments WHERE price_provider != manual
+  DB --> PriceProviderService : investments
+
+  loop For each investment
+    alt provider == 'coingecko'
+      PriceProviderService --> CoinGecko : GET /simple/price
+    else provider == 'yahoo'
+      PriceProviderService --> YahooFinance : GET /quote
+    else provider == 'kraken'
+      PriceProviderService --> Kraken : GET /ticker
+    end
+   
+    Providers --> PriceProviderService : price data
+    PriceProviderService --> InvestmentRepository : UPDATE prices
+    InvestmentRepository --> DB : UPDATE current_price, price_updated_at
+  end
+}
+
+note right of PriceProviderService
+  Supported providers:
+  - coingecko: Crypto
+  - yahoo: Stocks/ETFs
+  - kraken: Crypto
+  - manual: User entry
+end note
+
+@enduml

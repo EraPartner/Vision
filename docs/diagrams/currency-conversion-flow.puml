@@ -1,0 +1,66 @@
+@startuml Currency Conversion Flow
+title Currency Conversion Flow
+
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 50
+
+actor "User" as User
+
+package "Frontend" {
+  class TransactionPage
+  class useTransactions
+  class ApiClient
+}
+
+package "Backend Services" {
+  class CurrencyConversionService {
+    +convert(amount, from, to): Promise<number>
+    +getExchangeRate(from, to): Promise<number>
+    +warmCache(): Promise<void>
+  }
+
+  class ExchangeRateRepository {
+    +getLatestRate(currency): Promise<ExchangeRate>
+    +fetchAndStoreRates(): Promise<void>
+  }
+}
+
+cloud "External API" as ECB {
+  class ECB_API <<External Service>>
+}
+
+database "PostgreSQL" as DB {
+  table "exchange_rates"
+}
+
+package "Conversion Flow" {
+  User --> TransactionPage : View Transaction
+  TransactionPage --> useTransactions : Fetch
+  useTransactions --> ApiClient : GET /api/transactions
+  ApiClient --> CurrencyConversionService : convert(100, USD, EUR)
+  CurrencyConversionService --> ExchangeRateRepository : getExchangeRate(USD, EUR)
+
+  ExchangeRateRepository --> DB : Check cache
+  alt Cache hit
+    DB --> ExchangeRateRepository : rate
+  else Cache miss
+    ExchangeRateRepository --> ECB : GET /rates
+    ECB --> ExchangeRateRepository : JSON
+    ExchangeRateRepository --> DB : INSERT rates
+    DB --> ExchangeRateRepository : stored
+  end
+
+  ExchangeRateRepository --> CurrencyConversionService : rate
+  CurrencyConversionService --> ApiClient : converted amount
+  ApiClient --> TransactionPage : Transaction with EUR amount
+  TransactionPage --> User : Display
+}
+
+note right of CurrencyConversionService
+  Cache refresh: every 12 hours
+  Default currency: EUR
+end note
+
+@enduml

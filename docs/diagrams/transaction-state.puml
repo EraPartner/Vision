@@ -1,0 +1,67 @@
+@startuml Transaction State Diagram
+title Transaction State Diagram
+
+!theme plain
+skinparam linetype ortho
+skinparam stateDimension 100, 70
+
+title Transaction States
+
+state "Transaction Lifecycle" as tx {
+
+  [*] --> Active : create()
+
+  state Active <<current>> : is_active = true
+
+  state Categorized : category_id assigned
+  Categorized : category_name set
+
+  state Uncategorised : category_id = NULL
+  Uncategorised : AND recipient.default_category_id = NULL
+
+  state Split : has splits (e.g. shared expenses)
+
+  Active --> Categorized : assignCategory()
+  Active --> Uncategorised : [no category]
+
+  Categorized --> Categorized : changeCategory()
+  Uncategorised --> Categorized : assignCategory()
+
+  Split --> Categorized : finalize splits
+
+  Active --> [*] : delete() / hardDelete()
+
+}
+
+state "Transaction Types" as types {
+
+  state Regular : standard transaction
+  state FromPlanned : executed from planned_transaction
+  state Imported : from CSV import
+  state Manual : user-created
+
+  Regular --> FromPlanned : execute()
+  Regular --> Imported : CSV import
+  Regular --> Manual : user entry
+
+}
+
+note right of Uncategorised
+  Displayed in:
+  - /transactions?uncategorised=true
+  - Dashboard uncategorised widget
+end note
+
+note right of Categorized
+  Categories follow format:
+  "GENERAL:DETAIL"
+  e.g., "FOOD:GROCERIES"
+end note
+
+note left of FromPlanned
+  Linked via:
+  planned_transaction_executions
+  table
+end note
+
+@enduml
