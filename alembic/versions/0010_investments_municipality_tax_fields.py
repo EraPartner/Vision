@@ -1,6 +1,6 @@
 """Add municipality tax fields to investments
 
-Revision ID: 0010_investments_municipality_tax_fields
+Revision ID: 0010_inv_muni_tax
 Revises: 0009_transaction_splits
 Create Date: 2026-03-13
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '0010_investments_municipality_tax_fields'
+revision: str = '0010_inv_muni_tax'
 down_revision: Union[str, Sequence[str], None] = '0009_transaction_splits'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

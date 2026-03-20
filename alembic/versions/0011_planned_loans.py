@@ -1,7 +1,7 @@
 """Add loan fields and repayment schedule for planned transactions
 
 Revision ID: 0011_planned_loans
-Revises: 0010_investments_municipality_tax_fields
+Revises: 0010_inv_muni_tax
 Create Date: 2026-03-13
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '0011_planned_loans'
-down_revision: Union[str, Sequence[str], None] = '0010_investments_municipality_tax_fields'
+down_revision: Union[str, Sequence[str], None] = '0010_inv_muni_tax'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
