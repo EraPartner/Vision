@@ -26,6 +26,16 @@ FROM oven/bun:1-alpine
 
 WORKDIR /app
 
+# Install Python and Alembic for database migrations
+RUN apk add --no-cache python3 py3-pip && \
+    python3 -m venv /venv && \
+    . /venv/bin/activate && \
+    pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
+
+# Copy and make entrypoint executable
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Install backend production dependencies only
 COPY apps/node-backend/package.json apps/node-backend/bun.lockb* ./apps/node-backend/
 RUN cd apps/node-backend && bun install --frozen-lockfile --production
@@ -34,11 +44,14 @@ RUN cd apps/node-backend && bun install --frozen-lockfile --production
 COPY apps/node-backend/src/ ./apps/node-backend/src/
 COPY --from=frontend-builder /app/dist ./dist
 
+# Copy Alembic migration files and config
+COPY config/alembic.ini ./config/
+COPY alembic/ ./alembic/
+
 ENV NODE_ENV=production
 ENV ENVIRONMENT=production
 
 EXPOSE 3002
 
-# Use bun instead of node: bun's JS runtime starts faster and uses less memory
-# than stock Node.js for ESM entry points.
-CMD ["bun", "run", "apps/node-backend/src/main.js"]
+# Run entrypoint (which runs migrations then starts the backend)
+ENTRYPOINT ["/entrypoint.sh"]
