@@ -87,14 +87,11 @@ export async function initializeSchema() {
   const isWarmStart = storedVersion === CURRENT_SCHEMA_VERSION;
 
   if (isWarmStart) {
-    logger.info(`Schema version ${CURRENT_SCHEMA_VERSION} already applied — skipping DDL, running mat-view refresh only.`);
-    try {
-      await refreshMaterializedViews();
-      logger.info(`Mat-view refresh complete in ${Date.now() - start}ms`);
-    } catch (err) {
-      // Refresh failure is non-fatal; stale views are preferable to a broken start
-      logger.warn('Materialized view refresh failed on warm start (non-fatal)', { error: err.message });
-    }
+    logger.info(`Schema version ${CURRENT_SCHEMA_VERSION} already applied — skipping DDL.`);
+    // NOTE: Materialized view refresh is intentionally omitted from startup.
+    // Mat-views are refreshed on-demand via the /api/info endpoint or can be
+    // refreshed manually. This avoids blocking startup with expensive aggregation
+    // queries on every restart.
     return;
   }
 

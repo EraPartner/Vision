@@ -203,12 +203,13 @@ async function start() {
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in
     // parallel. On a cold first-ever start postgres can take up to ~30s to
-    // initialise its data directory, so we give it 40 attempts (40 seconds)
-    // rather than the previous 20. On warm starts postgres is up in <2s so
-    // the extra headroom costs nothing.
+    // initialise its data directory, so we give it 40 attempts with exponential
+    // backoff (max 1s). On warm starts postgres is up in <100ms.
     let dbReady = false;
     let attemptCount = 0;
     const maxAttempts = 40;
+    const baseDelay = 50; // Start with 50ms
+    const maxDelay = 1000;
 
     while (!dbReady && attemptCount < maxAttempts) {
       const isConnected = await checkConnection();
@@ -217,24 +218,12 @@ async function start() {
         logger.info('Database connection verified successfully');
         // Ensure all tables exist (idempotent)
         await initializeSchema();
-        // Pre-warm exchange rate cache (non-blocking) - fetch fresh rates from ECB on startup
-        warmExchangeRateCache().catch((err) => {
-          logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
-        });
-
-        // Schedule automatic exchange rate refresh every 12 hours so rates stay
-        // current even when no currency conversions are triggered by user activity
-        exchangeRateRefreshInterval = setInterval(async () => {
-          logger.info('Running scheduled exchange rate refresh...');
-          clearExchangeRateCache();
-          await warmExchangeRateCache().catch((err) => {
-            logger.error('Scheduled exchange rate refresh failed', { error: err.message });
-          });
-        }, 12 * 60 * 60 * 1000); // every 12 hours
       } else {
         attemptCount++;
-        logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts})`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
+        const delay = Math.min(baseDelay * Math.pow(2, attemptCount - 1), maxDelay);
+        logger.debug(`Waiting for database to be ready (attempt ${attemptCount}/${maxAttempts}, next retry in ${delay}ms)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
@@ -244,7 +233,7 @@ async function start() {
       throw new Error('Failed to connect to database');
     }
 
-    // Start Express server
+    // Start Express server immediately after DB is ready
     app.listen(PORT, HOST, () => {
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
         host: HOST,
@@ -253,6 +242,22 @@ async function start() {
         version: settings.api.version,
       });
       logger.info(`API documentation: http://${HOST}:${PORT}/api/`);
+
+      // Warm exchange rate cache AFTER server is accepting connections.
+      // This avoids blocking startup while waiting for external API calls.
+      warmExchangeRateCache().catch((err) => {
+        logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
+      });
+
+      // Schedule automatic exchange rate refresh every 12 hours so rates stay
+      // current even when no currency conversions are triggered by user activity
+      exchangeRateRefreshInterval = setInterval(async () => {
+        logger.info('Running scheduled exchange rate refresh...');
+        clearExchangeRateCache();
+        await warmExchangeRateCache().catch((err) => {
+          logger.error('Scheduled exchange rate refresh failed', { error: err.message });
+        });
+      }, 12 * 60 * 60 * 1000); // every 12 hours
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });
