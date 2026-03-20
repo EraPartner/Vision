@@ -39,3 +39,9 @@ Backups/
 *.db*
 htmlcov/
 *.tmp
+
+
+
+
+# Ignore Smart Environment folder
+.smart-env

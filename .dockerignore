@@ -30,9 +30,7 @@ apps/backend/
 __pycache__/
 *.pyc
 *.pyo
-alembic/
-alembic.ini
-config/alembic.ini
+# Note: alembic/ and config/alembic.ini are needed for Docker entrypoint migrations
 
 # Test artifacts
 apps/node-backend/tests/
