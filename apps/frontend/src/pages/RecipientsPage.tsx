@@ -12,9 +12,8 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { MergeRecipientsDialog } from "@/components/recipients/MergeRecipientsDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
-
-const PAGE_SIZE = 100;
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 type TableRecipient = {
     id: number;
@@ -32,6 +31,8 @@ type TableRecipient = {
 export default function RecipientsPage() {
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const pageSize = appSettings.defaultPageSize;
     const [showAll, setShowAll] = useState(false);
     const [showUncategorized, setShowUncategorized] = useState(false);
     const [search, setSearch] = useState("");
@@ -44,15 +45,17 @@ export default function RecipientsPage() {
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const loadingRef = useRef(false);
+    const cancelEditingRef = useRef<(() => void) | null>(null);
 
+    const queryClient = useQueryClient();
     const updateMutation = useUpdateRecipient();
     const deleteMutation = useDeleteRecipient();
     const unmergeMutation = useUnmergeRecipient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const { data: initialData, isLoading, error } = useQuery({
-        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir }],
-        queryFn: () => apiClient.getRecipients({ limit: PAGE_SIZE, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
+        queryKey: ['recipients', 'virtual', { active: !showAll, search: search || undefined, uncategorized: showUncategorized, sortKey, sortDir, pageSize }],
+        queryFn: () => apiClient.getRecipients({ limit: pageSize, offset: 0, active: !showAll, search: search || undefined, uncategorized: showUncategorized, sort_by: sortKey || undefined, sort_dir: sortDir || undefined }),
         staleTime: 30_000,
     });
 
@@ -71,7 +74,7 @@ export default function RecipientsPage() {
         setIsFetchingMore(true);
         try {
             const result = await apiClient.getRecipients({
-                limit: PAGE_SIZE,
+                limit: pageSize,
                 offset: offsetRef.current,
                 active: !showAll,
                 search: search || undefined,
@@ -93,7 +96,7 @@ export default function RecipientsPage() {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [showAll, search, showUncategorized, sortKey, sortDir]);
+    }, [showAll, search, showUncategorized, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: "asc" | "desc" | null) => {
         setSortKey(key);
@@ -196,10 +199,18 @@ export default function RecipientsPage() {
                         <CategoryCombobox
                             value={row.default_category_id ?? null}
                             onSelect={(catId) => {
-                                updateMutation.mutate({
-                                    id: row.id,
-                                    data: { default_category_id: catId },
-                                });
+                                // Cancel any ongoing queries to prevent refetch removing this row
+                                // before the edit mode is properly cancelled
+                                queryClient.cancelQueries({ queryKey: ['recipients'] });
+                                // Cancel edit mode first to avoid stale state
+                                cancelEditingRef.current?.();
+                                // Small delay to let the UI update before mutation
+                                setTimeout(() => {
+                                    updateMutation.mutate({
+                                        id: row.id,
+                                        data: { default_category_id: catId },
+                                    });
+                                }, 0);
                             }}
                             className="w-full"
                         />
@@ -348,17 +359,18 @@ export default function RecipientsPage() {
                     onLoadMore={loadMore}
                     hasMore={hasMoreRef.current}
                     onSearchChange={setSearch}
+                    searchValue={search}
                     onSortChange={handleSortChange}
                     sortKeyProp={sortKey}
                     sortDirProp={sortDir}
                     actions={tableActions}
                     maxHeight={700}
+                    cancelEditingRef={cancelEditingRef}
                 />
 
                 <MergeRecipientsDialog
                     open={mergeDialogOpen}
                     onOpenChange={setMergeDialogOpen}
-                    recipients={allItems}
                 />
             </div>
             <ConfirmDialog />

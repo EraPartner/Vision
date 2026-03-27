@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Eye, DollarSign, Percent, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -12,47 +14,173 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import type { AssetClass } from "@/types/portfolio";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
 }
 
-export default function StocksPage() {
+interface StocksPageProps {
+  assetClasses?: AssetClass[];
+  titleKey?: string;
+  emptyTitleKey?: string;
+  emptyDescriptionKey?: string;
+  allowedAddAssetClasses?: AssetClass[];
+  enableFxAwarePnl?: boolean;
+}
+
+export default function StocksPage({
+  assetClasses = ['stock', 'etf'],
+  titleKey = 'stocks.title',
+  emptyTitleKey = 'stocks.noStocks',
+  emptyDescriptionKey = 'stocks.noStocksDesc',
+  allowedAddAssetClasses = ['stock', 'etf'],
+  enableFxAwarePnl = true,
+}: StocksPageProps = {}) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
-  const holdings = byAssetClass(['stock', 'etf']);
+  const holdings = byAssetClass(assetClasses);
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-  function fmt(val: number, currency = 'EUR', decimals = 2) {
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
+  }
+
+  function fmt(
+    val: number,
+    currency = targetCurrency,
+    decimals = appSettings.showDecimalPlaces
+  ) {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
-  const totalValue = holdings.reduce((s, h) => s + h.currentValue, 0);
-  const totalCost = holdings.reduce((s, h) => s + h.totalBuyCost, 0);
-  const totalRealizedGain = holdings.reduce((s, h) => s + h.realizedGain, 0);
-  const totalUnrealizedGain = holdings.reduce((s, h) => s + h.unrealizedGain, 0);
-  const totalDividends = holdings.reduce((s, h) => s + h.totalDividends, 0);
-  const totalFees = holdings.reduce((s, h) => s + h.totalFees, 0);
-  const totalTaxes = holdings.reduce((s, h) => s + h.totalTaxes, 0);
+  function getRateToEur(currency?: string) {
+    const code = (currency || 'EUR').toUpperCase();
+    return ratesToEur[code] || 1;
+  }
+
+  function convertEurToTarget(amountEur: number) {
+    const rateTo = getRateToEur(targetCurrency);
+    return rateTo ? amountEur / rateTo : amountEur;
+  }
+
+  function openMarketLookup(symbol?: string) {
+    if (!symbol) return;
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+  }
+
+  function calculateFxAwarePnl(holding: InvestmentSummary) {
+    const sortedTxns = [...(holding.transactions || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    let poolUnits = 0;
+    let poolCostEur = 0;
+    let realizedEur = 0;
+
+    for (const txn of sortedTxns) {
+      const units = Number(txn.units) || 0;
+      const amount = Number(txn.amount) || 0;
+      const fees = Number(txn.fees) || 0;
+      const taxes = Number(txn.taxes) || 0;
+      const txnRateToEur = Number(txn.fx_rate_to_eur) > 0
+        ? Number(txn.fx_rate_to_eur)
+        : getRateToEur(txn.currency || holding.currency);
+
+      if (txn.type === 'buy' || txn.type === 'gift') {
+        poolUnits += units;
+        poolCostEur += (amount + fees + taxes) * txnRateToEur;
+      } else if (txn.type === 'sell' && units > 0 && poolUnits > 0) {
+        const sellUnits = Math.min(units, poolUnits);
+        const sellRatio = units > 0 ? sellUnits / units : 0;
+        const avgCostPerUnitEur = poolCostEur / poolUnits;
+        const costOfSoldEur = avgCostPerUnitEur * sellUnits;
+        const netProceedsEur = (amount - fees - taxes) * sellRatio * txnRateToEur;
+        realizedEur += netProceedsEur - costOfSoldEur;
+
+        poolUnits -= sellUnits;
+        poolCostEur -= costOfSoldEur;
+      }
+    }
+
+    poolUnits = Math.max(0, poolUnits);
+    poolCostEur = Math.max(0, poolCostEur);
+
+    const currentPrice = Number(holding.currentPrice ?? holding.current_price) || 0;
+    const currentValueEur = (Number(holding.totalUnits) || 0) * currentPrice * getRateToEur(holding.currency);
+    const unrealizedEur = currentValueEur - poolCostEur;
+
+    return {
+      realizedTarget: convertEurToTarget(realizedEur),
+      unrealizedTarget: convertEurToTarget(unrealizedEur),
+      unrealizedPercent: poolCostEur > 0 ? (unrealizedEur / poolCostEur) * 100 : 0,
+    };
+  }
+
+  const displayedPnlByHoldingId = useMemo(() => {
+    const map: Record<number, { realizedTarget: number; unrealizedTarget: number; unrealizedPercent: number }> = {};
+    for (const holding of holdings) {
+      if (enableFxAwarePnl) {
+        map[holding.id] = calculateFxAwarePnl(holding);
+        continue;
+      }
+
+      map[holding.id] = {
+        realizedTarget: convertToTarget(holding.realizedGain, holding.currency),
+        unrealizedTarget: convertToTarget(holding.unrealizedGain, holding.currency),
+        unrealizedPercent: Number(holding.gainLossPercent) || 0,
+      };
+    }
+    return map;
+  }, [holdings, enableFxAwarePnl, targetCurrency, exchangeData]);
+
+  const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);
+  const totalRealizedGain = holdings.reduce((s, h) => s + (displayedPnlByHoldingId[h.id]?.realizedTarget || 0), 0);
+  const totalUnrealizedGain = holdings.reduce((s, h) => s + (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0), 0);
+  const totalDividends = holdings.reduce((s, h) => s + convertToTarget(h.totalDividends, h.currency), 0);
+  const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
+  const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
   const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - totalFees - totalTaxes;
 
   if (holdings.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">{t('stocks.title')}</h1>
-          <AddInvestmentDialog allowedAssetClasses={[ 'stock', 'etf' ]} />
+          <h1 className="text-3xl font-bold text-foreground">{t(titleKey)}</h1>
+          <AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <TrendingUp className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">{t('stocks.noStocks')}</h3>
+            <h3 className="text-lg font-semibold mb-1">{t(emptyTitleKey)}</h3>
             <p className="text-muted-foreground text-sm mb-4">
-              {t('stocks.noStocksDesc')}
+              {t(emptyDescriptionKey)}
             </p>
-            <AddInvestmentDialog allowedAssetClasses={[ 'stock', 'etf' ]} />
+            <AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />
           </CardContent>
         </Card>
       </div>
@@ -63,8 +191,8 @@ export default function StocksPage() {
     <>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('stocks.title')}</h1>
-        <AddInvestmentDialog />
+        <h1 className="text-3xl font-bold text-foreground">{t(titleKey)}</h1>
+        <AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />
       </div>
 
       {/* Summary Cards */}
@@ -161,29 +289,38 @@ export default function StocksPage() {
                   <tr key={h.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors group">
                     <td className="py-2 px-3 font-mono font-bold text-primary">{h.symbol || '—'}</td>
                     <td className="py-2 px-3">
-                      <span className="font-medium">{h.name}</span>
-                      <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
-                        {h.assetClass === 'etf' ? t('stocks.etf') : t('stocks.stock')}
-                      </Badge>
+                      <button
+                        type="button"
+                        className="font-medium text-left hover:underline cursor-pointer"
+                        onDoubleClick={() => openMarketLookup(h.symbol)}
+                        title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
+                      >
+                        {h.name}
+                      </button>
+                       <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">
+                         {h.assetClass === 'etf' ? t('stocks.etf') : h.assetClass === 'metals' ? t('portfolio.assetClass.metals') : t('stocks.stock')}
+                       </Badge>
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums">{h.totalUnits.toFixed(4)}</td>
                     <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(h.avgCostBasis, h.currency)}</td>
                     <td className="text-right py-2 px-3 tabular-nums">{fmt(h.currentPrice ?? 0, h.currency)}</td>
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
-                    <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
-                      {h.unrealizedGain >= 0 ? "+" : ""}{fmt(h.unrealizedGain, h.currency)}
-                      <span className="text-xs ml-1 opacity-70">{fmtPct(h.gainLossPercent)}</span>
+                    <td className={cn("text-right py-2 px-3 tabular-nums font-medium", (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "text-accent" : "text-destructive")}>
+                      {(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "+" : ""}{fmt(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0)}
+                      <span className="text-xs ml-1 opacity-70">{fmtPct(displayedPnlByHoldingId[h.id]?.unrealizedPercent || 0)}</span>
                     </td>
-                    <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
-                      {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(h.realizedGain, h.currency)}` : '—'}
+                    <td className={cn("text-right py-2 px-3 tabular-nums", (displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? ((displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
+                      {(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) !== 0 ? `${(displayedPnlByHoldingId[h.id]?.realizedTarget || 0) >= 0 ? "+" : ""}${fmt(displayedPnlByHoldingId[h.id]?.realizedTarget || 0)}` : '—'}
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums text-accent">
-                      {h.totalDividends > 0 ? `+${fmt(h.totalDividends, h.currency)}` : '—'}
+                      {h.totalDividends > 0 ? `+${fmt(convertToTarget(h.totalDividends, h.currency))}` : '—'}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                         <InvestmentDetailDialog 
-                          investment={h} 
+                          investment={h}
+                          fxAwarePnl={enableFxAwarePnl ? displayedPnlByHoldingId[h.id] : undefined}
+                          fxAwareCurrency={enableFxAwarePnl ? targetCurrency : undefined}
                           trigger={
                             <Button variant="ghost" size="icon" className="h-7 w-7">
                               <Eye className="h-3.5 w-3.5" />

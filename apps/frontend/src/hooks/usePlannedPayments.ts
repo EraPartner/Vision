@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect } from "react";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
+import { getCurrencyFormatDefaults } from "@/utils/currency";
 import type {
   PlannedTransaction,
   PlannedTransactionCreate,
   PlannedTransactionUpdate,
   PlannedTransactionExecuteRequest,
+  PlannedTransactionExecution,
   PlannedLoanType,
   PlannedLoanScheduleEntry,
 } from "@/types/api";
@@ -38,6 +40,11 @@ export interface PlannedPayment {
   bank_account?: string;
   notes?: string;
   url?: string;
+  is_executed?: boolean;
+  last_executed_date?: string;
+  executed_transaction_id?: number;
+  execution_count?: number;
+  executions?: PlannedTransactionExecution[];
   is_active: boolean;
   created_at: string;
 }
@@ -72,11 +79,13 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     normalizedDate = normalizedDate.split('T')[0];
   }
 
+  const { defaultCurrency } = getCurrencyFormatDefaults();
+
   return {
     id: pt.id,
     name: pt.memo || pt.recipient_name || "Unnamed payment",
     amount: pt.amount,
-    currency: pt.currency || "EUR",
+    currency: pt.currency || defaultCurrency,
     due_date: normalizedDate,
     url: pt.url,
     is_recurring: pt.is_recurring,
@@ -103,6 +112,7 @@ function mapFromAPI(pt: PlannedTransaction): PlannedPayment {
     last_executed_date: pt.last_executed_date,
     executed_transaction_id: pt.executed_transaction_id,
     execution_count: pt.execution_count || 0,
+    executions: pt.executions || [],
     created_at: pt.created_at,
   };
 }

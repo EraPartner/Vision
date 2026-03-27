@@ -12,6 +12,8 @@ import {
 import { toast } from "sonner";
 import { ArrowUpCircle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -28,6 +30,7 @@ type ApplyPhase = "idle" | "pulling" | "restarting" | "done";
 
 export function UpdateNotification() {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const [status, setStatus] = useState<UpdateStatus | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [phase, setPhase] = useState<ApplyPhase>("idle");
@@ -121,7 +124,7 @@ export function UpdateNotification() {
 
                     {status.published_at && (
                         <p className="text-xs text-muted-foreground -mt-2">
-                            {t('update.released')} {new Date(status.published_at).toLocaleDateString()}
+                            {t('update.released')} {formatDateStringWithAppSettings(status.published_at, appSettings.dateFormat)}
                         </p>
                     )}
 

@@ -258,8 +258,8 @@ export interface PlannedTransactionExecuteRequest {
 
 // ==================== Portfolio Types ====================
 
-export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
-export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation';
+export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
+export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
 export type RecurrenceInterval = 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type PriceProvider = 'manual' | 'coingecko' | 'yahoo' | 'kraken' | 'custom';
 
@@ -280,6 +280,12 @@ export interface Investment {
     price_provider: PriceProvider;
     price_provider_id?: string;
     price_provider_url?: string;
+    price_provider_latest_url?: string;
+    price_provider_latest_path?: string;
+    price_provider_history_url?: string;
+    price_provider_history_path?: string;
+    price_provider_history_ts_path?: string;
+    price_provider_history_price_path?: string;
     price_updated_at?: string;
     is_active: boolean;
     created_at: string;
@@ -310,12 +316,17 @@ export interface InvestmentCreate {
     price_provider?: PriceProvider;
     price_provider_id?: string;
     price_provider_url?: string;
+    price_provider_latest_url?: string;
+    price_provider_latest_path?: string;
+    price_provider_history_url?: string;
+    price_provider_history_path?: string;
+    price_provider_history_ts_path?: string;
+    price_provider_history_price_path?: string;
 }
 
 export interface InvestmentUpdate {
     name?: string;
     symbol?: string;
-    asset_class?: AssetClass;
     currency?: string;
     current_price?: number;
     interest_rate?: number;
@@ -329,6 +340,17 @@ export interface InvestmentUpdate {
     price_provider?: PriceProvider;
     price_provider_id?: string;
     price_provider_url?: string;
+    price_provider_latest_url?: string;
+    price_provider_latest_path?: string;
+    price_provider_history_url?: string;
+    price_provider_history_path?: string;
+    price_provider_history_ts_path?: string;
+    price_provider_history_price_path?: string;
+}
+
+export interface InvestmentPricePoint {
+    timestampMs: number;
+    price: number;
 }
 
 export interface PortfolioTransaction {
@@ -342,6 +364,7 @@ export interface PortfolioTransaction {
     fees?: number;
     taxes?: number;
     currency: string;
+    fx_rate_to_eur?: number;
     note?: string;
     is_recurring: boolean;
     recurrence_interval?: RecurrenceInterval;
@@ -361,12 +384,13 @@ export interface PortfolioTransactionsListResponse {
 export interface PortfolioTransactionCreate {
     type: PortfolioTxnType;
     date: string;
-    amount: number;
+    amount?: number;
     units?: number;
     price_per_unit?: number;
     fees?: number;
     taxes?: number;
     currency?: string;
+    fx_rate_to_eur?: number;
     note?: string;
     is_recurring?: boolean;
     recurrence_interval?: RecurrenceInterval;

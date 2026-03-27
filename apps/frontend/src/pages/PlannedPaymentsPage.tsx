@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, differenceInDays } from "date-fns";
 import logger from "@/lib/logger";
-import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
+import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History, ExternalLink } from "lucide-react";
 import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/shared/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
+import { DatePicker } from "@/components/shared/DatePicker";
+import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +22,8 @@ import { apiClient } from "@/lib/api";
 import type { Transaction } from "@/types/api";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { formatCurrency } from "@/utils/currency";
+import { numberFormatToLocale } from "@/utils/currency";
+import { useNavigate } from "react-router-dom";
 
 // map frequency -> translation key (use inside component with t())
 const FREQ_LABEL_KEYS: Record<string, string> = {
@@ -37,7 +42,9 @@ const LOAN_TYPE_LABEL_KEYS: Record<string, string> = {
   interest_only: 'plannedPage.loanType.interestOnly',
 };
 
-function dueBadge(t: any, dateStr?: string | null) {
+type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+
+function dueBadge(t: TranslateFn, dateFormat: string, dateStr?: string | null) {
   if (!dateStr || typeof dateStr !== "string") {
     return <Badge variant="secondary">{t('plannedPage.due.noDate')}</Badge>;
   }
@@ -76,13 +83,31 @@ function dueBadge(t: any, dateStr?: string | null) {
   if (days <= 7) {
     return <Badge className="bg-chart-5/20 text-chart-5 border-chart-5/30">{t('plannedPage.due.inDays', { n: days })}</Badge>;
   }
-  return <Badge variant="secondary">{format(normalizedDue, "PP")}</Badge>;
+  return <Badge variant="secondary">{formatDateStringWithAppSettings(toYmd(normalizedDue), dateFormat)}</Badge>;
 }
 
 type TableRow = PlannedPayment & { _idx: number };
 
+type ExecutionHistoryItem = {
+  plannedPaymentId: number;
+  plannedPaymentName: string;
+  executionDate: string;
+  transactionId: number;
+  transactionDate: string;
+  recipientName?: string;
+  categoryName?: string;
+  amount: number;
+  currency?: string;
+  memo?: string;
+};
+
 export default function PlannedPaymentsPage() {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const formatDisplayCurrency = (amount: number, currency?: string) =>
+    formatCurrency(amount, currency || appSettings.defaultCurrency, locale);
+  const navigate = useNavigate();
   const [showAll, setShowAll] = useState(false);
   const { payments, addPayment, updatePayment, deletePayment, toggleActive, executePayment, loading, error } = usePlannedPayments(showAll);
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -106,6 +131,9 @@ export default function PlannedPaymentsPage() {
     matchAmount: true,
     amountTolerancePct: 5,
   });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [executionHistory, setExecutionHistory] = useState<ExecutionHistoryItem[]>([]);
 
   // Filter payments based on showAll state (for client-side filtering after local updates)
   const filteredPayments = useMemo(() => {
@@ -165,6 +193,72 @@ export default function PlannedPaymentsPage() {
   const pending = useMemo(() => {
     return payments.filter((p) => p.is_active && !p.is_executed).length;
   }, [payments]);
+
+  const loadExecutionHistory = async () => {
+    const links = payments.flatMap((payment) => {
+      if (payment.executions && payment.executions.length > 0) {
+        return payment.executions.map((execution) => ({
+          plannedPaymentId: payment.id,
+          plannedPaymentName: payment.name,
+          executionDate: execution.execution_date,
+          transactionId: execution.executed_transaction_id,
+        }));
+      }
+
+      if (payment.executed_transaction_id) {
+        return [{
+          plannedPaymentId: payment.id,
+          plannedPaymentName: payment.name,
+          executionDate: payment.last_executed_date || payment.due_date,
+          transactionId: payment.executed_transaction_id,
+        }];
+      }
+
+      return [];
+    });
+
+    if (links.length === 0) {
+      setExecutionHistory([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        links.map(async (link) => {
+          const txResponse = await apiClient.getTransactions({ transaction_id: link.transactionId, limit: 1 });
+          const transaction = txResponse.items[0];
+          if (!transaction) return null;
+
+          return {
+            plannedPaymentId: link.plannedPaymentId,
+            plannedPaymentName: link.plannedPaymentName,
+            executionDate: link.executionDate,
+            transactionId: link.transactionId,
+            transactionDate: transaction.transaction_date,
+            recipientName: transaction.recipient_name,
+            categoryName: transaction.category_name,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            memo: transaction.memo,
+          } satisfies ExecutionHistoryItem;
+        })
+      );
+
+      const resolved = results
+        .filter((result): result is PromiseFulfilledResult<ExecutionHistoryItem | null> => result.status === 'fulfilled')
+        .map((result) => result.value)
+        .filter((item): item is ExecutionHistoryItem => item != null)
+        .sort((a, b) => (b.executionDate || '').localeCompare(a.executionDate || ''));
+
+      setExecutionHistory(resolved);
+    } catch (err) {
+      logger.error('Failed to load planned execution history', err);
+      setExecutionHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const columns = [
     {
@@ -239,7 +333,7 @@ export default function PlannedPaymentsPage() {
       defaultWidth: 120,
       render: (row: TableRow) => (
         <span className={`font-semibold tabular-nums ${row.amount < 0 ? "text-destructive" : "text-accent"}`}>
-          {row.amount < 0 ? "−" : "+"}{formatCurrency(Math.abs(row.amount), row.currency)}
+          {row.amount < 0 ? "−" : "+"}{formatDisplayCurrency(Math.abs(row.amount), row.currency)}
         </span>
       ),
     },
@@ -248,7 +342,7 @@ export default function PlannedPaymentsPage() {
       header: t('plannedPage.col.dueDate'),
       editable: false,
       defaultWidth: 130,
-      render: (row: TableRow) => dueBadge(t, row.due_date),
+      render: (row: TableRow) => dueBadge(t, appSettings.dateFormat, row.due_date),
     },
     {
       key: "is_recurring",
@@ -408,13 +502,13 @@ export default function PlannedPaymentsPage() {
   // Fetch transactions when dialog opens or filters/search change (debounced)
   useEffect(() => {
     let isMounted = true;
-    let timer: any = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const fetchTransactions = async () => {
       if (!linkDialogOpen || !paymentToLink) return;
       setTxLoading(true);
       try {
-        const params: any = { limit: 50 };
+        const params: Record<string, string | number | boolean> = { limit: 50 };
         if (txFilters.start_date) params.start_date = txFilters.start_date;
         if (txFilters.end_date) params.end_date = txFilters.end_date;
         if (txFilters.bank_account) params.bank_account = txFilters.bank_account;
@@ -485,6 +579,18 @@ export default function PlannedPaymentsPage() {
           </div>
           <div className="flex gap-2">
               <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setHistoryOpen(true);
+                  await loadExecutionHistory();
+                }}
+                className="gap-1.5"
+              >
+                <History className="h-4 w-4" />
+                {t('plannedPage.history.button')}
+              </Button>
+              <Button
                 variant={showAll ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setShowAll(!showAll)}
@@ -534,7 +640,7 @@ export default function PlannedPaymentsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold tabular-nums">{totalMonthly.toFixed(2)}</p>
+              <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
             </CardContent>
           </Card>
           <Card className="border-none shadow-md">
@@ -577,12 +683,18 @@ export default function PlannedPaymentsPage() {
 
             <div className="grid gap-3 py-2">
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
-                <div>
-                  <input type="date" className="input" value={executionDate} onChange={(e) => setExecutionDate(e.target.value)} />
+                  <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
+                  <div className="space-y-1">
+                  <DatePicker
+                    value={executionDate ? parseLocalDateFromYmd(executionDate) : undefined}
+                    onChange={(date) => setExecutionDate(date ? toYmd(date) : "")}
+                    placeholder={t('plannedPage.link.pickDate')}
+                    allowClear
+                    clearLabel={t('common.clear')}
+                  />
                   {/* Show the selected transaction's date for clarity when a tx is selected */}
                   {selectedTxId && (
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-xs text-muted-foreground">
                       {t('plannedPage.link.txDate')} {candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date || '—'}
                     </div>
                   )}
@@ -594,11 +706,23 @@ export default function PlannedPaymentsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="tx-start-date">{t('importPage.startDate')}</Label>
-                    <Input id="tx-start-date" type="date" value={txFilters.start_date} onChange={(e) => setTxFilters({ ...txFilters, start_date: e.target.value })} />
+                    <DatePicker
+                      value={txFilters.start_date ? parseLocalDateFromYmd(txFilters.start_date) : undefined}
+                      onChange={(date) => setTxFilters({ ...txFilters, start_date: date ? toYmd(date) : "" })}
+                      placeholder={t('plannedPage.link.pickDate')}
+                      allowClear
+                      clearLabel={t('common.clear')}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="tx-end-date">{t('importPage.endDate')}</Label>
-                    <Input id="tx-end-date" type="date" value={txFilters.end_date} onChange={(e) => setTxFilters({ ...txFilters, end_date: e.target.value })} />
+                    <DatePicker
+                      value={txFilters.end_date ? parseLocalDateFromYmd(txFilters.end_date) : undefined}
+                      onChange={(date) => setTxFilters({ ...txFilters, end_date: date ? toYmd(date) : "" })}
+                      placeholder={t('plannedPage.link.pickDate')}
+                      allowClear
+                      clearLabel={t('common.clear')}
+                    />
                   </div>
                 </div>
 
@@ -671,12 +795,12 @@ export default function PlannedPaymentsPage() {
                               <div className="flex flex-col">
                                 <span className="font-medium">{tx.memo || t('plannedPage.link.txFallback', { id: tx.id })}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {[tx.recipient_name, tx.transaction_date ? format(new Date(tx.transaction_date), 'yyyy-MM-dd') : null].filter(Boolean).join(' • ')}
+                                  {[tx.recipient_name, tx.transaction_date ? formatDateStringWithAppSettings(tx.transaction_date, appSettings.dateFormat) : null].filter(Boolean).join(' • ')}
                                 </span>
                               </div>
                           </div>
                           <div className="text-right">
-                            <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(tx.amount), tx.currency || 'EUR')}</div>
+                            <div className={`font-semibold ${tx.amount < 0 ? 'text-destructive' : 'text-accent'}`}>{tx.amount < 0 ? '−' : '+'}{formatDisplayCurrency(Math.abs(tx.amount), tx.currency)}</div>
                             <div className="text-xs text-muted-foreground">#{tx.id}</div>
                           </div>
                         </label>
@@ -708,6 +832,64 @@ export default function PlannedPaymentsPage() {
               >
                 {t('plannedPage.link.linkAndExecute')}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+          <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{t('plannedPage.history.title')}</DialogTitle>
+            </DialogHeader>
+
+            {historyLoading ? (
+              <div className="py-10 text-center text-muted-foreground">{t('plannedPage.history.loading')}</div>
+            ) : executionHistory.length === 0 ? (
+              <div className="py-10 text-center text-muted-foreground">{t('plannedPage.history.empty')}</div>
+            ) : (
+              <div className="rounded-md border">
+                <div className="grid grid-cols-12 gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <div className="col-span-2">{t('plannedPage.history.colExecutedOn')}</div>
+                  <div className="col-span-3">{t('plannedPage.history.colPlanned')}</div>
+                  <div className="col-span-5">{t('plannedPage.history.colTransaction')}</div>
+                  <div className="col-span-2 text-right">{t('plannedPage.col.amount')}</div>
+                </div>
+                <div className="max-h-[55vh] overflow-y-auto">
+                  {executionHistory.map((item) => (
+                    <div key={`${item.plannedPaymentId}-${item.transactionId}-${item.executionDate}`} className="grid grid-cols-12 gap-3 border-b px-3 py-2 text-sm last:border-b-0">
+                      <div className="col-span-2 text-muted-foreground">{formatDateStringWithAppSettings(item.executionDate, appSettings.dateFormat) || '—'}</div>
+                      <div className="col-span-3 font-medium">{item.plannedPaymentName}</div>
+                      <div className="col-span-5 min-w-0">
+                        <div className="truncate">{item.memo || t('plannedPage.link.txFallback', { id: item.transactionId })}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {[item.recipientName, item.categoryName, formatDateStringWithAppSettings(item.transactionDate, appSettings.dateFormat)].filter(Boolean).join(' • ')}
+                        </div>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end gap-2">
+                        <span className={`tabular-nums font-semibold ${item.amount < 0 ? 'text-destructive' : 'text-accent'}`}>
+                          {item.amount < 0 ? '−' : '+'}{formatDisplayCurrency(Math.abs(item.amount), item.currency)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title={t('plannedPage.history.openTransaction')}
+                          onClick={() => {
+                            setHistoryOpen(false);
+                            navigate(`/transactions?transaction_id=${item.transactionId}`);
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setHistoryOpen(false)}>{t('common.close')}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

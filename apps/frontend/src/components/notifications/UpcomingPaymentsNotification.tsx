@@ -3,14 +3,58 @@ import { apiClient } from "@/lib/api";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatCurrency } from "@/utils/currency";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+
+const DISMISSED_UPCOMING_PLANNED_STORAGE_KEY = "dismissed_upcoming_planned_payments";
 
 export function UpcomingPaymentsNotification() {
   const { t } = useLanguage();
-  const [dismissed, setDismissed] = useState(false);
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+  const [dismissedLoaded, setDismissedLoaded] = useState(false);
+
+  const loadDismissedFromLocalStorage = () => {
+    try {
+      const raw = window.localStorage.getItem(DISMISSED_UPCOMING_PLANNED_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const values = parsed
+          .map((v) => Number(v))
+          .filter((v) => Number.isInteger(v) && v > 0);
+        setDismissedIds(new Set(values));
+      }
+    } catch {
+      // Ignore invalid localStorage payloads.
+    }
+  };
+
+  const persistDismissedToLocalStorage = (values: Set<number>) => {
+    try {
+      window.localStorage.setItem(DISMISSED_UPCOMING_PLANNED_STORAGE_KEY, JSON.stringify([...values]));
+    } catch {
+      // Ignore storage write failures.
+    }
+  };
+
+  const dismissById = (plannedPaymentId: number) => {
+    const next = new Set(dismissedIds);
+    next.add(plannedPaymentId);
+    setDismissedIds(next);
+    persistDismissedToLocalStorage(next);
+  };
+
+  useEffect(() => {
+    loadDismissedFromLocalStorage();
+    setDismissedLoaded(true);
+  }, []);
 
   const { data: upcoming } = useQuery({
     queryKey: ["upcomingPlannedPayments"],
@@ -32,34 +76,45 @@ export function UpcomingPaymentsNotification() {
     staleTime: 5 * 60_000,
   });
 
-  if (dismissed || !upcoming || upcoming.length === 0) return null;
+  const visibleUpcoming = (upcoming ?? []).filter((pt) => !dismissedIds.has(pt.id));
+
+  if (!dismissedLoaded || visibleUpcoming.length === 0) return null;
 
   return (
     <Alert className="relative border-primary/30 bg-primary/5 mb-4">
       <CalendarClock className="h-4 w-4 text-primary" />
       <AlertTitle className="flex items-center gap-2 text-primary font-semibold">
         <Bell className="h-4 w-4" />
-        {upcoming.length === 1
-          ? t('upcoming.countSingle', { count: String(upcoming.length) })
-          : t('upcoming.countPlural', { count: String(upcoming.length) })}
+        {visibleUpcoming.length === 1
+          ? t('upcoming.countSingle', { count: String(visibleUpcoming.length) })
+          : t('upcoming.countPlural', { count: String(visibleUpcoming.length) })}
       </AlertTitle>
       <AlertDescription className="mt-2 space-y-1">
-        {upcoming.slice(0, 5).map((pt) => (
+        {visibleUpcoming.slice(0, 5).map((pt) => (
           <div key={pt.id} className="flex items-center justify-between text-sm">
             <span className="font-medium">
               {pt.memo || pt.recipient_name || t('upcoming.unnamed')}
             </span>
-            <span className="flex items-center gap-3 text-muted-foreground">
-              <span>{pt.planned_date?.split("T")[0]}</span>
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <span>{formatDateStringWithAppSettings(pt.planned_date, appSettings.dateFormat)}</span>
               <span className="font-semibold text-foreground">
-                {formatCurrency(Math.abs(pt.amount), pt.currency || "EUR")}
+                {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale)}
               </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title={t('recurring.dismiss')}
+                onClick={() => dismissById(pt.id)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
             </span>
           </div>
         ))}
-        {upcoming.length > 5 && (
+        {visibleUpcoming.length > 5 && (
           <p className="text-xs text-muted-foreground">
-            {t('upcoming.more', { n: String(upcoming.length - 5) })}
+            {t('upcoming.more', { n: String(visibleUpcoming.length - 5) })}
           </p>
         )}
         <div className="mt-2">
@@ -75,7 +130,12 @@ export function UpcomingPaymentsNotification() {
         variant="ghost"
         size="icon"
         className="absolute top-2 right-2 h-6 w-6"
-        onClick={() => setDismissed(true)}
+        onClick={() => {
+          const next = new Set(dismissedIds);
+          visibleUpcoming.forEach((pt) => next.add(pt.id));
+          setDismissedIds(next);
+          persistDismissedToLocalStorage(next);
+        }}
       >
         <X className="h-3 w-3" />
       </Button>

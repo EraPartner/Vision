@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -61,6 +61,10 @@ interface VirtualDataTableProps<T> {
     maxHeight?: number;
     /** Estimated row height for virtualizer */
     rowHeight?: number;
+    /** Optional ref callback to get the cancelEditing function for external use */
+    cancelEditingRef?: React.MutableRefObject<(() => void) | null>;
+    /** Optional callback to notify when editing state changes (true = editing started, false = editing ended) */
+    onEditingChange?: (editing: boolean) => void;
 }
 
 function getSortValue(val: any): string | number {
@@ -90,26 +94,69 @@ export function VirtualDataTable<T extends Record<string, any>>({
     sortDirProp,
     maxHeight = 600,
     rowHeight = 44,
+    cancelEditingRef,
+    onEditingChange,
 }: VirtualDataTableProps<T>) {
     const { t } = useLanguage();
     const isServerSort = !!onSortChange;
     const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Record<string, any>>({});
-    const [localSearchQuery, setLocalSearchQuery] = useState("");
     const isServerSearch = !!onSearchChange;
-    const searchQuery = isServerSearch ? (searchValue ?? "") : localSearchQuery;
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
 
-    // Debounced server search
+    // Notify parent when editing state changes
+    useEffect(() => {
+        onEditingChange?.(editingRow !== null);
+    }, [editingRow, onEditingChange]);
+
+    // Expose cancelEditing via ref
+    useEffect(() => {
+        if (cancelEditingRef) {
+            cancelEditingRef.current = cancelEditing;
+        }
+    }, [cancelEditingRef]);
+
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isTypingRef = useRef(false);
+
+    const clearPendingSearch = useCallback(() => {
+        if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+            debounceRef.current = null;
+        }
+        isTypingRef.current = false;
+    }, []);
+
+    // Debounced server search - input updates immediately, but API call is debounced
     const handleSearchInput = useCallback((value: string) => {
         setLocalSearchQuery(value);
         if (isServerSearch) {
+            isTypingRef.current = true;
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
                 onSearchChange!(value);
-            }, 350);
+                debounceRef.current = null;
+                isTypingRef.current = false;
+            }, 200);
         }
     }, [isServerSearch, onSearchChange]);
+
+    const clearSearch = useCallback(() => {
+        clearPendingSearch();
+        setLocalSearchQuery("");
+        if (isServerSearch) onSearchChange!("");
+    }, [clearPendingSearch, isServerSearch, onSearchChange]);
+
+    // Keep local search in sync with external searchValue changes (e.g., clear from outside)
+    useEffect(() => {
+        if (!isServerSearch) return;
+        const externalQuery = searchValue ?? "";
+        if (!isTypingRef.current && externalQuery !== localSearchQuery) {
+            setLocalSearchQuery(externalQuery);
+        }
+    }, [isServerSearch, searchValue, localSearchQuery]);
+
+    useEffect(() => clearPendingSearch, [clearPendingSearch]);
 
     // In server-sort mode use controlled props; otherwise use local state
     const [localSortKey, setLocalSortKey] = useState<string | null>(null);
@@ -203,11 +250,13 @@ export function VirtualDataTable<T extends Record<string, any>>({
         return result;
     }, [data, columns]);
 
+    const deferredData = useDeferredValue(data);
+
     // Client-side filter/sort pipeline
     // NOTE: when onSortChange is provided (server-sort mode) the sort step is
     // skipped — the server already returns rows in the correct order.
     const processedData = useMemo(() => {
-        let result = [...data];
+        let result = [...deferredData];
 
         for (const [key, filterVal] of Object.entries(columnFilters)) {
             const q = filterVal.toLowerCase();
@@ -240,7 +289,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
         }
 
         return result;
-    }, [data, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columns]);
+    }, [deferredData, columnFilters, localSearchQuery, isServerSearch, isServerSort, sortKey, sortDir, columns]);
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
@@ -287,6 +336,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     };
 
     const clearAllFilters = () => {
+        clearPendingSearch();
         setColumnFilters({});
         setLocalSearchQuery("");
         if (isServerSearch) onSearchChange!("");
@@ -333,7 +383,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                             variant="ghost"
                             size="icon"
                             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                            onClick={() => { setLocalSearchQuery(""); if (isServerSearch) onSearchChange!(""); }}
+                            onClick={clearSearch}
                         >
                             <X className="h-3 w-3" />
                         </Button>

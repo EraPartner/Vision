@@ -77,7 +77,15 @@ function detectAmountChanges(transactions) {
   if (transactions.length < 2) return [];
 
   const changes = [];
-  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...transactions].sort((a, b) => {
+    const aTime = new Date(a?.date).getTime();
+    const bTime = new Date(b?.date).getTime();
+
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return aTime - bTime;
+  });
 
   // Calculate baseline (median of all amounts)
   const amounts = sorted.map((t) => Math.abs(parseFloat(t.amount)));

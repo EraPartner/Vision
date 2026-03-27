@@ -37,7 +37,6 @@ const SETTING_DEFAULTS = {
     defaultPageSize: 50,
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
-    defaultBankAccount: '',
     language: 'en',
   },
   dashboard_settings: {
@@ -53,6 +52,7 @@ const SETTING_DEFAULTS = {
     backupDir: '',
     backupOnQuit: false,
   },
+  widget_visibility: {},
 };
 
 // GET /api/settings/:key — single setting (returns default if not found)

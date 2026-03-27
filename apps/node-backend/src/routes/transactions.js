@@ -20,15 +20,17 @@ router.get('/', async (req, res) => {
   try {
     const {
       limit = 50, offset = 0,
+      transaction_id,
       start_date, end_date, bank_account,
       category_id, recipient_id, recipient_name,
-      uncategorised, active = 'true', search, normalize_to_eur = 'false',
+      uncategorised, active = 'true', search, normalize_to_eur = 'false', target_currency,
       sort_by, sort_dir,
     } = req.query;
 
     const opts = {
       limit: Math.min(parseInt(limit, 10) || 50, 5000),
       offset: parseInt(offset, 10) || 0,
+      transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
       startDate: start_date || null,
       endDate: end_date || null,
       bankAccount: bank_account || null,
@@ -56,7 +58,7 @@ router.get('/', async (req, res) => {
     }
 
     if (normalize_to_eur === 'true') {
-      items = await convertRowsToEur(items);
+      items = await convertRowsToEur(items, target_currency || 'EUR');
     }
 
     // Map date field to transaction_date for frontend compatibility

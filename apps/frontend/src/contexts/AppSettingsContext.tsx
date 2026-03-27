@@ -11,7 +11,6 @@ export interface AppSettings {
     defaultPageSize: number;
     startOfWeek: 'monday' | 'sunday';
     showDecimalPlaces: number;
-    defaultBankAccount: string;
     language: Language;
 }
 
@@ -31,7 +30,6 @@ const defaultAppSettings: AppSettings = {
     defaultPageSize: 50,
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
-    defaultBankAccount: '',
     language: 'en',
 };
 

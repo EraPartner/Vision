@@ -1,6 +1,8 @@
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 
 interface MonthlySpendingChartProps {
     data: Array<{ month: string; spending: number; income: number }>;
@@ -8,6 +10,16 @@ interface MonthlySpendingChartProps {
 
 export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+
+    const formatCompactCurrency = (value: number) => new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: defaultCurrency,
+        notation: "compact",
+        maximumFractionDigits: 1,
+    }).format(value);
 
     if (!data || data.length === 0) {
         return (
@@ -48,7 +60,7 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
                                 className="fill-muted-foreground"
                                 axisLine={false}
                                 tickLine={false}
-                                tickFormatter={(v) => `€${v}`}
+                                tickFormatter={(v) => formatCompactCurrency(v)}
                             />
                             <Tooltip
                                 contentStyle={{
@@ -58,7 +70,7 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
                                     color: "hsl(var(--card-foreground))",
                                 }}
                                 formatter={(value: number, name: string) => [
-                                    `€${value.toLocaleString()}`,
+                                    formatCurrency(value, defaultCurrency, locale),
                                     name === "spending" ? t('monthlySpending.spending') : t('monthlySpending.income'),
                                 ]}
                             />

@@ -10,8 +10,22 @@ import { Switch } from '@/components/ui/switch';
 import { Plus } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
-import { TXN_TYPE_LABELS, getTxnTypeLabel } from '@/types/portfolio';
+import { getTxnTypeLabel } from '@/types/portfolio';
 import { toast } from 'sonner';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+
+function parsePositive(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return n;
+}
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
 
 interface Props {
   investment: InvestmentSummary;
@@ -33,13 +47,13 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     yearly: t('addPortTxn.recurrence.yearly'),
   };
 
-  const isUnitBased = ['stock', 'etf', 'crypto'].includes(investment.assetClass);
+  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
   const isRealEstate = investment.assetClass === 'real_estate';
   const isFixedIncome = ['savings', 'bond'].includes(investment.assetClass);
 
   // Filter relevant transaction types per asset class
   const allowedTypes: PortfolioTxnType[] = (() => {
-    if (isUnitBased) return ['buy', 'sell', 'dividend', 'fee', 'tax'];
+    if (isUnitBased) return ['buy', 'sell', 'gift', 'dividend', 'fee', 'tax'];
     if (isRealEstate) return ['buy', 'sell', 'rent_income', 'appreciation', 'fee', 'tax'];
     if (isFixedIncome) return ['buy', 'sell', 'interest', 'fee', 'tax'];
     return ['buy', 'sell', 'fee', 'tax'];
@@ -53,6 +67,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     pricePerUnit: '',
     fees: '',
     taxes: '',
+    fxRateToEur: '',
     note: '',
     isRecurring: false,
     recurrenceInterval: 'monthly' as RecurrenceInterval,
@@ -61,30 +76,73 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   const reset = () => setForm({
     type: 'buy', date: new Date().toISOString().slice(0, 10),
-    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', note: '',
+    amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '',
     isRecurring: false, recurrenceInterval: 'monthly', recurrenceEndDate: '',
   });
 
-  // Auto-calculate amount from units * price
-  const computedAmount = form.units && form.pricePerUnit
-    ? (parseFloat(form.units) * parseFloat(form.pricePerUnit)).toFixed(2)
-    : '';
+  const amountInput = parsePositive(form.amount);
+  const unitsInput = parsePositive(form.units);
+  const priceInput = parsePositive(form.pricePerUnit);
+  const isBuySell = ['buy', 'sell'].includes(form.type);
+  const isGift = form.type === 'gift';
+
+  let derivedAmount: number | undefined;
+  let derivedUnits: number | undefined;
+  let derivedPrice: number | undefined;
+  if (isBuySell) {
+    const provided = Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined);
+    if (provided >= 2) {
+      if (amountInput === undefined && unitsInput !== undefined && priceInput !== undefined) {
+        derivedAmount = roundTo(unitsInput * priceInput, 4);
+      }
+      if (unitsInput === undefined && amountInput !== undefined && priceInput !== undefined) {
+        derivedUnits = roundTo(amountInput / priceInput, 8);
+      }
+      if (priceInput === undefined && amountInput !== undefined && unitsInput !== undefined) {
+        derivedPrice = roundTo(amountInput / unitsInput, 6);
+      }
+    }
+  }
+
+  const effectiveAmount = isGift ? 0 : (amountInput ?? derivedAmount);
+  const effectiveUnits = unitsInput ?? derivedUnits;
+  const effectivePrice = priceInput ?? derivedPrice;
+
+  const buySellIsValid = !isBuySell
+    || ((Number(amountInput !== undefined) + Number(unitsInput !== undefined) + Number(priceInput !== undefined)) >= 2
+      && effectiveAmount !== undefined
+      && effectiveUnits !== undefined
+      && effectivePrice !== undefined
+      && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(form.amount || computedAmount);
-    if (!amount || isNaN(amount)) { toast.error(t('addPortTxn.error.amountRequired')); return; }
+    if (isBuySell && !buySellIsValid) {
+      toast.error(t('addPortTxn.error.twoOfThreeRequired'));
+      return;
+    }
+
+    if (!isGift && (effectiveAmount === undefined || isNaN(effectiveAmount))) {
+      toast.error(t('addPortTxn.error.amountRequired'));
+      return;
+    }
+
+    if (isGift && effectiveUnits === undefined) {
+      toast.error(t('addPortTxn.error.unitsRequired'));
+      return;
+    }
 
     try {
       await addTransaction({
         investmentId: investment.id,
         type: form.type,
         date: form.date,
-        amount,
-        units: form.units ? parseFloat(form.units) : undefined,
-        price_per_unit: form.pricePerUnit ? parseFloat(form.pricePerUnit) : undefined,
-        fees: form.fees ? parseFloat(form.fees) : undefined,
-        taxes: form.taxes ? parseFloat(form.taxes) : undefined,
+        amount: isGift ? 0 : effectiveAmount,
+        units: effectiveUnits,
+        price_per_unit: effectivePrice,
+        fees: isGift ? 0 : (form.fees ? parseFloat(form.fees) : undefined),
+        taxes: isGift ? 0 : (form.taxes ? parseFloat(form.taxes) : undefined),
+        fx_rate_to_eur: form.fxRateToEur ? parseFloat(form.fxRateToEur) : undefined,
         currency: investment.currency,
         note: form.note.trim() || undefined,
         is_recurring: form.isRecurring,
@@ -99,8 +157,8 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     }
   };
 
-  const showUnits = isUnitBased && ['buy', 'sell'].includes(form.type);
-  const showFeesTaxes = ['buy', 'sell'].includes(form.type);
+  const showUnits = isUnitBased && ['buy', 'sell', 'gift'].includes(form.type);
+  const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(form.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(form.type);
 
   return (
@@ -131,7 +189,11 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="txn-date">{t('addPortTxn.date')}</Label>
-                <Input id="txn-date" type="date" value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} required />
+                <DatePicker
+                  value={form.date ? parseLocalDateFromYmd(form.date) : undefined}
+                  onChange={(date) => setForm(f => ({ ...f, date: date ? toYmd(date) : '' }))}
+                  placeholder={t('plannedPage.link.pickDate')}
+                />
               </div>
 
             {showUnits && (
@@ -150,10 +212,27 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
             <div className={`space-y-2 ${showUnits ? 'col-span-2' : ''}`}>
               <Label htmlFor="txn-amount">
                 {t('addPortTxn.totalAmount', { currency: investment.currency })}
-                {computedAmount && <span className="text-muted-foreground ml-1 text-xs">= {computedAmount}</span>}
+                {isGift
+                  ? <span className="text-muted-foreground ml-1 text-xs">= 0</span>
+                  : (derivedAmount !== undefined
+                    ? <span className="text-muted-foreground ml-1 text-xs">= {derivedAmount.toFixed(4)}</span>
+                    : null)}
               </Label>
-              <Input id="txn-amount" type="number" step="0.01" min="0" placeholder={computedAmount || '0.00'} value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
+              <Input
+                id="txn-amount"
+                type="number"
+                step="0.0001"
+                min="0"
+                placeholder={isGift ? '0.00' : (derivedAmount !== undefined ? derivedAmount.toFixed(4) : '0.00')}
+                value={isGift ? '0' : form.amount}
+                disabled={isGift}
+                onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
+              />
             </div>
+
+            {isBuySell && !buySellIsValid && (
+              <div className="col-span-2 text-xs text-destructive">{t('addPortTxn.error.twoOfThreeRequired')}</div>
+            )}
 
             {showFeesTaxes && (
               <>
@@ -167,6 +246,19 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
                 </div>
               </>
             )}
+
+            <div className={`space-y-2 ${showFeesTaxes ? 'col-span-2' : ''}`}>
+              <Label htmlFor="txn-fx-rate-to-eur">FX rate to EUR (optional)</Label>
+              <Input
+                id="txn-fx-rate-to-eur"
+                type="number"
+                step="0.0000000001"
+                min="0"
+                placeholder="1.0000000000"
+                value={form.fxRateToEur}
+                onChange={(e) => setForm(f => ({ ...f, fxRateToEur: e.target.value }))}
+              />
+            </div>
           </div>
 
           {showRecurring && (
@@ -190,7 +282,14 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">{t('addPortTxn.endDate')}</Label>
-                    <Input type="date" className="h-8 text-xs" value={form.recurrenceEndDate} onChange={(e) => setForm(f => ({ ...f, recurrenceEndDate: e.target.value }))} />
+                    <DatePicker
+                      value={form.recurrenceEndDate ? parseLocalDateFromYmd(form.recurrenceEndDate) : undefined}
+                      onChange={(date) => setForm(f => ({ ...f, recurrenceEndDate: date ? toYmd(date) : '' }))}
+                      placeholder={t('plannedPage.link.pickDate')}
+                      allowClear
+                      clearLabel={t('common.clear')}
+                      buttonClassName="h-8 text-xs"
+                    />
                   </div>
                 </div>
               )}

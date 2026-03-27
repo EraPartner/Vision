@@ -2,11 +2,11 @@ import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type {
-  Investment, InvestmentCreate, InvestmentUpdate,
+  InvestmentCreate, InvestmentUpdate,
   PortfolioTransaction, PortfolioTransactionCreate,
   AssetClass,
 } from '@/types/api';
-import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
+import type { InvestmentSummary } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -66,28 +66,30 @@ function calculateCostBasis(txns: PortfolioTransaction[]): CostBasisResult {
     const fees = Number(txn.fees) || 0;
     const taxes = Number(txn.taxes) || 0;
 
-    if (txn.type === 'buy') {
+    if (txn.type === 'buy' || txn.type === 'gift') {
       // Add units at their cost (amount + fees are the cost)
       const buyCost = amount + fees + taxes;
       totalUnits += units;
       totalCost += buyCost;
       totalBuyCost += buyCost;
-    } else if (txn.type === 'sell') {
-      if (totalUnits > 0 && units > 0) {
-        // Calculate average cost of units being sold
-        const avgCost = totalCost / totalUnits;
-        const costOfSoldUnits = avgCost * units;
-        
-        // Proceeds minus cost minus fees = realized gain
-        const netProceeds = amount - fees - taxes;
-        realizedGain += netProceeds - costOfSoldUnits;
-        
-        // Remove sold units from pool
-        totalUnits -= units;
-        totalCost -= costOfSoldUnits;
-        totalSellProceeds += amount;
+      } else if (txn.type === 'sell') {
+        if (totalUnits > 0 && units > 0) {
+          const sellUnits = Math.min(units, totalUnits);
+          const sellRatio = units > 0 ? sellUnits / units : 0;
+          // Calculate average cost of units being sold
+          const avgCost = totalCost / totalUnits;
+          const costOfSoldUnits = avgCost * sellUnits;
+          
+          // Proceeds minus cost minus fees = realized gain
+          const netProceeds = (amount - fees - taxes) * sellRatio;
+          realizedGain += netProceeds - costOfSoldUnits;
+          
+          // Remove sold units from pool
+          totalUnits -= sellUnits;
+          totalCost -= costOfSoldUnits;
+          totalSellProceeds += amount;
+        }
       }
-    }
   }
 
   // Ensure no negative units due to floating point
@@ -189,6 +191,13 @@ export function usePortfolio() {
     onError: (err: Error) => toast.error(t('portfolio.deleteTxnFailedTitle'), { description: err.message }),
     });
 
+    const updateTxnMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<PortfolioTransactionCreate> }) =>
+      apiClient.updatePortfolioTransaction(id, data),
+    onSuccess: () => invalidateAll(),
+    onError: (err: Error) => toast.error(t('portfolio.recordTxnFailedTitle'), { description: err.message }),
+    });
+
   // ---- wrapper functions (keep same interface for pages) ----
 
   const addInvestment = useCallback((data: Omit<InvestmentCreate, never>) => {
@@ -208,11 +217,17 @@ export function usePortfolio() {
       price_provider: data.price_provider,
       price_provider_id: data.price_provider_id,
       price_provider_url: data.price_provider_url,
+      price_provider_latest_url: data.price_provider_latest_url,
+      price_provider_latest_path: data.price_provider_latest_path,
+      price_provider_history_url: data.price_provider_history_url,
+      price_provider_history_path: data.price_provider_history_path,
+      price_provider_history_ts_path: data.price_provider_history_ts_path,
+      price_provider_history_price_path: data.price_provider_history_price_path,
     });
   }, [addInvestmentMutation]);
 
   const updateInvestment = useCallback((id: number, data: InvestmentUpdate) => {
-    updateInvestmentMutation.mutate({ id, data });
+    return updateInvestmentMutation.mutateAsync({ id, data });
   }, [updateInvestmentMutation]);
 
   const deleteInvestment = useCallback((id: number) => {
@@ -228,11 +243,15 @@ export function usePortfolio() {
     deleteTxnMutation.mutate(id);
   }, [deleteTxnMutation]);
 
+  const updateTransaction = useCallback((id: number, data: Partial<PortfolioTransactionCreate>) => {
+    return updateTxnMutation.mutateAsync({ id, data });
+  }, [updateTxnMutation]);
+
     const refreshPricesMutation = useMutation({
     mutationFn: () => apiClient.refreshInvestmentPrices(),
     onSuccess: (data) => {
       invalidateAll();
-      toast.success(t('portfolio.refreshedPrices', { n: String(data.updated) }));
+      toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }));
     },
     onError: (err: Error) => toast.error(t('portfolio.refreshPricesFailedTitle'), { description: err.message }),
     });
@@ -246,7 +265,7 @@ export function usePortfolio() {
   const summaries: InvestmentSummary[] = useMemo(() => {
     return investments.map((inv) => {
       const txns = transactions.filter((t) => t.investment_id === inv.id);
-      const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.asset_class);
+      const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(inv.asset_class);
       const isFixedIncome = ['savings', 'bond'].includes(inv.asset_class);
       const isRealEstate = inv.asset_class === 'real_estate';
 
@@ -294,7 +313,7 @@ export function usePortfolio() {
         
       } else if (isFixedIncome) {
         // Savings accounts and bonds: principal-based
-        const buys = txns.filter((t) => t.type === 'buy');
+        const buys = txns.filter((t) => t.type === 'buy' || t.type === 'gift');
         const sells = txns.filter((t) => t.type === 'sell');
         const totalBuyAmount = buys.reduce((s, t) => s + Number(t.amount), 0);
         const totalSellAmount = sells.reduce((s, t) => s + Number(t.amount), 0);
@@ -349,7 +368,7 @@ export function usePortfolio() {
 
       return {
         ...inv,
-        assetClass: inv.asset_class as any,
+        assetClass: inv.asset_class,
         totalUnits,
         totalInvested: Math.abs(totalInvested),
         totalFees,
@@ -395,7 +414,7 @@ export function usePortfolio() {
   return {
     investments, transactions, summaries,
     addInvestment, updateInvestment, deleteInvestment,
-    addTransaction, deleteTransaction,
+    addTransaction, updateTransaction, deleteTransaction,
     refreshPrices, isRefreshingPrices: refreshPricesMutation.isPending,
     byAssetClass, totalPortfolioValue, totalGainLoss,
     totalRealizedGain, totalUnrealizedGain,

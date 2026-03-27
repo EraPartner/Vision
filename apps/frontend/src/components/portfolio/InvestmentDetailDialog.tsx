@@ -5,21 +5,31 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
-  TrendingUp, TrendingDown, Eye, Trash2, Calendar, 
-  DollarSign, Percent, ArrowUpRight, ArrowDownRight, Clock
+  TrendingUp, TrendingDown, Eye, Trash2, Calendar,
+  DollarSign, Percent, ArrowUpRight, ArrowDownRight, Clock, Pencil,
 } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
+import { EditInvestmentDialog } from './EditInvestmentDialog';
+import { EditPortfolioTxnDialog } from './EditPortfolioTxnDialog';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { numberFormatToLocale } from '@/utils/currency';
+import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 import type { InvestmentSummary, PortfolioTxnType } from '@/types/portfolio';
 import { getAssetClassLabel, getTxnTypeLabel } from '@/types/portfolio';
 import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   investment: InvestmentSummary;
+  fxAwarePnl?: {
+    realizedTarget: number;
+    unrealizedTarget: number;
+    unrealizedPercent: number;
+  };
+  fxAwareCurrency?: string;
   trigger?: React.ReactNode;
 }
 
@@ -34,15 +44,20 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   appreciation: 'bg-accent/10 text-accent border-accent/20',
 };
 
-export function InvestmentDetailDialog({ investment, trigger }: Props) {
+export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency, trigger }: Props) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { deleteTransaction } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
 
-  function fmt(val: number, currency = 'EUR', decimals = 0) {
+  function fmt(
+    val: number,
+    currency = appSettings.defaultCurrency || 'EUR',
+    decimals = appSettings.showDecimalPlaces
+  ) {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
@@ -58,7 +73,7 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
     }).format(val);
   }
 
-  const isUnitBased = ['stock', 'etf', 'crypto'].includes(investment.assetClass);
+  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
   const isFixedIncome = ['savings', 'bond'].includes(investment.assetClass);
   const isRealEstate = investment.assetClass === 'real_estate';
 
@@ -70,6 +85,11 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
       variant: 'destructive',
     });
     if (ok) deleteTransaction(txnId);
+  };
+
+  const openMarketLookup = () => {
+    if (!investment.symbol) return;
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(investment.symbol)}`);
   };
 
   return (
@@ -88,8 +108,27 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
               {investment.symbol && (
                 <span className="font-mono font-bold text-lg">{investment.symbol}</span>
               )}
-              <DialogTitle className="text-xl">{investment.name}</DialogTitle>
+              <DialogTitle className="text-xl">
+                <button
+                  type="button"
+                  className="hover:underline cursor-pointer"
+                  onDoubleClick={openMarketLookup}
+                  title={investment.symbol ? t('watchlist.doubleClickChart') : undefined}
+                >
+                  {investment.name}
+                </button>
+              </DialogTitle>
               <Badge variant="secondary">{getAssetClassLabel(t, investment.assetClass)}</Badge>
+              <div className="ml-auto">
+                <EditInvestmentDialog
+                  investment={investment}
+                  trigger={
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <Pencil className="h-4 w-4" /> {t('common.edit')}
+                    </Button>
+                  }
+                />
+              </div>
             </div>
           </DialogHeader>
 
@@ -205,10 +244,10 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
 
                     <div className="space-y-2">
                       <div className="flex justify-between py-1.5 border-b border-border/50">
-                         <span className="text-muted-foreground flex items-center gap-1">
-                           <ArrowUpRight className="h-3 w-3 text-accent" />
-                           {t('invDetail.realizedGain')}
-                         </span>
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <ArrowUpRight className="h-3 w-3 text-accent" />
+                            {t('invDetail.realizedGain')}
+                          </span>
                         <span className={cn(
                           "font-medium tabular-nums",
                           investment.realizedGain >= 0 ? "text-accent" : "text-destructive"
@@ -216,11 +255,22 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
                           {investment.realizedGain >= 0 ? '+' : ''}{fmt(investment.realizedGain, investment.currency)}
                         </span>
                       </div>
+                      {fxAwarePnl && fxAwareCurrency && (
+                        <div className="flex justify-between py-1.5 border-b border-border/50">
+                          <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.realizedGain')} ({fxAwareCurrency})</span>
+                          <span className={cn(
+                            "font-medium tabular-nums",
+                            fxAwarePnl.realizedTarget >= 0 ? "text-accent" : "text-destructive"
+                          )}>
+                            {fxAwarePnl.realizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.realizedTarget, fxAwareCurrency)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between py-1.5 border-b border-border/50">
-                         <span className="text-muted-foreground flex items-center gap-1">
-                           <Clock className="h-3 w-3" />
-                           {t('invDetail.unrealizedGain')}
-                         </span>
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {t('invDetail.unrealizedGain')}
+                          </span>
                         <span className={cn(
                           "font-medium tabular-nums",
                           investment.unrealizedGain >= 0 ? "text-accent" : "text-destructive"
@@ -228,6 +278,18 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
                           {investment.unrealizedGain >= 0 ? '+' : ''}{fmt(investment.unrealizedGain, investment.currency)}
                         </span>
                       </div>
+                      {fxAwarePnl && fxAwareCurrency && (
+                        <div className="flex justify-between py-1.5 border-b border-border/50">
+                          <span className="text-muted-foreground text-xs">FX-aware {t('invDetail.unrealizedGain')} ({fxAwareCurrency})</span>
+                          <span className={cn(
+                            "font-medium tabular-nums",
+                            fxAwarePnl.unrealizedTarget >= 0 ? "text-accent" : "text-destructive"
+                          )}>
+                            {fxAwarePnl.unrealizedTarget >= 0 ? '+' : ''}{fmt(fxAwarePnl.unrealizedTarget, fxAwareCurrency)}
+                            <span className="text-xs ml-1 opacity-70">{fxAwarePnl.unrealizedPercent >= 0 ? '+' : ''}{fmtNum(fxAwarePnl.unrealizedPercent)}%</span>
+                          </span>
+                        </div>
+                      )}
                       
                       {investment.totalIncome > 0 && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
@@ -333,11 +395,7 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
                           </Badge>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {new Date(txn.date).toLocaleDateString(undefined, { 
-                              month: 'short', 
-                              day: 'numeric', 
-                              year: 'numeric' 
-                            })}
+                            {formatDateStringWithAppSettings(txn.date, appSettings.dateFormat)}
                           </span>
                         </div>
                         
@@ -372,14 +430,29 @@ export function InvestmentDetailDialog({ investment, trigger }: Props) {
                         )}
                       </div>
                       
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <EditPortfolioTxnDialog
+                          investment={investment}
+                          transaction={txn}
+                          trigger={
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          }
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

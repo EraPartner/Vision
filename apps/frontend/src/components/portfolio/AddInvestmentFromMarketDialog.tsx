@@ -12,6 +12,9 @@ import { usePortfolio } from '@/hooks/usePortfolio';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { TXN_TYPE_LABELS } from '@/types/portfolio';
 import { toast } from 'sonner';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { formatDateWithAppSettings, parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
 
 interface Quote {
   symbol: string;
@@ -34,7 +37,11 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'choose' | 'new' | 'transaction'>('choose');
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
   const { addInvestment, addTransaction } = usePortfolio();
+
+  const todayYmd = toYmd(new Date());
+  const todayLabel = formatDateWithAppSettings(new Date(), appSettings.dateFormat);
 
   // Determine asset class from quote type
   const getAssetClass = (type: string) => {
@@ -45,19 +52,19 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   };
 
   const assetClass = getAssetClass(quote.type);
-  const isUnitBased = ['stock', 'etf', 'crypto'].includes(assetClass);
+  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(assetClass);
 
   const [newInvestmentForm, setNewInvestmentForm] = useState({
     name: quote.name,
     symbol: quote.symbol,
     currency: quote.currency === 'USD' ? 'USD' : 'EUR',
     currentPrice: quote.price.toString(),
-    notes: t('addInvFromMarket.notesDefault', { date: new Date().toLocaleDateString() }),
+    notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
   });
 
   const [transactionForm, setTransactionForm] = useState({
     type: 'buy' as PortfolioTxnType,
-    date: new Date().toISOString().slice(0, 10),
+    date: todayYmd,
     amount: '',
     units: '',
     pricePerUnit: quote.price.toString(),
@@ -76,11 +83,11 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
       symbol: quote.symbol,
       currency: quote.currency === 'USD' ? 'USD' : 'EUR',
       currentPrice: quote.price.toString(),
-      notes: t('addInvFromMarket.notesDefault', { date: new Date().toLocaleDateString() }),
+      notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
     });
     setTransactionForm({
       type: 'buy',
-      date: new Date().toISOString().slice(0, 10),
+      date: todayYmd,
       amount: '',
       units: '',
       pricePerUnit: quote.price.toString(),
@@ -305,12 +312,10 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               </div>
               <div className="space-y-2">
                 <Label htmlFor="txn-date">{t('addPortTxn.date')}</Label>
-                <Input 
-                  id="txn-date" 
-                  type="date" 
-                  value={transactionForm.date} 
-                  onChange={(e) => setTransactionForm(f => ({ ...f, date: e.target.value }))} 
-                  required 
+                <DatePicker
+                  value={transactionForm.date ? parseLocalDateFromYmd(transactionForm.date) : undefined}
+                  onChange={(date) => setTransactionForm(f => ({ ...f, date: date ? toYmd(date) : '' }))}
+                  placeholder={t('plannedPage.link.pickDate')}
                 />
               </div>
 

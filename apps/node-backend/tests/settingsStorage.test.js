@@ -27,12 +27,27 @@ describe('Settings storage and retrieval', () => {
     const res = await settingsRepository.set(key, value);
     expect(res).toEqual({ key, value });
 
-    // Ensure DB was called with the key and the value (driver should accept JS object)
+    // Ensure DB was called with the key and JSON payload.
     expect(query).toHaveBeenCalled();
-    const calledWith = query.mock.calls[0];
-    expect(calledWith[1][0]).toBe(key);
-    expect(typeof calledWith[1][1]).toBe('object');
-    expect(calledWith[1][1].excludedCategoryIds).toEqual([1, 2]);
+    const upsertCall = query.mock.calls.find(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO user_settings'));
+    expect(upsertCall).toBeTruthy();
+    expect(upsertCall[1][0]).toBe(key);
+    expect(upsertCall[1][1]).toBe(JSON.stringify(value));
+  });
+
+  it('settingsRepository.set should serialize primitive arrays as JSON', async () => {
+    query.mockResolvedValue({});
+
+    const key = 'dismissed_recurring_patterns';
+    const value = [373];
+
+    const res = await settingsRepository.set(key, value);
+    expect(res).toEqual({ key, value });
+
+    const upsertCall = query.mock.calls.find(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO user_settings'));
+    expect(upsertCall).toBeTruthy();
+    expect(upsertCall[1][0]).toBe(key);
+    expect(upsertCall[1][1]).toBe('[373]');
   });
 
   it('settingsRepository.get should return parsed value from DB', async () => {

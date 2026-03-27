@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Bitcoin, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -11,6 +13,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useNavigate } from "react-router-dom";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -18,21 +21,56 @@ function fmtPct(val: number) {
 
 export default function CryptoPage() {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
-  function fmt(val: number, currency = 'EUR', decimals = 2) {
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
+  }
+
+  function fmt(
+    val: number,
+    currency = targetCurrency,
+    decimals = appSettings.showDecimalPlaces
+  ) {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
-  const totalValue = holdings.reduce((s, h) => s + h.currentValue, 0);
-  const totalRealizedGain = holdings.reduce((s, h) => s + h.realizedGain, 0);
-  const totalUnrealizedGain = holdings.reduce((s, h) => s + h.unrealizedGain, 0);
-  const totalFees = holdings.reduce((s, h) => s + h.totalFees, 0);
-  const totalTaxes = holdings.reduce((s, h) => s + h.totalTaxes, 0);
+  function openMarketLookup(symbol?: string) {
+    if (!symbol) return;
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
+  }
+
+  const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);
+  const totalRealizedGain = holdings.reduce((s, h) => s + convertToTarget(h.realizedGain, h.currency), 0);
+  const totalUnrealizedGain = holdings.reduce((s, h) => s + convertToTarget(h.unrealizedGain, h.currency), 0);
+  const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
+  const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
   const netGain = totalRealizedGain + totalUnrealizedGain - totalFees - totalTaxes;
 
   if (holdings.length === 0) {
@@ -61,7 +99,7 @@ export default function CryptoPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">{t('crypto.title')}</h1>
-        <AddInvestmentDialog />
+        <AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />
       </div>
 
       {/* Summary Cards */}
@@ -152,20 +190,27 @@ export default function CryptoPage() {
                         </div>
                         <div>
                           <span className="font-mono font-bold">{h.symbol || '?'}</span>
-                          <p className="text-xs text-muted-foreground">{h.name}</p>
+                          <button
+                            type="button"
+                            className="block text-xs text-muted-foreground hover:underline cursor-pointer"
+                            onDoubleClick={() => openMarketLookup(h.symbol)}
+                            title={h.symbol ? t('watchlist.doubleClickChart') : undefined}
+                          >
+                            {h.name}
+                          </button>
                         </div>
                       </div>
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums font-mono">{h.totalUnits.toFixed(6)}</td>
-                    <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(h.avgCostBasis, h.currency)}</td>
-                    <td className="text-right py-2 px-3 tabular-nums">{fmt(h.currentPrice ?? 0, h.currency)}</td>
-                    <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
+                    <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(convertToTarget(h.avgCostBasis, h.currency))}</td>
+                    <td className="text-right py-2 px-3 tabular-nums">{fmt(convertToTarget(h.currentPrice ?? 0, h.currency))}</td>
+                    <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(convertToTarget(h.currentValue, h.currency))}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
-                      {h.unrealizedGain >= 0 ? "+" : ""}{fmt(h.unrealizedGain, h.currency)}
+                      {h.unrealizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(h.unrealizedGain, h.currency))}
                       <span className="text-xs ml-1 opacity-70">{fmtPct(h.gainLossPercent)}</span>
                     </td>
                     <td className={cn("text-right py-2 px-3 tabular-nums", h.realizedGain !== 0 ? (h.realizedGain >= 0 ? "text-accent" : "text-destructive") : "text-muted-foreground")}>
-                      {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(h.realizedGain, h.currency)}` : '—'}
+                      {h.realizedGain !== 0 ? `${h.realizedGain >= 0 ? "+" : ""}${fmt(convertToTarget(h.realizedGain, h.currency))}` : '—'}
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">

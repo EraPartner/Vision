@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--primary))",
@@ -27,9 +28,13 @@ function shortAccountName(account: string): string {
 
 export function BankBalancesWidget() {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const integerLocaleFormatter = new Intl.NumberFormat(locale);
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const { data, isLoading, error } = useQuery({
-        queryKey: ["bankBalances"],
-        queryFn: () => apiClient.getBankBalances(),
+        queryKey: ["bankBalances", defaultCurrency],
+        queryFn: () => apiClient.getBankBalances({ currency: defaultCurrency }),
         staleTime: 60_000,
     });
 
@@ -106,7 +111,7 @@ export function BankBalancesWidget() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-3xl font-bold bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
-                        {formatCurrency(total_net_position, "EUR")}
+                        {formatCurrency(total_net_position, defaultCurrency, locale)}
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -137,10 +142,10 @@ export function BankBalancesWidget() {
                                         <Landmark className="h-4 w-4 text-muted-foreground/50 shrink-0" />
                                     </div>
                                     <div className={`text-xl font-bold ${acctPositive ? "text-foreground" : "text-destructive"}`}>
-                                        {formatCurrency(acct.balance, "EUR")}
+                                        {formatCurrency(acct.balance, defaultCurrency, locale)}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
-                                        {t('bankWidget.transactions', { n: acct.transaction_count.toLocaleString() })}
+                                        {t('bankWidget.transactions', { n: integerLocaleFormatter.format(acct.transaction_count) })}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -175,7 +180,7 @@ export function BankBalancesWidget() {
                                 <YAxis
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
-                                    tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
+                                    tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
                                 />
                                 <Tooltip
                                     contentStyle={{
@@ -185,7 +190,7 @@ export function BankBalancesWidget() {
                                         fontSize: "12px",
                                     }}
                                     formatter={(value: number, name: string) => [
-                                        formatCurrency(value, "EUR"),
+                                        formatCurrency(value, defaultCurrency, locale),
                                         name.length > 12 ? shortAccountName(name) : name,
                                     ]}
                                 />

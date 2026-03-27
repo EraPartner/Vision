@@ -25,7 +25,7 @@ def wait_for_db():
     user = os.environ.get('DB_USER', 'ftm_user')
     password = os.environ.get('DB_PASSWORD', os.environ.get('POSTGRES_PASSWORD', ''))
     dbname = os.environ.get('DB_NAME', 'financial_transactions')
-    
+
     for attempt in range(1, $MAX_ATTEMPTS + 1):
         try:
             conn = psycopg2.connect(
@@ -48,8 +48,36 @@ wait_for_db()
 echo "[entrypoint] Running Alembic migrations..."
 cd /app
 
-# Fix alembic_version column size if needed (for long revision IDs)
-$VENV_PYTHON -c "
+# Check whether alembic_version exists.
+# If missing, we are on a fresh DB where schemaInit.js should bootstrap schema.
+ALEMBIC_VERSION_EXISTS=$($VENV_PYTHON -c "
+import os
+import psycopg2
+
+conn = psycopg2.connect(
+    host=os.environ.get('DB_HOST', 'db'),
+    port=os.environ.get('DB_PORT', '5432'),
+    user=os.environ.get('DB_USER', 'ftm_user'),
+    password=os.environ.get('DB_PASSWORD', os.environ.get('POSTGRES_PASSWORD', '')),
+    database=os.environ.get('DB_NAME', 'financial_transactions')
+)
+cur = conn.cursor()
+cur.execute(\"\"\"
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'alembic_version'
+    )
+\"\"\")
+exists = cur.fetchone()[0]
+cur.close()
+conn.close()
+print('1' if exists else '0')
+")
+
+if [ "$ALEMBIC_VERSION_EXISTS" = "1" ]; then
+    # Fix alembic_version column size if needed (for long revision IDs)
+    $VENV_PYTHON -c "
 import os
 import psycopg2
 
@@ -63,10 +91,9 @@ def fix_alembic_version_column():
             database=os.environ.get('DB_NAME', 'financial_transactions')
         )
         cur = conn.cursor()
-        # Check current column size
         cur.execute(\"\"\"
-            SELECT character_maximum_length 
-            FROM information_schema.columns 
+            SELECT character_maximum_length
+            FROM information_schema.columns
             WHERE table_name = 'alembic_version' AND column_name = 'version_num'
         \"\"\")
         result = cur.fetchone()
@@ -83,12 +110,15 @@ def fix_alembic_version_column():
 fix_alembic_version_column()
 " 2>/dev/null || true
 
-# Run Alembic upgrade
-echo "[entrypoint] Running: $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head"
-$VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
-    echo "[entrypoint] Warning: Alembic migration failed (may be non-fatal if already applied)"
-    # Don't exit - let the app start anyway, schemaInit.js will handle it
-}
+    # Run Alembic upgrade
+    echo "[entrypoint] Running: $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head"
+    $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
+        echo "[entrypoint] Warning: Alembic migration failed (may be non-fatal if already applied)"
+        # Don't exit - let the app start anyway, schemaInit.js will handle it
+    }
+else
+    echo "[entrypoint] alembic_version not found; skipping Alembic on fresh DB (schemaInit.js will bootstrap schema)."
+fi
 
 echo "[entrypoint] Starting backend application..."
 exec bun run apps/node-backend/src/main.js

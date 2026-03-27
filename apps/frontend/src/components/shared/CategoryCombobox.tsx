@@ -12,9 +12,10 @@ interface CategoryComboboxProps {
     onSelect: (categoryId: number | null, categoryName: string | null) => void;
     disabled?: boolean;
     className?: string;
+    portalContainer?: HTMLElement | null;
 }
 
-export function CategoryCombobox({value, onSelect, disabled, className}: CategoryComboboxProps) {
+export function CategoryCombobox({value, onSelect, disabled, className, portalContainer}: CategoryComboboxProps) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const {data} = useCategories({limit: 500, active: true});
@@ -37,7 +38,7 @@ export function CategoryCombobox({value, onSelect, disabled, className}: Categor
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[280px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
+            <PopoverContent container={portalContainer} className="w-[280px] p-0 bg-popover border border-border shadow-lg z-50" align="start">
                 <Command>
                     <CommandInput placeholder={t('combobox.category.search')} />
                     <CommandList>

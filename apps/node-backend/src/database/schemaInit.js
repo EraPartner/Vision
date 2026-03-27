@@ -39,7 +39,7 @@ import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterial
  * Increment this whenever schema changes require DDL to be re-applied on existing DBs.
  * Format: YYYYMMDD_N (N = change number on that date, starting at 1).
  */
-const CURRENT_SCHEMA_VERSION = '20260313_3';
+const CURRENT_SCHEMA_VERSION = '20260325_1';
 
 /**
  * Check the stored schema version.  Returns null if the table doesn't exist yet.
@@ -191,8 +191,8 @@ export async function initializeSchema() {
 
 async function ensureEnums() {
   const enums = [
-    { name: 'asset_class', values: "'stock','etf','crypto','real_estate','savings','bond'" },
-    { name: 'portfolio_txn_type', values: "'buy','sell','dividend','fee','tax','interest','rent_income','appreciation'" },
+    { name: 'asset_class', values: "'stock','etf','crypto','metals','real_estate','savings','bond'" },
+    { name: 'portfolio_txn_type', values: "'buy','sell','dividend','fee','tax','interest','rent_income','appreciation','gift'" },
     { name: 'recurrence_interval', values: "'daily','weekly','bi-weekly','monthly','quarterly','yearly'" },
     { name: 'price_provider', values: "'manual','coingecko','yahoo','kraken','custom'" },
     { name: 'revolut_state', values: "'COMPLETED','PENDING','REVERTED','DECLINED'" },
@@ -206,6 +206,21 @@ async function ensureEnums() {
       END IF;
     END $$;
   `)));
+
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_class')
+         AND NOT EXISTS (
+           SELECT 1
+           FROM pg_enum pe
+           JOIN pg_type pt ON pt.oid = pe.enumtypid
+           WHERE pt.typname = 'asset_class'
+             AND pe.enumlabel = 'metals'
+         ) THEN
+        ALTER TYPE asset_class ADD VALUE 'metals';
+      END IF;
+    END $$;
+  `);
 }
 
 // ─────────────────────────────────────────────
@@ -665,10 +680,51 @@ async function createInvestments() {
       price_provider price_provider NOT NULL DEFAULT 'manual',
       price_provider_id VARCHAR(200),
       price_provider_url VARCHAR(500),
+      price_provider_latest_url VARCHAR(500),
+      price_provider_latest_path VARCHAR(300),
+      price_provider_history_url VARCHAR(500),
+      price_provider_history_path VARCHAR(300),
+      price_provider_history_ts_path VARCHAR(300),
+      price_provider_history_price_path VARCHAR(300),
       price_updated_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'investments'
+          AND n.nspname = 'public'
+          AND c.relkind IN ('r', 'p')
+      ) THEN
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_latest_url VARCHAR(500);
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_latest_path VARCHAR(300);
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_history_url VARCHAR(500);
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_history_path VARCHAR(300);
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_history_ts_path VARCHAR(300);
+        ALTER TABLE investments ADD COLUMN IF NOT EXISTS price_provider_history_price_path VARCHAR(300);
+      END IF;
+
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'investments_base'
+          AND n.nspname = 'public'
+          AND c.relkind IN ('r', 'p')
+      ) THEN
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_latest_url VARCHAR(500);
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_latest_path VARCHAR(300);
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_history_url VARCHAR(500);
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_history_path VARCHAR(300);
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_history_ts_path VARCHAR(300);
+        ALTER TABLE investments_base ADD COLUMN IF NOT EXISTS price_provider_history_price_path VARCHAR(300);
+      END IF;
+    END $$;
   `);
   await safeIndex('idx_investments_asset_class', 'investments', 'asset_class');
   await safeIndex('idx_investments_is_active', 'investments', 'is_active');
@@ -688,6 +744,7 @@ async function createPortfolioTransactions() {
       fees NUMERIC(18,4) DEFAULT 0,
       taxes NUMERIC(18,4) DEFAULT 0,
       currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
+      fx_rate_to_eur NUMERIC(20,10),
       note TEXT,
       is_recurring BOOLEAN NOT NULL DEFAULT false,
       recurrence_interval recurrence_interval,
@@ -695,6 +752,20 @@ async function createPortfolioTransactions() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+  await query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'portfolio_transactions'
+          AND n.nspname = 'public'
+          AND c.relkind IN ('r', 'p')
+      ) THEN
+        ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS fx_rate_to_eur NUMERIC(20,10);
+      END IF;
+    END $$;
   `);
   await safeIndex('idx_portfolio_txn_investment_id', 'portfolio_transactions', 'investment_id');
   await safeIndex('idx_portfolio_txn_date', 'portfolio_transactions', 'date');
@@ -778,7 +849,18 @@ async function createSavedCharts() {
  */
 async function safeIndex(name, table, columns) {
   await query(`
-    CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${columns});
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = '${table}'
+          AND n.nspname = 'public'
+          AND c.relkind = 'r'
+      ) THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${columns})';
+      END IF;
+    END $$;
   `);
 }
 
@@ -787,7 +869,18 @@ async function safeIndex(name, table, columns) {
  */
 async function safeGinIndex(name, table, expression) {
   await query(`
-    CREATE INDEX IF NOT EXISTS ${name} ON ${table} USING GIN (${expression});
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = '${table}'
+          AND n.nspname = 'public'
+          AND c.relkind = 'r'
+      ) THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS ${name} ON ${table} USING GIN (${expression})';
+      END IF;
+    END $$;
   `);
 }
 
@@ -797,7 +890,14 @@ async function safeGinIndex(name, table, expression) {
 async function safeTrigger(name, table) {
   await query(`
     DO $$ BEGIN
-      IF NOT EXISTS (
+      IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = '${table}'
+          AND n.nspname = 'public'
+          AND c.relkind = 'r'
+      ) AND NOT EXISTS (
         SELECT 1 FROM pg_trigger WHERE tgname = '${name}'
       ) THEN
         CREATE TRIGGER ${name}

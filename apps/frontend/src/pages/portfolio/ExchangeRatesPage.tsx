@@ -4,9 +4,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Database, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 
 interface ExchangeRate {
     currency: string;
@@ -23,6 +25,9 @@ interface ExchangeRatesData {
 
 export default function ExchangeRatesPage() {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const queryClient = useQueryClient();
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
@@ -93,7 +98,7 @@ export default function ExchangeRatesPage() {
                             <td className="py-2 px-3 font-mono font-medium">{currency}</td>
                             <td className="py-2 px-3 text-right font-mono">{rate.toFixed(6)}</td>
                             <td className="py-2 px-3 text-right font-mono">{(1 / rate).toFixed(4)}</td>
-                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, "EUR")}</td>
+                            <td className="py-2 px-3 text-right">{formatCurrency(100 * rate, defaultCurrency, locale)}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -150,7 +155,11 @@ export default function ExchangeRatesPage() {
                     <CardContent>
                         <p className="text-2xl font-bold">{rateDate ?? "—"}</p>
                         <p className="text-xs text-muted-foreground">
-                            {fetchedAt ? t('exchangeRates.fetchedAt', { date: new Date(fetchedAt).toLocaleString() }) : t('exchangeRates.noDataFetched')}
+                            {fetchedAt
+                                ? t('exchangeRates.fetchedAt', {
+                                    date: formatDateTimeStringWithAppSettings(fetchedAt, appSettings.dateFormat, locale),
+                                })
+                                : t('exchangeRates.noDataFetched')}
                         </p>
                     </CardContent>
                 </Card>
@@ -178,7 +187,13 @@ export default function ExchangeRatesPage() {
                             <CardHeader>
                                 <CardTitle className="text-lg">{t('exchangeRates.latestEcbRates')}</CardTitle>
                                 <CardDescription>
-                                    {t('exchangeRates.latestEcbDesc', { count: liveRates.length, date: rateDate ?? '', fetchedAt: fetchedAt ? new Date(fetchedAt).toLocaleString() : '' })}
+                                    {t('exchangeRates.latestEcbDesc', {
+                                        count: liveRates.length,
+                                        date: rateDate ?? '',
+                                        fetchedAt: fetchedAt
+                                            ? formatDateTimeStringWithAppSettings(fetchedAt, appSettings.dateFormat, locale)
+                                            : '',
+                                    })}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>

@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { formatDistanceToNow } from "date-fns";
+import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 
 interface PortfolioNewsFeedProps {
   symbols: string[];
@@ -25,8 +26,8 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
   const articles = data?.articles ?? [];
 
   return (
-    <Card className="h-full">
-          <CardHeader className="pb-3">
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Newspaper className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">{t('newsFeed.title')}</CardTitle>
@@ -37,8 +38,8 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="h-[480px]">
+      <CardContent className="p-0 flex-1 min-h-0">
+        <ScrollArea className="h-full">
           <div className="px-6 pb-4 space-y-1">
             {isLoading && (
               Array.from({ length: 6 }).map((_, i) => (
@@ -85,12 +86,11 @@ function NewsItem({ article }: { article: MarketNewsArticle }) {
       className="flex gap-3 py-3 border-b border-border/50 last:border-0 group hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"
     >
       {article.thumbnail && (
-        <img
+        <RemoteNewsImage
           src={article.thumbnail}
-          alt=""
-          className="h-16 w-24 rounded-md object-cover shrink-0 bg-muted"
-          loading="lazy"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          alt={article.title}
+          className="h-16 w-24"
+          fallbackClassName="hidden"
         />
       )}
       <div className="flex-1 min-w-0">

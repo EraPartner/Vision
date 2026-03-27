@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { DatePicker } from "@/components/shared/DatePicker";
+import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -936,33 +938,23 @@ export default function ImportPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="start-date">{t('importPage.startDate')}</Label>
-                  <Input
-                    id="start-date"
-                    type="date"
-                    placeholder={t('importPage.placeholderIso')}
-                    value={exportFilters.startDate}
-                    onChange={(e) =>
-                      setExportFilters({
-                        ...exportFilters,
-                        startDate: e.target.value,
-                      })
-                    }
+                  <DatePicker
+                    value={exportFilters.startDate ? parseLocalDateFromYmd(exportFilters.startDate) : undefined}
+                    onChange={(date) => setExportFilters({ ...exportFilters, startDate: date ? toYmd(date) : "" })}
+                    placeholder={t('plannedPage.link.pickDate')}
+                    allowClear
+                    clearLabel={t('common.clear')}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="end-date">{t('importPage.endDate')}</Label>
-                  <Input
-                    id="end-date"
-                    type="date"
-                    placeholder={t('importPage.placeholderIso')}
-                    value={exportFilters.endDate}
-                    onChange={(e) =>
-                      setExportFilters({
-                        ...exportFilters,
-                        endDate: e.target.value,
-                      })
-                    }
+                  <DatePicker
+                    value={exportFilters.endDate ? parseLocalDateFromYmd(exportFilters.endDate) : undefined}
+                    onChange={(date) => setExportFilters({ ...exportFilters, endDate: date ? toYmd(date) : "" })}
+                    placeholder={t('plannedPage.link.pickDate')}
+                    allowClear
+                    clearLabel={t('common.clear')}
                   />
                 </div>
               </div>

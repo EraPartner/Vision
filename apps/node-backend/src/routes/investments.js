@@ -5,11 +5,30 @@
 import { Router } from 'express';
 import investmentRepository from '../repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
-import { fetchLivePrices, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
+import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
+
+function hasLivePriceRefreshConfig(investment) {
+  const provider = investment?.price_provider;
+  if (!provider || provider === 'manual') return false;
+
+  if (provider === 'custom') {
+    return Boolean(
+      investment?.price_provider_latest_url
+      || investment?.price_provider_url
+      || investment?.price_provider_history_url
+    );
+  }
+
+  if (provider === 'yahoo') {
+    return Boolean(investment?.price_provider_id || investment?.symbol);
+  }
+
+  return Boolean(investment?.price_provider_id);
+}
 
 // GET /api/investments
 router.get('/', async (req, res) => {
@@ -35,9 +54,53 @@ router.get('/', async (req, res) => {
 // POST /api/investments
 router.post('/', async (req, res) => {
   try {
-    const { name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url } = req.body;
+    const {
+      name,
+      symbol,
+      asset_class,
+      currency,
+      current_price,
+      interest_rate,
+      maturity_date,
+      location,
+      municipality,
+      cadastral_income,
+      municipality_tax_rate,
+      notes,
+      price_provider,
+      price_provider_id,
+      price_provider_url,
+      price_provider_latest_url,
+      price_provider_latest_path,
+      price_provider_history_url,
+      price_provider_history_path,
+      price_provider_history_ts_path,
+      price_provider_history_price_path,
+    } = req.body;
     if (!name || !asset_class) return res.status(400).json({ detail: 'name and asset_class are required' });
-    const inv = await investmentRepository.create({ name, symbol, asset_class, currency, current_price, interest_rate, maturity_date, location, municipality, cadastral_income, municipality_tax_rate, notes, price_provider, price_provider_id, price_provider_url });
+    const inv = await investmentRepository.create({
+      name,
+      symbol,
+      asset_class,
+      currency,
+      current_price,
+      interest_rate,
+      maturity_date,
+      location,
+      municipality,
+      cadastral_income,
+      municipality_tax_rate,
+      notes,
+      price_provider,
+      price_provider_id,
+      price_provider_url,
+      price_provider_latest_url,
+      price_provider_latest_path,
+      price_provider_history_url,
+      price_provider_history_path,
+      price_provider_history_ts_path,
+      price_provider_history_price_path,
+    });
     res.status(201).json(inv);
   } catch (err) {
     logger.error('Failed to create investment', { error: err.message });
@@ -55,19 +118,27 @@ router.get('/providers', (req, res) => {
 router.post('/refresh-prices', async (req, res) => {
   try {
     const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
-    const toRefresh = allInvestments.filter(i => i.price_provider && i.price_provider !== 'manual' && i.price_provider_id);
+    const toRefresh = allInvestments.filter(hasLivePriceRefreshConfig);
 
     if (toRefresh.length === 0) {
       return res.json({ updated: 0, message: 'No investments with live price providers' });
     }
 
-    const prices = await fetchLivePrices(toRefresh);
+    const cachedPricesByInvestmentId = Object.fromEntries(
+      toRefresh.map(i => [i.id, Number(i.current_price)])
+    );
+    const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
+    const priceSources = {};
 
     // Update all investments in parallel — each update targets a different row
     const updateResults = await Promise.all(
-      Object.entries(prices).map(async ([investmentId, price]) => {
+      Object.entries(prices).map(async ([investmentId, priceData]) => {
+        const { price, source } = priceData || {};
         if (price != null && !isNaN(price)) {
-          await investmentRepository.update(parseInt(investmentId, 10), {
+          priceSources[investmentId] = source || 'live';
+          if (source === 'cached') return 0;
+
+          await investmentRepository.updatePrice(parseInt(investmentId, 10), {
             current_price: price,
             price_updated_at: new Date().toISOString(),
           });
@@ -79,10 +150,41 @@ router.post('/refresh-prices', async (req, res) => {
     const updated = updateResults.reduce((sum, n) => sum + n, 0);
 
     logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
-    res.json({ updated, total: toRefresh.length, prices });
+    res.json({
+      updated,
+      total: toRefresh.length,
+      prices: Object.fromEntries(Object.entries(prices).map(([id, data]) => [id, data.price])),
+      priceSources,
+    });
   } catch (err) {
     logger.error('Failed to refresh prices', { error: err.message });
     res.status(500).json({ detail: 'Failed to refresh investment prices' });
+  }
+});
+
+// GET /api/investments/:id
+router.get('/:id/price-history', validateIdParam, async (req, res) => {
+  try {
+    const investmentId = parseInt(req.params.id, 10);
+    const inv = await investmentRepository.getById(investmentId);
+    if (!inv) return res.status(404).json({ detail: 'Investment not found' });
+
+    const fromMs = req.query.from_ms;
+    const toMs = req.query.to_ms;
+
+    const points = await fetchHistoricalPrices(inv, {
+      fromMs: fromMs !== undefined ? Number(fromMs) : undefined,
+      toMs: toMs !== undefined ? Number(toMs) : undefined,
+    });
+
+    return res.json({
+      investment_id: investmentId,
+      provider: inv.price_provider,
+      points,
+    });
+  } catch (err) {
+    logger.error('Failed to get investment price history', { error: err.message });
+    return res.status(500).json({ detail: 'Failed to retrieve investment price history' });
   }
 });
 
@@ -104,6 +206,9 @@ router.patch('/:id', validateIdParam, async (req, res) => {
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
     res.json(inv);
   } catch (err) {
+    if (err?.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ detail: err.message });
+    }
     logger.error('Failed to update investment', { error: err.message });
     res.status(500).json({ detail: 'Failed to update investment' });
   }
@@ -152,15 +257,18 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
     const inv = await investmentRepository.getById(investment_id);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
 
-    const { type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date } = req.body;
-    if (!type || !date || amount === undefined) return res.status(400).json({ detail: 'type, date and amount are required' });
+    const { type, date, amount, units, price_per_unit, fees, taxes, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur } = req.body;
+    if (!type || !date) return res.status(400).json({ detail: 'type and date are required' });
 
     const txn = await portfolioTransactionRepository.create({
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
-      currency: currency || inv.currency, note, is_recurring, recurrence_interval, recurrence_end_date,
+      currency: currency || inv.currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur,
     });
     res.status(201).json(txn);
   } catch (err) {
+    if (err?.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ detail: err.message });
+    }
     logger.error('Failed to create portfolio transaction', { error: err.message });
     res.status(500).json({ detail: 'Failed to create portfolio transaction' });
   }
@@ -177,6 +285,23 @@ router.delete('/transactions/:txnId', async (req, res) => {
   } catch (err) {
     logger.error('Failed to delete portfolio transaction', { error: err.message });
     res.status(500).json({ detail: 'Failed to delete portfolio transaction' });
+  }
+});
+
+// PATCH /api/investments/transactions/:txnId
+router.patch('/transactions/:txnId', async (req, res) => {
+  try {
+    const txnId = parseInt(req.params.txnId, 10);
+    if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
+    const txn = await portfolioTransactionRepository.update(txnId, req.body || {});
+    if (!txn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
+    res.json(txn);
+  } catch (err) {
+    if (err?.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ detail: err.message });
+    }
+    logger.error('Failed to update portfolio transaction', { error: err.message });
+    res.status(500).json({ detail: 'Failed to update portfolio transaction' });
   }
 });
 

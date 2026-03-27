@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -109,11 +109,12 @@ export function CustomCategoryChart({
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
 
   // Auto-save config changes in saved mode (debounced)
@@ -435,7 +436,7 @@ export function CustomCategoryChart({
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
                   <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
                   <Legend />
                   {selectedCategories.map((cat, i) => (
@@ -446,7 +447,7 @@ export function CustomCategoryChart({
                 <AreaChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
                   <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
                   <Legend />
                   {selectedCategories.map((cat, i) => (
@@ -459,7 +460,7 @@ export function CustomCategoryChart({
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
                   <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
                   <Legend />
                   {selectedCategories.map((cat, i) => (

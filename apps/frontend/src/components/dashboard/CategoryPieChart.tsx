@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 
 const COLORS = [
     "hsl(var(--primary))",
@@ -19,6 +21,9 @@ interface CategoryPieChartProps {
 
 export function CategoryPieChart({ data, embedded = false }: CategoryPieChartProps) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const chartContent = (
         <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -44,7 +49,7 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
                             background: "hsl(var(--card))",
                             color: "hsl(var(--card-foreground))",
                         }}
-                        formatter={(value: number) => [`€${value.toLocaleString()}`, t('categoryPie.amount')]}
+                        formatter={(value: number) => [formatCurrency(value, defaultCurrency, locale), t('categoryPie.amount')]}
                     />
                     <Legend
                         verticalAlign="bottom"

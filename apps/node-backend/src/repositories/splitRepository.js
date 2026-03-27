@@ -6,6 +6,26 @@ import { query } from '../database/connection.js';
 
 export const splitRepository = {
   /**
+   * Get split allocation totals for a transaction.
+   */
+  async getTransactionSplitTotals(transactionId) {
+    const sql = `
+      SELECT ABS(t.amount) AS transaction_total,
+             COALESCE(SUM(ts.amount), 0) AS current_split_total
+      FROM transactions t
+      LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+      WHERE t.id = $1
+      GROUP BY t.id, t.amount
+    `;
+    const result = await query(sql, [transactionId]);
+    if (result.rows.length === 0) return null;
+    return {
+      transaction_total: parseFloat(result.rows[0].transaction_total),
+      current_split_total: parseFloat(result.rows[0].current_split_total),
+    };
+  },
+
+  /**
    * Create a new split for a transaction.
    */
   async createSplit({ transaction_id, recipient_id, amount, note }) {
@@ -109,9 +129,12 @@ export const splitRepository = {
              t.amount AS transaction_amount,
              t.currency AS transaction_currency,
              t.bank_account,
+             COALESCE(pr.name, r.name) AS transaction_recipient_name,
              COALESCE(sp_agg.paid, 0) AS amount_paid
       FROM transaction_splits ts
       JOIN transactions t ON ts.transaction_id = t.id
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN (
         SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
       ) sp_agg ON sp_agg.split_id = ts.id
@@ -126,8 +149,55 @@ export const splitRepository = {
       transaction_amount: parseFloat(row.transaction_amount),
       transaction_currency: row.transaction_currency,
       bank_account: row.bank_account,
+      transaction_recipient_name: row.transaction_recipient_name,
       amount_paid: parseFloat(row.amount_paid),
       remaining: parseFloat(row.amount) - parseFloat(row.amount_paid),
+    }));
+  },
+
+  /**
+   * Export unsettled split transactions for a specific recipient in transaction CSV shape.
+   * Amount is replaced by the split remaining amount to settle.
+   */
+  async getOwedExportRowsByRecipient(recipientId) {
+    const sql = `
+      SELECT
+        t.date,
+        t.bank_account,
+        COALESCE(pr.name, tr.name) AS recipient_name,
+        t.memo,
+        (ts.amount - COALESCE(sp_agg.paid, 0)) AS amount,
+        t.currency,
+        t.balance,
+        CASE
+          WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+          WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+          WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+          ELSE ''
+        END AS category_name,
+        t.comment
+      FROM transaction_splits ts
+      JOIN transactions t ON ts.transaction_id = t.id
+      LEFT JOIN recipients tr ON t.recipient_id = tr.id
+      LEFT JOIN recipients pr ON tr.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON tr.default_category_id = rc.id
+      LEFT JOIN categories pc ON pr.default_category_id = pc.id
+      LEFT JOIN (
+        SELECT split_id, SUM(amount) AS paid
+        FROM split_payments
+        GROUP BY split_id
+      ) sp_agg ON sp_agg.split_id = ts.id
+      WHERE ts.recipient_id = $1
+        AND ts.is_settled = false
+        AND (ts.amount - COALESCE(sp_agg.paid, 0)) > 0
+      ORDER BY t.date ASC
+    `;
+
+    const result = await query(sql, [recipientId]);
+    return result.rows.map((row) => ({
+      ...row,
+      amount: parseFloat(row.amount),
     }));
   },
 
@@ -181,6 +251,16 @@ export const splitRepository = {
     const sql = `UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *`;
     const result = await query(sql, [splitId]);
     return result.rows[0] ? formatSplit(result.rows[0]) : null;
+  },
+
+  async settleAllByRecipient(recipientId) {
+    const sql = `
+      UPDATE transaction_splits
+      SET is_settled = true
+      WHERE recipient_id = $1 AND is_settled = false
+    `;
+    const result = await query(sql, [recipientId]);
+    return { settled_count: result.rowCount || 0 };
   },
 
   /**

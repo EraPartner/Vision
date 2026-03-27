@@ -22,7 +22,9 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { numberFormatToLocale } from "@/utils/currency";
+import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
+
+type PivotValueMode = "absolute" | "net" | "income" | "expense";
 
 const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey?: string }> = [
   { id: "summaryCards",      labelKey: 'statsPage.widget.summaryCards',      defaultVisible: true },
@@ -81,8 +83,8 @@ function SummaryCards({ data }: { data: StatisticsData }) {
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
 
   const cards = [
@@ -139,11 +141,12 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
   const chartData = data.monthlyData.map((m) => ({
     period: formatPeriodShort(m.period),
@@ -156,7 +159,7 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
       <BarChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="period" className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} />
-        <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <Legend />
         <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
@@ -171,11 +174,12 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
   const chartData = data.monthlyData.map((m) => ({
     period: formatPeriodShort(m.period),
@@ -187,7 +191,7 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
       <AreaChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <defs>
           <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
@@ -206,11 +210,12 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
   const chartData = data.yearlyComparison.map((y) => ({
     year: y.year.toString(),
@@ -223,7 +228,7 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
       <BarChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="year" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <Legend />
         <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
@@ -235,15 +240,22 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
 
 // ─── Top Recipients ───────────────────────────────────────
 function TopRecipientsChart({ data }: { data: StatisticsData }) {
+  const { t } = useLanguage();
   const { appSettings } = useAppSettings();
+  const [yearFilter, setYearFilter] = useState<string>("all");
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
-  const chartData = data.topRecipients.slice(0, 10).map((r) => ({
+  const filteredRecipients = yearFilter === "all"
+    ? data.topRecipients
+    : (data.topRecipientsByYear[yearFilter] || []);
+
+  const chartData = filteredRecipients.slice(0, 10).map((r) => ({
     name: r.name.length > 20 ? r.name.substring(0, 20) + "…" : r.name,
     fullName: r.name,
     amount: Math.round(r.total),
@@ -251,58 +263,117 @@ function TopRecipientsChart({ data }: { data: StatisticsData }) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={chartData} layout="vertical">
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-        <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-        <RechartsTooltip
-          contentStyle={RECHARTS_TOOLTIP_STYLE}
-          formatter={(value: number) => formatCurrency(value)}
-          labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullName || label}
-        />
-        <Bar dataKey="amount" fill="hsl(217, 91%, 60%)" radius={[0, 4, 4, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Select value={yearFilter} onValueChange={setYearFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder={t('statistics.selectYear')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('statsPage.allYears')}</SelectItem>
+            {data.allYears.map((year) => (
+              <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ResponsiveContainer width="100%" height={350}>
+        <BarChart data={chartData} layout="vertical">
+          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
+          <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+          <RechartsTooltip
+            contentStyle={RECHARTS_TOOLTIP_STYLE}
+            formatter={(value: number) => formatCurrency(value)}
+            labelFormatter={(label: string, payload?: Array<{ payload?: { fullName?: string } }>) => payload?.[0]?.payload?.fullName || label}
+          />
+          <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
+            {chartData.map((_entry, index) => (
+              <Cell key={`recipient-bar-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
 // ─── Category Spending Pie ────────────────────────────────
 function CategoryPieChart({ data }: { data: StatisticsData }) {
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
-  const pieData = data.categoryPivot.slice(0, 10).map((c, i) => ({
-    name: c.categoryName,
-    value: Math.round(c.total),
-    color: CHART_COLORS[i % CHART_COLORS.length],
-  }));
+  const filteredPeriods = useMemo(() => {
+    if (yearFilter === "all") return data.allPeriods;
+    return data.allPeriods.filter((period) => period.startsWith(yearFilter));
+  }, [yearFilter, data.allPeriods]);
+
+  const pieData = useMemo(() => {
+    const totals = data.categoryPivot
+      .map((category) => {
+        const totalForPeriods = filteredPeriods.reduce((sum, period) => sum + (category.months[period] || 0), 0);
+        return {
+          name: category.categoryName,
+          value: Math.round(totalForPeriods),
+        };
+      })
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+
+    return totals.map((item, index) => ({
+      ...item,
+      color: CHART_COLORS[index % CHART_COLORS.length],
+    }));
+  }, [data.categoryPivot, filteredPeriods]);
 
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <PieChart>
-        <Pie
-          data={pieData}
-          cx="50%"
-          cy="50%"
-          outerRadius={120}
-          innerRadius={60}
-          dataKey="value"
-          label={({ name, percent }) => `${name.split(":")[0]} ${(percent * 100).toFixed(0)}%`}
-          labelLine={{ strokeWidth: 1 }}
-        >
-          {pieData.map((entry, index) => (
-            <Cell key={index} fill={entry.color} />
-          ))}
-        </Pie>
-        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Select value={yearFilter} onValueChange={setYearFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder={t('statistics.selectYear')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('statsPage.allYears')}</SelectItem>
+            {data.allYears.map((year) => (
+              <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <ResponsiveContainer width="100%" height={350}>
+        <PieChart>
+          <Pie
+            data={pieData}
+            cx="50%"
+            cy="50%"
+            outerRadius={120}
+            innerRadius={60}
+            dataKey="value"
+            label={({ name, percent }) => {
+              const parts = name.split(":");
+              const general = parts[0]?.trim() || name;
+              return `${general} ${(percent * 100).toFixed(0)}%`;
+            }}
+            labelLine={{ strokeWidth: 1 }}
+          >
+            {pieData.map((entry, index) => (
+              <Cell key={index} fill={entry.color} />
+            ))}
+          </Pie>
+          <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -321,14 +392,15 @@ function CategoryPivotTable({
   exclusionsApply: boolean;
 }) {
   const [yearFilter, setYearFilter] = useState<string>("all");
+  const [valueMode, setValueMode] = useState<PivotValueMode>("absolute");
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
 
   const filteredPeriods = useMemo(() => {
@@ -336,15 +408,27 @@ function CategoryPivotTable({
     return data.allPeriods.filter((p) => p.startsWith(yearFilter));
   }, [yearFilter, data.allPeriods]);
 
+  const getPeriodValue = (cat: StatisticsData['categoryPivot'][number], period: string) => {
+    if (valueMode === "net") return cat.netMonths[period] || 0;
+    if (valueMode === "income") return cat.incomeMonths[period] || 0;
+    if (valueMode === "expense") return cat.expenseMonths[period] || 0;
+    return cat.months[period] || 0;
+  };
+
   const filteredCategories = useMemo(() => {
     return data.categoryPivot
       .map((cat) => {
-        const filteredTotal = filteredPeriods.reduce((s, p) => s + (cat.months[p] || 0), 0);
+        const filteredTotal = filteredPeriods.reduce((s, p) => s + getPeriodValue(cat, p), 0);
         return { ...cat, filteredTotal };
       })
-      .filter((cat) => cat.filteredTotal > 0)
-      .sort((a, b) => b.filteredTotal - a.filteredTotal);
-  }, [data.categoryPivot, filteredPeriods]);
+      .filter((cat) => {
+        if (valueMode === "net") return cat.filteredTotal !== 0;
+        return cat.filteredTotal > 0;
+      })
+      .sort((a, b) => valueMode === "net"
+        ? Math.abs(b.filteredTotal) - Math.abs(a.filteredTotal)
+        : b.filteredTotal - a.filteredTotal);
+  }, [data.categoryPivot, filteredPeriods, valueMode]);
 
   const hierarchicalCategories = useMemo(() => {
     type PivotItem = (typeof filteredCategories)[number];
@@ -356,9 +440,11 @@ function CategoryPivotTable({
     }>();
 
     for (const cat of filteredCategories) {
+      // Parse "GENERAL: DETAIL" format - the colon is followed by space in normalized names
       const [rawGeneral, ...detailParts] = String(cat.categoryName || t('txPage.field.uncategorized')).split(":");
-      const general = rawGeneral || t('txPage.field.uncategorized');
-      const detailName = detailParts.length > 0 ? detailParts.join(":") : general;
+      const general = rawGeneral?.trim() || t('txPage.field.uncategorized');
+      // Remove leading space from detail if present (from "GENERAL: DETAIL" format)
+      const detailName = detailParts.length > 0 ? detailParts.join(":").replace(/^ /, '') : general;
 
       if (!grouped.has(general)) {
         const initialMonths: Record<string, number> = {};
@@ -377,7 +463,7 @@ function CategoryPivotTable({
       const group = grouped.get(general)!;
       group.total += cat.filteredTotal;
       for (const period of filteredPeriods) {
-        group.months[period] += cat.months[period] || 0;
+        group.months[period] += getPeriodValue(cat, period);
       }
       group.children.push({ ...cat, detailName });
     }
@@ -385,18 +471,22 @@ function CategoryPivotTable({
     return Array.from(grouped.values())
       .map((group) => ({
         ...group,
-        children: group.children.sort((a, b) => b.filteredTotal - a.filteredTotal),
+        children: group.children.sort((a, b) => valueMode === "net"
+          ? Math.abs(b.filteredTotal) - Math.abs(a.filteredTotal)
+          : b.filteredTotal - a.filteredTotal),
       }))
-      .sort((a, b) => b.total - a.total);
-  }, [filteredCategories, filteredPeriods]);
+      .sort((a, b) => valueMode === "net"
+        ? Math.abs(b.total) - Math.abs(a.total)
+        : b.total - a.total);
+  }, [filteredCategories, filteredPeriods, t, valueMode]);
 
   const columnTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const period of filteredPeriods) {
-      totals[period] = filteredCategories.reduce((s, cat) => s + (cat.months[period] || 0), 0);
+      totals[period] = filteredCategories.reduce((s, cat) => s + getPeriodValue(cat, period), 0);
     }
     return totals;
-  }, [filteredCategories, filteredPeriods]);
+  }, [filteredCategories, filteredPeriods, valueMode]);
 
   return (
     <Card>
@@ -407,6 +497,17 @@ function CategoryPivotTable({
           <CardDescription>{t('statsPage.pivotDesc')}</CardDescription>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={valueMode} onValueChange={(v) => setValueMode(v as PivotValueMode)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder={t('statsPage.pivot.metric')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="absolute">{t('statsPage.pivot.metric.absolute')}</SelectItem>
+              <SelectItem value="net">{t('statsPage.pivot.metric.net')}</SelectItem>
+              <SelectItem value="income">{t('statsPage.pivot.metric.income')}</SelectItem>
+              <SelectItem value="expense">{t('statsPage.pivot.metric.expense')}</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={yearFilter} onValueChange={setYearFilter}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder={t('statistics.selectYear')} />
@@ -449,12 +550,12 @@ function CategoryPivotTable({
                       {filteredPeriods.map((p) => {
                         const val = group.months[p] || 0;
                         return (
-                          <td key={p} className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""}`}>
+                          <td key={p} className={`text-right py-2 px-3 tabular-nums font-semibold ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-destructive" : ""}`}>
                             {val === 0 ? "—" : formatCurrency(val)}
                           </td>
                         );
                       })}
-                      <td className="text-right py-2 px-3 font-bold tabular-nums">{formatCurrency(group.total)}</td>
+                      <td className={`text-right py-2 px-3 font-bold tabular-nums ${group.total < 0 ? "text-destructive" : ""}`}>{formatCurrency(group.total)}</td>
                     </tr>
                     {group.children.map((cat) => (
                       <tr key={cat.categoryId} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
@@ -462,14 +563,14 @@ function CategoryPivotTable({
                           {cat.detailName}
                         </td>
                         {filteredPeriods.map((p) => {
-                          const val = cat.months[p] || 0;
+                          const val = getPeriodValue(cat, p);
                           return (
-                            <td key={p} className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""}`}>
+                            <td key={p} className={`text-right py-2 px-3 tabular-nums ${val === 0 ? "text-muted-foreground/40" : ""} ${val < 0 ? "text-destructive" : ""}`}>
                             {val === 0 ? "—" : formatCurrency(val)}
                           </td>
                         );
                       })}
-                        <td className="text-right py-2 px-3 font-medium tabular-nums">{formatCurrency(cat.filteredTotal)}</td>
+                        <td className={`text-right py-2 px-3 font-medium tabular-nums ${cat.filteredTotal < 0 ? "text-destructive" : ""}`}>{formatCurrency(cat.filteredTotal)}</td>
                       </tr>
                     ))}
                   </Fragment>
@@ -499,15 +600,16 @@ function CategoryPivotTable({
 function CategoryTrendChart({ data }: { data: StatisticsData }) {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const currencySymbol = getCurrencySymbol(appSettings.defaultCurrency || "EUR");
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
   const topCategories = data.categoryPivot.slice(0, 5);
   const chartData = data.allPeriods.map((period) => {
-    const point: Record<string, any> = { period: formatPeriodShort(period) };
+    const point: Record<string, number | string> = { period: formatPeriodShort(period) };
     for (const cat of topCategories) {
       point[cat.categoryName] = Math.round(cat.months[period] || 0);
     }
@@ -519,7 +621,7 @@ function CategoryTrendChart({ data }: { data: StatisticsData }) {
       <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
         <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
         <Legend />
         {topCategories.map((cat, i) => (
@@ -631,8 +733,8 @@ export default function StatisticsPage() {
   const formatCurrency = (val: number) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
 
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('statistics', STATISTICS_WIDGETS);
@@ -804,7 +906,7 @@ export default function StatisticsPage() {
                           <td className={`text-right py-2 px-3 font-bold tabular-nums ${y.net >= 0 ? "text-accent" : "text-destructive"}`}>
                             {formatCurrency(y.net)}
                           </td>
-                          <td className="text-right py-2 px-3 tabular-nums">{y.transactionCount.toLocaleString()}</td>
+                          <td className="text-right py-2 px-3 tabular-nums">{new Intl.NumberFormat(locale).format(y.transactionCount)}</td>
                         </tr>
                     ))}
                     </tbody>

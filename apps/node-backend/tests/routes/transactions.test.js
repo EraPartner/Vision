@@ -90,6 +90,21 @@ describe('Transaction Routes', () => {
 
       expect(transactionRepository.getUncategorised).toHaveBeenCalled();
     });
+
+    it('should support filtering by transaction_id', async () => {
+      transactionRepository.getAll.mockResolvedValue([
+        { id: 42, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 },
+      ]);
+      transactionRepository.getCount.mockResolvedValue(1);
+
+      const req = { query: { transaction_id: '42' } };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
+      expect(transactionRepository.getCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
+      expect(res.json.mock.calls[0][0].items).toHaveLength(1);
+    });
   });
 
   describe('GET /:id', () => {

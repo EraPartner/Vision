@@ -9,6 +9,23 @@ import { query } from '../database/connection.js';
 
 let userSettingsTableReady = false;
 
+function normalizeSettingValue(value) {
+  try {
+    if (value && typeof value === 'object') {
+      if (Array.isArray(value.excludedCategoryIds)) {
+        value.excludedCategoryIds = value.excludedCategoryIds.map(Number);
+      }
+      if (Array.isArray(value.excludedRecipientIds)) {
+        value.excludedRecipientIds = value.excludedRecipientIds.map(Number);
+      }
+    }
+  } catch {
+    // ignore normalization errors — DB will still store original value
+  }
+
+  return value;
+}
+
 async function ensureUserSettingsTable() {
   if (userSettingsTableReady) return;
 
@@ -61,27 +78,16 @@ export const settingsRepository = {
    */
   async set(key, value) {
     await ensureUserSettingsTable();
-    // Pass JS value directly so the Postgres driver stores it as JSONB
-    // Normalize any nested arrays of numeric IDs to arrays of integers
-    try {
-      if (value && typeof value === 'object') {
-        if (Array.isArray(value.excludedCategoryIds)) {
-          value.excludedCategoryIds = value.excludedCategoryIds.map(Number);
-        }
-        if (Array.isArray(value.excludedRecipientIds)) {
-          value.excludedRecipientIds = value.excludedRecipientIds.map(Number);
-        }
-      }
-    } catch (e) {
-      // ignore normalization errors — DB will still store original value
-    }
+    const normalized = normalizeSettingValue(value);
+    const jsonValue = JSON.stringify(normalized);
+
     await query(
       `INSERT INTO user_settings (key, value, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-      [key, value]
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
+      [key, jsonValue]
     );
-    return { key, value };
+    return { key, value: normalized };
   },
 
   /**
@@ -102,11 +108,14 @@ export const settingsRepository = {
     if (entries.length === 0) return;
 
     for (const [key, value] of entries) {
+      const normalized = normalizeSettingValue(value);
+      const jsonValue = JSON.stringify(normalized);
+
       await query(
         `INSERT INTO user_settings (key, value, updated_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-        [key, value]
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
+        [key, jsonValue]
       );
     }
   },

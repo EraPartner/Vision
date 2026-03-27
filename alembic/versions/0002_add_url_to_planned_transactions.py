@@ -24,12 +24,30 @@ def upgrade() -> None:
 
     The column is nullable to avoid impacting existing rows.
     """
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if not inspector.has_table('planned_transactions'):
+        return
+
+    existing_columns = {column['name'] for column in inspector.get_columns('planned_transactions')}
+    if 'url' in existing_columns:
+        return
+
     op.add_column('planned_transactions', sa.Column('url', URLType(), nullable=True))
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
+    inspector = sa.inspect(bind)
+
+    if not inspector.has_table('planned_transactions'):
+        return
+
+    existing_columns = {column['name'] for column in inspector.get_columns('planned_transactions')}
+    if 'url' not in existing_columns:
+        return
 
     if dialect == 'sqlite':
         with op.batch_alter_table('planned_transactions') as batch_op:

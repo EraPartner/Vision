@@ -2,8 +2,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, ReferenceLine } from "recharts";
 import { Activity } from "lucide-react";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
 interface DayData {
   day: number;
@@ -22,6 +24,9 @@ interface CashFlowComparisonProps {
 
 function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: number }) {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const defaultCurrency = appSettings.defaultCurrency || 'EUR';
   const lastActual = data.slice(0, currentDay).at(-1);
   const avgAtCurrentDay = lastActual ? data[currentDay - 1]?.average : null;
   const diff = lastActual?.current !== null && lastActual?.current !== undefined && avgAtCurrentDay !== null
@@ -44,7 +49,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
           />
           <YAxis
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-            tickFormatter={(v) => `€${Math.round(v)}`}
+            tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
             width={70}
           />
           <Tooltip
@@ -56,7 +61,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
               boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
             }}
             formatter={(value: number, name: string) => [
-              formatCurrency(value, 'EUR'),
+              formatCurrency(value, defaultCurrency, locale),
               name === 'average' ? t('cashflow.24monthAvg') : t('cashflow.thisMonth'),
             ]}
             labelFormatter={(label) => t('cashflow.day', { n: String(label) })}
@@ -99,7 +104,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
               ? `${t('cashflow.savingMore')} `
               : `${t('cashflow.spendingMore')} `}
             <span className="font-bold">
-              {formatCurrency(Math.abs(diff), 'EUR')}
+              {formatCurrency(Math.abs(diff), defaultCurrency, locale)}
             </span>
             {isBetterThanAverage ? ` ${t('cashflow.better')}` : ` ${t('cashflow.worse')}`}{' '}{t('cashflow.comparedTo')} {currentDay}
           </p>
@@ -110,8 +115,10 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
 }
 
 export function CashFlowComparisonChart({ withoutPlanned, withPlanned, currentDay, month, year, embedded = false }: CashFlowComparisonProps) {
-  const { t, language } = useLanguage();
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString(language, { month: "long", year: "numeric" }).replace(/^\w/, c => c.toUpperCase());
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const monthName = formatMonthYearWithAppSettings(new Date(year, month - 1, 1), appSettings.dateFormat, locale);
 
   const chartContent = (
     <Tabs defaultValue="without" className="w-full">

@@ -22,6 +22,9 @@ import {
 } from "recharts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -49,6 +52,8 @@ interface WatchlistChartDialogProps {
 
 export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChartDialogProps) {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const [selectedRange, setSelectedRange] = useState(RANGES[0]);
   const [editingPrice, setEditingPrice] = useState(false);
   const [newTargetPrice, setNewTargetPrice] = useState("");
@@ -107,10 +112,17 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   const currentPrice = quoteData?.price ?? null;
   const isBelowTarget = currentPrice != null && currentPrice <= targetPrice;
   const priceDiff = currentPrice != null ? ((currentPrice - targetPrice) / targetPrice) * 100 : null;
+  const formatDisplayCurrency = (value: number, currency: string) =>
+    new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
+    }).format(value);
 
   // Format chart data
   const formattedData = chartData?.points?.map((p) => ({
-    date: new Date(p.time).toLocaleDateString(),
+    date: formatDateWithAppSettings(new Date(p.time), appSettings.dateFormat),
     price: p.close,
     time: p.time,
   })) || [];
@@ -168,7 +180,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                   }}
                   className="text-2xl font-bold text-primary hover:underline text-left"
                 >
-                  {item.currency} {targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatDisplayCurrency(targetPrice, item.currency)}
                 </button>
               )}
             </div>
@@ -178,7 +190,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
               {currentPrice != null ? (
                 <>
                   <p className="text-2xl font-bold">
-                    {item.currency} {currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatDisplayCurrency(currentPrice, item.currency)}
                   </p>
                     <div className={cn(
                       "flex items-center gap-1 text-sm mt-1",
@@ -234,7 +246,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                     tickFormatter={(value) => {
                       const date = new Date(value);
-                      return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                      return formatDateWithAppSettings(date, appSettings.dateFormat);
                     }}
                     minTickGap={50}
                   />
@@ -243,7 +255,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     tickLine={false}
                     axisLine={false}
                     tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickFormatter={(value) => `${item.currency}${value.toFixed(0)}`}
+                    tickFormatter={(value) => formatDisplayCurrency(value, item.currency)}
                     width={60}
                   />
                   <Tooltip
@@ -253,7 +265,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                       borderRadius: "8px",
                     }}
                     formatter={(value: number) => [
-                      `${item.currency} ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                      formatDisplayCurrency(value, item.currency),
                       t('watchlistChart.priceLabel'),
                     ]}
                   />
@@ -263,7 +275,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     strokeDasharray="5 5"
                     strokeWidth={2}
                     label={{
-                      value: t('watchlistChart.targetLabel', { currency: item.currency, price: targetPrice.toFixed(2) }),
+                      value: t('watchlistChart.targetLabel', { currency: item.currency, price: formatDisplayCurrency(targetPrice, item.currency) }),
                       position: "insideTopRight",
                       fill: "hsl(var(--primary))",
                       fontSize: 12,

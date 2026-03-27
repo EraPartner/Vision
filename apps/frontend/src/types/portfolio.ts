@@ -2,13 +2,14 @@
  * Portfolio investment types — shared between frontend components.
  */
 
-export type AssetClass = 'stock' | 'etf' | 'crypto' | 'real_estate' | 'savings' | 'bond';
+export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
 
 /** @deprecated Use getAssetClassLabel(t, assetClass) for UI display */
 export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   stock: 'Stock',
   etf: 'ETF',
   crypto: 'Cryptocurrency',
+  metals: 'Metals',
   real_estate: 'Real Estate',
   savings: 'Savings Account',
   bond: 'Bond',
@@ -32,12 +33,13 @@ export function getAssetClassGroups(t: (key: string) => string): Record<string, 
   return {
     [t('portfolio.assetGroup.stocksEtfs')]: ['stock', 'etf'],
     [t('portfolio.assetGroup.crypto')]: ['crypto'],
+    [t('portfolio.assetGroup.metals')]: ['metals'],
     [t('portfolio.assetGroup.realEstate')]: ['real_estate'],
     [t('portfolio.assetGroup.savingsBonds')]: ['savings', 'bond'],
   };
 }
 
-export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation';
+export type PortfolioTxnType = 'buy' | 'sell' | 'dividend' | 'fee' | 'tax' | 'interest' | 'rent_income' | 'appreciation' | 'gift';
 
 /** @deprecated Use getTxnTypeLabel(t, type) for UI display */
 export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
@@ -49,6 +51,7 @@ export const TXN_TYPE_LABELS: Record<PortfolioTxnType, string> = {
   interest: 'Interest',
   rent_income: 'Rent Income',
   appreciation: 'Appreciation',
+  gift: 'Gift',
 };
 
 /** Returns a translated label for a portfolio transaction type. */
@@ -77,6 +80,15 @@ export interface InvestmentSummary {
   cadastral_income?: number;
   municipality_tax_rate?: number;
   notes?: string;
+  price_provider?: 'manual' | 'coingecko' | 'yahoo' | 'kraken' | 'custom';
+  price_provider_id?: string;
+  price_provider_url?: string;
+  price_provider_latest_url?: string;
+  price_provider_latest_path?: string;
+  price_provider_history_url?: string;
+  price_provider_history_path?: string;
+  price_provider_history_ts_path?: string;
+  price_provider_history_price_path?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

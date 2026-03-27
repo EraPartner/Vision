@@ -71,6 +71,19 @@ export function useSettleSplit() {
     });
 }
 
+export function useSettleAllSplitsByRecipient() {
+    const qc = useQueryClient();
+    const { t } = useLanguage();
+    return useMutation({
+        mutationFn: (recipientId: number) => apiClient.settleAllSplitsByRecipient(recipientId),
+        onSuccess: (result) => {
+            qc.invalidateQueries({ queryKey: ['splits'] });
+            toast.success(t('splits.allSettled', { n: result.settled_count }));
+        },
+        onError: (e: Error) => toast.error(t('splits.allSettledFailed'), { description: e.message }),
+    });
+}
+
 export function useDeleteSplit() {
     const qc = useQueryClient();
     const { t } = useLanguage();

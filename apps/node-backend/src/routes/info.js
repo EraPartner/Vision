@@ -13,10 +13,20 @@ import { rateLimiter, adminRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
+function getTargetCurrency(req) {
+  const raw = req.query.currency ?? req.query.target_currency;
+  if (raw == null || raw === '') return 'EUR';
+
+  const value = String(raw).toUpperCase().trim();
+  // Keep validation generic for easy extension to any ISO-4217 code.
+  return /^[A-Z]{3}$/.test(value) ? value : 'EUR';
+}
+
 // GET /api/info
 router.get('/', async (req, res) => {
   try {
-    const stats = await infoRepository.getStatistics();
+    const targetCurrency = getTargetCurrency(req);
+    const stats = await infoRepository.getStatistics(targetCurrency);
     res.json(stats);
   } catch (err) {
     logger.error('Error retrieving statistics', { error: err.message });
@@ -64,10 +74,12 @@ router.get('/transaction-count', async (req, res) => {
 router.get('/transaction-summary', async (req, res) => {
   try {
     const { bank_account, start_date, end_date } = req.query;
+    const targetCurrency = getTargetCurrency(req);
     const summary = await infoRepository.getTransactionSummary({
       bankAccount: bank_account || null,
       startDate: start_date || null,
       endDate: end_date || null,
+      targetCurrency,
     });
     res.json(summary);
   } catch (err) {
@@ -79,6 +91,7 @@ router.get('/transaction-summary', async (req, res) => {
 // GET /api/info/monthly-summary
 router.get('/monthly-summary', async (req, res) => {
   try {
+    const targetCurrency = getTargetCurrency(req);
     let excludedCategoryIds = req.query.excluded_category_ids;
     if (excludedCategoryIds) {
       if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
@@ -88,7 +101,7 @@ router.get('/monthly-summary', async (req, res) => {
     }
 
     logger.debug('Monthly summary request', { excludedCategoryIds });
-    const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds);
+    const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds, targetCurrency);
     logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
     res.json({ ...data, links: [] });
   } catch (err) {
@@ -100,7 +113,8 @@ router.get('/monthly-summary', async (req, res) => {
 // GET /api/info/planned-expenses-next-month
 router.get('/planned-expenses-next-month', async (req, res) => {
   try {
-    const data = await infoRepository.getPlannedExpensesNextMonth();
+    const targetCurrency = getTargetCurrency(req);
+    const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
     res.json({ ...data, links: [] });
   } catch (err) {
     logger.error('Error retrieving planned expenses next month', { error: err.message });
@@ -111,7 +125,8 @@ router.get('/planned-expenses-next-month', async (req, res) => {
 // GET /api/info/average-vs-current-spending
 router.get('/average-vs-current-spending', async (req, res) => {
   try {
-    const data = await infoRepository.getAverageVsCurrentSpending();
+    const targetCurrency = getTargetCurrency(req);
+    const data = await infoRepository.getAverageVsCurrentSpending(targetCurrency);
     res.json({ ...data, links: [] });
   } catch (err) {
     logger.error('Error retrieving average vs current spending', { error: err.message });
@@ -122,6 +137,7 @@ router.get('/average-vs-current-spending', async (req, res) => {
 // GET /api/info/cashflow-comparison
 router.get('/cashflow-comparison', async (req, res) => {
   try {
+    const targetCurrency = getTargetCurrency(req);
     let excludedCategoryIds = req.query.excluded_category_ids;
     if (excludedCategoryIds) {
       if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
@@ -136,7 +152,7 @@ router.get('/cashflow-comparison', async (req, res) => {
     } else {
       excludedRecipientIds = [];
     }
-    const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds);
+    const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds, targetCurrency);
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving cashflow comparison', { error: err.message, stack: err.stack });
@@ -147,7 +163,8 @@ router.get('/cashflow-comparison', async (req, res) => {
 // GET /api/info/category-breakdown - Detailed category breakdown with amounts
 router.get('/category-breakdown', async (req, res) => {
   try {
-    const stats = await infoRepository.getStatistics();
+    const targetCurrency = getTargetCurrency(req);
+    const stats = await infoRepository.getStatistics(targetCurrency);
     res.json({
       categories: stats.categories,
       links: [],
@@ -161,7 +178,8 @@ router.get('/category-breakdown', async (req, res) => {
 // GET /api/info/bank-balances - Current and historical balance per bank account
 router.get('/bank-balances', async (req, res) => {
   try {
-    const data = await infoRepository.getBankBalances();
+    const targetCurrency = getTargetCurrency(req);
+    const data = await infoRepository.getBankBalances(targetCurrency);
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving bank balances', { error: err.message });
@@ -183,7 +201,8 @@ router.get('/recurring-patterns', async (req, res) => {
 // GET /api/info/net-worth - Net worth combining bank balances + portfolio
 router.get('/net-worth', async (req, res) => {
   try {
-    const data = await infoRepository.getNetWorth();
+    const targetCurrency = getTargetCurrency(req);
+    const data = await infoRepository.getNetWorth(targetCurrency);
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving net worth', { error: err.message });
@@ -194,7 +213,8 @@ router.get('/net-worth', async (req, res) => {
 // GET /api/info/recipient-insights - Merchant/recipient spending insights
 router.get('/recipient-insights', async (req, res) => {
   try {
-    const data = await infoRepository.getRecipientInsights();
+    const targetCurrency = getTargetCurrency(req);
+    const data = await infoRepository.getRecipientInsights(targetCurrency);
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving recipient insights', { error: err.message });

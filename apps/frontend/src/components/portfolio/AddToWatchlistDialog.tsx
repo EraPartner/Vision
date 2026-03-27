@@ -41,7 +41,7 @@ interface AddToWatchlistDialogProps {
 export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<SearchResult | null>(null);
-  const [assetClass, setAssetClass] = useState<"stock" | "etf" | "crypto">("stock");
+  const [assetClass, setAssetClass] = useState<"stock" | "etf" | "crypto" | "metals">("stock");
   const [targetPrice, setTargetPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [notes, setNotes] = useState("");
@@ -207,6 +207,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                       <SelectItem value="stock">{t('addWatchlist.stock')}</SelectItem>
                       <SelectItem value="etf">{t('addWatchlist.etf')}</SelectItem>
                       <SelectItem value="crypto">{t('addWatchlist.crypto')}</SelectItem>
+                      <SelectItem value="metals">{t('addWatchlist.metals')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -53,6 +53,17 @@ describe('Info Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       expect(res.json.mock.calls[0][0].total_transactions).toBe(5);
+      expect(infoRepository.getStatistics).toHaveBeenCalledWith('EUR');
+    });
+
+    it('should pass selected currency to repository', async () => {
+      infoRepository.getStatistics.mockResolvedValue({ total_transactions: 0, categories: [] });
+
+      const req = { query: { currency: 'HUF' } };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(infoRepository.getStatistics).toHaveBeenCalledWith('HUF');
     });
 
     it('should return empty for empty database', async () => {
@@ -159,7 +170,22 @@ describe('Info Routes', () => {
       await routeHandlers['get:/transaction-summary'](req, res);
 
       expect(infoRepository.getTransactionSummary).toHaveBeenCalledWith({
-        bankAccount: 'Chase', startDate: '2026-01-01', endDate: '2026-12-31',
+        bankAccount: 'Chase', startDate: '2026-01-01', endDate: '2026-12-31', targetCurrency: 'EUR',
+      });
+    });
+
+    it('should pass selected currency for transaction summary', async () => {
+      infoRepository.getTransactionSummary.mockResolvedValue({ total: 50 });
+
+      const req = { query: { currency: 'AED', bank_account: 'Revolut' } };
+      const res = mockResponse();
+      await routeHandlers['get:/transaction-summary'](req, res);
+
+      expect(infoRepository.getTransactionSummary).toHaveBeenCalledWith({
+        bankAccount: 'Revolut',
+        startDate: null,
+        endDate: null,
+        targetCurrency: 'AED',
       });
     });
 
@@ -318,9 +344,9 @@ describe('Info Routes', () => {
         monthlyChange: 500,
         monthlyChangePercent: 3.45,
         snapshots: [
-          { month: '2026-01', liquid: 9000, investments: 4500, netWorth: 13500 },
-          { month: '2026-02', liquid: 9500, investments: 5000, netWorth: 14500 },
-          { month: '2026-03', liquid: 10000, investments: 5000, netWorth: 15000 },
+          { date: '2026-03-01', liquid: 9000, investments: 4500, netWorth: 13500 },
+          { date: '2026-03-02', liquid: 9500, investments: 5000, netWorth: 14500 },
+          { date: '2026-03-03', liquid: 10000, investments: 5000, netWorth: 15000 },
         ],
       });
 

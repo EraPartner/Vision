@@ -9,19 +9,45 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 
 vi.mock('../src/services/currencyConversionService.js', () => ({
-  convertToEur: vi.fn((amount) => amount), // identity by default
+  convertRowsToEur: vi.fn(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) }))),
+}));
+
+vi.mock('../src/services/priceProviderService.js', () => ({
+  fetchHistoricalPrices: vi.fn(async () => []),
+  getHistoricalPriceAt: vi.fn((points, timestampMs) => {
+    if (!Array.isArray(points) || points.length === 0) return undefined;
+    let best;
+    for (const point of points) {
+      if (!point || !Number.isFinite(point.timestampMs)) continue;
+      if (point.timestampMs <= timestampMs) best = point;
+      else break;
+    }
+    return best?.price;
+  }),
 }));
 
 import { query } from '../src/database/connection.js';
-import { convertToEur } from '../src/services/currencyConversionService.js';
+import { convertRowsToEur } from '../src/services/currencyConversionService.js';
+import { fetchHistoricalPrices } from '../src/services/priceProviderService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
+
+vi.mock('../src/config/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+import { logger } from '../src/config/logger.js';
 
 describe('InfoRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default: mvAvailable returns false (no materialized views)
     query.mockImplementation(async (sql) => {
-      if (typeof sql === 'string' && sql.includes('LIMIT 1')) {
+      if (typeof sql === 'string' && sql.includes('SELECT 1 FROM')) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -31,50 +57,46 @@ describe('InfoRepository', () => {
   describe('getNetWorth', () => {
     it('should return combined net worth from bank balances and portfolio', async () => {
       const calls = [];
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       query.mockImplementation(async (sql, params) => {
         calls.push(sql.trim().substring(0, 40));
 
         // mvAvailable checks -> false
-        if (sql.includes('LIMIT 1')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
 
-        // getBankBalances -> live fallback: account list
-        if (sql.includes('GROUP BY bank_account') && sql.includes('MIN(date)')) {
-          return { rows: [{ bank_account: 'Chase', transaction_count: '10', first_transaction: '2025-01-01', last_transaction: '2026-03-01' }] };
+        if (sql.includes('first_data_date')) {
+          return { rows: [{ first_data_date: '2026-02-01' }] };
         }
-        // getBankBalances -> amounts for Chase
-        if (sql.includes('bank_account = $1')) {
-          return { rows: [{ amount: '5000', currency: 'EUR', date: '2026-03-01' }] };
-        }
-        // getBankBalances -> history
-        if (sql.includes('generate_series') && sql.includes('CROSS JOIN')) {
+
+        // Daily bank history
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
           return {
             rows: [
-              { bank_account: 'Chase', month_start: '2026-02-01', month_end: '2026-02-28', cumulative_amount: '4500', currency: 'EUR' },
-              { bank_account: 'Chase', month_start: '2026-03-01', month_end: '2026-03-31', cumulative_amount: '5000', currency: 'EUR' },
+              { day: '2026-02-01', bank_account: 'Chase', balance: '4500', currency: 'EUR' },
+              { day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' },
             ]
           };
         }
-        // Portfolio history
-        if (sql.includes('portfolio_transactions') && sql.includes('generate_series')) {
+
+        // Daily portfolio history
+        if (sql.includes('tx_cumulative')) {
           return {
             rows: [
-              { month: '2026-02', cum_buys: '3000', cum_sells: '0', cum_income: '50', cum_appreciation: '200', cum_fees: '10', cum_taxes: '5' },
-              { month: '2026-03', cum_buys: '4000', cum_sells: '0', cum_income: '100', cum_appreciation: '400', cum_fees: '20', cum_taxes: '10' },
+              { day: '2026-02-01', currency: 'EUR', value: '3235' },
+              { day: todayKey, currency: 'EUR', value: '4470' },
             ]
           };
         }
-        // Current portfolio value
-        if (sql.includes('investments i') && sql.includes('is_active')) {
-          return {
-            rows: [
-              { id: 1, asset_class: 'etf', current_price: '120', total_units: '30', net_invested: '3000', total_income: '100', total_appreciation: '400' },
-            ]
-          };
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
         }
+
         return { rows: [] };
       });
 
-      convertToEur.mockImplementation((amount) => amount);
+      convertRowsToEur.mockImplementation(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) })));
 
       const result = await infoRepository.getNetWorth();
 
@@ -83,15 +105,62 @@ describe('InfoRepository', () => {
       expect(result).toHaveProperty('monthlyChangePercent');
       expect(result).toHaveProperty('snapshots');
       expect(result.current.liquid).toBe(5000);
-      // ETF: 120 * 30 = 3600
-      expect(result.current.investments).toBe(3600);
-      expect(result.current.netWorth).toBe(8600);
+      expect(result.current.investments).toBe(4470);
+      expect(result.current.netWorth).toBe(9470);
       expect(result.snapshots.length).toBeGreaterThanOrEqual(2);
+      expect(convertRowsToEur).toHaveBeenCalled();
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        1,
+        expect.any(Array),
+        'EUR',
+        { useHistoricalRatesByDate: true, dateField: 'day' }
+      );
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Array),
+        'EUR',
+        { useHistoricalRatesByDate: true, dateField: 'day' }
+      );
+    });
+
+    it('should pass target currency through conversion calls', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return { rows: [{ day: todayKey, bank_account: 'Chase', balance: '5000', currency: 'EUR' }] };
+        }
+        if (sql.includes('tx_cumulative')) {
+          return { rows: [{ day: todayKey, currency: 'EUR', value: '4470' }] };
+        }
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      });
+
+      await infoRepository.getNetWorth('HUF');
+
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        1,
+        expect.any(Array),
+        'HUF',
+        { useHistoricalRatesByDate: true, dateField: 'day' }
+      );
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Array),
+        'HUF',
+        { useHistoricalRatesByDate: true, dateField: 'day' }
+      );
     });
 
     it('should handle empty portfolio and bank data', async () => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes('LIMIT 1')) return { rows: [] };
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: null }] };
         return { rows: [] };
       });
 
@@ -104,24 +173,63 @@ describe('InfoRepository', () => {
       expect(result.monthlyChange).toBe(0);
     });
 
-    it('should compute monthly change percent correctly', async () => {
+    it('should build net worth from transactions even when no investments exist', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
       query.mockImplementation(async (sql) => {
-        if (sql.includes('LIMIT 1')) return { rows: [] };
-        if (sql.includes('GROUP BY bank_account') && sql.includes('MIN(date)')) return { rows: [] };
-        if (sql.includes('CROSS JOIN')) {
-          const currentMonth = new Date().toISOString().substring(0, 7);
-          const prevDate = new Date();
-          prevDate.setMonth(prevDate.getMonth() - 1);
-          const prevMonth = prevDate.toISOString().substring(0, 7);
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
+
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [{ day: todayKey, bank_account: 'Main', balance: '1234.56', currency: 'EUR' }],
+          };
+        }
+
+        if (sql.includes('tx_cumulative')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      expect(result.current.liquid).toBe(1234.56);
+      expect(result.current.investments).toBe(0);
+      expect(result.current.netWorth).toBe(1234.56);
+      expect(result.snapshots.length).toBeGreaterThan(0);
+    });
+
+    it('should compute monthly change percent correctly', async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const firstDayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+      const secondDayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) {
+          return { rows: [{ first_data_date: firstDayKey }] };
+        }
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
           return {
             rows: [
-              { bank_account: 'A', month_start: `${prevMonth}-01`, cumulative_amount: '1000', currency: 'EUR' },
-              { bank_account: 'A', month_start: `${currentMonth}-01`, cumulative_amount: '1100', currency: 'EUR' },
+              { day: firstDayKey, bank_account: 'A', balance: '1000', currency: 'EUR' },
+              { day: secondDayKey, bank_account: 'A', balance: '1100', currency: 'EUR' },
             ]
           };
         }
-        if (sql.includes('portfolio_transactions') && sql.includes('generate_series')) return { rows: [] };
-        if (sql.includes('investments i')) return { rows: [] };
+        if (sql.includes('tx_cumulative')) return { rows: [] };
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
         return { rows: [] };
       });
 
@@ -129,6 +237,252 @@ describe('InfoRepository', () => {
 
       expect(result.monthlyChange).toBe(100);
       expect(result.monthlyChangePercent).toBe(10);
+    });
+
+    it('should fall back to cumulative transaction flow when no bank balances are available', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: '2026-02-01' }] };
+
+        // No account-based balance history
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return { rows: [] };
+        }
+
+        // Fallback liquid flow query
+        if (sql.includes('COALESCE(SUM(t.amount), 0) AS amount')) {
+          return {
+            rows: [
+              { day: '2026-02-01', currency: 'EUR', value: '1200' },
+              { day: todayKey, currency: 'EUR', value: '1500' },
+            ],
+          };
+        }
+
+        // Portfolio history
+        if (sql.includes('tx_cumulative')) {
+          return {
+            rows: [
+              { day: '2026-02-01', currency: 'EUR', value: '300' },
+              { day: todayKey, currency: 'EUR', value: '500' },
+            ],
+          };
+        }
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      expect(result.current.liquid).toBe(1500);
+      expect(result.current.investments).toBe(500);
+      expect(result.current.netWorth).toBe(2000);
+      expect(convertRowsToEur).toHaveBeenCalled();
+    });
+
+    it('should use current investment holdings for latest snapshot when historical portfolio value is missing', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
+
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1000', currency: 'EUR' }] };
+        }
+
+        if (sql.includes('tx_cumulative')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                asset_class: 'stock',
+                currency: 'EUR',
+                current_price: '25',
+                units_in: '10',
+                units_out: '0',
+                buy_amount: '200',
+                sell_amount: '0',
+                appreciation: '0',
+              },
+            ],
+          };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      expect(result.current.liquid).toBe(1000);
+      expect(result.current.investments).toBe(250);
+      expect(result.current.netWorth).toBe(1250);
+    });
+
+    it('should fallback to seed date without active-only filters and log warning when needed', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+
+        if (sql.includes('first_data_date') && sql.includes('WHERE is_active = true')) {
+          return { rows: [{ first_data_date: null }] };
+        }
+
+        if (sql.includes('first_data_date') && !sql.includes('WHERE is_active = true')) {
+          return { rows: [{ first_data_date: todayKey }] };
+        }
+
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [{ day: todayKey, bank_account: 'FallbackAccount', balance: '99', currency: 'EUR' }],
+          };
+        }
+
+        if (sql.includes('tx_cumulative')) return { rows: [] };
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      expect(result.current.liquid).toBe(99);
+      expect(result.current.netWorth).toBe(99);
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Net worth seed date required fallback to include all records',
+        expect.objectContaining({ firstDataDate: todayKey })
+      );
+    });
+
+    it('should emit computation debug log with summary metrics', async () => {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: todayKey }] };
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return { rows: [{ day: todayKey, bank_account: 'Main', balance: '1000', currency: 'EUR' }] };
+        }
+        if (sql.includes('tx_cumulative')) return { rows: [] };
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+        return { rows: [] };
+      });
+
+      await infoRepository.getNetWorth();
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Net worth computed',
+        expect.objectContaining({
+          targetCurrency: 'EUR',
+          firstDataDate: todayKey,
+          currentNetWorth: 1000,
+        })
+      );
+    });
+
+    it('should use investment activity dates and historical prices for unit-asset daily valuation', async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      fetchHistoricalPrices.mockResolvedValue([
+        {
+          timestampMs: Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0, 0),
+          price: 12,
+        },
+      ]);
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: yesterdayKey }] };
+
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [
+              { day: yesterdayKey, bank_account: 'Main', balance: '0', currency: 'EUR' },
+              { day: todayKey, bank_account: 'Main', balance: '0', currency: 'EUR' },
+            ],
+          };
+        }
+
+        if (sql.includes('i.asset_class NOT IN (\'stock\', \'etf\', \'crypto\', \'metals\')')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('COALESCE(i.price_provider, \'manual\') AS price_provider')) {
+          return {
+            rows: [
+              {
+                id: 11,
+                currency: 'EUR',
+                current_price: '100',
+                price_provider: 'yahoo',
+                price_provider_id: 'AAPL',
+                symbol: 'AAPL',
+                price_provider_url: null,
+                price_provider_latest_url: null,
+                price_provider_latest_path: null,
+                price_provider_history_url: null,
+                price_provider_history_path: null,
+                price_provider_history_ts_path: null,
+                price_provider_history_price_path: null,
+                first_tx_date: todayKey,
+                created_date: yesterdayKey,
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('AS unit_delta')) {
+          return {
+            rows: [
+              { investment_id: 11, day: todayKey, unit_delta: '2' },
+            ],
+          };
+        }
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      const yesterdaySnapshot = result.snapshots.find((s) => s.date === yesterdayKey);
+      const todaySnapshot = result.snapshots.find((s) => s.date === todayKey);
+
+      expect(yesterdaySnapshot?.investments).toBe(0);
+      expect(todaySnapshot?.investments).toBe(24);
+      expect(result.current.investments).toBe(24);
+      expect(fetchHistoricalPrices).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 11, price_provider: 'yahoo' }),
+        expect.objectContaining({ fromMs: expect.any(Number), toMs: expect.any(Number) })
+      );
     });
   });
 
@@ -141,8 +495,8 @@ describe('InfoRepository', () => {
           // Top merchants query
           return {
             rows: [
-              { recipient_id: 1, recipient_name: 'Amazon', transaction_count: 15, total_spend: '750.50', avg_amount: '50.03', first_seen: '2025-01-15', last_seen: '2026-03-01' },
-              { recipient_id: 2, recipient_name: 'Walmart', total_spend: '420.00', transaction_count: 8, avg_amount: '52.50', first_seen: '2025-06-01', last_seen: '2026-02-28' },
+              { recipient_id: 1, recipient_name: 'Amazon', tx_count: 15, total_abs_amount: '750.50', first_seen: '2025-01-15', last_seen: '2026-03-01', currency: 'EUR' },
+              { recipient_id: 2, recipient_name: 'Walmart', tx_count: 8, total_abs_amount: '420.00', first_seen: '2025-06-01', last_seen: '2026-02-28', currency: 'EUR' },
             ]
           };
         }
@@ -150,8 +504,9 @@ describe('InfoRepository', () => {
           // MoM comparison query
           return {
             rows: [
-              { recipient_id: 1, recipient_name: 'Amazon', current_spend: '120.00', previous_spend: '80.00', change_percent: '50.0' },
-              { recipient_id: 2, recipient_name: 'Walmart', current_spend: '60.00', previous_spend: '0', change_percent: null },
+              { recipient_id: 1, recipient_name: 'Amazon', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '120.00' },
+              { recipient_id: 1, recipient_name: 'Amazon', period: (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().substring(0, 7); })(), currency: 'EUR', abs_amount: '80.00' },
+              { recipient_id: 2, recipient_name: 'Walmart', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '60.00' },
             ]
           };
         }
@@ -188,10 +543,10 @@ describe('InfoRepository', () => {
       let callIdx = 0;
       query.mockImplementation(async () => {
         callIdx++;
-        if (callIdx === 1) return { rows: [{ recipient_id: 1, recipient_name: 'Shop', transaction_count: 5, total_spend: '200', avg_amount: '40', first_seen: '2025-01-01', last_seen: '2026-03-01' }] };
+        if (callIdx === 1) return { rows: [{ recipient_id: 1, recipient_name: 'Shop', tx_count: 5, total_abs_amount: '200', first_seen: '2025-01-01', last_seen: '2026-03-01', currency: 'EUR' }] };
         if (callIdx === 2) return {
           rows: [
-            { recipient_id: 1, recipient_name: 'Shop', current_spend: '50', previous_spend: '0', change_percent: null },
+            { recipient_id: 1, recipient_name: 'Shop', period: new Date().toISOString().substring(0, 7), currency: 'EUR', abs_amount: '50' },
           ]
         };
         return { rows: [] };
@@ -226,19 +581,23 @@ describe('InfoRepository', () => {
   describe('getBankBalances', () => {
     it('should return account balances with history', async () => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes('LIMIT 1')) return { rows: [] };
-        if (sql.includes('GROUP BY bank_account') && sql.includes('MIN(date)')) {
-          return { rows: [{ bank_account: 'Revolut', transaction_count: '25', first_transaction: '2025-01-01', last_transaction: '2026-03-01' }] };
-        }
-        if (sql.includes('bank_account = $1')) {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('DISTINCT ON (bank_account)')) {
           return {
             rows: [
-              { amount: '3000', currency: 'EUR', date: '2026-03-01' },
-              { amount: '-500', currency: 'EUR', date: '2026-02-15' },
+              {
+                bank_account: 'Revolut',
+                balance: '2500',
+                currency: 'EUR',
+                date: '2026-03-01',
+                transaction_count: '25',
+                first_transaction: '2025-01-01',
+                last_transaction: '2026-03-01',
+              },
             ]
           };
         }
-        if (sql.includes('CROSS JOIN')) return { rows: [] };
+        if (sql.includes('ranked AS') && sql.includes('ROW_NUMBER() OVER')) return { rows: [] };
         return { rows: [] };
       });
 
@@ -248,6 +607,18 @@ describe('InfoRepository', () => {
       expect(result.accounts[0].bank_account).toBe('Revolut');
       expect(result.accounts[0].balance).toBe(2500);
       expect(result.total_net_position).toBe(2500);
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        1,
+        expect.any(Array),
+        'EUR',
+        { useHistoricalRatesByDate: true, dateField: 'date' }
+      );
+      expect(convertRowsToEur).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Array),
+        'EUR',
+        { useHistoricalRatesByDate: true, dateField: 'date' }
+      );
     });
   });
 

@@ -2,7 +2,7 @@ export interface WatchlistItem {
   id: number;
   name: string;
   symbol: string | null;
-  asset_class: 'stock' | 'etf' | 'crypto';
+  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
   target_price: number;
   currency: string;
   notes: string | null;
@@ -14,7 +14,7 @@ export interface WatchlistItem {
 export interface WatchlistCreate {
   name: string;
   symbol?: string;
-  asset_class: 'stock' | 'etf' | 'crypto';
+  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
   target_price: number;
   currency?: string;
   notes?: string;
@@ -24,7 +24,7 @@ export interface WatchlistCreate {
 export interface WatchlistUpdate {
   name?: string;
   symbol?: string;
-  asset_class?: 'stock' | 'etf' | 'crypto';
+  asset_class?: 'stock' | 'etf' | 'crypto' | 'metals';
   target_price?: number;
   currency?: string;
   notes?: string;

@@ -81,6 +81,7 @@ class ApiClient {
     // ==================== Transaction Methods ====================
 
     async getTransactions(params?: {
+        transaction_id?: number;
         limit?: number;
         offset?: number;
         start_date?: string;
@@ -93,6 +94,7 @@ class ApiClient {
         active?: boolean;
         search?: string;
         normalize_to_eur?: boolean;
+        target_currency?: string;
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     }): Promise<TransactionsListResponse> {
@@ -651,12 +653,13 @@ class ApiClient {
 
     // ==================== Info/Statistics Methods ====================
 
-    async getStatistics(): Promise<{
+    async getStatistics(params?: { currency?: string }): Promise<{
         total_transactions: number;
         total_amount: number;
         categories: Array<{ name: string; count: number }>;
     }> {
-        return this.request('/api/info');
+        const query = this.buildQuery(params);
+        return this.request(`/api/info${query ? `?${query}` : ''}`);
     }
 
     async getSupportedParsers(): Promise<{
@@ -676,6 +679,7 @@ class ApiClient {
         bank_account?: string;
         start_date?: string;
         end_date?: string;
+        currency?: string;
     }): Promise<{
         total_count: number;
         total_amount: number;
@@ -694,6 +698,7 @@ class ApiClient {
     async getCashflowComparison(params?: {
         excluded_category_ids?: number[];
         excluded_recipient_ids?: number[];
+        currency?: string;
     }): Promise<{
         days_in_month: number;
         current_day: number;
@@ -709,6 +714,9 @@ class ApiClient {
         if (params?.excluded_recipient_ids?.length) {
             params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
         }
+        if (params?.currency) {
+            queryParams.set('currency', params.currency);
+        }
         const q = queryParams.toString();
         return this.request(`/api/info/cashflow-comparison${q ? `?${q}` : ''}`);
     }
@@ -716,6 +724,7 @@ class ApiClient {
     async getMonthlyFinancialSummary(params?: {
         excluded_category_ids?: number[];
         excluded_recipient_ids?: number[];
+        currency?: string;
     }): Promise<{
         months: Array<{
             month: number;
@@ -743,11 +752,14 @@ class ApiClient {
         if (params?.excluded_recipient_ids?.length) {
             params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
         }
+        if (params?.currency) {
+            queryParams.set('currency', params.currency);
+        }
         const q = queryParams.toString();
         return this.request(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
     }
 
-    async getBankBalances(): Promise<{
+    async getBankBalances(params?: { currency?: string }): Promise<{
         accounts: Array<{
             bank_account: string;
             balance: number;
@@ -759,7 +771,8 @@ class ApiClient {
         history: Record<string, Array<{ month: string; balance: number }>>;
         total_history: Array<{ month: string; balance: number }>;
     }> {
-        return this.request('/api/info/bank-balances');
+        const query = this.buildQuery(params);
+        return this.request(`/api/info/bank-balances${query ? `?${query}` : ''}`);
     }
 
     async getRecurringPatterns(): Promise<{
@@ -821,7 +834,7 @@ class ApiClient {
         return this.request<Investment>('/api/investments', { method: 'POST', body: JSON.stringify(data) });
     }
 
-    async refreshInvestmentPrices(): Promise<{ updated: number; total: number; prices: Record<string, number> }> {
+    async refreshInvestmentPrices(): Promise<{ updated: number; total: number; prices: Record<string, number>; priceSources: Record<string, 'live' | 'close' | 'cached'> }> {
         return this.request('/api/investments/refresh-prices', { method: 'POST' });
     }
 
@@ -837,18 +850,37 @@ class ApiClient {
         await this.request<void>(`/api/investments/${id}`, { method: 'DELETE' });
     }
 
+    async getInvestmentPriceHistory(investmentId: number, params?: {
+        from_ms?: number;
+        to_ms?: number;
+    }): Promise<{ investment_id: number; provider: string; points: Array<{ timestampMs: number; price: number }> }> {
+        const query = this.buildQuery(params);
+        return this.request(`/api/investments/${investmentId}/price-history${query ? `?${query}` : ''}`);
+    }
+
     async getPortfolioTransactions(investmentId: number, params?: {
         type?: string;
         limit?: number;
         offset?: number;
     }): Promise<PortfolioTransactionsListResponse> {
         const query = this.buildQuery(params);
-        return this.request<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions${query ? `?${query}` : ''}`);
+        const res = await this.request<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions${query ? `?${query}` : ''}`);
+        res.items = res.items.map((tx: any) => ({
+            ...tx,
+            date: tx.date ?? tx.transaction_date,
+        }));
+        return res;
     }
 
     async createPortfolioTransaction(investmentId: number, data: PortfolioTransactionCreate): Promise<PortfolioTransaction> {
         return this.request<PortfolioTransaction>(`/api/investments/${investmentId}/transactions`, {
             method: 'POST', body: JSON.stringify(data),
+        });
+    }
+
+    async updatePortfolioTransaction(txnId: number, data: Partial<PortfolioTransactionCreate>): Promise<PortfolioTransaction> {
+        return this.request<PortfolioTransaction>(`/api/investments/transactions/${txnId}`, {
+            method: 'PATCH', body: JSON.stringify(data),
         });
     }
 
@@ -868,13 +900,14 @@ class ApiClient {
 
     // ==================== Net Worth ====================
 
-    async getNetWorth(): Promise<NetWorthResponse> {
-        return this.request('/api/info/net-worth');
+    async getNetWorth(params?: { currency?: string }): Promise<NetWorthResponse> {
+        const query = this.buildQuery(params);
+        return this.request(`/api/info/net-worth${query ? `?${query}` : ''}`);
     }
 
     // ==================== Recipient Insights ====================
 
-    async getRecipientInsights(): Promise<{
+    async getRecipientInsights(params?: { currency?: string }): Promise<{
         topMerchants: Array<{
             recipientId: number;
             name: string;
@@ -892,7 +925,8 @@ class ApiClient {
             changePercent: number;
         }>;
     }> {
-        return this.request('/api/info/recipient-insights');
+        const query = this.buildQuery(params);
+        return this.request(`/api/info/recipient-insights${query ? `?${query}` : ''}`);
     }
 
     // ==================== Splits / Owes Methods ====================
@@ -903,6 +937,25 @@ class ApiClient {
 
     async getOwedByRecipient(recipientId: number): Promise<{ items: any[] }> {
         return this.request(`/api/splits/owed/${recipientId}`);
+    }
+
+    async exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {
+        const response = await fetch(`${API_BASE_URL}/api/splits/owed/${recipientId}/export/csv`, {
+            method: 'GET',
+        });
+
+        if (!response.ok) {
+            let detail = 'Failed to export owed transactions';
+            try {
+                const payload = await response.json();
+                detail = payload?.detail || detail;
+            } catch {
+                // keep fallback detail
+            }
+            throw new Error(detail);
+        }
+
+        return response.blob();
     }
 
     async getSplitsByTransaction(transactionId: number): Promise<{ items: any[] }> {
@@ -925,6 +978,10 @@ class ApiClient {
 
     async settleSplit(splitId: number): Promise<any> {
         return this.request(`/api/splits/${splitId}/settle`, { method: 'POST' });
+    }
+
+    async settleAllSplitsByRecipient(recipientId: number): Promise<{ settled_count: number }> {
+        return this.request(`/api/splits/owed/${recipientId}/settle-all`, { method: 'POST' });
     }
 
     async deleteSplit(splitId: number): Promise<any> {
@@ -1113,7 +1170,7 @@ export interface MarketNewsArticle {
 }
 
 export interface NetWorthSnapshot {
-    month: string;
+    date: string;
     liquid: number;
     investments: number;
     netWorth: number;

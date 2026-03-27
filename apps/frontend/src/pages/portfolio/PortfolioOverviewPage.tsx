@@ -11,10 +11,12 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
-import { ASSET_CLASS_GROUPS, ASSET_CLASS_LABELS } from "@/types/portfolio";
+import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 
@@ -36,22 +38,56 @@ const COLORS = [
 export default function PortfolioOverviewPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
-    summaries, totalPortfolioValue, totalGainLoss,
-    totalRealizedGain, totalUnrealizedGain,
+    summaries, totalGainLoss,
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const PORTFOLIO_WIDGETS = getPortfolioWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
 
-  function fmt(val: number, currency = 'EUR') {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
   }
 
-  const totalInvested = summaries.reduce((s, i) => s + i.totalBuyCost, 0);
-  const totalIncome = summaries.reduce((s, i) => s + i.totalIncome, 0);
+  function fmt(
+    val: number,
+    currency = targetCurrency,
+    decimals = appSettings.showDecimalPlaces
+  ) {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(val);
+  }
+
+  const totalInvested = summaries.reduce((s, i) => s + convertToTarget(i.totalBuyCost, i.currency), 0);
+  const totalIncome = summaries.reduce((s, i) => s + convertToTarget(i.totalIncome, i.currency), 0);
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
   const newsSymbols = useMemo(() =>
@@ -62,39 +98,48 @@ export default function PortfolioOverviewPage() {
     [summaries]
   );
 
-  const allocationData = Object.entries(ASSET_CLASS_GROUPS).map(([group, classes]) => ({
-    name: group,
-    value: summaries.filter(s => classes.includes(s.assetClass)).reduce((sum, s) => sum + s.currentValue, 0),
-  })).filter(d => d.value > 0);
+  const allocationData = Object.entries(getAssetClassGroups(t))
+    .map(([group, classes]) => ({
+      name: group,
+      value: summaries
+        .filter((s) => classes.includes(s.assetClass))
+        .reduce((sum, s) => sum + convertToTarget(s.currentValue, s.currency), 0),
+    }))
+    .filter((d) => d.value > 0);
+
+  const totalPortfolioValueInTarget = summaries.reduce((s, i) => s + convertToTarget(i.currentValue, i.currency), 0);
+  const totalGainLossInTarget = summaries.reduce((s, i) => s + convertToTarget(i.totalGain, i.currency), 0);
+  const totalRealizedGainInTarget = summaries.reduce((s, i) => s + convertToTarget(i.realizedGain, i.currency), 0);
+  const totalUnrealizedGainInTarget = summaries.reduce((s, i) => s + convertToTarget(i.unrealizedGain, i.currency), 0);
 
   const cards = [
     {
       title: t('portfolio.totalValue'),
-      value: fmt(totalPortfolioValue),
+      value: fmt(totalPortfolioValueInTarget),
       icon: DollarSign,
       desc: t('portfolio.investments', { count: String(summaries.length) }),
       cls: "text-primary"
     },
     {
       title: t('portfolio.totalGainLoss'),
-      value: `${totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}`,
-      icon: totalGainLoss >= 0 ? TrendingUp : TrendingDown,
+      value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
+      icon: totalGainLossInTarget >= 0 ? TrendingUp : TrendingDown,
       desc: `${gainPercent >= 0 ? '+' : ''}${gainPercent.toFixed(1)}% ${t('networth.allTime')}`,
-      cls: totalGainLoss >= 0 ? "text-accent" : "text-destructive"
+      cls: totalGainLossInTarget >= 0 ? "text-accent" : "text-destructive"
     },
     {
       title: t('portfolio.realizedGains'),
-      value: `${totalRealizedGain >= 0 ? '+' : ''}${fmt(totalRealizedGain)}`,
+      value: `${totalRealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalRealizedGainInTarget)}`,
       icon: ArrowUpRight,
       desc: t('portfolio.fromClosedPositions'),
-      cls: totalRealizedGain >= 0 ? "text-accent" : "text-destructive"
+      cls: totalRealizedGainInTarget >= 0 ? "text-accent" : "text-destructive"
     },
     {
       title: t('portfolio.unrealizedGains'),
-      value: `${totalUnrealizedGain >= 0 ? '+' : ''}${fmt(totalUnrealizedGain)}`,
+      value: `${totalUnrealizedGainInTarget >= 0 ? '+' : ''}${fmt(totalUnrealizedGainInTarget)}`,
       icon: Clock,
       desc: t('portfolio.paperProfitLoss'),
-      cls: totalUnrealizedGain >= 0 ? "text-accent" : "text-destructive"
+      cls: totalUnrealizedGainInTarget >= 0 ? "text-accent" : "text-destructive"
     },
   ];
 
@@ -175,12 +220,12 @@ export default function PortfolioOverviewPage() {
                   <div className="space-y-3">
                     {[
                       { label: t('portfolio.totalInvested'), value: totalInvested, cls: 'text-foreground' },
-                      { label: t('portfolio.currentValue'), value: totalPortfolioValue, cls: 'text-foreground' },
-                      { label: t('portfolio.realizedGains'), value: totalRealizedGain, cls: totalRealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
-                      { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGain, cls: totalUnrealizedGain >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                       { label: t('portfolio.currentValue'), value: totalPortfolioValueInTarget, cls: 'text-foreground' },
+                       { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
+                       { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
                       { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
-                      { label: t('portfolio.totalFees'), value: -summaries.reduce((s, i) => s + i.totalFees, 0), cls: 'text-destructive' },
-                      { label: t('portfolio.totalTaxes'), value: -summaries.reduce((s, i) => s + i.totalTaxes, 0), cls: 'text-destructive' },
+                       { label: t('portfolio.totalFees'), value: -summaries.reduce((s, i) => s + convertToTarget(i.totalFees, i.currency), 0), cls: 'text-destructive' },
+                       { label: t('portfolio.totalTaxes'), value: -summaries.reduce((s, i) => s + convertToTarget(i.totalTaxes, i.currency), 0), cls: 'text-destructive' },
                     ].map(({ label, value, cls, showSign }) => (
                       <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>
@@ -195,15 +240,15 @@ export default function PortfolioOverviewPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-stretch">
             {isVisible('investments') && (
-              <div className={isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
-                <Card>
+              <div className={cn(isVisible('news') && newsSymbols.length > 0 ? "lg:col-span-2" : "lg:col-span-3", "h-full min-h-0")}>
+                <Card className="h-full flex flex-col">
                   <CardHeader><CardTitle>{t('portfolio.widget.investments')}</CardTitle></CardHeader>
-                  <CardContent>
+                  <CardContent className="min-h-0">
                     <div className="space-y-2">
                       {summaries.map((inv) => {
-                        const isUnitBased = ['stock', 'etf', 'crypto'].includes(inv.assetClass);
+                        const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(inv.assetClass);
                         return (
                           <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
@@ -213,17 +258,17 @@ export default function PortfolioOverviewPage() {
                                 <Badge variant="secondary" className="text-[10px] shrink-0">{ASSET_CLASS_LABELS[inv.assetClass]}</Badge>
                               </div>
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                 <span>{t('portfolio.costLabel')} {fmt(inv.totalBuyCost, inv.currency)}</span>
+                                 <span>{t('portfolio.costLabel')} {fmt(convertToTarget(inv.totalBuyCost, inv.currency))}</span>
                                 {isUnitBased && inv.totalUnits > 0 && (
-                                  <span>{t('portfolio.units.label', { units: inv.totalUnits.toFixed(4), price: fmt(inv.avgCostBasis, inv.currency) })}</span>
+                                  <span>{t('portfolio.units.label', { units: inv.totalUnits.toFixed(4), price: fmt(convertToTarget(inv.avgCostBasis, inv.currency)) })}</span>
                                 )}
-                                {inv.totalIncome > 0 && <span className="text-accent">{t('portfolio.income.label', { amount: fmt(inv.totalIncome, inv.currency) })}</span>}
+                                {inv.totalIncome > 0 && <span className="text-accent">{t('portfolio.income.label', { amount: fmt(convertToTarget(inv.totalIncome, inv.currency)) })}</span>}
                               </div>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="font-bold text-sm tabular-nums">{fmt(inv.currentValue, inv.currency)}</p>
+                              <p className="font-bold text-sm tabular-nums">{fmt(convertToTarget(inv.currentValue, inv.currency))}</p>
                               <p className={cn("text-xs tabular-nums font-medium", inv.totalGain >= 0 ? "text-accent" : "text-destructive")}>
-                                {inv.totalGain >= 0 ? '+' : ''}{fmt(inv.totalGain, inv.currency)} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
+                                {inv.totalGain >= 0 ? '+' : ''}{fmt(convertToTarget(inv.totalGain, inv.currency))} ({inv.gainLossPercent >= 0 ? '+' : ''}{inv.gainLossPercent.toFixed(1)}%)
                               </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -253,7 +298,7 @@ export default function PortfolioOverviewPage() {
               </div>
             )}
             {isVisible('news') && newsSymbols.length > 0 && (
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 h-full min-h-0">
                 <PortfolioNewsFeed symbols={newsSymbols} />
               </div>
             )}

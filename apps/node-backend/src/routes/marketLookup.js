@@ -7,6 +7,25 @@ import YahooFinance from 'yahoo-finance2';
 import { logger } from '../config/logger.js';
 
 const router = Router();
+
+function normalizeThumbnailUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  if (trimmed.startsWith('http://')) return `https://${trimmed.slice(7)}`;
+  if (trimmed.startsWith('https://')) return trimmed;
+  return null;
+}
+
+function pickBestThumbnail(thumbnail) {
+  const resolutions = Array.isArray(thumbnail?.resolutions) ? thumbnail.resolutions : [];
+  for (let i = resolutions.length - 1; i >= 0; i -= 1) {
+    const candidate = normalizeThumbnailUrl(resolutions[i]?.url);
+    if (candidate) return candidate;
+  }
+  return null;
+}
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 /**
@@ -229,7 +248,7 @@ router.get('/news', async (req, res) => {
           link: n.link,
           publisher: n.publisher,
           publishedAt: n.providerPublishTime ? new Date(n.providerPublishTime).getTime() : null,
-          thumbnail: n.thumbnail?.resolutions?.[0]?.url || null,
+          thumbnail: pickBestThumbnail(n.thumbnail),
           relatedSymbols: [sym.trim()],
         }));
       })

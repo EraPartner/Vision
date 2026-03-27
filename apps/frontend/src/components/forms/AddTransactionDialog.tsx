@@ -11,24 +11,24 @@ import {useCreateTransaction} from "@/hooks/useTransactions";
 import {useRecipients} from "@/hooks/useRecipients";
 import {useCategories} from "@/hooks/useCategories";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { DatePicker } from "@/components/shared/DatePicker";
+import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
 
 export function AddTransactionDialog() {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const [open, setOpen] = useState(false);
     const createMutation = useCreateTransaction();
     const {data: recipientsData} = useRecipients({limit: 200, active: true});
     const {data: categoriesData} = useCategories({limit: 200, active: true});
 
-    const [form, setForm] = useState({
-        transaction_date: new Date().toISOString().split("T")[0],
-        bank_account: "",
-        recipient_id: "",
-        category_id: "",
-        memo: "",
-        amount: "",
-        currency: "EUR",
-        comment: "",
-    });
+    const [form, setForm] = useState(() => createAddTransactionFormState(appSettings.defaultCurrency));
+
+    const resetForm = () => {
+        setForm(createAddTransactionFormState(appSettings.defaultCurrency));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -42,21 +42,12 @@ export function AddTransactionDialog() {
                 category_id: form.category_id ? Number(form.category_id) : undefined,
                 memo: form.memo.trim() || undefined,
                 amount: Number(form.amount),
-                currency: form.currency || "EUR",
+                currency: form.currency || appSettings.defaultCurrency,
                 comment: form.comment.trim() || undefined,
             },
             {
                 onSuccess: () => {
-                    setForm({
-                        transaction_date: new Date().toISOString().split("T")[0],
-                        bank_account: "",
-                        recipient_id: "",
-                        category_id: "",
-                        memo: "",
-                        amount: "",
-                        currency: "EUR",
-                        comment: "",
-                    });
+                    resetForm();
                     setOpen(false);
                 },
                 onError: (error: Error) => {
@@ -83,7 +74,11 @@ export function AddTransactionDialog() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="tx_date">{t('form.addTransaction.date')}</Label>
-                            <Input id="tx_date" type="date" value={form.transaction_date} onChange={(e) => setForm(f => ({...f, transaction_date: e.target.value}))} required />
+                            <DatePicker
+                                value={form.transaction_date ? parseLocalDateFromYmd(form.transaction_date) : undefined}
+                                onChange={(date) => setForm(f => ({ ...f, transaction_date: date ? toYmd(date) : "" }))}
+                                placeholder={t('plannedPage.link.pickDate')}
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_amount">{t('form.addTransaction.amount')}</Label>

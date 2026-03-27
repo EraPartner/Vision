@@ -8,10 +8,11 @@ import {buttonVariants} from "@/components/ui/button";
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
 function Calendar({className, classNames, showOutsideDays = true, ...props}: CalendarProps) {
+    const weekStartsOn = props.weekStartsOn ?? 1;
     return (
         <DayPicker
             showOutsideDays={showOutsideDays}
-            weekStartsOn={1}
+            weekStartsOn={weekStartsOn}
             className={cn("p-3", className)}
             classNames={{
                 months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",

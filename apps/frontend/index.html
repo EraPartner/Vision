@@ -10,21 +10,7 @@
     <meta content="Vision" name="author" />
 
     <!-- Prevent flash by setting preferred theme before React mounts -->
-    <script>
-        (function () {
-            try {
-                const t = localStorage.getItem('vision_theme');
-                // Default to dark if not set
-                if (t === 'light') {
-                    document.documentElement.classList.remove('dark');
-                } else {
-                    document.documentElement.classList.add('dark');
-                }
-            } catch (e) {
-                document.documentElement.classList.add('dark');
-            }
-        })();
-    </script>
+    <script src="/src/theme-flash.ts" type="module"></script>
 </head>
 
 <body>

@@ -11,16 +11,47 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 
 export default function RealEstatePage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const properties = byAssetClass('real_estate');
 
-  function fmt(val: number, currency = 'EUR', decimals = 0) {
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
+  }
+
+  function fmt(
+    val: number,
+    currency = targetCurrency,
+    decimals = appSettings.showDecimalPlaces
+  ) {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
@@ -28,19 +59,19 @@ export default function RealEstatePage() {
     return new Intl.NumberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
-  const totalValue = properties.reduce((s, p) => s + p.currentValue, 0);
-  const totalCost = properties.reduce((s, p) => s + p.totalBuyCost, 0);
-  const totalAppreciation = properties.reduce((s, p) => s + p.totalAppreciation, 0);
-  const totalRentIncome = properties.reduce((s, p) => s + p.totalIncome, 0);
-  const totalFees = properties.reduce((s, p) => s + p.totalFees, 0);
-  const totalTaxes = properties.reduce((s, p) => s + p.totalTaxes, 0);
+  const totalValue = properties.reduce((s, p) => s + convertToTarget(p.currentValue, p.currency), 0);
+  const totalCost = properties.reduce((s, p) => s + convertToTarget(p.totalBuyCost, p.currency), 0);
+  const totalAppreciation = properties.reduce((s, p) => s + convertToTarget(p.totalAppreciation, p.currency), 0);
+  const totalRentIncome = properties.reduce((s, p) => s + convertToTarget(p.totalIncome, p.currency), 0);
+  const totalFees = properties.reduce((s, p) => s + convertToTarget(p.totalFees, p.currency), 0);
+  const totalTaxes = properties.reduce((s, p) => s + convertToTarget(p.totalTaxes, p.currency), 0);
   
   // Estimate monthly rent from most recent rent_income transactions
   const estimatedMonthlyRent = properties.reduce((s, p) => {
     const rentTxns = p.transactions.filter(t => t.type === 'rent_income');
     if (rentTxns.length === 0) return s;
     // Use most recent rent as monthly estimate
-    return s + (rentTxns[0]?.amount ?? 0);
+    return s + convertToTarget(rentTxns[0]?.amount ?? 0, p.currency);
   }, 0);
   
   const annualYield = totalValue > 0 ? (estimatedMonthlyRent * 12) / totalValue * 100 : 0;
@@ -151,11 +182,14 @@ export default function RealEstatePage() {
       {/* Property Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {properties.map((p) => {
-          const propertyROI = p.totalBuyCost > 0 
-            ? ((p.totalAppreciation + p.totalIncome - p.totalFees - p.totalTaxes) / p.totalBuyCost) * 100 
+          const propertyCost = convertToTarget(p.totalBuyCost, p.currency);
+          const propertyReturn = convertToTarget(p.totalAppreciation + p.totalIncome - p.totalFees - p.totalTaxes, p.currency);
+          const propertyROI = propertyCost > 0
+            ? (propertyReturn / propertyCost) * 100
             : 0;
-          const monthlyRent = p.transactions.filter(t => t.type === 'rent_income')[0]?.amount ?? 0;
-          const propertyYield = p.currentValue > 0 ? (monthlyRent * 12) / p.currentValue * 100 : 0;
+          const monthlyRent = convertToTarget(p.transactions.filter(t => t.type === 'rent_income')[0]?.amount ?? 0, p.currency);
+          const currentValueInTarget = convertToTarget(p.currentValue, p.currency);
+          const propertyYield = currentValueInTarget > 0 ? (monthlyRent * 12) / currentValueInTarget * 100 : 0;
           
           return (
             <Card key={p.id} className="overflow-hidden">
@@ -205,11 +239,11 @@ export default function RealEstatePage() {
                   <div className="grid grid-cols-2 gap-4">
                    <div>
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.purchasePrice')}</p>
-                     <p className="text-xl font-bold tabular-nums">{fmt(p.totalBuyCost, p.currency)}</p>
+                     <p className="text-xl font-bold tabular-nums">{fmt(convertToTarget(p.totalBuyCost, p.currency))}</p>
                    </div>
                    <div className="text-right">
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.currentValue')}</p>
-                     <p className="text-xl font-bold text-primary tabular-nums">{fmt(p.currentValue, p.currency)}</p>
+                      <p className="text-xl font-bold text-primary tabular-nums">{fmt(convertToTarget(p.currentValue, p.currency))}</p>
                    </div>
                  </div>
 
@@ -221,7 +255,7 @@ export default function RealEstatePage() {
                        "text-lg font-bold tabular-nums",
                        p.totalAppreciation >= 0 ? "text-accent" : "text-destructive"
                      )}>
-                       {p.totalAppreciation >= 0 ? "+" : ""}{fmt(p.totalAppreciation, p.currency)}
+                        {p.totalAppreciation >= 0 ? "+" : ""}{fmt(convertToTarget(p.totalAppreciation, p.currency))}
                      </p>
                   </div>
 
@@ -238,7 +272,7 @@ export default function RealEstatePage() {
                       {(p.cadastral_income || p.cadastral_income === 0) && (
                         <div className="p-2 rounded-lg bg-muted/50">
                           <p className="text-xs text-muted-foreground">{t('invDetail.cadastralIncome')}</p>
-                          <p className="font-medium tabular-nums">{fmt(p.cadastral_income || 0, p.currency)}</p>
+                           <p className="font-medium tabular-nums">{fmt(convertToTarget(p.cadastral_income || 0, p.currency))}</p>
                         </div>
                       )}
 
@@ -253,10 +287,10 @@ export default function RealEstatePage() {
                    <div className="p-3 rounded-lg bg-muted/50">
                      <p className="text-xs text-muted-foreground mb-1">{t('portfolio.rentalIncome')}</p>
                      <p className="text-lg font-bold text-accent tabular-nums">
-                       +{fmt(p.totalIncome, p.currency)}
+                       +{fmt(convertToTarget(p.totalIncome, p.currency))}
                      </p>
                      {monthlyRent > 0 && (
-                       <p className="text-xs text-muted-foreground">~{fmt(monthlyRent, p.currency)}{t('realestate.perMonth')}</p>
+                        <p className="text-xs text-muted-foreground">~{fmt(monthlyRent)}{t('realestate.perMonth')}</p>
                      )}
                    </div>
                  </div>
@@ -282,7 +316,7 @@ export default function RealEstatePage() {
                  {(p.totalFees > 0 || p.totalTaxes > 0) && (
                    <div className="flex justify-between text-sm border-t border-border pt-3">
                      <span className="text-muted-foreground">{t('portfolio.feesAndTaxes')}</span>
-                     <span className="font-medium text-destructive">-{fmt(p.totalFees + p.totalTaxes, p.currency)}</span>
+                      <span className="font-medium text-destructive">-{fmt(convertToTarget(p.totalFees + p.totalTaxes, p.currency))}</span>
                    </div>
                  )}
               </CardContent>

@@ -9,7 +9,7 @@
  * - Supplements ECB rates with open.er-api.com for currencies ECB doesn't cover
  *   (AED, SAR, KWD, QAR, BHD, OMR, PKR, EGP, NGN, and ~130 more)
  * - ECB always takes priority over the supplementary source on overlapping currencies
- * - Stores exactly ONE row per currency in the database (the latest rates)
+ * - Stores latest rows per currency and optionally sparse historical rows
  * - On a successful fetch the in-memory fallback is updated to match live rates
  * - If both APIs are unavailable the service falls back to DB → hardcoded constants
  */
@@ -19,10 +19,12 @@ import { logger } from '../config/logger.js';
 
 const ECB_LATEST_URL   = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ERAR_LATEST_URL  = 'https://open.er-api.com/v6/latest/EUR';
+const ECB_HISTORY_90D_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
 
 // In-memory cache: { rates: {...}, timestamp: number } | null
 let memoryCache = null;
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
+let historicalEcb90dCache = null; // { byDate: Map<YYYY-MM-DD, ratesMap>, timestamp }
 
 // Fallback rates (used only when both APIs and DB are unavailable).
 // These are updated in-memory whenever a successful fetch occurs so that
@@ -102,6 +104,19 @@ function parseEcbXml(xmlText) {
   return Object.keys(rates).length > 1 ? rates : null;
 }
 
+function parseEcbHistoricalXml(xmlText) {
+  const byDate = new Map();
+  const dayBlocks = xmlText.match(/<Cube\s+time=['"][0-9]{4}-[0-9]{2}-[0-9]{2}['"][\s\S]*?<\/Cube>/g) || [];
+  for (const block of dayBlocks) {
+    const timeMatch = block.match(/time=['"]([0-9]{4}-[0-9]{2}-[0-9]{2})['"]/);
+    if (!timeMatch) continue;
+    const date = timeMatch[1];
+    const rates = parseEcbXml(block);
+    if (rates) byDate.set(date, rates);
+  }
+  return byDate;
+}
+
 // ---------------------------------------------------------------------------
 // Database (latest-only, no history)
 // ---------------------------------------------------------------------------
@@ -137,30 +152,36 @@ async function loadFromDatabase() {
  */
 async function saveToDatabase(rates) {
   try {
-    await query(`DELETE FROM exchange_rates`);
-
     const today = new Date().toISOString().split('T')[0];
     const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
     if (entries.length === 0) return;
 
-    // Build a single parameterised multi-row INSERT
-    // e.g. INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-    //      VALUES ($1,$2,$3,true), ($4,$5,$6,true), ...
-    const placeholders = [];
-    const values = [];
-    let idx = 1;
-    for (const [currency, rate] of entries) {
-      placeholders.push(`($${idx++}, $${idx++}, $${idx++}, true)`);
-      values.push(currency, rate, today);
-    }
-
+    await query('BEGIN');
+    // Clear latest marker only for currencies that are being refreshed now.
     await query(
-      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       VALUES ${placeholders.join(', ')}`,
-      values
+      `UPDATE exchange_rates
+       SET is_latest = false, updated_at = NOW()
+       WHERE currency_code = ANY($1::text[]) AND is_latest = true`,
+      [entries.map(([currency]) => currency)]
     );
+
+    for (const [currency, rate] of entries) {
+      await query(
+        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+         VALUES ($1, $2, $3, true)
+         ON CONFLICT (currency_code, rate_date)
+         DO UPDATE SET
+           rate_to_eur = EXCLUDED.rate_to_eur,
+           is_latest = true,
+           fetched_at = NOW(),
+           updated_at = NOW()`,
+        [currency, rate, today]
+      );
+    }
+    await query('COMMIT');
     logger.info(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
   } catch (err) {
+    await query('ROLLBACK').catch(() => {});
     logger.error('Failed to save exchange rates to database', { error: err.message });
   }
 }
@@ -222,6 +243,174 @@ async function fetchFromErApi() {
   }
 }
 
+async function fetchHistoricalFromEcb90d() {
+  if (historicalEcb90dCache && Date.now() - historicalEcb90dCache.timestamp < CACHE_LIFETIME_MS) {
+    return historicalEcb90dCache.byDate;
+  }
+  try {
+    const response = await fetch(ECB_HISTORY_90D_URL, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return new Map();
+    const xmlText = await response.text();
+    const byDate = parseEcbHistoricalXml(xmlText);
+    historicalEcb90dCache = { byDate, timestamp: Date.now() };
+    return byDate;
+  } catch {
+    return new Map();
+  }
+}
+
+function normalizeDateInput(dateValue) {
+  if (!dateValue) return null;
+  const str = String(dateValue);
+  const m = str.match(/^\d{4}-\d{2}-\d{2}/);
+  return m ? m[0] : null;
+}
+
+async function getNearestRateFromDatabase(currencyCode, dateStr) {
+  const result = await query(
+    `SELECT rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = $1
+     ORDER BY ABS(rate_date - $2::date) ASC, rate_date DESC
+     LIMIT 1`,
+    [currencyCode, dateStr]
+  );
+  if (result.rows.length === 0) return undefined;
+  return parseFloat(result.rows[0].rate_to_eur);
+}
+
+function buildHistoricalRateIndex(rows) {
+  const byCurrency = new Map();
+  for (const row of rows) {
+    const currency = String(row.currency_code || '').toUpperCase().trim();
+    const date = normalizeDateInput(row.rate_date);
+    const rate = parseFloat(row.rate_to_eur);
+    if (!currency || !date || !Number.isFinite(rate)) continue;
+    if (!byCurrency.has(currency)) byCurrency.set(currency, []);
+    byCurrency.get(currency).push({ date, rate });
+  }
+  for (const entries of byCurrency.values()) {
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  return byCurrency;
+}
+
+function findNearestRateInIndex(index, currencyCode, dateStr) {
+  if (currencyCode === 'EUR') return 1.0;
+  const entries = index.get(currencyCode);
+  if (!entries || entries.length === 0) return undefined;
+
+  let lo = 0;
+  let hi = entries.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const midDate = entries[mid].date;
+    if (midDate === dateStr) return entries[mid].rate;
+    if (midDate < dateStr) lo = mid + 1;
+    else hi = mid - 1;
+  }
+
+  const prev = hi >= 0 ? entries[hi] : null;
+  const next = lo < entries.length ? entries[lo] : null;
+  if (!prev) return next?.rate;
+  if (!next) return prev?.rate;
+
+  const prevDist = Math.abs(new Date(prev.date).getTime() - new Date(dateStr).getTime());
+  const nextDist = Math.abs(new Date(next.date).getTime() - new Date(dateStr).getTime());
+  return prevDist <= nextDist ? prev.rate : next.rate;
+}
+
+async function saveHistoricalRate(currencyCode, dateStr, rateToEur) {
+  await query(
+    `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+     VALUES ($1, $2, $3, false)
+     ON CONFLICT (currency_code, rate_date)
+     DO UPDATE SET
+       rate_to_eur = EXCLUDED.rate_to_eur,
+       updated_at = NOW()`,
+    [currencyCode, rateToEur, dateStr]
+  );
+}
+
+async function getRateToEurForDate(currencyCode, dateValue, { saveFetchedHistoricalRate = true } = {}) {
+  if (!currencyCode || currencyCode === 'EUR') return 1.0;
+  const dateStr = normalizeDateInput(dateValue);
+  if (!dateStr) return undefined;
+
+  const exact = await query(
+    `SELECT rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = $1 AND rate_date = $2::date
+     LIMIT 1`,
+    [currencyCode, dateStr]
+  );
+  if (exact.rows.length > 0) {
+    return parseFloat(exact.rows[0].rate_to_eur);
+  }
+
+  const ecbByDate = await fetchHistoricalFromEcb90d();
+  const ecbRatesForDate = ecbByDate.get(dateStr);
+  if (ecbRatesForDate && ecbRatesForDate[currencyCode]) {
+    const ecbRate = ecbRatesForDate[currencyCode];
+    if (saveFetchedHistoricalRate) {
+      await saveHistoricalRate(currencyCode, dateStr, ecbRate);
+    }
+    return ecbRate;
+  }
+
+  const nearest = await getNearestRateFromDatabase(currencyCode, dateStr);
+  if (nearest !== undefined) return nearest;
+
+  return undefined;
+}
+
+export async function backfillPortfolioHistoricalRates() {
+  const missingResult = await query(
+    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+     FROM portfolio_transactions pt
+     LEFT JOIN exchange_rates er
+       ON er.currency_code = pt.currency::text
+      AND er.rate_date = pt.date::date
+     WHERE pt.currency IS NOT NULL
+       AND UPPER(pt.currency::text) <> 'EUR'
+       AND er.id IS NULL
+     GROUP BY pt.currency::text, pt.date::date
+     ORDER BY pt.date::date ASC`
+  );
+
+  if (missingResult.rows.length === 0) return { inserted: 0, missing: 0 };
+
+  let inserted = 0;
+  let unresolved = 0;
+
+  for (const row of missingResult.rows) {
+    const currencyCode = String(row.currency_code || '').toUpperCase().trim();
+    const rateDate = normalizeDateInput(row.rate_date);
+    if (!currencyCode || !rateDate) continue;
+
+    const rate = await getRateToEurForDate(currencyCode, rateDate, { saveFetchedHistoricalRate: true });
+    if (rate === undefined) {
+      unresolved += 1;
+      continue;
+    }
+
+    const exactCheck = await query(
+      `SELECT 1 FROM exchange_rates WHERE currency_code = $1 AND rate_date = $2::date LIMIT 1`,
+      [currencyCode, rateDate]
+    );
+    if (exactCheck.rows.length === 0) {
+      await saveHistoricalRate(currencyCode, rateDate, rate);
+      inserted += 1;
+    }
+  }
+
+  if (inserted > 0 || unresolved > 0) {
+    logger.info('Portfolio historical FX backfill complete', { inserted, unresolved });
+  }
+
+  return { inserted, missing: unresolved };
+}
+
 // ---------------------------------------------------------------------------
 // Public cache helpers
 // ---------------------------------------------------------------------------
@@ -255,6 +444,7 @@ async function getRates() {
  */
 export function clearMemoryCache() {
   memoryCache = null;
+  historicalEcb90dCache = null;
   logger.debug('Cleared exchange rate memory cache');
 }
 
@@ -307,20 +497,12 @@ export async function warmCache() {
  * @param {string|null} fromCurrency - ISO 4217 currency code (e.g. "USD")
  * @returns {Promise<number>} Amount in EUR
  */
+/**
+ * Convert an amount from `fromCurrency` to EUR.
+ * Backwards-compatible wrapper around the generic convert function.
+ */
 export async function convertToEur(amount, fromCurrency) {
-  if (!fromCurrency || fromCurrency.toUpperCase().trim() === 'EUR') {
-    return amount;
-  }
-
-  const currency = fromCurrency.toUpperCase().trim();
-  const rates = await getRates();
-
-  if (!(currency in rates)) {
-    logger.warn(`Unsupported currency ${currency}, using 1:1 conversion`);
-    return amount;
-  }
-
-  return amount * rates[currency];
+  return convertToCurrency(amount, fromCurrency, 'EUR');
 }
 
 /**
@@ -330,29 +512,147 @@ export async function convertToEur(amount, fromCurrency) {
  * @param {Array<{amount: number|string, currency: string|null}>} rows
  * @returns {Promise<Array<{...row, amount_eur: number}>>}
  */
-export async function convertRowsToEur(rows) {
+/**
+ * Convert an array of rows to a target currency (default EUR).
+ * Returns the same rows with `amount_eur` field containing the converted
+ * amount in the requested target currency (keeps the original property name
+ * for compatibility with existing consumers).
+ *
+ * @param {Array<{amount:number|string,currency:string}>} rows
+ * @param {string} [targetCurrency='EUR']
+ */
+export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {}) {
   if (!rows || rows.length === 0) return [];
+
+  const { useHistoricalRatesByDate = false, dateField = null } = options || {};
+
+  // Normalize target
+  const toCur = (targetCurrency || 'EUR').toUpperCase().trim();
 
   // Pre-warm once for all rows
   const rates = await getRates();
 
-  return rows.map(row => {
+  const historicalRateCache = new Map();
+
+  function resolveDateFromRow(row) {
+    if (dateField && row[dateField]) return normalizeDateInput(row[dateField]);
+    return normalizeDateInput(row.date || row.day || row.transaction_date || row.planned_date || row.rate_date);
+  }
+
+  async function getRate(currencyCode, rowDate) {
+    if (!useHistoricalRatesByDate || !rowDate) {
+      return rates[currencyCode];
+    }
+    const key = `${currencyCode}:${rowDate}`;
+    if (historicalRateCache.has(key)) return historicalRateCache.get(key);
+    const value = await getRateToEurForDate(currencyCode, rowDate, { saveFetchedHistoricalRate: true });
+    historicalRateCache.set(key, value);
+    return value;
+  }
+
+  let historicalIndex = null;
+  if (useHistoricalRatesByDate) {
+    const relevantCurrencies = [...new Set([
+      ...rows.map(row => (row.currency || 'EUR').toUpperCase().trim()),
+      toCur,
+    ])]
+      .filter(Boolean);
+
+    if (relevantCurrencies.length > 0) {
+      const historicalRowsResult = await query(
+        `SELECT currency_code, rate_date, rate_to_eur
+         FROM exchange_rates
+         WHERE currency_code = ANY($1::text[])
+         ORDER BY currency_code ASC, rate_date ASC`,
+        [relevantCurrencies]
+      );
+      historicalIndex = buildHistoricalRateIndex(historicalRowsResult.rows || []);
+    }
+  }
+
+  const converted = [];
+  for (const row of rows) {
     const currency = (row.currency || 'EUR').toUpperCase().trim();
     const amount = typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount;
+    const rowDate = resolveDateFromRow(row);
 
-    let amountEur;
-    if (currency === 'EUR') {
-      amountEur = amount;
-    } else if (currency in rates) {
-      amountEur = amount * rates[currency];
-    } else {
-      logger.warn(`Unsupported currency ${currency}, using 1:1 conversion`);
-      amountEur = amount;
+    // Fast-path identical currencies
+    if (currency === toCur) {
+      converted.push({ ...row, amount_eur: amount });
+      continue;
     }
 
-    return { ...row, amount_eur: amountEur };
-  });
+    const historicalFrom = (historicalIndex && rowDate)
+      ? findNearestRateInIndex(historicalIndex, currency, rowDate)
+      : undefined;
+    const historicalTo = (historicalIndex && rowDate)
+      ? findNearestRateInIndex(historicalIndex, toCur, rowDate)
+      : undefined;
+
+    const rateFrom = historicalFrom
+      ?? (historicalIndex && !historicalIndex.has(currency) ? rates[currency] : undefined)
+      ?? await getRate(currency, rowDate)
+      ?? rates[currency];
+
+    const rateTo = historicalTo
+      ?? (historicalIndex && !historicalIndex.has(toCur) ? rates[toCur] : undefined)
+      ?? await getRate(toCur, rowDate)
+      ?? rates[toCur];
+
+    if (!rateFrom) {
+      logger.warn(`Unsupported source currency ${currency}, using 1:1 conversion`);
+      converted.push({ ...row, amount_eur: amount });
+      continue;
+    }
+    if (!rateTo) {
+      logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
+      // fallback: convert to EUR
+      converted.push({ ...row, amount_eur: amount * rateFrom });
+      continue;
+    }
+
+    // Convert: amount_in_target = amount * rateFrom (→ EUR) / rateTo (EUR→target)
+    const amountTarget = (amount * rateFrom) / rateTo;
+    converted.push({ ...row, amount_eur: amountTarget });
+  }
+
+  return converted;
+}
+
+/**
+ * Generic converter from any currency to any currency.
+ */
+export async function convertToCurrency(amount, fromCurrency, toCurrency) {
+  if (!fromCurrency || fromCurrency.toUpperCase().trim() === (toCurrency || 'EUR').toUpperCase().trim()) {
+    return amount;
+  }
+
+  const from = fromCurrency.toUpperCase().trim();
+  const to = (toCurrency || 'EUR').toUpperCase().trim();
+  const rates = await getRates();
+
+  const rateFrom = rates[from];
+  const rateTo = rates[to];
+
+  if (!rateFrom) {
+    logger.warn(`Unsupported currency ${from}, using 1:1 conversion`);
+    return amount;
+  }
+  if (!rateTo) {
+    logger.warn(`Unsupported target currency ${to}, falling back to EUR conversion`);
+    return amount * rateFrom;
+  }
+
+  return (amount * rateFrom) / rateTo;
 }
 
 export { FALLBACK_RATES };
-export default { convertToEur, convertRowsToEur, warmCache, clearMemoryCache, FALLBACK_RATES };
+export default {
+  convertToEur,
+  convertRowsToEur,
+  convertToCurrency,
+  warmCache,
+  clearMemoryCache,
+  backfillPortfolioHistoricalRates,
+  FALLBACK_RATES,
+};

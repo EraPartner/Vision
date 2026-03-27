@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, TrendingUp, Bitcoin, Building2, PiggyBank, BarChart3, ArrowRight } from 'lucide-react';
+import { Plus, TrendingUp, Bitcoin, Building2, PiggyBank, BarChart3, ArrowRight, Gem } from 'lucide-react';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { AssetClass } from '@/types/portfolio';
 import { ASSET_CLASS_LABELS, getAssetClassLabel } from '@/types/portfolio';
@@ -14,11 +14,15 @@ import type { PriceProvider } from '@/types/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 
 const ASSET_ICONS: Record<AssetClass, typeof TrendingUp> = {
   stock: TrendingUp,
   etf: BarChart3,
   crypto: Bitcoin,
+  metals: Gem,
   real_estate: Building2,
   savings: PiggyBank,
   bond: PiggyBank,
@@ -32,6 +36,8 @@ type Props = {
 
 export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const defaultCurrency = appSettings.defaultCurrency || 'EUR';
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'type' | 'details'>('type');
   const { addInvestment, addTransaction } = usePortfolio();
@@ -39,7 +45,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     assetClass: '' as AssetClass | '',
     name: '',
     symbol: '',
-    currency: 'EUR',
+    currency: defaultCurrency,
     currentPrice: '',
     interestRate: '',
     maturityDate: '',
@@ -51,6 +57,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     priceProvider: 'manual' as PriceProvider,
     priceProviderId: '',
     priceProviderUrl: '',
+    priceProviderLatestUrl: '',
+    priceProviderLatestPath: '',
+    priceProviderHistoryUrl: '',
+    priceProviderHistoryPath: 'points',
+    priceProviderHistoryTsPath: 'timestamp_ms',
+    priceProviderHistoryPricePath: 'price',
     addInitialPurchase: true,
     initialAmount: '',
     initialUnits: '',
@@ -62,6 +74,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     stock: t('addInv.desc.stock'),
     etf: t('addInv.desc.etf'),
     crypto: t('addInv.desc.crypto'),
+    metals: t('addInv.desc.metals'),
     real_estate: t('addInv.desc.real_estate'),
     savings: t('addInv.desc.savings'),
     bond: t('addInv.desc.bond'),
@@ -77,9 +90,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
 
   const reset = () => {
     setForm({
-      assetClass: '', name: '', symbol: '', currency: 'EUR', currentPrice: '',
+      assetClass: '', name: '', symbol: '', currency: defaultCurrency, currentPrice: '',
       interestRate: '', maturityDate: '', location: '', municipality: '', cadastralIncome: '', municipalityTaxRate: '', notes: '',
       priceProvider: 'manual', priceProviderId: '', priceProviderUrl: '',
+      priceProviderLatestUrl: '', priceProviderLatestPath: '',
+      priceProviderHistoryUrl: '', priceProviderHistoryPath: 'points',
+      priceProviderHistoryTsPath: 'timestamp_ms', priceProviderHistoryPricePath: 'price',
       addInitialPurchase: true, initialAmount: '', initialUnits: '',
       initialDate: new Date().toISOString().slice(0, 10), initialFees: '',
     });
@@ -95,7 +111,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         name: form.name.trim(),
         symbol: form.symbol.trim() || undefined,
         asset_class: form.assetClass,
-        currency: form.currency || 'EUR',
+        currency: form.currency || defaultCurrency,
         current_price: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
         interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
         maturity_date: form.maturityDate || undefined,
@@ -107,6 +123,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         price_provider: form.priceProvider,
         price_provider_id: form.priceProviderId.trim() || undefined,
         price_provider_url: form.priceProviderUrl.trim() || undefined,
+        price_provider_latest_url: form.priceProviderLatestUrl.trim() || undefined,
+        price_provider_latest_path: form.priceProviderLatestPath.trim() || undefined,
+        price_provider_history_url: form.priceProviderHistoryUrl.trim() || undefined,
+        price_provider_history_path: form.priceProviderHistoryPath.trim() || undefined,
+        price_provider_history_ts_path: form.priceProviderHistoryTsPath.trim() || undefined,
+        price_provider_history_price_path: form.priceProviderHistoryPricePath.trim() || undefined,
       });
 
       if (form.addInitialPurchase && form.initialAmount && investment) {
@@ -123,7 +145,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
             units,
             price_per_unit: units ? amount / units : undefined,
             fees,
-            currency: form.currency || 'EUR',
+            currency: form.currency || defaultCurrency,
             note: t('addInv.initialPurchaseNote'),
           });
         }
@@ -137,7 +159,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
     }
   };
 
-  const isUnitBased = ['stock', 'etf', 'crypto'].includes(form.assetClass);
+  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(form.assetClass);
   const isFixedIncome = ['savings', 'bond'].includes(form.assetClass);
   const isRealEstate = form.assetClass === 'real_estate';
   const selectedProvider = PRICE_PROVIDERS.find(p => p.key === form.priceProvider);
@@ -161,7 +183,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         // if only one allowed asset class, auto-select and jump to details
         if (allowedAssetClasses && allowedAssetClasses.length === 1) {
           const key = allowedAssetClasses[0];
-          const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf'].includes(key) ? 'yahoo' : 'manual';
+           const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
           setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
           setStep('details');
         } else {
@@ -195,7 +217,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                 <button
                   key={key}
                   onClick={() => {
-                    const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf'].includes(key) ? 'yahoo' : 'manual';
+                    const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
                     setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
                     setStep('details');
                   }}
@@ -283,11 +305,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="inv-maturity">{t('addInv.label.maturityDate')}</Label>
-                    <Input
-                      id="inv-maturity"
-                      type="date"
-                      value={form.maturityDate}
-                      onChange={(e) => setForm(f => ({ ...f, maturityDate: e.target.value }))}
+                    <DatePicker
+                      value={form.maturityDate ? parseLocalDateFromYmd(form.maturityDate) : undefined}
+                      onChange={(date) => setForm(f => ({ ...f, maturityDate: date ? toYmd(date) : '' }))}
+                      placeholder={t('plannedPage.link.pickDate')}
+                      allowClear
+                      clearLabel={t('common.clear')}
                     />
                   </div>
                 </div>
@@ -373,12 +396,11 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="init-date" className="text-xs">{t('addInv.label.date')}</Label>
-                      <Input
-                        id="init-date"
-                        type="date"
-                        className="h-9"
-                        value={form.initialDate}
-                        onChange={(e) => setForm(f => ({ ...f, initialDate: e.target.value }))}
+                      <DatePicker
+                        value={form.initialDate ? parseLocalDateFromYmd(form.initialDate) : undefined}
+                        onChange={(date) => setForm(f => ({ ...f, initialDate: date ? toYmd(date) : '' }))}
+                        placeholder={t('plannedPage.link.pickDate')}
+                        buttonClassName="h-9"
                       />
                     </div>
                     <div className="space-y-2">
@@ -455,10 +477,10 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                   </SelectContent>
                 </Select>
 
-                {form.priceProvider !== 'manual' && (
+                {form.priceProvider !== 'manual' && form.priceProvider !== 'custom' && (
                   <div className="space-y-2">
                     <Label htmlFor="inv-provider-id" className="text-xs">
-                      {form.priceProvider === 'custom' ? t('addInv.label.jsonPath') : t('addInv.label.providerId')}
+                      {t('addInv.label.providerId')}
                     </Label>
                     <Input
                       id="inv-provider-id"
@@ -472,17 +494,78 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                 )}
 
                 {form.priceProvider === 'custom' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="inv-provider-url" className="text-xs">{t('addInv.label.jsonEndpoint')}</Label>
-                    <Input
-                      id="inv-provider-url"
-                      type="url"
-                      placeholder={t('addInv.placeholder.jsonEndpoint')}
-                      value={form.priceProviderUrl}
-                      onChange={(e) => setForm(f => ({ ...f, priceProviderUrl: e.target.value }))}
-                      maxLength={500}
-                      className="font-mono text-sm"
-                    />
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-provider-latest-url" className="text-xs">{t('addInv.label.latestJsonEndpoint')}</Label>
+                      <Input
+                        id="inv-provider-latest-url"
+                        type="url"
+                        placeholder={t('addInv.placeholder.jsonEndpoint')}
+                        value={form.priceProviderLatestUrl}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderLatestUrl: e.target.value }))}
+                        maxLength={500}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-provider-latest-path" className="text-xs">{t('addInv.label.latestJsonPath')}</Label>
+                      <Input
+                        id="inv-provider-latest-path"
+                        placeholder="price"
+                        value={form.priceProviderLatestPath}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderLatestPath: e.target.value }))}
+                        maxLength={300}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-provider-history-url" className="text-xs">{t('addInv.label.historyJsonEndpoint')}</Label>
+                      <Input
+                        id="inv-provider-history-url"
+                        type="url"
+                        placeholder={t('addInv.placeholder.jsonEndpoint')}
+                        value={form.priceProviderHistoryUrl}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderHistoryUrl: e.target.value }))}
+                        maxLength={500}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="inv-provider-history-path" className="text-xs">{t('addInv.label.historyArrayPath')}</Label>
+                      <Input
+                        id="inv-provider-history-path"
+                        placeholder="points"
+                        value={form.priceProviderHistoryPath}
+                        onChange={(e) => setForm(f => ({ ...f, priceProviderHistoryPath: e.target.value }))}
+                        maxLength={300}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="inv-provider-history-ts" className="text-xs">{t('addInv.label.historyTimestampPath')}</Label>
+                        <Input
+                          id="inv-provider-history-ts"
+                          placeholder="timestamp_ms"
+                          value={form.priceProviderHistoryTsPath}
+                          onChange={(e) => setForm(f => ({ ...f, priceProviderHistoryTsPath: e.target.value }))}
+                          maxLength={300}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="inv-provider-history-price" className="text-xs">{t('addInv.label.historyPricePath')}</Label>
+                        <Input
+                          id="inv-provider-history-price"
+                          placeholder="price"
+                          value={form.priceProviderHistoryPricePath}
+                          onChange={(e) => setForm(f => ({ ...f, priceProviderHistoryPricePath: e.target.value }))}
+                          maxLength={300}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 

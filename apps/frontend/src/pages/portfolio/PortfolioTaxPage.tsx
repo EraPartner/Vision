@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Landmark, Receipt, TrendingDown, AlertTriangle, Info, SlidersHorizontal, Calculator } from 'lucide-react';
 import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,6 +7,7 @@ import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { usePortfolioTaxAdjustments } from '@/hooks/usePortfolioTaxAdjustments';
+import { apiClient } from '@/lib/api';
 import { getAssetClassLabel, type InvestmentSummary } from '@/types/portfolio';
 import { numberFormatToLocale } from '@/utils/currency';
 import { cn } from '@/lib/utils';
@@ -23,6 +25,7 @@ type TxnLite = {
   amount?: number;
   taxes?: number;
   fees?: number;
+  currency?: string;
 };
 
 function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) => string): WidgetDefinition[] {
@@ -50,17 +53,43 @@ export default function PortfolioTaxPage() {
   const { summaries } = usePortfolio();
   const { getAdjustment } = usePortfolioTaxAdjustments();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const txYear = profile.taxYear;
+
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
+  }
 
   const WIDGETS = getPortfolioTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolioTax', WIDGETS);
 
-  function fmt(val: number, currency = 'EUR') {
+  function fmt(val: number, currency = targetCurrency) {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
     }).format(val);
   }
 
@@ -70,15 +99,15 @@ export default function PortfolioTaxPage() {
         const yearlyRecordedTaxes = inv.transactions.reduce((sum: number, txn: TxnLite) => {
           const y = yearOf(txn.date);
           if (y !== txYear) return sum;
-          const explicit = txn.type === 'tax' ? Number(txn.amount) || 0 : 0;
-          return sum + explicit + (Number(txn.taxes) || 0);
+          const explicit = txn.type === 'tax' ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
+          return sum + explicit + convertToTarget(Number(txn.taxes) || 0, txn.currency);
         }, 0);
 
         const yearlyRecordedFees = inv.transactions.reduce((sum: number, txn: TxnLite) => {
           const y = yearOf(txn.date);
           if (y !== txYear) return sum;
-          const explicit = txn.type === 'fee' ? Number(txn.amount) || 0 : 0;
-          return sum + explicit + (Number(txn.fees) || 0);
+          const explicit = txn.type === 'fee' ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
+          return sum + explicit + convertToTarget(Number(txn.fees) || 0, txn.currency);
         }, 0);
 
         const manual = getAdjustment(txYear, inv.id);
@@ -125,19 +154,20 @@ export default function PortfolioTaxPage() {
       inv.transactions.forEach((txn: TxnLite) => {
         if (yearOf(txn.date) !== txYear) return;
         const txnTaxes = Number(txn.taxes) || 0;
-        if (txn.type === 'sell' && txnTaxes > 0) {
-          breakdown[t('tax.capitalGainsTax')] += txnTaxes;
-        } else if (txn.type === 'dividend' && txnTaxes > 0) {
-          breakdown[t('tax.dividendWithholding')] += txnTaxes;
-        } else if (txn.type === 'buy' && txnTaxes > 0) {
-          breakdown[t('tax.transactionTax')] += txnTaxes;
-        } else if (txn.type === 'tax') {
-          breakdown[t('tax.otherTaxes')] += Number(txn.amount) || 0;
-        } else if (txnTaxes > 0) {
-          breakdown[t('tax.otherTaxes')] += txnTaxes;
-        }
+          const convertedTaxes = convertToTarget(txnTaxes, txn.currency);
+          if (txn.type === 'sell' && convertedTaxes > 0) {
+            breakdown[t('tax.capitalGainsTax')] += convertedTaxes;
+          } else if (txn.type === 'dividend' && convertedTaxes > 0) {
+            breakdown[t('tax.dividendWithholding')] += convertedTaxes;
+          } else if (txn.type === 'buy' && convertedTaxes > 0) {
+            breakdown[t('tax.transactionTax')] += convertedTaxes;
+          } else if (txn.type === 'tax') {
+            breakdown[t('tax.otherTaxes')] += convertToTarget(Number(txn.amount) || 0, txn.currency);
+          } else if (convertedTaxes > 0) {
+            breakdown[t('tax.otherTaxes')] += convertedTaxes;
+          }
+        });
       });
-    });
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
       .filter((d) => d.value > 0);
@@ -154,15 +184,16 @@ export default function PortfolioTaxPage() {
       inv.transactions.forEach((txn: TxnLite) => {
         if (yearOf(txn.date) !== txYear) return;
         const txnFees = Number(txn.fees) || 0;
-        if (['buy', 'sell'].includes(txn.type) && txnFees > 0) {
-          breakdown[t('tax.brokerFees')] += txnFees;
-        } else if (txn.type === 'fee') {
-          breakdown[t('tax.managementFees')] += Number(txn.amount) || 0;
-        } else if (txnFees > 0) {
-          breakdown[t('tax.otherFees')] += txnFees;
-        }
+          const convertedFees = convertToTarget(txnFees, txn.currency);
+          if (['buy', 'sell'].includes(txn.type) && convertedFees > 0) {
+            breakdown[t('tax.brokerFees')] += convertedFees;
+          } else if (txn.type === 'fee') {
+            breakdown[t('tax.managementFees')] += convertToTarget(Number(txn.amount) || 0, txn.currency);
+          } else if (convertedFees > 0) {
+            breakdown[t('tax.otherFees')] += convertedFees;
+          }
+        });
       });
-    });
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
       .filter((d) => d.value > 0);
@@ -228,7 +259,7 @@ export default function PortfolioTaxPage() {
           sum +
           inv.transactions.reduce((txSum: number, txn: TxnLite) => {
             if (yearOf(txn.date) !== txYear) return txSum;
-            return txSum + (txn.type === 'dividend' ? Number(txn.amount) || 0 : 0);
+            return txSum + (txn.type === 'dividend' ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0);
           }, 0),
         0,
       ),
@@ -246,7 +277,7 @@ export default function PortfolioTaxPage() {
           sum +
           inv.transactions.reduce((txSum: number, txn: TxnLite) => {
             if (yearOf(txn.date) !== txYear) return txSum;
-            return txSum + (txn.type === 'buy' ? Number(txn.taxes) || 0 : 0);
+            return txSum + (txn.type === 'buy' ? convertToTarget(Number(txn.taxes) || 0, txn.currency) : 0);
           }, 0),
         0,
       ),
@@ -596,20 +627,20 @@ export default function PortfolioTaxPage() {
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                           <span>
-                            {t('tax.taxes')}: {fmt(inv.recordedTaxes, inv.currency)} + {fmt(inv.manualTaxes, inv.currency)}
+                            {t('tax.taxes')}: {fmt(inv.recordedTaxes)} + {fmt(inv.manualTaxes)}
                           </span>
                           <span>
-                            {t('tax.fees')}: {fmt(inv.recordedFees, inv.currency)} + {fmt(inv.manualFees, inv.currency)}
+                            {t('tax.fees')}: {fmt(inv.recordedFees)} + {fmt(inv.manualFees)}
                           </span>
                           {inv.realizedGain !== 0 && (
                             <span className={inv.realizedGain >= 0 ? 'text-accent' : 'text-destructive'}>
-                              {t('tax.realized')}: {inv.realizedGain >= 0 ? '+' : ''}{fmt(inv.realizedGain, inv.currency)}
+                              {t('tax.realized')}: {inv.realizedGain >= 0 ? '+' : ''}{fmt(convertToTarget(inv.realizedGain, inv.currency))}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-bold text-sm tabular-nums text-destructive">{fmt(inv.total, inv.currency)}</p>
+                        <p className="font-bold text-sm tabular-nums text-destructive">{fmt(inv.total)}</p>
                         <p className="text-xs text-muted-foreground">{t('tax.totalCosts')}</p>
                       </div>
                     </div>

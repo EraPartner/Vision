@@ -3,38 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Badge } from "@/components/ui/badge";
-import type { StatisticsData } from "@/hooks/useStatistics";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
-
-const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(142, 76%, 36%)",
-  "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)",
-  "hsl(340, 82%, 52%)",
-  "hsl(190, 80%, 45%)",
-  "hsl(30, 90%, 55%)",
-  "hsl(260, 70%, 55%)",
-  "hsl(170, 65%, 40%)",
-  "hsl(350, 75%, 60%)",
-];
-
-const RECHARTS_TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-  color: "hsl(var(--card-foreground))",
-};
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 
 type RecipientDetailRow = {
   recipientId: number;
@@ -56,15 +33,16 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatCurrency = (val: number, fractionDigits = 0) => new Intl.NumberFormat(locale, {
+  const targetCurrency = appSettings.defaultCurrency || "EUR";
+  const formatCurrency = (val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(val);
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights"],
-    queryFn: () => apiClient.getRecipientInsights(),
+    queryKey: ["recipient-insights", targetCurrency],
+    queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
     staleTime: 60000,
   });
 
@@ -80,7 +58,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
     };
   }, [data, excludedRecipientIds]);
 
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = appSettings.defaultPageSize;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
   const totalMerchants = filteredData?.topMerchants.length ?? 0;
@@ -88,7 +66,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   // Reset to first page whenever the filtered list changes (e.g. exclusion toggle)
   useEffect(() => {
     setDisplayCount(PAGE_SIZE);
-  }, [totalMerchants]);
+  }, [totalMerchants, PAGE_SIZE]);
 
   const displayedMerchants = useMemo(
     () => filteredData?.topMerchants.slice(0, displayCount) ?? [],
@@ -97,7 +75,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const hasMore = displayCount < totalMerchants;
   const handleLoadMore = useCallback(() => {
     setDisplayCount(prev => Math.min(prev + PAGE_SIZE, totalMerchants));
-  }, [totalMerchants]);
+  }, [PAGE_SIZE, totalMerchants]);
 
   const recipientDetailsColumns = useMemo(() => [
     {
@@ -137,7 +115,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       header: t('insights.col.firstSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
-        <span className="text-muted-foreground text-sm">{format(parseISO(row.firstSeen), "MMM yyyy")}</span>
+        <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.firstSeen), appSettings.dateFormat)}</span>
       ),
     },
     {
@@ -145,10 +123,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
       header: t('insights.col.lastSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
-        <span className="text-muted-foreground text-sm">{format(parseISO(row.lastSeen), "MMM yyyy")}</span>
+        <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t]);
+  ], [t, appSettings.dateFormat, appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
 
   if (isLoading) {
     return (
@@ -166,12 +144,6 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   }
 
   const top10 = filteredData.topMerchants.slice(0, 10);
-  const chartData = top10.map(m => ({
-    name: m.name.length > 18 ? m.name.slice(0, 16) + "…" : m.name,
-    fullName: m.name,
-    spend: m.totalSpend,
-  }));
-
   const totalTopSpend = top10.reduce((s, m) => s + m.totalSpend, 0);
   const totalTopTx = top10.reduce((s, m) => s + m.transactionCount, 0);
   const avgTopAmount = totalTopTx > 0 ? totalTopSpend / totalTopTx : 0;
@@ -226,34 +198,6 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
 
       {/* Statistics-derived chart with exclusion toggle */}
       {statisticsTopRecipientsChart}
-
-      {/* Top 10 Bar Chart from API */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('insights.topBySpend')}</CardTitle>
-          <CardDescription>{t('insights.topBySpendDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} className="text-xs" />
-              <YAxis type="category" dataKey="name" width={140} className="text-xs" />
-              <Tooltip
-                formatter={(value: number) => [formatCurrency(value), t('insights.col.totalSpend')]}
-                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
-                contentStyle={RECHARTS_TOOLTIP_STYLE}
-                labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-              />
-              <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
-                {chartData.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
 
       {/* Month over month alerts */}
       {filteredData.monthOverMonth.length > 0 && (

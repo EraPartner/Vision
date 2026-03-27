@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
 import { CashFlowComparisonChart } from "@/components/dashboard/CashFlowComparisonChart";
@@ -17,15 +17,21 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
-import { formatCurrency } from "@/utils/currency";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateWithAppSettings, formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
 type GraphExclusions = Record<string, boolean>;
 
 export default function DashboardPage() {
-    const { t, language } = useLanguage();
+    const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const targetCurrency = appSettings.defaultCurrency || 'EUR';
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const integerLocaleFormatter = new Intl.NumberFormat(locale);
 
     const DASHBOARD_WIDGETS: WidgetDefinition[] = [
         { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
@@ -94,41 +100,38 @@ export default function DashboardPage() {
 
     // Fetch monthly summary — FILTERED version (stable query key)
     const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useQuery({
-        queryKey: ['monthlySummary', 'filtered', filteredExclusionParams],
-        queryFn: () => apiClient.getMonthlyFinancialSummary(filteredExclusionParams),
+        queryKey: ['monthlySummary', 'filtered', targetCurrency, filteredExclusionParams],
+        queryFn: () => apiClient.getMonthlyFinancialSummary({ ...filteredExclusionParams, currency: targetCurrency }),
         staleTime: 30000,
         enabled: exclusionsApply,
     });
 
     // Fetch monthly summary — UNFILTERED version (stable query key)
-    // Only needed when exclusions are not active, or as fallback for per-graph toggle.
+    // Always enabled as fallback when users toggle a graph to "ignore filters"
     const { data: monthlySummaryUnfiltered, isLoading: monthlyUnfilteredLoading } = useQuery({
-        queryKey: ['monthlySummary', 'unfiltered'],
-        queryFn: () => apiClient.getMonthlyFinancialSummary({}),
+        queryKey: ['monthlySummary', 'unfiltered', targetCurrency],
+        queryFn: () => apiClient.getMonthlyFinancialSummary({ currency: targetCurrency }),
         staleTime: 30000,
-        // Skip this fetch when exclusions are active — filtered data is used instead.
-        // Still needed when users toggle a graph back to "unfiltered" mode, so we
-        // keep the query enabled if the exclusion toggles might need it.
-        enabled: !exclusionsApply,
+        enabled: true,
     });
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
     // Fetch cashflow comparison — FILTERED version (stable query key)
     const { data: cashflowDataFiltered, isLoading: cashflowFilteredLoading } = useQuery({
-        queryKey: ['cashflowComparison', 'filtered', filteredExclusionParams],
-        queryFn: () => apiClient.getCashflowComparison(filteredExclusionParams),
+        queryKey: ['cashflowComparison', 'filtered', targetCurrency, filteredExclusionParams],
+        queryFn: () => apiClient.getCashflowComparison({ ...filteredExclusionParams, currency: targetCurrency }),
         staleTime: 30000,
         enabled: exclusionsApply,
     });
 
     // Fetch cashflow comparison — UNFILTERED version (stable query key)
-    // Only needed when no exclusions are active, or for per-graph toggle back to raw data.
+    // Always enabled as fallback when users toggle a graph to "ignore filters"
     const { data: cashflowDataUnfiltered, isLoading: cashflowUnfilteredLoading } = useQuery({
-        queryKey: ['cashflowComparison', 'unfiltered'],
-        queryFn: () => apiClient.getCashflowComparison({}),
+        queryKey: ['cashflowComparison', 'unfiltered', targetCurrency],
+        queryFn: () => apiClient.getCashflowComparison({ currency: targetCurrency }),
         staleTime: 30000,
-        enabled: !exclusionsApply,
+        enabled: true,
     });
 
     const cashflowLoading = cashflowFilteredLoading || cashflowUnfilteredLoading;
@@ -325,15 +328,15 @@ export default function DashboardPage() {
             : allTransactions;
     })();
 
-    const recentTransactions = recentTransactionsSource.slice(0, 5).map(t => ({
-        id: t.id,
-        date: (t as any).date || t.transaction_date || '',
-        description: t.memo || t('txPage.field.description'),
-        amount: t.amount,
-        currency: t.currency || 'EUR',
-        category: t.category_name || t('txPage.field.uncategorized'),
-        recipient: t.recipient_name || t('txPage.field.unknown'),
-        bank: t.bank_account
+    const recentTransactions = recentTransactionsSource.slice(0, 5).map((txn) => ({
+        id: txn.id,
+        date: (txn as any).date || txn.transaction_date || '',
+        description: txn.memo || t('txPage.field.description'),
+        amount: txn.amount,
+        currency: txn.currency || appSettings.defaultCurrency,
+        category: txn.category_name || t('txPage.field.uncategorized'),
+        recipient: txn.recipient_name || t('txPage.field.unknown'),
+        bank: txn.bank_account
     }));
 
     const columns = [
@@ -343,7 +346,7 @@ export default function DashboardPage() {
             render: (row: (typeof recentTransactions)[0]) => {
                 try {
                     const dateObj = parseISO(row.date);
-                    return <span>{format(dateObj, "EEE, d MMM")}</span>;
+                    return <span>{formatDateWithAppSettings(dateObj, appSettings.dateFormat)}</span>;
                 } catch {
                     return <span>{row.date}</span>;
                 }
@@ -366,7 +369,7 @@ export default function DashboardPage() {
             className: "text-right",
             render: (row: (typeof recentTransactions)[0]) => (
                 <span className={`font-semibold ${row.amount >= 0 ? "text-accent" : "text-destructive"}`}>
-                    {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency)}
+                    {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
                 </span>
             ),
         },
@@ -449,12 +452,12 @@ export default function DashboardPage() {
             {/* Stats */}
             {isVisible('statCards') && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
-                <StatCard title={t('dashboard.stat.totalTransactions')} value={totalTransactions.toLocaleString()} icon={Receipt} />
-                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={formatCurrency(totalSpending, 'EUR')} icon={TrendingDown} trend="expense"
+                <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} icon={Receipt} />
+                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={formatCurrency(totalSpending, appSettings.defaultCurrency, locale)} icon={TrendingDown} trend="expense"
                     subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={formatCurrency(totalIncome, 'EUR')} icon={ArrowUpRight} trend="income"
+                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={formatCurrency(totalIncome, appSettings.defaultCurrency, locale)} icon={ArrowUpRight} trend="income"
                     subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthNet')} value={formatCurrency(netBalance, 'EUR')} icon={DollarSign}
+                <StatCard title={t('dashboard.stat.lastMonthNet')} value={formatCurrency(netBalance, appSettings.defaultCurrency, locale)} icon={DollarSign}
                     trend={netBalance >= 0 ? "income" : "expense"}
                     subtitle={netBalance >= 0 ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')} />
             </div>
@@ -521,7 +524,7 @@ export default function DashboardPage() {
                             <div>
                                 <CardTitle className="text-xl">{t('cashflow.title')}</CardTitle>
                                 <CardDescription className="text-base">
-                                    {t('cashflow.chartDesc', { monthName: new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1).toLocaleDateString(language, { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase()) })}
+                                    {t('cashflow.chartDesc', { monthName: formatMonthYearWithAppSettings(new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1), appSettings.dateFormat, locale) })}
                                 </CardDescription>
                             </div>
                         </div>

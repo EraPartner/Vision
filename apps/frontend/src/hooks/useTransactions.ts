@@ -45,6 +45,7 @@ export function useCreateTransaction() {
         mutationFn: (transaction: TransactionCreate) => apiClient.createTransaction(transaction),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
             toast.success(t('transactions.created'));
         },
@@ -63,6 +64,7 @@ export function useUpdateTransaction() {
             apiClient.updateTransaction(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
             toast.success(t('transactions.updated'));
         },
@@ -80,6 +82,7 @@ export function useDeleteTransaction() {
         mutationFn: (id: number) => apiClient.deleteTransaction(id),
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['transactions']});
+            queryClient.invalidateQueries({queryKey: ['transactions-virtual']});
             queryClient.invalidateQueries({queryKey: ['monthlySummary']});
             toast.success(t('transactions.deleted'));
         },

@@ -4,9 +4,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
-import { useCreateSplits } from "@/hooks/useSplits";
+import { useCreateSplits, useSplitsByTransaction } from "@/hooks/useSplits";
 import { Split, Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatCurrency } from "@/utils/currency";
@@ -31,6 +31,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     ]);
     const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
     const createSplits = useCreateSplits();
+    const { data: existingSplitsData, isLoading: isLoadingExistingSplits } = useSplitsByTransaction(open ? transactionId : null);
     const { t } = useLanguage();
 
     const absAmount = Math.abs(transactionAmount);
@@ -39,7 +40,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
 
     const removeEntry = (idx: number) => setEntries(prev => prev.filter((_, i) => i !== idx));
 
-    const updateEntry = (idx: number, field: keyof SplitEntry, value: any) => {
+    const updateEntry = (idx: number, field: keyof SplitEntry, value: number | string | null) => {
         setEntries(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e));
     };
 
@@ -49,6 +50,22 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const equalShare = totalPeople > 1 ? Math.round((absAmount / totalPeople) * 100) / 100 : 0;
 
     const customTotal = validEntries.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    const existingSplits = existingSplitsData?.items ?? [];
+    const existingSplitTotal = existingSplits.reduce((sum, split) => sum + (split.amount || 0), 0);
+    const existingRecipientNames = existingSplits
+        .map((split) => split.recipient_name)
+        .filter(Boolean)
+        .join(', ');
+    const newSplitTotal = splitType === "equal" ? equalShare * validEntries.length : customTotal;
+    const hasNonPositiveSplitAmount = splitType === "equal"
+        ? validEntries.length > 0 && equalShare <= 0
+        : validEntries.some((entry) => {
+            if (!entry.recipient_id) return false;
+            return (parseFloat(entry.amount) || 0) <= 0;
+        });
+    const totalAfterSubmit = existingSplitTotal + newSplitTotal;
+    const remainingSplitCapacity = Math.max(absAmount - existingSplitTotal, 0);
+    const hasExceededTransactionTotal = totalAfterSubmit > absAmount + 0.000001;
 
     const handleSubmit = () => {
         const splits = validEntries.map(e => ({
@@ -91,6 +108,43 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                 </DialogHeader>
 
                 <div className="space-y-4">
+                    {!isLoadingExistingSplits && (
+                        <Alert className="py-3">
+                            <AlertDescription>
+                                {existingSplits.length > 0
+                                    ? t('splitDialog.alreadySplit', { n: existingSplits.length })
+                                    : t('splitDialog.notSplitYet')}
+                                {existingRecipientNames && (
+                                    <span className="block mt-1 text-xs text-muted-foreground">
+                                        {t('splitDialog.existingRecipients', {
+                                            recipients: existingRecipientNames,
+                                        })}
+                                    </span>
+                                )}
+                                {existingSplits.length > 0 && (
+                                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                        {existingSplits.map((split) => (
+                                            <li key={split.id}>
+                                                {t('splitDialog.existingSplitLine', {
+                                                    recipient: split.recipient_name || t('txPage.field.unknown'),
+                                                    amount: formatCurrency(split.amount, transactionCurrency),
+                                                })}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {!isLoadingExistingSplits && hasExceededTransactionTotal && (
+                        <Alert variant="destructive" className="py-3">
+                            <AlertDescription>
+                                {t('splitDialog.exceedsTotal', { remaining: formatCurrency(remainingSplitCapacity, transactionCurrency) })}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     {/* Split type toggle */}
                     <div className="flex gap-2">
                         <Button
@@ -166,7 +220,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                     <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                     <Button
                         onClick={handleSubmit}
-                        disabled={validEntries.length === 0 || createSplits.isPending}
+                        disabled={validEntries.length === 0 || hasNonPositiveSplitAmount || hasExceededTransactionTotal || createSplits.isPending}
                     >
                         {createSplits.isPending ? t('splitDialog.splitting') : t('splitDialog.split')}
                     </Button>

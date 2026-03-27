@@ -39,6 +39,7 @@ import { AlertCircle, CheckCircle2, Database, Download, ExternalLink, FolderOpen
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
 
 interface DashboardSettingsDialogProps {
     open: boolean;
@@ -66,6 +67,8 @@ const NUMBER_FORMATS = [
     { value: 'ch', labelKey: 'settings.numberFormat.ch' },
     { value: 'in', labelKey: 'settings.numberFormat.in' },
 ];
+
+const DISMISSED_RECURRING_PATTERNS_KEY = 'dismissed_recurring_patterns';
 
 export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'general' }: DashboardSettingsDialogProps) {
     const { settings, updateSettings, resetSettings } = useSettings();
@@ -371,12 +374,29 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
     };
 
     const handleReset = () => {
+        resetSettings();
         resetAppSettings();
         setLocalExcludedCategories([]);
         setLocalExcludedRecipients([]);
         setLocalExcludeHidden(true);
+        setLocalExclusionScope('everywhere');
         setLocalAppSettings(defaultAppSettings);
         toast.info(t('settings.resetToDefaults'));
+    };
+
+    const handleResetRecurringDismissals = async () => {
+        try {
+            window.localStorage.removeItem(DISMISSED_RECURRING_PATTERNS_KEY);
+        } catch {
+            // ignore localStorage unavailability
+        }
+
+        try {
+            await apiClient.saveSetting(DISMISSED_RECURRING_PATTERNS_KEY, []);
+            toast.success(t('settings.app.recurringDismissalsResetSuccess'));
+        } catch {
+            toast.error(t('settings.app.recurringDismissalsResetFailed'));
+        }
     };
 
     const handleRestartOnboarding = () => {
@@ -881,7 +901,7 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                                                         </p>
                                                         {updateStatus.published_at && (
                                                             <p className="text-xs mt-0.5 opacity-80">
-                                                                {t('settings.app.released')} {new Date(updateStatus.published_at).toLocaleDateString()}
+                                                                {t('settings.app.released')} {formatDateStringWithAppSettings(updateStatus.published_at, appSettings.dateFormat)}
                                                             </p>
                                                         )}
                                                         {updateStatus.release_notes && (
@@ -943,6 +963,31 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                                                 {applyPhase === 'restarting' ? t('settings.app.restarting2') : t('settings.app.installUpdate')}
                                             </Button>
                                         )}
+                                    </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* Reset recurring suggestion dismissals */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-semibold text-foreground">{t('settings.app.recurringDismissals')}</h3>
+                                    <div className="flex items-center justify-between rounded-lg border p-4">
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-foreground">{t('settings.app.recurringDismissalsReset')}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {t('settings.app.recurringDismissalsResetHint')}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                void handleResetRecurringDismissals();
+                                            }}
+                                            className="ml-4 shrink-0"
+                                        >
+                                            {t('settings.app.reset')}
+                                        </Button>
                                     </div>
                                 </div>
 

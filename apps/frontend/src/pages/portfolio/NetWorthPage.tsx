@@ -1,41 +1,388 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiClient, type NetWorthSnapshot } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 
-function fmtMonth(month: string, lang: string) {
-  const [y, m] = month.split("-");
-  const date = new Date(Number(y), Number(m) - 1);
-  // Use language (eg. 'en'|'nl') for month localization while preserving numeric locale for currency elsewhere
-  return date.toLocaleDateString(lang, { month: "short", year: "2-digit" });
+function fmtDay(date: string, appDateFormat: string) {
+  return formatDateWithAppSettings(parseLocalDateFromYmd(date), appDateFormat);
+}
+
+const EMPTY_SNAPSHOTS: Array<{ date: string; netWorth: number; liquid: number; investments: number }> = [];
+const DAY_WIDTH_OPTIONS = [20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1, 0.75, 0.5, 0.25, 0.15, 0.1, 0.05, 0.03] as const;
+const MIN_CHART_WIDTH = 320;
+const DOMAIN_SCROLL_THRESHOLD_PX = 24;
+const DOMAIN_SCROLL_IDLE_MS = 120;
+type NetWorthSeries = 'netWorth' | 'liquid' | 'investments';
+
+function normalizeYmd(value: string) {
+  if (!value) return value;
+  if (value.includes('T')) return value.split('T')[0];
+  if (value.length > 10) return value.slice(0, 10);
+  return value;
+}
+
+function isFiniteSnapshot(snapshot: { date: string; netWorth: number; liquid: number; investments: number }) {
+  return Boolean(snapshot.date)
+    && Number.isFinite(snapshot.netWorth)
+    && Number.isFinite(snapshot.liquid)
+    && Number.isFinite(snapshot.investments);
+}
+
+function formatMonthTickLabel(dateYmd: string, formatter: Intl.DateTimeFormat) {
+  const normalized = normalizeYmd(dateYmd);
+  const parsed = parseLocalDateFromYmd(normalized);
+  if (Number.isNaN(parsed.getTime())) return normalized;
+  return formatter.format(parsed);
+}
+
+
+function computeYDomain(
+  points: Array<{ netWorth: number; liquid: number; investments: number }>,
+  series: NetWorthSeries[] = ['netWorth', 'liquid', 'investments'],
+): [number, number] {
+  const values = points
+    .flatMap((point) => series.map((key) => point[key]))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length === 0) return [0, 100];
+
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const span = maxValue - minValue;
+  const padding = span === 0
+    ? Math.max(Math.abs(maxValue) * 0.03, 1)
+    : Math.max(span * 0.03, 1);
+
+  const lower = Math.floor((minValue - padding) * 100) / 100;
+  const upper = Math.ceil((maxValue + padding) * 100) / 100;
+  return [lower, upper];
+}
+
+function niceStep(roughStep: number) {
+  if (!Number.isFinite(roughStep) || roughStep <= 0) return 100;
+
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+
+  let niceNormalized;
+  if (normalized <= 1) niceNormalized = 1;
+  else if (normalized <= 2) niceNormalized = 2;
+  else if (normalized <= 5) niceNormalized = 5;
+  else niceNormalized = 10;
+
+  return niceNormalized * magnitude;
+}
+
+function computeNiceYDomain(domain: [number, number], tickCount = 7): [number, number] {
+  const [rawMin, rawMax] = domain;
+  if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return [0, 1000];
+
+  if (rawMin === rawMax) {
+    const base = Math.max(100, niceStep(Math.abs(rawMax) / 5));
+    const center = rawMax;
+    const min = Math.floor((center - base * 2) / base) * base;
+    const max = Math.ceil((center + base * 2) / base) * base;
+    return min >= max ? [0, Math.max(base, max)] : [min, max];
+  }
+
+  const steps = Math.max(2, tickCount - 1);
+  const roughStep = (rawMax - rawMin) / steps;
+  const step = Math.max(1, niceStep(roughStep));
+  const min = Math.floor(rawMin / step) * step;
+  const max = Math.ceil(rawMax / step) * step;
+
+  return min >= max ? [0, Math.max(step, max)] : [min, max];
 }
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const targetCurrency = appSettings.defaultCurrency || "EUR";
   const { data, isLoading, error } = useQuery({
-    queryKey: ["net-worth"],
-    queryFn: () => apiClient.getNetWorth(),
+    queryKey: ["net-worth", targetCurrency],
+    queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
     staleTime: 60_000,
   });
+  const chartScrollRef = useRef<HTMLDivElement | null>(null);
+  const [yDomain, setYDomain] = useState<[number, number] | undefined>(undefined);
+  const [isAtLatest, setIsAtLatest] = useState(true);
+  const [zoomStep, setZoomStep] = useState(0);
+  const [selectedSeries, setSelectedSeries] = useState<NetWorthSeries>('netWorth');
+  const scrollRafRef = useRef<number | null>(null);
+  const scrollIdleTimerRef = useRef<number | null>(null);
+  const rangeRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
+  const lastDomainScrollLeftRef = useRef<number>(-1);
+  const pendingZoomScrollRatioRef = useRef<number | null>(null);
+  const snapshots = useMemo(() => {
+    return (data?.snapshots ?? EMPTY_SNAPSHOTS)
+      .map((snapshot) => ({ ...snapshot, date: normalizeYmd(snapshot.date) }))
+      .filter(isFiniteSnapshot);
+  }, [data?.snapshots]);
 
-  function fmt(val: number) {
-    return new Intl.NumberFormat(locale, {
-      style: "currency", currency: "EUR",
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(val);
-  }
+  const chartSnapshots = snapshots;
+
+  const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: appSettings.defaultCurrency || "EUR",
+    minimumFractionDigits: appSettings.showDecimalPlaces,
+    maximumFractionDigits: appSettings.showDecimalPlaces,
+  }), [appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
+
+  const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
+
+  const monthTickFormatter = useMemo(
+    () => new Intl.DateTimeFormat(monthLabelLocale, { month: 'short', year: '2-digit' }),
+    [monthLabelLocale],
+  );
+
+  const scrollToLatest = () => {
+    const scrollEl = chartScrollRef.current;
+    if (!scrollEl) return;
+    scrollEl.scrollTo({
+      left: Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth),
+      behavior: "smooth",
+    });
+  };
+
+  const captureZoomAnchor = useCallback(() => {
+    const scrollEl = chartScrollRef.current;
+    if (!scrollEl) return;
+
+    const maxScrollLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+    if (maxScrollLeft <= 0) {
+      pendingZoomScrollRatioRef.current = 1;
+      return;
+    }
+
+    const isLatestView = scrollEl.scrollLeft >= maxScrollLeft - 8;
+    pendingZoomScrollRatioRef.current = isLatestView
+      ? 1
+      : Math.min(1, Math.max(0, scrollEl.scrollLeft / maxScrollLeft));
+  }, []);
+
+  const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
+
+  const current = data?.current ?? { liquid: 0, investments: 0, netWorth: 0 };
+  const monthlyChange = data?.monthlyChange ?? 0;
+  const monthlyChangePercent = data?.monthlyChangePercent ?? 0;
+  const isPositiveChange = monthlyChange >= 0;
+
+  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
+
+  const chartWidth = useMemo(() => {
+    const dayCount = Math.max(chartSnapshots.length, 1);
+    return Math.max(MIN_CHART_WIDTH, dayCount * dayWidth);
+  }, [chartSnapshots.length, dayWidth]);
+
+  const displaySnapshots = chartSnapshots;
+
+  const fallbackYDomain = useMemo(
+    () => computeNiceYDomain(computeYDomain(displaySnapshots, [selectedSeries])),
+    [displaySnapshots, selectedSeries],
+  );
+
+  const monthlyTicks = useMemo(() => {
+    return displaySnapshots
+      .filter((snapshot, idx) => idx === 0 || snapshot.date.slice(0, 7) !== displaySnapshots[idx - 1].date.slice(0, 7))
+      .map((snapshot) => snapshot.date);
+  }, [displaySnapshots]);
+
+  const breakdownRows = useMemo(() => {
+    const rows = [] as Array<{
+      date: string;
+      liquid: number;
+      investments: number;
+      netWorth: number;
+      change: number | undefined;
+    }>;
+
+    for (let idx = snapshots.length - 1; idx >= 0; idx -= 1) {
+      const s = snapshots[idx];
+      const prev = idx > 0 ? snapshots[idx - 1] : undefined;
+      rows.push({
+        date: s.date,
+        liquid: s.liquid,
+        investments: s.investments,
+        netWorth: s.netWorth,
+        change: prev ? s.netWorth - prev.netWorth : undefined,
+      });
+    }
+
+    return rows;
+  }, [snapshots]);
+
+  const breakdownColumns = useMemo(() => [
+    {
+      key: 'date',
+      header: t('networth.date'),
+      render: (row: { date: string }) => (
+        <span className="font-medium">{fmtDay(row.date, appSettings.dateFormat)}</span>
+      ),
+    },
+    {
+      key: 'liquid',
+      header: t('networth.liquid'),
+      className: 'text-right tabular-nums',
+      render: (row: { liquid: number }) => fmt(row.liquid),
+    },
+    {
+      key: 'investments',
+      header: t('networth.investments'),
+      className: 'text-right tabular-nums',
+      render: (row: { investments: number }) => fmt(row.investments),
+    },
+    {
+      key: 'netWorth',
+      header: t('networth.title'),
+      className: 'text-right tabular-nums font-bold',
+      render: (row: { netWorth: number }) => fmt(row.netWorth),
+    },
+    {
+      key: 'change',
+      header: t('networth.change'),
+      className: 'text-right tabular-nums',
+      render: (row: { change: number | undefined }) => {
+        if (row.change === undefined) return '—';
+        return (
+          <span className={cn("font-medium", row.change >= 0 ? "text-accent" : "text-destructive")}>
+            {row.change >= 0 ? "+" : ""}{fmt(row.change)}
+          </span>
+        );
+      },
+    },
+  ], [appSettings.dateFormat, fmt, t]);
+
+  useEffect(() => {
+    if (displaySnapshots.length === 0) {
+      setYDomain(undefined);
+      setIsAtLatest(true);
+      rangeRef.current = null;
+      lastDomainScrollLeftRef.current = -1;
+      return;
+    }
+
+    const scrollEl = chartScrollRef.current;
+    if (!scrollEl) {
+      setYDomain(computeNiceYDomain(computeYDomain(displaySnapshots, [selectedSeries])));
+      setIsAtLatest(true);
+      return;
+    }
+
+    const updateVisibleDomain = (force = false) => {
+      const totalPoints = displaySnapshots.length;
+      if (totalPoints === 0) return;
+
+      const maxScrollLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+      const nextIsAtLatest = maxScrollLeft <= 2 || scrollEl.scrollLeft >= maxScrollLeft - 8;
+      setIsAtLatest((prev) => (prev === nextIsAtLatest ? prev : nextIsAtLatest));
+
+      if (
+        !force
+        && lastDomainScrollLeftRef.current >= 0
+        && Math.abs(scrollEl.scrollLeft - lastDomainScrollLeftRef.current) < DOMAIN_SCROLL_THRESHOLD_PX
+      ) {
+        return;
+      }
+      lastDomainScrollLeftRef.current = scrollEl.scrollLeft;
+
+      const maxIndex = totalPoints - 1;
+      const safeScrollWidth = Math.max(scrollEl.scrollWidth, 1);
+      const startRatio = scrollEl.scrollLeft / safeScrollWidth;
+      const endRatio = (scrollEl.scrollLeft + scrollEl.clientWidth) / safeScrollWidth;
+
+      const startIndex = Math.max(0, Math.floor(startRatio * maxIndex) - 1);
+      const endIndex = Math.min(maxIndex, Math.ceil(endRatio * maxIndex) + 1);
+      const previousRange = rangeRef.current;
+      const rangeUnchanged = previousRange
+        && previousRange.startIndex === startIndex
+        && previousRange.endIndex === endIndex;
+
+      if (force || !rangeUnchanged) {
+        rangeRef.current = { startIndex, endIndex };
+        const visiblePoints = displaySnapshots.slice(startIndex, endIndex + 1);
+        const domainSource = visiblePoints.length > 0 ? visiblePoints : displaySnapshots;
+        const nextDomain = computeNiceYDomain(computeYDomain(domainSource, [selectedSeries]));
+        const safeDomain: [number, number] = Number.isFinite(nextDomain[0])
+          && Number.isFinite(nextDomain[1])
+          && nextDomain[1] > nextDomain[0]
+          ? nextDomain
+          : computeNiceYDomain(computeYDomain(displaySnapshots, [selectedSeries]));
+        setYDomain((prev) => {
+          if (prev && prev[0] === safeDomain[0] && prev[1] === safeDomain[1]) return prev;
+          return safeDomain;
+        });
+      }
+    };
+
+    const scheduleUpdate = () => {
+      if (scrollRafRef.current !== null) return;
+      scrollRafRef.current = window.requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        updateVisibleDomain();
+      });
+    };
+
+    const onScroll = () => scheduleUpdate();
+    const onResize = () => scheduleUpdate();
+
+    const onScrollWithIdle = () => {
+      onScroll();
+      if (scrollIdleTimerRef.current !== null) {
+        window.clearTimeout(scrollIdleTimerRef.current);
+      }
+      scrollIdleTimerRef.current = window.setTimeout(() => {
+        scrollIdleTimerRef.current = null;
+        updateVisibleDomain(true);
+      }, DOMAIN_SCROLL_IDLE_MS);
+    };
+
+    scrollEl.addEventListener('scroll', onScrollWithIdle, { passive: true });
+    window.addEventListener('resize', onResize);
+
+    const rafId = window.requestAnimationFrame(() => {
+      const nextMaxScrollLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+      const pendingRatio = pendingZoomScrollRatioRef.current;
+
+      if (pendingRatio !== null) {
+        scrollEl.scrollLeft = pendingRatio >= 1 ? nextMaxScrollLeft : pendingRatio * nextMaxScrollLeft;
+        pendingZoomScrollRatioRef.current = null;
+      } else if (rangeRef.current === null) {
+        scrollEl.scrollLeft = nextMaxScrollLeft;
+      }
+
+      lastDomainScrollLeftRef.current = scrollEl.scrollLeft;
+      updateVisibleDomain(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      if (scrollRafRef.current !== null) {
+        window.cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      if (scrollIdleTimerRef.current !== null) {
+        window.clearTimeout(scrollIdleTimerRef.current);
+        scrollIdleTimerRef.current = null;
+      }
+      scrollEl.removeEventListener('scroll', onScrollWithIdle);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [chartWidth, displaySnapshots, selectedSeries, zoomStep]);
 
   if (isLoading) {
     return (
@@ -68,9 +415,6 @@ export default function NetWorthPage() {
     );
   }
 
-  const { current, monthlyChange, monthlyChangePercent, snapshots } = data;
-  const isPositiveChange = monthlyChange >= 0;
-
   // Min/max for chart
   const allValues = snapshots.map(s => s.netWorth);
   const peak = Math.max(...allValues);
@@ -95,17 +439,41 @@ export default function NetWorthPage() {
       title: t('networth.liquid'),
       value: fmt(current.liquid),
       icon: Landmark,
-      desc: `${current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : 0}% ${t('networth.ofNetWorth')}`,
+      desc: `${current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : 0} ${t('networth.ofNetWorth')}`,
       cls: "text-foreground",
     },
     {
       title: t('networth.investments'),
       value: fmt(current.investments),
       icon: PiggyBank,
-      desc: `${current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : 0}% ${t('networth.ofNetWorth')}`,
+      desc: `${current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : 0} ${t('networth.ofNetWorth')}`,
       cls: "text-foreground",
     },
   ];
+
+  const selectedSeriesConfig = {
+    netWorth: {
+      label: t('networth.title'),
+      stroke: 'hsl(var(--primary))',
+      strokeWidth: 2.5,
+      fill: 'url(#gradNetWorth)',
+      dash: undefined,
+    },
+    liquid: {
+      label: t('networth.liquid'),
+      stroke: 'hsl(var(--accent))',
+      strokeWidth: 2,
+      fill: 'url(#gradLiquid)',
+      dash: '4 2',
+    },
+    investments: {
+      label: t('networth.investments'),
+      stroke: 'hsl(217, 91%, 60%)',
+      strokeWidth: 2,
+      fill: 'url(#gradInvest)',
+      dash: '4 2',
+    },
+  }[selectedSeries];
 
   return (
     <div className="space-y-6">
@@ -137,79 +505,141 @@ export default function NetWorthPage() {
 
       {/* Main Chart */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t('networth.overTime')}</CardTitle>
-          <CardDescription>{t('networth.chartDesc')}</CardDescription>
+        <CardHeader className="sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <CardTitle>{t('networth.overTime')}</CardTitle>
+            <CardDescription>{t('networth.chartDesc')}</CardDescription>
+          </div>
+          <div className="flex items-center gap-1 self-start">
+            <Button
+              variant={selectedSeries === 'netWorth' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setSelectedSeries('netWorth')}
+            >
+              {t('networth.seriesTotal')}
+            </Button>
+            <Button
+              variant={selectedSeries === 'investments' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setSelectedSeries('investments')}
+            >
+              {t('networth.seriesInvestments')}
+            </Button>
+            <Button
+              variant={selectedSeries === 'liquid' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setSelectedSeries('liquid')}
+            >
+              {t('networth.seriesLiquid')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={() => {
+                captureZoomAnchor();
+                setZoomStep((prev) => Math.max(0, prev - 1));
+              }}
+              disabled={zoomStep <= 0}
+            >
+              {t('networth.zoomin')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={() => {
+                captureZoomAnchor();
+                setZoomStep((prev) => Math.min(DAY_WIDTH_OPTIONS.length - 1, prev + 1));
+              }}
+              disabled={zoomStep >= DAY_WIDTH_OPTIONS.length - 1}
+            >
+              {t('networth.zoomout')}
+            </Button>
+            {!isAtLatest && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground"
+                onClick={scrollToLatest}
+              >
+                {t('networth.latest')}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={420}>
-            <AreaChart data={snapshots} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gradNetWorth" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradLiquid" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="month"
-                tickFormatter={(v: string) => fmtMonth(v, language)}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
-              />
-              <YAxis
-                tickFormatter={(v) => fmt(v)}
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
-                width={80}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "var(--radius)",
-                  color: "hsl(var(--card-foreground))",
-                }}
-                 labelFormatter={(v: string) => fmtMonth(v, language)}
-                formatter={(value: number, name: string) => [fmt(value), name]}
-              />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="netWorth"
-                name={t('networth.title')}
-                stroke="hsl(var(--primary))"
-                strokeWidth={2.5}
-                fill="url(#gradNetWorth)"
-              />
-              <Area
-                type="monotone"
-                dataKey="liquid"
-                name={t('networth.liquid')}
-                stroke="hsl(var(--accent))"
-                strokeWidth={1.5}
-                fill="url(#gradLiquid)"
-                strokeDasharray="4 2"
-              />
-              <Area
-                type="monotone"
-                dataKey="investments"
-                name={t('networth.investments')}
-                stroke="hsl(217, 91%, 60%)"
-                strokeWidth={1.5}
-                fill="url(#gradInvest)"
-                strokeDasharray="4 2"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div ref={chartScrollRef} className="overflow-x-auto pb-2">
+            <div className="min-w-full" style={{ width: chartWidth }}>
+              <ResponsiveContainer width="100%" height={420}>
+                <AreaChart data={displaySnapshots} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradNetWorth" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradLiquid" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    ticks={monthlyTicks}
+                    tickFormatter={(v: string) => formatMonthTickLabel(v, monthTickFormatter)}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                    axisLine={{ stroke: "hsl(var(--border))" }}
+                    height={36}
+                    minTickGap={24}
+                  />
+                  <YAxis
+                    domain={yDomain ?? fallbackYDomain}
+                    allowDataOverflow
+                    tickFormatter={(v) => fmt(v)}
+                    tickCount={7}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                    axisLine={{ stroke: "hsl(var(--border))" }}
+                    width={90}
+                    orientation="right"
+                  />
+                  <ReferenceLine
+                    y={current[selectedSeries]}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="2 4"
+                    strokeOpacity={0.5}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "var(--radius)",
+                      color: "hsl(var(--card-foreground))",
+                    }}
+                    labelFormatter={(v: string) => fmtDay(v, appSettings.dateFormat)}
+                    formatter={(value: number, name: string) => [fmt(value), name]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={selectedSeries}
+                    name={selectedSeriesConfig.label}
+                    stroke={selectedSeriesConfig.stroke}
+                    strokeWidth={selectedSeriesConfig.strokeWidth}
+                    fill={selectedSeriesConfig.fill}
+                    strokeDasharray={selectedSeriesConfig.dash}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -233,7 +663,7 @@ export default function NetWorthPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.monthsTracked')}</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold text-foreground">{snapshots.length}</p>
@@ -241,51 +671,14 @@ export default function NetWorthPage() {
         </Card>
       </div>
 
-      {/* Monthly Breakdown Table */}
+      {/* Daily Breakdown Table */}
       {snapshots.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('networth.monthlyBreakdown')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    {[
-                      t('networth.month'),
-                      t('networth.liquid'),
-                      t('networth.investments'),
-                      t('networth.title'),
-                      t('networth.change'),
-                    ].map(h => (
-                      <th key={h} className={cn("py-2 px-3 font-medium text-muted-foreground", h !== t('networth.month') ? "text-right" : "text-left")}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...snapshots].reverse().map((s, idx, arr) => {
-                    const prev = arr[idx + 1];
-                    const change = prev ? s.netWorth - prev.netWorth : 0;
-                    return (
-                      <tr key={s.month} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-3 font-medium">{fmtMonth(s.month, language)}</td>
-                        <td className="text-right py-2 px-3 tabular-nums">{fmt(s.liquid)}</td>
-                        <td className="text-right py-2 px-3 tabular-nums">{fmt(s.investments)}</td>
-                        <td className="text-right py-2 px-3 tabular-nums font-bold">{fmt(s.netWorth)}</td>
-                        <td className={cn("text-right py-2 px-3 tabular-nums font-medium",
-                          change >= 0 ? "text-accent" : "text-destructive"
-                        )}>
-                          {prev ? `${change >= 0 ? "+" : ""}${fmt(change)}` : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <VirtualDataTable
+          title={t('networth.dailyBreakdown')}
+          columns={breakdownColumns}
+          data={breakdownRows}
+          maxHeight={520}
+        />
       )}
     </div>
   );

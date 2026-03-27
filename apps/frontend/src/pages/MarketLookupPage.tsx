@@ -2,6 +2,11 @@ import { useState, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import {
+  formatDateStringWithAppSettings,
+  formatDateTimeWithAppSettings,
+  formatDateWithAppSettings,
+} from "@/components/shared/dateUtils";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +24,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
+import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
+import { useSearchParams } from "react-router-dom";
 
 import { API_BASE_URL } from "@/lib/api";
 
@@ -109,15 +116,12 @@ function gradeColor(grade: string): string {
   return "text-yellow-500 dark:text-yellow-400";
 }
 
-function fmtDate(ts: number, range: string) {
+function fmtDate(ts: number, range: string, appDateFormat: string, locale: string) {
   const d = new Date(ts);
   if (range === "1d" || range === "5d") {
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   }
-  if (range === "1mo" || range === "3mo") {
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
-  return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  return formatDateWithAppSettings(d, appDateFormat);
 }
 
 export default function MarketLookupPage() {
@@ -147,6 +151,9 @@ export default function MarketLookupPage() {
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
+  const [searchParams] = useSearchParams();
+  const symbolFromQuery = searchParams.get("symbol")?.trim().toUpperCase();
+  const effectiveSelectedSymbol = selectedSymbol || symbolFromQuery || null;
   const debouncedSearch = useDebounce(searchText, 300);
   const { summaries } = usePortfolio();
 
@@ -164,41 +171,41 @@ export default function MarketLookupPage() {
 
   // Quote
   const { data: quoteData, isFetching: isQuoteLoading } = useQuery({
-    queryKey: ["market-quote", selectedSymbol],
+    queryKey: ["market-quote", effectiveSelectedSymbol],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(selectedSymbol!)}`);
+      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}`);
       if (!res.ok) throw new Error("Quote fetch failed");
       const data = await res.json() as { quotes: Quote[] };
       return data.quotes[0] || null;
     },
-    enabled: !!selectedSymbol,
+    enabled: !!effectiveSelectedSymbol,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
 
   // Chart
   const { data: chartData, isFetching: isChartLoading } = useQuery({
-    queryKey: ["market-chart", selectedSymbol, selectedRange.range, selectedRange.interval],
+    queryKey: ["market-chart", effectiveSelectedSymbol, selectedRange.range, selectedRange.interval],
     queryFn: async () => {
       const res = await fetch(
-        `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(selectedSymbol!)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
+        `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(effectiveSelectedSymbol!)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
       );
       if (!res.ok) throw new Error("Chart fetch failed");
       return res.json() as Promise<{ symbol: string; currency: string; points: ChartPoint[] }>;
     },
-    enabled: !!selectedSymbol,
+    enabled: !!effectiveSelectedSymbol,
     staleTime: 60_000,
   });
 
   // News
   const { data: newsData, isFetching: isNewsLoading } = useQuery({
-    queryKey: ["market-news", selectedSymbol],
+    queryKey: ["market-news", effectiveSelectedSymbol],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(selectedSymbol!)}&count=10`);
+      const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}&count=10`);
       if (!res.ok) throw new Error("News fetch failed");
       return res.json() as Promise<{ articles: NewsArticle[] }>;
     },
-    enabled: !!selectedSymbol,
+    enabled: !!effectiveSelectedSymbol,
     staleTime: 120_000,
   });
 
@@ -258,7 +265,7 @@ export default function MarketLookupPage() {
       </div>
 
       {/* No selection state */}
-      {!selectedSymbol && (
+      {!effectiveSelectedSymbol && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <BarChart3 className="h-14 w-14 text-muted-foreground/30 mb-4" />
@@ -271,7 +278,7 @@ export default function MarketLookupPage() {
       )}
 
       {/* Quote + Chart */}
-      {selectedSymbol && (
+      {effectiveSelectedSymbol && (
         <>
           {/* Header */}
           {isQuoteLoading ? (
@@ -327,7 +334,7 @@ export default function MarketLookupPage() {
           ) : (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
-                {t('market.noQuote', { symbol: selectedSymbol })}
+                {t('market.noQuote', { symbol: effectiveSelectedSymbol })}
               </CardContent>
             </Card>
           )}
@@ -367,7 +374,7 @@ export default function MarketLookupPage() {
                       </defs>
                       <XAxis
                         dataKey="time"
-                        tickFormatter={(ts) => fmtDate(ts, selectedRange.range)}
+                        tickFormatter={(ts) => fmtDate(ts, selectedRange.range, appSettings.dateFormat, locale)}
                         tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
                         axisLine={false}
                         tickLine={false}
@@ -389,7 +396,7 @@ export default function MarketLookupPage() {
                           color: "hsl(var(--card-foreground))",
                           fontSize: 12,
                         }}
-                        labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                        labelFormatter={(ts) => formatDateTimeWithAppSettings(new Date(ts), appSettings.dateFormat, locale)}
                         formatter={(value: number) => [fmtPrice(value, chartData.currency || "USD"), t('market.priceChart')]}
                       />
                       <Area
@@ -418,7 +425,7 @@ export default function MarketLookupPage() {
                           color: "hsl(var(--card-foreground))",
                           fontSize: 12,
                         }}
-                        labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                        labelFormatter={(ts) => formatDateTimeWithAppSettings(new Date(ts), appSettings.dateFormat, locale)}
                         formatter={(value: number) => [fmtLargeNum(value), t('market.volume')]}
                       />
                     </BarChart>
@@ -557,7 +564,7 @@ export default function MarketLookupPage() {
                                 ? <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
                                 : <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />}
                             <span className="text-muted-foreground shrink-0 w-14">
-                              {new Date(action.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                              {formatDateStringWithAppSettings(action.date, appSettings.dateFormat)}
                             </span>
                             <span className="font-medium text-foreground truncate flex-1">{action.firm}</span>
                             <span className={cn("shrink-0", gradeColor(action.toGrade))}>
@@ -612,11 +619,11 @@ export default function MarketLookupPage() {
                       className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"
                     >
                       {article.thumbnail && (
-                        <img
+                        <RemoteNewsImage
                           src={article.thumbnail}
-                          alt=""
-                          className="h-16 w-24 object-cover rounded shrink-0"
-                          loading="lazy"
+                          alt={article.title}
+                          className="h-16 w-24 rounded shrink-0"
+                          fallbackClassName="hidden"
                         />
                       )}
                       <div className="flex-1 min-w-0">
@@ -628,7 +635,7 @@ export default function MarketLookupPage() {
                           {article.publishedAt && (
                             <>
                               <span>·</span>
-                              <span>{new Date(article.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+                              <span>{formatDateStringWithAppSettings(article.publishedAt, appSettings.dateFormat)}</span>
                             </>
                           )}
                           <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />

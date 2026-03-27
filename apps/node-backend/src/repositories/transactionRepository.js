@@ -27,6 +27,7 @@ const TRANSACTION_JOINS = `
  * Returns { where, params, nextParam } so callers can append further params.
  */
 function buildWhereClause({
+  transactionId = null,
   startDate = null,
   endDate = null,
   bankAccount = null,
@@ -41,6 +42,7 @@ function buildWhereClause({
   let p = 1;
 
   if (active) clauses.push('t.is_active = true');
+  if (transactionId != null) { clauses.push(`t.id = $${p++}`); params.push(transactionId); }
   if (startDate) { clauses.push(`t.date >= $${p++}`); params.push(startDate); }
   if (endDate) { clauses.push(`t.date <= $${p++}`); params.push(endDate); }
   if (bankAccount) { clauses.push(`t.bank_account ILIKE $${p++}`); params.push(`%${bankAccount}%`); }
@@ -98,6 +100,7 @@ export const transactionRepository = {
    * Get transactions with pagination and filtering.
    */
   async getAll({
+    transactionId = null,
     limit = 50,
     offset = 0,
     startDate = null,
@@ -112,7 +115,7 @@ export const transactionRepository = {
     sortDir = null,
   } = {}) {
     const { where, params, nextParam: p } = buildWhereClause({
-      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
@@ -148,6 +151,7 @@ export const transactionRepository = {
    * Get total count with optional filters (reuses the same WHERE builder as getAll).
    */
   async getCount({
+    transactionId = null,
     startDate = null,
     endDate = null,
     bankAccount = null,
@@ -158,7 +162,7 @@ export const transactionRepository = {
     active = true,
   } = {}) {
     const { where, params } = buildWhereClause({
-      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
     const sql = `

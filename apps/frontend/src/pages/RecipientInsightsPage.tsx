@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,12 +8,13 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { useSettings } from "@/contexts/SettingsContext";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -42,7 +43,9 @@ export default function RecipientInsightsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const formatCurrency = (val: number, fractionDigits = 0) => new Intl.NumberFormat(locale, {
+  const targetCurrency = appSettings.defaultCurrency || "EUR";
+  const pageSize = appSettings.defaultPageSize;
+  const formatCurrency = (val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
     minimumFractionDigits: fractionDigits,
@@ -50,8 +53,8 @@ export default function RecipientInsightsPage() {
   }).format(val);
   const { settings } = useSettings();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["recipient-insights"],
-    queryFn: () => apiClient.getRecipientInsights(),
+    queryKey: ["recipient-insights", targetCurrency],
+    queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
     staleTime: 60000,
   });
 
@@ -69,6 +72,23 @@ export default function RecipientInsightsPage() {
       monthOverMonth: data.monthOverMonth.filter(m => !excludedRecipientIds.has(m.recipientId)),
     };
   }, [data, excludedRecipientIds]);
+
+  const totalMerchants = filteredData?.topMerchants.length ?? 0;
+  const [displayCount, setDisplayCount] = useState(pageSize);
+
+  useEffect(() => {
+    setDisplayCount(pageSize);
+  }, [totalMerchants, pageSize]);
+
+  const displayedMerchants = useMemo(
+    () => filteredData?.topMerchants.slice(0, displayCount) ?? [],
+    [filteredData, displayCount]
+  );
+
+  const hasMore = displayCount < totalMerchants;
+  const handleLoadMore = useCallback(() => {
+    setDisplayCount((prev) => Math.min(prev + pageSize, totalMerchants));
+  }, [pageSize, totalMerchants]);
 
   const recipientDetailsColumns = useMemo(() => [
     {
@@ -108,7 +128,7 @@ export default function RecipientInsightsPage() {
       header: t('insights.col.firstSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
-        <span className="text-muted-foreground text-sm">{format(parseISO(row.firstSeen), "MMM yyyy")}</span>
+        <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.firstSeen), appSettings.dateFormat)}</span>
       ),
     },
     {
@@ -116,10 +136,10 @@ export default function RecipientInsightsPage() {
       header: t('insights.col.lastSeen'),
       className: "text-right",
       render: (row: RecipientDetailRow) => (
-        <span className="text-muted-foreground text-sm">{format(parseISO(row.lastSeen), "MMM yyyy")}</span>
+        <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t]);
+  ], [t, appSettings.dateFormat, appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
 
   if (isLoading) {
     return (
@@ -287,7 +307,10 @@ export default function RecipientInsightsPage() {
         title={t('insights.detailsTitle')}
         subtitle={t('insights.detailsSubtitle')}
         columns={recipientDetailsColumns}
-        data={filteredData.topMerchants}
+        data={displayedMerchants}
+        totalItems={filteredData.topMerchants.length}
+        hasMore={hasMore}
+        onLoadMore={handleLoadMore}
         emptyMessage={t('insights.detailsEmpty')}
         maxHeight={700}
         rowHeight={48}

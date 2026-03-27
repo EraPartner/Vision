@@ -31,6 +31,48 @@ router.get('/owed/:id', validateIdParam, async (req, res) => {
   }
 });
 
+// GET /api/splits/owed/:id/export/csv - Export unsettled owed transactions for recipient
+router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
+  try {
+    const recipientId = parseInt(req.params.id, 10);
+    const rows = await splitRepository.getOwedExportRowsByRecipient(recipientId);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ detail: 'No unsettled owed transactions found for recipient' });
+    }
+
+    const header = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
+    const escape = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const csvRows = rows.map((row) => [
+      row.date,
+      row.bank_account,
+      row.recipient_name,
+      row.memo,
+      row.amount,
+      row.currency,
+      row.balance,
+      row.category_name,
+      row.comment,
+    ].map(escape).join(','));
+
+    const csv = [header, ...csvRows].join('\n');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `owed_transactions_recipient_${recipientId}_${timestamp}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(csv);
+  } catch (err) {
+    logger.error('Error exporting owed transactions csv', { error: err.message });
+    res.status(500).json({ detail: 'Error exporting owed transactions' });
+  }
+});
+
 // GET /api/splits/transaction/:transactionId - Splits for a transaction
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
   try {
@@ -49,6 +91,20 @@ router.post('/', async (req, res) => {
     if (!transaction_id || !recipient_id || amount == null) {
       return res.status(400).json({ detail: 'Missing required fields: transaction_id, recipient_id, amount' });
     }
+    const splitAmount = Number(amount);
+    if (Number.isNaN(splitAmount) || splitAmount <= 0) {
+      return res.status(400).json({ detail: 'Split amount must be a positive number' });
+    }
+
+    const totals = await splitRepository.getTransactionSplitTotals(transaction_id);
+    if (!totals) {
+      return res.status(404).json({ detail: 'Transaction not found' });
+    }
+
+    if (totals.current_split_total + splitAmount > totals.transaction_total) {
+      return res.status(400).json({ detail: 'Split amount exceeds transaction total' });
+    }
+
     const split = await splitRepository.createSplit({ transaction_id, recipient_id, amount, note });
     res.status(201).json(split);
   } catch (err) {
@@ -64,6 +120,24 @@ router.post('/batch', async (req, res) => {
     if (!transaction_id || !Array.isArray(splits) || splits.length === 0) {
       return res.status(400).json({ detail: 'Missing required fields: transaction_id, splits[]' });
     }
+
+    const splitAmounts = splits
+      .map((s) => Number(s?.amount))
+      .filter((a) => !Number.isNaN(a));
+    if (splitAmounts.some((a) => a <= 0)) {
+      return res.status(400).json({ detail: 'Split amount must be a positive number' });
+    }
+
+    const newSplitTotal = splitAmounts.reduce((sum, a) => sum + a, 0);
+    const totals = await splitRepository.getTransactionSplitTotals(transaction_id);
+    if (!totals) {
+      return res.status(404).json({ detail: 'Transaction not found' });
+    }
+
+    if (totals.current_split_total + newSplitTotal > totals.transaction_total) {
+      return res.status(400).json({ detail: 'Split amount exceeds transaction total' });
+    }
+
     const created = [];
     for (const s of splits) {
       if (!s.recipient_id || s.amount == null) continue;
@@ -120,6 +194,17 @@ router.post('/:id/settle', validateIdParam, async (req, res) => {
   } catch (err) {
     logger.error('Error settling split', { error: err.message });
     res.status(500).json({ detail: 'Error settling split' });
+  }
+});
+
+// POST /api/splits/owed/:id/settle-all - Mark all unsettled splits for a recipient as settled
+router.post('/owed/:id/settle-all', validateIdParam, async (req, res) => {
+  try {
+    const result = await splitRepository.settleAllByRecipient(parseInt(req.params.id, 10));
+    res.json(result);
+  } catch (err) {
+    logger.error('Error settling all splits for recipient', { error: err.message });
+    res.status(500).json({ detail: 'Error settling all splits for recipient' });
   }
 });
 

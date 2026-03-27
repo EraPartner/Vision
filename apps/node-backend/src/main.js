@@ -13,8 +13,64 @@ import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
 import { initializeSchema } from './database/schemaInit.js';
-import { warmCache as warmExchangeRateCache, clearMemoryCache as clearExchangeRateCache } from './services/currencyConversionService.js';
+import {
+  warmCache as warmExchangeRateCache,
+  clearMemoryCache as clearExchangeRateCache,
+  backfillPortfolioHistoricalRates,
+} from './services/currencyConversionService.js';
 import PostgresManager from './database/postgresManager.js';
+import investmentRepository from './repositories/investmentRepository.js';
+import { fetchLivePricesDetailed } from './services/priceProviderService.js';
+
+function hasLivePriceRefreshConfig(investment) {
+  const provider = investment?.price_provider;
+  if (!provider || provider === 'manual') return false;
+
+  if (provider === 'custom') {
+    return Boolean(
+      investment?.price_provider_latest_url
+      || investment?.price_provider_url
+      || investment?.price_provider_history_url
+    );
+  }
+
+  if (provider === 'yahoo') {
+    return Boolean(investment?.price_provider_id || investment?.symbol);
+  }
+
+  return Boolean(investment?.price_provider_id);
+}
+
+async function refreshInvestmentPricesOnStartup() {
+  const allInvestments = await investmentRepository.getAll({ limit: 1000, active: true });
+  const toRefresh = allInvestments.filter(hasLivePriceRefreshConfig);
+
+  if (toRefresh.length === 0) {
+    logger.info('No startup investment price refresh needed');
+    return;
+  }
+
+  const cachedPricesByInvestmentId = Object.fromEntries(
+    toRefresh.map(i => [i.id, Number(i.current_price)])
+  );
+  const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
+
+  const updateResults = await Promise.all(
+    Object.entries(prices).map(async ([investmentId, priceData]) => {
+      const { price, source } = priceData || {};
+      if (price == null || Number.isNaN(price) || source === 'cached') return 0;
+
+      await investmentRepository.updatePrice(parseInt(investmentId, 10), {
+        current_price: price,
+        price_updated_at: new Date().toISOString(),
+      });
+      return 1;
+    })
+  );
+
+  const updated = updateResults.reduce((sum, count) => sum + count, 0);
+  logger.info(`Startup investment price refresh completed: ${updated}/${toRefresh.length}`);
+}
 
 // Import route modules
 import transactionsRouter from './routes/transactions.js';
@@ -56,7 +112,7 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '0'); // Deprecated; rely on CSP instead
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   if (settings.isProduction()) {
     res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
@@ -247,6 +303,14 @@ async function start() {
       // This avoids blocking startup while waiting for external API calls.
       warmExchangeRateCache().catch((err) => {
         logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
+      });
+
+      backfillPortfolioHistoricalRates().catch((err) => {
+        logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
+      });
+
+      refreshInvestmentPricesOnStartup().catch((err) => {
+        logger.error('Failed to refresh investment prices on startup', { error: err.message });
       });
 
       // Schedule automatic exchange rate refresh every 12 hours so rates stay

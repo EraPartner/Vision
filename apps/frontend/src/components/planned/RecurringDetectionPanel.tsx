@@ -9,17 +9,16 @@ import {
     Repeat, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown,
     Calendar, Loader2, Sparkles, ChevronDown, ChevronUp, Plus, X,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
-function safeDateLabel(value: string, t: (key: string) => string): string {
+function safeDateLabel(value: string, appDateFormat: string, t: (key: string) => string): string {
     if (!value || typeof value !== "string") return t('common.unknownDate');
-    const parsed = parseISO(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return format(parsed, "PP");
+    return formatDateStringWithAppSettings(value, appDateFormat);
 }
 
 type RecurringPattern = Awaited<ReturnType<typeof apiClient.getRecurringPatterns>>["patterns"][number];
@@ -30,6 +29,7 @@ interface Props {
 
 export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(true);
     const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
@@ -46,31 +46,76 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     const loadDismissedFromLocalStorage = () => {
         try {
-            const raw = localStorage.getItem(DISMISSED_PATTERNS_STORAGE_KEY);
-            if (!raw) return;
+            const raw = window.localStorage.getItem(DISMISSED_PATTERNS_STORAGE_KEY);
+            if (!raw) return [];
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
-                const values = parsed
+                return parsed
                     .map((v) => Number(v))
                     .filter((v) => Number.isInteger(v) && v > 0);
-                setDismissedIds(new Set(values));
             }
+            return [];
         } catch {
             // Ignore invalid localStorage payloads.
+            return [];
         }
     };
 
     const persistDismissedToLocalStorage = (values: Set<number>) => {
         try {
-            localStorage.setItem(DISMISSED_PATTERNS_STORAGE_KEY, JSON.stringify([...values]));
+            window.localStorage.setItem(DISMISSED_PATTERNS_STORAGE_KEY, JSON.stringify([...values]));
         } catch {
             // Ignore storage write failures.
         }
     };
 
+    const persistDismissed = (values: Set<number>) => {
+        setDismissedIds(values);
+        persistDismissedToLocalStorage(values);
+        void apiClient
+            .saveSetting(DISMISSED_PATTERNS_STORAGE_KEY, [...values])
+            .catch(() => {
+                // Keep local fallback even if backend settings save fails.
+            });
+    };
+
     useEffect(() => {
-        loadDismissedFromLocalStorage();
-        setDismissedLoaded(true);
+        let cancelled = false;
+
+        const loadDismissed = async () => {
+            const localValues = loadDismissedFromLocalStorage();
+
+            try {
+                const setting = await apiClient.getSetting(DISMISSED_PATTERNS_STORAGE_KEY);
+                const settingValues = Array.isArray(setting?.value)
+                    ? setting.value
+                        .map((v) => Number(v))
+                        .filter((v) => Number.isInteger(v) && v > 0)
+                    : [];
+
+                const merged = new Set<number>([...localValues, ...settingValues]);
+
+                if (!cancelled) {
+                    setDismissedIds(merged);
+                    persistDismissedToLocalStorage(merged);
+                    setDismissedLoaded(true);
+                }
+                return;
+            } catch {
+                // Fallback to local storage only.
+            }
+
+            if (!cancelled) {
+                setDismissedIds(new Set(localValues));
+                setDismissedLoaded(true);
+            }
+        };
+
+        void loadDismissed();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const { data, isLoading, error } = useQuery({
@@ -85,8 +130,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const dismiss = (recipientId: number) => {
         const next = new Set(dismissedIds);
         next.add(recipientId);
-        setDismissedIds(next);
-        persistDismissedToLocalStorage(next);
+        persistDismissed(next);
     };
 
     const handleCreatePlanned = async (pattern: RecurringPattern) => {
@@ -124,6 +168,10 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     const amountAlerts = (data?.patterns ?? []).filter(
         (p) => p.amountChanges.length > 0 && !dismissedIds.has(p.recipientId)
     );
+
+    if (!dismissedLoaded) {
+        return null;
+    }
 
     if (isLoading) {
         return (
@@ -200,7 +248,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                                 </Badge>
                                             </div>
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                {t('recurring.changedOn', { date: safeDateLabel(lastChange.date, t) })}
+                                                {t('recurring.changedOn', { date: safeDateLabel(lastChange.date, appSettings.dateFormat, t) })}
                                             </p>
                                         </div>
                                         <Button
@@ -278,7 +326,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             </div>
                                             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                                                 <Calendar className="h-3 w-3" />
-                                                {t('recurring.nextExpected', { date: safeDateLabel(pattern.predictedNext, t) })}
+                                                {t('recurring.nextExpected', { date: safeDateLabel(pattern.predictedNext, appSettings.dateFormat, t) })}
                                             </div>
                                         </div>
 

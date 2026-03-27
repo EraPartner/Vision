@@ -2,6 +2,18 @@
  * Currency utility functions
  */
 
+type CurrencyFormatDefaults = {
+  defaultCurrency: string;
+  locale: string;
+  fractionDigits: number;
+};
+
+const currencyFormatDefaults: CurrencyFormatDefaults = {
+  defaultCurrency: 'EUR',
+  locale: 'en-US',
+  fractionDigits: 2,
+};
+
 /**
  * Map a numberFormat setting value (from AppSettings) to a BCP 47 locale string
  * suitable for use with Intl.NumberFormat.
@@ -16,6 +28,24 @@ export function numberFormatToLocale(numberFormat: string): string {
     case 'in': return 'en-IN';   // 1,23,456.78 — Indian
     default:   return 'en-US';
   }
+}
+
+export function configureCurrencyFormatDefaults(
+  updates: Partial<CurrencyFormatDefaults>
+): void {
+  if (updates.defaultCurrency) {
+    currencyFormatDefaults.defaultCurrency = updates.defaultCurrency;
+  }
+  if (updates.locale) {
+    currencyFormatDefaults.locale = updates.locale;
+  }
+  if (updates.fractionDigits !== undefined) {
+    currencyFormatDefaults.fractionDigits = Math.max(0, Math.min(6, updates.fractionDigits));
+  }
+}
+
+export function getCurrencyFormatDefaults(): CurrencyFormatDefaults {
+  return { ...currencyFormatDefaults };
 }
 
 /**
@@ -53,21 +83,25 @@ export function getCurrencySymbol(currencyCode: string = 'EUR'): string {
  * Format amount with currency using Intl.NumberFormat
  * @param amount The amount to format
  * @param currencyCode ISO 4217 currency code
- * @param locale The locale to use for formatting.
- *               Pass the result of numberFormatToLocale(appSettings.numberFormat) from a component.
- *               Defaults to 'en-US' for backwards-compatibility where no settings context is available.
+ * @param locale Optional locale override.
+ * @param fractionDigits Optional fraction digits override.
  * @returns Formatted currency string
  */
 export function formatCurrency(
   amount: number,
-  currencyCode: string = 'EUR',
-  locale: string = 'en-US'
+  currencyCode?: string,
+  locale?: string,
+  fractionDigits?: number
 ): string {
-  return new Intl.NumberFormat(locale, {
+  const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
+  const effectiveLocale = locale || currencyFormatDefaults.locale;
+  const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
+
+  return new Intl.NumberFormat(effectiveLocale, {
     style: 'currency',
-    currency: currencyCode,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    currency: effectiveCurrency,
+    minimumFractionDigits: effectiveFractionDigits,
+    maximumFractionDigits: effectiveFractionDigits,
   }).format(amount);
 }
 

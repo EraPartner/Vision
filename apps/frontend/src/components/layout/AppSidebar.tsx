@@ -18,6 +18,7 @@ import {
   Landmark,
   Building2,
   CalendarClock,
+  Gem,
   Coins,
   HandCoins,
   Import,
@@ -95,6 +96,7 @@ export function AppSidebar() {
       items: [
         { title: t('nav.stocksEtfs'), url: "/portfolio/stocks", icon: TrendingUp },
         { title: t('nav.crypto'), url: "/portfolio/crypto", icon: Coins },
+        { title: t('nav.metals'), url: "/portfolio/metals", icon: Gem },
       ],
     },
     {

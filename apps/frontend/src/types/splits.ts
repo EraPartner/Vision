@@ -18,6 +18,7 @@ export interface TransactionSplitDetail extends TransactionSplit {
     transaction_memo: string;
     transaction_amount: number;
     transaction_currency: string;
+    transaction_recipient_name?: string;
     bank_account: string;
     remaining: number;
 }

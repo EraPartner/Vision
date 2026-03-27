@@ -2,6 +2,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { TrendingUp } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
 interface MonthlyTrendsChartProps {
   data: Array<{
@@ -19,14 +22,22 @@ interface MonthlyTrendsChartProps {
 
 export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChartProps) {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+  const defaultCurrency = appSettings.defaultCurrency || "EUR";
+
+  const formatCompactCurrency = (value: number) => new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: defaultCurrency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
   // Transform data for the chart
   const chartData = data.map((monthData) => {
     const date = new Date(monthData.year, monthData.month - 1, 1);
-    const monthName = date.toLocaleDateString(undefined, { month: "short" });
-    const year = date.toLocaleDateString(undefined, { year: "2-digit" });
 
     return {
-      month: `${monthName} ${year}`,
+      month: formatMonthYearWithAppSettings(date, appSettings.dateFormat, locale),
       income: monthData.total_income,
       spending: Math.abs(monthData.total_spending),
       transactions: monthData.transaction_count,
@@ -57,10 +68,12 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             angle={-15}
             textAnchor="end"
             height={60}
+            interval="preserveStartEnd"
+            minTickGap={20}
           />
           <YAxis
             tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-            tickFormatter={(value) => `€${value}`}
+            tickFormatter={(value) => formatCompactCurrency(value)}
           />
           <Tooltip
             contentStyle={{
@@ -71,7 +84,7 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
               boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
             }}
             formatter={(value: number, name: string) => {
-              const formattedValue = `€${value.toFixed(2)}`;
+              const formattedValue = formatCurrency(value, defaultCurrency, locale);
               const label = name === "income" ? t('monthlyTrends.income') : name === "spending" ? t('monthlyTrends.spending') : t('monthlyTrends.transactions');
               return [formattedValue, label];
             }}
@@ -93,14 +106,14 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
           <div className="w-3 h-3 rounded-full flex-shrink-0 bg-accent"></div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-accent">{t('monthlyTrends.totalIncome')}</p>
-            <p className="text-sm font-bold text-accent">€{totalIncome.toFixed(2)}</p>
+            <p className="text-sm font-bold text-accent">{formatCurrency(totalIncome, defaultCurrency, locale)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
           <div className="w-3 h-3 rounded-full flex-shrink-0 bg-destructive"></div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-destructive">{t('monthlyTrends.totalSpending')}</p>
-            <p className="text-sm font-bold text-destructive">€{totalSpending.toFixed(2)}</p>
+            <p className="text-sm font-bold text-destructive">{formatCurrency(totalSpending, defaultCurrency, locale)}</p>
           </div>
         </div>
       </div>

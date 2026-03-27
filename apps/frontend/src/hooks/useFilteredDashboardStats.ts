@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
 
 interface FilteredDashboardStats {
   totalTransactions: number;
@@ -15,6 +16,8 @@ interface FilteredDashboardStats {
  */
 export function useFilteredDashboardStats() {
   const { settings } = useSettings();
+  const { appSettings } = useAppSettings();
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
   // Check if exclusions should apply to dashboard
   const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard';
@@ -24,6 +27,7 @@ export function useFilteredDashboardStats() {
   // cache misses on every unrelated setting change (language, theme, etc.).
   const queryKey = [
     'filteredDashboardStats',
+    targetCurrency,
     exclusionsApply,
     exclusionsApply ? settings.excludedCategoryIds : [],
     exclusionsApply ? settings.excludedRecipientIds : [],
@@ -35,12 +39,6 @@ export function useFilteredDashboardStats() {
     queryFn: async () => {
       // Fetch total transaction count from the transaction-count endpoint
       const countData = await apiClient.getTransactionCount();
-
-      // Use previous calendar month for "last month" cards.
-      const now = new Date();
-      const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const previousMonth = previousMonthDate.getMonth() + 1;
-      const previousMonthYear = previousMonthDate.getFullYear();
 
       // Resolve hidden category IDs if needed
       let hiddenCategoryIds: number[] = [];
@@ -59,25 +57,27 @@ export function useFilteredDashboardStats() {
       // Fetch monthly financial summary (6 months) with excluded categories
       const monthlySummary = await apiClient.getMonthlyFinancialSummary({
         excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
+        currency: targetCurrency,
       });
 
-      // Pick the previous calendar month from summary (may be empty).
-      const previousMonthSummary = monthlySummary.months.find(
-        (month) => month.month === previousMonth && month.year === previousMonthYear
-      );
+      // Use the most recent month with data to keep cards aligned with actual latest activity.
+      const monthsWithData = monthlySummary.months
+        .filter((month) => month.transaction_count > 0)
+        .sort((a, b) => (a.year - b.year) || (a.month - b.month));
 
-      // If no recipient exclusions (or exclusions don't apply), we can use the API data directly
-      if (!exclusionsApply || settings.excludedRecipientIds.length === 0) {
+      const latestMonthWithData = monthsWithData[monthsWithData.length - 1];
+
+      if (!latestMonthWithData) {
         return {
           totalTransactions: countData.total_transactions,
-          monthlyIncome: previousMonthSummary?.total_income ?? 0,
-          monthlySpending: Math.abs(previousMonthSummary?.total_spending ?? 0),
-          netBalance: previousMonthSummary?.net_amount ?? 0,
+          monthlyIncome: 0,
+          monthlySpending: 0,
+          netBalance: 0,
         };
       }
 
-      // Recipient exclusions require client-side filtering of transactions.
-      // Restrict query to the previous month for accuracy and smaller payload.
+      // Compute month totals from live transactions so values stay up-to-date
+      // even if materialized views are slightly behind.
       const toIsoDate = (date: Date): string => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -85,22 +85,37 @@ export function useFilteredDashboardStats() {
         return `${year}-${month}-${day}`;
       };
 
-      const previousMonthStart = new Date(previousMonthYear, previousMonth - 1, 1);
-      const previousMonthEnd = new Date(previousMonthYear, previousMonth, 0);
+      const monthStart = new Date(latestMonthWithData.year, latestMonthWithData.month - 1, 1);
+      const monthEnd = new Date(latestMonthWithData.year, latestMonthWithData.month, 0);
 
-      const transactionsData = await apiClient.getTransactions({
-        limit: 5000,
-        active: true,
-        normalize_to_eur: true,
-        start_date: toIsoDate(previousMonthStart),
-        end_date: toIsoDate(previousMonthEnd),
-      });
+      const pageSize = 1000;
+      let offset = 0;
+      const txItems: Array<{ amount: number; amount_eur?: number; category_id?: number; recipient_id?: number }> = [];
+
+      while (true) {
+        const page = await apiClient.getTransactions({
+          limit: pageSize,
+          offset,
+          active: true,
+          normalize_to_eur: true,
+          target_currency: targetCurrency,
+          start_date: toIsoDate(monthStart),
+          end_date: toIsoDate(monthEnd),
+        });
+
+        txItems.push(...page.items);
+
+        offset += page.items.length;
+        if (offset >= page.total || page.items.length < pageSize) {
+          break;
+        }
+      }
 
       const excludedRecipientIds = new Set(settings.excludedRecipientIds);
       const excludedCategoryIds = new Set(allExcludedCategoryIds);
 
       // Filter transactions based on settings
-      const filteredTransactions = transactionsData.items.filter((t) => {
+      const filteredTransactions = txItems.filter((t) => {
         // Exclude if category is in exclusion list
         if (t.category_id && excludedCategoryIds.has(t.category_id)) {
           return false;
@@ -114,7 +129,7 @@ export function useFilteredDashboardStats() {
         return true;
       });
 
-      // Calculate last-month statistics from fully filtered transactions
+      // Calculate latest-month statistics from fully filtered transactions
       // so category + recipient exclusions are both respected.
       const amountInEur = (tx: { amount: number; amount_eur?: number }) => (
         tx.amount_eur ?? tx.amount

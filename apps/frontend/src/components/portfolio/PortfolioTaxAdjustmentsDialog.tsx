@@ -65,8 +65,8 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: appSettings.defaultCurrency || 'EUR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
     }).format(val);
 
   async function handleSave() {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,8 @@ import { Plus, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
@@ -22,10 +25,13 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
 
 export default function WatchlistPage() {
   const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ["watchlist"],
@@ -66,6 +72,22 @@ export default function WatchlistPage() {
   const handleDoubleClick = (item: WatchlistItem) => {
     setSelectedItem(item);
   };
+
+  const handleNameDoubleClick = (item: WatchlistItem) => {
+    if (!item.symbol) {
+      setSelectedItem(item);
+      return;
+    }
+    navigate(`/portfolio/market?symbol=${encodeURIComponent(item.symbol)}`);
+  };
+
+  const formatDisplayCurrency = (value: number, currency: string) =>
+    new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
+    }).format(value);
 
   return (
     <div className="space-y-6">
@@ -120,7 +142,15 @@ export default function WatchlistPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
-                      <CardTitle className="text-lg">{item.name}</CardTitle>
+                      <CardTitle
+                        className="text-lg cursor-pointer hover:underline"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleNameDoubleClick(item);
+                        }}
+                      >
+                        {item.name}
+                      </CardTitle>
                       {item.symbol && (
                         <Badge variant="outline" className="font-mono text-xs">
                           {item.symbol}
@@ -137,22 +167,28 @@ export default function WatchlistPage() {
                     <div>
                        <p className="text-xs text-muted-foreground">{t('watchlist.targetPrice')}</p>
                       <p className="text-xl font-semibold text-primary">
-                        {item.currency} {item.target_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatDisplayCurrency(item.target_price, item.currency)}
                       </p>
                     </div>
                     {currentPrice != null && (
                       <div className="text-right">
-                         <p className="text-xs text-muted-foreground">{t('watchlist.currentPrice')}</p>
-                        <p className="text-lg font-medium">
-                          {item.currency} {currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <div className={cn(
-                          "flex items-center text-xs gap-1",
-                          priceDiff! > 0 ? "text-red-500" : "text-green-500"
-                        )}>
-                          {priceDiff! > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                           {Math.abs(priceDiff!).toFixed(1)}% {t(priceDiff! > 0 ? 'watchlist.aboveTarget' : 'watchlist.belowTarget')}
-                        </div>
+                        {priceDiff! > 0 ? (
+                          // Above target: show percentage
+                          <div className={cn(
+                            "flex items-center text-sm gap-1 text-red-500"
+                          )}>
+                            <TrendingUp className="h-4 w-4" />
+                            {Math.abs(priceDiff!).toFixed(1)}% {t('watchlist.aboveTarget')}
+                          </div>
+                        ) : (
+                          // At or below target: show current price
+                          <>
+                            <p className="text-xs text-muted-foreground">{t('watchlist.currentPrice')}</p>
+                            <p className="text-lg font-medium">
+                              {formatDisplayCurrency(currentPrice, item.currency)}
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

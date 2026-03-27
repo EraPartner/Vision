@@ -11,7 +11,10 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api";
 
 function daysUntil(dateStr?: string) {
   if (!dateStr) return null;
@@ -25,20 +28,49 @@ export default function SavingsPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
-  function fmt(val: number, currency = 'EUR', decimals = 2) {
+  const { data: exchangeData } = useQuery({
+    queryKey: ['exchange-rates', targetCurrency],
+    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    staleTime: 60_000,
+  });
+
+  const ratesToEur: Record<string, number> = {
+    EUR: 1,
+    ...Object.fromEntries(
+      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
+    ),
+    ...(exchangeData?.fallback_rates || {}),
+  };
+
+  function convertToTarget(amount: number, fromCurrency?: string) {
+    const from = (fromCurrency || 'EUR').toUpperCase();
+    const to = targetCurrency.toUpperCase();
+    if (from === to) return amount;
+    const rateFrom = ratesToEur[from];
+    const rateTo = ratesToEur[to];
+    if (!rateFrom || !rateTo) return amount;
+    return (amount * rateFrom) / rateTo;
+  }
+
+  function fmt(
+    val: number,
+    currency = targetCurrency,
+    decimals = appSettings.showDecimalPlaces
+  ) {
     return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
   }
 
-  const totalBalance = accounts.reduce((s, a) => s + a.currentValue, 0);
-  const totalInterestEarned = accounts.reduce((s, a) => s + a.totalIncome, 0);
-  const totalProjectedAnnual = accounts.reduce((s, a) => s + a.projectedAnnualInterest, 0);
-  const totalAccrued = accounts.reduce((s, a) => s + a.accruedInterest, 0);
+  const totalBalance = accounts.reduce((s, a) => s + convertToTarget(a.currentValue, a.currency), 0);
+  const totalInterestEarned = accounts.reduce((s, a) => s + convertToTarget(a.totalIncome, a.currency), 0);
+  const totalProjectedAnnual = accounts.reduce((s, a) => s + convertToTarget(a.projectedAnnualInterest, a.currency), 0);
+  const totalAccrued = accounts.reduce((s, a) => s + convertToTarget(a.accruedInterest, a.currency), 0);
   const weightedRate = totalBalance > 0
-    ? accounts.reduce((s, a) => s + (a.interestRate ?? 0) * a.currentValue, 0) / totalBalance
+    ? accounts.reduce((s, a) => s + (a.interestRate ?? 0) * convertToTarget(a.currentValue, a.currency), 0) / totalBalance
     : 0;
 
   if (accounts.length === 0) {
@@ -186,11 +218,11 @@ export default function SavingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.currentBalance')}</p>
-                    <p className="text-2xl font-bold tabular-nums">{fmt(a.currentValue, a.currency)}</p>
+                    <p className="text-2xl font-bold tabular-nums">{fmt(convertToTarget(a.currentValue, a.currency))}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground mb-1">{t('portfolio.interestEarned')}</p>
-                    <p className="text-2xl font-bold text-accent tabular-nums">+{fmt(a.totalIncome, a.currency)}</p>
+                    <p className="text-2xl font-bold text-accent tabular-nums">+{fmt(convertToTarget(a.totalIncome, a.currency))}</p>
                   </div>
                 </div>
                 
@@ -199,12 +231,12 @@ export default function SavingsPage() {
                   <div className="p-3 rounded-lg bg-muted/50 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{t('portfolio.projectedAnnualInterest')}</span>
-                      <span className="font-medium text-primary">+{fmt(a.projectedAnnualInterest, a.currency)}</span>
+                      <span className="font-medium text-primary">+{fmt(convertToTarget(a.projectedAnnualInterest, a.currency))}</span>
                     </div>
                     {a.accruedInterest > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{t('portfolio.accruedUnpaid')}</span>
-                        <span className="font-medium text-accent">+{fmt(a.accruedInterest, a.currency)}</span>
+                        <span className="font-medium text-accent">+{fmt(convertToTarget(a.accruedInterest, a.currency))}</span>
                       </div>
                     )}
                   </div>
@@ -224,9 +256,7 @@ export default function SavingsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">
-                        {new Date(a.maturityDate).toLocaleDateString(undefined, { 
-                          month: 'short', day: 'numeric', year: 'numeric' 
-                        })}
+                        {formatDateStringWithAppSettings(a.maturityDate, appSettings.dateFormat)}
                       </p>
                       {!isMatured && daysToMaturity !== null && (
                         <p className={cn(
@@ -244,7 +274,7 @@ export default function SavingsPage() {
                 {(a.totalFees > 0 || a.totalTaxes > 0) && (
                   <div className="flex justify-between text-sm border-t border-border pt-3">
                     <span className="text-muted-foreground">{t('portfolio.feesAndTaxesPaid')}</span>
-                    <span className="font-medium text-destructive">-{fmt(a.totalFees + a.totalTaxes, a.currency)}</span>
+                    <span className="font-medium text-destructive">-{fmt(convertToTarget(a.totalFees + a.totalTaxes, a.currency))}</span>
                   </div>
                 )}
               </CardContent>

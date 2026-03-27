@@ -56,8 +56,8 @@ export default function TaxOverviewPage() {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: appSettings.defaultCurrency || "EUR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: appSettings.showDecimalPlaces,
+      maximumFractionDigits: appSettings.showDecimalPlaces,
     }).format(val);
   }
 

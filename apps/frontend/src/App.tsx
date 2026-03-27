@@ -10,8 +10,9 @@ import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsConte
 import { BelgianTaxProfileProvider } from "@/contexts/BelgianTaxProfileContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider, type Language } from "@/contexts/LanguageContext";
+import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/currency";
 
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
@@ -30,6 +31,7 @@ const PortfolioOverviewPage = lazy(() => import("./pages/portfolio/PortfolioOver
 const MarketLookupPage = lazy(() => import("./pages/MarketLookupPage"));
 const StocksPage = lazy(() => import("./pages/portfolio/StocksPage"));
 const CryptoPage = lazy(() => import("./pages/portfolio/CryptoPage"));
+const MetalsPage = lazy(() => import("./pages/portfolio/MetalsPage"));
 const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
 const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
 const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
@@ -62,6 +64,15 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
     const { appSettings, updateAppSettings } = useAppSettings();
     const language: Language = (appSettings.language as Language) ?? 'en';
     const setLanguage = (lang: Language) => updateAppSettings({ language: lang });
+
+    useEffect(() => {
+        configureCurrencyFormatDefaults({
+            defaultCurrency: appSettings.defaultCurrency,
+            locale: numberFormatToLocale(appSettings.numberFormat),
+            fractionDigits: appSettings.showDecimalPlaces,
+        });
+    }, [appSettings.defaultCurrency, appSettings.numberFormat, appSettings.showDecimalPlaces]);
+
     return (
         <LanguageProvider language={language} setLanguage={setLanguage}>
             {children}
@@ -72,8 +83,8 @@ function LanguageBridge({ children }: { children: React.ReactNode }) {
 const App = () => {
     return (
         <QueryClientProvider client={queryClient}>
-            <ThemeProvider>
-                <SettingsPreloadProvider>
+            <SettingsPreloadProvider>
+                <ThemeProvider>
                     <SettingsProvider>
                         <AppSettingsProvider>
                             <BelgianTaxProfileProvider>
@@ -106,6 +117,7 @@ const App = () => {
                                                     <Route path="/portfolio/market" element={<MarketLookupPage />} />
                                                     <Route path="/portfolio/stocks" element={<StocksPage />} />
                                                     <Route path="/portfolio/crypto" element={<CryptoPage />} />
+                                                    <Route path="/portfolio/metals" element={<MetalsPage />} />
                                                     <Route path="/portfolio/real-estate" element={<RealEstatePage />} />
                                                     <Route path="/portfolio/savings" element={<SavingsPage />} />
                                                     <Route path="/portfolio/performance" element={<PerformancePage />} />
@@ -124,8 +136,8 @@ const App = () => {
                             </BelgianTaxProfileProvider>
                         </AppSettingsProvider>
                     </SettingsProvider>
-                </SettingsPreloadProvider>
-            </ThemeProvider>
+                </ThemeProvider>
+            </SettingsPreloadProvider>
         </QueryClientProvider>
     );
 };
