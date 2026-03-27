@@ -19,10 +19,12 @@ package "Backend Services" {
     +fetchPrice(provider, symbol): Promise<PriceData>
     +updateInvestmentPrices(): Promise<UpdateResult>
     +fetchLivePrices(investments): Promise<PriceMap>
+    +fetchHistoricalPrices(investment): Promise<HistoryPoint[]>
   }
 
   class InvestmentsRouter {
     +POST /refresh-prices : bulk refresh prices
+    +GET /:id/price-history : provider-backed history
   }
 
   class InvestmentRepository {
@@ -35,6 +37,7 @@ cloud "Price Providers" as Providers {
   class CoinGecko <<Crypto Prices>>
   class YahooFinance <<Stock Prices>>
   class Kraken <<Crypto Prices>>
+  class CustomJSON <<Latest + History>>
   class Manual <<User Entry>>
 }
 
@@ -73,6 +76,11 @@ package "Bulk Refresh Flow" {
       PriceProviderService --> YahooFinance : GET /quote
     else provider == 'kraken'
       PriceProviderService --> Kraken : GET /ticker
+    else provider == 'custom'
+      PriceProviderService --> CustomJSON : GET latest_url
+      alt latest path missing/unresolved
+        PriceProviderService --> CustomJSON : derive latest from history path
+      end
     end
    
     Providers --> PriceProviderService : price data
@@ -81,12 +89,36 @@ package "Bulk Refresh Flow" {
   end
 }
 
+package "On-demand History Flow" {
+  User --> PortfolioPage : Open performance chart
+  PortfolioPage --> InvestmentsRouter : GET /investments/:id/price-history
+  InvestmentsRouter --> PriceProviderService : fetchHistoricalPrices(investment)
+  PriceProviderService --> CustomJSON : GET history_url
+  CustomJSON --> PriceProviderService : history JSON
+  PriceProviderService --> InvestmentsRouter : [{timestampMs, price}]
+  InvestmentsRouter --> PortfolioPage : history points
+}
+
 note right of PriceProviderService
   Supported providers:
   - coingecko: Crypto
   - yahoo: Stocks/ETFs
   - kraken: Crypto
+  - custom: JSON latest + history
   - manual: User entry
+
+  Custom provider config:
+  - price_provider_latest_url / path
+  - price_provider_history_url / path
+  - timestamp path + price path
+
+  History is fetched on demand
+  and is NOT persisted to DB.
+
+  Migration dependency:
+  0017_investment_custom_provider_history
+  keeps compatibility view/trigger aligned
+  for metals + advanced provider fields.
 end note
 
 @enduml

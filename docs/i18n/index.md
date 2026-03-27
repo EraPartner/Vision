@@ -1,7 +1,7 @@
 ---
 title: Localization Documentation Index
 type: i18n-index
-date: 2025-03-18
+date: 2026-03-24
 ---
 
 # Localization Documentation
@@ -73,6 +73,23 @@ function Component() {
 2. Add corresponding keys to `i18n/source/nl.json`
 3. Build to generate `.ts` files
 4. Use in components via `useLanguage()` hook
+
+## Recent Key Additions (Portfolio/Metals + News)
+
+Added in source JSON and regenerated locale bundles (`apps/frontend/src/locales/en.ts`, `apps/frontend/src/locales/nl.ts`):
+
+- `addInv.desc.metals`
+- `addWatchlist.metals`
+- `metals.title`
+- `metals.noMetals`
+- `metals.noMetalsDesc`
+- `nav.metals`
+- `portfolio.assetClass.metals`
+- `portfolio.assetGroup.metals`
+
+Source-of-truth reminder: translation keys are maintained in `i18n/source/*.json`; generated frontend locale bundles are derived artifacts and should be regenerated after key changes.
+
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
 ## Key Naming Convention
 

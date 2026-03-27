@@ -97,13 +97,16 @@ package "Repositories" {
   }
 
   class SplitRepository {
+    +getTransactionSplitTotals(transactionId): Promise<{ transaction_total, current_split_total } | null>
     +createSplit({ transaction_id, recipient_id, amount, note }): Promise<Split>
     +getSplitsByTransaction(transactionId): Promise<Split[]>
     +getOwedSummary(): Promise<OwedSummary[]>
     +getOwedByRecipient(recipientId): Promise<OwedData>
+    +getOwedExportRowsByRecipient(recipientId): Promise<OwedExportRow[]>
     +addPayment({ split_id, amount, note, paid_at }): Promise<Payment>
     +getPayments(splitId): Promise<Payment[]>
     +settleSplit(splitId): Promise<Split>
+    +settleAllByRecipient(recipientId): Promise<{ settled_count: number }>
     +deleteSplit(splitId): Promise<boolean>
   }
 

@@ -209,7 +209,7 @@ Use the Obsidian MCP tools to search:
 
 **After completing any code changes, agents MUST update the knowledge base:**
 
-- Use the `vision-kb-updater` agent (`.opencode/agent/vision-kb-updater.md`)
+- Use the local `vision-kb-updater` agent (`.opencode/agent/vision-kb-updater.md`)
 - This ensures docs stay in sync with implementation
 - The updater will:
   1. Identify what changed based on modified files

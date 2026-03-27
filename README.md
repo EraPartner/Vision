@@ -25,9 +25,10 @@ A self-hosted, privacy-first personal finance manager. All your financial data s
 
 ### Investments
 - **Investment portfolio** — Stocks, ETFs, crypto, real estate, savings, and bonds with live price feeds
-- **Net worth & performance** — Full portfolio overview with performance history tracking
+- **Net worth & performance** — Full portfolio overview with daily net-worth tracking, series toggle (Total / Investments / Liquid), and performance heatmaps
 - **Market lookup & watchlist** — Search any ticker or asset and track price targets
 - **Exchange rates** — Live and cached rates via ECB XML feed and open.er-api.com, auto-refreshed every 12 hours
+- **Portfolio news feed** — Holdings-based market news panel embedded in Portfolio Overview
 
 ### Other
 - **Shared expenses** — Split transactions and track who owes you what
@@ -175,13 +176,20 @@ The frontend dev server starts at `http://localhost:5174` and the backend API at
 | `bun run db:setup` | Initialize local PostgreSQL instance |
 | `bun run db:start` | Start local PostgreSQL |
 | `bun run db:stop` | Stop local PostgreSQL |
-| `bun run db:status` | Check PostgreSQL status |
-| `bun run docker:build` | Build Docker image locally |
-| `bun run docker:up` | Start Docker Compose stack |
-| `bun run docker:down` | Stop Docker Compose stack |
-| `bun run docker:logs` | Tail app container logs |
+| `bun run db:upgrade` | Apply Alembic migrations |
+| `bun run db:revision -- "message"` | Create a migration revision |
+| `bun run docker:dev` | Start development Docker stack |
+| `bun run docker:dev:down` | Stop development Docker stack |
+| `bun run docker:dev:rebuild` | Rebuild and restart development Docker stack |
+| `bun run docker:clean` | Start clean Docker stack (recreate containers) |
+| `bun run docker:clean:down` | Stop clean Docker stack |
+| `bun run docker:clean:reset` | Reset clean stack including volumes |
+| `bun run docker:logs` | Tail Docker app container logs |
 | `bun run electron:dev` | Start desktop app in development mode |
+| `bun run electron:prod` | Start desktop app in production mode |
 | `bun run electron:clean` | Start desktop app with a clean stack |
+| `bun run generate-locales` | Regenerate frontend locale bundles |
+| `bun run validate-locales` | Validate locale key consistency |
 
 ### Project Structure
 

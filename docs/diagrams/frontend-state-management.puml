@@ -153,6 +153,10 @@ package "Custom Hooks (Business Logic)" {
     +settle(id): Promise<Split>
   }
 
+  class useSettleAllSplitsByRecipient {
+    +settleAllByRecipient(recipientId): Promise<{ settled_count: number }>
+  }
+
   class useDeleteSplit {
     +delete(id): Promise<void>
   }
@@ -211,6 +215,7 @@ useSplitsByTransaction ..> QueryClient : uses
 useCreateSplits ..> QueryClient : uses
 useRecordPayment ..> QueryClient : uses
 useSettleSplit ..> QueryClient : uses
+useSettleAllSplitsByRecipient ..> QueryClient : uses
 useDeleteSplit ..> QueryClient : uses
 useSavedCharts ..> QueryClient : uses
 usePortfolioTaxAdjustments ..> QueryClient : uses

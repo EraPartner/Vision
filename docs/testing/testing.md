@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2025-03-18
+date: 2026-03-25
 tags: [testing, vitest, jest, quality]
 description: Comprehensive testing documentation including frameworks, patterns, and best practices
 related_code: ["apps/node-backend/tests", "apps/frontend/src/components/__tests__"]
@@ -58,8 +58,10 @@ apps/node-backend/tests/
 ├── deduplication.test.js       # Deduplication logic
 ├── recurringDetectionService.test.js
 ├── loanRepaymentService.test.js
+├── investmentRepository.test.js  # Investment inheritance + legacy view compatibility
 ├── routes/
 │   ├── transactions.test.js
+│   ├── splits.test.js
 │   ├── categories.test.js
 │   ├── recipients.test.js
 │   ├── investments.test.js
@@ -131,6 +133,7 @@ vi.mock('../src/database/connection.js', () => ({
 | **Validation** | Input sanitization, ID validation, date parsing |
 | **Services** | Currency conversion, deduplication, recurring detection |
 | **Routes** | CRUD operations, edge cases, error handling |
+| **Split Routes** | Split amount bounds, batch validation, owed CSV export responses |
 | **Adapters** | Bank CSV parsing, normalization |
 
 ### Frontend
@@ -140,6 +143,26 @@ vi.mock('../src/database/connection.js', () => ({
 | **Components** | Rendering, user interactions |
 | **Hooks** | State management, data fetching |
 | **Forms** | Validation, submission |
+
+### Recent Additions
+
+- `apps/node-backend/tests/investmentRepository.test.js` covers PostgreSQL inheritance-backed investment writes/reads through compatibility views.
+- `apps/node-backend/tests/routes/splits.test.js` validates split amount bounds, per-recipient settle-all behavior, and owed CSV export flows.
+- `apps/frontend/src/components/shared/dateUtils.test.ts` adds coverage for semantic month label helpers: `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)`.
+- `apps/frontend/src/hooks/useStatistics.test.ts` now covers category pivot metric mode aggregations (absolute, net, income-only, expense-only) and recipient yearly aggregation (`topRecipientsByYear`) used by year-filtered top-recipient statistics.
+- Currency target conversion coverage expanded for analytics and conversion paths: `apps/node-backend/tests/routes/info.test.js`, `apps/node-backend/tests/infoRepository.test.js`, and `apps/node-backend/tests/currencyConversionService.test.js`.
+- Final readability/enforcement verification pass: targeted frontend tests passed (3 files, 13 tests), frontend build passed, and grep checks confirmed no `toLocaleDateString(` or `toLocaleString(` under `apps/frontend/src`, no `form.currency || 'EUR'`, and no persisted `defaultBankAccount` (removed — was unused).
+- Runtime `ReferenceError` hotfix validation after settings refactor: `bunx tsc -p apps/frontend/tsconfig.json --noEmit --ignoreDeprecations 6.0` passes with no undefined-variable TypeScript errors; frontend build also passes for locale-scoped month-label callsites in [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], and [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]].
+- Watchlist locale runtime-safety hotfix: `formatDisplayCurrency` moved into component scope in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] so `locale` and `appSettings` are in scope at runtime.
+- Validation snapshot: locale/language undefined-name sweep after patch reports no `Cannot find name 'locale'` or `Cannot find name 'language'`, and frontend build passes.
+- Validation status for this implementation batch: targeted frontend tests passed, frontend build passed, and root build passed.
+- Schema-init compatibility validation: startup bootstrap now safely skips index/trigger creation on non-base relations (including `investments` view in inheritance setups), preventing `cannot create index on relation "investments"` during idempotent startup re-runs ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+- Validation code links: [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/node-backend/src/database/schemaInit.js]]
+- News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
+- Historical FX conversion coverage expanded: [[apps/node-backend/tests/currencyConversionService.test.js]] now validates sparse historical backfill behavior (missing `(currency,date)` pairs only), date-aware row conversion options (`useHistoricalRatesByDate`, `dateField`), and nearest-date fallback logic.
+- `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
+
+Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/hooks/statisticsProcessing.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 
 ## Test Examples
 

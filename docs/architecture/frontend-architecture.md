@@ -1,7 +1,7 @@
 ---
 title: Frontend Architecture
 description: React frontend architecture and diagrams
-date: 2026-03-19
+date: 2026-03-23
 tags: [architecture, frontend, uml, plantuml, react]
 ---
 
@@ -105,7 +105,10 @@ package "Context Providers" {
   
   class ThemeContext {
     +theme: light|dark
-    +toggleTheme()
+    +mode: light|dark|system|schedule
+    +schedule: {lightFrom,darkFrom}
+    +setMode(mode)
+    +setSchedule(schedule)
   }
   
   class SettingsContext {
@@ -146,7 +149,8 @@ package "Utility Hooks" {
   class useConfirmDialog
 }
 
-QueryClientProvider --> ThemeContext
+QueryClientProvider --> SettingsPreloadContext
+SettingsPreloadContext --> ThemeContext
 ThemeContext --> SettingsContext
 SettingsContext --> AppSettingsContext
 AppSettingsContext --> LanguageContext
@@ -290,23 +294,23 @@ PortfolioOverviewPage --> PortfolioTaxPage
 App
 ├── QueryClientProvider
 │   └── QueryClient
-├── ThemeProvider
-│   └── ThemeContext
 ├── SettingsPreloadProvider
-│   └── SettingsProvider
-│       └── AppSettingsProvider
-│           └── BelgianTaxProfileProvider
-│               └── LanguageBridge
-│                   └── TooltipProvider
-│                       └── ErrorBoundary
-│                           ├── Toaster
-│                           ├── Sonner
-│                           └── BrowserRouter
-│                               └── AppLayout
-│                                   ├── Sidebar (navigation)
-│                                   └── Routes
-│                                       ├── Budgeting (/, /transactions, etc.)
-│                                       └── Portfolio (/portfolio/*)
+│   └── ThemeProvider
+│       └── ThemeContext
+│       └── SettingsProvider
+│           └── AppSettingsProvider
+│               └── BelgianTaxProfileProvider
+│                   └── LanguageBridge
+│                       └── TooltipProvider
+│                           └── ErrorBoundary
+│                               ├── Toaster
+│                               ├── Sonner
+│                               └── BrowserRouter
+│                                   └── AppLayout
+│                                       ├── Sidebar (navigation)
+│                                       └── Routes
+│                                           ├── Budgeting (/, /transactions, etc.)
+│                                           └── Portfolio (/portfolio/*)
 ```
 
 ## Key Patterns

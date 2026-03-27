@@ -2,10 +2,10 @@
 title: Info & Analytics API
 type: api
 status: active
-date: 2025-03-18
+date: 2026-03-27
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
-related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js"]
+related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js"]
 ---
 
 # Info & Analytics API
@@ -18,11 +18,24 @@ Comprehensive analytics and statistics endpoints for dashboards and financial in
 /api/info
 ```
 
+## Currency Query Parameters
+
+- Conversion-capable info endpoints accept `currency` (preferred) and `target_currency` (alias).
+- Values are normalized to uppercase 3-letter codes.
+- Invalid/unsupported target values fall back to EUR behavior.
+
 ## Endpoints
 
 ### GET /api/info
 
 Get general statistics about the workspace.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -101,6 +114,8 @@ Get transaction summary with optional filters.
 | `bank_account` | string | Filter by bank account |
 | `start_date` | date | Start date (YYYY-MM-DD) |
 | `end_date` | date | End date (YYYY-MM-DD) |
+| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -124,6 +139,8 @@ Get monthly financial summary for the last 12 months.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `excluded_category_ids` | number[] | Categories to exclude |
+| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -151,6 +168,13 @@ Get monthly financial summary for the last 12 months.
 
 Get planned expenses for next month.
 
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
+
 **Response:** `200 OK`
 
 ```json
@@ -172,6 +196,13 @@ Get planned expenses for next month.
 ### GET /api/info/average-vs-current-spending
 
 Compare current month spending to historical average.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -197,6 +228,8 @@ Compare cashflow between periods.
 |-----------|------|-------------|
 | `excluded_category_ids` | number[] | Categories to exclude |
 | `excluded_recipient_ids` | number[] | Recipients to exclude |
+| `currency` | string | Target 3-letter currency code for converted amounts (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -221,6 +254,13 @@ Compare cashflow between periods.
 
 Get spending breakdown by category.
 
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted totals (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
+
 **Response:** `200 OK`
 
 ```json
@@ -241,6 +281,18 @@ Get spending breakdown by category.
 ### GET /api/info/bank-balances
 
 Get current and historical balances per bank account.
+
+Notes:
+- For non-EUR targets, conversion is date-aware for both the current account balances and monthly history rows.
+- Historical FX lookup uses each row `date` when converting bank-balance datasets.
+- If historical conversion fails for a row set, conversion retries with latest available rates so the endpoint still returns balance data.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted balances (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -287,15 +339,46 @@ Detect recurring transaction patterns.
 
 Get net worth combining bank balances + portfolio value.
 
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted snapshots (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
+
+Notes:
+- Returns **daily** snapshots (not monthly) from the first available data date until today.
+- Seed date (`first_data_date`) is the minimum of: first `portfolio_transactions.date`, first active `investments.created_at`, and first active `transactions.date`.
+- If the active-only seed date is empty (legacy/partially-migrated data), backend automatically retries seed date discovery without active filters to avoid false all-zero responses.
+- Portfolio contribution uses cumulative portfolio transaction cashflow from that seed date onward.
+- Bank balance and portfolio series both start at `first_data_date`, so timelines include transaction-only workspaces (no investments).
+- Historical conversion is date-aware for both bank history and portfolio history using each snapshot `day`.
+- FX changes are reflected over time in historical snapshots (instead of applying only latest rates).
+- If historical conversion fails for a snapshot set, conversion retries with latest available rates so net worth data still loads.
+- When bank-account balance snapshots are unavailable, liquid net worth falls back to cumulative transaction flow (date- and currency-aware) so snapshots remain populated instead of returning empty liquid history.
+- Regression coverage includes a transactions-only (no investments) case to ensure `/api/info/net-worth` still returns non-zero liquid/net worth when transaction data exists ([[apps/node-backend/tests/infoRepository.test.js]]).
+- Latest snapshot investment value is reconciled from active investment holdings (`units` × `current_price` for unit-based assets, principal-based for savings/bonds, plus appreciation for real estate) so current net worth is not stuck at `0` when historical portfolio aggregation is sparse.
+- Backend emits debug/warn/info logs for net worth computation context (`firstDataDate`, snapshot count, current totals, fallback usage) to speed up production troubleshooting without changing API shape.
+
 **Response:** `200 OK`
 
 ```json
 {
-  "total_assets": 150000.00,
-  "total_liabilities": 0,
-  "bank_balance": 25000.00,
-  "investment_value": 125000.00,
-  "net_worth": 150000.00
+  "current": {
+    "liquid": 25000.0,
+    "investments": 125000.0,
+    "netWorth": 150000.0
+  },
+  "monthlyChange": 500.0,
+  "monthlyChangePercent": 0.33,
+  "snapshots": [
+    {
+      "date": "2026-01-15",
+      "liquid": 24000.0,
+      "investments": 120000.0,
+      "netWorth": 144000.0
+    }
+  ]
 }
 ```
 
@@ -304,6 +387,13 @@ Get net worth combining bank balances + portfolio value.
 ### GET /api/info/recipient-insights
 
 Get spending insights per recipient/merchant.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `currency` | string | Target 3-letter currency code for converted spend metrics (default: EUR) |
+| `target_currency` | string | Alias for `currency` |
 
 **Response:** `200 OK`
 
@@ -327,6 +417,12 @@ Get spending insights per recipient/merchant.
 ### GET /api/info/exchange-rates
 
 Get cached exchange rates from database.
+
+Notes:
+- Rates are fetched from ECB and supplemented with open.er-api for non-ECB currencies.
+- Stats endpoints can be requested in any valid 3-letter code (ISO-style), with EUR fallback when invalid.
+- Core tested currencies include EUR, USD, GBP, SAR, AED.
+- Latest exchange-rate rows are updated per currency while historical rows are preserved.
 
 **Response:** `200 OK`
 
@@ -393,3 +489,5 @@ These endpoints are optimized using:
 - [[docs/api/index]] - API Index
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
+
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]

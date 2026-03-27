@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 description: Production deployment instructions
-date: 2026-03-18
+date: 2026-03-25
 tags: [guide, deployment, production, docker, electron]
 related_code: [[docker-compose.yml]]
 ---
@@ -110,11 +110,14 @@ server {
 
 ## Database Migrations in Production
 
-Migrations run automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
+Startup logic runs automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
 1. Waits for the PostgreSQL database to be ready
-2. Fixes the `alembic_version` column size if needed (supports long revision IDs)
-3. Runs Alembic migrations
-4. Starts the backend application
+2. Checks whether `alembic_version` exists
+3. If it exists, fixes `alembic_version.version_num` size if needed (supports long revision IDs) and runs Alembic migrations
+4. If it does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
+5. Starts the backend application
+
+Startup compatibility note: schema init version `20260324_2` adds base-table guards to startup index/trigger helpers so bootstrap remains idempotent when compatibility relations like `investments` are views in inheritance-schema deployments ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
 
 If you need to run migrations manually (e.g., for troubleshooting):
 
@@ -122,6 +125,10 @@ If you need to run migrations manually (e.g., for troubleshooting):
 # Run migrations in the app container using the venv Python
 docker compose exec app /app/venv/bin/python3 -m alembic -c /app/config/alembic.ini upgrade head
 ```
+
+Note: migration `0002_add_url_to_planned_transactions` is idempotent and safely skips `url` creation when the column already exists.
+
+Migration caveat: `0016_add_fx_rate_to_portfolio_transactions` is now safe on inherited-schema deployments where `portfolio_transactions` is a compatibility view. It only runs `ALTER TABLE` when relation kind is table/partitioned table (`relkind in ('r','p')`) and keeps the view recreation path when relation kind is view (`relkind='v'`). During view recreation, `fx_rate_to_eur` stays at the end of the `SELECT` list to preserve existing column order and avoid PostgreSQL `CREATE OR REPLACE VIEW` column-rename errors ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
 
 ## Backup and Restore
 

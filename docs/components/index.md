@@ -1,7 +1,7 @@
 ---
 title: Components Documentation Index
 type: components-index
-date: 2025-03-18
+date: 2026-03-23
 ---
 
 # Components Documentation
@@ -50,6 +50,12 @@ SORT title ASC
 | `useWidgetVisibility()` | Widget show/hide |
 | `useFilteredDashboardStats()` | Dashboard data |
 | `useConfirmDialog()` | Confirmation dialogs |
+
+### Shared Form Inputs
+
+- `DatePicker` - Popover calendar input used in dialog forms (supports clear + portal container)
+- `RecipientCombobox` - Searchable recipient selector
+- `CategoryCombobox` - Searchable category selector
 
 ## Guidelines
 

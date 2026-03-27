@@ -2,7 +2,7 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-23
 tags: [components, forms, dialogs]
 description: Modal dialogs for adding and editing data throughout the application
 related_code: ["apps/frontend/src/components/forms"]
@@ -229,6 +229,20 @@ Form dialogs use these shared components:
 |-----------|-------|
 | `RecipientCombobox` | Searchable recipient selector |
 | `CategoryCombobox` | Searchable category selector |
+| `DatePicker` | Popover calendar date selector with optional clear action |
+
+For dialog-bound forms, comboboxes and date pickers can use a dialog-owned portal container to avoid overlay stacking issues:
+
+```tsx
+const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+
+<DialogContent>
+  <div ref={setPortalContainer} />
+  <DatePicker portalContainer={portalContainer} />
+  <RecipientCombobox portalContainer={portalContainer} />
+  <CategoryCombobox portalContainer={portalContainer} />
+</DialogContent>
+```
 
 ### Example with Combobox
 

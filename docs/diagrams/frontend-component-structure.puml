@@ -90,6 +90,12 @@ package "Shared Components" {
 
   class VirtualDataTable {
     +virtualized rows
+    +server-side sort
+    +server-side search
+    +column resize
+    +column filters
+    +inline editing
+    +cancelEditingRef
   }
 
   class DataTable {

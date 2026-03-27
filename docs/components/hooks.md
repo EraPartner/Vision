@@ -2,7 +2,7 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-25
 tags: [components, hooks, react-query]
 description: Custom React hooks for data fetching and state management
 related_code: ["apps/frontend/src/hooks"]
@@ -71,11 +71,15 @@ const deleteMutation = useDeleteTransaction();
 interface UseTransactionsOptions {
   limit?: number;
   offset?: number;
-  startDate?: string;
-  endDate?: string;
-  categoryId?: number;
-  recipientId?: number;
-  bankAccount?: string;
+  transaction_id?: number;
+  start_date?: string;
+  end_date?: string;
+  category_id?: number;
+  recipient_id?: number;
+  recipient_name?: string;
+  bank_account?: string;
+  uncategorised?: boolean;
+  active?: boolean;
   search?: string;
 }
 ```
@@ -85,8 +89,9 @@ interface UseTransactionsOptions {
 ```tsx
 const { data, isLoading } = useTransactions({
   limit: 50,
-  startDate: "2025-01-01",
-  endDate: "2025-03-18",
+  start_date: "2025-01-01",
+  end_date: "2025-03-18",
+  transaction_id: 123,
 });
 
 // Create transaction
@@ -171,6 +176,12 @@ interface InvestmentSummary {
 
 Hook for planned/scheduled transactions.
 
+### Settings-Aware Mapping
+
+- API-to-UI mapping fallback currency derives from configured app defaults (`appSettings.defaultCurrency` context) rather than fixed literals
+
+Code links: [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+
 ### API
 
 ```typescript
@@ -196,19 +207,72 @@ interface UsePlannedPaymentsOptions {
 
 ## useStatistics
 
-Hook for analytics/statistics data.
+Hook for analytics/statistics data with per-graph exclusion support.
 
 ### API
 
 ```typescript
-const { data, isLoading } = useStatistics();
+const {
+  data,              // Filtered statistics data
+  unfilteredData,    // Statistics without exclusions
+  getGraphData,      // (key: string) => StatisticsData | null
+  graphExclusions,   // Record<string, boolean>
+  toggleGraphExclusion, // (key: string) => void
+  exclusionsApply,   // boolean
+  isLoading,         // Loading state
+  isError,           // Error state
+  error,             // Error object
+} = useStatistics();
+```
 
-// Returns comprehensive statistics including:
-// - total_transactions
-// - total_recipients
-// - total_categories
-// - categories breakdown
-// - monthly summaries
+### Returns
+
+```typescript
+interface StatisticsData {
+  monthlyData: MonthlyData[];      // Monthly income/expense
+  categoryPivot: CategoryPivot[]; // Category spending breakdown (mode-dependent)
+  topRecipients: RecipientSpending[]; // Top spending recipients
+  topRecipientsByYear: Record<string, RecipientSpending[]>; // Year key (or all) -> recipients
+  yearlyComparison: YearlyComparison[]; // Year-over-year data
+  allPeriods: string[];           // Available periods (YYYY-MM)
+  allYears: number[];             // Available years
+  totalIncome: number;            // Total income
+  totalSpending: number;          // Total spending
+  averageMonthlySpending: number; // Average monthly spending
+  averageMonthlyIncome: number;   // Average monthly income
+}
+
+interface CategoryPivot {
+  categoryName: string;  // "GENERAL: DETAIL" format
+  categoryId: number;
+  months: Record<string, number>; // period -> total
+  total: number;
+}
+```
+
+### Features
+
+- **Per-graph exclusion toggle**: Each chart can independently toggle category/recipient exclusions
+- **Category normalization**: Ensures consistent `GENERAL: DETAIL` formatting across all charts
+- **Automatic query invalidation**: Reacts to settings changes
+- **Currency-aware stats fetching**: Uses `appSettings.defaultCurrency` as target currency for normalized transaction pulls (`normalize_to_eur=true` + `target_currency`)
+- **Currency in query keys**: Includes selected currency in React Query cache keys to prevent stale cross-currency reuse
+- **Large dataset support**: Fetches all transactions in paginated batches
+- **Year-aware category pie support**: Works with year-filtered pie slices while preserving normalized labels
+- **Shared processing module**: `useStatistics` delegates aggregation to `statisticsProcessing.ts` for consistent cross-widget calculations
+- **Pivot aggregation variants**: Processing emits pivot months/totals for absolute, income, expense, and net views
+- **Recipients yearly aggregation**: Processing emits `topRecipientsByYear` for `All years` and per-year recipient spending views
+
+### Usage
+
+```tsx
+const { data, getGraphData, toggleGraphExclusion } = useStatistics();
+
+// Get data for a specific graph
+const pieData = getGraphData('categoryPie');
+
+// Toggle exclusions for a graph
+toggleGraphExclusion('categoryPie');
 ```
 
 ---
@@ -223,10 +287,11 @@ Hook for transaction splitting and debt tracking.
 const { data, isLoading } = useSplits();
 
 // Mutations
-const createSplit = useCreateSplit();
-const createBatchSplits = useCreateBatchSplits();
-const addPayment = useAddSplitPayment();
+const createSplits = useCreateSplits();
+const addPayment = useRecordPayment();
 const settleSplit = useSettleSplit();
+const settleAllByRecipient = useSettleAllSplitsByRecipient();
+const removeSplit = useDeleteSplit();
 ```
 
 ---
@@ -287,7 +352,11 @@ const {
 
 - Respects exclusion settings
 - Applies category/recipient filters
-- Returns monthly summaries
+- Requests monthly summary in selected app currency via `currency` query param
+- Includes selected app currency in query key for cache isolation
+- Uses the **latest month with data** for dashboard income/spending cards
+- Computes card totals from live transactions for that month to avoid stale materialized-view lag
+- Fetches month transactions in pages so totals remain complete on large datasets
 
 ---
 

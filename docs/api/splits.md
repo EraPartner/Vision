@@ -2,7 +2,7 @@
 title: Splits API
 type: api
 status: active
-date: 2025-03-18
+date: 2026-03-23
 tags: [api, splits, transactions, debt]
 description: API endpoints for transaction splitting and debt tracking between recipients
 related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js"]
@@ -18,11 +18,19 @@ Endpoints for transaction splitting and debt tracking. Allows splitting expenses
 /api/splits
 ```
 
+## Validation Rules
+
+- Split amounts must be **positive numbers**.
+- The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
+- If a transaction does not exist, split creation returns `404`.
+
 ## Endpoints
 
 ### GET /api/splits/owed
 
 Get a summary of who owes what across all recipients.
+
+Only unsettled splits with a positive remaining balance are included.
 
 **Response:** `200 OK`
 
@@ -33,7 +41,9 @@ Get a summary of who owes what across all recipients.
       "recipient_id": 1,
       "recipient_name": "John Doe",
       "total_owed": 150.00,
-      "currency": "EUR"
+      "total_paid": 40.00,
+      "remaining": 110.00,
+      "split_count": 3
     }
   ]
 }
@@ -61,13 +71,48 @@ Get detailed splits owed by a specific recipient.
       "transaction_id": 100,
       "recipient_id": 2,
       "amount": 50.00,
+      "transaction_recipient_name": "CARD PAYMENT - CURRENT",
+      "transaction_memo": "Dinner split",
+      "transaction_currency": "EUR",
+      "bank_account": "BE12 3456 7890 1234",
       "note": "Dinner split",
+      "amount_paid": 10.00,
+      "remaining": 40.00,
       "is_settled": false,
       "created_at": "2025-01-15T10:00:00Z"
     }
   ]
 }
 ```
+
+`transaction_recipient_name` and `transaction_memo` are returned so clients can present the split source using both fields (for example in the Owes detail list).
+
+---
+
+### GET /api/splits/owed/:id/export/csv
+
+Export unsettled split transactions for a specific recipient as CSV, using the same transaction export columns.
+
+Important behavior:
+
+- Includes only splits for the recipient in `:id` that are **not settled** and still have a positive remaining amount.
+- Returns **one CSV row per split transaction** for that recipient.
+- `Amount` column is set to the split **remaining amount to settle** (`split.amount - paid`), not the original transaction amount.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Recipient ID (positive integer) |
+
+**Response:** `200 OK`
+
+- Content type: `text/csv`
+- Header: `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment`
+
+**Error Responses:**
+
+- `404 Not Found` when no unsettled owed transactions exist for that recipient.
 
 ---
 
@@ -135,6 +180,12 @@ Create a new split for a transaction.
 }
 ```
 
+```json
+{
+  "detail": "Split amount exceeds transaction total"
+}
+```
+
 ---
 
 ### POST /api/splits/batch
@@ -164,6 +215,14 @@ Create multiple splits for a transaction at once.
     { "id": 1, "transaction_id": 100, "recipient_id": 2, "amount": 25.00 },
     { "id": 2, "transaction_id": 100, "recipient_id": 3, "amount": 25.00 }
   ]
+}
+```
+
+**Error Response:** `400 Bad Request`
+
+```json
+{
+  "detail": "Split amount exceeds transaction total"
 }
 ```
 
@@ -264,6 +323,36 @@ Mark a split as fully settled.
 ```json
 {
   "detail": "Split not found"
+}
+```
+
+---
+
+### POST /api/splits/owed/:id/settle-all
+
+Mark all **unsettled** splits for a specific recipient as settled.
+
+This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records.
+
+**Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | number | Recipient ID (positive integer) |
+
+**Response:** `200 OK`
+
+```json
+{
+  "settled_count": 3
+}
+```
+
+**Error Response:** `500 Internal Server Error`
+
+```json
+{
+  "detail": "Error settling all splits for recipient"
 }
 ```
 

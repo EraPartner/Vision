@@ -1,7 +1,7 @@
 ---
 title: Architecture Diagrams
 description: Index of all UML diagrams for the Vision project
-date: 2026-03-19
+date: 2026-03-23
 tags: [architecture, uml, plantuml, diagrams]
 ---
 

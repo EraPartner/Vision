@@ -2,7 +2,7 @@
 title: Market Lookup API
 type: api
 status: active
-date: 2025-03-18
+date: 2026-03-24
 tags: [api, market, stocks, finance]
 description: API endpoints for real-time market data, search, quotes, and charts
 related_code: ["apps/node-backend/src/routes/marketLookup.js"]
@@ -177,6 +177,17 @@ Get news articles for one or more symbols.
 ```
 
 **Error Response:** `502 Bad Gateway` - Market news unavailable
+
+**Implementation notes (news thumbnails):**
+
+- Thumbnail URLs are normalized server-side before returning articles:
+  - Protocol-relative `//...` URLs are converted to `https://...`
+  - `http://...` URLs are upgraded to `https://...`
+- Backend CSP now allows remote HTTPS images via `img-src 'self' data: https:` so external Yahoo/provider thumbnails can render.
+- Yahoo thumbnail arrays now select the best available resolution instead of always taking the first resolution.
+- Frontend consumers render these URLs via a shared safe image component; news cards can pass `fallbackClassName="hidden"` to suppress placeholder icon boxes when fetches fail.
+
+Code links: [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.js]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
 
 ---
 

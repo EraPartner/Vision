@@ -2,22 +2,24 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2025-03-18
+date: 2026-03-25
 tags: [integration, currency, exchange-rates]
-description: Multi-currency support with automatic conversion to EUR using ECB and supplementary exchange rates
+description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion
 related_code: ["apps/node-backend/src/services/currencyConversionService.js"]
 ---
 
 # Currency Conversion
 
-Vision provides multi-currency support with automatic conversion to EUR using official exchange rates.
+Vision provides multi-currency support with conversion to EUR or another requested target currency using official exchange rates.
 
 ## Overview
 
 The currency conversion service handles all currency-related operations, including:
 - Fetching live exchange rates
-- Converting transaction amounts to EUR
+- Converting transaction amounts to a requested target currency
 - Handling currencies not covered by ECB
+- Preserving historical exchange-rate rows while updating the latest per currency
+- Date-aware historical lookup for portfolio conversion (exact date, otherwise nearest stored date)
 
 ## Data Sources
 
@@ -44,6 +46,8 @@ The service implements a multi-layer fallback:
 1. **In-memory cache** - 24-hour TTL
 2. **Database rates** - Stored in `exchange_rates` table
 3. **Hardcoded constants** - Last resort fallback
+
+For date-aware conversion requests, the service also opportunistically queries ECB's 90-day historical feed for exact-date matches before falling back to nearest stored database rates.
 
 ```
 ┌─────────────────────────────────────┐
@@ -163,7 +167,30 @@ Convert multiple rows at once:
 ```javascript
 import { convertRowsToEur } from './services/currencyConversionService.js';
 
-const converted = await convertRowsToEur(transactions, 'currency', 'amount');
+const converted = await convertRowsToEur(transactions, 'USD');
+```
+
+Date-aware conversion can be enabled for row sets that contain a date column:
+
+```javascript
+const converted = await convertRowsToEur(rows, 'USD', {
+  useHistoricalRatesByDate: true,
+  dateField: 'day'
+});
+```
+
+### Sparse Historical Backfill (Portfolio)
+
+- `backfillPortfolioHistoricalRates()` backfills only missing `(portfolio_transactions.currency, portfolio_transactions.date)` pairs (excluding EUR)
+- Existing historical rows are preserved
+- Backfill favors exact-date ECB data when available, then falls back to nearest local rate
+
+Generic amount conversion:
+
+```javascript
+import { convertToCurrency } from './services/currencyConversionService.js';
+
+const amountInSar = await convertToCurrency(125, 'USD', 'SAR');
 ```
 
 ---
@@ -171,6 +198,8 @@ const converted = await convertRowsToEur(transactions, 'currency', 'amount');
 ## Configuration
 
 No configuration required - service auto-initializes on startup.
+
+Startup triggers a background sparse historical backfill for portfolio transaction dates.
 
 **Optional environment variables:**
 - None currently required
@@ -180,7 +209,8 @@ No configuration required - service auto-initializes on startup.
 ## Error Handling
 
 - **API failures**: Falls back to database, then hardcoded rates
-- **Invalid currencies**: Returns 1:1 EUR conversion
+- **Invalid source currencies**: Returns 1:1 passthrough amount
+- **Invalid target currencies**: Falls back to EUR conversion behavior
 - **Stale data**: Uses hardcoded fallback if all sources fail
 
 ---
@@ -188,7 +218,7 @@ No configuration required - service auto-initializes on startup.
 ## Use Cases
 
 1. **Multi-currency transactions** - Track spending in original currency
-2. **EUR reporting** - Normalize all amounts to EUR for analysis
+2. **Target-currency reporting** - Normalize all amounts to the selected currency for analysis
 3. **Investment tracking** - Convert foreign investments to home currency
 4. **Tax reporting** - Required for EUR-based tax calculations
 
@@ -199,3 +229,5 @@ No configuration required - service auto-initializes on startup.
 - [[docs/performance/caching-strategies]] - Caching implementation
 - [[docs/api/settings]] - Settings API
 - [[docs/integrations/index]] - Integrations Index
+
+Code links: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/main.js]]

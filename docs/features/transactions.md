@@ -2,10 +2,10 @@
 title: Transactions
 type: feature
 status: active
-date: 2025-03-18
+date: 2026-03-23
 tags: [feature, transactions, finance]
 description: Core transaction management - income, expenses, and tracking financial activities
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js"]
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/frontend/src/components/shared/VirtualDataTable.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -88,11 +88,31 @@ See [[docs/features/import]] for details.
 Transactions support rich filtering:
 
 - Date range (start/end)
+- Exact transaction ID
 - Category filter
 - Recipient filter
 - Amount range (min/max)
 - Bank account
 - Currency
+
+#### Table Search Sync Behavior
+
+- Transaction table search input updates immediately in the UI and persists after execution.
+- Server filtering is debounced at 200ms through `VirtualDataTable` for a more live feel while keeping request volume controlled.
+- Search reacts correctly when loosening terms (character-by-character deletion) and when clearing entirely.
+- Table rows are rendered from a deferred data value (`useDeferredValue`) so typing remains responsive while results refresh.
+
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
+
+---
+
+### Extra Information Dialog Inline Editing
+
+- In the transaction extra information dialog, existing detail rows can now be edited inline using a per-row pencil action.
+- Transaction ID is displayed for reference and remains non-editable.
+- Inline row editing provides save/cancel controls and persists through the existing transaction update flow (`PATCH /api/transactions/:id`).
+
+Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
 ---
 
@@ -101,7 +121,7 @@ Transactions support rich filtering:
 Export transactions to CSV for external analysis:
 
 ```
-GET /api/transactions/export-csv?start_date=2025-01-01&end_date=2025-03-18
+GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18
 ```
 
 ---
@@ -138,7 +158,7 @@ Transactions feed into various analytics views:
 | GET | `/api/transactions/:id` | Get single transaction |
 | PATCH | `/api/transactions/:id` | Update transaction |
 | DELETE | `/api/transactions/:id` | Delete transaction |
-| POST | `/api/transactions/export-csv` | Export to CSV |
+| GET | `/api/transactions/export/csv` | Export to CSV |
 | PATCH | `/api/transactions/batch` | Batch update |
 
 ---

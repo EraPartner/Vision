@@ -2,7 +2,7 @@
 title: Integration - Price Providers
 type: integration
 description: Live price feeds for stocks, crypto, and other investments
-date: 2026-03-18
+date: 2026-03-24
 tags: [integration, price, stocks, crypto, api]
 related_code: [[apps/node-backend/src/services/priceProviderService.js]]
 ---
@@ -30,12 +30,14 @@ Price providers fetch live market prices for investments, supporting multiple as
   - Market cap, volume
 
 ### Yahoo Finance
-- **Asset Classes**: Stocks, ETFs
+- **Asset Classes**: Stocks, ETFs, Metals
 - **Implementation**: Web scraping / Yahoo Finance API
 - **Features**:
   - Real-time quotes
+  - Previous close fallback when real-time quote is unavailable/zero
   - Historical data
   - Wide coverage
+  - Supports futures-style metals tickers (for example, `GC=F`)
 
 ### Kraken
 - **Asset Classes**: Crypto
@@ -77,6 +79,11 @@ Response:
   "prices": {
     "1": 45000.00,
     "2": 185.50
+  },
+  "priceSources": {
+    "1": "live",
+    "2": "close",
+    "3": "cached"
   }
 }
 ```
@@ -99,7 +106,9 @@ Response:
 ## Error Handling
 
 If price fetch fails:
-- Keep existing price
+- Fallback to previous close where available (Yahoo)
+- Fallback to latest historical close from Yahoo chart data when quote fields are unavailable
+- Fallback to existing stored `current_price` when provider data is unavailable
 - Log error
 - Continue with other investments
 

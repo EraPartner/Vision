@@ -2,7 +2,7 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2025-03-18
+date: 2026-03-27
 tags: [feature, views, pages, frontend, ui]
 description: Complete overview of all views and pages in the Vision application
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
@@ -29,6 +29,7 @@ Import
 Owes (Splits)
 Tax
 Portfolio
+  - Metals
 ```
 
 ---
@@ -54,6 +55,8 @@ The main landing page providing a quick overview of your finances.
 - **Exclusion Controls**: Filter categories/recipients from dashboard stats
 - **Date Range**: View current month by default
 - **Real-time Data**: Refreshes automatically
+- **Semantic date-label UX pass (dashboard)**: Cashflow month descriptions/headings and Monthly Trends x-axis labels now use `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` from [[apps/frontend/src/components/shared/dateUtils.ts]] to avoid overly detailed full-date labels while respecting app settings
+- **Hotfix (settings-refactor runtime safety)**: Dashboard cashflow month description labels now consistently use in-scope `locale` (not undefined `language`) in [[apps/frontend/src/pages/DashboardPage.tsx]], and chart month formatter scope now defines `locale` in [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]]
 
 ### Use Cases
 
@@ -70,6 +73,8 @@ Full transaction management with advanced filtering and editing.
 ### Features
 
 - **List View**: Paginated table of all transactions
+- **Server Search Sync**: Search input is controlled and persists the typed value after execution (`VirtualDataTable` + `TransactionsPage`)
+- **Progressive Search Updates**: Typing and backspacing both update search terms (including loosened queries) with debounced server requests
 - **Filters**:
   - Date range (start/end date)
   - Category selection
@@ -79,9 +84,19 @@ Full transaction management with advanced filtering and editing.
   - Currency
   - Hidden/active status
 - **Inline Editing**: Quick edit amount, category, recipient
+- **Extra Info Inline Editing**: Edit existing extra information rows inline from the dialog via per-row pencil action (transaction ID remains read-only)
 - **Bulk Actions**: Select multiple transactions for batch operations
 - **Export**: Download filtered transactions as CSV
 - **Search**: Full-text search on memo/description
+
+### Search Behavior
+
+- Search input state is maintained locally in `VirtualDataTable` while server filtering is driven by controlled `searchValue`/`onSearchChange` in `TransactionsPage`.
+- Debounced server updates (200ms) provide a more live search feel while preserving immediate input feedback.
+- Clearing search (button or character-by-character) updates the query consistently and avoids stale delayed requests.
+- Virtual table rendering uses deferred data (`useDeferredValue`) to keep typing fluid during refreshes.
+
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
 ### Actions
 
@@ -149,13 +164,24 @@ Manage payees and payers (merchants, employers, etc.).
 ### Features
 
 - **Recipient List**: All recipients with transaction counts
+- **Server Search Sync**: Shared virtual table search behavior with persistent input and debounced server filtering
+- **Uncategorized Filter**: Toggle to view only recipients without default categories
 - **Create/Edit**: Add new recipients with details
 - **Merge**: Combine duplicate recipients
+- **Merge Search Uses Full Dataset**: Merge dialog fetches all recipients (paged in the background) so primary/alias search is not limited to currently loaded table rows
 - **Unmerge**: Separate merged recipients
 - **Aliases**: Alternative names for matching
-- **Default Categories**: Set default category per recipient
+- **Default Categories**: Set default category per recipient (inline editing)
 - **Bank Accounts**: Link bank accounts to recipients
 - **Notes**: Add notes about recipients
+
+### Search Behavior
+
+- Recipients search uses the same controlled virtual-table flow as transactions.
+- Search updates while typing and while removing characters, so broadening a query immediately reflects in the next debounced fetch.
+- Input persistence and clear handling are implemented in `VirtualDataTable` and consumed by `RecipientsPage`.
+
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
 
 ### Actions
 
@@ -183,8 +209,11 @@ Track upcoming and recurring payments.
 - **One-time Payments**: Single future payments
 - **Recurring Payments**: Weekly, monthly, yearly schedules
 - **Loan Tracking**: Special loan repayment management
+- **Currency Defaults Enforced**: New/reset planned payment currency now defaults to `appSettings.defaultCurrency`
 - **Execute**: Mark as paid (creates transaction)
 - **Overdue Alerts**: Highlight missed payments
+
+Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]]
 
 ### Transaction Types
 
@@ -215,20 +244,47 @@ Comprehensive analytics and reporting dashboard.
 | **Summary Cards** | Total income, expenses, savings rate |
 | **Monthly** | Monthly income/expense breakdown |
 | **Net Trend** | Net worth trend over time |
-| **Category Pie** | Spending by category |
-| **Category Trend** | Category spending over time |
-| **Pivot Table** | Category × Month matrix |
+| **Category Pie** | Spending by category (top 10) |
+| **Category Trend** | Category spending over time (top 5) |
+| **Pivot Table** | Category × Month matrix with hierarchical grouping |
 | **Top Recipients** | Biggest spending recipients |
 | **Yearly Comparison** | Year-over-year analysis |
 | **Yearly Summary** | Annual totals |
+| **Custom Charts** | User-configurable category charts |
+| **Saved Charts** | Reusable saved chart configurations |
 
 ### Features
 
-- **Custom Charts**: Save chart configurations
-- **Date Range**: Custom period selection
-- **Exclusions**: Filter out categories/recipients
-- **Export**: Download reports
-- **Saved Charts**: Reusable chart configs
+- **Custom Charts**: Save chart configurations with selected categories
+- **Per-graph Exclusions**: Each chart can independently toggle category/recipient exclusions
+- **Currency-aware statistics requests**: Statistics and dashboard analytics endpoints are requested with the selected app currency, and query caches are keyed by currency to keep results isolated
+- **Hierarchical Pivot Table**: Categories grouped by GENERAL with DETAIL sub-items
+- **Pivot Metric Modes**: Category pivot table supports `Absolute (Income + Expense)`, `Net (Income - Expense)`, `Income only`, and `Expense only`
+- **Pivot Mode Semantics**: Historical default behavior remains available as `Absolute` (sum of `abs(tx.amount)`), while `Net` includes negative values and sorts rows by absolute net magnitude
+- **Combined Filtering**: Pivot year filter remains available and now combines with the selected metric mode
+- **Top Recipients Year Filter**: Spending chart supports `All years` plus per-year filtering backed by pre-aggregated yearly recipient totals
+- **Widget Visibility**: Show/hide widgets via visibility dialog
+- **Chart Types**: Line, bar, and area charts for custom charts
+- **Semantic date-label UX pass (portfolio pages)**: [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] uses language-locale month labels on the x-axis and app date-format labels for tooltip/table day values; [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] uses locale month-only labels for heatmap headers and month-year helper labels for chart x-axis keys
+- **Cross-currency portfolio normalization**: Portfolio Overview, Performance, and Portfolio Tax monetary displays are converted to app default currency from live `/api/info/exchange-rates`; percentage values remain unchanged
+- **Hotfix (settings-refactor runtime safety)**: Net Worth month-label callsites now consistently use in-scope `locale` in [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] to prevent runtime `ReferenceError` from undefined aliases
+- **Recipient Insights Pagination**: `defaultPageSize` is enforced for initial load and load-more behavior
+- **Recipient Insights Reactivity**: Tab memo dependencies include `defaultPageSize` and paging inputs to avoid stale slices
+- **Locale-safe Integer Rendering**: Integer counters use app locale formatting (dashboard/stats surfaces)
+- **Currency Precision from Settings**: Currency displays follow `appSettings.showDecimalPlaces` across stats and tax views
+- **Chart Tooltip Number Safety**: Shared chart tooltip numeric rendering is zero-safe and robust for mixed values
+
+### Category Name Formatting
+
+Categories follow the `GENERAL: DETAIL` format:
+- **GENERAL**: Main category (e.g., FOOD, TRANSPORT, UTILITIES)
+- **DETAIL**: Specific subcategory (e.g., GROCERIES, GAS, ELECTRICITY)
+
+The statistics page normalizes all category names to ensure consistent formatting across:
+- Pie chart labels
+- Trend chart legends
+- Pivot table rows
+- Custom chart selections
 
 ### Use Cases
 
@@ -236,6 +292,9 @@ Comprehensive analytics and reporting dashboard.
 - Year-over-year comparison
 - Category trends identification
 - Budget planning
+- Recipient spending patterns
+
+Code links: [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/hooks/statisticsProcessing.ts]], [[apps/frontend/src/hooks/useStatistics.ts]], [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]]
 
 ---
 
@@ -290,6 +349,16 @@ Track shared expenses and debts between people.
 - **Payment Tracking**: Record partial payments
 - **Settlement**: Mark debts as settled
 - **Per-Person View**: Detailed breakdown per person
+- **Bulk Settle (Per Person)**: Settle all currently listed outstanding splits for the selected person from the per-person view (with confirmation)
+- **Split Source Context**: Per-person rows show both original transaction recipient and memo
+- **Jump to Source Transaction**: Double-click a split row to open Transactions filtered to the source `transaction_id`
+- **Recent Recipient Transactions Table**: Per-person detail now includes a bottom `VirtualDataTable` listing recent transactions for that recipient
+- **Infinite Scroll (Recipient Detail)**: Loads an initial 10 rows and fetches 10 more as you scroll
+- **Recipient Table Columns**: Date, Description, Category, Amount, Bank Account
+- **Recipient Table Empty State**: Shows localized empty state text when no recent transactions exist for the recipient
+- **Jump to Source Transaction (Recent Table)**: Double-click a recent transaction row to open Transactions filtered by that row's `transaction_id`
+
+Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
 ### Use Cases
 
@@ -342,6 +411,7 @@ Investment portfolio management across multiple asset classes.
 | **Crypto** | `/portfolio/crypto` | Cryptocurrency holdings |
 | **Real Estate** | `/portfolio/real-estate` | Property investments |
 | **Savings** | `/portfolio/savings` | Savings accounts |
+| **Metals** | `/portfolio/metals` | Precious metals holdings |
 | **Performance** | `/portfolio/performance` | Performance analytics |
 | **Net Worth** | `/portfolio/net-worth` | Total net worth |
 | **Exchange Rates** | `/portfolio/exchange-rates` | Currency rates |
@@ -352,11 +422,16 @@ Investment portfolio management across multiple asset classes.
 ### Portfolio Overview Features
 
 - **Summary Cards**: Total value, gain/loss
+- **Currency-normalized totals**: Summary cards, allocation chart values, and investment list amounts are converted to `appSettings.defaultCurrency` via `/api/info/exchange-rates`
 - **Allocation Chart**: Asset class distribution
+- **Allocation Group Source**: Overview allocation groups are derived from `getAssetClassGroups(t)` (not deprecated `ASSET_CLASS_GROUPS`), so metals are included with translated labels
 - **Performance Widget**: Returns over time
 - **Investment List**: All holdings with details
 - **News Feed**: Related market news
 - **Refresh Prices**: Update all prices
+- **Default/Reset Currency Source**: Add investment dialog default/reset currency follows `appSettings.defaultCurrency`
+
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]]
 
 ### Asset Classes
 
@@ -365,6 +440,7 @@ Investment portfolio management across multiple asset classes.
 3. **Real Estate**: Properties
 4. **Savings**: Savings accounts, CDs
 5. **Bonds**: Government/corporate bonds
+6. **Metals**: Precious metals tracked as unit-based holdings
 
 ### Investment Features
 
@@ -373,6 +449,23 @@ Investment portfolio management across multiple asset classes.
 - Track cost basis
 - Calculate gains (realized/unrealized)
 - Price refresh from providers
+- Stocks, Crypto, Real Estate, and Savings page display amounts are normalized to app default currency using live `/api/info/exchange-rates` payload for totals and row currency amounts
+- Metals page reuses Stocks page behavior and inherits the same currency normalization path
+- Per-row and summary percentage metrics remain percentage-only (no currency conversion)
+
+### Net Worth View Highlights
+
+- Net Worth chart runs in daily mode with a series toggle (Total / Investments / Liquid) so users can focus on one line at a time.
+- For long histories, Net Worth keeps horizontal scroll + zoom controls and shows a `Latest` jump action when not at the newest range.
+- Net Worth values are fetched in the selected app currency (`/api/info/net-worth?currency=...`) and the daily breakdown table is virtualized for large histories.
+- Y-axis domain is recalculated for the selected series in the visible viewport so Total/Investments/Liquid toggles expose detailed variation rather than sharing a fixed global scale.
+
+### Performance View Highlights
+
+- Monthly heatmap uses relative monthly returns (%) derived from investment value performance adjusted for monthly net contributions/withdrawals.
+- Heatmap excludes liquid-cash effects and keeps month coverage from first investment month through current month.
+
+Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]
 
 ### Price Providers
 
@@ -401,6 +494,10 @@ Real-time market data search and quotes.
 - **Charts**: Historical price charts
 - **News**: Latest market news
 - **Analyst Ratings**: Buy/hold/sell consensus
+- **Date/time formatting consistency**: Chart tooltips and analyst/news date labels follow app date format + locale settings
+- **News image rendering fix**: backend CSP now permits remote HTTPS thumbnails, and market/portfolio news cards hide image fallback placeholders on thumbnail fetch failures
+
+Code links: [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.js]]
 
 ### Data Source
 
@@ -418,19 +515,39 @@ Track symbols without owning them.
 - View current prices
 - Price alerts (future)
 - Performance tracking
+- Date axis labels in chart dialog follow app date format
+- Target/current price and currency displays follow app number format + decimal settings
+- Net Worth x-axis month labels follow app language locale (`en-US` / `nl-NL`), while Performance month keys use app date format helpers
+- Runtime-safety hotfix: `formatDisplayCurrency` in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] is defined inside component scope so it closes over in-scope `locale` and `appSettings` (prevents runtime undefined-reference failures)
+
+Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
 
 ---
 
 ## Settings
 
-While not a separate view, settings are accessible via the sidebar/settings:
+While not a separate view, settings are accessible via the sidebar/settings dialog.
 
-### Categories
+### Tabs
 
-- **General**: Language, currency, date format
-- **Dashboard**: Exclusion scope, default views
-- **Categories**: Custom category management
-- **Workspace**: Multi-workspace settings
+- **General**: App-wide preferences (default currency, number/date format, decimal places, start of week, default page size, language)
+- **Dashboard**: Dashboard/statistics exclusions and exclusion scope
+- **App**: Setup wizard restart and app update controls
+- **Backup**: Backup/restore configuration (Electron)
+
+### Propagation Notes
+
+- **Currency + number format**: `defaultCurrency` and `numberFormat` now propagate across add-transaction defaults and major displays (dashboard, owes, planned payments, portfolio, statistics)
+- **Decimal places**: `showDecimalPlaces` is respected by statistics/custom category currency formatters, tax overview displays, suggested deductions, portfolio tax adjustments, and watchlist target/current price displays
+- **Dates + calendar week start**: `dateFormat` is used across shared date pickers and transaction/date-heavy pages, plus update release dates (notification + settings), investment transaction/maturity dates, exchange-rate timestamps, market lookup chart/news/analyst labels, recurring-detection labels, watchlist chart labels, and add-from-market default note date; `startOfWeek` is used by calendar pickers
+- **Pagination defaults**: `defaultPageSize` now drives Transactions, Recipients, and Recipient Insights load-more pagination
+- **Reset behavior**: `Reset all` now resets both general app settings and dashboard exclusions
+- **Strict date-format enforcement complete (frontend month labels)**: After the latest pass, no `toLocaleDateString(` remains under `apps/frontend/src`; month labels route through app helpers including `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)` in [[apps/frontend/src/components/shared/dateUtils.ts]]
+- **Final readability + enforcement pass**: Dense month x-axes in [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] and [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] enforce `interval="preserveStartEnd"` + `minTickGap={20}`; tooltip numeric fallback locale is sourced from `getCurrencyFormatDefaults().locale` in [[apps/frontend/src/utils/currency.ts]] via [[apps/frontend/src/components/ui/chart.tsx]]
+- **Grep verification snapshot**: no `toLocaleDateString(` or `toLocaleString(` in `apps/frontend/src`; no `form.currency || 'EUR'`; no persisted `defaultBankAccount` (removed — was unused)
+- **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]]
+
+Code links: [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]]
 
 ---
 

@@ -54,10 +54,21 @@ cp .env .env.local
 bun run docker:dev
 ```
 
-Migrations run automatically via `docker-entrypoint.sh` which:
+Startup flow runs automatically via `docker-entrypoint.sh`:
 1. Waits for PostgreSQL to be ready
-2. Runs Alembic migrations
-3. Starts the backend
+2. If `alembic_version` exists, runs Alembic migrations (plus compatibility check for long revision IDs)
+3. If `alembic_version` does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
+4. Starts the backend
+
+Bootstrap compatibility note: schema init version `20260324_2` includes startup idempotency guards so index/trigger creation only targets base tables in `public`, avoiding startup failures when compatibility relations (for example `investments`) are views in inheritance-based schemas ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+
+If you are testing clean-slate startup repeatedly, prefer:
+
+```bash
+bun run docker:clean:reset
+```
+
+This recreates the clean Postgres volume before boot.
 
 #### Option B: Local PostgreSQL
 

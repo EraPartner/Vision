@@ -1,7 +1,7 @@
 ---
 title: Backend Architecture
 description: Node.js backend architecture and diagrams
-date: 2026-03-19
+date: 2026-03-26
 tags: [architecture, backend, uml, plantuml]
 ---
 
@@ -115,6 +115,7 @@ package "Investment & Portfolio" {
     +date: date
     +amount: numeric(18,4)
     +units: numeric(18,8)
+    +fx_rate_to_eur: numeric(20,10)
   }
 
   class Watchlist {
@@ -170,6 +171,8 @@ Investment "1" *-- "*" PortfolioTransaction
 
 @enduml
 ```
+
+Source diagram: [[docs/diagrams/backend-api-layer.puml]]
 
 ## Repository Layer
 
@@ -459,24 +462,94 @@ entity "planned_transaction_executions" as pte {
   * execution_date : date
 }
 
-entity "investments" as investments {
+entity "investments_base" as investments_base {
   * id : serial <<PK>>
   * name : varchar(200)
-  symbol : varchar(20)
-  * asset_class : asset_class
   currency : varchar(10)
-  current_price : numeric(18,6)
   is_active : boolean
 }
 
-entity "portfolio_transactions" as pct {
+entity "stock_investments" as stock_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
+  current_price : numeric(18,6)
+}
+
+entity "etf_investments" as etf_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
+  current_price : numeric(18,6)
+}
+
+entity "crypto_investments" as crypto_investments {
+  * id : integer <<PK>>
+  symbol : varchar(50)
+  current_price : numeric(18,6)
+}
+
+entity "real_estate_investments" as real_estate_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  location : varchar(300)
+  municipality : varchar(200)
+  cadastral_income : numeric(12,2)
+  municipality_tax_rate : numeric(8,4)
+}
+
+entity "savings_investments" as savings_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  interest_rate : numeric(8,4)
+}
+
+entity "bond_investments" as bond_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  interest_rate : numeric(8,4)
+  maturity_date : date
+}
+
+entity "portfolio_transactions_base" as portfolio_transactions_base {
   * id : serial <<PK>>
-  * investment_id : integer <<FK>>
+  * investment_id : integer
   * type : portfolio_txn_type
   * date : date
   * amount : numeric(18,4)
-  units : numeric(18,8)
   currency : varchar(10)
+  fx_rate_to_eur : numeric(20,10)
+}
+
+entity "stock_transactions" as stock_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+}
+
+entity "etf_transactions" as etf_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+}
+
+entity "crypto_transactions" as crypto_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+}
+
+entity "real_estate_transactions" as real_estate_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+}
+
+entity "savings_transactions" as savings_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+}
+
+entity "bond_transactions" as bond_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
 }
 
 entity "watchlist" as watchlist {
@@ -506,8 +579,26 @@ pt }|---|| recipients
 pt }|---|| categories
 pte }|--|| pt
 pte }|--|| transactions
-investments }|--|| pct
-pct }|--|| investments
+investments_base ||--|| stock_investments : inherits
+investments_base ||--|| etf_investments : inherits
+investments_base ||--|| crypto_investments : inherits
+investments_base ||--|| real_estate_investments : inherits
+investments_base ||--|| savings_investments : inherits
+investments_base ||--|| bond_investments : inherits
+
+portfolio_transactions_base ||--|| stock_transactions : inherits
+portfolio_transactions_base ||--|| etf_transactions : inherits
+portfolio_transactions_base ||--|| crypto_transactions : inherits
+portfolio_transactions_base ||--|| real_estate_transactions : inherits
+portfolio_transactions_base ||--|| savings_transactions : inherits
+portfolio_transactions_base ||--|| bond_transactions : inherits
+
+stock_investments ||--o{ stock_transactions
+etf_investments ||--o{ etf_transactions
+crypto_investments ||--o{ crypto_transactions
+real_estate_investments ||--o{ real_estate_transactions
+savings_investments ||--o{ savings_transactions
+bond_investments ||--o{ bond_transactions
 
 @enduml
 ```
@@ -740,6 +831,9 @@ TransactionPage --> User : display
 
 Automatic price updates for investments from external providers.
 
+Migration compatibility note:
+- `0017_investment_custom_provider_history` updates inheritance compatibility for custom-provider latest/history fields and metals view/trigger wiring, while keeping history fetch as on-demand external data (no DB history persistence) ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+
 ```plantuml
 @startuml
 !theme plain
@@ -780,6 +874,8 @@ end
 
 @enduml
 ```
+
+Source diagram: [[docs/diagrams/price-provider-flow.puml]]
 
 ## Recurring Detection Flow
 

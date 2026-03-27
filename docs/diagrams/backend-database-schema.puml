@@ -133,20 +133,11 @@ entity "split_payments" as split_payments {
   created_at : timestamptz
 }
 
-' Investment Tables
-entity "investments" as investments {
+' Investment Tables (PostgreSQL inheritance)
+entity "investments_base" as investments_base {
   * id : serial <<PK>>
   * name : varchar(200)
-  symbol : varchar(20)
-  * asset_class : asset_class
   * currency : varchar(10)
-  current_price : numeric(18,6)
-  interest_rate : numeric(8,4)
-  maturity_date : date
-  location : varchar(300)
-  municipality : varchar(200)
-  cadastral_income : numeric(12,2)
-  municipality_tax_rate : numeric(8,4)
   notes : text
   is_active : boolean
   * price_provider : price_provider
@@ -157,23 +148,98 @@ entity "investments" as investments {
   updated_at : timestamptz
 }
 
-entity "portfolio_transactions" as portfolio_transactions {
+entity "stock_investments" as stock_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
+  current_price : numeric(18,6)
+}
+
+entity "etf_investments" as etf_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
+  current_price : numeric(18,6)
+}
+
+entity "crypto_investments" as crypto_investments {
+  * id : integer <<PK>>
+  symbol : varchar(50)
+  current_price : numeric(18,6)
+}
+
+entity "real_estate_investments" as real_estate_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  location : varchar(300)
+  municipality : varchar(200)
+  cadastral_income : numeric(12,2)
+  municipality_tax_rate : numeric(8,4)
+}
+
+entity "savings_investments" as savings_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  interest_rate : numeric(8,4)
+}
+
+entity "bond_investments" as bond_investments {
+  * id : integer <<PK>>
+  current_price : numeric(18,6)
+  interest_rate : numeric(8,4)
+  maturity_date : date
+}
+
+entity "portfolio_transactions_base" as portfolio_transactions_base {
   * id : serial <<PK>>
-  * investment_id : integer <<FK>>
+  * investment_id : integer
   * type : portfolio_txn_type
   * date : date
   * amount : numeric(18,4)
-  units : numeric(18,8)
-  price_per_unit : numeric(18,6)
   fees : numeric(18,4)
   taxes : numeric(18,4)
   * currency : varchar(10)
+  fx_rate_to_eur : numeric(20,10)
   note : text
   * is_recurring : boolean
   recurrence_interval : recurrence_interval
   recurrence_end_date : date
   * created_at : timestamptz
   * updated_at : timestamptz
+}
+
+entity "stock_transactions" as stock_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
+}
+
+entity "etf_transactions" as etf_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
+}
+
+entity "crypto_transactions" as crypto_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
+}
+
+entity "real_estate_transactions" as real_estate_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+}
+
+entity "savings_transactions" as savings_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+}
+
+entity "bond_transactions" as bond_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
 }
 
 entity "watchlist" as watchlist {
@@ -327,7 +393,26 @@ pte }o--|| planned_transactions
 pte }o--|| transactions
 ptls }o--|| planned_transactions
 
-investments ||--o{ portfolio_transactions
+investments_base ||--|| stock_investments : inherits
+investments_base ||--|| etf_investments : inherits
+investments_base ||--|| crypto_investments : inherits
+investments_base ||--|| real_estate_investments : inherits
+investments_base ||--|| savings_investments : inherits
+investments_base ||--|| bond_investments : inherits
+
+portfolio_transactions_base ||--|| stock_transactions : inherits
+portfolio_transactions_base ||--|| etf_transactions : inherits
+portfolio_transactions_base ||--|| crypto_transactions : inherits
+portfolio_transactions_base ||--|| real_estate_transactions : inherits
+portfolio_transactions_base ||--|| savings_transactions : inherits
+portfolio_transactions_base ||--|| bond_transactions : inherits
+
+stock_investments ||--o{ stock_transactions
+etf_investments ||--o{ etf_transactions
+crypto_investments ||--o{ crypto_transactions
+real_estate_investments ||--o{ real_estate_transactions
+savings_investments ||--o{ savings_transactions
+bond_investments ||--o{ bond_transactions
 
 transaction_splits }o--|| transactions
 transaction_splits }o--|| recipients

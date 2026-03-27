@@ -2,7 +2,7 @@
 title: UI Components
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-23
 tags: [components, ui, radix, shadcn]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS
 related_code: ["apps/frontend/src/components/ui"]
@@ -387,3 +387,11 @@ All components follow WAI-ARIA patterns via Radix primitives:
 - [[docs/features/views]] - Views using these components
 - [Radix UI Docs](https://radix-ui.com)
 - [shadcn/ui](https://ui.shadcn.com)
+
+## Chart Tooltip Notes
+
+Shared chart tooltip numeric rendering is hardened to be zero-safe and robust for mixed numeric payloads (including `0`, undefined-like values, and formatted values).
+
+Numeric fallback formatting now uses `getCurrencyFormatDefaults().locale` from [[apps/frontend/src/utils/currency.ts]] (instead of bare `Intl.NumberFormat()` locale defaults) for settings-consistent locale output.
+
+Code links: [[apps/frontend/src/components/ui/chart.tsx]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/pages/StatisticsPage.tsx]]

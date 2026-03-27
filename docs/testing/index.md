@@ -1,7 +1,7 @@
 ---
 title: Testing Documentation Index
 type: testing-index
-date: 2025-03-18
+date: 2026-03-23
 ---
 
 # Testing Documentation
@@ -35,6 +35,8 @@ SORT title ASC
 - Currency conversion
 - Bank adapters
 - API routes
+- Split route validation and CSV export responses
+- Investment repository inheritance compatibility tests
 - React components
 
 ## Tools

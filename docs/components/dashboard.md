@@ -2,7 +2,7 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-23
 tags: [components, dashboard, charts, widgets]
 description: Dashboard-specific components for financial overview and visualization
 related_code: ["apps/frontend/src/components/dashboard"]
@@ -182,6 +182,17 @@ interface CashFlowComparisonChartProps {
 - Percentage change indicators
 - Color-coded (green for improvement)
 
+### Date Label Formatting
+
+- Semantic date-label UX pass adds shared month helpers in [[apps/frontend/src/components/shared/dateUtils.ts]]:
+  - `formatMonthYearWithAppSettings(date, appDateFormat, locale?)`
+  - `formatMonthLabelWithLocale(date, locale?, width?)`
+- [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] now uses the month-year helper for chart labels (avoids overly detailed full dates while respecting settings)
+- [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]] x-axis readability for dense month labels is reinforced with `interval="preserveStartEnd"` and `minTickGap={20}`
+- [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]] and [[apps/frontend/src/pages/DashboardPage.tsx]] now use the month-year helper for cashflow month descriptions
+
+Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+
 ---
 
 ## BankBalancesWidget
@@ -220,6 +231,9 @@ interface BankBalancesWidgetProps {
 - Transaction count per account
 - Date range of transactions
 - Currency formatting
+- Integer transaction counts use app locale formatter for consistent separators/grouping
+
+Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
 
 ---
 

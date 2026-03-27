@@ -90,12 +90,14 @@ package "Routes" {
     +GET / : list investments
     +GET /providers : list price providers
     +POST /refresh-prices : bulk refresh prices
+    +GET /:id/price-history : provider-backed historical prices
     +GET /:id : get investment
     +POST / : create investment
     +PATCH /:id : update investment
     +DELETE /:id : delete investment
     +GET /:id/transactions : list portfolio transactions
     +POST /:id/transactions : create portfolio transaction
+    +PATCH /transactions/:txnId : update portfolio transaction
     +GET /:id/summary : get investment summary
     +DELETE /transactions/:txnId : delete portfolio transaction
   }
@@ -136,6 +138,8 @@ package "Routes" {
   class SplitsRouter {
     +GET /owed : get owed summary
     +GET /owed/:id : get owed by recipient
+    +GET /owed/:id/export/csv : export owed CSV by recipient
+    +POST /owed/:id/settle-all : settle all splits by recipient
     +GET /transaction/:id : get splits for transaction
     +POST / : create split
     +POST /batch : create batch splits
@@ -180,6 +184,12 @@ package "Routes" {
     +POST /update/apply-and-restart : apply and restart
   }
 }
+
+note right of InvestmentsRouter
+  Compatibility for custom-provider latest/history
+  fields + metals view updates is applied by
+  migration 0017_investment_custom_provider_history.
+end note
 
 package "Repositories" {
   class TransactionRepository as TR

@@ -2,10 +2,10 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2025-03-18
+date: 2026-03-26
 tags: [feature, planned, recurring, bills]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
 # Planned Transactions
@@ -79,6 +79,25 @@ Special handling for loans with amortization:
 
 ## Features
 
+### Form UX and Date Handling
+
+Planned payment forms now use shared input components for consistency across dialogs:
+
+- `DatePicker` (Popover + Calendar) for due date and optional end date
+- `RecipientCombobox` for recipient selection
+- `CategoryCombobox` for category selection
+- Shared local-date helpers in `dateUtils` (`parseLocalDateFromYmd`, `toYmd`) to avoid timezone shifts when reading/writing `YYYY-MM-DD`
+
+This keeps planned-payment date selection aligned with other forms and avoids native date-input overlay/stacking issues in modal contexts.
+
+Planned payment form currency defaults are now sourced from app settings consistently:
+
+- New planned payment form defaults `currency` to `appSettings.defaultCurrency`
+- Form reset after create/edit reuses `appSettings.defaultCurrency`
+- Planned payment API mapping fallback currency uses configured defaults rather than hardcoded values
+
+Code links: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+
 ### Execution Tracking
 
 Track when planned transactions become real transactions:
@@ -95,6 +114,25 @@ Vision can alert users about upcoming payments:
 - Upcoming this week
 - Overdue payments
 - Monthly bill summary
+
+The top-level upcoming-planned-payments notification is dismissible with persistence:
+
+- Dismissal state is stored in browser local storage by planned payment ID
+- Dismissing an item hides it on subsequent page loads/sessions
+- Dismissing the banner hides all currently visible upcoming planned payments
+
+### Recurring Detection Dismissals
+
+Dismissals in the recurring-pattern detection panel are persistent and do not reappear after reload:
+
+- Uses setting key `dismissed_recurring_patterns`
+- Persists to backend settings (`/api/settings/:key`) so state survives sessions/devices
+- Keeps a localStorage fallback (`dismissed_recurring_patterns`) when settings API is unavailable
+- Users can reset these dismissals from Settings → App via “Reset dismissed recurring suggestions”
+- Pattern date labels in `RecurringDetectionPanel` follow app `dateFormat` + locale settings
+- Backend settings persistence now stores dismissal arrays as explicit JSONB (`JSON.stringify` + `::jsonb`) to prevent invalid JSON writes when dismissing suggestions
+
+Code links: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/node-backend/src/repositories/settingsRepository.js]]
 
 ---
 

@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-03-18
-tags: [api, investments, portfolio, stocks, crypto]
+date: 2026-03-27
+tags: [api, investments, portfolio, stocks, crypto, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]]
 ---
 
@@ -13,7 +13,9 @@ related_code: [[apps/node-backend/src/routes/investments.js]]
 
 ## Overview
 
-The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, real estate, savings, and bonds. It supports live price feeds from multiple providers.
+The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, metals, real estate, savings, and bonds. It supports live price feeds from multiple providers.
+
+The storage layer uses PostgreSQL inheritance (`investments_base` + asset-specific child tables, and `portfolio_transactions_base` + transaction child tables) while preserving API compatibility via legacy views (`investments`, `portfolio_transactions`).
 
 ## Endpoints
 
@@ -30,7 +32,7 @@ Retrieve a list of investments.
 | asset_class | string | null | Filter by asset class |
 | active | boolean | true | Show active/inactive |
 
-**Asset Class Values:** stock, etf, crypto, real_estate, savings, bond
+**Asset Class Values:** stock, etf, crypto, metals, real_estate, savings, bond
 
 **Response:**
 ```json
@@ -54,6 +56,12 @@ Retrieve a list of investments.
       "price_provider": "yahoo",
       "price_provider_id": "AAPL",
       "price_provider_url": null,
+      "price_provider_latest_url": null,
+      "price_provider_latest_path": null,
+      "price_provider_history_url": null,
+      "price_provider_history_path": null,
+      "price_provider_history_ts_path": null,
+      "price_provider_history_price_path": null,
       "price_updated_at": "2026-03-18T10:00:00Z",
       "created_at": "2026-01-01T00:00:00Z",
       "updated_at": "2026-03-18T10:00:00Z"
@@ -73,7 +81,39 @@ Get supported price providers.
 **Response:**
 ```json
 {
-  "providers": ["manual", "coingecko", "yahoo", "kraken", "custom"]
+  "providers": [
+    { "key": "manual", "name": "Manual", "description": "Set price manually" },
+    { "key": "coingecko", "name": "CoinGecko", "description": "Free crypto prices (use coin ID, e.g. \"bitcoin\")" },
+    { "key": "yahoo", "name": "Yahoo Finance", "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")" },
+    { "key": "kraken", "name": "Kraken", "description": "Crypto pairs (use pair, e.g. \"XBTUSD\")" },
+    { "key": "custom", "name": "Custom JSON", "description": "Any JSON endpoint with a configurable price path" }
+  ]
+}
+```
+
+### GET /api/investments/:id/price-history
+
+Fetch historical price points for an investment from its provider-specific history source.
+
+Current support:
+- `custom` provider: reads remote JSON directly (no DB persistence), using configurable JSON paths.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| from_ms | integer | Optional lower bound (unix timestamp ms) |
+| to_ms | integer | Optional upper bound (unix timestamp ms) |
+
+**Response:**
+```json
+{
+  "investment_id": 42,
+  "provider": "custom",
+  "points": [
+    { "timestampMs": 1774461600000, "price": 716.75 },
+    { "timestampMs": 1774462500000, "price": 717.0 }
+  ]
 }
 ```
 
@@ -81,17 +121,40 @@ Get supported price providers.
 
 Refresh prices from live providers for all investments.
 
+Fallback chain for each investment price:
+1. Live quote (`live`)
+2. Previous close (`close`, when provider live price is missing/0)
+3. Latest historical close from Yahoo chart data (`close`, when quote fields are unavailable)
+4. Stored `current_price` in DB (`cached`)
+
+Additional refresh behavior:
+- Yahoo refresh accepts either `price_provider_id` **or** investment `symbol` (symbol fallback), matching Market Lookup symbol handling.
+- Price writes are persisted through inheritance tables (`investments_base` + asset child table) to avoid direct updates on the non-updatable `investments` compatibility view.
+
+Compatibility safeguard:
+- A DB migration adds an `INSTEAD OF UPDATE` trigger on the `investments` view, so legacy `UPDATE investments ...` statements are redirected to inheritance tables and no longer error.
+- Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- Startup schema bootstrap compatibility (schema version `20260324_2`) now guards `safeIndex`, `safeGinIndex`, and `safeTrigger` to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[apps/node-backend/src/database/schemaInit.js]]).
+
 **Response:**
 ```json
 {
-  "updated": 10,
+  "updated": 9,
   "total": 15,
   "prices": {
     "1": 185.50,
     "2": 45000.00
+  },
+  "priceSources": {
+    "1": "close",
+    "2": "live",
+    "3": "cached"
   }
 }
 ```
+
+- `total`: investments considered for refresh (with live providers)
+- `updated`: investments whose DB row was actively updated this run
 
 ### POST /api/investments
 
@@ -107,11 +170,36 @@ Create a new investment.
   "current_price": 185.50,
   "price_provider": "yahoo",
   "price_provider_id": "AAPL",
+  "price_provider_latest_url": "https://example.com/latest",
+  "price_provider_latest_path": "data.price",
+  "price_provider_history_url": "https://example.com/history",
+  "price_provider_history_path": "points",
+  "price_provider_history_ts_path": "timestamp_ms",
+  "price_provider_history_price_path": "price",
   "notes": "Tech stock"
 }
 ```
 
+Custom provider path configuration fields:
+
+- `price_provider_latest_url`: endpoint used to resolve current/refresh price.
+- `price_provider_latest_path`: JSON path to latest price value.
+- `price_provider_history_url`: endpoint used to resolve historical chart points.
+- `price_provider_history_path`: JSON path to array of history rows.
+- `price_provider_history_ts_path`: JSON path (relative to each history row) for timestamp in ms.
+- `price_provider_history_price_path`: JSON path (relative to each history row) for price.
+
+Fallback compatibility:
+- legacy `price_provider_url` and `price_provider_id` are still read for custom latest-price resolution.
+- legacy-schema create compatibility: when DB relation `investments` lacks new custom-provider columns, create falls back to legacy insert fields and maps `price_provider_latest_path` → `price_provider_id`, `price_provider_latest_url` → `price_provider_url`.
+- recommended schema state for full custom-provider latest/history compatibility is migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+
 **Required Fields:** name, asset_class
+
+Create-path compatibility:
+- `create()` auto-detects inheritance schema by checking `investments_base`; when present, it inserts into the asset-specific child table (`stock_investments`, `etf_investments`, `crypto_investments`, `metals_investments`, `real_estate_investments`, `savings_investments`, `bond_investments`) and then reads the created row from the `investments` compatibility view.
+- In legacy schema mode, `create()` still performs `INSERT INTO investments ...`; if that path fails with `cannot insert into view "investments"`, it falls back to inheritance-table insert and caches inheritance mode for subsequent creates ([[apps/node-backend/src/repositories/investmentRepository.js]]).
+- In inheritance mode, if child-table insert fails with duplicate-id primary key violation (`23505`, `<child_table>_pkey`, `Key (id)`), `create()` self-heals by resyncing the `investments_base` sequence (`setval(..., COALESCE(MAX(id), 0) + 1, false)`) and retries the insert once ([[apps/node-backend/src/repositories/investmentRepository.js]]).
 
 ### GET /api/investments/:id
 
@@ -121,9 +209,21 @@ Get a single investment by ID.
 
 Update an investment.
 
+Validation and mutability rules:
+- `asset_class` is immutable after creation; attempts to change it return `400` with `VALIDATION_ERROR`.
+- `symbol` (ticker) is editable for unit-based investments but must be non-empty when provided and globally unique (case-insensitive).
+- Route-level update now maps repository validation failures to `400` instead of generic `500` for business-rule violations.
+- Existing DB `updated_at` triggers keep timestamp-only edit history (no previous-value history required).
+
+Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+
 ### DELETE /api/investments/:id
 
 Delete an investment (hard delete).
+
+Delete-path compatibility:
+- `hardDelete()` now detects inheritance schema and deletes through `investments_base` when needed.
+- If legacy `DELETE FROM investments ...` fails with a non-updatable view error, the repository falls back to base-table delete and caches inheritance mode for subsequent deletes ([[apps/node-backend/src/repositories/investmentRepository.js]]).
 
 ### GET /api/investments/:id/transactions
 
@@ -137,7 +237,7 @@ Get portfolio transactions for an investment.
 | limit | integer | 200 | Max items |
 | offset | integer | 0 | Items to skip |
 
-**Transaction Types:** buy, sell, dividend, fee, tax, interest, rent_income, appreciation
+**Transaction Types:** buy, sell, gift, dividend, fee, tax, interest, rent_income, appreciation
 
 ### POST /api/investments/:id/transactions
 
@@ -153,15 +253,61 @@ Create a portfolio transaction.
   "price_per_unit": 185.50,
   "fees": 5.00,
   "currency": "USD",
+  "fx_rate_to_eur": 0.9200000000,
   "note": "Initial purchase"
 }
 ```
 
-**Required Fields:** type, date, amount
+**Required Fields:** type, date (additional type-specific validation below)
+
+Unit-based buy/sell behavior (asset classes: stock, etf, crypto, metals):
+- Request may include any 2 of `amount`, `units`, `price_per_unit`; backend computes the missing third value.
+- If all 3 are provided and inconsistent, request is rejected with `400`.
+- Precision policy during normalization/storage: `amount` (4 decimals), `units` (8 decimals), `price_per_unit` (6 decimals).
+- Compatibility tolerance is applied for all-3-field consistency checks to avoid false rejections from client-side rounding differences.
+- Oversell protection: `sell` transactions are rejected with `400` / `VALIDATION_ERROR` when `units` exceed net units held on the transaction date.
+
+Dividend behavior:
+- `dividend` transactions support optional `fees` and `taxes`.
+
+Gift behavior (unit-based assets):
+- New `gift` transaction type requires `units`.
+- `amount` defaults to `0` when omitted (optional basis amount can still be provided).
+- `fees` and `taxes` are forced to `0`.
+
+Create-path compatibility:
+- `create()` now supports inheritance schema for portfolio transactions; if `portfolio_transactions` is a non-updatable compatibility view, it inserts into the asset-specific child transaction table based on the investment `asset_class`.
+- Before inherited child-table insert, `create()` proactively resyncs the `portfolio_transactions_base` sequence to reduce sequence drift failures; if insert still hits duplicate id (`23505`), it self-heals by resyncing again and retries once ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
+- Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]]).
+- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/frontend/src/types/api.ts]]).
+- Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
+- Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
+- If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
+
+### PATCH /api/investments/transactions/:txnId
+
+Update a portfolio transaction by transaction ID.
+
+Update endpoint notes:
+- Route is available at `PATCH /api/investments/transactions/:txnId` ([[apps/node-backend/src/routes/investments.js]]).
+- Repository update logic keeps inheritance compatibility fallback behavior for non-updatable `portfolio_transactions` views ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Transaction `type` is immutable on edit; attempts to change it return `400` with `VALIDATION_ERROR`.
+- Unit-based buy/sell updates enforce the same 2-of-3 pricing rule as create: when changing pricing fields, client must send at least 2 of `amount`, `units`, `price_per_unit`, and backend computes the missing value.
+- If all 3 pricing fields are sent on update and inconsistent, request is rejected with `400` (with the same precision normalization and compatibility tolerance handling as create).
+- Optional `fx_rate_to_eur` is supported on update payloads as well, including UI edit flow ([[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.
+
+Update-path compatibility:
+- For repository-level transaction update paths (PATCH), if `UPDATE portfolio_transactions ...` fails because `portfolio_transactions` is a non-updatable compatibility view, the repository falls back to updating `portfolio_transactions_base` plus the asset-specific child transaction table ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Startup schema-init safety: bootstrap `fx_rate_to_eur` column changes now run only when `portfolio_transactions` is a table/partitioned table (`relkind in ('r','p')`), so app startup no longer attempts `ALTER TABLE` on a compatibility view ([[apps/node-backend/src/database/schemaInit.js]]).
 
 ### DELETE /api/investments/transactions/:txnId
 
 Delete a portfolio transaction.
+
+Delete-path compatibility:
+- `hardDelete()` supports inheritance schema by falling back from `portfolio_transactions` view delete to `portfolio_transactions_base` delete when needed ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 
 ### GET /api/investments/:id/summary
 
@@ -187,7 +333,7 @@ Get investment summary with holdings breakdown.
 |----------|---------------|-------------|
 | manual | all | Manual price entry |
 | coingecko | crypto | CoinGecko API |
-| yahoo | stock, etf | Yahoo Finance |
+| yahoo | stock, etf, metals | Yahoo Finance |
 | kraken | crypto | Kraken exchange |
 | custom | all | Custom API |
 
@@ -202,3 +348,5 @@ For real estate investments:
 
 - [[docs/api/watchlist|Watchlist API]]
 - [[docs/adr/002-database-schema|Database Schema]]
+
+Metals implementation code links: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]

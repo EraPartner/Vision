@@ -2,7 +2,7 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-27
 tags: [components, portfolio, investments]
 description: Components for investment portfolio management
 related_code: ["apps/frontend/src/components/portfolio"]
@@ -10,7 +10,7 @@ related_code: ["apps/frontend/src/components/portfolio"]
 
 # Portfolio Components
 
-Components for managing investment portfolios, including stocks, crypto, real estate, and savings.
+Components for managing investment portfolios, including stocks, crypto, metals, real estate, and savings.
 
 ## Component List
 
@@ -18,6 +18,8 @@ Components for managing investment portfolios, including stocks, crypto, real es
 |-----------|-------------|------|
 | [[docs/components/add-investment-dialog|AddInvestmentDialog]] | Add new investment | `AddInvestmentDialog.tsx` |
 | [[docs/components/add-portfolio-txn-dialog|AddPortfolioTxnDialog]] | Record buy/sell transactions | `AddPortfolioTxnDialog.tsx` |
+| EditInvestmentDialog | Edit existing investment details | `EditInvestmentDialog.tsx` |
+| EditPortfolioTxnDialog | Edit existing portfolio transaction | `EditPortfolioTxnDialog.tsx` |
 | [[docs/components/investment-detail-dialog|InvestmentDetailDialog]] | View investment details | `InvestmentDetailDialog.tsx` |
 | [[docs/components/add-to-watchlist-dialog|AddToWatchlistDialog]] | Add symbol to watchlist | `AddToWatchlistDialog.tsx` |
 | [[docs/components/portfolio-news-feed|PortfolioNewsFeed]] | Market news for holdings | `PortfolioNewsFeed.tsx` |
@@ -56,6 +58,7 @@ interface AddInvestmentDialogProps {
 ```
 stocks      - Individual stocks, ETFs
 crypto      - Cryptocurrencies
+metals      - Precious metals (unit-based holdings)
 real_estate - Property investments
 savings     - Savings accounts, CDs
 bonds       - Government/corporate bonds
@@ -70,6 +73,29 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
   <Button>Add Investment</Button>
 </AddInvestmentDialog>
 ```
+
+### Settings Propagation Notes
+
+- Default form `currency` uses `appSettings.defaultCurrency`
+- Reset/cancel path restores `currency` to `appSettings.defaultCurrency`
+- Submit payload and initial buy-transaction currency fallback now use `defaultCurrency` (replacing fixed EUR fallback)
+
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+
+### Custom Provider Advanced Fields
+
+When `price_provider = custom`, the add/edit dialogs support advanced provider configuration:
+
+- `price_provider_latest_url`: URL for latest quote payload
+- `price_provider_latest_path`: JSON path to latest quote price
+- `price_provider_history_url`: URL for historical quote payload
+- `price_provider_history_path`: JSON path to array of history points
+- `price_provider_history_ts_path`: JSON path (per point) to timestamp (ms)
+- `price_provider_history_price_path`: JSON path (per point) to price
+
+Compatibility note:
+- legacy `price_provider_url` / `price_provider_id` remain accepted by backend and are still mapped in UI payloads.
+- full compatibility for advanced latest/history fields in inheritance + legacy-schema bridge paths is provided by migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 
 ---
 
@@ -114,6 +140,41 @@ Shows detailed information about an investment.
 - Transaction history
 - Price chart
 - Notes
+- Transaction dates are formatted with app date settings
+- Dedicated edit actions for both investment metadata and individual transactions
+
+Code links: [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+
+### EditInvestmentDialog
+
+Dedicated modal used from investment details/list contexts to update investment metadata without changing asset class.
+
+Editable fields:
+- name
+- symbol (unit-based assets)
+- currency
+- price provider + provider identifiers
+
+Validation highlights:
+- symbol required for unit-based assets in UI
+- backend enforces non-empty + globally unique symbol and immutable `asset_class`
+
+Code link: [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]]
+
+### EditPortfolioTxnDialog
+
+Dedicated modal used from transaction rows to edit existing portfolio transactions.
+
+Behavior:
+- transaction type is displayed but immutable
+- buy/sell keeps two-of-three amount/units/price validation and auto-derivation
+- supports recurring fields and note updates
+
+Code link: [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]]
+
+### Settings Propagation Notes
+
+- Uses app date format for transaction date labels displayed in the dialog
 
 ### Usage
 
@@ -152,14 +213,19 @@ const symbols = ["AAPL", "BTC", "ETH"];
 
 - Fetches news from Yahoo Finance
 - Filters by portfolio symbols
-- Shows thumbnails when available
+- Renders thumbnails via shared `RemoteNewsImage` with URL sanitization
+- Uses hidden fallback styling on image load failure to avoid placeholder icon boxes in card grids
 - Links to full articles
+
+Code links: [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
 
 ---
 
 ## AddToWatchlistDialog
 
 Add a symbol to the watchlist.
+
+Supports metals as a watchlist asset-class option.
 
 ### Props
 
@@ -195,6 +261,12 @@ import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialo
 
 Manage tax adjustments for investment holdings.
 
+### Settings Propagation Notes
+
+- Currency amounts in adjustments follow app decimal precision (`appSettings.showDecimalPlaces`)
+
+Code links: [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+
 ### Usage
 
 ```tsx
@@ -204,6 +276,25 @@ import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioT
   <Button>Tax Adjustments</Button>
 </PortfolioTaxAdjustmentsDialog>
 ```
+
+---
+
+## AddInvestmentFromMarketDialog
+
+Adds a new investment directly from market lookup results.
+
+### Settings Propagation Notes
+
+- Default generated note date now follows app date format + locale
+- Transaction date form input remains persisted as `YYYY-MM-DD` for data consistency
+
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+
+### Metals Support Notes
+
+- Unit-based behavior now includes metals for add transaction, detail valuation, and performance/overview calculations.
+
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]]
 
 ---
 
@@ -223,3 +314,11 @@ import { PortfolioTaxAdjustmentsDialog } from "@/components/portfolio/PortfolioT
 - [[docs/api/investments]] - Investments API
 - [[docs/api/watchlist]] - Watchlist API
 - [[docs/features/portfolio]] - Portfolio Features
+
+## Additional Page Links
+
+- [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] - Savings maturity date display uses app date format
+- [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]] - Exchange-rate fetched-at/description timestamps use app date-time format
+- [[apps/frontend/src/pages/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
+- [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] - Month labels use app-language locale (`en-US`/`nl-NL`), while chart/table values use app settings; page includes Total/Investments/Liquid series toggle, daily-only timeline with per-day hover values, horizontal scroll/zoom controls, and a virtualized daily breakdown table
+- [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Heatmap headers use `formatMonthLabelWithLocale(date, locale?, width?)`; chart x-axis month keys use `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` from [[apps/frontend/src/components/shared/dateUtils.ts]], with dense-month readability enforced via `interval="preserveStartEnd"` and `minTickGap={20}`

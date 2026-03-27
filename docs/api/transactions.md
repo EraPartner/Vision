@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-03-18
+date: 2026-03-25
 tags: [api, transactions, finance]
-related_code: [[apps/node-backend/src/routes/transactions.js]]
+related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
 ---
 
 # Transactions API
@@ -27,6 +27,7 @@ Retrieve a list of transactions with filtering and pagination.
 |-----------|------|---------|-------------|
 | limit | integer | 50 | Max items to return (max 5000) |
 | offset | integer | 0 | Number of items to skip |
+| transaction_id | integer | null | Filter by exact transaction ID |
 | start_date | string | null | Filter by start date (YYYY-MM-DD) |
 | end_date | string | null | Filter by end date (YYYY-MM-DD) |
 | bank_account | string | null | Filter by bank account |
@@ -37,8 +38,13 @@ Retrieve a list of transactions with filtering and pagination.
 | active | boolean | true | Show active/inactive |
 | search | string | null | Search in memo/comment |
 | normalize_to_eur | boolean | false | Convert amounts to EUR |
+| target_currency | string | null | Target currency used when normalize_to_eur=true (defaults to EUR) |
 | sort_by | string | null | Sort field |
 | sort_dir | string | null | Sort direction (asc/desc) |
+
+Notes:
+- `target_currency` is only applied when `normalize_to_eur=true`.
+- If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
 
 **Response:**
 ```json

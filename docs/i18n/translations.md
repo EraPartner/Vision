@@ -2,7 +2,7 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2025-03-18
+date: 2026-03-24
 tags: [i18n, translations, localization, internationalization]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
@@ -152,6 +152,21 @@ Run the build to generate TypeScript files:
 ```bash
 bun run build
 ```
+
+### Recent keys added in this task
+
+- `addInv.desc.metals`
+- `addWatchlist.metals`
+- `metals.title`
+- `metals.noMetals`
+- `metals.noMetalsDesc`
+- `nav.metals`
+- `portfolio.assetClass.metals`
+- `portfolio.assetGroup.metals`
+
+These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts`.
+
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
 ### Step 3: Use in Component
 
