@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import type {
+  Investment,
   InvestmentCreate, InvestmentUpdate,
   PortfolioTransaction, PortfolioTransactionCreate,
   AssetClass,
@@ -9,6 +10,8 @@ import type {
 import type { InvestmentSummary } from '@/types/portfolio';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+
+const EMPTY_INVESTMENTS: Investment[] = [];
 
 // ---- queries ----
 
@@ -22,13 +25,21 @@ function useInvestmentsQuery() {
 
 function usePortfolioTransactionsQuery(investmentIds: number[]) {
   return useQuery({
-    queryKey: ['portfolio-transactions', investmentIds],
+    queryKey: ['portfolio-transactions', investmentIds.join(',')],
     queryFn: async () => {
       if (investmentIds.length === 0) return [];
-      const results = await Promise.all(
-        investmentIds.map((id) => apiClient.getPortfolioTransactions(id, { limit: 1000 }))
-      );
-      return results.flatMap((r) => r.items);
+      try {
+        const bulk = await apiClient.getPortfolioTransactionsBulk({
+          investment_ids: investmentIds.join(','),
+          per_investment_limit: 1000,
+        });
+        return bulk.items;
+      } catch {
+        const results = await Promise.all(
+          investmentIds.map((id) => apiClient.getPortfolioTransactions(id, { limit: 1000 }))
+        );
+        return results.flatMap((r) => r.items);
+      }
     },
     enabled: investmentIds.length > 0,
     staleTime: 30_000,
@@ -149,8 +160,8 @@ export function usePortfolio() {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
   const { data: invData } = useInvestmentsQuery();
-  const investments = invData?.items ?? [];
-  const investmentIds = useMemo(() => investments.map((i) => i.id), [investments]);
+  const investments = invData?.items ?? EMPTY_INVESTMENTS;
+  const investmentIds = useMemo(() => investments.map((i) => i.id).sort((a, b) => a - b), [investments]);
   const { data: transactions = [] } = usePortfolioTransactionsQuery(investmentIds);
 
   const invalidateAll = () => {
@@ -263,25 +274,63 @@ export function usePortfolio() {
   // ---- computed summaries ----
 
   const summaries: InvestmentSummary[] = useMemo(() => {
+    const txnsByInvestment = new Map<number, PortfolioTransaction[]>();
+    for (const txn of transactions) {
+      const existing = txnsByInvestment.get(txn.investment_id);
+      if (existing) existing.push(txn);
+      else txnsByInvestment.set(txn.investment_id, [txn]);
+    }
+
     return investments.map((inv) => {
-      const txns = transactions.filter((t) => t.investment_id === inv.id);
+      const txns = txnsByInvestment.get(inv.id) ?? [];
       const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(inv.asset_class);
       const isFixedIncome = ['savings', 'bond'].includes(inv.asset_class);
       const isRealEstate = inv.asset_class === 'real_estate';
 
-      // Calculate all fee and tax transactions
-      const feeTxns = txns.filter((t) => t.type === 'fee');
-      const taxTxns = txns.filter((t) => t.type === 'tax');
-      const totalFees = feeTxns.reduce((s, t) => s + Number(t.amount), 0)
-        + txns.reduce((s, t) => s + (Number(t.fees) || 0), 0);
-      const totalTaxes = taxTxns.reduce((s, t) => s + Number(t.amount), 0)
-        + txns.reduce((s, t) => s + (Number(t.taxes) || 0), 0);
+      let feeTxnAmount = 0;
+      let taxTxnAmount = 0;
+      let feesFieldAmount = 0;
+      let taxesFieldAmount = 0;
+      let totalDividends = 0;
+      let totalInterestPaid = 0;
+      let totalRent = 0;
+      let totalAppreciation = 0;
+      let totalBuyAmount = 0;
+      let totalBuyOrGiftAmount = 0;
+      let totalSellAmount = 0;
 
-      // Income calculations
-      const totalDividends = txns.filter((t) => t.type === 'dividend').reduce((s, t) => s + Number(t.amount), 0);
-      const totalInterestPaid = txns.filter((t) => t.type === 'interest').reduce((s, t) => s + Number(t.amount), 0);
-      const totalRent = txns.filter((t) => t.type === 'rent_income').reduce((s, t) => s + Number(t.amount), 0);
-      const totalAppreciation = txns.filter((t) => t.type === 'appreciation').reduce((s, t) => s + Number(t.amount), 0);
+      for (const txn of txns) {
+        const amount = Number(txn.amount) || 0;
+        const fees = Number(txn.fees) || 0;
+        const taxes = Number(txn.taxes) || 0;
+        feesFieldAmount += fees;
+        taxesFieldAmount += taxes;
+
+        if (txn.type === 'buy') {
+          totalBuyAmount += amount;
+          totalBuyOrGiftAmount += amount;
+        } else if (txn.type === 'gift') {
+          totalBuyOrGiftAmount += amount;
+        } else if (txn.type === 'sell') {
+          totalSellAmount += amount;
+        } else if (txn.type === 'fee') {
+          feeTxnAmount += amount;
+        } else if (txn.type === 'tax') {
+          taxTxnAmount += amount;
+        } else if (txn.type === 'dividend') {
+          totalDividends += amount;
+        } else if (txn.type === 'interest') {
+          totalInterestPaid += amount;
+        } else if (txn.type === 'rent_income') {
+          totalRent += amount;
+        } else if (txn.type === 'appreciation') {
+          totalAppreciation += amount;
+        }
+      }
+
+      // Calculate all fee and tax transactions
+      const totalFees = feeTxnAmount + feesFieldAmount;
+      const totalTaxes = taxTxnAmount + taxesFieldAmount;
 
       let totalUnits = 0;
       let avgCostBasis = 0;
@@ -313,13 +362,8 @@ export function usePortfolio() {
         
       } else if (isFixedIncome) {
         // Savings accounts and bonds: principal-based
-        const buys = txns.filter((t) => t.type === 'buy' || t.type === 'gift');
-        const sells = txns.filter((t) => t.type === 'sell');
-        const totalBuyAmount = buys.reduce((s, t) => s + Number(t.amount), 0);
-        const totalSellAmount = sells.reduce((s, t) => s + Number(t.amount), 0);
-        
-        totalInvested = totalBuyAmount - totalSellAmount;
-        totalBuyCost = totalBuyAmount;
+        totalInvested = totalBuyOrGiftAmount - totalSellAmount;
+        totalBuyCost = totalBuyOrGiftAmount;
         totalSellProceeds = totalSellAmount;
         
         const interestRate = Number(inv.interest_rate) || 0;
@@ -335,11 +379,6 @@ export function usePortfolio() {
         
       } else if (isRealEstate) {
         // Real estate: purchase price + appreciation - depreciation
-        const buys = txns.filter((t) => t.type === 'buy');
-        const sells = txns.filter((t) => t.type === 'sell');
-        const totalBuyAmount = buys.reduce((s, t) => s + Number(t.amount), 0);
-        const totalSellAmount = sells.reduce((s, t) => s + Number(t.amount), 0);
-        
         totalInvested = totalBuyAmount - totalSellAmount;
         totalBuyCost = totalBuyAmount;
         totalSellProceeds = totalSellAmount;
@@ -353,9 +392,7 @@ export function usePortfolio() {
         
       } else {
         // Generic fallback
-        const buys = txns.filter((t) => t.type === 'buy');
-        const sells = txns.filter((t) => t.type === 'sell');
-        totalInvested = buys.reduce((s, t) => s + Number(t.amount), 0) - sells.reduce((s, t) => s + Number(t.amount), 0);
+        totalInvested = totalBuyAmount - totalSellAmount;
         currentValue = totalInvested;
       }
 
@@ -396,7 +433,7 @@ export function usePortfolio() {
         totalBuyCost,
         totalSellProceeds,
         
-        transactions: txns.sort((a, b) => b.date.localeCompare(a.date)),
+        transactions: [...txns].sort((a, b) => b.date.localeCompare(a.date)),
       } as InvestmentSummary;
     });
   }, [investments, transactions]);
@@ -406,17 +443,30 @@ export function usePortfolio() {
     return summaries.filter((s) => classes.includes(s.assetClass));
   }, [summaries]);
 
-  const totalPortfolioValue = useMemo(() => summaries.reduce((s, i) => s + i.currentValue, 0), [summaries]);
-  const totalGainLoss = useMemo(() => summaries.reduce((s, i) => s + i.gainLoss, 0), [summaries]);
-  const totalRealizedGain = useMemo(() => summaries.reduce((s, i) => s + i.realizedGain, 0), [summaries]);
-  const totalUnrealizedGain = useMemo(() => summaries.reduce((s, i) => s + i.unrealizedGain, 0), [summaries]);
+  const totals = useMemo(() => {
+    return summaries.reduce((acc, item) => {
+      acc.totalPortfolioValue += item.currentValue;
+      acc.totalGainLoss += item.gainLoss;
+      acc.totalRealizedGain += item.realizedGain;
+      acc.totalUnrealizedGain += item.unrealizedGain;
+      return acc;
+    }, {
+      totalPortfolioValue: 0,
+      totalGainLoss: 0,
+      totalRealizedGain: 0,
+      totalUnrealizedGain: 0,
+    });
+  }, [summaries]);
 
   return {
     investments, transactions, summaries,
     addInvestment, updateInvestment, deleteInvestment,
     addTransaction, updateTransaction, deleteTransaction,
     refreshPrices, isRefreshingPrices: refreshPricesMutation.isPending,
-    byAssetClass, totalPortfolioValue, totalGainLoss,
-    totalRealizedGain, totalUnrealizedGain,
+    byAssetClass,
+    totalPortfolioValue: totals.totalPortfolioValue,
+    totalGainLoss: totals.totalGainLoss,
+    totalRealizedGain: totals.totalRealizedGain,
+    totalUnrealizedGain: totals.totalUnrealizedGain,
   };
 }

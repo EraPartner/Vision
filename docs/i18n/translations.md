@@ -2,7 +2,7 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-03-24
+date: 2026-03-28
 tags: [i18n, translations, localization, internationalization]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
@@ -163,8 +163,9 @@ bun run build
 - `nav.metals`
 - `portfolio.assetClass.metals`
 - `portfolio.assetGroup.metals`
+- `addInv.provider.hint.kinesis`
 
-These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts`.
+These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts` (including provider-hint updates for `binance`/`kinesis`).
 
 Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 

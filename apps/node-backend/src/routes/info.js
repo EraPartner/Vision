@@ -10,8 +10,30 @@ import { detectRecurringPatterns } from '../services/recurringDetectionService.j
 import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import { logger } from '../config/logger.js';
 import { rateLimiter, adminRateLimiter } from '../middleware/rateLimiter.js';
+import {
+  getInflationRates,
+  clearInflationMemoryCache,
+} from '../services/belgianInflationService.js';
 
 const router = Router();
+
+const NET_WORTH_CACHE_TTL_MS = 60_000;
+const netWorthResponseCache = new Map();
+
+function getCachedNetWorth(key) {
+  const cached = netWorthResponseCache.get(key);
+  if (!cached) return undefined;
+  if (cached.expiresAt > Date.now() && cached.data) return cached.data;
+  return undefined;
+}
+
+function setCachedNetWorth(key, data) {
+  netWorthResponseCache.set(key, {
+    data,
+    inflight: undefined,
+    expiresAt: Date.now() + NET_WORTH_CACHE_TTL_MS,
+  });
+}
 
 function getTargetCurrency(req) {
   const raw = req.query.currency ?? req.query.target_currency;
@@ -20,6 +42,23 @@ function getTargetCurrency(req) {
   const value = String(raw).toUpperCase().trim();
   // Keep validation generic for easy extension to any ISO-4217 code.
   return /^[A-Z]{3}$/.test(value) ? value : 'EUR';
+}
+
+function getMonthParam(raw) {
+  if (raw == null || raw === '') return undefined;
+  const value = String(raw).trim();
+  if (/^\d{4}-\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 7);
+  return undefined;
+}
+
+function isTruthyQueryParam(raw) {
+  if (raw === true || raw === 1) return true;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return false;
 }
 
 // GET /api/info
@@ -199,10 +238,45 @@ router.get('/recurring-patterns', async (req, res) => {
 });
 
 // GET /api/info/net-worth - Net worth combining bank balances + portfolio
-router.get('/net-worth', async (req, res) => {
+router.get(
+  '/net-worth',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth' }),
+  async (req, res) => {
   try {
     const targetCurrency = getTargetCurrency(req);
-    const data = await infoRepository.getNetWorth(targetCurrency);
+    const cacheKey = targetCurrency;
+
+    const cachedData = getCachedNetWorth(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    const cachedEntry = netWorthResponseCache.get(cacheKey);
+    if (cachedEntry?.inflight) {
+      const data = await cachedEntry.inflight;
+      return res.json(data);
+    }
+
+    const inflight = infoRepository.getNetWorth(targetCurrency)
+      .then((data) => {
+        setCachedNetWorth(cacheKey, data);
+        return data;
+      })
+      .catch((error) => {
+        const current = netWorthResponseCache.get(cacheKey);
+        if (current?.inflight === inflight) {
+          netWorthResponseCache.delete(cacheKey);
+        }
+        throw error;
+      });
+
+    netWorthResponseCache.set(cacheKey, {
+      data: cachedEntry?.data,
+      inflight,
+      expiresAt: cachedEntry?.expiresAt || 0,
+    });
+
+    const data = await inflight;
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving net worth', { error: err.message });
@@ -282,6 +356,46 @@ router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
   } catch (err) {
     logger.error('Error refreshing exchange rates', { error: err.message });
     res.status(500).json({ detail: 'Error refreshing exchange rates' });
+  }
+});
+
+// GET /api/info/inflation-rates - View cached Belgian monthly inflation rates
+router.get(
+  '/inflation-rates',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'inflation-rates' }),
+  async (req, res) => {
+    try {
+      const startMonth = getMonthParam(req.query.start_month);
+      const endMonth = getMonthParam(req.query.end_month);
+      const dbOnly = isTruthyQueryParam(req.query.db_only);
+      const result = await getInflationRates({
+        startMonth,
+        endMonth,
+        dbOnly,
+        scheduleBackgroundRefresh: dbOnly,
+      });
+
+      res.json({
+        source: result.source,
+        total_rates: result.rates.length,
+        rates: result.rates,
+      });
+    } catch (err) {
+      logger.error('Error retrieving Belgian inflation rates', { error: err.message });
+      res.status(500).json({ detail: 'Error retrieving Belgian inflation rates' });
+    }
+  }
+);
+
+// POST /api/info/inflation-rates/refresh - Force refresh from Statbel
+router.post('/inflation-rates/refresh', adminRateLimiter, async (req, res) => {
+  try {
+    clearInflationMemoryCache();
+    const result = await getInflationRates({ forceRefresh: true });
+    res.json({ message: 'Belgian inflation rates refreshed from Statbel', source: result.source, total_rates: result.rates.length });
+  } catch (err) {
+    logger.error('Error refreshing Belgian inflation rates', { error: err.message });
+    res.status(500).json({ detail: 'Error refreshing Belgian inflation rates' });
   }
 });
 

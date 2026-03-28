@@ -34,15 +34,16 @@ package "Backend Services" {
 }
 
 cloud "Price Providers" as Providers {
-  class CoinGecko <<Crypto Prices>>
+  class Binance <<Crypto Prices>>
   class YahooFinance <<Stock Prices>>
-  class Kraken <<Crypto Prices>>
+  class Kinesis <<Metals/Commodities>>
   class CustomJSON <<Latest + History>>
   class Manual <<User Entry>>
 }
 
 database "PostgreSQL" as DB {
   table "investments"
+  table "asset_price_history"
 }
 
 package "Manual Flow" {
@@ -70,12 +71,12 @@ package "Bulk Refresh Flow" {
   DB --> PriceProviderService : investments
 
   loop For each investment
-    alt provider == 'coingecko'
-      PriceProviderService --> CoinGecko : GET /simple/price
+    alt provider == 'binance'
+      PriceProviderService --> Binance : GET /ticker/price
     else provider == 'yahoo'
       PriceProviderService --> YahooFinance : GET /quote
-    else provider == 'kraken'
-      PriceProviderService --> Kraken : GET /ticker
+    else provider == 'kinesis'
+      PriceProviderService --> Kinesis : GET trendline
     else provider == 'custom'
       PriceProviderService --> CustomJSON : GET latest_url
       alt latest path missing/unresolved
@@ -93,17 +94,29 @@ package "On-demand History Flow" {
   User --> PortfolioPage : Open performance chart
   PortfolioPage --> InvestmentsRouter : GET /investments/:id/price-history
   InvestmentsRouter --> PriceProviderService : fetchHistoricalPrices(investment)
-  PriceProviderService --> CustomJSON : GET history_url
-  CustomJSON --> PriceProviderService : history JSON
+  PriceProviderService --> DB : SELECT asset_price_history (range)
+  alt DB coverage incomplete
+    PriceProviderService --> CustomJSON : GET history_url (custom)
+    PriceProviderService --> YahooFinance : GET /chart (yahoo)
+    Providers --> PriceProviderService : history JSON
+    PriceProviderService --> DB : UPSERT asset_price_history
+  end
   PriceProviderService --> InvestmentsRouter : [{timestampMs, price}]
   InvestmentsRouter --> PortfolioPage : history points
 }
 
+package "Startup Backfill" {
+  PriceProviderService --> DB : SELECT held investments + first_tx_date
+  loop For each held unit-based investment
+    PriceProviderService --> PriceProviderService : fetchHistoricalPrices(from first_tx_date)
+  end
+}
+
 note right of PriceProviderService
   Supported providers:
-  - coingecko: Crypto
+  - binance: Crypto
   - yahoo: Stocks/ETFs
-  - kraken: Crypto
+  - kinesis: Metals/commodities
   - custom: JSON latest + history
   - manual: User entry
 
@@ -113,7 +126,8 @@ note right of PriceProviderService
   - timestamp path + price path
 
   History is fetched on demand
-  and is NOT persisted to DB.
+  and persisted with read-through
+  cache behavior in asset_price_history.
 
   Migration dependency:
   0017_investment_custom_provider_history

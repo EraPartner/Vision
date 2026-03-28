@@ -2,7 +2,7 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-03-27
+date: 2026-03-28
 tags: [components, portfolio, investments]
 description: Components for investment portfolio management
 related_code: ["apps/frontend/src/components/portfolio"]
@@ -79,8 +79,10 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 - Default form `currency` uses `appSettings.defaultCurrency`
 - Reset/cancel path restores `currency` to `appSettings.defaultCurrency`
 - Submit payload and initial buy-transaction currency fallback now use `defaultCurrency` (replacing fixed EUR fallback)
+- Default crypto provider selection is `binance` (replacing legacy `coingecko` default)
+- Add/Edit provider pickers include `kinesis` with dedicated UI hint text for provider-id guidance
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/frontend/src/types/portfolio.ts]]
 
 ### Custom Provider Advanced Fields
 
@@ -153,6 +155,7 @@ Editable fields:
 - name
 - symbol (unit-based assets)
 - currency
+- current price (`current_price`) when provider is `manual` (unit-based assets)
 - price provider + provider identifiers
 
 Validation highlights:
@@ -321,4 +324,10 @@ Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], 
 - [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]] - Exchange-rate fetched-at/description timestamps use app date-time format
 - [[apps/frontend/src/pages/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
 - [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] - Month labels use app-language locale (`en-US`/`nl-NL`), while chart/table values use app settings; page includes Total/Investments/Liquid series toggle, daily-only timeline with per-day hover values, horizontal scroll/zoom controls, and a virtualized daily breakdown table
-- [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Heatmap headers use `formatMonthLabelWithLocale(date, locale?, width?)`; chart x-axis month keys use `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` from [[apps/frontend/src/components/shared/dateUtils.ts]], with dense-month readability enforced via `interval="preserveStartEnd"` and `minTickGap={20}`
+- [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Absolute and relative charts now run on day-level timeline points (`YYYY-MM-DD`) for more realistic fluctuation shape; relative contribution adjustment now uses day-keyed net flows (not month-bucket chart alignment); chart x-axis keys by day internally while rendering locale-formatted month-year ticks for readability; relative performance keeps chained index baseline `1` with display conversion `(index - 1) * 100`; monthly heatmap remains month-based and keeps Modified Dietz-style monthly return denominator `prevValue + netFlow / 2` (fallback `prevValue` when denominator <= 0); first heatmap month is rendered as no data (`null`) rather than forced `0%`; inflation adjustment compounds backend Belgian monthly rates (`/api/info/inflation-rates`) keyed by `YYYY-MM`
+
+- [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`.
+- [[apps/node-backend/src/services/belgianInflationService.js]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.
+- [[apps/node-backend/src/routes/info.js]] - Exposes `GET /api/info/inflation-rates` and admin-limited `POST /api/info/inflation-rates/refresh`.
+- [[apps/node-backend/src/database/schemaInit.js]] - Creates `belgian_inflation_rates` table and indexes/triggers during schema init.
+- [[apps/node-backend/src/main.js]] - Warms and schedules Belgian inflation cache refresh during backend startup lifecycle.

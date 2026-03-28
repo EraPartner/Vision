@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const routeHandlers = {};
 const mockRouter = {
-  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
-  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
   use: vi.fn(),
 };
 
@@ -35,6 +35,13 @@ vi.mock('../../src/repositories/infoRepository.js', () => ({
 vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
+
+const mockInflationService = {
+  getInflationRates: vi.fn(),
+  clearInflationMemoryCache: vi.fn(),
+};
+
+vi.mock('../../src/services/belgianInflationService.js', () => mockInflationService);
 
 import infoRepository from '../../src/repositories/infoRepository.js';
 await import('../../src/routes/info.js');
@@ -350,7 +357,7 @@ describe('Info Routes', () => {
         ],
       });
 
-      const req = { query: {} };
+      const req = { query: { currency: 'EUR' } };
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
@@ -368,7 +375,7 @@ describe('Info Routes', () => {
         snapshots: [],
       });
 
-      const req = { query: {} };
+      const req = { query: { currency: 'USD' } };
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
@@ -380,7 +387,7 @@ describe('Info Routes', () => {
     it('should handle errors', async () => {
       infoRepository.getNetWorth.mockRejectedValue(new Error('DB error'));
 
-      const req = { query: {} };
+      const req = { query: { currency: 'GBP' } };
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
@@ -432,6 +439,101 @@ describe('Info Routes', () => {
       const req = { query: {} };
       const res = mockResponse();
       await routeHandlers['get:/recipient-insights'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /inflation-rates', () => {
+    it('should return Belgian inflation rates', async () => {
+      mockInflationService.getInflationRates.mockResolvedValue({
+        source: 'database',
+        rates: [
+          { month: '2024-01', monthly_rate: 0.004 },
+          { month: '2024-02', monthly_rate: 0.003 },
+        ],
+      });
+
+      const req = { query: { start_month: '2024-01', end_month: '2024-12' } };
+      const res = mockResponse();
+      await routeHandlers['get:/inflation-rates'](req, res);
+
+      expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
+        startMonth: '2024-01',
+        endMonth: '2024-12',
+        dbOnly: false,
+        scheduleBackgroundRefresh: false,
+      });
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.total_rates).toBe(2);
+      expect(payload.source).toBe('database');
+    });
+
+    it('should ignore invalid month params', async () => {
+      mockInflationService.getInflationRates.mockResolvedValue({ source: 'memory', rates: [] });
+
+      const req = { query: { start_month: 'invalid', end_month: '2024/01' } };
+      const res = mockResponse();
+      await routeHandlers['get:/inflation-rates'](req, res);
+
+      expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
+        startMonth: undefined,
+        endMonth: undefined,
+        dbOnly: false,
+        scheduleBackgroundRefresh: false,
+      });
+    });
+
+    it('should pass db_only flag and enable background refresh scheduling', async () => {
+      mockInflationService.getInflationRates.mockResolvedValue({
+        source: 'database',
+        rates: [{ month: '2024-01', monthly_rate: 0.004 }],
+      });
+
+      const req = { query: { db_only: 'true', start_month: '2024-01' } };
+      const res = mockResponse();
+      await routeHandlers['get:/inflation-rates'](req, res);
+
+      expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
+        startMonth: '2024-01',
+        endMonth: undefined,
+        dbOnly: true,
+        scheduleBackgroundRefresh: true,
+      });
+    });
+
+    it('should handle inflation route errors', async () => {
+      mockInflationService.getInflationRates.mockRejectedValue(new Error('boom'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/inflation-rates'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('POST /inflation-rates/refresh', () => {
+    it('should refresh Belgian inflation rates', async () => {
+      mockInflationService.getInflationRates.mockResolvedValue({ source: 'statbel', rates: [{ month: '2024-01', monthly_rate: 0.004 }] });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/inflation-rates/refresh'](req, res);
+
+      expect(mockInflationService.clearInflationMemoryCache).toHaveBeenCalled();
+      expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({ forceRefresh: true });
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.total_rates).toBe(1);
+      expect(payload.source).toBe('statbel');
+    });
+
+    it('should handle refresh errors', async () => {
+      mockInflationService.getInflationRates.mockRejectedValue(new Error('refresh failed'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/inflation-rates/refresh'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });

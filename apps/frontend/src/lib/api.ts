@@ -775,6 +775,15 @@ class ApiClient {
         return this.request(`/api/info/bank-balances${query ? `?${query}` : ''}`);
     }
 
+    async getBelgianInflationRates(params?: { start_month?: string; end_month?: string; db_only?: boolean }): Promise<{
+        source: 'memory' | 'database' | 'statbel' | 'eurostat';
+        total_rates: number;
+        rates: Array<{ month: string; monthly_rate: number }>;
+    }> {
+        const query = this.buildQuery(params);
+        return this.request(`/api/info/inflation-rates${query ? `?${query}` : ''}`);
+    }
+
     async getRecurringPatterns(): Promise<{
         patterns: Array<{
             recipientId: number;
@@ -853,6 +862,7 @@ class ApiClient {
     async getInvestmentPriceHistory(investmentId: number, params?: {
         from_ms?: number;
         to_ms?: number;
+        db_only?: boolean;
     }): Promise<{ investment_id: number; provider: string; points: Array<{ timestampMs: number; price: number }> }> {
         const query = this.buildQuery(params);
         return this.request(`/api/investments/${investmentId}/price-history${query ? `?${query}` : ''}`);
@@ -865,7 +875,23 @@ class ApiClient {
     }): Promise<PortfolioTransactionsListResponse> {
         const query = this.buildQuery(params);
         const res = await this.request<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions${query ? `?${query}` : ''}`);
-        res.items = res.items.map((tx: any) => ({
+        res.items = res.items.map((tx) => ({
+            ...tx,
+            date: tx.date ?? tx.transaction_date,
+        }));
+        return res;
+    }
+
+    async getPortfolioTransactionsBulk(params: {
+        investment_ids: string;
+        type?: string;
+        per_investment_limit?: number;
+        limit?: number;
+        offset?: number;
+    }): Promise<PortfolioTransactionsListResponse> {
+        const query = this.buildQuery(params);
+        const res = await this.request<PortfolioTransactionsListResponse>(`/api/investments/transactions${query ? `?${query}` : ''}`);
+        res.items = res.items.map((tx) => ({
             ...tx,
             date: tx.date ?? tx.transaction_date,
         }));

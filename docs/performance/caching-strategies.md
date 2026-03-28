@@ -2,7 +2,7 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2025-03-18
+date: 2026-03-28
 tags: [performance, caching, optimization]
 description: In-memory caching implementation for exchange rates and price feeds
 related_code: ["apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/priceProviderService.js"]
@@ -43,13 +43,13 @@ Vision implements multi-layer caching to minimize external API calls and improve
 
 **Service:** `priceProviderService.js`  
 **TTL:** 5 minutes  
-**Storage:** In-memory (Map)
+**Storage:** In-memory (Map) + PostgreSQL historical cache (`asset_price_history`)
 
 ```javascript
 // Cache key format
-"coingecko:bitcoin"    // CoinGecko
+"binance:BTCUSDT"      // Binance
 "yahoo:AAPL"           // Yahoo Finance
-"kraken:BTC"           // Kraken
+"kinesis:42"           // Kinesis (investment-scoped)
 "custom:123"           // Custom provider
 ```
 
@@ -57,6 +57,12 @@ Vision implements multi-layer caching to minimize external API calls and improve
 - Per-symbol caching
 - Automatic expiration
 - Stale-while-revalidate pattern
+- Provider-consistent keying for investment-scoped providers (`custom`, `kinesis`) across lookup/set paths
+- Kinesis trendline sanitization runs before latest/history cache writes to prevent isolated one-point needles from polluting short-lived memory cache or persisted history ([[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/tests/priceProviderService.test.js]])
+- DB-backed historical quote persistence for `yahoo`/`custom` provider history
+- Read-through history fetch (`DB -> provider -> DB upsert`)
+- Startup background backfill for held market-priced assets
+- Startup immediate/deferred split: Kinesis investments with valid persisted `current_price` are served from stored DB value first, while external Kinesis refresh runs in background after boot
 
 ---
 
@@ -74,7 +80,23 @@ const mvCache = new Map();
 
 ---
 
-### 4. HTTP Cache Headers
+### 4. Net Worth Route Cache
+
+**Route:** `GET /api/info/net-worth`  
+**TTL:** 60 seconds  
+**Storage:** In-memory (Map), keyed by target currency
+
+**Features:**
+- Per-currency response caching for repeated dashboard refreshes
+- In-flight request deduplication (same-currency concurrent requests share one repository promise)
+- Short TTL preserves near-real-time UX while reducing recomputation bursts
+- Route-level throttling (`30 req / 60s`) to protect expensive compute path
+
+Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]
+
+---
+
+### 5. HTTP Cache Headers
 
 Static assets use long-lived caching:
 
@@ -107,6 +129,7 @@ clearMvCache();
 - Exchange rates: 24-hour TTL
 - Price feeds: 5-minute TTL
 - Materialized views: After data changes
+- Net worth route cache: 60-second per-currency TTL
 
 ---
 

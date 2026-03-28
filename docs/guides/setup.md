@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 description: Complete setup instructions for local development
-date: 2026-03-18
+date: 2026-03-28
 tags: [guide, setup, development, local]
 related_code: [[package.json]]
 ---
@@ -59,6 +59,8 @@ Startup flow runs automatically via `docker-entrypoint.sh`:
 2. If `alembic_version` exists, runs Alembic migrations (plus compatibility check for long revision IDs)
 3. If `alembic_version` does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
 4. Starts the backend
+
+After backend start, non-blocking startup tasks run in background (cache warming/backfills/refresh). This now includes persisted Kinesis history sanitization (`sanitizePersistedKinesisHistory()`), with errors caught and logged without blocking startup ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/services/priceProviderService.js]]).
 
 Bootstrap compatibility note: schema init version `20260324_2` includes startup idempotency guards so index/trigger creation only targets base tables in `public`, avoiding startup failures when compatibility relations (for example `investments`) are views in inheritance-based schemas ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
 

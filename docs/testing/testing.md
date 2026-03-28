@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-03-25
+date: 2026-03-28
 tags: [testing, vitest, jest, quality]
 description: Comprehensive testing documentation including frameworks, patterns, and best practices
 related_code: ["apps/node-backend/tests", "apps/frontend/src/components/__tests__"]
@@ -126,6 +126,18 @@ vi.mock('../src/database/connection.js', () => ({
 
 ## Test Coverage Areas
 
+### Recent provider propagation coverage
+
+- `apps/node-backend/tests/priceProviderService.test.js` covers Kinesis provider config resolution reuse across live/history, cache-key consistency for investment-scoped Kinesis entries, and Binance batch behavior in live-price detail fetch.
+- `apps/node-backend/tests/priceProviderService.test.js` also validates isolated Kinesis spike sanitization, ensuring confirmed single-point up/down needles are interpolated from neighbors while surrounding trend detail is preserved.
+- `apps/node-backend/tests/priceProviderService.test.js` includes regression coverage for moderate one-day spike patterns (20 normal, 21 spike, 22 normal) so relaxed Kinesis sanitization thresholds continue catching medium needles.
+- `apps/node-backend/tests/priceProviderService.test.js` covers `sanitizePersistedKinesisHistory()` summary/behavior (processed/updated/correctedPoints/failed) when sanitizing persisted `asset_price_history` rows for Kinesis investments.
+- `apps/node-backend/tests/priceProviderService.test.js` adds regression coverage for the no-refetch early-return case (`sanitizes covered cached DB points for kinesis without provider refetch`), confirming covered cached DB history is sanitized and corrected points are persisted before response return.
+- `apps/node-backend/tests/routes/admin.test.js` covers `POST /api/admin/investments/kinesis/sanitize-history` response handling for success and failure paths.
+- `apps/node-backend/tests/routes/investments.test.js` covers refresh eligibility for Kinesis investments when `price_provider_id` is missing but asset name/symbol maps through Kinesis config.
+
+Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/investments.js]]
+
 ### Backend
 
 | Category | Examples |
@@ -161,6 +173,7 @@ vi.mock('../src/database/connection.js', () => ({
 - News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
 - Historical FX conversion coverage expanded: [[apps/node-backend/tests/currencyConversionService.test.js]] now validates sparse historical backfill behavior (missing `(currency,date)` pairs only), date-aware row conversion options (`useHistoricalRatesByDate`, `dateField`), and nearest-date fallback logic.
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
+- `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
 Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/hooks/statisticsProcessing.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
 

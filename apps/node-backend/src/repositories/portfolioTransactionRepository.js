@@ -435,12 +435,81 @@ export const portfolioTransactionRepository = {
     return result.rows;
   },
 
-  async getCount({ investmentId = null, type = null } = {}) {
+  async getAllByInvestmentIds({
+    investmentIds = [],
+    type = null,
+    perInvestmentLimit = 1000,
+    limit = null,
+    offset = 0,
+  } = {}) {
+    const normalizedIds = Array.from(new Set((investmentIds || [])
+      .map((id) => Number.parseInt(id, 10))
+      .filter((id) => Number.isInteger(id) && id > 0)));
+
+    if (normalizedIds.length === 0) return [];
+
+    const safePerInvestmentLimit = Math.max(1, Math.min(Number.parseInt(perInvestmentLimit, 10) || 1000, 5000));
+    const safeOffset = Math.max(0, Number.parseInt(offset, 10) || 0);
+    const safeLimit = limit == null ? null : Math.max(1, Math.min(Number.parseInt(limit, 10) || normalizedIds.length * safePerInvestmentLimit, 200000));
+
+    let sql = `
+      WITH ranked AS (
+        SELECT
+          pt.id,
+          ROW_NUMBER() OVER (PARTITION BY pt.investment_id ORDER BY pt.date DESC, pt.id DESC) AS rn
+        FROM portfolio_transactions pt
+        WHERE pt.investment_id = ANY($1::int[])
+    `;
+    const params = [normalizedIds, safePerInvestmentLimit];
+    let idx = 3;
+
+    if (type) {
+      sql += ` AND pt.type = $${idx++}`;
+      params.push(type);
+    }
+
+    sql += `
+      ),
+      limited AS (
+        SELECT id
+        FROM ranked
+        WHERE rn <= $2
+      )
+      SELECT pt.*
+      FROM portfolio_transactions pt
+      JOIN limited l ON l.id = pt.id
+      ORDER BY pt.date DESC, pt.id DESC
+    `;
+
+    if (safeLimit != null) {
+      sql += ` LIMIT $${idx++}`;
+      params.push(safeLimit);
+    }
+
+    sql += ` OFFSET $${idx++}`;
+    params.push(safeOffset);
+
+    const result = await query(sql, params);
+    return result.rows;
+  },
+
+  async getCount({ investmentId = null, investmentIds = null, type = null } = {}) {
     let sql = `SELECT count(*) FROM portfolio_transactions WHERE 1=1`;
     const params = [];
     let idx = 1;
 
-    if (investmentId) { sql += ` AND investment_id = $${idx++}`; params.push(investmentId); }
+    if (investmentId) {
+      sql += ` AND investment_id = $${idx++}`;
+      params.push(investmentId);
+    } else if (Array.isArray(investmentIds) && investmentIds.length > 0) {
+      const normalizedIds = Array.from(new Set(investmentIds
+        .map((id) => Number.parseInt(id, 10))
+        .filter((id) => Number.isInteger(id) && id > 0)));
+      if (normalizedIds.length > 0) {
+        sql += ` AND investment_id = ANY($${idx++}::int[])`;
+        params.push(normalizedIds);
+      }
+    }
     if (type) { sql += ` AND type = $${idx++}`; params.push(type); }
 
     const result = await query(sql, params);

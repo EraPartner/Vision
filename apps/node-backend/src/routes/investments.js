@@ -8,6 +8,7 @@ import portfolioTransactionRepository from '../repositories/portfolioTransaction
 import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 
 const router = Router();
 
@@ -25,6 +26,12 @@ function hasLivePriceRefreshConfig(investment) {
 
   if (provider === 'yahoo') {
     return Boolean(investment?.price_provider_id || investment?.symbol);
+  }
+
+  if (provider === 'kinesis') {
+    if (investment?.price_provider_id) return true;
+    const assetName = (investment?.name || investment?.symbol || '').toLowerCase().trim();
+    return Boolean(assetName && getKinesisAssetConfig(assetName));
   }
 
   return Boolean(investment?.price_provider_id);
@@ -162,6 +169,54 @@ router.post('/refresh-prices', async (req, res) => {
   }
 });
 
+router.get('/transactions', async (req, res) => {
+  try {
+    const rawInvestmentIds = req.query.investment_ids;
+    if (rawInvestmentIds == null || rawInvestmentIds === '') {
+      return res.status(400).json({ detail: 'investment_ids is required' });
+    }
+
+    const investmentIds = String(rawInvestmentIds)
+      .split(',')
+      .map((value) => parseInt(value, 10))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    if (investmentIds.length === 0) {
+      return res.status(400).json({ detail: 'investment_ids must include at least one valid id' });
+    }
+
+    const { type, per_investment_limit = 1000, limit, offset = 0 } = req.query;
+    const opts = {
+      investmentIds,
+      type: type || null,
+      perInvestmentLimit: Math.max(1, Math.min(parseInt(per_investment_limit, 10) || 1000, 5000)),
+      limit: limit == null || limit === ''
+        ? null
+        : Math.max(1, Math.min(parseInt(limit, 10) || 1, 200000)),
+      offset: Math.max(0, parseInt(offset, 10) || 0),
+    };
+
+    const [items, total] = await Promise.all([
+      portfolioTransactionRepository.getAllByInvestmentIds(opts),
+      portfolioTransactionRepository.getCount({
+        investmentIds: opts.investmentIds,
+        type: opts.type,
+      }),
+    ]);
+
+    res.json({
+      items,
+      total,
+      limit: opts.limit ?? items.length,
+      offset: opts.offset,
+      links: [],
+    });
+  } catch (err) {
+    logger.error('Failed to get bulk portfolio transactions', { error: err.message });
+    res.status(500).json({ detail: 'Failed to retrieve portfolio transactions' });
+  }
+});
+
 // GET /api/investments/:id
 router.get('/:id/price-history', validateIdParam, async (req, res) => {
   try {
@@ -171,10 +226,16 @@ router.get('/:id/price-history', validateIdParam, async (req, res) => {
 
     const fromMs = req.query.from_ms;
     const toMs = req.query.to_ms;
+    const dbOnlyRaw = req.query.db_only;
+    const dbOnly = dbOnlyRaw === '1'
+      || dbOnlyRaw === 'true'
+      || dbOnlyRaw === 1
+      || dbOnlyRaw === true;
 
     const points = await fetchHistoricalPrices(inv, {
       fromMs: fromMs !== undefined ? Number(fromMs) : undefined,
       toMs: toMs !== undefined ? Number(toMs) : undefined,
+      dbOnly,
     });
 
     return res.json({

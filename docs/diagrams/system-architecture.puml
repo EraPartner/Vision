@@ -99,9 +99,9 @@ database "PostgreSQL 18" as DB {
 
 cloud "External Services" as External {
   node "ECB (Exchange Rates)" as ECB
-  node "CoinGecko (Crypto)" as CoinGecko
+  node "Binance (Crypto)" as Binance
   node "Yahoo Finance (Stocks)" as Yahoo
-  node "Kraken (Crypto)" as Kraken
+  node "Kinesis (Metals)" as Kinesis
 }
 
 cloud "Development Tools" as DevTools {
@@ -136,7 +136,7 @@ package "External Services" {
 
 note right of External
   - Exchange rates refreshed every 12h
-  - Price providers: manual, coingecko, yahoo, kraken
+  - Price providers: manual, binance, yahoo, kinesis, custom
 end note
 
 note right of Tables

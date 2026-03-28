@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Trash2, Eye, DollarSign, Percent, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, Trash2, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
@@ -15,7 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { AssetClass } from "@/types/portfolio";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 function fmtPct(val: number) {
@@ -31,12 +31,15 @@ interface StocksPageProps {
   enableFxAwarePnl?: boolean;
 }
 
+const DEFAULT_STOCKS_ASSET_CLASSES: AssetClass[] = ['stock', 'etf'];
+const DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES: AssetClass[] = ['stock', 'etf'];
+
 export default function StocksPage({
-  assetClasses = ['stock', 'etf'],
+  assetClasses = DEFAULT_STOCKS_ASSET_CLASSES,
   titleKey = 'stocks.title',
   emptyTitleKey = 'stocks.noStocks',
   emptyDescriptionKey = 'stocks.noStocksDesc',
-  allowedAddAssetClasses = ['stock', 'etf'],
+  allowedAddAssetClasses = DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES,
   enableFxAwarePnl = true,
 }: StocksPageProps = {}) {
   const { t } = useLanguage();
@@ -45,7 +48,7 @@ export default function StocksPage({
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const { byAssetClass, deleteInvestment } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
-  const holdings = byAssetClass(assetClasses);
+  const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
   const { data: exchangeData } = useQuery({
@@ -54,15 +57,17 @@ export default function StocksPage({
     staleTime: 60_000,
   });
 
-  const ratesToEur: Record<string, number> = {
+  const ratesToEur: Record<string, number> = useMemo(() => ({
     EUR: 1,
     ...Object.fromEntries(
       (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
     ),
     ...(exchangeData?.fallback_rates || {}),
-  };
+  }), [exchangeData]);
 
-  function convertToTarget(amount: number, fromCurrency?: string) {
+  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
+
+  const convertToTarget = useCallback((amount: number, fromCurrency?: string) => {
     const from = (fromCurrency || 'EUR').toUpperCase();
     const to = targetCurrency.toUpperCase();
     if (from === to) return amount;
@@ -71,32 +76,43 @@ export default function StocksPage({
     const rateTo = ratesToEur[to];
     if (!rateFrom || !rateTo) return amount;
     return (amount * rateFrom) / rateTo;
-  }
+  }, [ratesToEur, targetCurrency]);
 
-  function fmt(
+  const fmt = useCallback((
     val: number,
     currency = targetCurrency,
     decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-  }
+  ) => {
+    const key = `${locale}:${currency}:${decimals}`;
+    let formatter = formatterCache.get(key);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+      formatterCache.set(key, formatter);
+    }
+    return formatter.format(val);
+  }, [targetCurrency, appSettings.showDecimalPlaces, locale, formatterCache]);
 
-  function getRateToEur(currency?: string) {
+  const getRateToEur = useCallback((currency?: string) => {
     const code = (currency || 'EUR').toUpperCase();
     return ratesToEur[code] || 1;
-  }
+  }, [ratesToEur]);
 
-  function convertEurToTarget(amountEur: number) {
+  const convertEurToTarget = useCallback((amountEur: number) => {
     const rateTo = getRateToEur(targetCurrency);
     return rateTo ? amountEur / rateTo : amountEur;
-  }
+  }, [getRateToEur, targetCurrency]);
 
-  function openMarketLookup(symbol?: string) {
+  const openMarketLookup = useCallback((symbol?: string) => {
     if (!symbol) return;
     navigate(`/portfolio/market?symbol=${encodeURIComponent(symbol)}`);
-  }
+  }, [navigate]);
 
-  function calculateFxAwarePnl(holding: InvestmentSummary) {
+  const calculateFxAwarePnl = useCallback((holding: InvestmentSummary) => {
     const sortedTxns = [...(holding.transactions || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
     let poolUnits = 0;
     let poolCostEur = 0;
@@ -139,7 +155,7 @@ export default function StocksPage({
       unrealizedTarget: convertEurToTarget(unrealizedEur),
       unrealizedPercent: poolCostEur > 0 ? (unrealizedEur / poolCostEur) * 100 : 0,
     };
-  }
+  }, [convertEurToTarget, getRateToEur]);
 
   const displayedPnlByHoldingId = useMemo(() => {
     const map: Record<number, { realizedTarget: number; unrealizedTarget: number; unrealizedPercent: number }> = {};
@@ -156,14 +172,35 @@ export default function StocksPage({
       };
     }
     return map;
-  }, [holdings, enableFxAwarePnl, targetCurrency, exchangeData]);
+  }, [holdings, enableFxAwarePnl, calculateFxAwarePnl, convertToTarget]);
 
-  const totalValue = holdings.reduce((s, h) => s + convertToTarget(h.currentValue, h.currency), 0);
-  const totalRealizedGain = holdings.reduce((s, h) => s + (displayedPnlByHoldingId[h.id]?.realizedTarget || 0), 0);
-  const totalUnrealizedGain = holdings.reduce((s, h) => s + (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0), 0);
-  const totalDividends = holdings.reduce((s, h) => s + convertToTarget(h.totalDividends, h.currency), 0);
-  const totalFees = holdings.reduce((s, h) => s + convertToTarget(h.totalFees, h.currency), 0);
-  const totalTaxes = holdings.reduce((s, h) => s + convertToTarget(h.totalTaxes, h.currency), 0);
+  const totals = useMemo(() => {
+    return holdings.reduce((acc, holding) => {
+      acc.totalValue += convertToTarget(holding.currentValue, holding.currency);
+      acc.totalRealizedGain += displayedPnlByHoldingId[holding.id]?.realizedTarget || 0;
+      acc.totalUnrealizedGain += displayedPnlByHoldingId[holding.id]?.unrealizedTarget || 0;
+      acc.totalDividends += convertToTarget(holding.totalDividends, holding.currency);
+      acc.totalFees += convertToTarget(holding.totalFees, holding.currency);
+      acc.totalTaxes += convertToTarget(holding.totalTaxes, holding.currency);
+      return acc;
+    }, {
+      totalValue: 0,
+      totalRealizedGain: 0,
+      totalUnrealizedGain: 0,
+      totalDividends: 0,
+      totalFees: 0,
+      totalTaxes: 0,
+    });
+  }, [holdings, displayedPnlByHoldingId, convertToTarget]);
+
+  const {
+    totalValue,
+    totalRealizedGain,
+    totalUnrealizedGain,
+    totalDividends,
+    totalFees,
+    totalTaxes,
+  } = totals;
   const netGain = totalRealizedGain + totalUnrealizedGain + totalDividends - totalFees - totalTaxes;
 
   if (holdings.length === 0) {

@@ -1,7 +1,7 @@
 ---
 title: Backend Architecture
 description: Node.js backend architecture and diagrams
-date: 2026-03-26
+date: 2026-03-28
 tags: [architecture, backend, uml, plantuml]
 ---
 
@@ -832,7 +832,8 @@ TransactionPage --> User : display
 Automatic price updates for investments from external providers.
 
 Migration compatibility note:
-- `0017_investment_custom_provider_history` updates inheritance compatibility for custom-provider latest/history fields and metals view/trigger wiring, while keeping history fetch as on-demand external data (no DB history persistence) ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- `0017_investment_custom_provider_history` updates inheritance compatibility for custom-provider latest/history fields and metals view/trigger wiring ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- `0019_asset_price_history_cache` adds persisted historical quote cache (`asset_price_history`) used by read-through provider history fetches and startup backfill for held assets ([[alembic/versions/0019_asset_price_history_cache.py]]).
 
 ```plantuml
 @startuml
@@ -849,9 +850,10 @@ package "Backend Services" {
 }
 
 cloud "Providers" as Providers {
-  CoinGecko
+  Binance
   YahooFinance
-  Kraken
+  Kinesis
+  CustomJSON
 }
 
 database "PostgreSQL" as DB
@@ -860,12 +862,14 @@ PriceProviderService --> InvestmentRepository : getActiveInvestments()
 InvestmentRepository --> DB : SELECT
 
 loop For each investment
-  alt provider = 'coingecko'
-    PriceProviderService --> CoinGecko : GET price
+  alt provider = 'binance'
+    PriceProviderService --> Binance : GET price
   else provider = 'yahoo'
     PriceProviderService --> YahooFinance : GET price
-  else provider = 'kraken'
-    PriceProviderService --> Kraken : GET price
+  else provider = 'kinesis'
+    PriceProviderService --> Kinesis : GET trendline
+  else provider = 'custom'
+    PriceProviderService --> CustomJSON : GET latest/history
   end
   Providers --> PriceProviderService : price
   PriceProviderService --> InvestmentRepository : update price
@@ -876,6 +880,9 @@ end
 ```
 
 Source diagram: [[docs/diagrams/price-provider-flow.puml]]
+
+Database addition note:
+- Historical quote persistence table: `asset_price_history` (`investment_id`, `price_date`, `close_price`, `source`, `fetched_at`, `updated_at`) created by schema init and Alembic migration.
 
 ## Recurring Detection Flow
 

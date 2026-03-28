@@ -2,7 +2,7 @@
 title: Admin API
 type: api
 status: active
-date: 2025-03-18
+date: 2026-03-28
 tags: [api, admin, system, updates]
 description: API endpoints for system administration, database management, and application updates
 related_code: ["apps/node-backend/src/routes/admin.js"]
@@ -115,6 +115,32 @@ Reset the database (requires explicit confirmation).
 
 ---
 
+### POST /api/admin/investments/kinesis/sanitize-history
+
+Run persisted Kinesis history sanitization for all investments where `price_provider='kinesis'`.
+
+**Response:** `200 OK`
+
+```json
+{
+  "message": "Kinesis historical spikes sanitization completed",
+  "processed": 3,
+  "updated": 2,
+  "correctedPoints": 5,
+  "failed": 0
+}
+```
+
+**Response:** `500 Internal Server Error`
+
+```json
+{
+  "detail": "Failed to sanitize Kinesis history"
+}
+```
+
+---
+
 ### GET /api/admin/update/check
 
 Check for application updates via GitHub Releases API.
@@ -197,3 +223,5 @@ Apply update and restart the application (backwards compatibility endpoint).
 
 - [[docs/api/index]] - API Index
 - [[docs/adr/002-database-schema]] - Database Schema
+
+Code links: [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/services/priceProviderService.js]]

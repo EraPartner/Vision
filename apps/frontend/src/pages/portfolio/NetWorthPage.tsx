@@ -72,6 +72,42 @@ function computeYDomain(
   return [lower, upper];
 }
 
+function computeSeriesDomainForRange(
+  points: Array<{ netWorth: number; liquid: number; investments: number }>,
+  series: NetWorthSeries,
+  startIndex: number,
+  endIndex: number,
+): [number, number] {
+  if (points.length === 0) return [0, 100];
+  const safeStart = Math.max(0, startIndex);
+  const safeEnd = Math.min(points.length - 1, endIndex);
+  if (safeEnd < safeStart) return [0, 100];
+
+  let minValue = Number.POSITIVE_INFINITY;
+  let maxValue = Number.NEGATIVE_INFINITY;
+
+  for (let index = safeStart; index <= safeEnd; index += 1) {
+    const point = points[index];
+    const value = point?.[series];
+    if (!Number.isFinite(value)) continue;
+    if (value < minValue) minValue = value;
+    if (value > maxValue) maxValue = value;
+  }
+
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+    return [0, 100];
+  }
+
+  const span = maxValue - minValue;
+  const padding = span === 0
+    ? Math.max(Math.abs(maxValue) * 0.03, 1)
+    : Math.max(span * 0.03, 1);
+
+  const lower = Math.floor((minValue - padding) * 100) / 100;
+  const upper = Math.ceil((maxValue + padding) * 100) / 100;
+  return [lower, upper];
+}
+
 function niceStep(roughStep: number) {
   if (!Number.isFinite(roughStep) || roughStep <= 0) return 100;
 
@@ -314,9 +350,10 @@ export default function NetWorthPage() {
 
       if (force || !rangeUnchanged) {
         rangeRef.current = { startIndex, endIndex };
-        const visiblePoints = displaySnapshots.slice(startIndex, endIndex + 1);
-        const domainSource = visiblePoints.length > 0 ? visiblePoints : displaySnapshots;
-        const nextDomain = computeNiceYDomain(computeYDomain(domainSource, [selectedSeries]));
+        const hasVisibleRange = endIndex >= startIndex;
+        const nextDomain = hasVisibleRange
+          ? computeNiceYDomain(computeSeriesDomainForRange(displaySnapshots, selectedSeries, startIndex, endIndex))
+          : computeNiceYDomain(computeYDomain(displaySnapshots, [selectedSeries]));
         const safeDomain: [number, number] = Number.isFinite(nextDomain[0])
           && Number.isFinite(nextDomain[1])
           && nextDomain[1] > nextDomain[0]

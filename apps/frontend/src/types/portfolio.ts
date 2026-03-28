@@ -80,7 +80,7 @@ export interface InvestmentSummary {
   cadastral_income?: number;
   municipality_tax_rate?: number;
   notes?: string;
-  price_provider?: 'manual' | 'coingecko' | 'yahoo' | 'kraken' | 'custom';
+  price_provider?: 'manual' | 'binance' | 'yahoo' | 'custom' | 'kinesis';
   price_provider_id?: string;
   price_provider_url?: string;
   price_provider_latest_url?: string;

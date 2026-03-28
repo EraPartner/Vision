@@ -47,9 +47,24 @@ vi.mock('../../src/services/priceProviderService.js', () => ({
   fetchHistoricalPrices: vi.fn(),
   SUPPORTED_PROVIDERS: [
     { key: 'manual', name: 'Manual' },
-    { key: 'coingecko', name: 'CoinGecko' },
+    { key: 'binance', name: 'Binance' },
     { key: 'yahoo', name: 'Yahoo Finance' },
+    { key: 'custom', name: 'Custom JSON' },
+    { key: 'kinesis', name: 'Kinesis' },
   ],
+}));
+
+vi.mock('../../src/config/kinesisConfig.js', () => ({
+  getKinesisAssetConfig: vi.fn((assetName) => {
+    if (assetName === 'kaufen_gold') {
+      return {
+        symbol: 'KAU_USD',
+        timeframe: 'daily',
+        fromDate: '2020-01-01',
+      };
+    }
+    return undefined;
+  }),
 }));
 
 vi.mock('../../src/middleware/validation.js', () => ({
@@ -182,7 +197,7 @@ describe('Investment Routes', () => {
   describe('POST /refresh-prices', () => {
     it('should refresh prices for investments with providers', async () => {
       investmentRepository.getAll.mockResolvedValue([
-        { id: 1, price_provider: 'coingecko', price_provider_id: 'bitcoin' },
+        { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT' },
       ]);
       fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 50000, source: 'live' } });
       investmentRepository.updatePrice.mockResolvedValue({});
@@ -231,6 +246,25 @@ describe('Investment Routes', () => {
       expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
     });
 
+    it('should refresh kinesis investments when configured by mapped asset name', async () => {
+      investmentRepository.getAll.mockResolvedValue([
+        { id: 1, name: 'kaufen_gold', price_provider: 'kinesis', price_provider_id: null },
+      ]);
+      fetchLivePricesDetailed.mockResolvedValue({ 1: { price: 101.25, source: 'live' } });
+      investmentRepository.updatePrice.mockResolvedValue({});
+
+      const req = { body: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/refresh-prices'](req, res);
+
+      const data = res.json.mock.calls[0][0];
+      expect(data.total).toBe(1);
+      expect(data.updated).toBe(1);
+      expect(data.prices).toEqual({ 1: 101.25 });
+      expect(data.priceSources).toEqual({ 1: 'live' });
+      expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
+    });
+
     it('should return 0 updated when no providers configured', async () => {
       investmentRepository.getAll.mockResolvedValue([
         { id: 1, price_provider: 'manual', price_provider_id: null },
@@ -268,7 +302,7 @@ describe('Investment Routes', () => {
 
       expect(fetchHistoricalPrices).toHaveBeenCalledWith(
         { id: 12, price_provider: 'custom' },
-        { fromMs: 1699999999999, toMs: 1700000000001 }
+        { fromMs: 1699999999999, toMs: 1700000000001, dbOnly: false }
       );
       expect(res.json).toHaveBeenCalledWith({
         investment_id: 12,

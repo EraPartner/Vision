@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-03-27
+date: 2026-03-28
 tags: [api, investments, portfolio, stocks, crypto, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]]
 ---
@@ -83,9 +83,9 @@ Get supported price providers.
 {
   "providers": [
     { "key": "manual", "name": "Manual", "description": "Set price manually" },
-    { "key": "coingecko", "name": "CoinGecko", "description": "Free crypto prices (use coin ID, e.g. \"bitcoin\")" },
+    { "key": "binance", "name": "Binance", "description": "Crypto prices (use trading pair, e.g. \"BTCUSDT\")" },
     { "key": "yahoo", "name": "Yahoo Finance", "description": "Stocks, ETFs & metals (use ticker, e.g. \"AAPL\", \"VWCE.DE\", \"GC=F\")" },
-    { "key": "kraken", "name": "Kraken", "description": "Crypto pairs (use pair, e.g. \"XBTUSD\")" },
+    { "key": "kinesis", "name": "Kinesis", "description": "Precious metals & commodities (use symbol, e.g. \"KAU_USD\")" },
     { "key": "custom", "name": "Custom JSON", "description": "Any JSON endpoint with a configurable price path" }
   ]
 }
@@ -96,7 +96,12 @@ Get supported price providers.
 Fetch historical price points for an investment from its provider-specific history source.
 
 Current support:
-- `custom` provider: reads remote JSON directly (no DB persistence), using configurable JSON paths.
+- `yahoo` and `custom` providers: endpoint reads persisted DB history first, fetches provider history when range coverage is missing, then upserts refreshed rows.
+- Other providers return persisted history if available.
+
+Persistence notes:
+- Historical quotes are stored in `asset_price_history` (daily `price_date` and `close_price` per investment).
+- Startup runs background backfill (`backfillHistoricalAssetQuotes`) for held market-priced assets from first transaction date.
 
 **Query Parameters:**
 
@@ -104,6 +109,7 @@ Current support:
 |-----------|------|-------------|
 | from_ms | integer | Optional lower bound (unix timestamp ms) |
 | to_ms | integer | Optional upper bound (unix timestamp ms) |
+| db_only | boolean (`true`/`false` or `1`/`0`) | Optional. When true, serves only persisted DB history and skips external provider refresh/fetch |
 
 **Response:**
 ```json
@@ -129,11 +135,15 @@ Fallback chain for each investment price:
 
 Additional refresh behavior:
 - Yahoo refresh accepts either `price_provider_id` **or** investment `symbol` (symbol fallback), matching Market Lookup symbol handling.
+- Kinesis refresh/history resolution uses shared config resolution (`_resolveKinesisConfig`) so live and historical paths use the same symbol/timeframe mapping.
+- Route-level live-refresh eligibility for `kinesis` accepts either explicit `price_provider_id` or asset-name/symbol mapping via `getKinesisAssetConfig`, so mapped metals can refresh even when `provider_id` is empty.
 - Price writes are persisted through inheritance tables (`investments_base` + asset child table) to avoid direct updates on the non-updatable `investments` compatibility view.
 
 Compatibility safeguard:
 - A DB migration adds an `INSTEAD OF UPDATE` trigger on the `investments` view, so legacy `UPDATE investments ...` statements are redirected to inheritance tables and no longer error.
 - Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- Migration `0021_price_provider_binance` replaces `coingecko`/`kraken` enum values with `binance` by altering `investments_base.price_provider` directly (not the `investments` compatibility view), dropping the default before enum conversion, then restoring `DEFAULT 'manual'` after conversion. The migration also handles PostgreSQL relation dependencies by backing up and dropping all dependent `public` views that reference `investments_base` (table-level or `price_provider` column-level dependencies), then recreating them from captured definitions; when the `investments` view is restored and `investments_view_update_instead()` exists, it recreates trigger `update_investments_view_instead` ([[alembic/versions/0021_update_price_provider_enum.py]]).
+- Migration `0022_add_kinesis_price_provider_enum` extends enum `price_provider` with value `kinesis`. Downgrade remaps `kinesis` rows to `manual`, rebuilds the enum without `kinesis`, and applies the same dependent-view/trigger handling pattern used by the prior enum migration to keep compatibility views functional ([[alembic/versions/0022_add_kinesis_price_provider_enum.py]]).
 - Startup schema bootstrap compatibility (schema version `20260324_2`) now guards `safeIndex`, `safeGinIndex`, and `safeTrigger` to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[apps/node-backend/src/database/schemaInit.js]]).
 
 **Response:**
@@ -239,6 +249,29 @@ Get portfolio transactions for an investment.
 
 **Transaction Types:** buy, sell, gift, dividend, fee, tax, interest, rent_income, appreciation
 
+### GET /api/investments/transactions
+
+Get portfolio transactions for **multiple investments** in a single request.
+
+This endpoint is intended for portfolio pages that need to load many holdings at once and avoids client-side N-request fan-out.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `investment_ids` | string | required | Comma-separated investment IDs (e.g. `1,2,5`) |
+| `type` | string | null | Optional transaction type filter |
+| `per_investment_limit` | integer | 1000 | Max rows per investment (clamped 1..5000) |
+| `limit` | integer | null | Optional global cap after per-investment limiting (clamped 1..200000) |
+| `offset` | integer | 0 | Global offset after ordering |
+
+**Behavior notes:**
+- Repository uses per-investment ranking (`ROW_NUMBER() OVER (PARTITION BY investment_id ORDER BY date DESC, id DESC)`) so each investment contributes at most `per_investment_limit` rows.
+- Final result is globally ordered by `date DESC, id DESC`.
+- `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
+
+Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
+
 ### POST /api/investments/:id/transactions
 
 Create a portfolio transaction.
@@ -332,9 +365,9 @@ Get investment summary with holdings breakdown.
 | Provider | Asset Classes | Description |
 |----------|---------------|-------------|
 | manual | all | Manual price entry |
-| coingecko | crypto | CoinGecko API |
+| binance | crypto | Binance market data |
 | yahoo | stock, etf, metals | Yahoo Finance |
-| kraken | crypto | Kraken exchange |
+| kinesis | metals, commodities | Kinesis market data |
 | custom | all | Custom API |
 
 ## Belgian Tax Fields
@@ -350,3 +383,5 @@ For real estate investments:
 - [[docs/adr/002-database-schema|Database Schema]]
 
 Metals implementation code links: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/schemaInit.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

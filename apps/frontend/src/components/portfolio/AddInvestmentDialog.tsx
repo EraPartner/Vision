@@ -82,9 +82,9 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
 
   const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
     { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
-    { key: 'coingecko', name: 'CoinGecko', hint: t('addInv.provider.hint.coingecko') },
+    { key: 'binance', name: 'Binance', hint: t('addInv.provider.hint.binance') },
     { key: 'yahoo', name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
-    { key: 'kraken', name: 'Kraken', hint: t('addInv.provider.hint.kraken') },
+    { key: 'kinesis', name: 'Kinesis', hint: t('addInv.provider.hint.kinesis') },
     { key: 'custom', name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
   ];
 
@@ -181,12 +181,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         // fresh state on open
         reset();
         // if only one allowed asset class, auto-select and jump to details
-        if (allowedAssetClasses && allowedAssetClasses.length === 1) {
-          const key = allowedAssetClasses[0];
-           const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
-          setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
-          setStep('details');
-        } else {
+          if (allowedAssetClasses && allowedAssetClasses.length === 1) {
+            const key = allowedAssetClasses[0];
+            const defaultProvider = key === 'crypto' ? 'binance' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
+           setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
+           setStep('details');
+         } else {
           setStep('type');
         }
       }}
@@ -217,7 +217,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
                 <button
                   key={key}
                   onClick={() => {
-                    const defaultProvider = key === 'crypto' ? 'coingecko' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
+                    const defaultProvider = key === 'crypto' ? 'binance' : ['stock', 'etf', 'metals'].includes(key) ? 'yahoo' : 'manual';
                     setForm(f => ({ ...f, assetClass: key, priceProvider: defaultProvider as PriceProvider }));
                     setStep('details');
                   }}

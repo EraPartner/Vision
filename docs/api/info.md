@@ -2,7 +2,7 @@
 title: Info & Analytics API
 type: api
 status: active
-date: 2026-03-27
+date: 2026-03-28
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js"]
@@ -162,6 +162,10 @@ Get monthly financial summary for the last 12 months.
 }
 ```
 
+Notes:
+- Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
+- This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
+
 ---
 
 ### GET /api/info/planned-expenses-next-month
@@ -247,6 +251,11 @@ Compare cashflow between periods.
   }
 }
 ```
+
+Notes:
+- Historical and current transaction rows are converted with date-specific FX (`date` field).
+- Planned rows are converted with date-specific FX using `planned_date`.
+- This avoids retroactive movement of historical daily/average cashflow lines when latest exchange rates change.
 
 ---
 
@@ -347,6 +356,9 @@ Get net worth combining bank balances + portfolio value.
 | `target_currency` | string | Alias for `currency` |
 
 Notes:
+- Route applies per-currency in-memory response caching (TTL 60s) to reduce repeated heavy repository recomputation on dashboard refreshes.
+- Concurrent requests for the same currency are deduplicated in-flight and share the same repository promise.
+- Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) to protect expensive net-worth computations.
 - Returns **daily** snapshots (not monthly) from the first available data date until today.
 - Seed date (`first_data_date`) is the minimum of: first `portfolio_transactions.date`, first active `investments.created_at`, and first active `transactions.date`.
 - If the active-only seed date is empty (legacy/partially-migrated data), backend automatically retries seed date discovery without active filters to avoid false all-zero responses.
@@ -358,7 +370,9 @@ Notes:
 - When bank-account balance snapshots are unavailable, liquid net worth falls back to cumulative transaction flow (date- and currency-aware) so snapshots remain populated instead of returning empty liquid history.
 - Regression coverage includes a transactions-only (no investments) case to ensure `/api/info/net-worth` still returns non-zero liquid/net worth when transaction data exists ([[apps/node-backend/tests/infoRepository.test.js]]).
 - Latest snapshot investment value is reconciled from active investment holdings (`units` × `current_price` for unit-based assets, principal-based for savings/bonds, plus appreciation for real estate) so current net worth is not stuck at `0` when historical portfolio aggregation is sparse.
+- Historical unit-priced investment valuation uses persisted/provider historical quotes first and falls back to transaction-derived unit price carry-forward when quote history is missing; it does not backfill past days from mutable `current_price`.
 - Backend emits debug/warn/info logs for net worth computation context (`firstDataDate`, snapshot count, current totals, fallback usage) to speed up production troubleshooting without changing API shape.
+- Daily net-worth snapshots are sanitized for isolated one-day investment spikes/troughs: confirmed outlier days are replaced with geometric interpolation (`sqrt(prev*next)`) and `netWorth` is recomputed with unchanged liquid value; `monthlyChange` and baseline calculations use sanitized snapshots ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
 **Response:** `200 OK`
 
@@ -452,6 +466,63 @@ Force refresh exchange rates from ECB API.
 
 ---
 
+### GET /api/info/inflation-rates
+
+Get Belgian monthly inflation rates used by portfolio real-return calculations.
+
+Notes:
+- Source data is fetched from Statbel with Eurostat HICP index as fallback and cached server-side.
+- Response `source` indicates where the response came from: `memory`, `database`, `statbel`, or `eurostat`.
+- Supports optional month filtering with `start_month` and `end_month` in `YYYY-MM` (or `YYYY-MM-DD`, month part is used).
+- Supports optional `db_only=true|1` to force persisted DB rates for immediate responses (decoupled from external API latency).
+- When `db_only` is enabled, the backend serves DB rates immediately and schedules background external refresh (Statbel then Eurostat fallback) without blocking the response.
+- Statbel fetch uses retry + backoff across multiple candidate Statbel base URLs.
+- On Statbel failure, service attempts Eurostat HICP monthly index and derives monthly inflation as month-over-month index change.
+- If both external sources fail, API falls back to persisted DB rates and warning logs are throttled to reduce noise during prolonged outages.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `start_month` | string | Start month filter (`YYYY-MM`) |
+| `end_month` | string | End month filter (`YYYY-MM`) |
+| `db_only` | boolean | If `true`/`1`, return persisted DB rates only and do external refresh in background |
+
+**Response:** `200 OK`
+
+```json
+{
+  "source": "database",
+  "total_rates": 24,
+  "rates": [
+    { "month": "2024-01", "monthly_rate": 0.0021 },
+    { "month": "2024-02", "monthly_rate": 0.0018 }
+  ]
+}
+```
+
+---
+
+### POST /api/info/inflation-rates/refresh
+
+Force refresh Belgian inflation rates from Statbel.
+
+Notes:
+- Admin-limited endpoint (same admin limiter pattern as exchange-rate refresh).
+- Clears in-memory cache and repopulates persisted monthly rates.
+
+**Response:** `200 OK`
+
+```json
+{
+  "message": "Belgian inflation rates refreshed from Statbel",
+  "source": "statbel",
+  "total_rates": 120
+}
+```
+
+---
+
 ### POST /api/info/refresh-views
 
 Manually refresh materialized views.
@@ -490,4 +561,4 @@ These endpoints are optimized using:
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]

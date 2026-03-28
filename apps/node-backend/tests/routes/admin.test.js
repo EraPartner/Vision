@@ -32,8 +32,13 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('../../src/services/priceProviderService.js', () => ({
+  sanitizePersistedKinesisHistory: vi.fn(),
+}));
+
 import { checkConnection, getTableCount } from '../../src/database/connection.js';
 import { getSettings } from '../../src/config/config.js';
+import { sanitizePersistedKinesisHistory } from '../../src/services/priceProviderService.js';
 await import('../../src/routes/admin.js');
 
 describe('Admin Routes', () => {
@@ -138,6 +143,39 @@ describe('Admin Routes', () => {
       await routeHandlers['post:/database/reset'](req, res);
 
       expect(res.json).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /investments/kinesis/sanitize-history', () => {
+    it('should sanitize persisted kinesis history and return summary', async () => {
+      sanitizePersistedKinesisHistory.mockResolvedValue({
+        processed: 3,
+        updated: 2,
+        correctedPoints: 4,
+        failed: 0,
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/investments/kinesis/sanitize-history'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Kinesis historical spikes sanitization completed',
+        processed: 3,
+        updated: 2,
+        correctedPoints: 4,
+        failed: 0,
+      });
+    });
+
+    it('should return 500 when sanitization fails', async () => {
+      sanitizePersistedKinesisHistory.mockRejectedValue(new Error('boom'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/investments/kinesis/sanitize-history'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
     });
   });
 });

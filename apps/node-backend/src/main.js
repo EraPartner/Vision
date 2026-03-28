@@ -18,9 +18,18 @@ import {
   clearMemoryCache as clearExchangeRateCache,
   backfillPortfolioHistoricalRates,
 } from './services/currencyConversionService.js';
+import {
+  warmInflationCache,
+  clearInflationMemoryCache,
+} from './services/belgianInflationService.js';
 import PostgresManager from './database/postgresManager.js';
 import investmentRepository from './repositories/investmentRepository.js';
-import { fetchLivePricesDetailed } from './services/priceProviderService.js';
+import {
+  fetchLivePricesDetailed,
+  backfillHistoricalAssetQuotes,
+  sanitizePersistedKinesisHistory,
+} from './services/priceProviderService.js';
+import { getKinesisAssetConfig } from './config/kinesisConfig.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -38,7 +47,35 @@ function hasLivePriceRefreshConfig(investment) {
     return Boolean(investment?.price_provider_id || investment?.symbol);
   }
 
+  if (provider === 'kinesis') {
+    if (investment?.price_provider_id) return true;
+    const assetName = (investment?.name || investment?.symbol || '').toLowerCase().trim();
+    return Boolean(assetName && getKinesisAssetConfig(assetName));
+  }
+
   return Boolean(investment?.price_provider_id);
+}
+
+function isValidStoredPrice(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
+}
+
+async function persistRefreshedPrices(prices) {
+  const updateResults = await Promise.all(
+    Object.entries(prices).map(async ([investmentId, priceData]) => {
+      const { price, source } = priceData || {};
+      if (price == null || Number.isNaN(price) || source === 'cached') return 0;
+
+      await investmentRepository.updatePrice(parseInt(investmentId, 10), {
+        current_price: price,
+        price_updated_at: new Date().toISOString(),
+      });
+      return 1;
+    })
+  );
+
+  return updateResults.reduce((sum, count) => sum + count, 0);
 }
 
 async function refreshInvestmentPricesOnStartup() {
@@ -53,23 +90,39 @@ async function refreshInvestmentPricesOnStartup() {
   const cachedPricesByInvestmentId = Object.fromEntries(
     toRefresh.map(i => [i.id, Number(i.current_price)])
   );
-  const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
 
-  const updateResults = await Promise.all(
-    Object.entries(prices).map(async ([investmentId, priceData]) => {
-      const { price, source } = priceData || {};
-      if (price == null || Number.isNaN(price) || source === 'cached') return 0;
+  const deferredKinesisRefresh = [];
+  const immediateRefresh = [];
 
-      await investmentRepository.updatePrice(parseInt(investmentId, 10), {
-        current_price: price,
-        price_updated_at: new Date().toISOString(),
-      });
-      return 1;
-    })
-  );
+  for (const investment of toRefresh) {
+    if (investment.price_provider === 'kinesis' && isValidStoredPrice(cachedPricesByInvestmentId[investment.id])) {
+      deferredKinesisRefresh.push(investment);
+      continue;
+    }
+    immediateRefresh.push(investment);
+  }
 
-  const updated = updateResults.reduce((sum, count) => sum + count, 0);
-  logger.info(`Startup investment price refresh completed: ${updated}/${toRefresh.length}`);
+  if (immediateRefresh.length > 0) {
+    const prices = await fetchLivePricesDetailed(immediateRefresh, { cachedPricesByInvestmentId });
+    const updated = await persistRefreshedPrices(prices);
+    logger.info(`Startup immediate investment price refresh completed: ${updated}/${immediateRefresh.length}`);
+  } else {
+    logger.info('Startup immediate investment price refresh skipped: all configured investments have usable stored prices');
+  }
+
+  if (deferredKinesisRefresh.length > 0) {
+    logger.info(`Startup deferred Kinesis price refresh scheduled for ${deferredKinesisRefresh.length} investment(s)`);
+    setTimeout(() => {
+      fetchLivePricesDetailed(deferredKinesisRefresh)
+        .then(prices => persistRefreshedPrices(prices))
+        .then((updated) => {
+          logger.info(`Startup deferred Kinesis price refresh completed: ${updated}/${deferredKinesisRefresh.length}`);
+        })
+        .catch((err) => {
+          logger.error('Startup deferred Kinesis price refresh failed', { error: err.message });
+        });
+    }, 0);
+  }
 }
 
 // Import route modules
@@ -305,8 +358,20 @@ async function start() {
         logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
       });
 
+      warmInflationCache().catch((err) => {
+        logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
+      });
+
       backfillPortfolioHistoricalRates().catch((err) => {
         logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
+      });
+
+      backfillHistoricalAssetQuotes().catch((err) => {
+        logger.error('Failed to backfill historical asset quotes on startup', { error: err.message });
+      });
+
+      sanitizePersistedKinesisHistory().catch((err) => {
+        logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
       });
 
       refreshInvestmentPricesOnStartup().catch((err) => {
@@ -320,6 +385,11 @@ async function start() {
         clearExchangeRateCache();
         await warmExchangeRateCache().catch((err) => {
           logger.error('Scheduled exchange rate refresh failed', { error: err.message });
+        });
+
+        clearInflationMemoryCache();
+        await warmInflationCache().catch((err) => {
+          logger.error('Scheduled Belgian inflation refresh failed', { error: err.message });
         });
       }, 12 * 60 * 60 * 1000); // every 12 hours
     });

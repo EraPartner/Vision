@@ -13,7 +13,7 @@ import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     Calendar, DollarSign, Activity,
 } from "lucide-react";
-import { format, parseISO, differenceInMonths, differenceInDays, startOfMonth, endOfMonth, isAfter, isBefore, isValid, subMonths, subYears } from "date-fns";
+import { format, parseISO, differenceInMonths, differenceInDays, startOfMonth, endOfMonth, isAfter, isValid, subMonths, subYears } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass, PortfolioTransaction } from "@/types/api";
@@ -40,21 +40,11 @@ function getPriceFromHistory(points: HistoryPoint[], date: Date): number | undef
     return best?.price;
 }
 
-// ─── EU Inflation (Eurostat HICP annual avg, hardcoded for simplicity) ───
-const EU_ANNUAL_INFLATION: Record<number, number> = {
-    2018: 1.8, 2019: 1.2, 2020: 0.3, 2021: 2.6,
-    2022: 8.4, 2023: 5.4, 2024: 2.4, 2025: 2.1, 2026: 2.0,
-};
-
-function getMonthlyInflation(year: number): number {
-    const annual = EU_ANNUAL_INFLATION[year] ?? 2.0;
-    return annual / 12 / 100; // monthly rate
-}
-
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
 interface MonthlySnapshot {
     month: string; // YYYY-MM
+    day: string; // YYYY-MM-DD
     date: Date;
     invested: number;
     value: number;
@@ -86,6 +76,19 @@ interface RelativeFlowBucket {
 
 const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
 
+const CHART_KEYS = {
+    invested: 'invested',
+    inflationAdjusted: 'inflationAdjusted',
+    value: 'value',
+    stocksEtfs: 'stocksEtfs',
+    crypto: 'crypto',
+    metals: 'metals',
+    relativePortfolio: 'relativePortfolio',
+    relativeStocksEtfs: 'relativeStocksEtfs',
+    relativeCrypto: 'relativeCrypto',
+    relativeMetals: 'relativeMetals',
+} as const;
+
 export default function PerformancePage() {
     const { t, language } = useLanguage();
     const { appSettings } = useAppSettings();
@@ -105,20 +108,55 @@ export default function PerformancePage() {
         staleTime: 60_000,
     });
 
+    const historyRange = useMemo(() => {
+        let earliestTimestamp = Number.POSITIVE_INFINITY;
+
+        for (const transaction of transactions) {
+            const parsed = Date.parse(transaction.date);
+            if (!Number.isFinite(parsed)) continue;
+            if (parsed < earliestTimestamp) earliestTimestamp = parsed;
+        }
+
+        if (!Number.isFinite(earliestTimestamp)) return undefined;
+
+        const from = new Date(earliestTimestamp);
+        from.setHours(0, 0, 0, 0);
+
+        const to = new Date();
+        to.setHours(23, 59, 59, 999);
+
+        return {
+            fromMs: from.getTime(),
+            toMs: to.getTime(),
+        };
+    }, [transactions]);
+
     const historicalPriceInvestments = useMemo(
         () => summaries
             .filter((s) => ['stock', 'etf', 'crypto', 'metals'].includes(s.assetClass))
-            .map((s) => s.id),
+            .map((s) => s.id)
+            .sort((a, b) => a - b),
         [summaries]
     );
 
     const { data: customHistoryData } = useQuery({
-        queryKey: ['investment-price-history', historicalPriceInvestments],
+        queryKey: [
+            'investment-price-history',
+            historicalPriceInvestments.join(','),
+            historyRange?.fromMs ?? null,
+            historyRange?.toMs ?? null,
+        ],
         queryFn: async () => {
             const entries = await Promise.all(
                 historicalPriceInvestments.map(async (id) => {
                     try {
-                        const res = await apiClient.getInvestmentPriceHistory(id);
+                        const res = await apiClient.getInvestmentPriceHistory(id, historyRange
+                            ? {
+                                from_ms: historyRange.fromMs,
+                                to_ms: historyRange.toMs,
+                                db_only: true,
+                            }
+                            : undefined);
                         const points = ((res?.points || []) as HistoryPointResponse[])
                             .map((p) => ({ timestampMs: Number(p.timestampMs), price: Number(p.price) }))
                             .filter((p: HistoryPoint) => Number.isFinite(p.timestampMs) && Number.isFinite(p.price) && p.price > 0)
@@ -131,7 +169,7 @@ export default function PerformancePage() {
             );
             return Object.fromEntries(entries) as Record<number, HistoryPoint[]>;
         },
-        enabled: historicalPriceInvestments.length > 0,
+        enabled: historicalPriceInvestments.length > 0 && Boolean(historyRange),
         staleTime: 5 * 60_000,
     });
 
@@ -143,15 +181,25 @@ export default function PerformancePage() {
         ...(exchangeData?.fallback_rates || {}),
     }), [exchangeData]);
 
-    const convertToTarget = useCallback((amount: number, fromCurrency?: string) => {
+    const convertToTarget = useCallback((amount: number, fromCurrency?: string, fxRateToEur?: number) => {
         const from = (fromCurrency || 'EUR').toUpperCase();
         const to = defaultCurrency.toUpperCase();
         if (from === to) return amount;
-        const rateFrom = ratesToEur[from];
         const rateTo = ratesToEur[to];
+
+        const txRateToEur = Number(fxRateToEur);
+        if (from !== 'EUR' && Number.isFinite(txRateToEur) && txRateToEur > 0 && Number.isFinite(rateTo) && rateTo > 0) {
+            return (amount * txRateToEur) / rateTo;
+        }
+
+        const rateFrom = ratesToEur[from];
         if (!rateFrom || !rateTo) return amount;
         return (amount * rateFrom) / rateTo;
     }, [defaultCurrency, ratesToEur]);
+
+    const convertTransactionAmountToTarget = useCallback((transaction: ParsedPortfolioTransaction) => {
+        return convertToTarget(Number(transaction.amount), transaction.currency, transaction.fx_rate_to_eur);
+    }, [convertToTarget]);
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
     const PERIOD_LABELS: Record<Period, string> = {
@@ -173,6 +221,30 @@ export default function PerformancePage() {
             .sort((a, b) => a._parsedDate.getTime() - b._parsedDate.getTime()),
         [transactions],
     );
+
+    const inflationStartMonth = useMemo(() => {
+        const firstDate = parsedTransactions[0]?._parsedDate;
+        return firstDate ? format(firstDate, "yyyy-MM") : undefined;
+    }, [parsedTransactions]);
+
+    const { data: inflationRatesData } = useQuery({
+        queryKey: ['belgian-inflation-rates', inflationStartMonth],
+        queryFn: () => apiClient.getBelgianInflationRates({
+            start_month: inflationStartMonth,
+            db_only: true,
+        }),
+        enabled: Boolean(inflationStartMonth),
+        staleTime: 24 * 60 * 60 * 1000,
+    });
+
+    const inflationByMonth = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const rate of inflationRatesData?.rates ?? []) {
+            if (!rate?.month || !Number.isFinite(rate.monthly_rate)) continue;
+            map.set(rate.month, Number(rate.monthly_rate));
+        }
+        return map;
+    }, [inflationRatesData?.rates]);
 
     const investmentAssetClassById = useMemo(() => {
         const map = new Map<number, AssetClass>();
@@ -206,9 +278,10 @@ export default function PerformancePage() {
             const rawAmount = Number(transaction.amount);
             if (!Number.isFinite(rawAmount) || rawAmount === 0) continue;
 
+            const convertedAmount = convertTransactionAmountToTarget(transaction);
             const signedFlow = transaction.type === "sell"
-                ? -convertToTarget(rawAmount, transaction.currency)
-                : convertToTarget(rawAmount, transaction.currency);
+                ? -convertedAmount
+                : convertedAmount;
 
             if (!Number.isFinite(signedFlow) || signedFlow === 0) continue;
 
@@ -227,13 +300,70 @@ export default function PerformancePage() {
         }
 
         return byMonth;
-    }, [parsedTransactions, convertToTarget, investmentAssetClassById]);
+    }, [parsedTransactions, convertTransactionAmountToTarget, investmentAssetClassById]);
+
+    const dailyNetFlows = useMemo(() => {
+        const byDay = new Map<string, RelativeFlowBucket>();
+
+        const ensure = (day: string) => {
+            const existing = byDay.get(day);
+            if (existing) return existing;
+            const created: RelativeFlowBucket = {
+                portfolio: 0,
+                stocksEtfs: 0,
+                crypto: 0,
+                metals: 0,
+            };
+            byDay.set(day, created);
+            return created;
+        };
+
+        for (const transaction of parsedTransactions) {
+            if (transaction.type !== "buy" && transaction.type !== "gift" && transaction.type !== "sell") {
+                continue;
+            }
+
+            const rawAmount = Number(transaction.amount);
+            if (!Number.isFinite(rawAmount) || rawAmount === 0) continue;
+
+            const convertedAmount = convertTransactionAmountToTarget(transaction);
+            const signedFlow = transaction.type === "sell"
+                ? -convertedAmount
+                : convertedAmount;
+
+            if (!Number.isFinite(signedFlow) || signedFlow === 0) continue;
+
+            const dayKey = format(transaction._parsedDate, "yyyy-MM-dd");
+            const bucket = ensure(dayKey);
+            bucket.portfolio += signedFlow;
+
+            const assetClass = investmentAssetClassById.get(transaction.investment_id);
+            if (assetClass === "stock" || assetClass === "etf") {
+                bucket.stocksEtfs += signedFlow;
+            } else if (assetClass === "crypto") {
+                bucket.crypto += signedFlow;
+            } else if (assetClass === "metals") {
+                bucket.metals += signedFlow;
+            }
+        }
+
+        return byDay;
+    }, [parsedTransactions, convertTransactionAmountToTarget, investmentAssetClassById]);
 
     const netWorthInvestmentsByMonth = useMemo(() => {
         const map = new Map<string, number>();
         for (const snapshot of netWorthData?.snapshots ?? []) {
             if (!snapshot?.date || !Number.isFinite(snapshot.investments)) continue;
             map.set(snapshot.date.slice(0, 7), snapshot.investments);
+        }
+        return map;
+    }, [netWorthData?.snapshots]);
+
+    const netWorthInvestmentsByDay = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const snapshot of netWorthData?.snapshots ?? []) {
+            if (!snapshot?.date || !Number.isFinite(snapshot.investments)) continue;
+            map.set(snapshot.date, snapshot.investments);
         }
         return map;
     }, [netWorthData?.snapshots]);
@@ -249,6 +379,13 @@ export default function PerformancePage() {
 
         const snapshots: MonthlySnapshot[] = [];
         let cumulativeInflation = 1;
+        const sourceTransactions = parsedTransactions.filter((t) => !isAfter(t._parsedDate, now));
+        let txIndex = 0;
+        const txCount = sourceTransactions.length;
+        let invested = 0;
+        const unitsByInvestment: Record<number, number> = {};
+        const lastTxPriceByInvestment: Record<number, number> = {};
+        const nonMarketByInvestment: Record<number, { buys: number; sells: number; income: number; appreciation: number; feesTaxes: number }> = {};
 
         for (let i = 0; i < totalMonths; i++) {
             const monthStart = startOfMonth(new Date(firstDate.getFullYear(), firstDate.getMonth() + i, 1));
@@ -257,24 +394,44 @@ export default function PerformancePage() {
 
             if (isAfter(monthStart, now)) break;
 
-            // Calculate invested amount up to this month
-            const txnsUpToMonth = parsedTransactions.filter(
-                (t) => !isAfter(t._parsedDate, monthEnd)
-            );
+            while (txIndex < txCount && !isAfter(sourceTransactions[txIndex]._parsedDate, monthEnd)) {
+                const t = sourceTransactions[txIndex];
+                const convertedAmount = convertTransactionAmountToTarget(t);
+                const nonMarketAgg = nonMarketByInvestment[t.investment_id]
+                    || { buys: 0, sells: 0, income: 0, appreciation: 0, feesTaxes: 0 };
 
-            let invested = 0;
-            const unitsByInvestment: Record<number, number> = {};
-
-            for (const t of txnsUpToMonth) {
                 if (t.type === "buy") {
-                    invested += convertToTarget(Number(t.amount), t.currency);
+                    invested += convertedAmount;
                     unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) + (Number(t.units) || 0);
+                    nonMarketAgg.buys += convertedAmount;
+                    const rawUnits = Number(t.units) || 0;
+                    const rawAmount = Number(t.amount) || 0;
+                    if (rawUnits > 0 && rawAmount > 0) {
+                        lastTxPriceByInvestment[t.investment_id] = rawAmount / rawUnits;
+                    }
                 } else if (t.type === "gift") {
-                    invested += convertToTarget(Number(t.amount), t.currency);
+                    invested += convertedAmount;
                     unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) + (Number(t.units) || 0);
+                    nonMarketAgg.buys += convertedAmount;
                 } else if (t.type === "sell") {
+                    invested -= convertedAmount;
                     unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) - (Number(t.units) || 0);
+                    nonMarketAgg.sells += convertedAmount;
+                    const rawUnits = Number(t.units) || 0;
+                    const rawAmount = Number(t.amount) || 0;
+                    if (rawUnits > 0 && rawAmount > 0) {
+                        lastTxPriceByInvestment[t.investment_id] = rawAmount / rawUnits;
+                    }
+                } else if (t.type === "interest" || t.type === "dividend" || t.type === "rent_income") {
+                    nonMarketAgg.income += convertedAmount;
+                } else if (t.type === "appreciation") {
+                    nonMarketAgg.appreciation += convertedAmount;
+                } else if (t.type === "fee" || t.type === "tax") {
+                    nonMarketAgg.feesTaxes += convertedAmount;
                 }
+
+                nonMarketByInvestment[t.investment_id] = nonMarketAgg;
+                txIndex += 1;
             }
 
             // Estimate value at end of month
@@ -298,28 +455,37 @@ export default function PerformancePage() {
                     }
                 };
 
-                if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass) && inv.currentPrice) {
+                if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass)) {
                     const historyPoints = customHistoryData?.[inv.id] || [];
-                    const historicalPrice = getPriceFromHistory(historyPoints, monthEnd);
-                    const effectivePrice = historicalPrice ?? inv.currentPrice;
-                    const classValue = convertToTarget(units * effectivePrice, inv.currency);
+                    let historicalPrice = getPriceFromHistory(historyPoints, monthEnd);
+                    
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        historicalPrice = lastTxPriceByInvestment[inv.id];
+                    }
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        if (historyPoints.length > 0) {
+                            historicalPrice = historyPoints[0].price;
+                        }
+                    }
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        historicalPrice = Number(inv.currentPrice || inv.current_price) || 0;
+                    }
+                    
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) continue;
+                    const classValue = convertToTarget(units * historicalPrice!, inv.currency);
                     value += classValue;
                     addClassValue(classValue);
                 } else {
-                    // For real estate, savings etc., use proportional value
-                    const invTxns = txnsUpToMonth.filter((t) => t.investment_id === inv.id);
-                    const invBuys = invTxns.filter((t) => t.type === "buy").reduce((s, t) => s + convertToTarget(Number(t.amount), t.currency), 0);
-                    const invSells = invTxns.filter((t) => t.type === "sell").reduce((s, t) => s + convertToTarget(Number(t.amount), t.currency), 0);
-                    const invInterest = invTxns.filter((t) => t.type === "interest").reduce((s, t) => s + convertToTarget(Number(t.amount), t.currency), 0);
-                    const invAppreciation = invTxns.filter((t) => t.type === "appreciation").reduce((s, t) => s + convertToTarget(Number(t.amount), t.currency), 0);
-                    const classValue = invBuys - invSells + invInterest + invAppreciation;
+                    // For real estate, savings etc., use accumulated non-market flows
+                    const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, income: 0, appreciation: 0, feesTaxes: 0 };
+                    const classValue = agg.buys - agg.sells + agg.income + agg.appreciation - agg.feesTaxes;
                     value += classValue;
                     addClassValue(classValue);
                 }
             }
 
-            // Inflation
-            const monthlyInfl = getMonthlyInflation(monthStart.getFullYear());
+            // Belgian monthly inflation from backend (Statbel-backed cache)
+            const monthlyInfl = inflationByMonth.get(monthKey) ?? 0;
             cumulativeInflation *= 1 + monthlyInfl;
 
             const netWorthValue = netWorthInvestmentsByMonth.get(monthKey);
@@ -339,6 +505,7 @@ export default function PerformancePage() {
 
             snapshots.push({
                 month: monthKey,
+                day: `${monthKey}-01`,
                 date: monthStart,
                 invested: Math.round(invested * 100) / 100,
                 value: Math.round(effectiveValue * 100) / 100,
@@ -354,11 +521,12 @@ export default function PerformancePage() {
         }
 
         return snapshots;
-    }, [summaries, parsedTransactions, customHistoryData, convertToTarget, netWorthInvestmentsByMonth]);
+    }, [summaries, parsedTransactions, customHistoryData, convertToTarget, convertTransactionAmountToTarget, netWorthInvestmentsByMonth, inflationByMonth]);
 
-    // ─── Filter by period ───
-    const filteredSnapshots = useMemo(() => {
-        if (allSnapshots.length === 0) return [];
+    const dailyFilteredSnapshots = useMemo(() => {
+        if (parsedTransactions.length === 0) return [];
+
+        const firstDate = parsedTransactions[0]._parsedDate;
         const now = new Date();
         let cutoff: Date;
         switch (selectedPeriod) {
@@ -367,10 +535,176 @@ export default function PerformancePage() {
             case "6m": cutoff = subMonths(now, 6); break;
             case "1y": cutoff = subYears(now, 1); break;
             case "3y": cutoff = subYears(now, 3); break;
-            default: return allSnapshots;
+            default: cutoff = firstDate; break;
         }
-        return allSnapshots.filter((s) => !isBefore(s.date, cutoff));
-    }, [allSnapshots, selectedPeriod]);
+
+        const timelineStart = isAfter(cutoff, firstDate) ? cutoff : firstDate;
+        const start = new Date(timelineStart);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date();
+        end.setHours(0, 0, 0, 0);
+
+        const snapshots: MonthlySnapshot[] = [];
+        let cumulativeInflation = 1;
+        let currentInflationMonth = '';
+
+        let invested = 0;
+        const unitsByInvestment: Record<number, number> = {};
+        const nonMarketByInvestment: Record<number, { buys: number; sells: number; interest: number; appreciation: number }> = {};
+        const lastTxPriceByInvestment: Record<number, number> = {};
+
+        const sourceTransactions = parsedTransactions.filter((t) => !isAfter(t._parsedDate, end));
+        let txIndex = 0;
+        const txCount = sourceTransactions.length;
+
+        for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+            const dayEnd = new Date(day);
+            dayEnd.setHours(23, 59, 59, 999);
+            const dayKey = format(day, "yyyy-MM-dd");
+            const monthKey = format(day, "yyyy-MM");
+
+            while (txIndex < txCount && !isAfter(sourceTransactions[txIndex]._parsedDate, dayEnd)) {
+                const tx = sourceTransactions[txIndex];
+                const amount = convertTransactionAmountToTarget(tx);
+                const units = Number(tx.units) || 0;
+
+                if (tx.type === "buy") {
+                    invested += amount;
+                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) + units;
+                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    agg.buys += amount;
+                    nonMarketByInvestment[tx.investment_id] = agg;
+                    const rawUnits = Number(tx.units) || 0;
+                    const rawAmount = Number(tx.amount) || 0;
+                    if (rawUnits > 0 && rawAmount > 0) {
+                        lastTxPriceByInvestment[tx.investment_id] = rawAmount / rawUnits;
+                    }
+                } else if (tx.type === "gift") {
+                    invested += amount;
+                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) + units;
+                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    agg.buys += amount;
+                    nonMarketByInvestment[tx.investment_id] = agg;
+                } else if (tx.type === "sell") {
+                    invested -= amount;
+                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) - units;
+                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    agg.sells += amount;
+                    nonMarketByInvestment[tx.investment_id] = agg;
+                    const rawUnits = Number(tx.units) || 0;
+                    const rawAmount = Number(tx.amount) || 0;
+                    if (rawUnits > 0 && rawAmount > 0) {
+                        lastTxPriceByInvestment[tx.investment_id] = rawAmount / rawUnits;
+                    }
+                } else if (tx.type === "interest") {
+                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    agg.interest += amount;
+                    nonMarketByInvestment[tx.investment_id] = agg;
+                } else if (tx.type === "appreciation") {
+                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    agg.appreciation += amount;
+                    nonMarketByInvestment[tx.investment_id] = agg;
+                }
+
+                txIndex += 1;
+            }
+
+            let value = 0;
+            let stocksEtfsValue = 0;
+            let cryptoValue = 0;
+            let metalsValue = 0;
+
+            const addClassValue = (assetClass: AssetClass, amount: number) => {
+                if (!Number.isFinite(amount)) return;
+                if (assetClass === "stock" || assetClass === "etf") {
+                    stocksEtfsValue += amount;
+                } else if (assetClass === "crypto") {
+                    cryptoValue += amount;
+                } else if (assetClass === "metals") {
+                    metalsValue += amount;
+                }
+            };
+
+            for (const inv of summaries) {
+                const units = unitsByInvestment[inv.id] || 0;
+                if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass)) {
+                    if (units <= 0) continue;
+                    const historyPoints = customHistoryData?.[inv.id] || [];
+                    let historicalPrice = getPriceFromHistory(historyPoints, dayEnd);
+                    
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        historicalPrice = lastTxPriceByInvestment[inv.id];
+                    }
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        if (historyPoints.length > 0) {
+                            historicalPrice = historyPoints[0].price;
+                        }
+                    }
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
+                        historicalPrice = Number(inv.currentPrice || inv.current_price) || 0;
+                    }
+
+                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) continue;
+                    const classValue = convertToTarget(units * historicalPrice!, inv.currency);
+                    value += classValue;
+                    addClassValue(inv.assetClass, classValue);
+                } else {
+                    const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
+                    const classValue = agg.buys - agg.sells + agg.interest + agg.appreciation;
+                    value += classValue;
+                    addClassValue(inv.assetClass, classValue);
+                }
+            }
+
+            if (monthKey !== currentInflationMonth) {
+                cumulativeInflation *= 1 + (inflationByMonth.get(monthKey) ?? 0);
+                currentInflationMonth = monthKey;
+            }
+
+            const netWorthValue = netWorthInvestmentsByDay.get(dayKey);
+            const effectiveValue = Number.isFinite(netWorthValue) ? Number(netWorthValue) : value;
+
+            if (Number.isFinite(effectiveValue) && value > 0) {
+                const scale = effectiveValue / value;
+                stocksEtfsValue *= scale;
+                cryptoValue *= scale;
+                metalsValue *= scale;
+            }
+
+            const gainLoss = effectiveValue - invested;
+            const returnPct = invested > 0 ? (gainLoss / invested) * 100 : 0;
+            const inflationAdjustedValue = effectiveValue / cumulativeInflation;
+            const realReturnPct = invested > 0 ? ((inflationAdjustedValue - invested) / invested) * 100 : 0;
+
+            snapshots.push({
+                month: monthKey,
+                day: dayKey,
+                date: new Date(day),
+                invested: Math.round(invested * 100) / 100,
+                value: Math.round(effectiveValue * 100) / 100,
+                stocksEtfsValue: Math.round(stocksEtfsValue * 100) / 100,
+                cryptoValue: Math.round(cryptoValue * 100) / 100,
+                metalsValue: Math.round(metalsValue * 100) / 100,
+                gainLoss: Math.round(gainLoss * 100) / 100,
+                returnPct: Math.round(returnPct * 100) / 100,
+                inflationAdjustedValue: Math.round(inflationAdjustedValue * 100) / 100,
+                realReturnPct: Math.round(realReturnPct * 100) / 100,
+                cumulativeInflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
+            });
+        }
+
+        return snapshots;
+    }, [
+        parsedTransactions,
+        selectedPeriod,
+        summaries,
+        customHistoryData,
+        convertToTarget,
+        convertTransactionAmountToTarget,
+        inflationByMonth,
+        netWorthInvestmentsByDay,
+    ]);
 
     // ─── Overall portfolio metrics (independent of selected period) ───
     const overallMetrics = useMemo(() => {
@@ -421,20 +755,26 @@ export default function PerformancePage() {
             const monthIdx = curr.date.getMonth();
             const year = curr.date.getFullYear();
 
-            let monthlyReturnPct: number;
+            let monthlyReturnPct: number | null;
             if (!prev) {
-                monthlyReturnPct = 0;
+                monthlyReturnPct = null;
             } else {
                 const baseValue = prev.value;
                 const netContribution = monthlyNetFlows.get(curr.month)?.portfolio ?? 0;
-                monthlyReturnPct = baseValue > 0
-                    ? ((curr.value - prev.value - netContribution) / baseValue) * 100
+                const modifiedDietzBase = baseValue + (netContribution / 2);
+                const denominator = modifiedDietzBase > 0 ? modifiedDietzBase : baseValue;
+                monthlyReturnPct = denominator > 0
+                    ? ((curr.value - prev.value - netContribution) / denominator) * 100
                     : 0;
             }
 
-            const roundedReturnPct = Math.round(monthlyReturnPct * 100) / 100;
+            const roundedReturnPct = monthlyReturnPct === null
+                ? null
+                : Math.round(monthlyReturnPct * 100) / 100;
             data[year][monthIdx] = roundedReturnPct;
-            monthlyReturns.push(Math.abs(roundedReturnPct));
+            if (roundedReturnPct !== null) {
+                monthlyReturns.push(Math.abs(roundedReturnPct));
+            }
         }
 
         const maxAbsPct = monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0;
@@ -481,47 +821,53 @@ export default function PerformancePage() {
     );
 
     // ─── Chart data ───
-    const chartData = filteredSnapshots.map((s) => ({
-        month: monthTickFormatter.format(s.date),
-        [t('portfolio.totalInvested')]: s.invested,
-        [t('performance.inflationAdjusted')]: s.inflationAdjustedValue,
-        [t('portfolio.portfolioValue')]: s.value,
-    }));
+    const chartData = useMemo(() => dailyFilteredSnapshots.map((s) => ({
+        day: s.day,
+        [CHART_KEYS.invested]: s.invested,
+        [CHART_KEYS.inflationAdjusted]: s.inflationAdjustedValue,
+        [CHART_KEYS.value]: s.value,
+        [CHART_KEYS.stocksEtfs]: s.stocksEtfsValue,
+        [CHART_KEYS.crypto]: s.cryptoValue,
+        [CHART_KEYS.metals]: s.metalsValue,
+    })), [dailyFilteredSnapshots]);
 
     const relativePerformanceData = useMemo(() => {
-        if (filteredSnapshots.length === 0) return [];
+        if (dailyFilteredSnapshots.length === 0) return [];
 
         const buildRelativeSeries = (
             valueSelector: (snapshot: MonthlySnapshot) => number,
             flowSelector: (flow: RelativeFlowBucket) => number,
         ) => {
             const results: number[] = [];
-            let index = 100;
+            let index = 1;
 
-            for (let i = 0; i < filteredSnapshots.length; i++) {
+            for (let i = 0; i < dailyFilteredSnapshots.length; i++) {
                 if (i === 0) {
                     results.push(0);
                     continue;
                 }
 
-                const prev = filteredSnapshots[i - 1];
-                const curr = filteredSnapshots[i];
+                const prev = dailyFilteredSnapshots[i - 1];
+                const curr = dailyFilteredSnapshots[i];
                 if (!prev || !curr) {
-                    results.push(Math.round((index - 100) * 100) / 100);
+                    results.push(Math.round((index - 1) * 10000) / 100);
                     continue;
                 }
 
                 const prevValue = valueSelector(prev);
                 const currValue = valueSelector(curr);
-                const monthlyFlow = flowSelector(monthlyNetFlows.get(curr.month) ?? {
+                const monthlyFlow = flowSelector(dailyNetFlows.get(curr.day) ?? {
                     portfolio: 0,
                     stocksEtfs: 0,
                     crypto: 0,
                     metals: 0,
                 });
 
-                const rawReturn = prevValue > 0
-                    ? (currValue - prevValue - monthlyFlow) / prevValue
+                const modifiedDietzBase = prevValue + (monthlyFlow / 2);
+                const denominator = modifiedDietzBase > 0 ? modifiedDietzBase : prevValue;
+
+                const rawReturn = denominator > 0
+                    ? (currValue - prevValue - monthlyFlow) / denominator
                     : 0;
 
                 const boundedReturn = Number.isFinite(rawReturn)
@@ -529,7 +875,7 @@ export default function PerformancePage() {
                     : 0;
 
                 index *= 1 + boundedReturn;
-                results.push(Math.round((index - 100) * 100) / 100);
+                results.push(Math.round((index - 1) * 10000) / 100);
             }
 
             return results;
@@ -552,14 +898,47 @@ export default function PerformancePage() {
             (flow) => flow.metals,
         );
 
-        return filteredSnapshots.map((snapshot, idx) => ({
-            month: monthTickFormatter.format(snapshot.date),
-            [t('performance.relativePortfolio')]: portfolioSeries[idx] ?? 0,
-            [t('performance.relativeStocksEtfs')]: stocksEtfsSeries[idx] ?? 0,
-            [t('performance.relativeCrypto')]: cryptoSeries[idx] ?? 0,
-            [t('performance.relativeMetals')]: metalsSeries[idx] ?? 0,
+        return dailyFilteredSnapshots.map((snapshot, idx) => ({
+            day: snapshot.day,
+            [CHART_KEYS.relativePortfolio]: portfolioSeries[idx] ?? 0,
+            [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
+            [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
+            [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
         }));
-    }, [filteredSnapshots, t, monthTickFormatter, monthlyNetFlows]);
+    }, [dailyFilteredSnapshots, dailyNetFlows]);
+
+    const assetClassBreakdown = useMemo(() => {
+        const grouped = new Map<AssetClass, { count: number; value: number; invested: number; gain: number }>();
+        for (const summary of summaries) {
+            const existing = grouped.get(summary.assetClass) || { count: 0, value: 0, invested: 0, gain: 0 };
+            existing.count += 1;
+            existing.value += convertToTarget(summary.currentValue, summary.currency);
+            existing.invested += convertToTarget(summary.totalInvested, summary.currency);
+            existing.gain += convertToTarget(summary.gainLoss, summary.currency);
+            grouped.set(summary.assetClass, existing);
+        }
+
+        return Array.from(grouped.entries()).map(([assetClass, data]) => {
+            const pct = data.invested > 0 ? (data.gain / data.invested) * 100 : 0;
+            return {
+                assetClass,
+                label: t(`performance.${assetClass}` as `performance.${AssetClass}`) || assetClass,
+                count: data.count,
+                classValue: data.value,
+                classInvested: data.invested,
+                classGain: data.gain,
+                classPct: pct,
+            };
+        });
+    }, [summaries, convertToTarget, t]);
+
+    const { topPerformers, bottomPerformers } = useMemo(() => {
+        const sorted = [...summaries].sort((a, b) => a.gainLossPercent - b.gainLossPercent);
+        return {
+            topPerformers: sorted.slice(-5).reverse(),
+            bottomPerformers: sorted.slice(0, 5),
+        };
+    }, [summaries]);
 
     if (summaries.length === 0) {
         return (
@@ -677,7 +1056,14 @@ export default function PerformancePage() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis dataKey="month" tick={{ fontSize: 12 }} className="fill-muted-foreground" interval="preserveStartEnd" minTickGap={20} />
+                                <XAxis
+                                    dataKey="day"
+                                    tick={{ fontSize: 12 }}
+                                    className="fill-muted-foreground"
+                                    interval="preserveStartEnd"
+                                    minTickGap={20}
+                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
+                                />
                                 <YAxis
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
@@ -695,7 +1081,8 @@ export default function PerformancePage() {
                                 <Legend />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('portfolio.totalInvested')}
+                                    dataKey={CHART_KEYS.invested}
+                                    name={t('portfolio.totalInvested')}
                                     stroke="hsl(var(--muted-foreground))"
                                     fill="url(#gradInvested)"
                                     strokeWidth={1.5}
@@ -703,14 +1090,40 @@ export default function PerformancePage() {
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('performance.inflationAdjusted')}
+                                    dataKey={CHART_KEYS.inflationAdjusted}
+                                    name={t('performance.inflationAdjusted')}
                                     stroke="hsl(30, 80%, 55%)"
                                     fill="url(#gradInflAdj)"
                                     strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('portfolio.portfolioValue')}
+                                    dataKey={CHART_KEYS.stocksEtfs}
+                                    name={t('performance.relativeStocksEtfs') || t('nav.stocksEtfs')}
+                                    stroke="hsl(0, 72%, 51%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.crypto}
+                                    name={t('performance.crypto')}
+                                    stroke="hsl(142, 76%, 36%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.metals}
+                                    name={t('performance.metals')}
+                                    stroke="hsl(45, 93%, 47%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.value}
+                                    name={t('portfolio.portfolioValue')}
                                     stroke="hsl(var(--primary))"
                                     fill="url(#gradValue)"
                                     strokeWidth={2.5}
@@ -743,7 +1156,14 @@ export default function PerformancePage() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis dataKey="month" tick={{ fontSize: 12 }} className="fill-muted-foreground" interval="preserveStartEnd" minTickGap={20} />
+                                <XAxis
+                                    dataKey="day"
+                                    tick={{ fontSize: 12 }}
+                                    className="fill-muted-foreground"
+                                    interval="preserveStartEnd"
+                                    minTickGap={20}
+                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
+                                />
                                 <YAxis
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
@@ -761,28 +1181,32 @@ export default function PerformancePage() {
                                 <Legend />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('performance.relativePortfolio')}
+                                    dataKey={CHART_KEYS.relativePortfolio}
+                                    name={t('performance.relativePortfolio')}
                                     stroke="hsl(var(--primary))"
                                     fill="url(#gradRelPortfolio)"
                                     strokeWidth={2.5}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('performance.relativeStocksEtfs')}
-                                    stroke="hsl(217, 91%, 60%)"
+                                    dataKey={CHART_KEYS.relativeStocksEtfs}
+                                    name={t('performance.relativeStocksEtfs')}
+                                    stroke="hsl(0, 72%, 51%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('performance.relativeCrypto')}
+                                    dataKey={CHART_KEYS.relativeCrypto}
+                                    name={t('performance.crypto')}
                                     stroke="hsl(142, 76%, 36%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
                                 />
                                 <Area
                                     type="monotone"
-                                    dataKey={t('performance.relativeMetals')}
+                                    dataKey={CHART_KEYS.relativeMetals}
+                                    name={t('performance.metals')}
                                     stroke="hsl(45, 93%, 47%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
@@ -795,43 +1219,31 @@ export default function PerformancePage() {
 
             {/* Per-asset class breakdown */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {(() => {
-                    const classes = [...new Set(summaries.map((s) => s.assetClass))];
-                    return classes.map((cls) => {
-                        const items = summaries.filter((s) => s.assetClass === cls);
-                        const classValue = items.reduce((s, i) => s + convertToTarget(i.currentValue, i.currency), 0);
-                        const classInvested = items.reduce((s, i) => s + convertToTarget(i.totalInvested, i.currency), 0);
-                        const classGain = items.reduce((s, i) => s + convertToTarget(i.gainLoss, i.currency), 0);
-                        const classPct = classInvested > 0 ? (classGain / classInvested) * 100 : 0;
-                        const label = t(`performance.${cls}` as `performance.${AssetClass}`) || cls;
-                        const count = items.length;
-                        return (
-                            <Card key={cls} className="border shadow-sm">
-                                <CardContent className="pt-4 pb-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-semibold text-muted-foreground">
-                                            {label}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground">
-                                            {count === 1
-                                                ? t('performance.holdings', { count: String(count) })
-                                                : t('performance.holdingsPlural', { count: String(count) })}
-                                        </span>
-                                    </div>
-                                    <div className="text-xl font-bold text-foreground">
-                                        {formatCurrency(classValue, defaultCurrency, locale)}
-                                    </div>
-                                    <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "text-accent" : "text-destructive"}`}>
-                                        {classGain >= 0 ? "+" : ""}{formatCurrency(classGain, defaultCurrency, locale)} ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                        {t('portfolio.invested', { amount: formatCurrency(classInvested, defaultCurrency, locale) })}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    });
-                })()}
+                {assetClassBreakdown.map(({ assetClass, label, count, classValue, classInvested, classGain, classPct }) => (
+                    <Card key={assetClass} className="border shadow-sm">
+                        <CardContent className="pt-4 pb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-muted-foreground">
+                                    {label}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                    {count === 1
+                                        ? t('performance.holdings', { count: String(count) })
+                                        : t('performance.holdingsPlural', { count: String(count) })}
+                                </span>
+                            </div>
+                            <div className="text-xl font-bold text-foreground">
+                                {formatCurrency(classValue, defaultCurrency, locale)}
+                            </div>
+                            <div className={`text-sm font-medium mt-1 ${classGain >= 0 ? "text-accent" : "text-destructive"}`}>
+                                {classGain >= 0 ? "+" : ""}{formatCurrency(classGain, defaultCurrency, locale)} ({classPct >= 0 ? "+" : ""}{classPct.toFixed(1)}%)
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                                {t('portfolio.invested', { amount: formatCurrency(classInvested, defaultCurrency, locale) })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
 
             {/* Monthly Returns Heatmap */}
@@ -922,10 +1334,7 @@ export default function PerformancePage() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
-                            {[...summaries]
-                                .sort((a, b) => b.gainLossPercent - a.gainLossPercent)
-                                .slice(0, 5)
-                                .map((inv) => (
+                            {topPerformers.map((inv) => (
                                     <div key={inv.id} className="flex items-center justify-between">
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
@@ -954,10 +1363,7 @@ export default function PerformancePage() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
-                            {[...summaries]
-                                .sort((a, b) => a.gainLossPercent - b.gainLossPercent)
-                                .slice(0, 5)
-                                .map((inv) => (
+                            {bottomPerformers.map((inv) => (
                                     <div key={inv.id} className="flex items-center justify-between">
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>

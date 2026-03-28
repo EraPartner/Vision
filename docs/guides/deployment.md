@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 description: Production deployment instructions
-date: 2026-03-25
+date: 2026-03-28
 tags: [guide, deployment, production, docker, electron]
 related_code: [[docker-compose.yml]]
 ---
@@ -129,6 +129,10 @@ docker compose exec app /app/venv/bin/python3 -m alembic -c /app/config/alembic.
 Note: migration `0002_add_url_to_planned_transactions` is idempotent and safely skips `url` creation when the column already exists.
 
 Migration caveat: `0016_add_fx_rate_to_portfolio_transactions` is now safe on inherited-schema deployments where `portfolio_transactions` is a compatibility view. It only runs `ALTER TABLE` when relation kind is table/partitioned table (`relkind in ('r','p')`) and keeps the view recreation path when relation kind is view (`relkind='v'`). During view recreation, `fx_rate_to_eur` stays at the end of the `SELECT` list to preserve existing column order and avoid PostgreSQL `CREATE OR REPLACE VIEW` column-rename errors ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+
+Migration caveat: `0021_update_price_provider_enum` updates enum type `price_provider` by swapping provider values (`coingecko`/`kraken` -> `binance`) on `investments_base.price_provider`. For PostgreSQL dependency safety during enum type conversion, it temporarily drops the column default, dynamically captures and drops all dependent `public` views that reference `investments_base` (including `price_provider` dependencies), performs the type swap and value mapping, restores `DEFAULT 'manual'`, then recreates the captured views. If `investments` is among recreated views and function `investments_view_update_instead()` exists, trigger `update_investments_view_instead` is recreated as well ([[alembic/versions/0021_update_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
+
+Migration caveat: `0022_add_kinesis_price_provider_enum` adds enum value `kinesis` to `price_provider`. Its downgrade remaps `kinesis` to `manual`, then rebuilds the enum without `kinesis` while handling dependent `public` views and `investments` update trigger recreation using the same safety pattern as prior enum migrations ([[alembic/versions/0022_add_kinesis_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
 
 ## Backup and Restore
 

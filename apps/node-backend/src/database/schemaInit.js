@@ -39,7 +39,7 @@ import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterial
  * Increment this whenever schema changes require DDL to be re-applied on existing DBs.
  * Format: YYYYMMDD_N (N = change number on that date, starting at 1).
  */
-const CURRENT_SCHEMA_VERSION = '20260325_1';
+const CURRENT_SCHEMA_VERSION = '20260327_2';
 
 /**
  * Check the stored schema version.  Returns null if the table doesn't exist yet.
@@ -158,7 +158,9 @@ export async function initializeSchema() {
     // investments must finish first; the others are fully independent.
     await Promise.all([
       createExchangeRates(),
+      createBelgianInflationRates(),
       createInvestments(),
+      createAssetPriceHistory(),
       createWatchlist(),
       createUserSettings(),
       createSavedCharts(),
@@ -194,7 +196,7 @@ async function ensureEnums() {
     { name: 'asset_class', values: "'stock','etf','crypto','metals','real_estate','savings','bond'" },
     { name: 'portfolio_txn_type', values: "'buy','sell','dividend','fee','tax','interest','rent_income','appreciation','gift'" },
     { name: 'recurrence_interval', values: "'daily','weekly','bi-weekly','monthly','quarterly','yearly'" },
-    { name: 'price_provider', values: "'manual','coingecko','yahoo','kraken','custom'" },
+    { name: 'price_provider', values: "'manual','binance','yahoo','custom','kinesis'" },
     { name: 'revolut_state', values: "'COMPLETED','PENDING','REVERTED','DECLINED'" },
   ];
 
@@ -660,6 +662,21 @@ async function createExchangeRates() {
   await safeIndex('idx_exchange_rates_latest', 'exchange_rates', 'is_latest');
 }
 
+async function createBelgianInflationRates() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS belgian_inflation_rates (
+      id SERIAL PRIMARY KEY,
+      month_date DATE NOT NULL UNIQUE,
+      monthly_rate NUMERIC(10,8) NOT NULL,
+      source VARCHAR(50) NOT NULL DEFAULT 'statbel',
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ
+    );
+  `);
+  await safeIndex('idx_belgian_inflation_month_date', 'belgian_inflation_rates', 'month_date');
+  await safeTrigger('update_belgian_inflation_updated_at', 'belgian_inflation_rates');
+}
+
 async function createInvestments() {
   await query(`
     CREATE TABLE IF NOT EXISTS investments (
@@ -729,6 +746,38 @@ async function createInvestments() {
   await safeIndex('idx_investments_asset_class', 'investments', 'asset_class');
   await safeIndex('idx_investments_is_active', 'investments', 'is_active');
   await safeTrigger('update_investments_updated_at', 'investments');
+}
+
+async function createAssetPriceHistory() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS asset_price_history (
+      id SERIAL PRIMARY KEY,
+      investment_id INTEGER NOT NULL,
+      price_date DATE NOT NULL,
+      close_price NUMERIC(18,6) NOT NULL,
+      source VARCHAR(50) NOT NULL DEFAULT 'provider',
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ,
+      CONSTRAINT uq_asset_price_history_investment_date UNIQUE (investment_id, price_date)
+    );
+  `);
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_asset_price_history_investment'
+          AND conrelid = 'asset_price_history'::regclass
+      ) THEN
+        ALTER TABLE asset_price_history
+          DROP CONSTRAINT fk_asset_price_history_investment;
+      END IF;
+    END $$;
+  `);
+  await safeIndex('idx_asset_price_history_investment_date', 'asset_price_history', 'investment_id, price_date');
+  await safeIndex('idx_asset_price_history_date', 'asset_price_history', 'price_date');
+  await safeTrigger('update_asset_price_history_updated_at', 'asset_price_history');
 }
 
 async function createPortfolioTransactions() {

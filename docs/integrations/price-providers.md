@@ -2,7 +2,7 @@
 title: Integration - Price Providers
 type: integration
 description: Live price feeds for stocks, crypto, and other investments
-date: 2026-03-24
+date: 2026-03-28
 tags: [integration, price, stocks, crypto, api]
 related_code: [[apps/node-backend/src/services/priceProviderService.js]]
 ---
@@ -20,14 +20,23 @@ Price providers fetch live market prices for investments, supporting multiple as
 - **Usage**: User enters prices manually
 - **Implementation**: No API calls, uses stored `current_price`
 
-### CoinGecko
+### Binance
 - **Asset Classes**: Crypto
-- **API**: CoinGecko Free API
-- **Endpoint**: `https://api.coingecko.com/api/v3/simple/price`
+- **API**: Binance market data API
+- **Endpoint**: `https://api.binance.com/api/v3/ticker/price`
 - **Features**: 
-  - Free tier (limited calls)
-  - Historical data available
-  - Market cap, volume
+  - Real-time crypto quote data
+  - Broad pair coverage
+
+### Kinesis
+- **Asset Classes**: Metals, commodities
+- **API**: Kinesis market trendline API
+- **Endpoint**: default `https://api.kinesis.money/api/market-data/trendlines` via `KINESIS_BASE_URL` ([[apps/node-backend/src/config/kinesisConfig.js]])
+- **Features**:
+  - Live/latest price from trendline points
+  - Historical points from same symbol stream
+  - Symbol resolution from either explicit `price_provider_id` or configured asset-name mapping
+  - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`) ([[apps/node-backend/src/services/priceProviderService.js]])
 
 ### Yahoo Finance
 - **Asset Classes**: Stocks, ETFs, Metals
@@ -39,18 +48,23 @@ Price providers fetch live market prices for investments, supporting multiple as
   - Wide coverage
   - Supports futures-style metals tickers (for example, `GC=F`)
 
-### Kraken
-- **Asset Classes**: Crypto
-- **API**: Kraken REST API
-- **Endpoint**: `https://api.kraken.com/0/public/Ticker`
-- **Features**:
-  - Real-time exchange rates
-  - Multiple trading pairs
-
 ### Custom
 - **Asset Classes**: All
-- **Configuration**: Custom API URL and parameters
+- **Configuration**: Custom latest/history URLs and JSON paths
 - **Usage**: For proprietary or unsupported APIs
+
+## Historical Quote Cache
+
+- Historical quotes for provider-backed assets are persisted in `asset_price_history` (daily close per investment).
+- `GET /api/investments/:id/price-history` uses read-through behavior: read DB first, fetch provider when coverage is missing, then upsert refreshed rows.
+- Startup runs a background backfill for held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from each asset's first transaction date.
+- Startup live refresh now prioritizes fast availability for Kinesis-backed investments: when a valid persisted `current_price` exists, it is used immediately and the external Kinesis refresh is deferred to background execution.
+- If provider fetch fails, history requests fall back to persisted DB rows.
+- `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.
+- Live refresh keeps an explicit Binance batch fetch block in `fetchLivePricesDetailed` for crypto provider efficiency.
+- Kinesis sanitization is applied before latest extraction and before historical cache/persist writes so cached history avoids isolated trendline needles ([[apps/node-backend/src/services/priceProviderService.js]]).
+- `fetchHistoricalPrices` now also sanitizes Kinesis points on the early-return path when requested range is already fully covered by persisted DB history; when sanitizer changes points, corrected values are upserted through `_saveHistoricalPointsToDatabase(..., 'kinesis')` before returning ([[apps/node-backend/src/services/priceProviderService.js]]).
+- Persisted Kinesis history can be re-sanitized in place via `sanitizePersistedKinesisHistory()`: it scans `investments.price_provider='kinesis'`, loads persisted `asset_price_history` points, applies isolated spike sanitization, upserts corrected points with source `kinesis`, and returns `{ processed, updated, correctedPoints, failed }`.
 
 ## Usage
 
@@ -61,8 +75,8 @@ POST /api/investments
   "name": "Bitcoin",
   "symbol": "BTC",
   "asset_class": "crypto",
-  "price_provider": "coingecko",
-  "price_provider_id": "bitcoin"
+  "price_provider": "binance",
+  "price_provider_id": "BTCUSDT"
 }
 ```
 
@@ -99,9 +113,9 @@ Response:
 
 ## Rate Limits
 
-- CoinGecko: ~10-30 calls/minute (free tier)
+- Binance: provider/network dependent
+- Kinesis: provider/network dependent
 - Yahoo: Depends on usage
-- Kraken: 15 calls/second
 
 ## Error Handling
 
@@ -116,3 +130,5 @@ If price fetch fails:
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/features/portfolio|Feature: Portfolio]]
+
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/database/schemaInit.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

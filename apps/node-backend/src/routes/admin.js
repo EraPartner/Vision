@@ -17,6 +17,7 @@ import https from 'https';
 import { checkConnection, getTableCount } from '../database/connection.js';
 import { getSettings } from '../config/config.js';
 import { logger } from '../config/logger.js';
+import { sanitizePersistedKinesisHistory } from '../services/priceProviderService.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
@@ -160,6 +161,20 @@ router.post('/update/apply-and-restart', async (req, res) => {
     success: true,
     note: 'Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required.',
   });
+});
+
+// POST /api/admin/investments/kinesis/sanitize-history
+router.post('/investments/kinesis/sanitize-history', async (req, res) => {
+  try {
+    const result = await sanitizePersistedKinesisHistory();
+    return res.json({
+      message: 'Kinesis historical spikes sanitization completed',
+      ...result,
+    });
+  } catch (err) {
+    logger.error('Kinesis history sanitization failed', { error: err.message });
+    return res.status(500).json({ detail: 'Failed to sanitize Kinesis history' });
+  }
 });
 
 export default router;

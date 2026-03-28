@@ -24,6 +24,11 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     name: investment.name,
     symbol: investment.symbol || '',
     currency: investment.currency || 'EUR',
+    currentPrice: investment.currentPrice != null
+      ? String(investment.currentPrice)
+      : investment.current_price != null
+        ? String(investment.current_price)
+        : '',
     priceProvider: (investment.price_provider || 'manual') as PriceProvider,
     priceProviderId: investment.price_provider_id || '',
     priceProviderUrl: investment.price_provider_url || '',
@@ -39,9 +44,9 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
 
   const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
     { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
-    { key: 'coingecko', name: 'CoinGecko', hint: t('addInv.provider.hint.coingecko') },
+    { key: 'binance', name: 'Binance', hint: t('addInv.provider.hint.binance') },
     { key: 'yahoo', name: 'Yahoo Finance', hint: t('addInv.provider.hint.yahoo') },
-    { key: 'kraken', name: 'Kraken', hint: t('addInv.provider.hint.kraken') },
+    { key: 'kinesis', name: 'Kinesis', hint: t('addInv.provider.hint.kinesis') },
     { key: 'custom', name: 'Custom JSON', hint: t('addInv.provider.hint.custom') },
   ];
 
@@ -50,6 +55,11 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
       name: investment.name,
       symbol: investment.symbol || '',
       currency: investment.currency || 'EUR',
+      currentPrice: investment.currentPrice != null
+        ? String(investment.currentPrice)
+        : investment.current_price != null
+          ? String(investment.current_price)
+          : '',
       priceProvider: (investment.price_provider || 'manual') as PriceProvider,
       priceProviderId: investment.price_provider_id || '',
       priceProviderUrl: investment.price_provider_url || '',
@@ -76,6 +86,9 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
         name: form.name.trim(),
         symbol: isUnitBased ? form.symbol.trim().toUpperCase() : undefined,
         currency: form.currency,
+        current_price: form.priceProvider === 'manual' && form.currentPrice
+          ? parseFloat(form.currentPrice)
+          : undefined,
         price_provider: form.priceProvider,
         price_provider_id: form.priceProviderId.trim() || undefined,
         price_provider_url: form.priceProviderUrl.trim() || undefined,
@@ -180,6 +193,21 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
                   onChange={(e) => setForm((f) => ({ ...f, priceProviderId: e.target.value }))}
                   maxLength={200}
                   className="font-mono text-sm"
+                />
+              </div>
+            )}
+
+            {isUnitBased && form.priceProvider === 'manual' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-inv-price" className="text-xs">{t('addInv.label.currentPrice')}</Label>
+                <Input
+                  id="edit-inv-price"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  placeholder="0.00"
+                  value={form.currentPrice}
+                  onChange={(e) => setForm((f) => ({ ...f, currentPrice: e.target.value }))}
                 />
               </div>
             )}

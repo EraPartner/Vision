@@ -22,46 +22,6 @@ import { logger } from '../config/logger.js';
  */
 const mvCache = new Map();
 
-function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
-  if (!Array.isArray(snapshots) || snapshots.length < 3) return Array.isArray(snapshots) ? snapshots : [];
-
-  const sanitized = snapshots.map((snapshot) => ({ ...snapshot }));
-  const minJump = Math.log(1.18);
-  const neighborTolerance = Math.log(1.12);
-  const localNeedleRatio = 1.8;
-
-  for (let i = 1; i < sanitized.length - 1; i += 1) {
-    const prev = Number(sanitized[i - 1]?.investments);
-    const current = Number(sanitized[i]?.investments);
-    const next = Number(sanitized[i + 1]?.investments);
-
-    if (!Number.isFinite(prev) || !Number.isFinite(current) || !Number.isFinite(next)) continue;
-    if (prev <= 0 || current <= 0 || next <= 0) continue;
-
-    const jump = Math.log(current / prev);
-    const revert = Math.log(next / current);
-    const bridge = Math.log(next / prev);
-
-    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
-    const largeMove = Math.abs(jump) >= minJump && Math.abs(revert) >= minJump;
-    const bridgeLooksNormal = Math.abs(bridge) <= neighborTolerance;
-
-    const maxNeighbor = Math.max(prev, next);
-    const minNeighbor = Math.min(prev, next);
-    const localNeedlePeak = current >= maxNeighbor * localNeedleRatio && bridgeLooksNormal;
-    const localNeedleTrough = current * localNeedleRatio <= minNeighbor && bridgeLooksNormal;
-
-    if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
-      const correctedInvestments = Math.sqrt(prev * next);
-      const liquid = Number(sanitized[i]?.liquid) || 0;
-      sanitized[i].investments = Math.round(correctedInvestments * 100) / 100;
-      sanitized[i].netWorth = Math.round((liquid + correctedInvestments) * 100) / 100;
-    }
-  }
-
-  return sanitized;
-}
-
 /**
  * Helper: check if a materialized view exists and has rows.
  * Result is cached in-process after the first successful check.
@@ -259,11 +219,10 @@ export const infoRepository = {
       const mvConverted = await convertRowsToEur(mvResult.rows.map(r => ({
         ...r,
         // Use month_start as a representative date for the rate lookup
-        date: r.month_start,
         currency: r.currency,
         amount: parseFloat(r.total_income),
         _spending: parseFloat(r.total_spending),
-      })), targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' });
+      })), targetCurrency);
 
       // convertRowsToEur only converts 'amount', so we need a second pass for spending
       // Use the same rates by calling getRates once - instead batch both into separate rows
@@ -274,7 +233,7 @@ export const infoRepository = {
         mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_income), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'income', _row: r, date: dateStr });
         mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_spending), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'spending', _row: r, date: dateStr });
       }
-      const mergedConverted = await convertRowsToEur(mergedRows, targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' });
+      const mergedConverted = await convertRowsToEur(mergedRows, targetCurrency);
 
       for (const conv of mergedConverted) {
         const key = conv._key;
@@ -368,8 +327,7 @@ export const infoRepository = {
       result.rows
         .filter(r => r.txn_id != null)
         .map(r => ({ ...r, amount: parseFloat(r.amount) })),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
+      targetCurrency
     );
 
     const monthMap = {};
@@ -657,11 +615,7 @@ export const infoRepository = {
     const pastResult = await query(sqlPast, excludeParams);
 
     // Batch-convert all historical rows in one rates fetch
-    const pastConverted = await convertRowsToEur(
-      pastResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
-    );
+    const pastConverted = await convertRowsToEur(pastResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
 
     // Group by month → day → net EUR
     const monthDayNet = {};
@@ -704,11 +658,7 @@ export const infoRepository = {
     const currentResult = await query(sqlCurrent, excludeParams);
 
     // Batch-convert current month rows
-    const currentCashflowConverted = await convertRowsToEur(
-      currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'date' }
-    );
+    const currentCashflowConverted = await convertRowsToEur(currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
 
     const currentDayNet = {};
     for (const row of currentCashflowConverted) {
@@ -735,11 +685,7 @@ export const infoRepository = {
     const plannedCurrentResult = await query(sqlPlannedCurrent);
 
     // Batch-convert planned current month rows
-    const plannedCurrentConverted = await convertRowsToEur(
-      plannedCurrentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'planned_date' }
-    );
+    const plannedCurrentConverted = await convertRowsToEur(plannedCurrentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
 
     const plannedCurrentByDay = {};
     for (const row of plannedCurrentConverted) {
@@ -760,11 +706,7 @@ export const infoRepository = {
     const plannedHistResult = await query(sqlPlannedHist);
 
     // Batch-convert historical planned rows
-    const plannedHistConverted = await convertRowsToEur(
-      plannedHistResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: 'planned_date' }
-    );
+    const plannedHistConverted = await convertRowsToEur(plannedHistResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
 
     const plannedHistMonthDay = {};
     for (const row of plannedHistConverted) {
@@ -1199,7 +1141,7 @@ export const infoRepository = {
         SELECT
           pt.date::date AS day,
           COALESCE(pt.currency, 'EUR') AS currency,
-          COALESCE(SUM(CASE WHEN pt.type IN ('buy', 'gift') THEN pt.amount ELSE 0 END), 0) AS buys,
+          COALESCE(SUM(CASE WHEN pt.type = 'buy' THEN pt.amount ELSE 0 END), 0) AS buys,
           COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN pt.amount ELSE 0 END), 0) AS sells,
           COALESCE(SUM(CASE WHEN pt.type IN ('dividend', 'interest', 'rent_income') THEN pt.amount ELSE 0 END), 0) AS income,
           COALESCE(SUM(CASE WHEN pt.type = 'appreciation' THEN pt.amount ELSE 0 END), 0) AS appreciation,
@@ -1328,91 +1270,15 @@ export const infoRepository = {
       unitDeltasByInvestment[investmentId][row.day] = Number(row.unit_delta) || 0;
     }
 
-    const unitPriceByInvestmentDateResult = await query(`
-      SELECT
-        pt.investment_id,
-        to_char(pt.date::date, 'YYYY-MM-DD') AS day,
-        COALESCE(
-          NULLIF(
-            SUM(
-              CASE
-                WHEN COALESCE(pt.units, 0) > 0
-                  AND COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) > 0
-                THEN
-                  COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) * COALESCE(pt.units, 0)
-                ELSE 0
-              END
-            ),
-            0
-          ) / NULLIF(
-            SUM(
-              CASE
-                WHEN COALESCE(pt.units, 0) > 0
-                  AND COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) > 0
-                THEN COALESCE(pt.units, 0)
-                ELSE 0
-              END
-            ),
-            0
-          ),
-          0
-        ) AS unit_price
-      FROM portfolio_transactions pt
-      JOIN investments i ON i.id = pt.investment_id
-      WHERE i.is_active = true
-        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-        AND pt.date >= $1::date
-        AND pt.date <= CURRENT_DATE
-        AND pt.type IN ('buy', 'gift', 'sell')
-      GROUP BY pt.investment_id, pt.date::date
-      ORDER BY pt.investment_id, pt.date::date
-    `, [firstDataDateYmd]);
-
-    const unitPriceByInvestment = {};
-    for (const row of unitPriceByInvestmentDateResult.rows) {
-      const investmentId = Number(row.investment_id);
-      const unitPrice = Number(row.unit_price) || 0;
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
-      if (!unitPriceByInvestment[investmentId]) unitPriceByInvestment[investmentId] = {};
-      unitPriceByInvestment[investmentId][row.day] = unitPrice;
-    }
-
     const unitInvestmentByDayCurrency = {};
     const rangeStartMs = new Date(`${firstDataDateYmd}T00:00:00Z`).getTime();
     const rangeEndDate = new Date();
     rangeEndDate.setHours(0, 0, 0, 0);
     const rangeEndMs = rangeEndDate.getTime();
 
-    const historicalPointsByInvestment = new Map();
-    const historicalPointsEntries = await Promise.all(
-      unitInvestmentsResult.rows.map(async (investment) => {
-        const points = await fetchHistoricalPrices(investment, {
-          fromMs: rangeStartMs,
-          toMs: rangeEndMs,
-        });
-        return [Number(investment.id), points] ;
-      })
-    );
-    for (const [investmentId, points] of historicalPointsEntries) {
-      historicalPointsByInvestment.set(investmentId, points);
-    }
-
     for (const investment of unitInvestmentsResult.rows) {
       const invId = Number(investment.id);
       const deltaMap = unitDeltasByInvestment[invId] || {};
-      const unitPriceMap = unitPriceByInvestment[invId] || {};
       const firstTxDate = investment.first_tx_date
         ? (investment.first_tx_date instanceof Date
           ? investment.first_tx_date.toISOString().split('T')[0]
@@ -1425,15 +1291,12 @@ export const infoRepository = {
         : null;
       const startDateYmd = firstTxDate || createdDate || firstDataDateYmd;
 
-      const historicalPoints = historicalPointsByInvestment.get(invId) || [];
-
-      const firstHistoricalPrice = historicalPoints && historicalPoints.length > 0 
-        ? Number(historicalPoints[0].price) 
-        : undefined;
-      const currentInvPrice = Number(investment.current_price) || undefined;
+      const historicalPoints = await fetchHistoricalPrices(investment, {
+        fromMs: rangeStartMs,
+        toMs: rangeEndMs,
+      });
 
       let units = 0;
-      let fallbackUnitPrice;
       const startDate = new Date(`${startDateYmd}T00:00:00`);
       for (const day = new Date(startDate); day <= rangeEndDate; day.setDate(day.getDate() + 1)) {
         const yyyy = day.getFullYear();
@@ -1445,28 +1308,12 @@ export const infoRepository = {
         const heldUnits = Math.max(0, units);
         if (heldUnits <= 0) continue;
 
-        const txUnitPrice = Number(unitPriceMap[dayKey]) || 0;
-        if (Number.isFinite(txUnitPrice) && txUnitPrice > 0) {
-          fallbackUnitPrice = txUnitPrice;
-        }
-
         const dayEndTimestamp = Date.UTC(yyyy, Number(mm) - 1, Number(dd), 23, 59, 59, 999);
         const historicalPrice = getHistoricalPriceAt(historicalPoints, dayEndTimestamp);
-        
-        let unitPrice = historicalPrice;
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = fallbackUnitPrice;
-        }
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = firstHistoricalPrice;
-        }
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = currentInvPrice;
-        }
-
+        const fallbackPrice = Number(investment.current_price) || 0;
+        const unitPrice = (Number.isFinite(historicalPrice) && historicalPrice > 0)
+          ? historicalPrice
+          : fallbackPrice;
         if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
 
         if (!unitInvestmentByDayCurrency[dayKey]) unitInvestmentByDayCurrency[dayKey] = {};
@@ -1493,51 +1340,57 @@ export const infoRepository = {
       }
     }
 
-    // Date range for calculations (needed for fixed income investments)
+    // Ensure current-day investment value reflects live holdings and current prices.
+    // This prevents all-zero net worth when historical portfolio transactions are
+    // missing or incomplete while active investments exist.
+    const currentPortfolioResult = await query(`
+      SELECT
+        i.id,
+        i.asset_class,
+        COALESCE(i.currency, 'EUR') AS currency,
+        COALESCE(i.current_price, 0) AS current_price,
+        COALESCE(SUM(CASE WHEN pt.type IN ('buy', 'gift') THEN COALESCE(pt.units, 0) ELSE 0 END), 0) AS units_in,
+        COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN COALESCE(pt.units, 0) ELSE 0 END), 0) AS units_out,
+        COALESCE(SUM(CASE WHEN pt.type IN ('buy', 'gift') THEN COALESCE(pt.amount, 0) ELSE 0 END), 0) AS buy_amount,
+        COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN COALESCE(pt.amount, 0) ELSE 0 END), 0) AS sell_amount,
+        COALESCE(SUM(CASE WHEN pt.type = 'appreciation' THEN COALESCE(pt.amount, 0) ELSE 0 END), 0) AS appreciation
+      FROM investments i
+      LEFT JOIN portfolio_transactions pt ON pt.investment_id = i.id
+      WHERE i.is_active = true
+      GROUP BY i.id, i.asset_class, i.currency, i.current_price
+    `);
+
+    const currentPortfolioRows = currentPortfolioResult.rows.map((row) => {
+      const assetClass = row.asset_class;
+      const units = Math.max(0, Number(row.units_in) - Number(row.units_out));
+      const buyAmount = Number(row.buy_amount) || 0;
+      const sellAmount = Number(row.sell_amount) || 0;
+      const netPrincipal = Math.max(0, buyAmount - sellAmount);
+      const currentPrice = Number(row.current_price) || 0;
+      const appreciation = Number(row.appreciation) || 0;
+
+      let currentValue = 0;
+      if (assetClass === 'stock' || assetClass === 'etf' || assetClass === 'crypto' || assetClass === 'metals') {
+        currentValue = units * currentPrice;
+      } else if (assetClass === 'real_estate') {
+        currentValue = netPrincipal + appreciation;
+      } else {
+        // savings, bond and generic fallback use principal-based valuation
+        currentValue = netPrincipal;
+      }
+
+      return {
+        currency: row.currency,
+        amount: currentValue,
+      };
+    });
+
+    const currentPortfolioConverted = await convertRowsToEur(currentPortfolioRows, targetCurrency);
+    const currentPortfolioTotal = currentPortfolioConverted.reduce((sum, row) => sum + (Number(row.amount_eur) || 0), 0);
+
     const start = new Date(`${firstDataDateYmd}T00:00:00`);
     const end = new Date();
     end.setHours(0, 0, 0, 0);
-
-    // Fetch non-unit investments (real_estate, savings, bond) that store value in current_price
-    const fixedIncomeInvestments = await query(`
-      SELECT
-        i.id,
-        COALESCE(i.currency, 'EUR') AS currency,
-        COALESCE(i.current_price, 0) AS current_price,
-        COALESCE(i.created_at::date, $1::date) AS created_date
-      FROM investments i
-      WHERE i.is_active = true
-        AND i.asset_class IN ('real_estate', 'savings', 'bond')
-    `, [firstDataDateYmd]);
-
-    if (fixedIncomeInvestments.rows.length > 0) {
-      const fixedIncomeConverted = await convertRowsToEur(
-        fixedIncomeInvestments.rows.map(r => ({
-          ...r,
-          amount: parseFloat(r.current_price) || 0,
-        })),
-        targetCurrency
-      );
-      // Add fixed income investments to all days from their creation date
-      for (const row of fixedIncomeConverted) {
-        const value = row.amount_eur || 0;
-        if (value <= 0) continue;
-        const createdDate = row.created_date
-          ? (row.created_date instanceof Date
-            ? row.created_date.toISOString().split('T')[0]
-            : String(row.created_date).split('T')[0])
-          : firstDataDateYmd;
-        const invStartDate = new Date(Math.max(start.getTime(), new Date(createdDate).getTime()));
-        for (const day = new Date(invStartDate); day <= end; day.setDate(day.getDate() + 1)) {
-          const yyyy = day.getFullYear();
-          const mm = String(day.getMonth() + 1).padStart(2, '0');
-          const dd = String(day.getDate()).padStart(2, '0');
-          const dayKey = `${yyyy}-${mm}-${dd}`;
-          if (!investmentsByDay[dayKey]) investmentsByDay[dayKey] = 0;
-          investmentsByDay[dayKey] += value;
-        }
-      }
-    }
 
     const snapshots = [];
     for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
@@ -1555,16 +1408,20 @@ export const infoRepository = {
       });
     }
 
-    const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+    if (snapshots.length > 0 && currentPortfolioTotal > 0) {
+      const latestIndex = snapshots.length - 1;
+      snapshots[latestIndex].investments = Math.round(currentPortfolioTotal * 100) / 100;
+      snapshots[latestIndex].netWorth = Math.round((snapshots[latestIndex].liquid + snapshots[latestIndex].investments) * 100) / 100;
+    }
 
-    const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
+    const latest = snapshots[snapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
     const currentMonthPrefix = latest.date ? latest.date.substring(0, 7) : null;
     const firstCurrentMonthIdx = currentMonthPrefix
-      ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
+      ? snapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
       : -1;
     const baseline = firstCurrentMonthIdx > 0
-      ? sanitizedSnapshots[firstCurrentMonthIdx - 1]
-      : sanitizedSnapshots[0];
+      ? snapshots[firstCurrentMonthIdx - 1]
+      : snapshots[0];
     const monthlyChange = baseline ? latest.netWorth - baseline.netWorth : 0;
     const monthlyChangePercent = baseline && baseline.netWorth !== 0
       ? (monthlyChange / Math.abs(baseline.netWorth)) * 100
@@ -1578,13 +1435,13 @@ export const infoRepository = {
       },
       monthlyChange: Math.round(monthlyChange * 100) / 100,
       monthlyChangePercent: Math.round(monthlyChangePercent * 100) / 100,
-      snapshots: sanitizedSnapshots,
+      snapshots,
     };
 
     logger.debug('Net worth computed', {
       targetCurrency,
       firstDataDate: firstDataDateYmd,
-      snapshots: sanitizedSnapshots.length,
+      snapshots: snapshots.length,
       currentLiquid: result.current.liquid,
       currentInvestments: result.current.investments,
       currentNetWorth: result.current.netWorth,

@@ -14,7 +14,7 @@ import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -45,7 +45,7 @@ export default function PortfolioOverviewPage() {
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
-  const PORTFOLIO_WIDGETS = getPortfolioWidgets(t);
+  const PORTFOLIO_WIDGETS = useMemo(() => getPortfolioWidgets(t), [t]);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
 
   const { data: exchangeData } = useQuery({
@@ -54,15 +54,15 @@ export default function PortfolioOverviewPage() {
     staleTime: 60_000,
   });
 
-  const ratesToEur: Record<string, number> = {
+  const ratesToEur: Record<string, number> = useMemo(() => ({
     EUR: 1,
     ...Object.fromEntries(
       (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
     ),
     ...(exchangeData?.fallback_rates || {}),
-  };
+  }), [exchangeData]);
 
-  function convertToTarget(amount: number, fromCurrency?: string) {
+  const convertToTarget = useCallback((amount: number, fromCurrency?: string) => {
     const from = (fromCurrency || 'EUR').toUpperCase();
     const to = targetCurrency.toUpperCase();
     if (from === to) return amount;
@@ -71,46 +71,110 @@ export default function PortfolioOverviewPage() {
     const rateTo = ratesToEur[to];
     if (!rateFrom || !rateTo) return amount;
     return (amount * rateFrom) / rateTo;
-  }
+  }, [ratesToEur, targetCurrency]);
 
-  function fmt(
+  const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
+
+  const fmt = useCallback((
     val: number,
     currency = targetCurrency,
     decimals = appSettings.showDecimalPlaces
-  ) {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }).format(val);
-  }
+  ) => {
+    const key = `${locale}:${currency}:${decimals}`;
+    let formatter = formatterCache.get(key);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+      formatterCache.set(key, formatter);
+    }
+    return formatter.format(val);
+  }, [targetCurrency, appSettings.showDecimalPlaces, formatterCache, locale]);
 
-  const totalInvested = summaries.reduce((s, i) => s + convertToTarget(i.totalBuyCost, i.currency), 0);
-  const totalIncome = summaries.reduce((s, i) => s + convertToTarget(i.totalIncome, i.currency), 0);
+  const assetClassGroups = useMemo(() => getAssetClassGroups(t), [t]);
+
+  const totalsAndDerived = useMemo(() => {
+    const classToGroup = new Map<string, string>();
+    for (const [group, classes] of Object.entries(assetClassGroups)) {
+      for (const cls of classes) {
+        classToGroup.set(cls, group);
+      }
+    }
+
+    const allocationByGroup = new Map<string, number>();
+    const newsSymbols: string[] = [];
+
+    const totals = summaries.reduce((acc, summary) => {
+      const currentValueInTarget = convertToTarget(summary.currentValue, summary.currency);
+      const totalBuyCostInTarget = convertToTarget(summary.totalBuyCost, summary.currency);
+      const totalIncomeInTarget = convertToTarget(summary.totalIncome, summary.currency);
+      const totalGainInTarget = convertToTarget(summary.totalGain, summary.currency);
+      const realizedGainInTarget = convertToTarget(summary.realizedGain, summary.currency);
+      const unrealizedGainInTarget = convertToTarget(summary.unrealizedGain, summary.currency);
+      const feesInTarget = convertToTarget(summary.totalFees, summary.currency);
+      const taxesInTarget = convertToTarget(summary.totalTaxes, summary.currency);
+
+      acc.totalInvested += totalBuyCostInTarget;
+      acc.totalIncome += totalIncomeInTarget;
+      acc.totalPortfolioValueInTarget += currentValueInTarget;
+      acc.totalGainLossInTarget += totalGainInTarget;
+      acc.totalRealizedGainInTarget += realizedGainInTarget;
+      acc.totalUnrealizedGainInTarget += unrealizedGainInTarget;
+      acc.totalFeesInTarget += feesInTarget;
+      acc.totalTaxesInTarget += taxesInTarget;
+
+      const group = classToGroup.get(summary.assetClass);
+      if (group) {
+        allocationByGroup.set(group, (allocationByGroup.get(group) || 0) + currentValueInTarget);
+      }
+
+      if (summary.symbol && newsSymbols.length < 10) {
+        newsSymbols.push(summary.symbol);
+      }
+
+      return acc;
+    }, {
+      totalInvested: 0,
+      totalIncome: 0,
+      totalPortfolioValueInTarget: 0,
+      totalGainLossInTarget: 0,
+      totalRealizedGainInTarget: 0,
+      totalUnrealizedGainInTarget: 0,
+      totalFeesInTarget: 0,
+      totalTaxesInTarget: 0,
+    });
+
+    const allocationData = Object.keys(assetClassGroups)
+      .map((group) => ({
+        name: group,
+        value: allocationByGroup.get(group) || 0,
+      }))
+      .filter((entry) => entry.value > 0);
+
+    return {
+      ...totals,
+      newsSymbols,
+      allocationData,
+    };
+  }, [summaries, convertToTarget, assetClassGroups]);
+
+  const {
+    totalInvested,
+    totalIncome,
+    totalPortfolioValueInTarget,
+    totalGainLossInTarget,
+    totalRealizedGainInTarget,
+    totalUnrealizedGainInTarget,
+    totalFeesInTarget,
+    totalTaxesInTarget,
+    newsSymbols,
+    allocationData,
+  } = totalsAndDerived;
+
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
-
-  const newsSymbols = useMemo(() =>
-    summaries
-      .filter(s => s.symbol)
-      .map(s => s.symbol!)
-      .slice(0, 10),
-    [summaries]
-  );
-
-  const allocationData = Object.entries(getAssetClassGroups(t))
-    .map(([group, classes]) => ({
-      name: group,
-      value: summaries
-        .filter((s) => classes.includes(s.assetClass))
-        .reduce((sum, s) => sum + convertToTarget(s.currentValue, s.currency), 0),
-    }))
-    .filter((d) => d.value > 0);
-
-  const totalPortfolioValueInTarget = summaries.reduce((s, i) => s + convertToTarget(i.currentValue, i.currency), 0);
-  const totalGainLossInTarget = summaries.reduce((s, i) => s + convertToTarget(i.totalGain, i.currency), 0);
-  const totalRealizedGainInTarget = summaries.reduce((s, i) => s + convertToTarget(i.realizedGain, i.currency), 0);
-  const totalUnrealizedGainInTarget = summaries.reduce((s, i) => s + convertToTarget(i.unrealizedGain, i.currency), 0);
 
   const cards = [
     {
@@ -224,8 +288,8 @@ export default function PortfolioOverviewPage() {
                        { label: t('portfolio.realizedGains'), value: totalRealizedGainInTarget, cls: totalRealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
                        { label: t('portfolio.unrealizedGains'), value: totalUnrealizedGainInTarget, cls: totalUnrealizedGainInTarget >= 0 ? 'text-accent' : 'text-destructive', showSign: true },
                       { label: t('portfolio.totalIncome'), value: totalIncome, cls: 'text-accent', showSign: true },
-                       { label: t('portfolio.totalFees'), value: -summaries.reduce((s, i) => s + convertToTarget(i.totalFees, i.currency), 0), cls: 'text-destructive' },
-                       { label: t('portfolio.totalTaxes'), value: -summaries.reduce((s, i) => s + convertToTarget(i.totalTaxes, i.currency), 0), cls: 'text-destructive' },
+                       { label: t('portfolio.totalFees'), value: -totalFeesInTarget, cls: 'text-destructive' },
+                        { label: t('portfolio.totalTaxes'), value: -totalTaxesInTarget, cls: 'text-destructive' },
                     ].map(({ label, value, cls, showSign }) => (
                       <div key={label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                         <span className="text-sm text-muted-foreground">{label}</span>

@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-03-27
+date: 2026-03-28
 tags: [feature, portfolio, investments, stocks, crypto, metals]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js"]
@@ -53,9 +53,9 @@ POST /api/investments
 | Provider | Asset Classes | API |
 |----------|---------------|-----|
 | manual | all | User-entered prices |
-| coingecko | crypto | CoinGecko API |
+| binance | crypto | Binance market data |
 | yahoo | stock, etf, metals | Yahoo Finance |
-| kraken | crypto | Kraken Exchange |
+| kinesis | metals, commodities | Kinesis market data |
 | custom | all | Custom API endpoint(s) for latest + historical quotes |
 
 ### Editing Investments
@@ -66,6 +66,7 @@ Editable fields:
 - Name (`name`)
 - Ticker/symbol (`symbol`) for unit-based assets
 - Currency (`currency`)
+- Current price (`current_price`) when using manual provider on unit-based assets
 - Price provider fields (`price_provider`, `price_provider_id`, `price_provider_url`)
 - Custom provider advanced fields (`price_provider_latest_url`, `price_provider_latest_path`, `price_provider_history_url`, `price_provider_history_path`, `price_provider_history_ts_path`, `price_provider_history_price_path`)
 
@@ -92,11 +93,14 @@ The refresh API response includes `priceSources` per investment ID so clients ca
 
 Implementation notes:
 - Yahoo provider resolution now follows Market Lookup style symbol handling by accepting `price_provider_id` first and falling back to `symbol` when needed.
+- Kinesis provider now resolves symbol/timeframe/from-date through a shared helper for both live and historical paths, keeping lookup behavior consistent.
+- Kinesis refresh eligibility accepts either explicit `price_provider_id` or name/symbol mapping via Kinesis asset config.
 - Refresh price persistence updates inheritance storage tables directly (`investments_base` and asset-specific child tables), avoiding `UPDATE investments ...` against the compatibility view.
 - Custom provider refresh can resolve latest quote either via explicit latest path, or from latest point in configured history payload when latest path is not provided.
-- New API endpoint `GET /api/investments/:id/price-history` serves provider-backed history (currently custom provider) without storing external provider price history in DB.
+- New API endpoint `GET /api/investments/:id/price-history` serves provider-backed history (yahoo/custom) with read-through DB persistence in `asset_price_history`.
 - Legacy DB compatibility: if `investments` table/view does not yet contain new custom-provider columns, investment create automatically falls back to legacy provider fields (`price_provider_id`, `price_provider_url`) so custom latest-path setups still work during mixed-schema deployments.
 - Migration dependency: `0017_investment_custom_provider_history` applies custom-provider latest/history columns to inheritance storage, conditionally patches legacy `investments` table only when relation kind is table/partition, creates `metals_investments` if missing, and refreshes the compatibility view/trigger for metals + new provider fields ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- Migration dependency: `0021_update_price_provider_enum` migrates the `price_provider` enum from `coingecko`/`kraken` to `binance` by altering `investments_base.price_provider`, dropping the column default before enum type conversion and restoring `DEFAULT 'manual'` after conversion. To prevent dependency failures in PostgreSQL, it dynamically backs up and drops all dependent `public` views referencing `investments_base` (including column-level dependencies such as `price_provider`), recreates those views from captured definitions after the enum swap, and recreates the `update_investments_view_instead` trigger on `investments` when `investments_view_update_instead()` exists ([[alembic/versions/0021_update_price_provider_enum.py]]).
 - Migration dependency: `0018_metals_transactions_inheritance_split` introduces dedicated `metals_transactions`, migrates existing metals transaction rows out of `stock_transactions`, and refreshes `portfolio_transactions` compatibility view joins ([[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
 
 ## Portfolio Transactions
@@ -240,17 +244,24 @@ Current behavior:
 - Y-axis domain adapts to the currently visible window so local movement remains readable even when global historical peaks exist.
 - Net Worth requests and renders values in `appSettings.defaultCurrency` (via `GET /api/info/net-worth?currency=...`) and formats amounts with app locale + decimal settings.
 - Snapshot range starts at the first available data date and runs through today.
+- Net-worth route response is cached in-memory per target currency for 60 seconds with in-flight request deduplication to reduce repeated expensive recomputation.
 - Seed date is the minimum of first portfolio transaction date, first active investment creation date, and first active transaction date.
 - Portfolio cashflow contribution is computed from that seed date onward, removing prior-year hard-cutoff behavior.
-- For unit-priced assets (stocks/ETFs/crypto/metals), daily net worth valuation now starts from each investment’s own first activity date and uses provider historical close quotes when available (Yahoo/custom), falling back to current price only when historical quotes are unavailable.
+- For unit-priced assets (stocks/ETFs/crypto/metals), daily net worth valuation now starts from each investment’s own first activity date and values days with provider historical close quotes first; when quote history is missing, it falls back to the latest known transaction unit price carry-forward (never mutable `current_price` for past days).
 - Liquid side now falls back to cumulative transaction flow when account balance snapshots are unavailable.
 - If seed date discovery via active-only rows returns empty, net worth now retries with non-filtered seed discovery so legacy rows still produce non-zero snapshots.
 - Latest-day investment snapshot is now reconciled against active holdings and `current_price`, so net worth no longer stays at zero when historical portfolio transaction aggregation is incomplete.
+- Daily net worth snapshots sanitize isolated one-day investment needles (spike/trough reversal + local needle ratio check) by replacing only the outlier day with geometric interpolation between neighboring days; downstream monthly change/baseline values use the sanitized series.
 - Net worth backend logs fallback paths and final computed summary metrics (currency, seed date, snapshot count, current totals) for easier debugging when users report zeroed dashboards.
 - Regression tests cover transactions-only (no investments) workspaces to keep non-zero liquid/net worth responses correct.
-- Backend startup now triggers a background investment price refresh for assets with live providers (Yahoo/CoinGecko/Kraken/custom), improving first-load portfolio and net worth freshness.
+- Regression tests cover isolated one-day unit investment spike sanitization in net worth snapshots ([[apps/node-backend/tests/infoRepository.test.js]]).
+- Backend startup now triggers live price refresh after the API starts accepting requests, so startup remains non-blocking for users.
+- For Kinesis investments that already have a persisted `current_price`, startup uses that stored value immediately and defers the external Kinesis refresh to a background task.
+- If a Kinesis investment has no usable stored price, startup still includes it in the immediate refresh set to preserve first-load correctness.
+- Portfolio hook transaction loading now uses a single bulk API call (`GET /api/investments/transactions`) with fallback to per-investment calls when bulk endpoint is unavailable.
+- Portfolio summaries now pre-group transactions by `investment_id` before per-investment calculations, reducing repeated global scans during render/memo recompute.
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
 ## Cross-Currency Display Normalization
 
@@ -258,19 +269,49 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/fro
 - UI conversion uses live rates from `/api/info/exchange-rates` so cards, charts, and tables aggregate mixed-source currencies consistently in the selected target currency.
 - Percentage metrics remain unchanged (no currency conversion applied).
 - Asset page scope includes Stocks, Crypto, Real Estate, and Savings; Metals inherits the same behavior by reusing Stocks page logic.
-- Performance chart valuation now consumes custom-provider historical points (when configured) for unit-based investments; when unavailable it falls back to current price approximation.
+- Performance chart valuation now consumes custom-provider historical points (when configured) for unit-based investments; past points without historical quotes are skipped instead of falling back to mutable `current_price`.
+- Performance historical series determinism: historical unit-priced valuation no longer depends on live `current_price`, preventing retroactive chart shifts after startup price refresh.
+- Performance startup rendering now avoids blocking day-level graph computation on net-worth snapshot availability; the chart can render immediately from portfolio transactions + persisted price history and later reconciles with net-worth overlays when snapshot data arrives.
+- Performance price-history requests are bounded to the portfolio transaction date range (`from_ms`/`to_ms`) to reduce startup payload size and history-query latency.
+- Performance graph history requests use DB-only mode (`db_only=true`) so chart rendering is decoupled from live provider latency/timeouts (for example Kinesis network timeouts) and uses persisted `asset_price_history` immediately.
+- Performance inflation requests now use DB-only mode (`/api/info/inflation-rates?db_only=true`) so inflation-adjusted series render from persisted DB rates immediately while external Statbel/Eurostat refresh runs in background.
+- Performance absolute class series (Stocks & ETFs, Crypto, Metals) no longer apply proportional rescaling to match net-worth total overlays; class lines remain true class-native valuations to avoid visual distortion.
 - Performance top summary cards are now pinned to **overall portfolio** metrics (independent of selected chart period), matching portfolio-level totals.
 - Performance invested-capital summary now aligns with dashboard semantics by using total buy cost aggregation in target currency.
 - Performance total return uses aggregated `totalGain` semantics, while annualized return is computed as CAGR from current value vs invested capital over tracked duration.
-- Performance value-over-time now prefers monthly net-worth investment snapshots (`/api/info/net-worth`) to align chart behavior with the Net Worth page.
-- Performance value-over-time class series (stocks+ETFs/crypto/metals) are proportionally normalized to the net-worth monthly investment total when available, keeping class overlays aligned with authoritative net-worth valuation.
-- Performance uses locale-aware text month labels (`MMM YY`) for portfolio and relative charts, consistent with Net Worth chart labeling.
-- Performance includes a relative-performance chart for entire portfolio, stocks+ETFs, crypto, and metals using **contribution-adjusted** monthly return chaining (net buy/gift/sell flows removed before return computation) to avoid inflated percentages when capital contributions are large.
-- Monthly heatmap represents **relative monthly investment returns (%)** (investment performance only; no liquid-cash component).
-- Monthly return computation now uses transaction-derived net monthly flows (`buy` + `gift` - `sell`) instead of invested-balance deltas, avoiding distortions from valuation reclassifications; first visible month is pinned to `0.00%` baseline and YTD is compounded from monthly returns.
+- Performance value-over-time now uses day-level snapshot points (daily timeline) for absolute and relative charts, improving fluctuation fidelity versus month-only series.
+- Performance value-over-time class series (stocks+ETFs/crypto/metals) now align to the same day-level timeline used by portfolio totals.
+- Performance chart x-axis now keys by day (`YYYY-MM-DD`) internally and formats ticks as locale-aware month-year labels for readability.
+- Relative performance now applies contribution adjustment using day-keyed net flows (`YYYY-MM-DD`) rather than month-bucket flow alignment for chart series.
+- Performance flow/invested conversion now uses transaction `fx_rate_to_eur` when present, reducing historical drift from live FX-rate refreshes.
+- Performance includes a relative-performance chart for entire portfolio, stocks+ETFs, crypto, and metals using contribution-adjusted return chaining (Modified Dietz-style cash-flow handling) to avoid inflated percentages when capital contributions are large.
+- Relative chart scaling fix: chained performance index baseline is `1` (not `100`), and plotted percentage now uses `(index - 1) * 100`; this removes 10x/100x over-scaling (for example, `2000%` shown instead of `200%`).
+- Performance absolute chart now explicitly plots class lines for stocks+ETFs, crypto, and metals; stocks+ETFs line uses a red stroke for faster visual separation from total portfolio.
+- Relative performance chart keeps stocks+ETFs line in red to align class-color semantics between absolute and relative views.
+- Monthly heatmap remains **month-based** and represents relative monthly investment returns (%) (investment performance only; no liquid-cash component).
+- Monthly heatmap return formula: `monthlyReturn = (currValue - prevValue - netFlow) / denominator`, with `denominator = prevValue + netFlow / 2` and fallback `denominator = prevValue` when computed denominator `<= 0`.
+- Heatmap first month is now `null` (no data) instead of forced `0.00%`, so the first displayed month does not imply a measured return without a prior month anchor; YTD is compounded from available non-null monthly returns.
 - Performance month labels for charts and heatmap now always follow app language locale (`en-US`/`nl-NL`) rather than number-format locale, preventing German month names when number format is set to EU style.
+- Performance inflation adjustment now uses Belgian monthly rates from backend (`/api/info/inflation-rates`) instead of hardcoded EU annual assumptions; real return and inflation-adjusted value are compounded month-by-month using backend month keys (`YYYY-MM`).
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+
+## Belgian Inflation Data Flow
+
+- Backend now owns Belgian inflation sourcing and caching via Statbel-backed service with Eurostat fallback; frontend consumes monthly rates through the info API.
+- Data path and fallback order: in-memory cache (24h) -> PostgreSQL persisted rows -> remote Statbel fetch -> remote Eurostat HICP index fallback; if both remote sources fail, service falls back to persisted DB data.
+- Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
+- New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
+
+Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+
+## Historical Asset Quote Persistence
+
+- Historical provider prices are now persisted in `asset_price_history` and reused by portfolio valuation flows.
+- Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
+- Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
+
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
 
 ## Related
 

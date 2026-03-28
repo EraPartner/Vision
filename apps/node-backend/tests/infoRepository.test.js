@@ -303,22 +303,22 @@ describe('InfoRepository', () => {
           return { rows: [] };
         }
 
-        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+        if (sql.includes('i.price_provider_history_url')) {
           return {
             rows: [
               {
                 id: 1,
-                asset_class: 'stock',
                 currency: 'EUR',
                 current_price: '25',
-                units_in: '10',
-                units_out: '0',
-                buy_amount: '200',
-                sell_amount: '0',
-                appreciation: '0',
+                price_provider: 'manual',
+                first_tx_date: todayKey,
+                created_date: todayKey,
               },
             ],
           };
+        }
+        if (sql.includes('AS unit_delta')) {
+          return { rows: [{ investment_id: 1, day: todayKey, unit_delta: '10' }] };
         }
 
         return { rows: [] };
@@ -483,6 +483,100 @@ describe('InfoRepository', () => {
         expect.objectContaining({ id: 11, price_provider: 'yahoo' }),
         expect.objectContaining({ fromMs: expect.any(Number), toMs: expect.any(Number) })
       );
+    });
+
+    it('should sanitize isolated one-day unit investment spikes in net worth snapshots', async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const day2 = new Date(today);
+      day2.setDate(day2.getDate() - 1);
+      const day1 = new Date(today);
+      day1.setDate(day1.getDate() - 2);
+
+      const day1Key = `${day1.getFullYear()}-${String(day1.getMonth() + 1).padStart(2, '0')}-${String(day1.getDate()).padStart(2, '0')}`;
+      const day2Key = `${day2.getFullYear()}-${String(day2.getMonth() + 1).padStart(2, '0')}-${String(day2.getDate()).padStart(2, '0')}`;
+      const day3Key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      fetchHistoricalPrices.mockResolvedValue([
+        { timestampMs: Date.UTC(day1.getFullYear(), day1.getMonth(), day1.getDate(), 12, 0, 0, 0), price: 100 },
+        { timestampMs: Date.UTC(day2.getFullYear(), day2.getMonth(), day2.getDate(), 12, 0, 0, 0), price: 1200 },
+        { timestampMs: Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0, 0), price: 101 },
+      ]);
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM')) return { rows: [] };
+        if (sql.includes('first_data_date')) return { rows: [{ first_data_date: day1Key }] };
+
+        if (sql.includes('account_list') && sql.includes('LEFT JOIN LATERAL')) {
+          return {
+            rows: [
+              { day: day1Key, bank_account: 'Main', balance: '0', currency: 'EUR' },
+              { day: day2Key, bank_account: 'Main', balance: '0', currency: 'EUR' },
+              { day: day3Key, bank_account: 'Main', balance: '0', currency: 'EUR' },
+            ],
+          };
+        }
+
+        if (sql.includes('i.asset_class NOT IN (\'stock\', \'etf\', \'crypto\', \'metals\')')) {
+          return { rows: [] };
+        }
+
+        if (sql.includes('COALESCE(i.price_provider, \'manual\') AS price_provider')) {
+          return {
+            rows: [
+              {
+                id: 31,
+                currency: 'EUR',
+                current_price: '100',
+                price_provider: 'kinesis',
+                price_provider_id: 'XAU_USD',
+                symbol: 'XAU_USD',
+                price_provider_url: null,
+                price_provider_latest_url: null,
+                price_provider_latest_path: null,
+                price_provider_history_url: null,
+                price_provider_history_path: null,
+                price_provider_history_ts_path: null,
+                price_provider_history_price_path: null,
+                first_tx_date: day1Key,
+                created_date: day1Key,
+              },
+            ],
+          };
+        }
+
+        if (sql.includes('AS unit_delta')) {
+          return {
+            rows: [
+              { investment_id: 31, day: day1Key, unit_delta: '1' },
+              { investment_id: 31, day: day2Key, unit_delta: '0' },
+              { investment_id: 31, day: day3Key, unit_delta: '0' },
+            ],
+          };
+        }
+
+        if (sql.includes('pt.type IN (\'buy\', \'gift\', \'sell\')')) {
+          return {
+            rows: [
+              { investment_id: 31, day: day1Key, unit_price: '100' },
+            ],
+          };
+        }
+
+        if (sql.includes('FROM investments i') && sql.includes('LEFT JOIN portfolio_transactions pt')) {
+          return { rows: [] };
+        }
+
+        return { rows: [] };
+      });
+
+      const result = await infoRepository.getNetWorth();
+
+      const spikeDay = result.snapshots.find((s) => s.date === day2Key);
+      expect(spikeDay).toBeDefined();
+      expect(spikeDay?.investments).toBeGreaterThan(100);
+      expect(spikeDay?.investments).toBeLessThan(101);
+      expect(result.current.investments).toBe(101);
     });
   });
 

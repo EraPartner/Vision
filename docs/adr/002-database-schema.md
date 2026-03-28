@@ -2,7 +2,7 @@
 title: ADR 002 - Database Schema
 type: adr
 status: Accepted
-date: 2026-03-18
+date: 2026-03-28
 tags: [architecture, database, schema, postgresql]
 ---
 
@@ -249,7 +249,9 @@ Investment holdings (stocks, ETFs, crypto, real estate, savings, bonds).
 
 **Asset Class Enum**: stock, etf, crypto, real_estate, savings, bond
 
-**Price Provider Enum**: manual, coingecko, yahoo, kraken, custom
+**Price Provider Enum**: manual, binance, yahoo, kinesis, custom
+
+Migration reference: enum value `kinesis` was added via [[alembic/versions/0022_add_kinesis_price_provider_enum.py]].
 
 **Indexes**:
 - `idx_investments_asset_class` on asset_class
@@ -359,7 +361,7 @@ Links transactions to their raw source.
 | asset_class | stock, etf, crypto, real_estate, savings, bond |
 | portfolio_txn_type | buy, sell, dividend, fee, tax, interest, rent_income, appreciation |
 | recurrence_interval | daily, weekly, bi-weekly, monthly, quarterly, yearly |
-| price_provider | manual, coingecko, yahoo, kraken, custom |
+| price_provider | manual, binance, yahoo, kinesis, custom |
 | revolut_state | COMPLETED, PENDING, REVERTED, DECLINED |
 
 ### Materialized Views
