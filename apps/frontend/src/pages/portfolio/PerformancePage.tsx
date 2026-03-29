@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,65 +13,23 @@ import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     Calendar, DollarSign, Activity,
 } from "lucide-react";
-import { format, parseISO, differenceInMonths, differenceInDays, startOfMonth, endOfMonth, isAfter, isValid, subMonths, subYears } from "date-fns";
+import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
-import type { AssetClass, PortfolioTransaction } from "@/types/api";
-
-type HistoryPoint = { timestampMs: number; price: number };
-
-function getPriceFromHistory(points: HistoryPoint[], date: Date): number | undefined {
-    if (!Array.isArray(points) || points.length === 0) return undefined;
-    const target = date.getTime();
-    let left = 0;
-    let right = points.length - 1;
-    let best: HistoryPoint | undefined;
-    while (left <= right) {
-        const mid = Math.floor((left + right) / 2);
-        const p = points[mid];
-        if (!p) break;
-        if (p.timestampMs <= target) {
-            best = p;
-            left = mid + 1;
-        } else {
-            right = mid - 1;
-        }
-    }
-    return best?.price;
-}
+import type { AssetClass } from "@/types/api";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
-interface MonthlySnapshot {
-    month: string; // YYYY-MM
-    day: string; // YYYY-MM-DD
-    date: Date;
+interface PerformanceSnapshot {
+    date: string;
     invested: number;
     value: number;
-    stocksEtfsValue: number;
-    cryptoValue: number;
-    metalsValue: number;
-    gainLoss: number;
-    returnPct: number;
-    inflationAdjustedValue: number;
-    realReturnPct: number;
-    cumulativeInflation: number;
-}
-
-interface HistoryPointResponse {
-    timestampMs: number | string;
-    price: number | string;
-}
-
-interface ParsedPortfolioTransaction extends PortfolioTransaction {
-    _parsedDate: Date;
-}
-
-interface RelativeFlowBucket {
-    portfolio: number;
-    stocksEtfs: number;
-    crypto: number;
-    metals: number;
+    stocks_etfs_value: number;
+    crypto_value: number;
+    metals_value: number;
+    inflation_adjusted_value: number;
+    gain_loss: number;
+    return_pct: number;
 }
 
 const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
@@ -87,6 +45,7 @@ const CHART_KEYS = {
     relativeStocksEtfs: 'relativeStocksEtfs',
     relativeCrypto: 'relativeCrypto',
     relativeMetals: 'relativeMetals',
+    relativeInflationAdjusted: 'relativeInflationAdjusted',
 } as const;
 
 export default function PerformancePage() {
@@ -94,7 +53,8 @@ export default function PerformancePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const { summaries, transactions } = usePortfolio();
+    const { summaries } = usePortfolio();
+    const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
     const { data: exchangeData } = useQuery({
         queryKey: ['exchange-rates', defaultCurrency],
@@ -102,97 +62,10 @@ export default function PerformancePage() {
         staleTime: 60_000,
     });
 
-    const { data: netWorthData } = useQuery({
-        queryKey: ["net-worth", defaultCurrency],
-        queryFn: () => apiClient.getNetWorth({ currency: defaultCurrency }),
-        staleTime: 60_000,
-    });
-
-    const { data: portfolioPerformanceData } = useQuery({
+    const { data: portfolioPerformanceData, isLoading } = useQuery({
         queryKey: ["portfolio-performance", defaultCurrency],
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
         staleTime: 300_000,
-    });
-
-    const historyRange = useMemo(() => {
-        let earliestTimestamp = Number.POSITIVE_INFINITY;
-
-        for (const transaction of transactions) {
-            const parsed = Date.parse(transaction.date);
-            if (!Number.isFinite(parsed)) continue;
-            if (parsed < earliestTimestamp) earliestTimestamp = parsed;
-        }
-
-        if (!Number.isFinite(earliestTimestamp)) return undefined;
-
-        const from = new Date(earliestTimestamp);
-        from.setHours(0, 0, 0, 0);
-
-        const to = new Date();
-        to.setHours(23, 59, 59, 999);
-
-        return {
-            fromMs: from.getTime(),
-            toMs: to.getTime(),
-        };
-    }, [transactions]);
-
-    const historicalPriceInvestments = useMemo(
-        () => summaries
-            .filter((s) => ['stock', 'etf', 'crypto', 'metals'].includes(s.assetClass))
-            .map((s) => s.id)
-            .sort((a, b) => a - b),
-        [summaries]
-    );
-
-    const { data: customHistoryData } = useQuery({
-        queryKey: [
-            'investment-price-history',
-            historicalPriceInvestments.join(','),
-            historyRange?.fromMs ?? null,
-            historyRange?.toMs ?? null,
-        ],
-        queryFn: async () => {
-            const parseHistoryPoints = (response: { points?: HistoryPointResponse[] } | undefined) => (
-                ((response?.points || []) as HistoryPointResponse[])
-                    .map((p) => ({ timestampMs: Number(p.timestampMs), price: Number(p.price) }))
-                    .filter((p: HistoryPoint) => Number.isFinite(p.timestampMs) && Number.isFinite(p.price) && p.price > 0)
-                    .sort((a: HistoryPoint, b: HistoryPoint) => a.timestampMs - b.timestampMs)
-            );
-
-            const entries = await Promise.all(
-                historicalPriceInvestments.map(async (id) => {
-                    try {
-                        const dbRes = await apiClient.getInvestmentPriceHistory(id, historyRange
-                            ? {
-                                from_ms: historyRange.fromMs,
-                                to_ms: historyRange.toMs,
-                                db_only: true,
-                            }
-                            : undefined);
-
-                        let points = parseHistoryPoints(dbRes);
-
-                        if (points.length === 0) {
-                            const refreshedRes = await apiClient.getInvestmentPriceHistory(id, historyRange
-                                ? {
-                                    from_ms: historyRange.fromMs,
-                                    to_ms: historyRange.toMs,
-                                }
-                                : undefined);
-                            points = parseHistoryPoints(refreshedRes);
-                        }
-
-                        return [id, points] as const;
-                    } catch {
-                        return [id, []] as const;
-                    }
-                })
-            );
-            return Object.fromEntries(entries) as Record<number, HistoryPoint[]>;
-        },
-        enabled: historicalPriceInvestments.length > 0 && Boolean(historyRange),
-        staleTime: 5 * 60_000,
     });
 
     const ratesToEur: Record<string, number> = useMemo(() => ({
@@ -203,26 +76,15 @@ export default function PerformancePage() {
         ...(exchangeData?.fallback_rates || {}),
     }), [exchangeData]);
 
-    const convertToTarget = useCallback((amount: number, fromCurrency?: string, fxRateToEur?: number) => {
+    const convertToTarget = (amount: number, fromCurrency?: string) => {
         const from = (fromCurrency || 'EUR').toUpperCase();
         const to = defaultCurrency.toUpperCase();
         if (from === to) return amount;
-        const rateTo = ratesToEur[to];
-
-        const txRateToEur = Number(fxRateToEur);
-        if (from !== 'EUR' && Number.isFinite(txRateToEur) && txRateToEur > 0 && Number.isFinite(rateTo) && rateTo > 0) {
-            return (amount * txRateToEur) / rateTo;
-        }
-
         const rateFrom = ratesToEur[from];
+        const rateTo = ratesToEur[to];
         if (!rateFrom || !rateTo) return amount;
         return (amount * rateFrom) / rateTo;
-    }, [defaultCurrency, ratesToEur]);
-
-    const convertTransactionAmountToTarget = useCallback((transaction: ParsedPortfolioTransaction) => {
-        return convertToTarget(Number(transaction.amount), transaction.currency, transaction.fx_rate_to_eur);
-    }, [convertToTarget]);
-    const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+    };
 
     const PERIOD_LABELS: Record<Period, string> = {
         "1m": t('performance.period.1m'),
@@ -233,353 +95,18 @@ export default function PerformancePage() {
         "all": t('performance.period.all'),
     };
 
-    const parsedTransactions: ParsedPortfolioTransaction[] = useMemo(
-        () => transactions
-            .map((t) => {
-                const parsedDate = parseISO(t.date);
-                return { ...t, _parsedDate: parsedDate };
-            })
-            .filter((t) => isValid(t._parsedDate))
-            .sort((a, b) => a._parsedDate.getTime() - b._parsedDate.getTime()),
-        [transactions],
+    const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
+
+    const monthTickFormatter = useMemo(
+        () => new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" }),
+        [monthLabelLocale],
     );
 
-    const inflationStartMonth = useMemo(() => {
-        const firstDate = parsedTransactions[0]?._parsedDate;
-        return firstDate ? format(firstDate, "yyyy-MM") : undefined;
-    }, [parsedTransactions]);
+    // ─── Filter snapshots by selected period ───
+    const filteredSnapshots: PerformanceSnapshot[] = useMemo(() => {
+        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
+        if (allSnapshots.length === 0) return [];
 
-    const { data: inflationRatesData } = useQuery({
-        queryKey: ['belgian-inflation-rates', inflationStartMonth],
-        queryFn: () => apiClient.getBelgianInflationRates({
-            start_month: inflationStartMonth,
-            db_only: true,
-        }),
-        enabled: Boolean(inflationStartMonth),
-        staleTime: 24 * 60 * 60 * 1000,
-    });
-
-    const inflationByMonth = useMemo(() => {
-        const map = new Map<string, number>();
-        for (const rate of inflationRatesData?.rates ?? []) {
-            if (!rate?.month || !Number.isFinite(rate.monthly_rate)) continue;
-            map.set(rate.month, Number(rate.monthly_rate));
-        }
-        return map;
-    }, [inflationRatesData?.rates]);
-
-    const investmentAssetClassById = useMemo(() => {
-        const map = new Map<number, AssetClass>();
-        for (const investment of summaries) {
-            map.set(investment.id, investment.assetClass);
-        }
-        return map;
-    }, [summaries]);
-
-    const monthlyNetFlows = useMemo(() => {
-        const byMonth = new Map<string, RelativeFlowBucket>();
-
-        const ensure = (month: string) => {
-            const existing = byMonth.get(month);
-            if (existing) return existing;
-            const created: RelativeFlowBucket = {
-                portfolio: 0,
-                stocksEtfs: 0,
-                crypto: 0,
-                metals: 0,
-            };
-            byMonth.set(month, created);
-            return created;
-        };
-
-        for (const transaction of parsedTransactions) {
-            if (transaction.type !== "buy" && transaction.type !== "gift" && transaction.type !== "sell") {
-                continue;
-            }
-
-            const rawAmount = Number(transaction.amount);
-            if (!Number.isFinite(rawAmount) || rawAmount === 0) continue;
-
-            const convertedAmount = convertTransactionAmountToTarget(transaction);
-            const signedFlow = transaction.type === "sell"
-                ? -convertedAmount
-                : convertedAmount;
-
-            if (!Number.isFinite(signedFlow) || signedFlow === 0) continue;
-
-            const monthKey = format(transaction._parsedDate, "yyyy-MM");
-            const bucket = ensure(monthKey);
-            bucket.portfolio += signedFlow;
-
-            const assetClass = investmentAssetClassById.get(transaction.investment_id);
-            if (assetClass === "stock" || assetClass === "etf") {
-                bucket.stocksEtfs += signedFlow;
-            } else if (assetClass === "crypto") {
-                bucket.crypto += signedFlow;
-            } else if (assetClass === "metals") {
-                bucket.metals += signedFlow;
-            }
-        }
-
-        return byMonth;
-    }, [parsedTransactions, convertTransactionAmountToTarget, investmentAssetClassById]);
-
-    const dailyNetFlows = useMemo(() => {
-        const byDay = new Map<string, RelativeFlowBucket>();
-
-        const ensure = (day: string) => {
-            const existing = byDay.get(day);
-            if (existing) return existing;
-            const created: RelativeFlowBucket = {
-                portfolio: 0,
-                stocksEtfs: 0,
-                crypto: 0,
-                metals: 0,
-            };
-            byDay.set(day, created);
-            return created;
-        };
-
-        for (const transaction of parsedTransactions) {
-            if (transaction.type !== "buy" && transaction.type !== "gift" && transaction.type !== "sell") {
-                continue;
-            }
-
-            const rawAmount = Number(transaction.amount);
-            if (!Number.isFinite(rawAmount) || rawAmount === 0) continue;
-
-            const convertedAmount = convertTransactionAmountToTarget(transaction);
-            const signedFlow = transaction.type === "sell"
-                ? -convertedAmount
-                : convertedAmount;
-
-            if (!Number.isFinite(signedFlow) || signedFlow === 0) continue;
-
-            const dayKey = format(transaction._parsedDate, "yyyy-MM-dd");
-            const bucket = ensure(dayKey);
-            bucket.portfolio += signedFlow;
-
-            const assetClass = investmentAssetClassById.get(transaction.investment_id);
-            if (assetClass === "stock" || assetClass === "etf") {
-                bucket.stocksEtfs += signedFlow;
-            } else if (assetClass === "crypto") {
-                bucket.crypto += signedFlow;
-            } else if (assetClass === "metals") {
-                bucket.metals += signedFlow;
-            }
-        }
-
-        return byDay;
-    }, [parsedTransactions, convertTransactionAmountToTarget, investmentAssetClassById]);
-
-    const netWorthInvestmentsByMonth = useMemo(() => {
-        const map = new Map<string, number>();
-        for (const snapshot of netWorthData?.snapshots ?? []) {
-            if (!snapshot?.date || !Number.isFinite(snapshot.investments)) continue;
-            map.set(snapshot.date.slice(0, 7), snapshot.investments);
-        }
-        return map;
-    }, [netWorthData?.snapshots]);
-
-    const netWorthInvestmentsByDay = useMemo(() => {
-        const map = new Map<string, number>();
-        for (const snapshot of netWorthData?.snapshots ?? []) {
-            if (!snapshot?.date || !Number.isFinite(snapshot.investments)) continue;
-            map.set(snapshot.date, snapshot.investments);
-        }
-        return map;
-    }, [netWorthData?.snapshots]);
-
-    // ─── Compute monthly snapshots ───
-    const allSnapshots: MonthlySnapshot[] = useMemo(() => {
-        if (summaries.length === 0 || parsedTransactions.length === 0) return [];
-
-        const firstDate = parsedTransactions[0]._parsedDate;
-        const now = new Date();
-        const totalMonths = differenceInMonths(now, firstDate) + 1;
-        if (!Number.isFinite(totalMonths) || totalMonths <= 0) return [];
-
-        const snapshots: MonthlySnapshot[] = [];
-        let cumulativeInflation = 1;
-        const sourceTransactions = parsedTransactions.filter((t) => !isAfter(t._parsedDate, now));
-        let txIndex = 0;
-        const txCount = sourceTransactions.length;
-        let invested = 0;
-        const unitsByInvestment: Record<number, number> = {};
-        const lastTxPriceByInvestment: Record<number, number> = {};
-        const nonMarketByInvestment: Record<number, { buys: number; sells: number; income: number; appreciation: number; feesTaxes: number }> = {};
-
-        for (let i = 0; i < totalMonths; i++) {
-            const monthStart = startOfMonth(new Date(firstDate.getFullYear(), firstDate.getMonth() + i, 1));
-            const monthEnd = endOfMonth(monthStart);
-            const monthKey = format(monthStart, "yyyy-MM");
-
-            if (isAfter(monthStart, now)) break;
-
-            while (txIndex < txCount && !isAfter(sourceTransactions[txIndex]._parsedDate, monthEnd)) {
-                const t = sourceTransactions[txIndex];
-                const convertedAmount = convertTransactionAmountToTarget(t);
-                const nonMarketAgg = nonMarketByInvestment[t.investment_id]
-                    || { buys: 0, sells: 0, income: 0, appreciation: 0, feesTaxes: 0 };
-
-                if (t.type === "buy") {
-                    invested += convertedAmount;
-                    unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) + (Number(t.units) || 0);
-                    nonMarketAgg.buys += convertedAmount;
-                    const rawUnits = Number(t.units) || 0;
-                    const rawAmount = Number(t.amount) || 0;
-                    if (rawUnits > 0 && rawAmount > 0) {
-                        lastTxPriceByInvestment[t.investment_id] = rawAmount / rawUnits;
-                    }
-                } else if (t.type === "gift") {
-                    invested += convertedAmount;
-                    unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) + (Number(t.units) || 0);
-                    nonMarketAgg.buys += convertedAmount;
-                } else if (t.type === "sell") {
-                    invested -= convertedAmount;
-                    unitsByInvestment[t.investment_id] = (unitsByInvestment[t.investment_id] || 0) - (Number(t.units) || 0);
-                    nonMarketAgg.sells += convertedAmount;
-                    const rawUnits = Number(t.units) || 0;
-                    const rawAmount = Number(t.amount) || 0;
-                    if (rawUnits > 0 && rawAmount > 0) {
-                        lastTxPriceByInvestment[t.investment_id] = rawAmount / rawUnits;
-                    }
-                } else if (t.type === "interest" || t.type === "dividend" || t.type === "rent_income") {
-                    nonMarketAgg.income += convertedAmount;
-                } else if (t.type === "appreciation") {
-                    nonMarketAgg.appreciation += convertedAmount;
-                } else if (t.type === "fee" || t.type === "tax") {
-                    nonMarketAgg.feesTaxes += convertedAmount;
-                }
-
-                nonMarketByInvestment[t.investment_id] = nonMarketAgg;
-                txIndex += 1;
-            }
-
-            // Estimate value at end of month
-            // For current month, use current prices; for past months, use linear interpolation
-            let value = 0;
-            let stocksEtfsValue = 0;
-            let cryptoValue = 0;
-            let metalsValue = 0;
-            for (const inv of summaries) {
-                const units = unitsByInvestment[inv.id] || 0;
-
-                const addClassValue = (amount: number) => {
-                    if (!Number.isFinite(amount)) return;
-                    if (inv.assetClass === "stock" || inv.assetClass === "etf") {
-                        stocksEtfsValue += amount;
-                    } else if (inv.assetClass === "crypto") {
-                        cryptoValue += amount;
-                    } else if (inv.assetClass === "metals") {
-                        metalsValue += amount;
-                    }
-                };
-
-                if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass)) {
-                    if (units <= 0) continue;
-                    const historyPoints = customHistoryData?.[inv.id] || [];
-                    let historicalPrice = getPriceFromHistory(historyPoints, monthEnd);
-                    
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        historicalPrice = lastTxPriceByInvestment[inv.id];
-                    }
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        if (historyPoints.length > 0) {
-                            historicalPrice = historyPoints[0].price;
-                        }
-                    }
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        historicalPrice = Number(inv.currentPrice || inv.current_price) || 0;
-                    }
-                    
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) continue;
-                    const classValue = convertToTarget(units * historicalPrice!, inv.currency);
-                    value += classValue;
-                    addClassValue(classValue);
-                } else if (["real_estate", "savings", "bond"].includes(inv.assetClass)) {
-                    // Fixed income: value stored directly in current_price (not units-based)
-                    const fixedValue = Number(inv.currentPrice || inv.current_price) || 0;
-                    if (fixedValue > 0) {
-                        const classValue = convertToTarget(fixedValue, inv.currency);
-                        value += classValue;
-                    }
-                } else {
-                    // For other non-market assets, use accumulated non-market flows
-                    const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, income: 0, appreciation: 0, feesTaxes: 0 };
-                    const classValue = agg.buys - agg.sells + agg.income + agg.appreciation - agg.feesTaxes;
-                    value += classValue;
-                    addClassValue(classValue);
-                }
-            }
-
-            // Belgian monthly inflation from backend (Statbel-backed cache)
-            const monthlyInfl = inflationByMonth.get(monthKey) ?? 0;
-            cumulativeInflation *= 1 + monthlyInfl;
-
-            const netWorthValue = netWorthInvestmentsByMonth.get(monthKey);
-            const effectiveValue = Number.isFinite(netWorthValue) ? Number(netWorthValue) : value;
-
-            const gainLoss = effectiveValue - invested;
-            const returnPct = invested > 0 ? (gainLoss / invested) * 100 : 0;
-            const inflationAdjustedValue = effectiveValue / cumulativeInflation;
-            const realReturnPct = invested > 0 ? ((inflationAdjustedValue - invested) / invested) * 100 : 0;
-
-            snapshots.push({
-                month: monthKey,
-                day: `${monthKey}-01`,
-                date: monthStart,
-                invested: Math.round(invested * 100) / 100,
-                value: Math.round(effectiveValue * 100) / 100,
-                stocksEtfsValue: Math.round(stocksEtfsValue * 100) / 100,
-                cryptoValue: Math.round(cryptoValue * 100) / 100,
-                metalsValue: Math.round(metalsValue * 100) / 100,
-                gainLoss: Math.round(gainLoss * 100) / 100,
-                returnPct: Math.round(returnPct * 100) / 100,
-                inflationAdjustedValue: Math.round(inflationAdjustedValue * 100) / 100,
-                realReturnPct: Math.round(realReturnPct * 100) / 100,
-                cumulativeInflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
-            });
-        }
-
-        return snapshots;
-    }, [summaries, parsedTransactions, customHistoryData, convertToTarget, convertTransactionAmountToTarget, netWorthInvestmentsByMonth, inflationByMonth]);
-
-    const dailyFilteredSnapshots = useMemo(() => {
-        if (portfolioPerformanceData?.snapshots && portfolioPerformanceData.snapshots.length > 0) {
-            const snapshots = portfolioPerformanceData.snapshots.map(s => ({
-                day: s.date,
-                invested: s.invested,
-                value: s.value,
-                stocksEtfsValue: s.stocks_etfs_value,
-                cryptoValue: s.crypto_value,
-                metalsValue: s.metals_value,
-                inflationAdjustedValue: s.value,
-            }));
-            
-            const firstDate = parseISO(snapshots[0].day);
-            const now = new Date();
-            let cutoff: Date;
-            switch (selectedPeriod) {
-                case "1m": cutoff = subMonths(now, 1); break;
-                case "3m": cutoff = subMonths(now, 3); break;
-                case "6m": cutoff = subMonths(now, 6); break;
-                case "1y": cutoff = subYears(now, 1); break;
-                case "3y": cutoff = subYears(now, 3); break;
-                default: cutoff = firstDate; break;
-            }
-
-            const timelineStart = isAfter(cutoff, firstDate) ? cutoff : firstDate;
-            
-            return snapshots.filter(s => {
-                const snapDate = parseISO(s.day);
-                return !isAfter(snapDate, timelineStart);
-            });
-        }
-
-        if (parsedTransactions.length === 0) return [];
-
-        const firstDate = parsedTransactions[0]._parsedDate;
         const now = new Date();
         let cutoff: Date;
         switch (selectedPeriod) {
@@ -588,192 +115,101 @@ export default function PerformancePage() {
             case "6m": cutoff = subMonths(now, 6); break;
             case "1y": cutoff = subYears(now, 1); break;
             case "3y": cutoff = subYears(now, 3); break;
-            default: cutoff = firstDate; break;
+            default: cutoff = new Date(0); break;
         }
 
-        const timelineStart = isAfter(cutoff, firstDate) ? cutoff : firstDate;
-        const start = new Date(timelineStart);
-        start.setHours(0, 0, 0, 0);
+        return allSnapshots.filter(s => {
+            const snapDate = parseISO(s.date);
+            return isAfter(snapDate, cutoff) || s.date === allSnapshots[0].date;
+        });
+    }, [portfolioPerformanceData?.snapshots, selectedPeriod]);
 
-        const end = new Date();
-        end.setHours(0, 0, 0, 0);
+    // ─── Chart data (Portfolio Value Over Time) ───
+    const chartData = useMemo(() => filteredSnapshots.map((s) => ({
+        day: s.date,
+        [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
+        [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
+        [CHART_KEYS.value]: Math.round(s.value * 100) / 100,
+        [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
+        [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
+        [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
+    })), [filteredSnapshots]);
 
-        const snapshots: MonthlySnapshot[] = [];
-        let cumulativeInflation = 1;
-        let currentInflationMonth = '';
+    // ─── Relative performance (percentage-based, flow-adjusted) ───
+    const relativePerformanceData = useMemo(() => {
+        if (filteredSnapshots.length < 2) return [];
 
-        let invested = 0;
-        const unitsByInvestment: Record<number, number> = {};
-        const nonMarketByInvestment: Record<number, { buys: number; sells: number; interest: number; appreciation: number }> = {};
-        const lastTxPriceByInvestment: Record<number, number> = {};
+        const buildRelativeSeries = (
+            valueSelector: (s: PerformanceSnapshot) => number,
+        ) => {
+            const results: number[] = [0];
+            let index = 1;
 
-        const sourceTransactions = parsedTransactions.filter((t) => !isAfter(t._parsedDate, end));
-        let txIndex = 0;
-        const txCount = sourceTransactions.length;
+            for (let i = 1; i < filteredSnapshots.length; i++) {
+                const prev = filteredSnapshots[i - 1];
+                const curr = filteredSnapshots[i];
+                const prevVal = valueSelector(prev);
+                const currVal = valueSelector(curr);
 
-        for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
-            const dayEnd = new Date(day);
-            dayEnd.setHours(23, 59, 59, 999);
-            const dayKey = format(day, "yyyy-MM-dd");
-            const monthKey = format(day, "yyyy-MM");
-
-            while (txIndex < txCount && !isAfter(sourceTransactions[txIndex]._parsedDate, dayEnd)) {
-                const tx = sourceTransactions[txIndex];
-                const amount = convertTransactionAmountToTarget(tx);
-                const units = Number(tx.units) || 0;
-
-                if (tx.type === "buy") {
-                    invested += amount;
-                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) + units;
-                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    agg.buys += amount;
-                    nonMarketByInvestment[tx.investment_id] = agg;
-                    const rawUnits = Number(tx.units) || 0;
-                    const rawAmount = Number(tx.amount) || 0;
-                    if (rawUnits > 0 && rawAmount > 0) {
-                        lastTxPriceByInvestment[tx.investment_id] = rawAmount / rawUnits;
+                if (prevVal <= 0) {
+                    if (currVal > 0) {
+                        index = 1; // reset when first entering
                     }
-                } else if (tx.type === "gift") {
-                    invested += amount;
-                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) + units;
-                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    agg.buys += amount;
-                    nonMarketByInvestment[tx.investment_id] = agg;
-                } else if (tx.type === "sell") {
-                    invested -= amount;
-                    unitsByInvestment[tx.investment_id] = (unitsByInvestment[tx.investment_id] || 0) - units;
-                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    agg.sells += amount;
-                    nonMarketByInvestment[tx.investment_id] = agg;
-                    const rawUnits = Number(tx.units) || 0;
-                    const rawAmount = Number(tx.amount) || 0;
-                    if (rawUnits > 0 && rawAmount > 0) {
-                        lastTxPriceByInvestment[tx.investment_id] = rawAmount / rawUnits;
-                    }
-                } else if (tx.type === "interest") {
-                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    agg.interest += amount;
-                    nonMarketByInvestment[tx.investment_id] = agg;
-                } else if (tx.type === "appreciation") {
-                    const agg = nonMarketByInvestment[tx.investment_id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    agg.appreciation += amount;
-                    nonMarketByInvestment[tx.investment_id] = agg;
+                    results.push(Math.round((index - 1) * 10000) / 100);
+                    continue;
                 }
 
-                txIndex += 1;
+                // Simple price return (no flow adjustment needed since invested capital
+                // is a separate line — we compare market values directly)
+                const dailyReturn = (currVal - prevVal) / prevVal;
+                const bounded = Number.isFinite(dailyReturn) ? Math.max(dailyReturn, -0.9999) : 0;
+                index *= (1 + bounded);
+                results.push(Math.round((index - 1) * 10000) / 100);
             }
+            return results;
+        };
 
-            let value = 0;
-            let stocksEtfsValue = 0;
-            let cryptoValue = 0;
-            let metalsValue = 0;
+        const portfolioSeries = buildRelativeSeries(s => s.value);
+        const stocksEtfsSeries = buildRelativeSeries(s => s.stocks_etfs_value);
+        const cryptoSeries = buildRelativeSeries(s => s.crypto_value);
+        const metalsSeries = buildRelativeSeries(s => s.metals_value);
+        const inflAdjSeries = buildRelativeSeries(s => s.inflation_adjusted_value);
 
-            const addClassValue = (assetClass: AssetClass, amount: number) => {
-                if (!Number.isFinite(amount)) return;
-                if (assetClass === "stock" || assetClass === "etf") {
-                    stocksEtfsValue += amount;
-                } else if (assetClass === "crypto") {
-                    cryptoValue += amount;
-                } else if (assetClass === "metals") {
-                    metalsValue += amount;
-                }
-            };
+        return filteredSnapshots.map((s, idx) => ({
+            day: s.date,
+            [CHART_KEYS.relativePortfolio]: portfolioSeries[idx] ?? 0,
+            [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
+            [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
+            [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
+            [CHART_KEYS.relativeInflationAdjusted]: inflAdjSeries[idx] ?? 0,
+        }));
+    }, [filteredSnapshots]);
 
-            for (const inv of summaries) {
-                const units = unitsByInvestment[inv.id] || 0;
-                if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass)) {
-                    if (units <= 0) continue;
-                    const historyPoints = customHistoryData?.[inv.id] || [];
-                    let historicalPrice = getPriceFromHistory(historyPoints, dayEnd);
-                    
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        historicalPrice = lastTxPriceByInvestment[inv.id];
-                    }
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        if (historyPoints.length > 0) {
-                            historicalPrice = historyPoints[0].price;
-                        }
-                    }
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) {
-                        historicalPrice = Number(inv.currentPrice || inv.current_price) || 0;
-                    }
-
-                    if (!Number.isFinite(historicalPrice) || historicalPrice! <= 0) continue;
-                    const classValue = convertToTarget(units * historicalPrice!, inv.currency);
-                    value += classValue;
-                    addClassValue(inv.assetClass, classValue);
-                } else if (["real_estate", "savings", "bond"].includes(inv.assetClass)) {
-                    const fixedValue = Number(inv.currentPrice || inv.current_price) || 0;
-                    if (fixedValue > 0) {
-                        const classValue = convertToTarget(fixedValue, inv.currency);
-                        value += classValue;
-                    }
-                } else {
-                    const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
-                    const classValue = agg.buys - agg.sells + agg.interest + agg.appreciation;
-                    value += classValue;
-                    addClassValue(inv.assetClass, classValue);
-                }
-            }
-
-            if (monthKey !== currentInflationMonth) {
-                cumulativeInflation *= 1 + (inflationByMonth.get(monthKey) ?? 0);
-                currentInflationMonth = monthKey;
-            }
-
-            const netWorthValue = netWorthInvestmentsByDay.get(dayKey);
-            const effectiveValue = Number.isFinite(netWorthValue) ? Number(netWorthValue) : value;
-
-            const gainLoss = effectiveValue - invested;
-            const returnPct = invested > 0 ? (gainLoss / invested) * 100 : 0;
-            const inflationAdjustedValue = effectiveValue / cumulativeInflation;
-            const realReturnPct = invested > 0 ? ((inflationAdjustedValue - invested) / invested) * 100 : 0;
-
-            snapshots.push({
-                month: monthKey,
-                day: dayKey,
-                date: new Date(day),
-                invested: Math.round(invested * 100) / 100,
-                value: Math.round(effectiveValue * 100) / 100,
-                stocksEtfsValue: Math.round(stocksEtfsValue * 100) / 100,
-                cryptoValue: Math.round(cryptoValue * 100) / 100,
-                metalsValue: Math.round(metalsValue * 100) / 100,
-                gainLoss: Math.round(gainLoss * 100) / 100,
-                returnPct: Math.round(returnPct * 100) / 100,
-                inflationAdjustedValue: Math.round(inflationAdjustedValue * 100) / 100,
-                realReturnPct: Math.round(realReturnPct * 100) / 100,
-                cumulativeInflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
-            });
-        }
-
-        return snapshots;
-    }, [
-        parsedTransactions,
-        selectedPeriod,
-        summaries,
-        customHistoryData,
-        convertToTarget,
-        convertTransactionAmountToTarget,
-        inflationByMonth,
-        netWorthInvestmentsByDay,
-    ]);
-
-    // ─── Overall portfolio metrics (independent of selected period) ───
+    // ─── Overall metrics ───
     const overallMetrics = useMemo(() => {
+        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
         if (allSnapshots.length < 1) return null;
 
-        const first = allSnapshots[0];
         const last = allSnapshots[allSnapshots.length - 1];
-        const days = differenceInDays(last.date, first.date) || 1;
+        const first = allSnapshots[0];
+        const days = differenceInDays(parseISO(last.date), parseISO(first.date)) || 1;
 
-        const totalInvested = summaries.reduce((sum, inv) => sum + convertToTarget(inv.totalBuyCost, inv.currency), 0);
-        const currentValue = summaries.reduce((sum, inv) => sum + convertToTarget(inv.currentValue, inv.currency), 0);
-        const totalGainLoss = summaries.reduce((sum, inv) => sum + convertToTarget(inv.totalGain, inv.currency), 0);
+        const totalInvested = last.invested;
+        const currentValue = last.value;
+        const totalGainLoss = last.gain_loss;
         const totalReturnPct = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
         const years = days / 365.25;
         const annualizedReturn = totalInvested > 0 && years > 0 && currentValue > 0
             ? (Math.pow(currentValue / totalInvested, 1 / years) - 1) * 100
+            : 0;
+
+        const realReturnPct = totalInvested > 0
+            ? ((last.inflation_adjusted_value - totalInvested) / totalInvested) * 100
+            : 0;
+
+        const cumulativeInflation = currentValue > 0 && last.inflation_adjusted_value > 0
+            ? ((currentValue / last.inflation_adjusted_value) - 1) * 100
             : 0;
 
         return {
@@ -782,18 +218,25 @@ export default function PerformancePage() {
             totalGainLoss: Math.round(totalGainLoss * 100) / 100,
             totalReturnPct: Math.round(totalReturnPct * 100) / 100,
             annualizedReturn: Math.round((Number.isFinite(annualizedReturn) ? annualizedReturn : 0) * 100) / 100,
-            realReturnPct: Math.round(last.realReturnPct * 100) / 100,
-            cumulativeInflation: last.cumulativeInflation,
+            realReturnPct: Math.round(realReturnPct * 100) / 100,
+            cumulativeInflation: Math.round(cumulativeInflation * 10) / 10,
         };
-    }, [allSnapshots, summaries, convertToTarget]);
+    }, [portfolioPerformanceData?.snapshots]);
 
-    // ─── Monthly returns heatmap data ───
+    // ─── Monthly returns heatmap ───
     const heatmapData = useMemo(() => {
-        if (allSnapshots.length < 1) {
-            return { years: [], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
+        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
+        if (allSnapshots.length < 2) return { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
+
+        // Group by month — take last snapshot of each month
+        const byMonth = new Map<string, PerformanceSnapshot>();
+        for (const s of allSnapshots) {
+            const month = s.date.slice(0, 7);
+            byMonth.set(month, s);
         }
 
-        const years = [...new Set(allSnapshots.map((s) => s.date.getFullYear()))].sort();
+        const monthKeys = [...byMonth.keys()].sort();
+        const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))].sort();
         const data: Record<number, (number | null)[]> = {};
         const monthlyReturns: number[] = [];
 
@@ -801,164 +244,32 @@ export default function PerformancePage() {
             data[year] = Array(12).fill(null);
         }
 
-        for (let i = 0; i < allSnapshots.length; i++) {
-            const prev = i > 0 ? allSnapshots[i - 1] : undefined;
-            const curr = allSnapshots[i];
-            const monthIdx = curr.date.getMonth();
-            const year = curr.date.getFullYear();
+        for (let i = 1; i < monthKeys.length; i++) {
+            const prevSnap = byMonth.get(monthKeys[i - 1])!;
+            const currSnap = byMonth.get(monthKeys[i])!;
+            const year = parseInt(monthKeys[i].slice(0, 4));
+            const monthIdx = parseInt(monthKeys[i].slice(5, 7)) - 1;
 
-            let monthlyReturnPct: number | null;
-            if (!prev) {
-                monthlyReturnPct = null;
-            } else {
-                const baseValue = prev.value;
-                const netContribution = monthlyNetFlows.get(curr.month)?.portfolio ?? 0;
-                const modifiedDietzBase = baseValue + (netContribution / 2);
-                const denominator = modifiedDietzBase > 0 ? modifiedDietzBase : baseValue;
-                monthlyReturnPct = denominator > 0
-                    ? ((curr.value - prev.value - netContribution) / denominator) * 100
-                    : 0;
-            }
+            const base = prevSnap.value;
+            const monthlyReturn = base > 0
+                ? ((currSnap.value - prevSnap.value) / base) * 100
+                : 0;
 
-            const roundedReturnPct = monthlyReturnPct === null
-                ? null
-                : Math.round(monthlyReturnPct * 100) / 100;
-            data[year][monthIdx] = roundedReturnPct;
-            if (roundedReturnPct !== null) {
-                monthlyReturns.push(Math.abs(roundedReturnPct));
-            }
+            const rounded = Math.round(monthlyReturn * 100) / 100;
+            data[year][monthIdx] = rounded;
+            monthlyReturns.push(Math.abs(rounded));
         }
 
-        const maxAbsPct = monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0;
+        return { years, data, maxAbsPct: monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0 };
+    }, [portfolioPerformanceData?.snapshots]);
 
-        return { years, data, maxAbsPct };
-    }, [allSnapshots, monthlyNetFlows]);
-
-    const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
-
-    // Locale-aware month abbreviations based on app language
     const MONTH_LABELS = useMemo(() => {
         return Array.from({ length: 12 }, (_, i) =>
             formatMonthLabelWithLocale(new Date(2000, i, 1), monthLabelLocale, "short")
         );
     }, [monthLabelLocale]);
 
-    function getHeatColor(val: number | null, maxAbsPct: number): string {
-        if (val === null) return "bg-muted/30";
-        if (val === 0) return "bg-muted text-muted-foreground";
-
-        const scale = Math.max(maxAbsPct, 1);
-        const ratio = Math.abs(val) / scale;
-        const absPct = Math.abs(val);
-
-        // Keep tiny monthly moves near-neutral to highlight meaningful months.
-        if (absPct < 0.25) return "bg-muted/70 text-muted-foreground";
-
-        const strongMove = absPct >= 2.5 || ratio > 0.72;
-        const mediumMove = absPct >= 1.0 || ratio > 0.42;
-
-        if (val > 0 && strongMove) return "bg-emerald-600 text-white";
-        if (val > 0 && mediumMove) return "bg-emerald-500 text-white";
-        if (val > 0) return "bg-emerald-400/80 text-emerald-950";
-        if (strongMove) return "bg-rose-600 text-white";
-        if (mediumMove) return "bg-rose-500 text-white";
-        return "bg-rose-400/80 text-rose-950";
-    }
-
-    const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
-
-    const monthTickFormatter = useMemo(
-        () => new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" }),
-        [monthLabelLocale],
-    );
-
-    // ─── Chart data ───
-    const chartData = useMemo(() => dailyFilteredSnapshots.map((s) => ({
-        day: s.day,
-        [CHART_KEYS.invested]: s.invested,
-        [CHART_KEYS.inflationAdjusted]: s.inflationAdjustedValue,
-        [CHART_KEYS.value]: s.value,
-        [CHART_KEYS.stocksEtfs]: s.stocksEtfsValue,
-        [CHART_KEYS.crypto]: s.cryptoValue,
-        [CHART_KEYS.metals]: s.metalsValue,
-    })), [dailyFilteredSnapshots]);
-
-    const relativePerformanceData = useMemo(() => {
-        if (dailyFilteredSnapshots.length === 0) return [];
-
-        const buildRelativeSeries = (
-            valueSelector: (snapshot: MonthlySnapshot) => number,
-            flowSelector: (flow: RelativeFlowBucket) => number,
-        ) => {
-            const results: number[] = [];
-            let index = 1;
-
-            for (let i = 0; i < dailyFilteredSnapshots.length; i++) {
-                if (i === 0) {
-                    results.push(0);
-                    continue;
-                }
-
-                const prev = dailyFilteredSnapshots[i - 1];
-                const curr = dailyFilteredSnapshots[i];
-                if (!prev || !curr) {
-                    results.push(Math.round((index - 1) * 10000) / 100);
-                    continue;
-                }
-
-                const prevValue = valueSelector(prev);
-                const currValue = valueSelector(curr);
-                const monthlyFlow = flowSelector(dailyNetFlows.get(curr.day) ?? {
-                    portfolio: 0,
-                    stocksEtfs: 0,
-                    crypto: 0,
-                    metals: 0,
-                });
-
-                const modifiedDietzBase = prevValue + (monthlyFlow / 2);
-                const denominator = modifiedDietzBase > 0 ? modifiedDietzBase : prevValue;
-
-                const rawReturn = denominator > 0
-                    ? (currValue - prevValue - monthlyFlow) / denominator
-                    : 0;
-
-                const boundedReturn = Number.isFinite(rawReturn)
-                    ? Math.max(rawReturn, -0.9999)
-                    : 0;
-
-                index *= 1 + boundedReturn;
-                results.push(Math.round((index - 1) * 10000) / 100);
-            }
-
-            return results;
-        };
-
-        const portfolioSeries = buildRelativeSeries(
-            (snapshot) => snapshot.value,
-            (flow) => flow.portfolio,
-        );
-        const stocksEtfsSeries = buildRelativeSeries(
-            (snapshot) => snapshot.stocksEtfsValue,
-            (flow) => flow.stocksEtfs,
-        );
-        const cryptoSeries = buildRelativeSeries(
-            (snapshot) => snapshot.cryptoValue,
-            (flow) => flow.crypto,
-        );
-        const metalsSeries = buildRelativeSeries(
-            (snapshot) => snapshot.metalsValue,
-            (flow) => flow.metals,
-        );
-
-        return dailyFilteredSnapshots.map((snapshot, idx) => ({
-            day: snapshot.day,
-            [CHART_KEYS.relativePortfolio]: portfolioSeries[idx] ?? 0,
-            [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
-            [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
-            [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
-        }));
-    }, [dailyFilteredSnapshots, dailyNetFlows, portfolioPerformanceData]);
-
+    // ─── Asset class breakdown from summaries ───
     const assetClassBreakdown = useMemo(() => {
         const grouped = new Map<AssetClass, { count: number; value: number; invested: number; gain: number }>();
         for (const summary of summaries) {
@@ -992,6 +303,25 @@ export default function PerformancePage() {
         };
     }, [summaries]);
 
+    function getHeatColor(val: number | null, maxAbsPct: number): string {
+        if (val === null) return "bg-muted/30";
+        if (val === 0) return "bg-muted text-muted-foreground";
+        const absPct = Math.abs(val);
+        if (absPct < 0.25) return "bg-muted/70 text-muted-foreground";
+        const scale = Math.max(maxAbsPct, 1);
+        const ratio = absPct / scale;
+        const strongMove = absPct >= 2.5 || ratio > 0.72;
+        const mediumMove = absPct >= 1.0 || ratio > 0.42;
+        if (val > 0 && strongMove) return "bg-emerald-600 text-white";
+        if (val > 0 && mediumMove) return "bg-emerald-500 text-white";
+        if (val > 0) return "bg-emerald-400/80 text-emerald-950";
+        if (strongMove) return "bg-rose-600 text-white";
+        if (mediumMove) return "bg-rose-500 text-white";
+        return "bg-rose-400/80 text-rose-950";
+    }
+
+    const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+
     if (summaries.length === 0) {
         return (
             <div className="space-y-6">
@@ -1005,7 +335,7 @@ export default function PerformancePage() {
         );
     }
 
-    if (allSnapshots.length === 0) {
+    if (isLoading || filteredSnapshots.length === 0) {
         return (
             <div className="space-y-6">
                 <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
@@ -1078,7 +408,7 @@ export default function PerformancePage() {
                 </div>
             )}
 
-            {/* Performance chart */}
+            {/* Portfolio Value Over Time chart */}
             {chartData.length > 1 && (
                 <Card>
                     <CardHeader>
@@ -1186,7 +516,7 @@ export default function PerformancePage() {
                 </Card>
             )}
 
-            {/* Relative performance chart */}
+            {/* Relative Performance chart */}
             {relativePerformanceData.length > 1 && (
                 <Card>
                     <CardHeader>
@@ -1263,6 +593,15 @@ export default function PerformancePage() {
                                     fillOpacity={0}
                                     strokeWidth={2}
                                 />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.relativeInflationAdjusted}
+                                    name={t('performance.inflationAdjusted')}
+                                    stroke="hsl(30, 80%, 55%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    strokeDasharray="4 4"
+                                />
                             </AreaChart>
                         </ResponsiveContainer>
                     </CardContent>
@@ -1275,9 +614,7 @@ export default function PerformancePage() {
                     <Card key={assetClass} className="border shadow-sm">
                         <CardContent className="pt-4 pb-4">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-semibold text-muted-foreground">
-                                    {label}
-                                </span>
+                                <span className="text-sm font-semibold text-muted-foreground">{label}</span>
                                 <span className="text-xs text-muted-foreground">
                                     {count === 1
                                         ? t('performance.holdings', { count: String(count) })
@@ -1315,11 +652,9 @@ export default function PerformancePage() {
                                     <tr>
                                         <th className="text-left py-2 px-2 font-semibold text-muted-foreground w-16">{t('performance.year')}</th>
                                         {MONTH_LABELS.map((m) => (
-                                            <th key={m} className="text-center py-2 px-1 font-semibold text-muted-foreground min-w-[48px]">
-                                                {m}
-                                            </th>
+                                            <th key={m} className="text-center py-2 px-1 font-semibold text-muted-foreground min-w-[48px]">{m}</th>
                                         ))}
-                                         <th className="text-center py-2 px-2 font-semibold text-muted-foreground min-w-[56px]">{t('performance.ytd')}</th>
+                                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground min-w-[56px]">{t('performance.ytd')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1357,9 +692,8 @@ export default function PerformancePage() {
                             </table>
                         </div>
 
-                         {/* Legend */}
                         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
-                             <span>{t('performance.loss')}</span>
+                            <span>{t('performance.loss')}</span>
                             <div className="flex gap-0.5">
                                 <div className="w-6 h-4 rounded-sm bg-rose-600" />
                                 <div className="w-6 h-4 rounded-sm bg-rose-500" />
@@ -1387,21 +721,21 @@ export default function PerformancePage() {
                     <CardContent>
                         <div className="space-y-3">
                             {topPerformers.map((inv) => (
-                                    <div key={inv.id} className="flex items-center justify-between">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
-                                            <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
-                                                {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
-                                            </p>
-                                        </div>
+                                <div key={inv.id} className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
+                                        <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
                                     </div>
-                                ))}
+                                    <div className="text-right shrink-0">
+                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
+                                            {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </CardContent>
                 </Card>
@@ -1416,21 +750,21 @@ export default function PerformancePage() {
                     <CardContent>
                         <div className="space-y-3">
                             {bottomPerformers.map((inv) => (
-                                    <div key={inv.id} className="flex items-center justify-between">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
-                                            <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
-                                                {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
-                                            </p>
-                                        </div>
+                                <div key={inv.id} className="flex items-center justify-between">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-foreground truncate">{inv.name}</p>
+                                        <p className="text-xs text-muted-foreground">{inv.symbol || inv.assetClass}</p>
                                     </div>
-                                ))}
+                                    <div className="text-right shrink-0">
+                                        <p className={`text-sm font-bold ${inv.gainLossPercent >= 0 ? "text-accent" : "text-destructive"}`}>
+                                            {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </CardContent>
                 </Card>
@@ -1439,7 +773,6 @@ export default function PerformancePage() {
     );
 }
 
-// ─── Reusable metric card ───
 function MetricCard({
     title, value, subtitle, icon: Icon, trend,
 }: {
