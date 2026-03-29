@@ -362,7 +362,7 @@ async function loadFromDatabase(startMonth, endMonth) {
   );
 
   return result.rows.map((row) => ({
-    month: String(row.month_date).slice(0, 7),
+    month: String(row.month_date.toISOString()).slice(0, 7),
     monthly_rate: Number(row.monthly_rate),
   }));
 }

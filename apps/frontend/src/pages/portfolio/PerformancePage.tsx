@@ -442,7 +442,6 @@ export default function PerformancePage() {
             let metalsValue = 0;
             for (const inv of summaries) {
                 const units = unitsByInvestment[inv.id] || 0;
-                if (units <= 0) continue;
 
                 const addClassValue = (amount: number) => {
                     if (!Number.isFinite(amount)) return;
@@ -456,6 +455,7 @@ export default function PerformancePage() {
                 };
 
                 if (["stock", "etf", "crypto", "metals"].includes(inv.assetClass)) {
+                    if (units <= 0) continue;
                     const historyPoints = customHistoryData?.[inv.id] || [];
                     let historicalPrice = getPriceFromHistory(historyPoints, monthEnd);
                     
@@ -475,8 +475,15 @@ export default function PerformancePage() {
                     const classValue = convertToTarget(units * historicalPrice!, inv.currency);
                     value += classValue;
                     addClassValue(classValue);
+                } else if (["real_estate", "savings", "bond"].includes(inv.assetClass)) {
+                    // Fixed income: value stored directly in current_price (not units-based)
+                    const fixedValue = Number(inv.currentPrice || inv.current_price) || 0;
+                    if (fixedValue > 0) {
+                        const classValue = convertToTarget(fixedValue, inv.currency);
+                        value += classValue;
+                    }
                 } else {
-                    // For real estate, savings etc., use accumulated non-market flows
+                    // For other non-market assets, use accumulated non-market flows
                     const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, income: 0, appreciation: 0, feesTaxes: 0 };
                     const classValue = agg.buys - agg.sells + agg.income + agg.appreciation - agg.feesTaxes;
                     value += classValue;
@@ -649,6 +656,12 @@ export default function PerformancePage() {
                     const classValue = convertToTarget(units * historicalPrice!, inv.currency);
                     value += classValue;
                     addClassValue(inv.assetClass, classValue);
+                } else if (["real_estate", "savings", "bond"].includes(inv.assetClass)) {
+                    const fixedValue = Number(inv.currentPrice || inv.current_price) || 0;
+                    if (fixedValue > 0) {
+                        const classValue = convertToTarget(fixedValue, inv.currency);
+                        value += classValue;
+                    }
                 } else {
                     const agg = nonMarketByInvestment[inv.id] || { buys: 0, sells: 0, interest: 0, appreciation: 0 };
                     const classValue = agg.buys - agg.sells + agg.interest + agg.appreciation;
