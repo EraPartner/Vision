@@ -108,6 +108,12 @@ export default function PerformancePage() {
         staleTime: 60_000,
     });
 
+    const { data: portfolioPerformanceData } = useQuery({
+        queryKey: ["portfolio-performance", defaultCurrency],
+        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
+        staleTime: 300_000,
+    });
+
     const historyRange = useMemo(() => {
         let earliestTimestamp = Number.POSITIVE_INFINITY;
 
@@ -540,6 +546,37 @@ export default function PerformancePage() {
     }, [summaries, parsedTransactions, customHistoryData, convertToTarget, convertTransactionAmountToTarget, netWorthInvestmentsByMonth, inflationByMonth]);
 
     const dailyFilteredSnapshots = useMemo(() => {
+        if (portfolioPerformanceData?.snapshots && portfolioPerformanceData.snapshots.length > 0) {
+            const snapshots = portfolioPerformanceData.snapshots.map(s => ({
+                day: s.date,
+                invested: s.invested,
+                value: s.value,
+                stocksEtfsValue: s.stocks_etfs_value,
+                cryptoValue: s.crypto_value,
+                metalsValue: s.metals_value,
+                inflationAdjustedValue: s.value,
+            }));
+            
+            const firstDate = parseISO(snapshots[0].day);
+            const now = new Date();
+            let cutoff: Date;
+            switch (selectedPeriod) {
+                case "1m": cutoff = subMonths(now, 1); break;
+                case "3m": cutoff = subMonths(now, 3); break;
+                case "6m": cutoff = subMonths(now, 6); break;
+                case "1y": cutoff = subYears(now, 1); break;
+                case "3y": cutoff = subYears(now, 3); break;
+                default: cutoff = firstDate; break;
+            }
+
+            const timelineStart = isAfter(cutoff, firstDate) ? cutoff : firstDate;
+            
+            return snapshots.filter(s => {
+                const snapDate = parseISO(s.day);
+                return !isAfter(snapDate, timelineStart);
+            });
+        }
+
         if (parsedTransactions.length === 0) return [];
 
         const firstDate = parsedTransactions[0]._parsedDate;
@@ -920,7 +957,7 @@ export default function PerformancePage() {
             [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
             [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
         }));
-    }, [dailyFilteredSnapshots, dailyNetFlows]);
+    }, [dailyFilteredSnapshots, dailyNetFlows, portfolioPerformanceData]);
 
     const assetClassBreakdown = useMemo(() => {
         const grouped = new Map<AssetClass, { count: number; value: number; invested: number; gain: number }>();

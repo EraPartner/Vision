@@ -411,4 +411,36 @@ router.post('/refresh-views', async (req, res) => {
   }
 });
 
+// GET /api/info/portfolio-performance - Get pre-computed portfolio performance snapshots
+router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30 }), async (req, res) => {
+  try {
+    const targetCurrency = getTargetCurrency(req);
+    const startDate = req.query.start_date || '2000-01-01';
+    const endDate = req.query.end_date || new Date().toISOString().split('T')[0];
+
+    const { getSnapshots } = await import('../services/portfolioPerformanceSnapshotService.js');
+    const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
+
+    res.json({
+      currency: targetCurrency,
+      start_date: startDate,
+      end_date: endDate,
+      snapshots: snapshots.map(s => ({
+        date: s.snapshot_date,
+        invested: parseFloat(s.invested) || 0,
+        value: parseFloat(s.value) || 0,
+        stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
+        crypto_value: parseFloat(s.crypto_value) || 0,
+        metals_value: parseFloat(s.metals_value) || 0,
+        cash_value: parseFloat(s.cash_value) || 0,
+        gain_loss: parseFloat(s.gain_loss) || 0,
+        return_pct: parseFloat(s.return_pct) || 0,
+      })),
+    });
+  } catch (err) {
+    logger.error('Error retrieving portfolio performance', { error: err.message });
+    res.status(500).json({ detail: 'Error retrieving portfolio performance' });
+  }
+});
+
 export default router;

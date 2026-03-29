@@ -30,6 +30,7 @@ import {
   sanitizePersistedKinesisHistory,
 } from './services/priceProviderService.js';
 import { getKinesisAssetConfig } from './config/kinesisConfig.js';
+import { computeAndStoreSnapshots } from './services/portfolioPerformanceSnapshotService.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -372,6 +373,10 @@ async function start() {
 
       sanitizePersistedKinesisHistory().catch((err) => {
         logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
+      });
+
+      computeAndStoreSnapshots().catch((err) => {
+        logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
       });
 
       refreshInvestmentPricesOnStartup().catch((err) => {

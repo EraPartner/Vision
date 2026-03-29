@@ -931,6 +931,32 @@ class ApiClient {
         return this.request(`/api/info/net-worth${query ? `?${query}` : ''}`);
     }
 
+    // ==================== Portfolio Performance ====================
+
+    async getPortfolioPerformance(params?: { 
+        currency?: string;
+        start_date?: string;
+        end_date?: string;
+    }): Promise<{
+        currency: string;
+        start_date: string;
+        end_date: string;
+        snapshots: Array<{
+            date: string;
+            invested: number;
+            value: number;
+            stocks_etfs_value: number;
+            crypto_value: number;
+            metals_value: number;
+            cash_value: number;
+            gain_loss: number;
+            return_pct: number;
+        }>;
+    }> {
+        const query = this.buildQuery(params);
+        return this.request(`/api/info/portfolio-performance${query ? `?${query}` : ''}`);
+    }
+
     // ==================== Recipient Insights ====================
 
     async getRecipientInsights(params?: { currency?: string }): Promise<{
