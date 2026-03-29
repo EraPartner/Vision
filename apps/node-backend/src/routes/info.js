@@ -432,7 +432,7 @@ router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests
         stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
         crypto_value: parseFloat(s.crypto_value) || 0,
         metals_value: parseFloat(s.metals_value) || 0,
-        cash_value: parseFloat(s.cash_value) || 0,
+        inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
         gain_loss: parseFloat(s.gain_loss) || 0,
         return_pct: parseFloat(s.return_pct) || 0,
       })),
