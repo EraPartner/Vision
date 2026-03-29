@@ -147,20 +147,36 @@ export default function PerformancePage() {
             historyRange?.toMs ?? null,
         ],
         queryFn: async () => {
+            const parseHistoryPoints = (response: { points?: HistoryPointResponse[] } | undefined) => (
+                ((response?.points || []) as HistoryPointResponse[])
+                    .map((p) => ({ timestampMs: Number(p.timestampMs), price: Number(p.price) }))
+                    .filter((p: HistoryPoint) => Number.isFinite(p.timestampMs) && Number.isFinite(p.price) && p.price > 0)
+                    .sort((a: HistoryPoint, b: HistoryPoint) => a.timestampMs - b.timestampMs)
+            );
+
             const entries = await Promise.all(
                 historicalPriceInvestments.map(async (id) => {
                     try {
-                        const res = await apiClient.getInvestmentPriceHistory(id, historyRange
+                        const dbRes = await apiClient.getInvestmentPriceHistory(id, historyRange
                             ? {
                                 from_ms: historyRange.fromMs,
                                 to_ms: historyRange.toMs,
                                 db_only: true,
                             }
                             : undefined);
-                        const points = ((res?.points || []) as HistoryPointResponse[])
-                            .map((p) => ({ timestampMs: Number(p.timestampMs), price: Number(p.price) }))
-                            .filter((p: HistoryPoint) => Number.isFinite(p.timestampMs) && Number.isFinite(p.price) && p.price > 0)
-                            .sort((a: HistoryPoint, b: HistoryPoint) => a.timestampMs - b.timestampMs);
+
+                        let points = parseHistoryPoints(dbRes);
+
+                        if (points.length === 0) {
+                            const refreshedRes = await apiClient.getInvestmentPriceHistory(id, historyRange
+                                ? {
+                                    from_ms: historyRange.fromMs,
+                                    to_ms: historyRange.toMs,
+                                }
+                                : undefined);
+                            points = parseHistoryPoints(refreshedRes);
+                        }
+
                         return [id, points] as const;
                     } catch {
                         return [id, []] as const;
@@ -498,13 +514,6 @@ export default function PerformancePage() {
             const netWorthValue = netWorthInvestmentsByMonth.get(monthKey);
             const effectiveValue = Number.isFinite(netWorthValue) ? Number(netWorthValue) : value;
 
-            if (Number.isFinite(effectiveValue) && value > 0) {
-                const scale = effectiveValue / value;
-                stocksEtfsValue *= scale;
-                cryptoValue *= scale;
-                metalsValue *= scale;
-            }
-
             const gainLoss = effectiveValue - invested;
             const returnPct = invested > 0 ? (gainLoss / invested) * 100 : 0;
             const inflationAdjustedValue = effectiveValue / cumulativeInflation;
@@ -677,13 +686,6 @@ export default function PerformancePage() {
 
             const netWorthValue = netWorthInvestmentsByDay.get(dayKey);
             const effectiveValue = Number.isFinite(netWorthValue) ? Number(netWorthValue) : value;
-
-            if (Number.isFinite(effectiveValue) && value > 0) {
-                const scale = effectiveValue / value;
-                stocksEtfsValue *= scale;
-                cryptoValue *= scale;
-                metalsValue *= scale;
-            }
 
             const gainLoss = effectiveValue - invested;
             const returnPct = invested > 0 ? (gainLoss / invested) * 100 : 0;
