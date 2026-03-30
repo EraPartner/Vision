@@ -430,6 +430,9 @@ export async function getSnapshots(startDate, endDate, currency = 'EUR') {
       gain_loss,
       return_pct,
       COALESCE(inflation_adjusted_value, value) AS inflation_adjusted_value,
+      COALESCE(stocks_etfs_invested, 0) AS stocks_etfs_invested,
+      COALESCE(crypto_invested, 0) AS crypto_invested,
+      COALESCE(metals_invested, 0) AS metals_invested,
       currency
     FROM portfolio_performance_snapshots
     WHERE currency = $1
