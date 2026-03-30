@@ -216,6 +216,9 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
   // State tracking
   const unitsByInvestment = {};  // investmentId -> cumulative units
   let cumulativeInvested = 0;     // cumulative capital deployed (buys - sells)
+  let stocksEtfsInvested = 0;
+  let cryptoInvested = 0;
+  let metalsInvested = 0;
   let cumulativeInflation = 1;
   let lastInflationMonth = '';
   const lastKnownPrice = {};      // investmentId -> last known price
