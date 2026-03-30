@@ -325,6 +325,9 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
       stocks_etfs_value: stocksEtfsValue || 0,
       crypto_value: cryptoValue || 0,
       metals_value: metalsValue || 0,
+      stocks_etfs_invested: stocksEtfsInvested || 0,
+      crypto_invested: cryptoInvested || 0,
+      metals_invested: metalsInvested || 0,
       inflation_adjusted_value: inflationAdjustedValue || 0,
       cumulative_inflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
     });
