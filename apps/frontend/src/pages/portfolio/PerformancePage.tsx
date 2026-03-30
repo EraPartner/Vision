@@ -135,54 +135,43 @@ export default function PerformancePage() {
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
     })), [filteredSnapshots]);
 
-    // ─── Relative performance (percentage-based, flow-adjusted) ───
+    // ─── Relative performance (percentage-based) ───
     const relativePerformanceData = useMemo(() => {
         if (filteredSnapshots.length < 2) return [];
 
-        const buildRelativeSeries = (
-            valueSelector: (s: PerformanceSnapshot) => number,
-        ) => {
-            const results: number[] = [0];
-            let index = 1;
-
-            for (let i = 1; i < filteredSnapshots.length; i++) {
-                const prev = filteredSnapshots[i - 1];
-                const curr = filteredSnapshots[i];
-                const prevVal = valueSelector(prev);
-                const currVal = valueSelector(curr);
-
-                if (prevVal <= 0) {
-                    if (currVal > 0) {
-                        index = 1; // reset when first entering
-                    }
-                    results.push(Math.round((index - 1) * 10000) / 100);
-                    continue;
+        // For total portfolio & inflation-adjusted: use invested capital as denominator
+        // This gives the true return on capital deployed
+        // For sub-classes: use first non-zero value in the period as base (simple return)
+        const buildSubClassSeries = (valueSelector: (s: PerformanceSnapshot) => number) => {
+            let baseValue = 0;
+            return filteredSnapshots.map((s) => {
+                const val = valueSelector(s);
+                if (baseValue <= 0) {
+                    if (val > 0) baseValue = val;
+                    return 0;
                 }
-
-                // Simple price return (no flow adjustment needed since invested capital
-                // is a separate line — we compare market values directly)
-                const dailyReturn = (currVal - prevVal) / prevVal;
-                const bounded = Number.isFinite(dailyReturn) ? Math.max(dailyReturn, -0.9999) : 0;
-                index *= (1 + bounded);
-                results.push(Math.round((index - 1) * 10000) / 100);
-            }
-            return results;
+                return Math.round(((val / baseValue) - 1) * 10000) / 100;
+            });
         };
 
-        const portfolioSeries = buildRelativeSeries(s => s.value);
-        const stocksEtfsSeries = buildRelativeSeries(s => s.stocks_etfs_value);
-        const cryptoSeries = buildRelativeSeries(s => s.crypto_value);
-        const metalsSeries = buildRelativeSeries(s => s.metals_value);
-        const inflAdjSeries = buildRelativeSeries(s => s.inflation_adjusted_value);
+        const stocksEtfsSeries = buildSubClassSeries(s => s.stocks_etfs_value);
+        const cryptoSeries = buildSubClassSeries(s => s.crypto_value);
+        const metalsSeries = buildSubClassSeries(s => s.metals_value);
 
-        return filteredSnapshots.map((s, idx) => ({
-            day: s.date,
-            [CHART_KEYS.relativePortfolio]: portfolioSeries[idx] ?? 0,
-            [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
-            [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
-            [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
-            [CHART_KEYS.relativeInflationAdjusted]: inflAdjSeries[idx] ?? 0,
-        }));
+        return filteredSnapshots.map((s, idx) => {
+            const invested = s.invested;
+            const portfolioPct = invested > 0 ? Math.round(((s.value / invested) - 1) * 10000) / 100 : 0;
+            const inflAdjPct = invested > 0 ? Math.round(((s.inflation_adjusted_value / invested) - 1) * 10000) / 100 : 0;
+
+            return {
+                day: s.date,
+                [CHART_KEYS.relativePortfolio]: portfolioPct,
+                [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
+                [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
+                [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
+                [CHART_KEYS.relativeInflationAdjusted]: inflAdjPct,
+            };
+        });
     }, [filteredSnapshots]);
 
     // ─── Overall metrics ───
