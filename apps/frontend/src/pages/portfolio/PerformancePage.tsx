@@ -430,6 +430,7 @@ export default function PerformancePage() {
                                         borderRadius: "8px",
                                         fontSize: "12px",
                                     }}
+                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
                                     formatter={(value: number) => [formatCurrency(value, defaultCurrency, locale)]}
                                 />
                                 <Legend />
