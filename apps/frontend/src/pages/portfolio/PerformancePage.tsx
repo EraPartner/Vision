@@ -27,6 +27,9 @@ interface PerformanceSnapshot {
     stocks_etfs_value: number;
     crypto_value: number;
     metals_value: number;
+    stocks_etfs_invested: number;
+    crypto_invested: number;
+    metals_invested: number;
     inflation_adjusted_value: number;
     gain_loss: number;
     return_pct: number;
