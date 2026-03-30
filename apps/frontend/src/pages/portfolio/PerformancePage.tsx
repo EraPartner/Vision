@@ -531,6 +531,7 @@ export default function PerformancePage() {
                                         borderRadius: "8px",
                                         fontSize: "12px",
                                     }}
+                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
                                     formatter={(value: number) => [`${value > 0 ? '+' : ''}${value.toFixed(2)}%`]}
                                 />
                                 <Legend />
