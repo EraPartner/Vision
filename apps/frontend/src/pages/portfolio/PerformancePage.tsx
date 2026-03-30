@@ -139,42 +139,22 @@ export default function PerformancePage() {
     })), [filteredSnapshots]);
 
     // ─── Relative performance (percentage-based) ───
+    // Cumulative return = (current_value - invested_capital) / invested_capital × 100
+    // This is the standard finance formula for measuring true return on capital deployed.
     const relativePerformanceData = useMemo(() => {
         if (filteredSnapshots.length < 2) return [];
 
-        // For total portfolio & inflation-adjusted: use invested capital as denominator
-        // This gives the true return on capital deployed
-        // For sub-classes: use first non-zero value in the period as base (simple return)
-        const buildSubClassSeries = (valueSelector: (s: PerformanceSnapshot) => number) => {
-            let baseValue = 0;
-            return filteredSnapshots.map((s) => {
-                const val = valueSelector(s);
-                if (baseValue <= 0) {
-                    if (val > 0) baseValue = val;
-                    return 0;
-                }
-                return Math.round(((val / baseValue) - 1) * 10000) / 100;
-            });
-        };
+        const cumulativeReturn = (value: number, invested: number) =>
+            invested > 0 ? Math.round(((value / invested) - 1) * 10000) / 100 : 0;
 
-        const stocksEtfsSeries = buildSubClassSeries(s => s.stocks_etfs_value);
-        const cryptoSeries = buildSubClassSeries(s => s.crypto_value);
-        const metalsSeries = buildSubClassSeries(s => s.metals_value);
-
-        return filteredSnapshots.map((s, idx) => {
-            const invested = s.invested;
-            const portfolioPct = invested > 0 ? Math.round(((s.value / invested) - 1) * 10000) / 100 : 0;
-            const inflAdjPct = invested > 0 ? Math.round(((s.inflation_adjusted_value / invested) - 1) * 10000) / 100 : 0;
-
-            return {
-                day: s.date,
-                [CHART_KEYS.relativePortfolio]: portfolioPct,
-                [CHART_KEYS.relativeStocksEtfs]: stocksEtfsSeries[idx] ?? 0,
-                [CHART_KEYS.relativeCrypto]: cryptoSeries[idx] ?? 0,
-                [CHART_KEYS.relativeMetals]: metalsSeries[idx] ?? 0,
-                [CHART_KEYS.relativeInflationAdjusted]: inflAdjPct,
-            };
-        });
+        return filteredSnapshots.map((s) => ({
+            day: s.date,
+            [CHART_KEYS.relativePortfolio]: cumulativeReturn(s.value, s.invested),
+            [CHART_KEYS.relativeStocksEtfs]: cumulativeReturn(s.stocks_etfs_value, s.stocks_etfs_invested),
+            [CHART_KEYS.relativeCrypto]: cumulativeReturn(s.crypto_value, s.crypto_invested),
+            [CHART_KEYS.relativeMetals]: cumulativeReturn(s.metals_value, s.metals_invested),
+            [CHART_KEYS.relativeInflationAdjusted]: cumulativeReturn(s.inflation_adjusted_value, s.invested),
+        }));
     }, [filteredSnapshots]);
 
     // ─── Overall metrics ───
