@@ -216,6 +216,9 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
   // State tracking
   const unitsByInvestment = {};  // investmentId -> cumulative units
   let cumulativeInvested = 0;     // cumulative capital deployed (buys - sells)
+  let stocksEtfsInvested = 0;
+  let cryptoInvested = 0;
+  let metalsInvested = 0;
   let cumulativeInflation = 1;
   let lastInflationMonth = '';
   const lastKnownPrice = {};      // investmentId -> last known price
@@ -230,12 +233,24 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
 
       if (tx.type === 'buy' || tx.type === 'gift') {
         cumulativeInvested += converted;
+        const inv = investmentsById.get(tx.investmentId);
+        if (inv) {
+          if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsInvested += converted;
+          else if (inv.assetClass === 'crypto') cryptoInvested += converted;
+          else if (inv.assetClass === 'metals') metalsInvested += converted;
+        }
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
         if (tx.units > 0 && tx.amount > 0) {
           lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
         }
       } else if (tx.type === 'sell') {
         cumulativeInvested -= converted;
+        const inv = investmentsById.get(tx.investmentId);
+        if (inv) {
+          if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsInvested -= converted;
+          else if (inv.assetClass === 'crypto') cryptoInvested -= converted;
+          else if (inv.assetClass === 'metals') metalsInvested -= converted;
+        }
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) - tx.units;
         if (tx.units > 0 && tx.amount > 0) {
           lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
@@ -313,6 +328,9 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
       stocks_etfs_value: stocksEtfsValue || 0,
       crypto_value: cryptoValue || 0,
       metals_value: metalsValue || 0,
+      stocks_etfs_invested: stocksEtfsInvested || 0,
+      crypto_invested: cryptoInvested || 0,
+      metals_invested: metalsInvested || 0,
       inflation_adjusted_value: inflationAdjustedValue || 0,
       cumulative_inflation: Math.round((cumulativeInflation - 1) * 10000) / 100,
     });
@@ -352,7 +370,7 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
     let paramIdx = 1;
 
     for (const snap of batch) {
-      values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, NOW())`);
+      values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, NOW())`);
       params.push(
         snap.snapshot_date,
         snap.invested,
@@ -365,6 +383,9 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         snap.return_pct,
         targetCurrency,
         snap.inflation_adjusted_value,
+        snap.stocks_etfs_invested,
+        snap.crypto_invested,
+        snap.metals_invested,
       );
     }
 
@@ -372,7 +393,8 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
       INSERT INTO portfolio_performance_snapshots (
         snapshot_date, invested, value, stocks_etfs_value, crypto_value,
         metals_value, cash_value, gain_loss, return_pct, currency,
-        inflation_adjusted_value, computed_at
+        inflation_adjusted_value, stocks_etfs_invested, crypto_invested,
+        metals_invested, computed_at
       ) VALUES ${values.join(', ')}
       ON CONFLICT (snapshot_date) DO UPDATE SET
         invested = EXCLUDED.invested,
@@ -384,6 +406,9 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         gain_loss = EXCLUDED.gain_loss,
         return_pct = EXCLUDED.return_pct,
         inflation_adjusted_value = EXCLUDED.inflation_adjusted_value,
+        stocks_etfs_invested = EXCLUDED.stocks_etfs_invested,
+        crypto_invested = EXCLUDED.crypto_invested,
+        metals_invested = EXCLUDED.metals_invested,
         computed_at = NOW()
     `, params);
   }
@@ -405,6 +430,9 @@ export async function getSnapshots(startDate, endDate, currency = 'EUR') {
       gain_loss,
       return_pct,
       COALESCE(inflation_adjusted_value, value) AS inflation_adjusted_value,
+      COALESCE(stocks_etfs_invested, 0) AS stocks_etfs_invested,
+      COALESCE(crypto_invested, 0) AS crypto_invested,
+      COALESCE(metals_invested, 0) AS metals_invested,
       currency
     FROM portfolio_performance_snapshots
     WHERE currency = $1
