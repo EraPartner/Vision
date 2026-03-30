@@ -230,12 +230,24 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
 
       if (tx.type === 'buy' || tx.type === 'gift') {
         cumulativeInvested += converted;
+        const inv = investmentsById.get(tx.investmentId);
+        if (inv) {
+          if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsInvested += converted;
+          else if (inv.assetClass === 'crypto') cryptoInvested += converted;
+          else if (inv.assetClass === 'metals') metalsInvested += converted;
+        }
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) + tx.units;
         if (tx.units > 0 && tx.amount > 0) {
           lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
         }
       } else if (tx.type === 'sell') {
         cumulativeInvested -= converted;
+        const inv = investmentsById.get(tx.investmentId);
+        if (inv) {
+          if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsInvested -= converted;
+          else if (inv.assetClass === 'crypto') cryptoInvested -= converted;
+          else if (inv.assetClass === 'metals') metalsInvested -= converted;
+        }
         unitsByInvestment[tx.investmentId] = (unitsByInvestment[tx.investmentId] || 0) - tx.units;
         if (tx.units > 0 && tx.amount > 0) {
           lastKnownPrice[tx.investmentId] = tx.amount / tx.units;
