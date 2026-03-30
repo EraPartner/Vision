@@ -370,7 +370,7 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
     let paramIdx = 1;
 
     for (const snap of batch) {
-      values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, NOW())`);
+      values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, NOW())`);
       params.push(
         snap.snapshot_date,
         snap.invested,
@@ -383,6 +383,9 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         snap.return_pct,
         targetCurrency,
         snap.inflation_adjusted_value,
+        snap.stocks_etfs_invested,
+        snap.crypto_invested,
+        snap.metals_invested,
       );
     }
 
@@ -390,7 +393,8 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
       INSERT INTO portfolio_performance_snapshots (
         snapshot_date, invested, value, stocks_etfs_value, crypto_value,
         metals_value, cash_value, gain_loss, return_pct, currency,
-        inflation_adjusted_value, computed_at
+        inflation_adjusted_value, stocks_etfs_invested, crypto_invested,
+        metals_invested, computed_at
       ) VALUES ${values.join(', ')}
       ON CONFLICT (snapshot_date) DO UPDATE SET
         invested = EXCLUDED.invested,
@@ -402,6 +406,9 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         gain_loss = EXCLUDED.gain_loss,
         return_pct = EXCLUDED.return_pct,
         inflation_adjusted_value = EXCLUDED.inflation_adjusted_value,
+        stocks_etfs_invested = EXCLUDED.stocks_etfs_invested,
+        crypto_invested = EXCLUDED.crypto_invested,
+        metals_invested = EXCLUDED.metals_invested,
         computed_at = NOW()
     `, params);
   }
