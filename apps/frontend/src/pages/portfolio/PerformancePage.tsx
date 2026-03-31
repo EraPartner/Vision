@@ -59,35 +59,6 @@ export default function PerformancePage() {
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
-    const { data: exchangeData } = useQuery({
-        queryKey: ['exchange-rates', defaultCurrency],
-        queryFn: () => apiClient.request('/api/info/exchange-rates'),
-        staleTime: 60_000,
-    });
-
-    const { data: portfolioPerformanceData, isLoading } = useQuery({
-        queryKey: ["portfolio-performance", defaultCurrency],
-        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
-        staleTime: 300_000,
-    });
-
-    const ratesToEur: Record<string, number> = useMemo(() => ({
-        EUR: 1,
-        ...Object.fromEntries(
-            (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
-        ),
-        ...(exchangeData?.fallback_rates || {}),
-    }), [exchangeData]);
-
-    const convertToTarget = (amount: number, fromCurrency?: string) => {
-        const from = (fromCurrency || 'EUR').toUpperCase();
-        const to = defaultCurrency.toUpperCase();
-        if (from === to) return amount;
-        const rateFrom = ratesToEur[from];
-        const rateTo = ratesToEur[to];
-        if (!rateFrom || !rateTo) return amount;
-        return (amount * rateFrom) / rateTo;
-    };
 
     const PERIOD_LABELS: Record<Period, string> = {
         "1m": t('performance.period.1m'),
