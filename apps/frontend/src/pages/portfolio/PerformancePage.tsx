@@ -17,6 +17,7 @@ import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
+import { downsampleLTTB } from "@/utils/downsample";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
