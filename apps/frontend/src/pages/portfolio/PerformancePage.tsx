@@ -450,6 +450,7 @@ export default function PerformancePage() {
                                     fill="url(#gradInvested)"
                                     strokeWidth={1.5}
                                     strokeDasharray="4 4"
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
