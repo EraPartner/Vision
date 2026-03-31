@@ -56,7 +56,6 @@ export default function PerformancePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const { summaries } = usePortfolio();
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
     const { data: exchangeData } = useQuery({
