@@ -16,6 +16,7 @@ import {
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { downsampleLTTB } from "@/utils/downsample";
 
 function fmtDay(date: string, appDateFormat: string) {
   return formatDateWithAppSettings(parseLocalDateFromYmd(date), appDateFormat);
