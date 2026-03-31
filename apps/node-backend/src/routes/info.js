@@ -20,6 +20,9 @@ const router = Router();
 const NET_WORTH_CACHE_TTL_MS = 60_000;
 const netWorthResponseCache = new Map();
 
+const PERF_CACHE_TTL_MS = 120_000;
+const perfResponseCache = new Map();
+
 function getCachedNetWorth(key) {
   const cached = netWorthResponseCache.get(key);
   if (!cached) return undefined;
@@ -417,29 +420,51 @@ router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests
     const targetCurrency = getTargetCurrency(req);
     const startDate = req.query.start_date || '2000-01-01';
     const endDate = req.query.end_date || new Date().toISOString().split('T')[0];
+    const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
+
+    const cached = perfResponseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return res.json(cached.data);
+    }
+
+    if (cached?.inflight) {
+      const data = await cached.inflight;
+      return res.json(data);
+    }
 
     const { getSnapshots } = await import('../services/portfolioPerformanceSnapshotService.js');
-    const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
 
-    res.json({
-      currency: targetCurrency,
-      start_date: startDate,
-      end_date: endDate,
-      snapshots: snapshots.map(s => ({
-        date: s.snapshot_date,
-        invested: parseFloat(s.invested) || 0,
-        value: parseFloat(s.value) || 0,
-        stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
-        crypto_value: parseFloat(s.crypto_value) || 0,
-        metals_value: parseFloat(s.metals_value) || 0,
-        stocks_etfs_invested: parseFloat(s.stocks_etfs_invested) || 0,
-        crypto_invested: parseFloat(s.crypto_invested) || 0,
-        metals_invested: parseFloat(s.metals_invested) || 0,
-        inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
-        gain_loss: parseFloat(s.gain_loss) || 0,
-        return_pct: parseFloat(s.return_pct) || 0,
-      })),
+    const inflight = getSnapshots(startDate, endDate, targetCurrency).then(snapshots => {
+      const payload = {
+        currency: targetCurrency,
+        start_date: startDate,
+        end_date: endDate,
+        snapshots: snapshots.map(s => ({
+          date: s.snapshot_date,
+          invested: parseFloat(s.invested) || 0,
+          value: parseFloat(s.value) || 0,
+          stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
+          crypto_value: parseFloat(s.crypto_value) || 0,
+          metals_value: parseFloat(s.metals_value) || 0,
+          stocks_etfs_invested: parseFloat(s.stocks_etfs_invested) || 0,
+          crypto_invested: parseFloat(s.crypto_invested) || 0,
+          metals_invested: parseFloat(s.metals_invested) || 0,
+          inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
+          gain_loss: parseFloat(s.gain_loss) || 0,
+          return_pct: parseFloat(s.return_pct) || 0,
+        })),
+      };
+      perfResponseCache.set(cacheKey, { data: payload, expiresAt: Date.now() + PERF_CACHE_TTL_MS });
+      return payload;
+    }).catch(error => {
+      const current = perfResponseCache.get(cacheKey);
+      if (current?.inflight === inflight) perfResponseCache.delete(cacheKey);
+      throw error;
     });
+
+    perfResponseCache.set(cacheKey, { inflight, expiresAt: 0 });
+    const data = await inflight;
+    res.json(data);
   } catch (err) {
     logger.error('Error retrieving portfolio performance', { error: err.message });
     res.status(500).json({ detail: 'Error retrieving portfolio performance' });
