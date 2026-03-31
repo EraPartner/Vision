@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
-    Calendar, DollarSign, Activity,
+    DollarSign, Activity,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
