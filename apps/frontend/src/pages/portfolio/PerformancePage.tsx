@@ -588,6 +588,7 @@ export default function PerformancePage() {
                                     stroke="hsl(var(--primary))"
                                     fill="url(#gradRelPortfolio)"
                                     strokeWidth={2.5}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -596,6 +597,7 @@ export default function PerformancePage() {
                                     stroke="hsl(0, 72%, 51%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -604,6 +606,7 @@ export default function PerformancePage() {
                                     stroke="hsl(142, 76%, 36%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -612,6 +615,7 @@ export default function PerformancePage() {
                                     stroke="hsl(45, 93%, 47%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -621,6 +625,7 @@ export default function PerformancePage() {
                                     fillOpacity={0}
                                     strokeWidth={2}
                                     strokeDasharray="4 4"
+                                    isAnimationActive={false}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
