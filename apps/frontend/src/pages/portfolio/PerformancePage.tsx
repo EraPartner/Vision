@@ -243,11 +243,6 @@ export default function PerformancePage() {
         return { years, data, maxAbsPct: monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0 };
     }, [portfolioPerformanceData?.snapshots]);
 
-    const MONTH_LABELS = useMemo(() => {
-        return Array.from({ length: 12 }, (_, i) =>
-            formatMonthLabelWithLocale(new Date(2000, i, 1), monthLabelLocale, "short")
-        );
-    }, [monthLabelLocale]);
 
     const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 
