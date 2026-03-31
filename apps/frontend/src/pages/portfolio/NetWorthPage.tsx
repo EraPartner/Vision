@@ -171,7 +171,11 @@ export default function NetWorthPage() {
       .filter(isFiniteSnapshot);
   }, [data?.snapshots]);
 
-  const chartSnapshots = snapshots;
+  const chartSnapshots = useMemo(() => {
+    const MAX_CHART_POINTS = 400;
+    if (snapshots.length <= MAX_CHART_POINTS) return snapshots;
+    return downsampleLTTB(snapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item[selectedSeries]);
+  }, [snapshots, selectedSeries]);
 
   const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: "currency",

@@ -162,8 +162,8 @@ export default function PerformancePage() {
             [CHART_KEYS.relativeCrypto]: cumulativeReturn(s.crypto_value, s.crypto_invested),
             [CHART_KEYS.relativeMetals]: cumulativeReturn(s.metals_value, s.metals_invested),
             [CHART_KEYS.relativeInflationAdjusted]: cumulativeReturn(s.inflation_adjusted_value, s.invested),
-        }));
-    }, [filteredSnapshots]);
+    }));
+    }, [downsampledSnapshots]);
 
     // ─── Overall metrics ───
     const overallMetrics = useMemo(() => {
