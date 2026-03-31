@@ -219,7 +219,7 @@ export default function PerformancePage() {
     }, [portfolioPerformanceData?.snapshots]);
 
 
-    const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+    
 
     if (isLoading || filteredSnapshots.length === 0) {
         return (
