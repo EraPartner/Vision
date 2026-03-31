@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
 import { downsampleLTTB } from "@/utils/downsample";
 
