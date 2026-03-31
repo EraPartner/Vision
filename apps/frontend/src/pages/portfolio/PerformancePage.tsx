@@ -459,6 +459,43 @@ export default function PerformancePage() {
                                     stroke="hsl(30, 80%, 55%)"
                                     fill="url(#gradInflAdj)"
                                     strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.stocksEtfs}
+                                    name={t('performance.relativeStocksEtfs') || t('nav.stocksEtfs')}
+                                    stroke="hsl(0, 72%, 51%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.crypto}
+                                    name={t('performance.crypto')}
+                                    stroke="hsl(142, 76%, 36%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.metals}
+                                    name={t('performance.metals')}
+                                    stroke="hsl(45, 93%, 47%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.value}
+                                    name={t('portfolio.portfolioValue')}
+                                    stroke="hsl(var(--primary))"
+                                    fill="url(#gradValue)"
+                                    strokeWidth={2.5}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
