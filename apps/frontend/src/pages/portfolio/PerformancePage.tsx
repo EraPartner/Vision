@@ -128,8 +128,15 @@ export default function PerformancePage() {
         });
     }, [portfolioPerformanceData?.snapshots, selectedPeriod]);
 
-    // ─── Chart data (Portfolio Value Over Time) ───
-    const chartData = useMemo(() => filteredSnapshots.map((s) => ({
+    // ─── Downsample then map chart data ───
+    const MAX_CHART_POINTS = 400;
+
+    const downsampledSnapshots = useMemo(() => {
+        if (filteredSnapshots.length <= MAX_CHART_POINTS) return filteredSnapshots;
+        return downsampleLTTB(filteredSnapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item.value);
+    }, [filteredSnapshots]);
+
+    const chartData = useMemo(() => downsampledSnapshots.map((s) => ({
         day: s.date,
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
@@ -137,7 +144,7 @@ export default function PerformancePage() {
         [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
         [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
-    })), [filteredSnapshots]);
+    })), [downsampledSnapshots]);
 
     // ─── Relative performance (percentage-based) ───
     // Cumulative return = (current_value - invested_capital) / invested_capital × 100
