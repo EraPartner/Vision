@@ -16,6 +16,7 @@ import {
 import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { downsampleLTTB } from "@/utils/downsample";
 
 function fmtDay(date: string, appDateFormat: string) {
   return formatDateWithAppSettings(parseLocalDateFromYmd(date), appDateFormat);
@@ -170,7 +171,11 @@ export default function NetWorthPage() {
       .filter(isFiniteSnapshot);
   }, [data?.snapshots]);
 
-  const chartSnapshots = snapshots;
+  const chartSnapshots = useMemo(() => {
+    const MAX_CHART_POINTS = 400;
+    if (snapshots.length <= MAX_CHART_POINTS) return snapshots;
+    return downsampleLTTB(snapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item[selectedSeries]);
+  }, [snapshots, selectedSeries]);
 
   const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: "currency",

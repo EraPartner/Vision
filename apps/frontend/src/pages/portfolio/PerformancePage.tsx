@@ -17,6 +17,7 @@ import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
+import { downsampleLTTB } from "@/utils/downsample";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
@@ -127,8 +128,15 @@ export default function PerformancePage() {
         });
     }, [portfolioPerformanceData?.snapshots, selectedPeriod]);
 
-    // ─── Chart data (Portfolio Value Over Time) ───
-    const chartData = useMemo(() => filteredSnapshots.map((s) => ({
+    // ─── Downsample then map chart data ───
+    const MAX_CHART_POINTS = 400;
+
+    const downsampledSnapshots = useMemo(() => {
+        if (filteredSnapshots.length <= MAX_CHART_POINTS) return filteredSnapshots;
+        return downsampleLTTB(filteredSnapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item.value);
+    }, [filteredSnapshots]);
+
+    const chartData = useMemo(() => downsampledSnapshots.map((s) => ({
         day: s.date,
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
@@ -136,26 +144,26 @@ export default function PerformancePage() {
         [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
         [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
-    })), [filteredSnapshots]);
+    })), [downsampledSnapshots]);
 
     // ─── Relative performance (percentage-based) ───
     // Cumulative return = (current_value - invested_capital) / invested_capital × 100
     // This is the standard finance formula for measuring true return on capital deployed.
     const relativePerformanceData = useMemo(() => {
-        if (filteredSnapshots.length < 2) return [];
+        if (downsampledSnapshots.length < 2) return [];
 
         const cumulativeReturn = (value: number, invested: number) =>
             invested > 0 ? Math.round(((value / invested) - 1) * 10000) / 100 : 0;
 
-        return filteredSnapshots.map((s) => ({
+        return downsampledSnapshots.map((s) => ({
             day: s.date,
             [CHART_KEYS.relativePortfolio]: cumulativeReturn(s.value, s.invested),
             [CHART_KEYS.relativeStocksEtfs]: cumulativeReturn(s.stocks_etfs_value, s.stocks_etfs_invested),
             [CHART_KEYS.relativeCrypto]: cumulativeReturn(s.crypto_value, s.crypto_invested),
             [CHART_KEYS.relativeMetals]: cumulativeReturn(s.metals_value, s.metals_invested),
             [CHART_KEYS.relativeInflationAdjusted]: cumulativeReturn(s.inflation_adjusted_value, s.invested),
-        }));
-    }, [filteredSnapshots]);
+    }));
+    }, [downsampledSnapshots]);
 
     // ─── Overall metrics ───
     const overallMetrics = useMemo(() => {
@@ -442,6 +450,7 @@ export default function PerformancePage() {
                                     fill="url(#gradInvested)"
                                     strokeWidth={1.5}
                                     strokeDasharray="4 4"
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -450,6 +459,43 @@ export default function PerformancePage() {
                                     stroke="hsl(30, 80%, 55%)"
                                     fill="url(#gradInflAdj)"
                                     strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.stocksEtfs}
+                                    name={t('performance.relativeStocksEtfs') || t('nav.stocksEtfs')}
+                                    stroke="hsl(0, 72%, 51%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.crypto}
+                                    name={t('performance.crypto')}
+                                    stroke="hsl(142, 76%, 36%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.metals}
+                                    name={t('performance.metals')}
+                                    stroke="hsl(45, 93%, 47%)"
+                                    fillOpacity={0}
+                                    strokeWidth={2}
+                                    isAnimationActive={false}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={CHART_KEYS.value}
+                                    name={t('portfolio.portfolioValue')}
+                                    stroke="hsl(var(--primary))"
+                                    fill="url(#gradValue)"
+                                    strokeWidth={2.5}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -542,6 +588,7 @@ export default function PerformancePage() {
                                     stroke="hsl(var(--primary))"
                                     fill="url(#gradRelPortfolio)"
                                     strokeWidth={2.5}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -550,6 +597,7 @@ export default function PerformancePage() {
                                     stroke="hsl(0, 72%, 51%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -558,6 +606,7 @@ export default function PerformancePage() {
                                     stroke="hsl(142, 76%, 36%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -566,6 +615,7 @@ export default function PerformancePage() {
                                     stroke="hsl(45, 93%, 47%)"
                                     fillOpacity={0}
                                     strokeWidth={2}
+                                    isAnimationActive={false}
                                 />
                                 <Area
                                     type="monotone"
@@ -575,6 +625,7 @@ export default function PerformancePage() {
                                     fillOpacity={0}
                                     strokeWidth={2}
                                     strokeDasharray="4 4"
+                                    isAnimationActive={false}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
