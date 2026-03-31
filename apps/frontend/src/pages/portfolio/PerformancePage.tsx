@@ -150,12 +150,12 @@ export default function PerformancePage() {
     // Cumulative return = (current_value - invested_capital) / invested_capital × 100
     // This is the standard finance formula for measuring true return on capital deployed.
     const relativePerformanceData = useMemo(() => {
-        if (filteredSnapshots.length < 2) return [];
+        if (downsampledSnapshots.length < 2) return [];
 
         const cumulativeReturn = (value: number, invested: number) =>
             invested > 0 ? Math.round(((value / invested) - 1) * 10000) / 100 : 0;
 
-        return filteredSnapshots.map((s) => ({
+        return downsampledSnapshots.map((s) => ({
             day: s.date,
             [CHART_KEYS.relativePortfolio]: cumulativeReturn(s.value, s.invested),
             [CHART_KEYS.relativeStocksEtfs]: cumulativeReturn(s.stocks_etfs_value, s.stocks_etfs_invested),
