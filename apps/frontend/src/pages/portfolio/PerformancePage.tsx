@@ -59,6 +59,11 @@ export default function PerformancePage() {
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
+    const { data: portfolioPerformanceData, isLoading } = useQuery({
+        queryKey: ["portfolio-performance", defaultCurrency],
+        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
+        staleTime: 300_000,
+    });
 
     const PERIOD_LABELS: Record<Period, string> = {
         "1m": t('performance.period.1m'),
