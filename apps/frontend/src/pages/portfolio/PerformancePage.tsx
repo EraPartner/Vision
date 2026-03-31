@@ -247,71 +247,7 @@ export default function PerformancePage() {
         );
     }, [monthLabelLocale]);
 
-    // ─── Asset class breakdown from summaries ───
-    const assetClassBreakdown = useMemo(() => {
-        const grouped = new Map<AssetClass, { count: number; value: number; invested: number; gain: number }>();
-        for (const summary of summaries) {
-            const existing = grouped.get(summary.assetClass) || { count: 0, value: 0, invested: 0, gain: 0 };
-            existing.count += 1;
-            existing.value += convertToTarget(summary.currentValue, summary.currency);
-            existing.invested += convertToTarget(summary.totalInvested, summary.currency);
-            existing.gain += convertToTarget(summary.gainLoss, summary.currency);
-            grouped.set(summary.assetClass, existing);
-        }
-
-        return Array.from(grouped.entries()).map(([assetClass, data]) => {
-            const pct = data.invested > 0 ? (data.gain / data.invested) * 100 : 0;
-            return {
-                assetClass,
-                label: t(`performance.${assetClass}` as `performance.${AssetClass}`) || assetClass,
-                count: data.count,
-                classValue: data.value,
-                classInvested: data.invested,
-                classGain: data.gain,
-                classPct: pct,
-            };
-        });
-    }, [summaries, convertToTarget, t]);
-
-    const { topPerformers, bottomPerformers } = useMemo(() => {
-        const sorted = [...summaries].sort((a, b) => a.gainLossPercent - b.gainLossPercent);
-        return {
-            topPerformers: sorted.slice(-5).reverse(),
-            bottomPerformers: sorted.slice(0, 5),
-        };
-    }, [summaries]);
-
-    function getHeatColor(val: number | null, maxAbsPct: number): string {
-        if (val === null) return "bg-muted/30";
-        if (val === 0) return "bg-muted text-muted-foreground";
-        const absPct = Math.abs(val);
-        if (absPct < 0.25) return "bg-muted/70 text-muted-foreground";
-        const scale = Math.max(maxAbsPct, 1);
-        const ratio = absPct / scale;
-        const strongMove = absPct >= 2.5 || ratio > 0.72;
-        const mediumMove = absPct >= 1.0 || ratio > 0.42;
-        if (val > 0 && strongMove) return "bg-emerald-600 text-white";
-        if (val > 0 && mediumMove) return "bg-emerald-500 text-white";
-        if (val > 0) return "bg-emerald-400/80 text-emerald-950";
-        if (strongMove) return "bg-rose-600 text-white";
-        if (mediumMove) return "bg-rose-500 text-white";
-        return "bg-rose-400/80 text-rose-950";
-    }
-
     const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
-
-    if (summaries.length === 0) {
-        return (
-            <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
-                <Card>
-                    <CardContent className="flex items-center justify-center h-48">
-                        <p className="text-muted-foreground">{t('performance.noData')}</p>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
 
     if (isLoading || filteredSnapshots.length === 0) {
         return (
