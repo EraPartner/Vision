@@ -20,6 +20,9 @@ const router = Router();
 const NET_WORTH_CACHE_TTL_MS = 60_000;
 const netWorthResponseCache = new Map();
 
+const PERF_CACHE_TTL_MS = 120_000;
+const perfResponseCache = new Map();
+
 function getCachedNetWorth(key) {
   const cached = netWorthResponseCache.get(key);
   if (!cached) return undefined;
