@@ -18,6 +18,8 @@ import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
 import { downsampleLTTB } from "@/utils/downsample";
 
+const LazyPerformanceBreakdown = lazy(() => import("@/components/portfolio/PerformanceBreakdown"));
+
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
 interface PerformanceSnapshot {
