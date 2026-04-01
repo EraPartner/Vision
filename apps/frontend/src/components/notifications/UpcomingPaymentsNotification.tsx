@@ -103,7 +103,7 @@ export function UpcomingPaymentsNotification() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-5 w-5 min-h-0 min-w-0 p-0 rounded-sm"
                 title={t('recurring.dismiss')}
                 onClick={() => dismissById(pt.id)}
               >
