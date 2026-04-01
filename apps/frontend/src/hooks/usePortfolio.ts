@@ -19,7 +19,8 @@ function useInvestmentsQuery() {
   return useQuery({
     queryKey: ['investments'],
     queryFn: () => apiClient.getInvestments({ limit: 500, active: false }),
-    staleTime: 30_000,
+    staleTime: 2 * 60_000,   // investments rarely change — 2min stale
+    gcTime: 10 * 60_000,     // keep in cache 10min for fast page switches
   });
 }
 
@@ -42,7 +43,8 @@ function usePortfolioTransactionsQuery(investmentIds: number[]) {
       }
     },
     enabled: investmentIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 2 * 60_000,   // transactions rarely change — 2min stale
+    gcTime: 10 * 60_000,
   });
 }
 
@@ -433,7 +435,7 @@ export function usePortfolio() {
         totalBuyCost,
         totalSellProceeds,
         
-        transactions: [...txns].sort((a, b) => b.date.localeCompare(a.date)),
+        transactions: txns,  // already sorted by query; avoid re-sort per render
       } as InvestmentSummary;
     });
   }, [investments, transactions]);

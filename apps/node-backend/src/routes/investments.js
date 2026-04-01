@@ -12,6 +12,16 @@ import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 
 const router = Router();
 
+// ---- In-memory response caches ----
+const INVESTMENTS_CACHE_TTL_MS = 60_000;
+let investmentsCache = { data: undefined, expiresAt: 0 };
+let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+
+function clearInvestmentsCaches() {
+  investmentsCache = { data: undefined, expiresAt: 0 };
+  bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+}
+
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
   if (!provider || provider === 'manual') return false;
@@ -47,11 +57,24 @@ router.get('/', async (req, res) => {
       assetClass: asset_class || null,
       active: active !== 'false',
     };
+
+    // Cache the default request that the frontend hits on every page (limit=500, active=false, no filter)
+    const isDefaultRequest = opts.limit >= 500 && !opts.assetClass && !opts.active && opts.offset === 0;
+    if (isDefaultRequest && investmentsCache.data && investmentsCache.expiresAt > Date.now()) {
+      return res.json(investmentsCache.data);
+    }
+
     const [items, total] = await Promise.all([
       investmentRepository.getAll(opts),
       investmentRepository.getCount(opts),
     ]);
-    res.json({ items, total, limit: opts.limit, offset: opts.offset, links: [] });
+    const payload = { items, total, limit: opts.limit, offset: opts.offset, links: [] };
+
+    if (isDefaultRequest) {
+      investmentsCache = { data: payload, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+    }
+
+    res.json(payload);
   } catch (err) {
     logger.error('Failed to get investments', { error: err.message });
     res.status(500).json({ detail: 'Failed to retrieve investments' });
@@ -108,6 +131,7 @@ router.post('/', async (req, res) => {
       price_provider_history_ts_path,
       price_provider_history_price_path,
     });
+    clearInvestmentsCaches();
     res.status(201).json(inv);
   } catch (err) {
     logger.error('Failed to create investment', { error: err.message });
@@ -157,6 +181,7 @@ router.post('/refresh-prices', async (req, res) => {
     const updated = updateResults.reduce((sum, n) => sum + n, 0);
 
     logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
+    clearInvestmentsCaches();
     res.json({
       updated,
       total: toRefresh.length,
@@ -196,6 +221,12 @@ router.get('/transactions', async (req, res) => {
       offset: Math.max(0, parseInt(offset, 10) || 0),
     };
 
+    // Cache bulk transactions for the default request pattern
+    const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.offset}`;
+    if (bulkTxnCache.key === cacheKey && bulkTxnCache.data && bulkTxnCache.expiresAt > Date.now()) {
+      return res.json(bulkTxnCache.data);
+    }
+
     const [items, total] = await Promise.all([
       portfolioTransactionRepository.getAllByInvestmentIds(opts),
       portfolioTransactionRepository.getCount({
@@ -204,13 +235,16 @@ router.get('/transactions', async (req, res) => {
       }),
     ]);
 
-    res.json({
+    const payload = {
       items,
       total,
       limit: opts.limit ?? items.length,
       offset: opts.offset,
       links: [],
-    });
+    };
+
+    bulkTxnCache = { data: payload, key: cacheKey, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+    res.json(payload);
   } catch (err) {
     logger.error('Failed to get bulk portfolio transactions', { error: err.message });
     res.status(500).json({ detail: 'Failed to retrieve portfolio transactions' });
@@ -265,6 +299,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const inv = await investmentRepository.update(parseInt(req.params.id, 10), req.body);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
+    clearInvestmentsCaches();
     res.json(inv);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
@@ -280,6 +315,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const ok = await investmentRepository.hardDelete(parseInt(req.params.id, 10));
     if (!ok) return res.status(404).json({ detail: 'Investment not found' });
+    clearInvestmentsCaches();
     res.status(204).end();
   } catch (err) {
     logger.error('Failed to delete investment', { error: err.message });
@@ -325,6 +361,7 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
       currency: currency || inv.currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur,
     });
+    clearInvestmentsCaches();
     res.status(201).json(txn);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
@@ -342,6 +379,7 @@ router.delete('/transactions/:txnId', async (req, res) => {
     if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
     const ok = await portfolioTransactionRepository.hardDelete(txnId);
     if (!ok) return res.status(404).json({ detail: 'Portfolio transaction not found' });
+    clearInvestmentsCaches();
     res.status(204).end();
   } catch (err) {
     logger.error('Failed to delete portfolio transaction', { error: err.message });
@@ -356,6 +394,7 @@ router.patch('/transactions/:txnId', async (req, res) => {
     if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
     const txn = await portfolioTransactionRepository.update(txnId, req.body || {});
     if (!txn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
+    clearInvestmentsCaches();
     res.json(txn);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
