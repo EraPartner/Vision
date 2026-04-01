@@ -384,6 +384,7 @@ router.patch('/transactions/:txnId', async (req, res) => {
     if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
     const txn = await portfolioTransactionRepository.update(txnId, req.body || {});
     if (!txn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
+    clearInvestmentsCaches();
     res.json(txn);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
