@@ -351,6 +351,7 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
       currency: currency || inv.currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur,
     });
+    clearInvestmentsCaches();
     res.status(201).json(txn);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
