@@ -220,6 +220,12 @@ router.get('/transactions', async (req, res) => {
       offset: Math.max(0, parseInt(offset, 10) || 0),
     };
 
+    // Cache bulk transactions for the default request pattern
+    const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.offset}`;
+    if (bulkTxnCache.key === cacheKey && bulkTxnCache.data && bulkTxnCache.expiresAt > Date.now()) {
+      return res.json(bulkTxnCache.data);
+    }
+
     const [items, total] = await Promise.all([
       portfolioTransactionRepository.getAllByInvestmentIds(opts),
       portfolioTransactionRepository.getCount({
@@ -228,13 +234,16 @@ router.get('/transactions', async (req, res) => {
       }),
     ]);
 
-    res.json({
+    const payload = {
       items,
       total,
       limit: opts.limit ?? items.length,
       offset: opts.offset,
       links: [],
-    });
+    };
+
+    bulkTxnCache = { data: payload, key: cacheKey, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+    res.json(payload);
   } catch (err) {
     logger.error('Failed to get bulk portfolio transactions', { error: err.message });
     res.status(500).json({ detail: 'Failed to retrieve portfolio transactions' });
