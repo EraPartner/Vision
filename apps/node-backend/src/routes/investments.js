@@ -369,6 +369,7 @@ router.delete('/transactions/:txnId', async (req, res) => {
     if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
     const ok = await portfolioTransactionRepository.hardDelete(txnId);
     if (!ok) return res.status(404).json({ detail: 'Portfolio transaction not found' });
+    clearInvestmentsCaches();
     res.status(204).end();
   } catch (err) {
     logger.error('Failed to delete portfolio transaction', { error: err.message });
