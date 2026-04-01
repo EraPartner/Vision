@@ -426,8 +426,8 @@ export default function PortfolioTaxPage() {
                         }}
                         formatter={(v: number) => fmt(v)}
                       />
-                      <Bar dataKey="taxes" name={t('tax.taxes')} fill="hsl(340, 82%, 52%)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="fees" name={t('tax.fees')} fill="hsl(45, 93%, 47%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="taxes" name={t('tax.taxes')} fill="hsl(340, 82%, 52%)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                      <Bar dataKey="fees" name={t('tax.fees')} fill="hsl(45, 93%, 47%)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
