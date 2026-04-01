@@ -181,6 +181,7 @@ router.post('/refresh-prices', async (req, res) => {
     const updated = updateResults.reduce((sum, n) => sum + n, 0);
 
     logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
+    clearInvestmentsCaches();
     res.json({
       updated,
       total: toRefresh.length,
