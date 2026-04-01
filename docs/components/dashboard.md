@@ -16,12 +16,12 @@ Components for the main Dashboard page (`/`), providing financial overview and v
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/stat-card|StatCard]] | Summary stat card with trend | `StatCard.tsx` |
-| [[docs/components/monthly-trends-chart|MonthlyTrendsChart]] | Monthly income vs expenses bar chart | `MonthlyTrendsChart.tsx` |
-| [[docs/components/category-pie-chart|CategoryPieChart]] | Spending by category pie chart | `CategoryPieChart.tsx` |
-| [[docs/components/cashflow-chart|CashFlowComparisonChart]] | Current vs previous period comparison | `CashFlowComparisonChart.tsx` |
-| [[docs/components/bank-balances-widget|BankBalancesWidget]] | Bank account balance display | `BankBalancesWidget.tsx` |
-| [[docs/components/monthly-spending-chart|MonthlySpendingChart]] | Monthly spending line chart | `MonthlySpendingChart.tsx` |
+| StatCard | Summary stat card with trend | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
+| MonthlyTrendsChart | Monthly income vs expenses bar chart | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
+| CategoryPieChart | Spending by category pie chart | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
+| CashFlowComparisonChart | Current vs previous period comparison | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
+| BankBalancesWidget | Bank account balance display | [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
+| MonthlySpendingChart | Monthly spending line chart | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
 
 ---
 
@@ -234,6 +234,46 @@ interface BankBalancesWidgetProps {
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 
 Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
+
+---
+
+## MonthlySpendingChart
+
+Renders a Recharts BarChart comparing monthly spending vs income.
+
+### Props
+
+```typescript
+interface MonthlySpendingChartProps {
+  data: Array<{
+    month: string;
+    spending: number;
+    income: number;
+  }>;
+}
+```
+
+### Usage
+
+```tsx
+<MonthlySpendingChart
+  data={[
+    { month: "2025-01", spending: 3200, income: 5000 },
+    { month: "2025-02", spending: 2800, income: 5000 },
+  ]}
+/>
+```
+
+### Features
+
+- Recharts BarChart with two data series (spending in destructive color, income in accent color)
+- Responsive container for adaptive sizing
+- Formatted currency tooltips
+- Compact Y-axis labels for space efficiency
+- Legend for series identification
+- No-data state when data array is empty
+
+**Code**: [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx]]
 
 ---
 

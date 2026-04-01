@@ -1,9 +1,10 @@
 ---
 title: Splits API
-type: api
+type: endpoint
 status: active
-date: 2026-03-23
+date: 2026-03-31
 tags: [api, splits, transactions, debt]
+aliases: [splits-api, owes, debt-tracking, shared-expenses, settle-up, transaction-split]
 description: API endpoints for transaction splitting and debt tracking between recipients
 related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js"]
 ---
@@ -384,6 +385,59 @@ Delete a split.
 }
 ```
 
+## TypeScript Types
+
+**File:** [[apps/frontend/src/types/splits.ts]]
+
+```typescript
+interface TransactionSplit {
+  id: number;
+  transaction_id: number;
+  recipient_id: number;
+  recipient_name?: string;
+  amount: number;
+  amount_paid: number;
+  note?: string;
+  is_settled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TransactionSplitDetail extends TransactionSplit {
+  transaction_date: string;
+  transaction_memo: string;
+  transaction_amount: number;
+  transaction_currency: string;
+  transaction_recipient_name?: string;
+  bank_account: string;
+  remaining: number;
+}
+
+interface OwedSummary {
+  recipient_id: number;
+  recipient_name: string;
+  total_owed: number;
+  total_paid: number;
+  remaining: number;
+  split_count: number;
+}
+
+interface SplitPayment {
+  id: number;
+  split_id: number;
+  amount: number;
+  paid_at: string;
+  note?: string;
+  created_at: string;
+}
+
+interface SplitCreateInput {
+  recipient_id: number;
+  amount: number;
+  note?: string;
+}
+```
+
 ## Use Cases
 
 - **Shared expenses**: Split a restaurant bill or group purchase among friends
@@ -395,3 +449,8 @@ Delete a split.
 - [[docs/api/index]] - API Index
 - [[docs/api/transactions]] - Transactions API
 - [[docs/api/recipients]] - Recipients API
+- [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
+
+## Migrations
+
+- `0009_transaction_splits.py` — Added `transaction_splits` and `split_payments` tables for expense splitting

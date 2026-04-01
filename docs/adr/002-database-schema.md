@@ -2,8 +2,10 @@
 title: ADR 002 - Database Schema
 type: adr
 status: Accepted
-date: 2026-03-28
+date: 2026-03-31
 tags: [architecture, database, schema, postgresql]
+description: Complete database schema design with all tables, columns, enums, indexes, and PostgreSQL table inheritance for investments
+aliases: [database schema, ERD, tables, postgresql schema, migrations]
 ---
 
 # ADR-002: Database Schema Design
@@ -205,11 +207,9 @@ Bank-specific raw transaction storage for deduplication:
 | `sabb_raw_transactions` | SABB | Saudi Arabian British Bank |
 | `wise_raw_transactions` | Wise | Parses Wise transaction exports |
 | `vision_raw_transactions` | Vision | Parses Vision bank format |
-| `custom_raw_transactions` | Custom CSV Import | User-defined column mapping for generic CSVs |
 | `manual_raw_transactions` | Manual Entry | Deduplication for manually entered transactions |
 
-#### Custom CSV Import (`custom_raw_transactions`)
-The `custom_raw_transactions` table stores transactions imported via the **Custom** bank adapter. This adapter allows users to define their own column mappings (date, description, amount, etc.) for CSV files that don't match any supported bank format. The mapping is stored per-import in `raw_metadata`.
+> **Note:** `custom_raw_transactions` was dropped by migration [[alembic/versions/0008_drop_custom_raw_transactions.py]]. Custom CSV imports now use the generic import path without a dedicated raw table.
 
 #### Manual Entry Deduplication (`manual_raw_transactions`)
 The `manual_raw_transactions` table stores manually entered transaction data **before** creating the actual transaction. This enables hash-based deduplication to prevent duplicate entries when users manually add transactions that may already exist in imported data.
@@ -247,11 +247,16 @@ Investment holdings (stocks, ETFs, crypto, real estate, savings, bonds).
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
 
-**Asset Class Enum**: stock, etf, crypto, real_estate, savings, bond
+**Asset Class Enum**: stock, etf, crypto, real_estate, savings, bond, metals
 
 **Price Provider Enum**: manual, binance, yahoo, kinesis, custom
 
-Migration reference: enum value `kinesis` was added via [[alembic/versions/0022_add_kinesis_price_provider_enum.py]].
+Migration references:
+- Price provider enum `kinesis` was added via [[alembic/versions/0022_add_kinesis_price_provider_enum.py]].
+- Price provider enum `custom` was added via [[alembic/versions/0021_update_price_provider_enum.py]].
+- Custom provider history fields and metals view/trigger wiring via [[alembic/versions/0017_investment_custom_provider_history.py]].
+- Metals transactions inheritance split via [[alembic/versions/0018_metals_transactions_inheritance_split.py]].
+- Asset price history cache table via [[alembic/versions/0019_asset_price_history_cache.py]].
 
 **Indexes**:
 - `idx_investments_asset_class` on asset_class
@@ -280,9 +285,14 @@ Buy/sell/dividend transactions for investments.
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
 
-**Transaction Type Enum**: buy, sell, dividend, fee, tax, interest, rent_income, appreciation
+**Transaction Type Enum**: buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift
 
 **Recurrence Interval Enum**: daily, weekly, bi-weekly, monthly, quarterly, yearly
+
+Migration references:
+- `gift` transaction type added via [[alembic/versions/0015_add_gift_portfolio_txn_type.py]].
+- FX rate column added via [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]].
+- Portfolio inheritance tables via [[alembic/versions/0013_investment_inheritance.py]] and [[alembic/versions/0014_investments_view_update_trigger.py]].
 
 **Indexes**:
 - `idx_portfolio_txn_investment_id` on investment_id
@@ -304,6 +314,121 @@ Investment watchlist for tracking.
 | price_provider_id | VARCHAR(200) | NULLABLE | Provider ID |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+
+#### Asset Price History (`asset_price_history`)
+Cached historical price data for investments, used to avoid repeated API calls to price providers.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PRIMARY KEY | Unique identifier |
+| investment_id | INTEGER | NOT NULL | Investment reference |
+| price_date | DATE | NOT NULL | Price date |
+| close_price | NUMERIC(18,6) | NOT NULL | Closing price |
+| source | VARCHAR(50) | DEFAULT 'provider' | Price source |
+| fetched_at | TIMESTAMPTZ | DEFAULT NOW() | Fetch timestamp |
+| updated_at | TIMESTAMPTZ | NULLABLE | Last update |
+
+**Constraints**: UNIQUE(investment_id, price_date)
+
+**Indexes**:
+- `idx_asset_price_history_investment_date` on (investment_id, price_date)
+- `idx_asset_price_history_date` on price_date
+
+Migration references:
+- Table created via [[alembic/versions/0019_asset_price_history_cache.py]].
+- Foreign key constraint dropped via [[alembic/versions/0020_drop_asset_price_history_fk.py]] for flexibility.
+
+#### Portfolio Performance Snapshots (`portfolio_performance_snapshots`)
+Daily pre-computed portfolio performance data for fast chart rendering.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PRIMARY KEY | Unique identifier |
+| snapshot_date | DATE | NOT NULL UNIQUE | Snapshot date |
+| invested | NUMERIC(18,6) | NOT NULL | Total invested amount |
+| value | NUMERIC(18,6) | NOT NULL | Total portfolio value |
+| stocks_etfs_value | NUMERIC(18,6) | NULLABLE | Stocks/ETFs value |
+| crypto_value | NUMERIC(18,6) | NULLABLE | Crypto value |
+| metals_value | NUMERIC(18,6) | NULLABLE | Metals value |
+| cash_value | NUMERIC(18,6) | NULLABLE | Cash value |
+| gain_loss | NUMERIC(18,6) | NULLABLE | Total gain/loss |
+| return_pct | NUMERIC(10,4) | NULLABLE | Return percentage |
+| inflation_adjusted_value | NUMERIC(18,6) | NULLABLE | Inflation-adjusted value |
+| cumulative_inflation | NUMERIC(10,4) | NULLABLE | Cumulative inflation rate |
+| real_return_pct | NUMERIC(10,4) | NULLABLE | Real return percentage |
+| currency | VARCHAR(3) | NOT NULL | Currency code |
+| computed_at | TIMESTAMPTZ | NULLABLE | Computation timestamp |
+| stocks_etfs_invested | NUMERIC(18,6) | NULLABLE | Stocks/ETFs invested |
+| crypto_invested | NUMERIC(18,6) | NULLABLE | Crypto invested |
+| metals_invested | NUMERIC(18,6) | NULLABLE | Metals invested |
+
+**Indexes**:
+- `idx_portfolio_performance_snapshots_date` on snapshot_date
+- `idx_portfolio_performance_snapshots_currency` on currency
+
+Migration references:
+- Table created via [[alembic/versions/0023_portfolio_performance_snapshots.py]].
+- Per-class invested columns added via [[alembic/versions/0024_per_class_invested_columns.py]].
+
+### Transaction Splits Tables
+
+#### Transaction Splits (`transaction_splits`)
+Split transactions among multiple recipients.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PRIMARY KEY | Unique identifier |
+| transaction_id | INTEGER | NOT NULL REFERENCES transactions(id) | Parent transaction |
+| recipient_id | INTEGER | NOT NULL REFERENCES recipients(id) | Split recipient |
+| amount | NUMERIC(15,2) | NOT NULL | Split amount |
+| currency | VARCHAR(10) | DEFAULT 'EUR' | Currency |
+| is_settled | BOOLEAN | DEFAULT false | Settlement status |
+| settled_at | TIMESTAMPTZ | NULLABLE | Settlement timestamp |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+| updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last update |
+
+**Indexes**:
+- `idx_splits_transaction` on transaction_id
+- `idx_splits_recipient` on recipient_id
+- `idx_splits_unsettled` (partial) on (transaction_id, recipient_id) WHERE is_settled = false
+
+Migration references:
+- Table created via [[alembic/versions/0009_transaction_splits.py]].
+
+#### Split Payments (`split_payments`)
+Payment records tracking settlement of transaction splits.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PRIMARY KEY | Unique identifier |
+| split_id | INTEGER | NOT NULL REFERENCES transaction_splits(id) | Split reference |
+| amount | NUMERIC(15,2) | NOT NULL | Payment amount |
+| paid_at | DATE | NOT NULL DEFAULT CURRENT_DATE | Payment date |
+| note | TEXT | NULLABLE | Payment note |
+| created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+
+**Indexes**:
+- `idx_split_payments_split` on split_id
+
+Migration references:
+- Table created via [[alembic/versions/0009_transaction_splits.py]].
+
+### Belgian Inflation Rates
+
+#### Belgian Inflation Rates (`belgian_inflation_rates`)
+Monthly Belgian inflation data from Statbel/Eurostat for inflation-adjusted portfolio returns.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | SERIAL | PRIMARY KEY | Unique identifier |
+| month_date | DATE | NOT NULL UNIQUE | Month date (first of month) |
+| monthly_rate | NUMERIC(10,8) | NOT NULL | Monthly inflation rate |
+| source | VARCHAR(50) | DEFAULT 'statbel' | Data source (statbel/eurostat) |
+| fetched_at | TIMESTAMPTZ | DEFAULT NOW() | Fetch timestamp |
+| updated_at | TIMESTAMPTZ | NULLABLE | Last update |
+
+**Indexes**:
+- `idx_belgian_inflation_month_date` on month_date
 
 ### Supporting Tables
 
@@ -358,19 +483,13 @@ Links transactions to their raw source.
 
 | Enum Name | Values |
 |-----------|--------|
-| asset_class | stock, etf, crypto, real_estate, savings, bond |
-| portfolio_txn_type | buy, sell, dividend, fee, tax, interest, rent_income, appreciation |
+| asset_class | stock, etf, crypto, metals, real_estate, savings, bond |
+| portfolio_txn_type | buy, sell, dividend, fee, tax, interest, rent_income, appreciation, gift |
 | recurrence_interval | daily, weekly, bi-weekly, monthly, quarterly, yearly |
 | price_provider | manual, binance, yahoo, kinesis, custom |
 | revolut_state | COMPLETED, PENDING, REVERTED, DECLINED |
 
-### Materialized Views
-The schema includes materialized views for performance optimization (see [[apps/node-backend/src/services/materializedViewService.js]]):
-- Transaction summaries by category/recipient
-- Portfolio valuations
-- Spending trends
-
-Views are refreshed on startup and after data modifications.
+### Enum Types
 
 ## Consequences
 

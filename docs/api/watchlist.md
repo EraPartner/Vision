@@ -6,7 +6,8 @@ path: /api/watchlist
 description: Investment watchlist management
 date: 2026-03-18
 tags: [api, watchlist, investments]
-related_code: [[apps/node-backend/src/routes/watchlist.js]]
+status: active
+related_code: [[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]
 ---
 
 # Watchlist API
@@ -20,6 +21,14 @@ The Watchlist API manages investment watchlists for tracking stocks, ETFs, and c
 ### GET /api/watchlist
 
 Retrieve all watchlist items.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| limit | integer | 50 | Max items to return |
+| offset | integer | 0 | Items to skip |
+| asset_class | string | null | Filter by asset class (stock, etf, crypto) |
 
 **Response:**
 ```json
@@ -39,7 +48,8 @@ Retrieve all watchlist items.
     }
   ],
   "total": 10,
-  "links": []
+  "limit": 50,
+  "offset": 0
 }
 ```
 

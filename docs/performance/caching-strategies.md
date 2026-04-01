@@ -96,7 +96,26 @@ Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/re
 
 ---
 
-### 5. HTTP Cache Headers
+### 6. Portfolio Performance Snapshots
+
+**Service:** `portfolioPerformanceSnapshotService.js`  
+**Storage:** PostgreSQL (`portfolio_performance_snapshots` table)
+
+**Features:**
+- Daily snapshots computed and stored for portfolio performance charts
+- Per-currency storage (EUR, USD, etc.) for multi-currency support
+- `ON CONFLICT` upsert pattern for idempotent recomputation
+- Batch insert (500 rows/batch) for efficient bulk writes
+- Includes per-class breakdowns: stocks/ETFs, crypto, metals (both value and invested capital)
+- Inflation-adjusted values using Belgian monthly inflation rates
+- Spike sanitization: isolated one-day anomalies replaced with geometric interpolation
+- Frontend reads from persisted DB table instead of computing on-demand
+
+Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[alembic/versions/0023_portfolio_performance_snapshots.py]], [[alembic/versions/0024_per_class_invested_columns.py]]
+
+---
+
+### 7. HTTP Cache Headers
 
 Static assets use long-lived caching:
 
@@ -130,6 +149,7 @@ clearMvCache();
 - Price feeds: 5-minute TTL
 - Materialized views: After data changes
 - Net worth route cache: 60-second per-currency TTL
+- Portfolio performance snapshots: Recomputed on-demand, stored in DB
 
 ---
 

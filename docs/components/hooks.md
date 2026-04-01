@@ -2,7 +2,7 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-03-25
+date: 2026-03-31
 tags: [components, hooks, react-query]
 description: Custom React hooks for data fetching and state management
 related_code: ["apps/frontend/src/hooks"]
@@ -18,23 +18,22 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 
 | Hook | Description | File |
 |------|-------------|------|
-| [[docs/components/use-transactions|useTransactions]] | Transaction CRUD | `useTransactions.ts` |
-| [[docs/components/use-categories|useCategories]] | Category management | `useCategories.ts` |
-| [[docs/components/use-recipients|useRecipients]] | Recipient management | `useRecipients.ts` |
-| [[docs/components/use-portfolio|usePortfolio]] | Investment portfolio | `usePortfolio.ts` |
-| [[docs/components/use-planned-payments|usePlannedPayments]] | Planned transactions | `usePlannedPayments.ts` |
-| [[docs/components/use-statistics|useStatistics]] | Analytics data | `useStatistics.ts` |
-| [[docs/components/use-splits|useSplits]] | Debt tracking | `useSplits.ts` |
-| [[docs/components/use-saved-charts|useSavedCharts]] | Saved chart configs | `useSavedCharts.ts` |
-| [[docs/components/use-watchlist|useWatchlist]] | Watchlist management | `useWatchlist.ts` |
+| `useTransactions()` | Transaction CRUD | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]] |
+| `useCategories()` | Category management | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
+| `useRecipients()` | Recipient management | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]] |
+| `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
+| `usePlannedPayments()` | Planned transactions | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]] |
+| `useStatistics()` | Analytics data | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]] |
+| `useSplits()` | Debt tracking | [[apps/frontend/src/hooks/useSplits.ts\|useSplits.ts]] |
+| `useSavedCharts()` | Saved chart configs | [[apps/frontend/src/hooks/useSavedCharts.ts\|useSavedCharts.ts]] |
 
 ### UI State Hooks
 
 | Hook | Description | File |
 |------|-------------|------|
-| [[docs/components/use-widget-visibility|useWidgetVisibility]] | Widget visibility | `useWidgetVisibility.ts` |
-| [[docs/components/use-filtered-dashboard-stats|useFilteredDashboardStats]] | Filtered dashboard data | `useFilteredDashboardStats.ts` |
-| [[docs/components/use-confirm-dialog|useConfirmDialog]] | Confirmation dialogs | `useConfirmDialog.tsx` |
+| `useWidgetVisibility()` | Widget visibility | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]] |
+| `useFilteredDashboardStats()` | Filtered dashboard data | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
+| `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
 
 ### Utility Hooks
 
@@ -42,6 +41,13 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useDebounce()` | Debounce value changes | `useDebounce.ts` |
 | `useToast()` | Toast notifications | `use-toast.ts` |
+| `useIsMobile()` | Responsive breakpoint check | `use-mobile.tsx` |
+
+### Portfolio Hooks
+
+| Hook | Description | File |
+|------|-------------|------|
+| `usePortfolioTaxAdjustments()` | Per-investment tax/fee adjustments by year | `usePortfolioTaxAdjustments.ts` |
 
 ---
 
@@ -401,6 +407,126 @@ All data hooks use [TanStack Query](https://tanstack.com/query) for:
 ['portfolio']
 ['planned-payments', { upcoming: true }]
 ```
+
+---
+
+## useIsMobile
+
+Responsive breakpoint hook for mobile detection.
+
+### API
+
+```typescript
+const isMobile = useIsMobile();
+```
+
+### Behavior
+
+- Returns `true` when viewport width is less than 768px
+- Uses `window.matchMedia` for efficient change detection
+- Returns `false` during SSR/initial render (before hydration)
+- Breakpoint constant: `MOBILE_BREAKPOINT = 768`
+
+### Usage
+
+```tsx
+const isMobile = useIsMobile();
+
+return (
+  <div className={isMobile ? "mobile-layout" : "desktop-layout"}>
+    {/* Responsive content */}
+  </div>
+);
+```
+
+---
+
+## usePortfolioTaxAdjustments
+
+Hook for managing per-investment tax and fee adjustments by tax year. Used by the Portfolio Tax page to manually adjust tax calculations for individual holdings.
+
+### API
+
+```typescript
+const {
+  isLoading,           // Loading state (waiting for preloaded setting)
+  adjustments,         // Full adjustment map: { "year:investmentId": { taxes, fees } }
+  getAdjustment,       // (taxYear, investmentId) => { taxes, fees }
+  setAdjustment,       // (taxYear, investmentId, { taxes, fees }) => void
+  setManyForYear,      // (taxYear, { investmentId: { taxes, fees } }) => void
+  saveManyForYear,     // (taxYear, { investmentId: { taxes, fees } }) => Promise<void>
+  saveAdjustments,     // (next?) => Promise<void>
+  byYear,              // (taxYear) => { investmentId: { taxes, fees } }
+} = usePortfolioTaxAdjustments();
+```
+
+### Storage
+
+- **Key**: `portfolio_tax_adjustments_v1` (stored via settings API)
+- **Format**: `Record<string, { taxes: number, fees: number }>` where key is `"taxYear:investmentId"`
+- **Preloading**: Uses `SettingsPreloadContext` for fast initial load
+
+### Usage
+
+```tsx
+const { getAdjustment, saveManyForYear, byYear } = usePortfolioTaxAdjustments();
+
+// Get adjustment for a specific investment and year
+const adj = getAdjustment(2025, 42);
+console.log(adj.taxes, adj.fees);
+
+// Save adjustments for multiple investments in one year
+await saveManyForYear(2025, {
+  42: { taxes: 150, fees: 25 },
+  43: { taxes: 80, fees: 10 },
+});
+
+// Get all adjustments for a year
+const yearAdjustments = byYear(2025);
+```
+
+---
+
+## Utility Modules
+
+### sanitize.ts
+
+Input sanitization and XSS prevention utilities. These are pure functions (not React hooks) used throughout the frontend to sanitize user input before rendering or API submission.
+
+**Code**: [[apps/frontend/src/utils/sanitize.ts]]
+
+| Function | Description |
+|----------|-------------|
+| `escapeHtml(str: string)` | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) to prevent XSS when rendering user content as text |
+| `stripHtml(str: string)` | Removes all HTML tags from a string using regex |
+| `sanitizeFilename(filename: string)` | Sanitizes filenames: replaces non-alphanumeric chars with `_`, collapses dots, prevents leading dots, truncates to 255 chars |
+| `sanitizeInput(input: string, maxLength?: number)` | Validates and sanitizes string input: trims whitespace, strips HTML tags, limits to max length (default 1000) |
+| `isValidUrl(url: string)` | Validates that a string is a safe URL (http/https protocol only) |
+| `sanitizeNumber(value: string | number)` | Sanitizes numeric input: returns `NaN` for non-numeric strings, passes through valid numbers |
+
+### statisticsProcessing.ts
+
+Shared processing module for statistics aggregation. `useStatistics` delegates pivot aggregation and recipient yearly aggregation to this module.
+
+**Code**: [[apps/frontend/src/hooks/statisticsProcessing.ts]]
+
+| Export | Description |
+|--------|-------------|
+| `aggregatePivotData()` | Computes pivot table aggregations for the Statistics page category/recipient breakdowns |
+| `aggregateRecipientYearly()` | Computes yearly aggregations per recipient for the Recipient Insights view |
+
+### currency.ts
+
+Currency formatting and parsing utilities.
+
+**Code**: [[apps/frontend/src/utils/currency.ts]]
+
+| Function | Description |
+|----------|-------------|
+| `formatCurrency(amount, currency?, locale?)` | Formats a number as currency string using `Intl.NumberFormat` |
+| `getCurrencyFormatDefaults(currency)` | Returns default formatting options (decimals, symbol) for a currency |
+| `numberFormatToLocale(appSettings)` | Derives the locale string from app settings for number formatting |
+| `parseCurrency(input, currency?)` | Parses a currency-formatted string back to a number |
 
 ---
 

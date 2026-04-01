@@ -1,13 +1,17 @@
 ---
 title: Architecture Diagrams
-description: Index of all UML diagrams for the Vision project
-date: 2026-03-23
-tags: [architecture, uml, plantuml, diagrams]
+type: architecture-index
+status: active
+date: 2026-03-31
+tags: [architecture, index, uml, plantuml, diagrams]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams
+aliases: [architecture, diagrams, UML, system design]
 ---
 
 # Architecture Diagrams
 
-This document provides an index of all UML diagrams generated from the Vision project codebase.
+> [!abstract] Overview
+> Complete collection of UML diagrams for the Vision project, generated from source code and maintained alongside it. All diagrams use PlantUML and render in Obsidian.
 
 ## Overview
 

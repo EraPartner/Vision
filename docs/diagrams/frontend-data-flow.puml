@@ -79,9 +79,10 @@ package "Backend (Node.js)" {
 
 package "External Services" {
   class ECB (Exchange Rates)
-  class CoinGecko (Crypto Prices)
-  class Yahoo Finance (Stock Prices)
-  class Kraken (Crypto Prices)
+  class Binance (Crypto Prices)
+  class YahooFinance (Stock Prices)
+  class Kinesis (US Stock Prices)
+  class Statbel (Belgian Inflation)
 }
 
 ' Relationships
@@ -100,8 +101,9 @@ RESTEndpoints --> Repositories
 Repositories --> Database
 
 CurrencyConversionService --> ECB
-PriceProviderService --> CoinGecko
+PriceProviderService --> Binance
 PriceProviderService --> YahooFinance
-PriceProviderService --> Kraken
+PriceProviderService --> Kinesis
+BelgianInflationService --> Statbel
 
 @enduml

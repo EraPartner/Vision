@@ -16,16 +16,16 @@ Components for managing investment portfolios, including stocks, crypto, metals,
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/add-investment-dialog|AddInvestmentDialog]] | Add new investment | `AddInvestmentDialog.tsx` |
-| [[docs/components/add-portfolio-txn-dialog|AddPortfolioTxnDialog]] | Record buy/sell transactions | `AddPortfolioTxnDialog.tsx` |
-| EditInvestmentDialog | Edit existing investment details | `EditInvestmentDialog.tsx` |
-| EditPortfolioTxnDialog | Edit existing portfolio transaction | `EditPortfolioTxnDialog.tsx` |
-| [[docs/components/investment-detail-dialog|InvestmentDetailDialog]] | View investment details | `InvestmentDetailDialog.tsx` |
-| [[docs/components/add-to-watchlist-dialog|AddToWatchlistDialog]] | Add symbol to watchlist | `AddToWatchlistDialog.tsx` |
-| [[docs/components/portfolio-news-feed|PortfolioNewsFeed]] | Market news for holdings | `PortfolioNewsFeed.tsx` |
-| [[docs/components/watchlist-chart-dialog|WatchlistChartDialog]] | Chart for watchlist symbol | `WatchlistChartDialog.tsx` |
-| [[docs/components/add-investment-from-market-dialog|AddInvestmentFromMarketDialog]] | Add investment from market search | `AddInvestmentFromMarketDialog.tsx` |
-| [[docs/components/portfolio-tax-adjustments-dialog|PortfolioTaxAdjustmentsDialog]] | Tax adjustments for investments | `PortfolioTaxAdjustmentsDialog.tsx` |
+| AddInvestmentDialog | Add new investment | [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx\|AddInvestmentDialog.tsx]] |
+| AddPortfolioTxnDialog | Record buy/sell transactions | [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx\|AddPortfolioTxnDialog.tsx]] |
+| EditInvestmentDialog | Edit existing investment details | [[apps/frontend/src/components/portfolio/EditInvestmentDialog.tsx\|EditInvestmentDialog.tsx]] |
+| EditPortfolioTxnDialog | Edit existing portfolio transaction | [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx\|EditPortfolioTxnDialog.tsx]] |
+| InvestmentDetailDialog | View investment details | [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx\|InvestmentDetailDialog.tsx]] |
+| AddToWatchlistDialog | Add symbol to watchlist | [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx\|AddToWatchlistDialog.tsx]] |
+| PortfolioNewsFeed | Market news for holdings | [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx\|PortfolioNewsFeed.tsx]] |
+| WatchlistChartDialog | Chart for watchlist symbol | [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx\|WatchlistChartDialog.tsx]] |
+| AddInvestmentFromMarketDialog | Add investment from market search | [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx\|AddInvestmentFromMarketDialog.tsx]] |
+| PortfolioTaxAdjustmentsDialog | Tax adjustments for investments | [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx\|PortfolioTaxAdjustmentsDialog.tsx]] |
 
 ---
 
@@ -306,8 +306,57 @@ Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], 
 | Hook | Description |
 |------|-------------|
 | `usePortfolio()` | Portfolio data and operations |
-| `useWatchlist()` | Watchlist management |
 | `usePortfolioTaxAdjustments()` | Tax adjustment data |
+
+---
+
+## TypeScript Types
+
+### Watchlist Types
+
+**File:** [[apps/frontend/src/types/watchlist.ts]]
+
+```typescript
+interface WatchlistItem {
+  id: number;
+  name: string;
+  symbol: string | null;
+  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
+  target_price: number;
+  currency: string;
+  notes: string | null;
+  price_provider_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WatchlistCreate {
+  name: string;
+  symbol?: string;
+  asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
+  target_price: number;
+  currency?: string;
+  notes?: string;
+  price_provider_id?: string;
+}
+
+interface WatchlistUpdate {
+  name?: string;
+  symbol?: string;
+  asset_class?: 'stock' | 'etf' | 'crypto' | 'metals';
+  target_price?: number;
+  currency?: string;
+  notes?: string;
+  price_provider_id?: string;
+}
+
+interface WatchlistListResponse {
+  items: WatchlistItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+```
 
 ---
 

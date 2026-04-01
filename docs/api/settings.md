@@ -6,7 +6,8 @@ path: /api/settings
 description: User preferences and application settings
 date: 2026-03-26
 tags: [api, settings, preferences]
-related_code: [[apps/node-backend/src/routes/settings.js]]
+status: active
+related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]]
 ---
 
 # Settings API
@@ -142,4 +143,7 @@ Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/fronten
 
 ## Related
 
-- [[docs/adr/002-database-schema|Database Schema]]
+- [[docs/adr/002-database-schema|Database Schema]] - `user_settings` table definition
+- [[docs/features/views|Views & Pages]] - How settings affect page rendering
+- [[docs/components/form-dialogs|Form Dialogs]] - Settings propagation to forms
+- [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings

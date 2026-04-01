@@ -3,7 +3,7 @@ title: ADR-003: Bug Fixes - UI State Consistency, Category Names, Dashboard Char
 type: adr
 status: Accepted
 date: 2026-03-23
-tags: [bug-fix, frontend, backend, ui, statistics, recipients, dashboard, planned-payments, splits, settings, database, schema, react-query]
+tags: [bug-fix, frontend, backend, ui, database]
 description: Fixed UI/data consistency issues across virtual tables, statistics, planned-payment date handling, split settlement/export flows, settings defaults, and transaction filtering
 related_code: 
   - "apps/frontend/src/pages/RecipientsPage.tsx"

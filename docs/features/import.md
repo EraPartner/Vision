@@ -2,10 +2,11 @@
 title: Feature - CSV Import & Deduplication
 type: feature
 status: active
-date: 2026-03-18
+date: 2026-03-31
 tags: [feature, import, csv, deduplication]
+aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
-related_code: ["apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/importService.js", "apps/node-backend/src/routes/importRoutes.js"]
+related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -26,6 +27,90 @@ Vision provides comprehensive CSV import capabilities with support for multiple 
 | Wise | Multi-currency transfers | Transfer ID, exchange rate |
 | Vision | Internal format | Standard transaction fields |
 | Custom | User-defined | Configurable column mapping |
+
+## Import Service Architecture
+
+Vision has **three** CSV import services, each serving a different purpose:
+
+### 1. `importService.js` — Legacy Import
+**File:** [[apps/node-backend/src/services/importService.js]]
+
+The original import service. Processes CSV files sequentially, using field-based deduplication for generic banks and hash-based deduplication for known banks. Falls back to `isDuplicateByFields()` when raw tables aren't available.
+
+**Use case:** Small files, generic bank formats, backward compatibility.
+
+### 2. `streamingImportService.js` — Streaming Import with Progress
+**File:** [[apps/node-backend/src/services/streamingImportService.js]]
+
+Optimized for large files with real-time progress reporting via callbacks (used by SSE endpoints). Key performance features:
+- **Parallel batch processing**: Rows processed in concurrent batches of 20 (`IMPORT_BATCH_SIZE`), capped to avoid DB pool overload
+- **Single-round-trip recipient upsert**: `INSERT ... ON CONFLICT DO NOTHING RETURNING id` with fallback SELECT (down from 2-4 round-trips)
+- **Single-round-trip raw dedup**: `INSERT ... ON CONFLICT DO NOTHING RETURNING *` — null return means duplicate
+- **Fire-and-forget non-critical writes**: Bank account linking and raw reference creation don't block import outcome
+- **Promise.allSettled per batch**: One bad row doesn't stall others
+
+**Progress phases:** `counting` → `parsing` → `importing` → `complete`/`error`
+
+**Use case:** Large CSV files, UI progress display, SSE streaming endpoint (`POST /api/import/csv/stream`).
+
+### 3. `rawTransactionImportService.js` — Raw Data Preservation Import
+**File:** [[apps/node-backend/src/services/rawTransactionImportService.js]]
+
+Orchestrates CSV import with full raw data preservation. Architecture:
+1. Parse CSV via bank adapter
+2. Check raw table deduplication (hash-based per bank)
+3. Store raw data in bank-specific table
+4. Create normalized transaction record
+5. Link transaction to raw data via `transaction_raw_references`
+
+Falls back to `importService.js` for generic/unsupported bank types.
+
+**Use case:** Audit trail requirements, re-import capability, supported banks (Belfius, Revolut, KBC, SABB, Wise, Vision).
+
+### 4. `dataImportService.js` — Recipients & Categories Bulk Import
+**File:** [[apps/node-backend/src/services/dataImportService.js]]
+
+Handles bulk CSV import for **recipients** and **categories** (not transactions).
+
+**Recipient CSV format:**
+| Column | Required | Notes |
+|--------|----------|-------|
+| name | Yes | Recipient name |
+| bank_account | No | IBAN or account number |
+| address | No | Stored in `notes` field |
+| category | No | Format: `GENERAL:DETAIL` |
+
+**Category CSV format:**
+| Column | Required | Notes |
+|--------|----------|-------|
+| category | Yes | Format: `GENERAL:DETAIL` (falls back to first column) |
+
+Both use `createOrGet` pattern — existing records are skipped, not overwritten.
+
+---
+
+## Supporting Services
+
+### `textNormalization.js`
+**File:** [[apps/node-backend/src/services/textNormalization.js]]
+
+Text processing utilities for import and recipient matching:
+
+| Function | Purpose |
+|----------|---------|
+| `cleanRecipientName()` | Strips common prefixes ("Payment from", "Transfer to", etc.) |
+| `cleanKbcRecipientName()` | KBC-specific parsing (handles Dutch/French transaction types and separators) |
+| `normalizeToUppercase()` | Uppercase + trim validation |
+| `normalizeForMatching()` | Canonical form for recipient matching — filters initials, sorts tokens alphabetically, removes punctuation. E.g., "John F Doe" → "DOE JOHN" |
+| `formatAmountString()` | Handles European decimal formats (comma as decimal separator) |
+| `extractCurrencyCode()` | Extracts 3-letter currency code from strings |
+
+### `deduplication.js`
+**File:** [[apps/node-backend/src/services/deduplication.js]]
+
+Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|recipient|memo|bank_account` for raw table dedup, and direct field matching for the legacy path.
+
+---
 
 ## Import Process
 
@@ -71,8 +156,9 @@ Each raw transaction gets a unique hash stored in its respective bank-specific t
 - `sabb_raw_transactions.deduplication_hash`
 - `wise_raw_transactions.deduplication_hash`
 - `vision_raw_transactions.deduplication_hash`
-- `custom_raw_transactions.deduplication_hash` - Custom CSV imports
 - `manual_raw_transactions.deduplication_hash` - Manual entry deduplication
+
+> **Note:** `custom_raw_transactions` was dropped by migration `0008_drop_custom_raw_transactions.py`. Custom CSV imports now use the generic import path without a dedicated raw table.
 
 ### Field-based Matching
 For manual transactions, checks:
@@ -94,7 +180,7 @@ For unsupported banks, use custom import:
 POST /api/import/csv/custom
 ```
 
-**Storage**: Custom imports are stored in `custom_raw_transactions` table, which allows user-defined column mapping for any CSV format.
+**Storage**: Custom imports use the generic import path with field-based deduplication (no dedicated raw table since migration `0008`).
 
 Parameters:
 - `bank_name`: Custom identifier

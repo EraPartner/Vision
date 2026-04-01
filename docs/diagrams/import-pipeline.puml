@@ -117,8 +117,7 @@ note right of RawTransactionsTable
   - sabb_raw_transactions
   - wise_raw_transactions
   - vision_raw_transactions
-  - custom_raw_transactions
-  (Custom adapter storage)
+  (Bank-specific raw storage with SHA-256 deduplication)
 end note
 
 @enduml

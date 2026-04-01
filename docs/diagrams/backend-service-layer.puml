@@ -98,10 +98,8 @@ package "Supporting Services" {
   }
 
   class IBANService {
-    +validate(iban): boolean
-    +format(iban): string
-    +extractCountry(iban): string
-    +extractBankCode(iban): string
+    +normalizeIban(iban): string
+    +isValidIban(iban): boolean
   }
 
   class MaterializedViewService {

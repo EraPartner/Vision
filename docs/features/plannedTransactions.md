@@ -2,10 +2,11 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-03-26
-tags: [feature, planned, recurring, bills]
+date: 2026-03-31
+tags: [feature, planned, recurring, bills, loans]
+aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/loanRepaymentService.js", "apps/node-backend/src/services/recurrenceService.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
 # Planned Transactions
@@ -153,6 +154,65 @@ Useful for:
 
 ---
 
+## Supporting Services
+
+### `recurrenceService.js`
+**File:** [[apps/node-backend/src/services/recurrenceService.js]]
+
+Calculates next occurrence dates for recurring planned transactions.
+
+**Supported Patterns:** `daily`, `weekly`, `biweekly`, `monthly`, `quarterly`, `yearly`, and custom `every N days`.
+
+| Function | Purpose |
+|----------|---------|
+| `calculateNextDate(currentDate, pattern)` | Returns next date based on recurrence pattern |
+| `isValidPattern(pattern)` | Validates pattern string |
+| `getSupportedPatterns()` | Returns array of supported pattern names |
+
+### `loanRepaymentService.js`
+**File:** [[apps/node-backend/src/services/loanRepaymentService.js]]
+
+Generates amortization schedules for loan-type planned transactions.
+
+**Supported Loan Types:**
+- `amortizing` — Fixed monthly payment (principal + interest), calculated using standard annuity formula
+- `fixed_principal` — Equal principal payments + declining interest
+- `interest_only` — Interest-only payments, full principal due at final installment
+
+**Key Functions:**
+| Function | Purpose |
+|----------|---------|
+| `validateLoanConfig(config)` | Validates loan parameters (principal, rate, term, payment day, start date). Max term: 600 months (50 years) |
+| `generateLoanRepaymentSchedule(config)` | Generates full amortization schedule with per-installment breakdown (principal, interest, remaining) |
+
+**Schedule Output:** Each installment includes `installment_number`, `due_date`, `payment_amount`, `principal_amount`, `interest_amount`, `remaining_principal`.
+
+### `recurringDetectionService.js`
+**File:** [[apps/node-backend/src/services/recurringDetectionService.js]]
+
+Analyzes transaction history to detect recurring payment patterns and suggests planned transactions.
+
+**Detection Algorithm:**
+1. Groups transactions by recipient
+2. Calculates intervals between consecutive transactions
+3. Matches against known patterns (weekly, biweekly, monthly, quarterly, yearly) with tolerance
+4. Detects custom regular intervals using coefficient of variation (< 25%)
+5. Flags amount changes (> 5% from median)
+6. Computes confidence score (0-100) based on consistency, occurrence count, and amount stability
+
+**Minimum Requirements:** 3 occurrences to consider a pattern.
+
+**Output per Pattern:**
+- `detectedPattern` — Pattern name (weekly, monthly, custom, etc.)
+- `intervalDays` — Median interval in days
+- `consistency` — Percentage match (0-100)
+- `confidence` — Overall confidence score
+- `predictedNext` — Predicted next occurrence date
+- `amountChanges` — Recent amount deviations
+- `isAlreadyPlanned` — Whether recipient already has a planned transaction
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -208,8 +268,67 @@ When a planned transaction is executed:
 
 ---
 
+## Frontend Components
+
+### PlannedPaymentForm
+
+Dialog form for creating and editing planned transactions. Supports both one-time payments and recurring payments with optional loan configuration.
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `open` | `boolean` | Dialog open state |
+| `onOpenChange` | `(open) => void` | Open state change handler |
+| `onSubmit` | `(data) => void` | Submit handler with PlannedPayment payload |
+| `initial` | `PlannedPayment?` | Pre-fill values for editing mode |
+
+**Form Fields:**
+- Name, amount, currency, due date
+- Recurring toggle with frequency selector (daily, weekly, biweekly, monthly, quarterly, yearly, custom)
+- Loan toggle with loan type (amortizing, fixed_principal, interest_only)
+- Loan fields: principal, annual interest rate, term months, payment day
+- Recurring limits: end date, max occurrences
+- Recipient, category, bank account, notes, URL
+
+**Validation:**
+- Name and due date always required
+- Amount required for non-loan payments
+- Loan requires principal, rate, and term (1-600 months)
+- When loan is enabled, recurrence inputs are cleared before submission
+
+**Code**: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]]
+
+### RecurringDetectionPanel
+
+Panel that displays detected recurring payment patterns from the backend. Allows users to review patterns, dismiss false positives, and convert patterns into planned transactions.
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `onCreatePlanned` | `(pattern) => void` | Called when user creates a planned from a pattern |
+
+**Features:**
+- Fetches patterns via `apiClient.getRecurringPatterns()`
+- Displays pattern details: frequency, amount, recipient, date range, occurrence count
+- Shows confidence indicators (amount stability, interval consistency)
+- Dismiss patterns (persisted to localStorage + backend settings)
+- Create planned transactions from detected patterns
+- Expandable/collapsible pattern cards
+- Amount change detection warnings
+
+**Dismissal Storage:** Uses dual storage — localStorage for immediate persistence and backend settings API for cross-device sync. Storage key: `dismissed_recurring_patterns`.
+
+**Code**: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]]
+
+---
+
 ## Related Documentation
 
 - [[docs/api/plannedTransactions]] - Planned Transactions API
 - [[docs/api/transactions]] - Transactions API
 - [[docs/api/recipients]] - Recipients API
+
+## Migrations
+
+- `0002_add_url_to_planned_transactions.py` — Added `url` field for linking to billing portals
+- `0011_planned_loans.py` — Added loan support fields (`is_loan`, `loan_type`, `loan_principal`, `loan_annual_interest_rate`, `loan_term_months`, `loan_start_date`, `loan_payment_day`, `loan_regular_payment_amount`, `loan_first_payment_date`) and `planned_transaction_loan_schedule` table

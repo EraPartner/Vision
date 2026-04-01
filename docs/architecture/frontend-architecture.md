@@ -1,8 +1,11 @@
 ---
 title: Frontend Architecture
+type: architecture
+status: active
 description: React frontend architecture and diagrams
 date: 2026-03-23
 tags: [architecture, frontend, uml, plantuml, react]
+aliases: [frontend architecture, react architecture, frontend design]
 ---
 
 # Frontend Architecture
@@ -249,6 +252,7 @@ package "Portfolio" {
   class MarketLookupPage <<path: /portfolio/market>>
   class StocksPage <<path: /portfolio/stocks>>
   class CryptoPage <<path: /portfolio/crypto>>
+  class MetalsPage <<path: /portfolio/metals>>
   class RealEstatePage <<path: /portfolio/real-estate>>
   class SavingsPage <<path: /portfolio/savings>>
   class PerformancePage <<path: /portfolio/performance>>
@@ -276,6 +280,7 @@ AppLayout --> TaxOverviewPage
 AppLayout --> PortfolioOverviewPage
 PortfolioOverviewPage --> StocksPage
 PortfolioOverviewPage --> CryptoPage
+PortfolioOverviewPage --> MetalsPage
 PortfolioOverviewPage --> RealEstatePage
 PortfolioOverviewPage --> SavingsPage
 PortfolioOverviewPage --> PerformancePage

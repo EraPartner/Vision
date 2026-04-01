@@ -4,6 +4,7 @@ type: guide
 description: Production deployment instructions
 date: 2026-03-28
 tags: [guide, deployment, production, docker, electron]
+status: active
 related_code: [[docker-compose.yml]]
 ---
 
@@ -268,6 +269,7 @@ docker stats
 ## Related
 
 - [[docs/guides/setup|Setup Guide]] - Local development setup
+- [[docs/guides/migrations|Migration Guide]] - Database schema management with Alembic
 - [[docs/guides/contributing|Contributing Guide]] - Development contributions
 - [[docs/performance/index|Performance Documentation]]
 - [[docs/security/index|Security Documentation]]

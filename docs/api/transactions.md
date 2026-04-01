@@ -6,7 +6,9 @@ path: /api/transactions
 description: CRUD operations for financial transactions
 date: 2026-03-25
 tags: [api, transactions, finance]
-related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
+status: active
+aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
+related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
 ---
 
 # Transactions API
@@ -173,6 +175,80 @@ Permanently delete a transaction (hard delete).
   "details": { "method": "hard delete" },
   "links": []
 }
+```
+
+## Examples
+
+### List Transactions
+
+**curl:**
+```bash
+curl "http://localhost:3002/api/transactions?limit=10&active=true"
+```
+
+**apiClient:**
+```ts
+const { data } = await apiClient.getTransactions({ limit: 10, active: true });
+```
+
+### Create Transaction
+
+**curl:**
+```bash
+curl -X POST http://localhost:3002/api/transactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "date": "2026-01-15",
+    "bank_account": "BE12 3456 7890 1234",
+    "recipient_id": 1,
+    "amount": -75.50,
+    "memo": "Weekly shopping",
+    "currency": "EUR"
+  }'
+```
+
+**apiClient:**
+```ts
+const txn = await apiClient.createTransaction({
+  date: '2026-01-15',
+  bank_account: 'BE12 3456 7890 1234',
+  recipient_id: 1,
+  amount: -75.50,
+  memo: 'Weekly shopping',
+  currency: 'EUR',
+});
+```
+
+### Update Transaction
+
+**curl:**
+```bash
+curl -X PATCH http://localhost:3002/api/transactions/123 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "category_id": 6,
+    "comment": "Updated comment"
+  }'
+```
+
+**apiClient:**
+```ts
+const updated = await apiClient.updateTransaction(123, {
+  category_id: 6,
+  comment: 'Updated comment',
+});
+```
+
+### Delete Transaction
+
+**curl:**
+```bash
+curl -X DELETE http://localhost:3002/api/transactions/123
+```
+
+**apiClient:**
+```ts
+await apiClient.deleteTransaction(123);
 ```
 
 ## Transaction Amounts

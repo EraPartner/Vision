@@ -22,88 +22,88 @@ All UI components are located in `apps/frontend/src/components/ui/` and are base
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/button|Button]] | Versatile button with multiple variants | `button.tsx` |
-| [[docs/components/button|IconButton]] | Square icon-only button | `button.tsx` |
-| [[docs/components/command|Command]] | Searchable command menu | `command.tsx` |
+| Button | Versatile button with multiple variants | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]] |
+| IconButton | Square icon-only button | [[apps/frontend/src/components/ui/button.tsx\|button.tsx]] |
+| Command | Searchable command menu | [[apps/frontend/src/components/ui/command.tsx\|command.tsx]] |
 
 ### Forms
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/input|Input]] | Text input field | `input.tsx` |
-| [[docs/components/textarea|Textarea]] | Multi-line text input | `textarea.tsx` |
-| [[docs/components/select|Select]] | Dropdown select | `select.tsx` |
-| [[docs/components/checkbox|Checkbox]] | Binary checkbox | `checkbox.tsx` |
-| [[docs/components/radio-group|RadioGroup]] | Radio button group | `radio-group.tsx` |
-| [[docs/components/switch|Switch]] | Toggle switch | `switch.tsx` |
-| [[docs/components/slider|Slider]] | Range slider | `slider.tsx` |
-| [[docs/components/label|Label]] | Form label | `label.tsx` |
-| [[docs/components/form|Form]] | Form wrapper with validation | `form.tsx` |
+| Input | Text input field | [[apps/frontend/src/components/ui/input.tsx\|input.tsx]] |
+| Textarea | Multi-line text input | [[apps/frontend/src/components/ui/textarea.tsx\|textarea.tsx]] |
+| Select | Dropdown select | [[apps/frontend/src/components/ui/select.tsx\|select.tsx]] |
+| Checkbox | Binary checkbox | [[apps/frontend/src/components/ui/checkbox.tsx\|checkbox.tsx]] |
+| RadioGroup | Radio button group | [[apps/frontend/src/components/ui/radio-group.tsx\|radio-group.tsx]] |
+| Switch | Toggle switch | [[apps/frontend/src/components/ui/switch.tsx\|switch.tsx]] |
+| Slider | Range slider | [[apps/frontend/src/components/ui/slider.tsx\|slider.tsx]] |
+| Label | Form label | [[apps/frontend/src/components/ui/label.tsx\|label.tsx]] |
+| Form | Form wrapper with validation | [[apps/frontend/src/components/ui/form.tsx\|form.tsx]] |
 
 ### Feedback
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/alert|Alert]] | Alert message box | `alert.tsx` |
-| [[docs/components/alert-dialog|AlertDialog]] | Confirmation dialog | `alert-dialog.tsx` |
-| [[docs/components/toast|Toast]] | Temporary notification | `toast.tsx` |
-| [[docs/components/sonner|Sonner]] | Toast notification system | `sonner.tsx` |
-| [[docs/components/progress|Progress]] | Progress bar | `progress.tsx` |
-| [[docs/components/skeleton|Skeleton]] | Loading placeholder | `skeleton.tsx` |
+| Alert | Alert message box | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]] |
+| AlertDialog | Confirmation dialog | [[apps/frontend/src/components/ui/alert-dialog.tsx\|alert-dialog.tsx]] |
+| Toast | Temporary notification | [[apps/frontend/src/components/ui/toast.tsx\|toast.tsx]] |
+| Sonner | Toast notification system | [[apps/frontend/src/components/ui/sonner.tsx\|sonner.tsx]] |
+| Progress | Progress bar | [[apps/frontend/src/components/ui/progress.tsx\|progress.tsx]] |
+| Skeleton | Loading placeholder | [[apps/frontend/src/components/ui/skeleton.tsx\|skeleton.tsx]] |
 
 ### Layout
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/card|Card]] | Content container | `card.tsx` |
-| [[docs/components/sheet|Sheet]] | Side drawer panel | `sheet.tsx` |
-| [[docs/components/drawer|Drawer]] | Bottom/side drawer | `drawer.tsx` |
-| [[docs/components/separator|Separator]] | Visual divider | `separator.tsx` |
-| [[docs/components/accordion|Accordion]] | Collapsible sections | `accordion.tsx` |
-| [[docs/components/collapsible|Collapsible]] | Collapsible content | `collapsible.tsx` |
-| [[docs/components/resizable|Resizable]] | Resizable panel | `resizable.tsx` |
-| [[docs/components/aspect-ratio|AspectRatio]] | Fixed aspect ratio | `aspect-ratio.tsx` |
+| Card | Content container | [[apps/frontend/src/components/ui/card.tsx\|card.tsx]] |
+| Sheet | Side drawer panel | [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]] |
+| Drawer | Bottom/side drawer | [[apps/frontend/src/components/ui/drawer.tsx\|drawer.tsx]] |
+| Separator | Visual divider | [[apps/frontend/src/components/ui/separator.tsx\|separator.tsx]] |
+| Accordion | Collapsible sections | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]] |
+| Collapsible | Collapsible content | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]] |
+| Resizable | Resizable panel | [[apps/frontend/src/components/ui/resizable.tsx\|resizable.tsx]] |
+| AspectRatio | Fixed aspect ratio | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
 
 ### Navigation
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/sidebar|Sidebar]] | Collapsible sidebar | `sidebar.tsx` |
-| [[docs/components/tabs|Tabs]] | Tabbed content | `tabs.tsx` |
-| [[docs/components/navigation-menu|NavigationMenu]] | Navigation menu | `navigation-menu.tsx` |
-| [[docs/components/breadcrumb|Breadcrumb]] | Breadcrumb trail | `breadcrumb.tsx` |
-| [[docs/components/dropdown-menu|DropdownMenu]] | Dropdown menu | `dropdown-menu.tsx` |
-| [[docs/components/context-menu|ContextMenu]] | Right-click menu | `context-menu.tsx` |
-| [[docs/components/menubar|MenuBar]] | Menu bar | `menubar.tsx` |
+| Sidebar | Collapsible sidebar | [[apps/frontend/src/components/ui/sidebar.tsx\|sidebar.tsx]] |
+| Tabs | Tabbed content | [[apps/frontend/src/components/ui/tabs.tsx\|tabs.tsx]] |
+| NavigationMenu | Navigation menu | [[apps/frontend/src/components/ui/navigation-menu.tsx\|navigation-menu.tsx]] |
+| Breadcrumb | Breadcrumb trail | [[apps/frontend/src/components/ui/breadcrumb.tsx\|breadcrumb.tsx]] |
+| DropdownMenu | Dropdown menu | [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]] |
+| ContextMenu | Right-click menu | [[apps/frontend/src/components/ui/context-menu.tsx\|context-menu.tsx]] |
+| MenuBar | Menu bar | [[apps/frontend/src/components/ui/menubar.tsx\|menubar.tsx]] |
 
 ### Data Display
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/table|Table]] | Data table | `table.tsx` |
-| [[docs/components/badge|Badge]] | Status badge | `badge.tsx` |
-| [[docs/components/avatar|Avatar]] | User avatar | `avatar.tsx` |
-| [[docs/components/hover-card|HoverCard]] | Popup info card | `hover-card.tsx` |
-| [[docs/components/tooltip|Tooltip]] | Hover tooltip | `tooltip.tsx` |
-| [[docs/components/popover|Popover]] | Popup content | `popover.tsx` |
+| Table | Data table | [[apps/frontend/src/components/ui/table.tsx\|table.tsx]] |
+| Badge | Status badge | [[apps/frontend/src/components/ui/badge.tsx\|badge.tsx]] |
+| Avatar | User avatar | [[apps/frontend/src/components/ui/avatar.tsx\|avatar.tsx]] |
+| HoverCard | Popup info card | [[apps/frontend/src/components/ui/hover-card.tsx\|hover-card.tsx]] |
+| Tooltip | Hover tooltip | [[apps/frontend/src/components/ui/tooltip.tsx\|tooltip.tsx]] |
+| Popover | Popup content | [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]] |
 
 ### Charts
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/chart|Chart]] | Base chart component | `chart.tsx` |
+| Chart | Base chart component | [[apps/frontend/src/components/ui/chart.tsx\|chart.tsx]] |
 
 ### Utilities
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/pagination|Pagination]] | Page navigation | `pagination.tsx` |
-| [[docs/components/scroll-area|ScrollArea]] | Scrollable container | `scroll-area.tsx` |
-| [[docs/components/calendar|Calendar]] | Date picker calendar | `calendar.tsx` |
-| [[docs/components/toggle|Toggle]] | Binary toggle | `toggle.tsx` |
-| [[docs/components/toggle-group|ToggleGroup]] | Toggle button group | `toggle-group.tsx` |
-| [[docs/components/input-otp|InputOTP]] | One-time password input | `input-otp.tsx` |
-| [[docs/components/radio-group|Carousel]] | Carousel/slider | `carousel.tsx` |
+| Pagination | Page navigation | [[apps/frontend/src/components/ui/pagination.tsx\|pagination.tsx]] |
+| ScrollArea | Scrollable container | [[apps/frontend/src/components/ui/scroll-area.tsx\|scroll-area.tsx]] |
+| Calendar | Date picker calendar | [[apps/frontend/src/components/ui/calendar.tsx\|calendar.tsx]] |
+| Toggle | Binary toggle | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]] |
+| ToggleGroup | Toggle button group | [[apps/frontend/src/components/ui/toggle-group.tsx\|toggle-group.tsx]] |
+| InputOTP | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]] |
+| Carousel | Carousel/slider | [[apps/frontend/src/components/ui/carousel.tsx\|carousel.tsx]] |
 
 ---
 

@@ -469,9 +469,9 @@ Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/fronten
 
 ### Price Providers
 
-- CoinGecko (crypto)
+- Binance (crypto)
 - Yahoo Finance (stocks)
-- Kraken (crypto)
+- Kinesis (US stocks)
 - Custom (manual)
 
 ### Related API
@@ -548,6 +548,39 @@ While not a separate view, settings are accessible via the sidebar/settings dial
 - **Locale/language undefined-name sweep**: post-patch type/grep validation shows no `Cannot find name 'locale'` or `Cannot find name 'language'`; frontend build passes after watchlist formatter scoping fix in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]]
 
 Code links: [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/components/notifications/UpdateNotification.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/frontend/src/components/shared/DatePicker.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/statistics/RecipientInsightsTab.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]], [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/components/tax/SuggestedDeductionsCard.tsx]], [[apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentFromMarketDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]]
+
+---
+
+## NotFound Page
+
+Simple 404 page displayed when no route matches.
+
+### Features
+
+- Centered layout with title, heading, and description
+- "Back to Home" link navigates to `/`
+- Logs the attempted route via `logger.warn` on mount
+- Uses `useLocation` internally to access the unmatched path
+
+**Code**: [[apps/frontend/src/pages/NotFound.tsx]]
+
+---
+
+## RecipientInsights Page
+
+Full analytics page for recipient spending patterns.
+
+### Features
+
+- Fetches `apiClient.getRecipientInsights()` for recipient-level analytics
+- Applies exclusion filters from settings
+- 3 KPI cards: top recipient, top-10 total spend, average transaction
+- Horizontal bar chart of top 10 recipients by spend
+- Month-over-month change alerts (increases in red, decreases in green)
+- [[docs/components/virtual-data-table|VirtualDataTable]] with paginated recipient details (rank, name, total spend, count, average, first/last seen)
+- Accessible from Statistics page via deep link or direct navigation
+
+**Code**: [[apps/frontend/src/pages/RecipientInsightsPage.tsx]]
 
 ---
 

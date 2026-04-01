@@ -4,6 +4,7 @@ type: guide
 description: How to contribute to Vision
 date: 2026-03-18
 tags: [guide, contributing, development, workflow]
+status: active
 related_code: [[AGENTS.md]]
 ---
 

@@ -52,8 +52,11 @@ package "Server" {
       - ImportService
       - CurrencyConversionService
       - PriceProviderService
+      - BelgianInflationService
+      - PortfolioPerformanceSnapshotService
       - LoanRepaymentService
       - RecurringDetectionService
+      - MaterializedViewService
     }
     node "Repositories" as Repos {
       - TransactionRepo
@@ -75,9 +78,12 @@ database "PostgreSQL 18" as DB {
     - planned_transactions
     - planned_transaction_executions
     - planned_transaction_loan_schedule
-    - investments
-    - portfolio_transactions
+    - investments_base (+ inheritance children)
+    - portfolio_transactions_base (+ inheritance children)
     - exchange_rates
+    - asset_price_history
+    - belgian_inflation_rates
+    - portfolio_performance_snapshots
     - transaction_raw_references
     - belfius_raw_transactions
     - revolut_raw_transactions
@@ -85,7 +91,6 @@ database "PostgreSQL 18" as DB {
     - sabb_raw_transactions
     - wise_raw_transactions
     - vision_raw_transactions
-    - custom_raw_transactions
     - manual_raw_transactions
     - user_settings
     - saved_charts
@@ -102,6 +107,8 @@ cloud "External Services" as External {
   node "Binance (Crypto)" as Binance
   node "Yahoo Finance (Stocks)" as Yahoo
   node "Kinesis (Metals)" as Kinesis
+  node "Statbel (Inflation)" as Statbel
+  node "Eurostat HICP (Inflation Fallback)" as Eurostat
 }
 
 cloud "Development Tools" as DevTools {
@@ -137,12 +144,13 @@ package "External Services" {
 note right of External
   - Exchange rates refreshed every 12h
   - Price providers: manual, binance, yahoo, kinesis, custom
+  - Inflation: Statbel primary, Eurostat HICP fallback
+  - Price history persisted to asset_price_history
 end note
 
 note right of Tables
   Raw Transactions Tables:
   - Bank-specific: Belfius, Revolut, KBC, SABB, Wise, Vision
-  - custom_raw_transactions: Custom CSV imports
   - manual_raw_transactions: Manual entry deduplication
 end note
 

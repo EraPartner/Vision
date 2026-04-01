@@ -6,7 +6,9 @@ path: /api/categories
 description: Category management for organizing transactions
 date: 2026-03-18
 tags: [api, categories, organization]
-related_code: [[apps/node-backend/src/routes/categories.js]]
+status: active
+aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
+related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.js]]
 ---
 
 # Categories API

@@ -1,8 +1,11 @@
 ---
 title: Backend Architecture
+type: architecture
+status: active
 description: Node.js backend architecture and diagrams
 date: 2026-03-28
 tags: [architecture, backend, uml, plantuml]
+aliases: [backend architecture, node architecture, server design]
 ---
 
 # Backend Architecture
@@ -308,6 +311,17 @@ package "External Services" {
   class PriceProviderService {
     +fetchPrice(provider, symbol)
     +updateInvestmentPrices()
+    +sanitizePersistedKinesisHistory()
+  }
+
+  class BelgianInflationService {
+    +getMonthlyRates(startMonth, endMonth)
+    +refreshFromStatbel()
+  }
+
+  class PortfolioPerformanceSnapshotService {
+    +computeAndStoreSnapshots(currency)
+    +getSnapshots(startDate, endDate, currency)
   }
 
   class BankAdapters {
@@ -487,6 +501,12 @@ entity "crypto_investments" as crypto_investments {
   current_price : numeric(18,6)
 }
 
+entity "metals_investments" as metals_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
+  current_price : numeric(18,6)
+}
+
 entity "real_estate_investments" as real_estate_investments {
   * id : integer <<PK>>
   current_price : numeric(18,6)
@@ -537,6 +557,12 @@ entity "crypto_transactions" as crypto_transactions {
   units : numeric(18,8)
 }
 
+entity "metals_transactions" as metals_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+}
+
 entity "real_estate_transactions" as real_estate_transactions {
   * id : integer <<PK>>
   * investment_id : integer
@@ -582,6 +608,7 @@ pte }|--|| transactions
 investments_base ||--|| stock_investments : inherits
 investments_base ||--|| etf_investments : inherits
 investments_base ||--|| crypto_investments : inherits
+investments_base ||--|| metals_investments : inherits
 investments_base ||--|| real_estate_investments : inherits
 investments_base ||--|| savings_investments : inherits
 investments_base ||--|| bond_investments : inherits
@@ -589,6 +616,7 @@ investments_base ||--|| bond_investments : inherits
 portfolio_transactions_base ||--|| stock_transactions : inherits
 portfolio_transactions_base ||--|| etf_transactions : inherits
 portfolio_transactions_base ||--|| crypto_transactions : inherits
+portfolio_transactions_base ||--|| metals_transactions : inherits
 portfolio_transactions_base ||--|| real_estate_transactions : inherits
 portfolio_transactions_base ||--|| savings_transactions : inherits
 portfolio_transactions_base ||--|| bond_transactions : inherits
@@ -596,6 +624,7 @@ portfolio_transactions_base ||--|| bond_transactions : inherits
 stock_investments ||--o{ stock_transactions
 etf_investments ||--o{ etf_transactions
 crypto_investments ||--o{ crypto_transactions
+metals_investments ||--o{ metals_transactions
 real_estate_investments ||--o{ real_estate_transactions
 savings_investments ||--o{ savings_transactions
 bond_investments ||--o{ bond_transactions
@@ -708,9 +737,10 @@ database "PostgreSQL 18" as DB {
 
 cloud "External Services" as External {
   node "ECB (Exchange Rates)"
-  node "CoinGecko (Crypto)"
+  node "Binance (Crypto)"
   node "Yahoo Finance (Stocks)"
-  node "Kraken (Crypto)"
+  node "Kinesis (US Stocks)"
+  node "Statbel/Eurostat (Belgian Inflation)"
 }
 
 User --> ReactApp : HTTPS

@@ -6,6 +6,8 @@ path: /api/import
 description: CSV import for transactions, recipients, and categories
 date: 2026-03-18
 tags: [api, import, csv, bank]
+status: active
+aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
 related_code: [[apps/node-backend/src/routes/importRoutes.js]]
 ---
 
@@ -154,7 +156,9 @@ TRANSPORT,GAS,Fuel purchases
 ## Rate Limits
 
 - Standard imports: General rate limits apply
-- Export endpoint: 30 requests per minute
+- Streaming imports: Progress callbacks are not rate-limited
+
+> **Note:** CSV export (`GET /api/transactions/export/csv`) is on the [[docs/api/transactions|Transactions API]], not the imports API. It has a rate limit of 30 requests per minute.
 
 ## Related
 

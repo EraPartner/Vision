@@ -1,17 +1,22 @@
 ---
 title: Testing Documentation Index
 type: testing-index
-date: 2026-03-23
+status: active
+date: 2026-03-31
+tags: [testing, index, quality, vitest]
+description: Testing strategies, patterns, and best practices for the Vision project
+aliases: [testing, tests, QA]
 ---
 
 # Testing Documentation
 
-Testing strategies and patterns for Vision.
+> [!abstract] Overview
+> Testing documentation for Vision. Covers frameworks, patterns, and best practices for both backend and frontend.
 
 ## Test Documentation
 
 ```dataview
-TABLE title, description
+TABLE WITHOUT FILE title AS "Topic", description AS "Description", date AS "Updated"
 FROM "docs/testing"
 WHERE type = "testing"
 SORT title ASC
@@ -21,13 +26,15 @@ SORT title ASC
 
 | Topic | Description |
 |-------|-------------|
-| [[docs/testing/testing|Testing Guide]] | Comprehensive testing guide |
+| [[docs/testing/testing\|Testing Guide]] | Comprehensive testing guide with patterns and best practices |
 
 ## Test Types
 
-- **Unit Tests** - Individual function/component testing
-- **Integration Tests** - API endpoint testing
-- **Component Tests** - Frontend UI testing
+| Type | Scope | Framework |
+|------|-------|-----------|
+| **Unit Tests** | Individual functions/services | Vitest |
+| **Integration Tests** | API endpoints | Vitest + Supertest |
+| **Component Tests** | Frontend UI | React Testing Library |
 
 ## Test Coverage Areas
 
@@ -60,6 +67,14 @@ bun vitest run src/path/to/test.test.js
 
 ## Coverage Goals
 
-- All new features require tests
-- Focus on user-facing behavior
-- Test error handling and edge cases
+> [!tip] Testing Guidelines
+> - All new features require tests
+> - Focus on user-facing behavior
+> - Test error handling and edge cases
+> - Never modify original code to make testing easier
+
+## Related Documentation
+
+- [[docs/guides/contributing\|Contributing Guide]] - Development workflow
+- [[docs/features/index\|Feature Docs]] - What to test for each feature
+- [[docs/api/index\|API Documentation]] - Endpoints to test

@@ -1,12 +1,17 @@
 ---
 title: Localization Documentation Index
 type: i18n-index
-date: 2026-03-24
+status: active
+date: 2026-03-31
+tags: [i18n, index, localization, translations]
+description: Internationalization system including supported languages, translation workflow, and usage patterns
+aliases: [i18n, localization, translations, languages]
 ---
 
 # Localization Documentation
 
-Internationalization (i18n) in Vision.
+> [!abstract] Overview
+> Internationalization (i18n) in Vision. The app supports multiple languages with a JSON-based translation workflow.
 
 ## Documentation
 

@@ -4,6 +4,7 @@ type: integration
 description: Live price feeds for stocks, crypto, and other investments
 date: 2026-03-28
 tags: [integration, price, stocks, crypto, api]
+status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js]]
 ---
 
@@ -129,6 +130,8 @@ If price fetch fails:
 ## Related
 
 - [[docs/api/investments|API: Investments]]
+- [[docs/api/admin|API: Admin]] (Kinesis history sanitization endpoint)
 - [[docs/features/portfolio|Feature: Portfolio]]
+- [[docs/performance/chart-downsampling|Chart Data Downsampling]]
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/database/schemaInit.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

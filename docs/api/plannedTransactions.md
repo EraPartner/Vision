@@ -6,7 +6,9 @@ path: /api/planned-transactions
 description: Scheduled and recurring payment management
 date: 2026-03-18
 tags: [api, planned, recurring, schedule]
-related_code: [[apps/node-backend/src/routes/plannedTransactions.js]]
+status: active
+aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
+related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
 ---
 
 # Planned Transactions API

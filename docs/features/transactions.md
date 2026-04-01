@@ -4,6 +4,7 @@ type: feature
 status: active
 date: 2026-03-23
 tags: [feature, transactions, finance]
+aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/frontend/src/components/shared/VirtualDataTable.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
@@ -185,3 +186,12 @@ Heavy operations (export, batch updates) are rate-limited to protect database pe
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/import]] - CSV Import Feature
 - [[docs/features/portfolio]] - Portfolio & Investments
+
+## Migrations
+
+- `0001_initial_database_schema.py` — Initial schema with `transactions`, `categories`, `recipients` tables
+- `0003_make_recipient_nullable.py` — Made `recipient_id` nullable on transactions
+- `0005_manual_raw_transactions.py` — Added `manual_raw_transactions` table for manual entry deduplication
+- `0007_recipient_merge.py` — Added `primary_recipient_id` for recipient merge support
+- `0008_drop_custom_raw_transactions.py` — Dropped `custom_raw_transactions` table (custom imports now use generic path)
+- `0012_add_indexes.py` — Performance indexes on transactions and related tables

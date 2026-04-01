@@ -4,6 +4,7 @@ type: integration
 description: Bank API integrations for CSV imports
 date: 2026-03-18
 tags: [integration, bank, csv, import]
+status: active
 related_code: [[apps/node-backend/src/services/bankAdapters.js]]
 ---
 

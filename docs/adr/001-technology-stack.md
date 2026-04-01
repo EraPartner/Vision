@@ -4,6 +4,9 @@ type: adr
 status: Accepted
 date: 2026-03-17
 tags: [architecture, stack, frontend, backend]
+description: Technology stack selection - React, TypeScript, Node.js, PostgreSQL, and Electron
+aliases: [tech stack, technology choices, stack selection]
+related_code: ["package.json", "apps/frontend/src/", "apps/node-backend/src/", "config/"]
 ---
 
 # ADR-001: Technology Stack Selection
@@ -57,3 +60,6 @@ Vision requires a desktop only financial transaction management application with
 ## Related
 - [[docs/guides/setup|Setup Guide]]
 - [[docs/adr/index|All ADRs]]
+- [[docs/architecture/backend-architecture|Backend Architecture]]
+- [[docs/architecture/frontend-architecture|Frontend Architecture]]
+- [[docs/reference/scripts|Scripts Reference]]

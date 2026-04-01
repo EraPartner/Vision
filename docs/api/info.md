@@ -1,8 +1,8 @@
 ---
 title: Info & Analytics API
-type: api
+type: endpoint
 status: active
-date: 2026-03-28
+date: 2026-03-31
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js"]
@@ -444,7 +444,7 @@ Notes:
 {
   "total_rates": 30,
   "rates": [
-    { "currency": "USD", "rate_to_eur": 0.92, "rate_date": "2025-03-18" }
+    { "currency": "USD", "rate_to_eur": 0.92, "rate_date": "2025-03-18", "fetched_at": "2025-03-18T10:30:00Z" }
   ],
   "fallback_rates": { "USD": 0.917, "GBP": 1.176 }
 }
@@ -518,6 +518,53 @@ Notes:
   "message": "Belgian inflation rates refreshed from Statbel",
   "source": "statbel",
   "total_rates": 120
+}
+```
+
+---
+
+### GET /api/info/portfolio-performance
+
+Get pre-computed portfolio performance snapshots with per-class breakdowns.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `start_date` | string | `2000-01-01` | Start date filter (YYYY-MM-DD) |
+| `end_date` | string | today | End date filter (YYYY-MM-DD) |
+| `currency` | string | EUR | Target 3-letter currency code |
+| `target_currency` | string | EUR | Alias for `currency` |
+
+Notes:
+- Reads from the `portfolio_performance_snapshots` table — no on-demand computation.
+- Returns daily snapshots with per-class value/invested breakdowns (stocks+ETFs, crypto, metals).
+- Includes inflation-adjusted values using Belgian monthly inflation rates.
+- Route-level rate limited (`30 req / 60s`) to protect against excessive queries.
+
+**Response:** `200 OK`
+
+```json
+{
+  "currency": "EUR",
+  "start_date": "2025-01-01",
+  "end_date": "2026-03-31",
+  "snapshots": [
+    {
+      "date": "2025-01-15",
+      "invested": 50000.00,
+      "value": 52500.00,
+      "stocks_etfs_value": 30000.00,
+      "crypto_value": 10000.00,
+      "metals_value": 12500.00,
+      "stocks_etfs_invested": 28000.00,
+      "crypto_invested": 9500.00,
+      "metals_invested": 12500.00,
+      "inflation_adjusted_value": 51800.00,
+      "gain_loss": 2500.00,
+      "return_pct": 5.0
+    }
+  ]
 }
 ```
 

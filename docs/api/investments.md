@@ -6,7 +6,9 @@ path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-03-28
 tags: [api, investments, portfolio, stocks, crypto, metals]
-related_code: [[apps/node-backend/src/routes/investments.js]]
+status: active
+aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
+related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 ---
 
 # Investments API
@@ -270,6 +272,31 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 - Final result is globally ordered by `date DESC, id DESC`.
 - `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
 
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "investment_id": 5,
+      "type": "buy",
+      "date": "2026-01-15",
+      "amount": 1855.00,
+      "units": 10,
+      "price_per_unit": 185.50,
+      "fees": 5.00,
+      "currency": "USD",
+      "fx_rate_to_eur": 0.92,
+      "created_at": "2026-01-15T10:00:00Z"
+    }
+  ],
+  "total": 500,
+  "limit": 1000,
+  "offset": 0,
+  "links": []
+}
+```
+
 Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
 
 ### POST /api/investments/:id/transactions
@@ -285,11 +312,33 @@ Create a portfolio transaction.
   "units": 10,
   "price_per_unit": 185.50,
   "fees": 5.00,
+  "taxes": 0.00,
   "currency": "USD",
   "fx_rate_to_eur": 0.9200000000,
-  "note": "Initial purchase"
+  "note": "Initial purchase",
+  "is_recurring": false,
+  "recurrence_interval": "monthly",
+  "recurrence_end_date": "2027-01-15"
 }
 ```
+
+**Request Body Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| type | string | Yes | Transaction type: buy, sell, gift, dividend, fee, tax, interest, rent_income, appreciation |
+| date | string | Yes | Transaction date (YYYY-MM-DD) |
+| amount | number | No | Total amount (auto-computed if missing for unit-based types) |
+| units | number | No | Number of units (required for buy/sell/gift on unit-based assets) |
+| price_per_unit | number | No | Price per unit (auto-computed if missing for unit-based types) |
+| fees | number | No | Transaction fees |
+| taxes | number | No | Transaction taxes (supported for dividend transactions) |
+| currency | string | No | Currency code (defaults to investment currency) |
+| fx_rate_to_eur | number | No | FX rate to EUR at transaction date |
+| note | string | No | Transaction note |
+| is_recurring | boolean | No | Whether this transaction is recurring |
+| recurrence_interval | string | No | Recurrence pattern: daily, weekly, bi-weekly, monthly, quarterly, yearly |
+| recurrence_end_date | string | No | End date for recurring transactions (YYYY-MM-DD) |
 
 **Required Fields:** type, date (additional type-specific validation below)
 
@@ -358,6 +407,84 @@ Get investment summary with holdings breakdown.
     "total_fees": 25.00
   }
 }
+```
+
+## Examples
+
+### List Investments
+
+**curl:**
+```bash
+curl "http://localhost:3002/api/investments?limit=20"
+```
+
+**apiClient:**
+```ts
+const { data } = await apiClient.getInvestments({ limit: 20 });
+```
+
+### Create Investment
+
+**curl:**
+```bash
+curl -X POST http://localhost:3002/api/investments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Apple Inc.",
+    "asset_class": "stock",
+    "symbol": "AAPL",
+    "currency": "USD",
+    "price_provider": "yahoo"
+  }'
+```
+
+**apiClient:**
+```ts
+const investment = await apiClient.createInvestment({
+  name: 'Apple Inc.',
+  asset_class: 'stock',
+  symbol: 'AAPL',
+  currency: 'USD',
+  price_provider: 'yahoo',
+});
+```
+
+### Add Portfolio Transaction
+
+**curl:**
+```bash
+curl -X POST http://localhost:3002/api/investments/5/transactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "buy",
+    "date": "2026-01-15",
+    "units": 10,
+    "price_per_unit": 185.50,
+    "currency": "USD"
+  }'
+```
+
+**apiClient:**
+```ts
+const txn = await apiClient.createPortfolioTransaction(5, {
+  type: 'buy',
+  date: '2026-01-15',
+  units: 10,
+  price_per_unit: 185.50,
+  currency: 'USD',
+});
+```
+
+### Update Prices
+
+**curl:**
+```bash
+curl -X POST http://localhost:3002/api/investments/update-prices
+```
+
+**apiClient:**
+```ts
+await apiClient.updateInvestmentPrices();
 ```
 
 ## Price Providers

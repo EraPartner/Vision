@@ -16,8 +16,8 @@ Core layout components that structure the application shell.
 
 | Component | Description | File |
 |-----------|-------------|------|
-| [[docs/components/app-layout|AppLayout]] | Main app wrapper with sidebar | `AppLayout.tsx` |
-| [[docs/components/app-sidebar|AppSidebar]] | Navigation sidebar | `AppSidebar.tsx` |
+| AppLayout | Main app wrapper with sidebar | [[apps/frontend/src/components/layout/AppLayout.tsx\|AppLayout.tsx]] |
+| AppSidebar | Navigation sidebar | [[apps/frontend/src/components/layout/AppSidebar.tsx\|AppSidebar.tsx]] |
 
 ---
 
@@ -213,6 +213,55 @@ function App() {
 - Catches React component errors
 - Shows error UI instead of crashing
 - Provides error recovery options
+
+---
+
+## Workspace Hook
+
+The `useWorkspace()` hook provides workspace-aware navigation. It derives the active workspace from the current route path — no Context or Provider needed since all state lives in the router.
+
+### Type: Workspace
+
+```ts
+type Workspace = "budgeting" | "portfolio";
+```
+
+### Hook API
+
+```ts
+function useWorkspace(): { workspace: Workspace; setWorkspace: (ws: Workspace) => void }
+```
+
+| Return | Type | Description |
+|--------|------|-------------|
+| `workspace` | `Workspace` | Current workspace: `"portfolio"` if path starts with `/portfolio`, otherwise `"budgeting"` |
+| `setWorkspace` | `(ws: Workspace) => void` | Navigate to the workspace root: `/portfolio` or `/` |
+
+### Usage
+
+```tsx
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+
+function WorkspaceSwitcher() {
+  const { workspace, setWorkspace } = useWorkspace();
+
+  return (
+    <Button
+      onClick={() => setWorkspace(workspace === "portfolio" ? "budgeting" : "portfolio")}
+    >
+      Switch to {workspace === "portfolio" ? "Budgeting" : "Portfolio"}
+    </Button>
+  );
+}
+```
+
+### Design Notes
+
+- **No Context Provider**: Unlike other contexts in the app, `WorkspaceContext` does not export a React Context or Provider. It uses `useLocation` and `useNavigate` from React Router directly, treating the router as the state container.
+- **Route-derived**: The workspace is determined solely by whether the current path starts with `/portfolio`.
+- **Used by**: [[docs/components/app-sidebar|AppSidebar]] for workspace switching in the navigation.
+
+**Code**: [[apps/frontend/src/contexts/WorkspaceContext.tsx]]
 
 ---
 

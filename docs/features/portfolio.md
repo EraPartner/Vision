@@ -2,8 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-03-28
+date: 2026-03-31
 tags: [feature, portfolio, investments, stocks, crypto, metals]
+aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js"]
 ---
@@ -318,3 +319,21 @@ Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/n
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/watchlist|API: Watchlist]]
 - [[docs/adr/002-database-schema|Database Schema]]
+
+## Migrations
+
+- `0004_portfolio_tables.py` — Initial portfolio tables (`investments`, `portfolio_transactions`)
+- `0006_price_providers.py` — Added `price_provider` enum type
+- `0010_investments_municipality_tax_fields.py` — Added `municipality` and `cadastral_income` to real estate investments
+- `0013_investment_inheritance.py` — Migrated to PostgreSQL table inheritance (`investments_base` + child tables)
+- `0014_investments_view_update_trigger.py` — Added UPDATE trigger on `investments` view for inheritance-compatible writes
+- `0015_add_gift_portfolio_txn_type.py` — Added `gift` to `portfolio_txn_type` enum
+- `0016_add_fx_rate_to_portfolio_transactions.py` — Added `fx_rate_to_eur` column for cross-currency portfolio transactions
+- `0017_investment_custom_provider_history.py` — Added custom provider history/latest URL and path fields; updated metals view/trigger wiring
+- `0018_metals_transactions_inheritance_split.py` — Split metals transactions from stock_transactions into dedicated `metals_transactions` inheritance child
+- `0019_asset_price_history_cache.py` — Added `asset_price_history` table for persisted historical quotes
+- `0020_drop_asset_price_history_fk.py` — Dropped FK constraint on `asset_price_history.investment_id`
+- `0021_update_price_provider_enum.py` — Added `custom` to `price_provider` enum
+- `0022_add_kinesis_price_provider_enum.py` — Added `kinesis` to `price_provider` enum
+- `0023_portfolio_performance_snapshots.py` — Added `portfolio_performance_snapshots` table for daily performance caching
+- `0024_per_class_invested_columns.py` — Added per-class invested columns (`stocks_etfs_invested`, `crypto_invested`, `metals_invested`) to performance snapshots

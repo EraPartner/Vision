@@ -56,7 +56,7 @@ entity "transactions" as transactions {
   bank_account : text
   * recipient_id : integer <<FK>>
   recipient_bank_account_id : integer <<FK>>
-  * category_id : integer <<FK>>
+  category_id : integer <<FK>>
   is_active : boolean
   created_at : timestamptz
   updated_at : timestamptz
@@ -143,6 +143,12 @@ entity "investments_base" as investments_base {
   * price_provider : price_provider
   price_provider_id : varchar(200)
   price_provider_url : varchar(500)
+  price_provider_latest_url : varchar(500)
+  price_provider_latest_path : varchar(300)
+  price_provider_history_url : varchar(500)
+  price_provider_history_path : varchar(300)
+  price_provider_history_ts_path : varchar(300)
+  price_provider_history_price_path : varchar(300)
   price_updated_at : timestamptz
   created_at : timestamptz
   updated_at : timestamptz
@@ -163,6 +169,12 @@ entity "etf_investments" as etf_investments {
 entity "crypto_investments" as crypto_investments {
   * id : integer <<PK>>
   symbol : varchar(50)
+  current_price : numeric(18,6)
+}
+
+entity "metals_investments" as metals_investments {
+  * id : integer <<PK>>
+  symbol : varchar(20)
   current_price : numeric(18,6)
 }
 
@@ -227,6 +239,13 @@ entity "crypto_transactions" as crypto_transactions {
   price_per_unit : numeric(18,6)
 }
 
+entity "metals_transactions" as metals_transactions {
+  * id : integer <<PK>>
+  * investment_id : integer
+  units : numeric(18,8)
+  price_per_unit : numeric(18,6)
+}
+
 entity "real_estate_transactions" as real_estate_transactions {
   * id : integer <<PK>>
   * investment_id : integer
@@ -270,7 +289,7 @@ entity "exchange_rates" as exchange_rates {
 
 entity "asset_price_history" as asset_price_history {
   * id : serial <<PK>>
-  * investment_id : integer <<FK>>
+  investment_id : integer
   * price_date : date
   * close_price : numeric(18,6)
   source : varchar(50)
@@ -278,6 +297,39 @@ entity "asset_price_history" as asset_price_history {
   updated_at : timestamptz
   ---
   UNIQUE(investment_id, price_date)
+}
+
+entity "portfolio_performance_snapshots" as portfolio_performance_snapshots {
+  * id : serial <<PK>>
+  * snapshot_date : date <<UQ>>
+  * invested : numeric(18,6)
+  * value : numeric(18,6)
+  stocks_etfs_value : numeric(18,6)
+  crypto_value : numeric(18,6)
+  metals_value : numeric(18,6)
+  cash_value : numeric(18,6)
+  gain_loss : numeric(18,6)
+  return_pct : numeric(10,4)
+  inflation_adjusted_value : numeric(18,6)
+  cumulative_inflation : numeric(10,4)
+  real_return_pct : numeric(10,4)
+  * currency : varchar(3)
+  computed_at : timestamptz
+  stocks_etfs_invested : numeric(18,6)
+  crypto_invested : numeric(18,6)
+  metals_invested : numeric(18,6)
+  ---
+  INDEX(snapshot_date)
+  INDEX(currency)
+}
+
+entity "belgian_inflation_rates" as belgian_inflation_rates {
+  * id : serial <<PK>>
+  * month_date : date <<UQ>>
+  * monthly_rate : numeric(10,8)
+  source : varchar(50)
+  fetched_at : timestamptz
+  updated_at : timestamptz
 }
 
 entity "user_settings" as user_settings {
@@ -346,29 +398,6 @@ entity "vision_raw_transactions" as vision_raw_transactions {
   created_at : timestamptz
 }
 
-entity "custom_raw_transactions" as custom_raw_transactions {
-  * id : serial <<PK>>
-  * deduplication_hash : varchar(64)
-  created_at : timestamptz
-  -- Custom CSV Import --
-  date : timestamptz
-  description : text
-  * amount : numeric(15,2)
-  * currency : varchar(3)
-  counterparty_name : text
-  counterparty_account : varchar(34)
-  balance : numeric(15,2)
-  category_name : text
-  comments : text
-  raw_csv_line : text
-  raw_metadata : jsonb
-}
-note right of custom_raw_transactions
-  Stores transactions imported
-  via Custom bank adapter
-  (user-defined column mapping)
-end note
-
 entity "manual_raw_transactions" as manual_raw_transactions {
   * id : serial <<PK>>
   * deduplication_hash : varchar(64)
@@ -382,6 +411,8 @@ entity "manual_raw_transactions" as manual_raw_transactions {
   currency : varchar(3)
   category_id : integer
   comment : text
+  * raw_csv_line : text
+  raw_metadata : jsonb
 }
 note right of manual_raw_transactions
   Stores manually entered
@@ -391,7 +422,7 @@ end note
 
 ' Relationships (using standard UML crow's foot notation)
 ' One-to-One / One-to-Many relationships
-recipients ||--o{ categories : default_category_id
+categories ||--o{ recipients : default_category_id
 recipients ||--o| recipients : primary_recipient_id
 recipient_bank_accounts }o--|| recipients
 transactions }o--|| recipients
@@ -408,6 +439,7 @@ ptls }o--|| planned_transactions
 investments_base ||--|| stock_investments : inherits
 investments_base ||--|| etf_investments : inherits
 investments_base ||--|| crypto_investments : inherits
+investments_base ||--|| metals_investments : inherits
 investments_base ||--|| real_estate_investments : inherits
 investments_base ||--|| savings_investments : inherits
 investments_base ||--|| bond_investments : inherits
@@ -415,6 +447,7 @@ investments_base ||--|| bond_investments : inherits
 portfolio_transactions_base ||--|| stock_transactions : inherits
 portfolio_transactions_base ||--|| etf_transactions : inherits
 portfolio_transactions_base ||--|| crypto_transactions : inherits
+portfolio_transactions_base ||--|| metals_transactions : inherits
 portfolio_transactions_base ||--|| real_estate_transactions : inherits
 portfolio_transactions_base ||--|| savings_transactions : inherits
 portfolio_transactions_base ||--|| bond_transactions : inherits
@@ -422,6 +455,7 @@ portfolio_transactions_base ||--|| bond_transactions : inherits
 stock_investments ||--o{ stock_transactions
 etf_investments ||--o{ etf_transactions
 crypto_investments ||--o{ crypto_transactions
+metals_investments ||--o{ metals_transactions
 real_estate_investments ||--o{ real_estate_transactions
 savings_investments ||--o{ savings_transactions
 bond_investments ||--o{ bond_transactions

@@ -3,7 +3,7 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-03-28
-tags: [testing, vitest, jest, quality]
+tags: [testing, vitest, quality]
 description: Comprehensive testing documentation including frameworks, patterns, and best practices
 related_code: ["apps/node-backend/tests", "apps/frontend/src/components/__tests__"]
 ---

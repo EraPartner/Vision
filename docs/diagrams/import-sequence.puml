@@ -85,9 +85,9 @@ end note
 
 note over Adapter
   Supported: Belfius, Revolut, KBC
-  SABB, Wise, Vision, Custom
-  Custom: User-defined column mapping
-  Stores in custom_raw_transactions
+  SABB, Wise, Vision
+  Custom: User-defined column mapping (no raw table)
+  Manual: Deduplication via manual_raw_transactions
 end note
 
 @enduml

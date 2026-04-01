@@ -1,6 +1,6 @@
 ---
 title: Admin API
-type: api
+type: endpoint
 status: active
 date: 2026-03-28
 tags: [api, admin, system, updates]

@@ -42,8 +42,10 @@ package "Desktop Application (Electron)" as Desktop {
 
 cloud "External Services" as External {
   node "ECB API" as ECB
-  node "CoinGecko" as CoinGecko
+  node "Binance" as Binance
   node "Yahoo Finance" as Yahoo
+  node "Kinesis" as Kinesis
+  node "Statbel/Eurostat" as Statbel
 }
 
 actor "User" as User

@@ -125,16 +125,16 @@ database "PostgreSQL" as DB {
     class sabb_raw_transactions
     class wise_raw_transactions
     class vision_raw_transactions
-    class custom_raw_transactions <<Custom CSV imports>>
     class manual_raw_transactions <<Manual entry dedup>>
   }
 }
 
 cloud "External APIs" as External {
   class ECB_API <<Exchange Rate>>
-  class CoinGecko_API <<Crypto Prices>>
+  class Binance_API <<Crypto Prices>>
   class YahooFinance_API <<Stock Prices>>
-  class Kraken_API <<Crypto Prices>>
+  class Kinesis_API <<US Stock Prices>>
+  class Statbel_API <<Belgian Inflation>>
 }
 
 package "Frontend Interactions" {
@@ -195,9 +195,10 @@ package "Repository to Database" {
 
 package "External APIs" {
   CurrencyConversionService --> ECB_API
-  PriceProviderService --> CoinGecko_API
+  PriceProviderService --> Binance_API
   PriceProviderService --> YahooFinance_API
-  PriceProviderService --> Kraken_API
+  PriceProviderService --> Kinesis_API
+  BelgianInflationService --> Statbel_API
 }
 
 package "Response Flow" {
@@ -220,8 +221,10 @@ end note
 
 note right of External
   Exchange Rates: ECB (daily)
-  Crypto Prices: CoinGecko, Kraken
+  Crypto Prices: Binance
+  US Stock Prices: Kinesis
   Stock Prices: Yahoo Finance
+  Belgian Inflation: Statbel/Eurostat
 end note
 
 note right of RecipientBankAccountsRouter

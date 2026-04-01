@@ -1,25 +1,52 @@
 ---
 title: Performance Documentation Index
 type: performance-index
+status: active
+date: 2026-03-31
+tags: [performance, index, optimization]
+description: Performance optimization strategies including caching, materialized views, and chart downsampling
+aliases: [performance, optimization, speed]
 ---
 
 # Performance Documentation
 
-Performance optimization strategies for Vision.
+> [!abstract] Overview
+> Performance optimization strategies for Vision. Covers caching layers, database optimizations, and frontend rendering improvements.
 
-## Areas
+## All Performance Docs
 
 ```dataview
-TABLE title, description
+TABLE WITHOUT FILE title AS "Topic", description AS "Description", date AS "Updated"
 FROM "docs/performance"
 WHERE type = "performance"
 SORT title ASC
 ```
 
-## Topics
+## Optimization Strategies
 
-- [[docs/performance/materialized-views|Materialized Views]] - Pre-computed aggregations
-- [[docs/performance/caching-strategies|Caching Strategies]] - Multi-layer caching
-- Database query optimization (future)
-- Frontend rendering performance (future)
-- Bundle size optimization (future)
+| Strategy | Documentation | Impact |
+|----------|---------------|--------|
+| **In-Memory Caching** | [[docs/performance/caching-strategies\|Caching Strategies]] | Reduces API calls for exchange rates and prices |
+| **Materialized Views** | [[docs/performance/materialized-views\|Materialized Views]] | Pre-computed dashboard aggregations |
+| **Chart Downsampling** | [[docs/performance/chart-downsampling\|Chart Downsampling]] | LTTB algorithm for large time-series data |
+| **Database Indexes** | [[docs/adr/002-database-schema\|Schema Indexes]] | Optimized query performance |
+| **Virtual Scrolling** | [[docs/components/form-dialogs\|VirtualDataTable]] | Efficient rendering of large tables |
+
+## Cache Layers
+
+Vision implements a multi-layer caching strategy:
+
+1. **Browser Cache** - Static assets and API responses
+2. **React Query Cache** - Client-side data caching
+3. **In-Memory Cache** - Exchange rates and price feeds (backend)
+4. **Materialized Views** - Pre-computed aggregations (PostgreSQL)
+5. **Read-Through Cache** - Asset price history with DB fallback
+6. **Performance Snapshots** - Daily portfolio performance cache
+
+See [[docs/performance/caching-strategies\|Caching Strategies]] for details.
+
+## Related Documentation
+
+- [[docs/adr/002-database-schema\|Database Schema]] - Indexes and constraints
+- [[docs/architecture/backend-architecture\|Backend Architecture]] - Service layer design
+- [[docs/features/portfolio\|Portfolio Feature]] - Performance-sensitive features

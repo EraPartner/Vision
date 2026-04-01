@@ -1,6 +1,6 @@
 ---
 title: Market Lookup API
-type: api
+type: endpoint
 status: active
 date: 2026-03-24
 tags: [api, market, stocks, finance]

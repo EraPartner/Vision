@@ -4,6 +4,7 @@ type: guide
 description: Complete setup instructions for local development
 date: 2026-03-28
 tags: [guide, setup, development, local]
+status: active
 related_code: [[package.json]]
 ---
 
