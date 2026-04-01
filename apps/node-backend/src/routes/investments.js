@@ -57,11 +57,24 @@ router.get('/', async (req, res) => {
       assetClass: asset_class || null,
       active: active !== 'false',
     };
+
+    // Cache the default request that the frontend hits on every page (limit=500, active=false, no filter)
+    const isDefaultRequest = opts.limit >= 500 && !opts.assetClass && !opts.active && opts.offset === 0;
+    if (isDefaultRequest && investmentsCache.data && investmentsCache.expiresAt > Date.now()) {
+      return res.json(investmentsCache.data);
+    }
+
     const [items, total] = await Promise.all([
       investmentRepository.getAll(opts),
       investmentRepository.getCount(opts),
     ]);
-    res.json({ items, total, limit: opts.limit, offset: opts.offset, links: [] });
+    const payload = { items, total, limit: opts.limit, offset: opts.offset, links: [] };
+
+    if (isDefaultRequest) {
+      investmentsCache = { data: payload, expiresAt: Date.now() + INVESTMENTS_CACHE_TTL_MS };
+    }
+
+    res.json(payload);
   } catch (err) {
     logger.error('Failed to get investments', { error: err.message });
     res.status(500).json({ detail: 'Failed to retrieve investments' });
