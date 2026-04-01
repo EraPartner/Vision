@@ -305,6 +305,7 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   try {
     const ok = await investmentRepository.hardDelete(parseInt(req.params.id, 10));
     if (!ok) return res.status(404).json({ detail: 'Investment not found' });
+    clearInvestmentsCaches();
     res.status(204).end();
   } catch (err) {
     logger.error('Failed to delete investment', { error: err.message });
