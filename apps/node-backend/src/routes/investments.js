@@ -12,6 +12,16 @@ import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 
 const router = Router();
 
+// ---- In-memory response caches ----
+const INVESTMENTS_CACHE_TTL_MS = 60_000;
+let investmentsCache = { data: undefined, expiresAt: 0 };
+let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+
+function clearInvestmentsCaches() {
+  investmentsCache = { data: undefined, expiresAt: 0 };
+  bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+}
+
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
   if (!provider || provider === 'manual') return false;
