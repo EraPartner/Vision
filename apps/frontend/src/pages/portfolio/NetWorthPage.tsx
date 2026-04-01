@@ -172,10 +172,14 @@ export default function NetWorthPage() {
   }, [data?.snapshots]);
 
   const chartSnapshots = useMemo(() => {
-    const MAX_CHART_POINTS = 400;
-    if (snapshots.length <= MAX_CHART_POINTS) return snapshots;
-    return downsampleLTTB(snapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item[selectedSeries]);
-  }, [snapshots, selectedSeries]);
+    // Adapt threshold to zoom: when zoomed out (small dayWidth), fewer points needed
+    // since fewer pixels are available. Use ~1 point per 4px as a rough guide.
+    const scrollWidth = chartScrollRef.current?.clientWidth || 800;
+    const maxPointsForZoom = Math.max(150, Math.min(500, Math.round(scrollWidth / dayWidth)));
+    const threshold = Math.min(maxPointsForZoom, 400);
+    if (snapshots.length <= threshold) return snapshots;
+    return downsampleLTTB(snapshots, threshold, (_item, i) => i, (item) => item[selectedSeries]);
+  }, [snapshots, selectedSeries, dayWidth]);
 
   const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: "currency",
@@ -457,10 +461,13 @@ export default function NetWorthPage() {
     );
   }
 
-  // Min/max for chart
-  const allValues = snapshots.map(s => s.netWorth);
-  const peak = Math.max(...allValues);
-  const trough = Math.min(...allValues);
+  // Min/max for chart (avoid spread on large arrays)
+  let peak = -Infinity;
+  let trough = Infinity;
+  for (const s of snapshots) {
+    if (s.netWorth > peak) peak = s.netWorth;
+    if (s.netWorth < trough) trough = s.netWorth;
+  }
   const firstNetWorth = snapshots[0]?.netWorth ?? 0;
   const allTimeChange = current.netWorth - firstNetWorth;
   const allTimePercent = firstNetWorth !== 0 ? (allTimeChange / Math.abs(firstNetWorth)) * 100 : 0;
