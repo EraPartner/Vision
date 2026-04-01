@@ -80,6 +80,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
             strokeDasharray="8 4"
             dot={false}
             name="average"
+            isAnimationActive={false}
           />
           <Line
             type="monotone"
@@ -89,6 +90,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
             dot={false}
             name="current"
             connectNulls={false}
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>
