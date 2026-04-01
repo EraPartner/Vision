@@ -129,7 +129,7 @@ export function UpcomingPaymentsNotification() {
       <Button
         variant="ghost"
         size="icon"
-        className="absolute top-2 right-2 h-6 w-6"
+        className="absolute top-2 right-2 h-5 w-5 min-h-0 min-w-0 p-0 rounded-sm"
         onClick={() => {
           const next = new Set(dismissedIds);
           visibleUpcoming.forEach((pt) => next.add(pt.id));
