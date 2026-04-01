@@ -172,10 +172,14 @@ export default function NetWorthPage() {
   }, [data?.snapshots]);
 
   const chartSnapshots = useMemo(() => {
-    const MAX_CHART_POINTS = 400;
-    if (snapshots.length <= MAX_CHART_POINTS) return snapshots;
-    return downsampleLTTB(snapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item[selectedSeries]);
-  }, [snapshots, selectedSeries]);
+    // Adapt threshold to zoom: when zoomed out (small dayWidth), fewer points needed
+    // since fewer pixels are available. Use ~1 point per 4px as a rough guide.
+    const scrollWidth = chartScrollRef.current?.clientWidth || 800;
+    const maxPointsForZoom = Math.max(150, Math.min(500, Math.round(scrollWidth / dayWidth)));
+    const threshold = Math.min(maxPointsForZoom, 400);
+    if (snapshots.length <= threshold) return snapshots;
+    return downsampleLTTB(snapshots, threshold, (_item, i) => i, (item) => item[selectedSeries]);
+  }, [snapshots, selectedSeries, dayWidth]);
 
   const currencyFormatter = useMemo(() => new Intl.NumberFormat(locale, {
     style: "currency",
