@@ -435,7 +435,7 @@ export function usePortfolio() {
         totalBuyCost,
         totalSellProceeds,
         
-        transactions: [...txns].sort((a, b) => b.date.localeCompare(a.date)),
+        transactions: txns,  // already sorted by query; avoid re-sort per render
       } as InvestmentSummary;
     });
   }, [investments, transactions]);
