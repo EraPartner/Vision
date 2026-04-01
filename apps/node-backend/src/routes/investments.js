@@ -131,6 +131,7 @@ router.post('/', async (req, res) => {
       price_provider_history_ts_path,
       price_provider_history_price_path,
     });
+    clearInvestmentsCaches();
     res.status(201).json(inv);
   } catch (err) {
     logger.error('Failed to create investment', { error: err.message });
