@@ -289,6 +289,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
   try {
     const inv = await investmentRepository.update(parseInt(req.params.id, 10), req.body);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
+    clearInvestmentsCaches();
     res.json(inv);
   } catch (err) {
     if (err?.code === 'VALIDATION_ERROR') {
