@@ -200,9 +200,9 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-3">
         {!collapsed && (
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-[11px] text-muted-foreground/60 text-center font-medium tracking-wide uppercase">
             Vision v1.0
           </p>
         )}

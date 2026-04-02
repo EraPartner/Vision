@@ -136,7 +136,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             <Settings className="h-5 w-5" />
                         </Button>
                     </header>
-                    <main className="flex-1 p-6">
+                    <main className="flex-1 p-4 md:p-6">
                         <UpcomingPaymentsNotification />
                         {children}
                     </main>
