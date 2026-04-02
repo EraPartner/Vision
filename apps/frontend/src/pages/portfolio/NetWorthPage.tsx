@@ -230,7 +230,16 @@ export default function NetWorthPage() {
       : Math.min(1, Math.max(0, scrollEl.scrollLeft / maxScrollLeft));
   }, []);
 
-  const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
+  const tooltipLabelFormatter = useCallback((v: string) => fmtDay(v, appSettings.dateFormat), [appSettings.dateFormat]);
+  const tooltipValueFormatter = useCallback((value: number, name: string) => [fmt(value), name], [fmt]);
+  const tooltipContentStyle = useMemo(() => ({
+    backgroundColor: "hsl(var(--card))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "var(--radius)",
+    color: "hsl(var(--card-foreground))",
+  }), []);
+
+
 
   const current = data?.current ?? { liquid: 0, investments: 0, netWorth: 0 };
   const monthlyChange = data?.monthlyChange ?? 0;
