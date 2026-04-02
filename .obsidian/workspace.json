@@ -4,31 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "7a95953177bef529",
+        "id": "9cf4033fddddd228",
         "type": "tabs",
         "children": [
           {
-            "id": "40de2397a2407032",
+            "id": "df7a3f626f3a4b36",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/adr/002-database-schema.md",
-                "mode": "source",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "002-database-schema"
+              "title": "New tab"
             }
           }
         ]
@@ -183,27 +169,17 @@
             }
           },
           {
-            "id": "0e0f872b1b008975",
+            "id": "7a9652abab55f913",
             "type": "leaf",
             "state": {
-              "type": "smart-connections-view",
+              "type": "copilot-chat-view",
               "state": {},
-              "icon": "smart-connections",
-              "title": "Connections"
-            }
-          },
-          {
-            "id": "352a46788767af32",
-            "type": "leaf",
-            "state": {
-              "type": "smart-lookup-view",
-              "state": {},
-              "icon": "smart-lookup",
-              "title": "Lookup"
+              "icon": "message-square",
+              "title": "Copilot"
             }
           }
         ],
-        "currentTab": 7
+        "currentTab": 6
       }
     ],
     "direction": "horizontal",
@@ -218,51 +194,49 @@
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
       "bases:Create new base": false,
-      "smart-connections:Smart Connections: Open connections view": false,
-      "smart-connections:Smart Lookup: Open lookup view": false,
-      "smart-connections:Smart Connections: Open random connection": false
+      "copilot:Open Copilot Chat": false
     }
   },
-  "active": "40de2397a2407032",
+  "active": "df7a3f626f3a4b36",
   "lastOpenFiles": [
+    "docs/troubleshooting.md",
+    "docs/getting-started.md",
+    "docs/tag-taxonomy.md",
+    "docs/reference/react-query-keys.md",
+    "docs/reference/frontend-routes.md",
+    "docs/reference/api-endpoint-matrix.md",
+    "test_networth.js",
+    "supabase/config.toml",
+    "supabase",
+    "old_infoRepo.js",
+    "fix_tests.py",
+    "apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx",
+    "docs/common-tasks.md",
+    "docs/guides/kb-maintenance.md",
+    "docs/guides/ai-agent-kb-usage.md",
+    "docs/reference/error-codes.md",
+    "docs/reference/code-patterns.md",
+    "docs/glossary.md",
+    "docs/index.md",
+    "docs/api/index.md",
+    "copilot/copilot-conversations/If_a_lead_ball_and_a_feather_are_dropped_simultaneously@20260401_092407.md",
+    "copilot/copilot-conversations/What's_the_longest_river_in_the_world@20260401_083426.md",
+    "docs/performance/chart-downsampling.md",
+    "packaging/electron/node_modules/node-gyp/docs/Force-npm-to-use-global-node-gyp.md",
+    "docs/guides/backend-configuration.md",
+    "docs/guides/migrations.md",
+    "docs/adr/002-database-schema.md",
+    "docs/features/portfolio.md",
+    "copilot/copilot-conversations/Identifying_the_app_from_code@20260329_220043.md",
+    "copilot/copilot-conversations/Information_about_the_indexed_vault@20260329_185319.md",
+    "copilot/copilot-conversations/Inquiry_about_a_vault@20260329_174810.md",
+    "copilot/copilot-conversations",
+    "copilot/copilot-custom-prompts/Clip Web Page.md",
+    "copilot/copilot-custom-prompts",
+    "copilot",
     "config/requirements.txt",
-    "alembic/versions/__pycache__/0012_add_indexes.cpython-314.pyc",
-    "alembic/versions/__pycache__/0011_planned_loans.cpython-314.pyc",
-    "alembic/versions/__pycache__/0010_investments_municipality_tax_fields.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/view.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/utils.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/query_chain.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/proxy_dict.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/path.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/operators.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/sqlalchemy_utils/__pycache__/observer.cpython-314.pyc",
-    "venv/lib/python3.14/site-packages/pip-26.0.1.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
-    "venv/lib/python3.14/site-packages/~ip/_vendor/idna/LICENSE.md",
-    "venv/lib/python3.14/site-packages/~ip-26.0.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
-    "venv/lib/python3.14/site-packages/pip-26.0.dist-info/licenses/src/pip/_vendor/idna/LICENSE.md",
-    "venv/lib/python3.14/site-packages/pip/_vendor/idna/LICENSE.md",
     "Untitled.canvas",
     "docs/diagrams/Database Schema - ERD.png",
-    "docs/diagrams/API Route Layer Architecture.png",
-    "docs/architecture/frontend-architecture.md",
-    "Chats/New Chat.md",
-    "docs/guides/contributing.md",
-    "docs/guides/deployment.md",
-    "docs/guides/setup.md",
-    "docs/features/transactions.md",
-    "docs/features/portfolio.md",
-    "docs/features/plannedTransactions.md",
-    "docs/features/index.md",
-    "docs/features/import.md",
-    "docs/features/views.md",
-    "docs/testing/testing.md",
-    "docs/testing/index.md",
-    "docs/i18n/translations.md",
-    "docs/i18n/index.md",
-    "packaging/electron/node_modules/node-addon-api/README.md",
-    "docs/components/hooks.md",
-    "docs/components/ui-components.md",
-    "docs/components/portfolio.md",
-    "docs/components/layout.md"
+    "docs/diagrams/API Route Layer Architecture.png"
   ]
 }

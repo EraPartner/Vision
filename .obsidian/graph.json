@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "path:docs  ",
+  "search": "path:docs -path:packaging  ",
   "showTags": false,
   "showAttachments": false,
   "hideUnresolved": true,
@@ -13,7 +13,7 @@
   "nodeSizeMultiplier": 1,
   "lineSizeMultiplier": 1,
   "collapse-forces": false,
-  "centerStrength": 0.553478063196181,
+  "centerStrength": 0.0324505569447602,
   "repelStrength": 10,
   "linkStrength": 1,
   "linkDistance": 250,

@@ -45,3 +45,4 @@ htmlcov/
 
 # Ignore Smart Environment folder
 .smart-env
+copilot/

@@ -167,6 +167,8 @@ export default function NetWorthPage() {
   const rangeRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
   const lastDomainScrollLeftRef = useRef<number>(-1);
   const pendingZoomScrollRatioRef = useRef<number | null>(null);
+  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
+
   const snapshots = useMemo(() => {
     const raw = data?.snapshots ?? EMPTY_SNAPSHOTS;
     const result: typeof EMPTY_SNAPSHOTS = [];
@@ -180,8 +182,6 @@ export default function NetWorthPage() {
     }
     return result;
   }, [data?.snapshots]);
-
-  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
 
   const chartSnapshots = useMemo(() => {
     const scrollWidth = chartScrollRef.current?.clientWidth || 800;
@@ -197,6 +197,8 @@ export default function NetWorthPage() {
     minimumFractionDigits: appSettings.showDecimalPlaces,
     maximumFractionDigits: appSettings.showDecimalPlaces,
   }), [appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
+
+  const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
 
   const monthLabelLocale = useMemo(() => (language === 'nl' ? 'nl-NL' : 'en-US'), [language]);
 
@@ -245,7 +247,6 @@ export default function NetWorthPage() {
   const monthlyChange = data?.monthlyChange ?? 0;
   const monthlyChangePercent = data?.monthlyChangePercent ?? 0;
   const isPositiveChange = monthlyChange >= 0;
-
 
   const chartWidth = useMemo(() => {
     const dayCount = Math.max(chartSnapshots.length, 1);
