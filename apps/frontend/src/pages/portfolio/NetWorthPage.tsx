@@ -243,7 +243,6 @@ export default function NetWorthPage() {
   const monthlyChangePercent = data?.monthlyChangePercent ?? 0;
   const isPositiveChange = monthlyChange >= 0;
 
-  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
 
   const chartWidth = useMemo(() => {
     const dayCount = Math.max(chartSnapshots.length, 1);
