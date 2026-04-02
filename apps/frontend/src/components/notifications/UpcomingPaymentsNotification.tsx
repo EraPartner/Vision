@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { formatCurrency } from "@/utils/currency";
 import { Link } from "react-router-dom";
@@ -100,15 +99,14 @@ export function UpcomingPaymentsNotification() {
               <span className="font-semibold text-foreground">
                 {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale)}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 min-h-0 min-w-0 p-0 rounded-sm"
+              <button
+                type="button"
+                className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('recurring.dismiss')}
                 onClick={() => dismissById(pt.id)}
               >
                 <X className="h-3 w-3" />
-              </Button>
+              </button>
             </span>
           </div>
         ))}
@@ -126,10 +124,9 @@ export function UpcomingPaymentsNotification() {
           </Link>
         </div>
       </AlertDescription>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 right-2 h-5 w-5 min-h-0 min-w-0 p-0 rounded-sm"
+      <button
+        type="button"
+        className="absolute top-2 right-2 inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         onClick={() => {
           const next = new Set(dismissedIds);
           visibleUpcoming.forEach((pt) => next.add(pt.id));
@@ -138,7 +135,7 @@ export function UpcomingPaymentsNotification() {
         }}
       >
         <X className="h-3 w-3" />
-      </Button>
+      </button>
     </Alert>
   );
 }
