@@ -520,15 +520,15 @@ export default function DashboardPage() {
 
             {/* Cash Flow Comparison */}
             {isVisible('cashflowComparison') && effectiveCashflowData && (
-                <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm lg:col-span-2">
+                <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
-                                <DollarSign className="h-6 w-6" />
+                            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center shadow-sm text-accent transition-transform duration-300 group-hover:scale-105">
+                                <DollarSign className="h-5 w-5" />
                             </div>
                             <div>
-                                <CardTitle className="text-xl">{t('cashflow.title')}</CardTitle>
-                                <CardDescription className="text-base">
+                                <CardTitle className="text-lg">{t('cashflow.title')}</CardTitle>
+                                <CardDescription>
                                     {t('cashflow.chartDesc', { monthName: formatMonthYearWithAppSettings(new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1), appSettings.dateFormat, locale) })}
                                 </CardDescription>
                             </div>
