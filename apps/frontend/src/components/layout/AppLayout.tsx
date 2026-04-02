@@ -45,7 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
-                        className="h-14 border-b bg-card/80 backdrop-blur-sm flex items-center px-4 sticky top-0 z-30">
+                        className="h-14 border-b border-border/50 bg-background/80 backdrop-blur-md flex items-center px-4 sticky top-0 z-30 supports-[backdrop-filter]:bg-background/60">
                         <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
                         <UpdateNotification />
@@ -136,7 +136,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             <Settings className="h-5 w-5" />
                         </Button>
                     </header>
-                    <main className="flex-1 p-6">
+                    <main className="flex-1 p-4 md:p-6">
                         <UpcomingPaymentsNotification />
                         {children}
                     </main>

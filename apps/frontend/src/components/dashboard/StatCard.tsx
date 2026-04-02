@@ -4,10 +4,8 @@ import { LucideIcon } from "lucide-react";
 interface StatCardProps {
     title: string;
     value: string;
-    /** Small delta text displayed below the value (e.g. "+12%"). */
     change?: string;
     changeType?: "positive" | "negative" | "neutral";
-    /** Subtitle shown in muted text beneath the value when no change delta is provided. */
     subtitle?: string;
     icon: LucideIcon;
     trend?: "income" | "expense" | "up" | "down" | "neutral";
@@ -15,42 +13,38 @@ interface StatCardProps {
 
 export function StatCard({ title, value, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral" }: StatCardProps) {
     const changeColor = {
-        positive: "text-emerald-600 dark:text-emerald-400",
-        // Use brighter rose in dark mode for better contrast
-        negative: "text-rose-600 dark:text-rose-300",
+        positive: "text-accent dark:text-accent",
+        negative: "text-destructive dark:text-destructive",
         neutral: "text-muted-foreground",
     }[changeType];
 
-    // Normalise "up"/"down" aliases so callers can pass either form
     const normalisedTrend = trend === "up" ? "income" : trend === "down" ? "expense" : trend;
 
     const trendGradient = {
-        income: "from-emerald-500/10 to-green-500/5",
-        expense: "from-rose-500/10 to-red-500/5",
-        neutral: "from-blue-500/10 to-indigo-500/5",
-    }[normalisedTrend] ?? "from-blue-500/10 to-indigo-500/5";
+        income: "from-accent/10 to-accent/5",
+        expense: "from-destructive/10 to-destructive/5",
+        neutral: "from-primary/10 to-primary/5",
+    }[normalisedTrend] ?? "from-primary/10 to-primary/5";
 
     const iconBg = {
-        income: "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400",
-        // brighten the text/icon in dark mode
-        expense: "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300",
-        neutral: "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400",
-    }[normalisedTrend] ?? "bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-600 dark:text-blue-400";
+        income: "bg-gradient-to-br from-accent/20 to-accent/10 text-accent",
+        expense: "bg-gradient-to-br from-destructive/20 to-destructive/10 text-destructive",
+        neutral: "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
+    }[normalisedTrend] ?? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
 
     return (
         <Card
-            className={`relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-to-br ${trendGradient} backdrop-blur-sm`}>
+            className={`group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-gradient-to-br ${trendGradient} backdrop-blur-sm`}>
             <div
-                className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
+                className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">{title}</CardTitle>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+                <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm transition-transform duration-300 group-hover:scale-105`}>
                     <Icon className="h-5 w-5" />
                 </div>
             </CardHeader>
             <CardContent>
-                <div
-                    className="text-3xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                <div className="text-3xl font-bold text-foreground">
                     {value}
                 </div>
                 {change && (

@@ -121,17 +121,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-5">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-xl bg-primary flex items-center justify-center shadow-md">
+          <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/20">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <h1 className="text-base font-bold text-sidebar-foreground truncate">
+              <h1 className="text-base font-bold text-sidebar-foreground tracking-tight truncate">
                 Vision
               </h1>
-              <p className="text-xs text-muted-foreground truncate">{t('nav.financeManager')}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{t('nav.financeManager')}</p>
             </div>
           )}
         </div>
@@ -200,9 +200,9 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-3">
         {!collapsed && (
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-[11px] text-muted-foreground/60 text-center font-medium tracking-wide uppercase">
             Vision v1.0
           </p>
         )}
