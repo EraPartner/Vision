@@ -174,14 +174,22 @@ export default function NetWorthPage() {
   const lastDomainScrollLeftRef = useRef<number>(-1);
   const pendingZoomScrollRatioRef = useRef<number | null>(null);
   const snapshots = useMemo(() => {
-    return (data?.snapshots ?? EMPTY_SNAPSHOTS)
-      .map((snapshot) => ({ ...snapshot, date: normalizeYmd(snapshot.date) }))
-      .filter(isFiniteSnapshot);
+    const raw = data?.snapshots ?? EMPTY_SNAPSHOTS;
+    const result: typeof EMPTY_SNAPSHOTS = [];
+    for (let i = 0; i < raw.length; i++) {
+      const s = raw[i];
+      const date = normalizeYmd(s.date);
+      if (date && Number.isFinite(s.netWorth) && Number.isFinite(s.liquid) && Number.isFinite(s.investments)) {
+        // Avoid object spread — only create new object when date changed
+        result.push(date !== s.date ? { date, netWorth: s.netWorth, liquid: s.liquid, investments: s.investments } : s);
+      }
+    }
+    return result;
   }, [data?.snapshots]);
 
+  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
+
   const chartSnapshots = useMemo(() => {
-    // Adapt threshold to zoom: when zoomed out (small dayWidth), fewer points needed
-    // since fewer pixels are available. Use ~1 point per 4px as a rough guide.
     const scrollWidth = chartScrollRef.current?.clientWidth || 800;
     const maxPointsForZoom = Math.max(150, Math.min(500, Math.round(scrollWidth / dayWidth)));
     const threshold = Math.min(maxPointsForZoom, 400);
