@@ -36,12 +36,6 @@ function normalizeYmd(value: string) {
   return value;
 }
 
-function isFiniteSnapshot(snapshot: { date: string; netWorth: number; liquid: number; investments: number }) {
-  return Boolean(snapshot.date)
-    && Number.isFinite(snapshot.netWorth)
-    && Number.isFinite(snapshot.liquid)
-    && Number.isFinite(snapshot.investments);
-}
 
 function formatMonthTickLabel(dateYmd: string, formatter: Intl.DateTimeFormat) {
   const normalized = normalizeYmd(dateYmd);
