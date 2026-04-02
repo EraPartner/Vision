@@ -36,12 +36,6 @@ function normalizeYmd(value: string) {
   return value;
 }
 
-function isFiniteSnapshot(snapshot: { date: string; netWorth: number; liquid: number; investments: number }) {
-  return Boolean(snapshot.date)
-    && Number.isFinite(snapshot.netWorth)
-    && Number.isFinite(snapshot.liquid)
-    && Number.isFinite(snapshot.investments);
-}
 
 function formatMonthTickLabel(dateYmd: string, formatter: Intl.DateTimeFormat) {
   const normalized = normalizeYmd(dateYmd);
@@ -55,14 +49,22 @@ function computeYDomain(
   points: Array<{ netWorth: number; liquid: number; investments: number }>,
   series: NetWorthSeries[] = ['netWorth', 'liquid', 'investments'],
 ): [number, number] {
-  const values = points
-    .flatMap((point) => series.map((key) => point[key]))
-    .filter((value) => Number.isFinite(value));
+  let minValue = Number.POSITIVE_INFINITY;
+  let maxValue = Number.NEGATIVE_INFINITY;
 
-  if (values.length === 0) return [0, 100];
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    for (let j = 0; j < series.length; j++) {
+      const value = point[series[j]];
+      if (Number.isFinite(value)) {
+        if (value < minValue) minValue = value;
+        if (value > maxValue) maxValue = value;
+      }
+    }
+  }
 
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) return [0, 100];
+
   const span = maxValue - minValue;
   const padding = span === 0
     ? Math.max(Math.abs(maxValue) * 0.03, 1)
@@ -166,14 +168,22 @@ export default function NetWorthPage() {
   const lastDomainScrollLeftRef = useRef<number>(-1);
   const pendingZoomScrollRatioRef = useRef<number | null>(null);
   const snapshots = useMemo(() => {
-    return (data?.snapshots ?? EMPTY_SNAPSHOTS)
-      .map((snapshot) => ({ ...snapshot, date: normalizeYmd(snapshot.date) }))
-      .filter(isFiniteSnapshot);
+    const raw = data?.snapshots ?? EMPTY_SNAPSHOTS;
+    const result: typeof EMPTY_SNAPSHOTS = [];
+    for (let i = 0; i < raw.length; i++) {
+      const s = raw[i];
+      const date = normalizeYmd(s.date);
+      if (date && Number.isFinite(s.netWorth) && Number.isFinite(s.liquid) && Number.isFinite(s.investments)) {
+        // Avoid object spread — only create new object when date changed
+        result.push(date !== s.date ? { date, netWorth: s.netWorth, liquid: s.liquid, investments: s.investments } : s);
+      }
+    }
+    return result;
   }, [data?.snapshots]);
 
+  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
+
   const chartSnapshots = useMemo(() => {
-    // Adapt threshold to zoom: when zoomed out (small dayWidth), fewer points needed
-    // since fewer pixels are available. Use ~1 point per 4px as a rough guide.
     const scrollWidth = chartScrollRef.current?.clientWidth || 800;
     const maxPointsForZoom = Math.max(150, Math.min(500, Math.round(scrollWidth / dayWidth)));
     const threshold = Math.min(maxPointsForZoom, 400);
@@ -220,14 +230,22 @@ export default function NetWorthPage() {
       : Math.min(1, Math.max(0, scrollEl.scrollLeft / maxScrollLeft));
   }, []);
 
-  const fmt = useCallback((val: number) => currencyFormatter.format(val), [currencyFormatter]);
+  const tooltipLabelFormatter = useCallback((v: string) => fmtDay(v, appSettings.dateFormat), [appSettings.dateFormat]);
+  const tooltipValueFormatter = useCallback((value: number, name: string) => [fmt(value), name], [fmt]);
+  const tooltipContentStyle = useMemo(() => ({
+    backgroundColor: "hsl(var(--card))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "var(--radius)",
+    color: "hsl(var(--card-foreground))",
+  }), []);
+
+
 
   const current = data?.current ?? { liquid: 0, investments: 0, netWorth: 0 };
   const monthlyChange = data?.monthlyChange ?? 0;
   const monthlyChangePercent = data?.monthlyChangePercent ?? 0;
   const isPositiveChange = monthlyChange >= 0;
 
-  const dayWidth = DAY_WIDTH_OPTIONS[zoomStep] ?? DAY_WIDTH_OPTIONS[0];
 
   const chartWidth = useMemo(() => {
     const dayCount = Math.max(chartSnapshots.length, 1);
@@ -666,14 +684,9 @@ export default function NetWorthPage() {
                     strokeOpacity={0.5}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      color: "hsl(var(--card-foreground))",
-                    }}
-                    labelFormatter={(v: string) => fmtDay(v, appSettings.dateFormat)}
-                    formatter={(value: number, name: string) => [fmt(value), name]}
+                    contentStyle={tooltipContentStyle}
+                    labelFormatter={tooltipLabelFormatter}
+                    formatter={tooltipValueFormatter}
                   />
                   <Area
                     type="monotone"
