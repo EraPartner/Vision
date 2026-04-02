@@ -469,15 +469,15 @@ export default function DashboardPage() {
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
                 {isVisible('monthlyTrends') && monthlyData.length > 0 && (
-                    <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+                    <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary">
-                                    <TrendingDown className="h-6 w-6" />
+                                <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary transition-transform duration-300 group-hover:scale-105">
+                                    <TrendingDown className="h-5 w-5" />
                                 </div>
                                 <div>
-                                     <CardTitle className="text-xl">{t('monthlyTrends.title')}</CardTitle>
-                                     <CardDescription className="text-base">{t('monthlyTrends.desc')}</CardDescription>
+                                     <CardTitle className="text-lg">{t('monthlyTrends.title')}</CardTitle>
+                                     <CardDescription>{t('monthlyTrends.desc')}</CardDescription>
                                  </div>
                             </div>
                             <ExclusionToggle
@@ -493,11 +493,16 @@ export default function DashboardPage() {
                     </Card>
                 )}
                 {isVisible('categoryPie') && (
-                <Card className="relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-card backdrop-blur-sm">
+                <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="text-xl">{t('categoryPie.title')}</CardTitle>
-                            <CardDescription className="text-base">{t('categoryPie.desc')}</CardDescription>
+                        <div className="flex items-center gap-3">
+                            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-chart-4/20 to-chart-4/5 flex items-center justify-center shadow-sm text-chart-4 transition-transform duration-300 group-hover:scale-105">
+                                <Tags className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">{t('categoryPie.title')}</CardTitle>
+                                <CardDescription>{t('categoryPie.desc')}</CardDescription>
+                            </div>
                         </div>
                         <ExclusionToggle
                             graphKey="categoryPie"
