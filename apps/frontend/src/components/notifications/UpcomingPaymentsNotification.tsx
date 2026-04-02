@@ -100,15 +100,14 @@ export function UpcomingPaymentsNotification() {
               <span className="font-semibold text-foreground">
                 {formatCurrency(Math.abs(pt.amount), pt.currency || appSettings.defaultCurrency, locale)}
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 min-h-0 min-w-0 p-0 rounded-sm"
+              <button
+                type="button"
+                className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('recurring.dismiss')}
                 onClick={() => dismissById(pt.id)}
               >
                 <X className="h-3 w-3" />
-              </Button>
+              </button>
             </span>
           </div>
         ))}
