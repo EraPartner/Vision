@@ -10,7 +10,7 @@ import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, DollarSign, Receipt, TrendingDown } from "lucide-react";
+import { ArrowUpRight, DollarSign, Receipt, TrendingDown, Tags } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 import { useSettings } from "@/contexts/SettingsContext";
