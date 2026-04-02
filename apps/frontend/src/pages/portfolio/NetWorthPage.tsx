@@ -684,14 +684,9 @@ export default function NetWorthPage() {
                     strokeOpacity={0.5}
                   />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "var(--radius)",
-                      color: "hsl(var(--card-foreground))",
-                    }}
-                    labelFormatter={(v: string) => fmtDay(v, appSettings.dateFormat)}
-                    formatter={(value: number, name: string) => [fmt(value), name]}
+                    contentStyle={tooltipContentStyle}
+                    labelFormatter={tooltipLabelFormatter}
+                    formatter={tooltipValueFormatter}
                   />
                   <Area
                     type="monotone"
