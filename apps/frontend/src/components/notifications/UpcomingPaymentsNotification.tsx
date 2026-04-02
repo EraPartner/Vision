@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Bell, X, CalendarClock } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { formatCurrency } from "@/utils/currency";
 import { Link } from "react-router-dom";
