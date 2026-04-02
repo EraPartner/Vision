@@ -55,14 +55,22 @@ function computeYDomain(
   points: Array<{ netWorth: number; liquid: number; investments: number }>,
   series: NetWorthSeries[] = ['netWorth', 'liquid', 'investments'],
 ): [number, number] {
-  const values = points
-    .flatMap((point) => series.map((key) => point[key]))
-    .filter((value) => Number.isFinite(value));
+  let minValue = Number.POSITIVE_INFINITY;
+  let maxValue = Number.NEGATIVE_INFINITY;
 
-  if (values.length === 0) return [0, 100];
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    for (let j = 0; j < series.length; j++) {
+      const value = point[series[j]];
+      if (Number.isFinite(value)) {
+        if (value < minValue) minValue = value;
+        if (value > maxValue) maxValue = value;
+      }
+    }
+  }
 
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) return [0, 100];
+
   const span = maxValue - minValue;
   const padding = span === 0
     ? Math.max(Math.abs(maxValue) * 0.03, 1)
