@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
@@ -49,6 +51,12 @@ export function AppSidebar() {
   const location = useLocation();
   const { workspace, setWorkspace } = useWorkspace();
   const { t } = useLanguage();
+  const { prefetchNetWorth, prefetchPerformance } = usePortfolioPrefetch(workspace);
+
+  const handleNavHover = useCallback((url: string) => {
+    if (url === "/portfolio/net-worth") prefetchNetWorth();
+    else if (url === "/portfolio/performance") prefetchPerformance();
+  }, [prefetchNetWorth, prefetchPerformance]);
 
   const budgetingGroups = [
     {
@@ -186,7 +194,7 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                        <NavLink to={item.url}>
+                        <NavLink to={item.url} onMouseEnter={() => handleNavHover(item.url)}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </NavLink>

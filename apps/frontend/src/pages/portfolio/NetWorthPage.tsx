@@ -155,7 +155,7 @@ export default function NetWorthPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["net-worth", targetCurrency],
     queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
-    staleTime: 60_000,
+    staleTime: 120_000,
   });
   const chartScrollRef = useRef<HTMLDivElement | null>(null);
   const [yDomain, setYDomain] = useState<[number, number] | undefined>(undefined);
