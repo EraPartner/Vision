@@ -83,13 +83,13 @@ const mvCache = new Map();
 ### 4. Net Worth Route Cache
 
 **Route:** `GET /api/info/net-worth`  
-**TTL:** 60 seconds  
+**TTL:** 5 minutes  
 **Storage:** In-memory (Map), keyed by target currency
 
 **Features:**
 - Per-currency response caching for repeated dashboard refreshes
 - In-flight request deduplication (same-currency concurrent requests share one repository promise)
-- Short TTL preserves near-real-time UX while reducing recomputation bursts
+- **Pre-warmed on backend startup** via `warmInfoCaches()` so the first request is instant
 - Route-level throttling (`30 req / 60s`) to protect expensive compute path
 
 Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]
