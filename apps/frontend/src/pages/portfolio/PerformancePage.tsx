@@ -63,6 +63,7 @@ export default function PerformancePage() {
         queryKey: ["portfolio-performance", defaultCurrency],
         queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
         staleTime: 300_000,
+        gcTime: 10 * 60_000,
     });
 
     const PERIOD_LABELS: Record<Period, string> = {
