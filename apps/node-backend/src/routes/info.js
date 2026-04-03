@@ -471,4 +471,51 @@ router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests
   }
 });
 
+/**
+ * Pre-warm the net-worth and portfolio-performance caches so the first
+ * request after startup is served instantly from memory.
+ */
+export async function warmInfoCaches(targetCurrency = 'EUR') {
+  try {
+    logger.info('Warming net-worth cache...', { targetCurrency });
+    const nwData = await infoRepository.getNetWorth(targetCurrency);
+    setCachedNetWorth(targetCurrency, nwData);
+    logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
+  } catch (err) {
+    logger.error('Failed to warm net-worth cache', { error: err.message });
+  }
+
+  try {
+    logger.info('Warming portfolio-performance cache...', { targetCurrency });
+    const { getSnapshots } = await import('../services/portfolioPerformanceSnapshotService.js');
+    const startDate = '2000-01-01';
+    const endDate = new Date().toISOString().split('T')[0];
+    const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
+    const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
+    const payload = {
+      currency: targetCurrency,
+      start_date: startDate,
+      end_date: endDate,
+      snapshots: snapshots.map(s => ({
+        date: s.snapshot_date,
+        invested: parseFloat(s.invested) || 0,
+        value: parseFloat(s.value) || 0,
+        stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
+        crypto_value: parseFloat(s.crypto_value) || 0,
+        metals_value: parseFloat(s.metals_value) || 0,
+        stocks_etfs_invested: parseFloat(s.stocks_etfs_invested) || 0,
+        crypto_invested: parseFloat(s.crypto_invested) || 0,
+        metals_invested: parseFloat(s.metals_invested) || 0,
+        inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
+        gain_loss: parseFloat(s.gain_loss) || 0,
+        return_pct: parseFloat(s.return_pct) || 0,
+      })),
+    };
+    perfResponseCache.set(cacheKey, { data: payload, expiresAt: Date.now() + PERF_CACHE_TTL_MS });
+    logger.info('Portfolio-performance cache warmed', { targetCurrency, snapshots: payload.snapshots.length });
+  } catch (err) {
+    logger.error('Failed to warm portfolio-performance cache', { error: err.message });
+  }
+}
+
 export default router;
