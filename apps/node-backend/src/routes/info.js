@@ -17,10 +17,10 @@ import {
 
 const router = Router();
 
-const NET_WORTH_CACHE_TTL_MS = 60_000;
+const NET_WORTH_CACHE_TTL_MS = 300_000; // 5min – data rarely changes mid-session
 const netWorthResponseCache = new Map();
 
-const PERF_CACHE_TTL_MS = 120_000;
+const PERF_CACHE_TTL_MS = 300_000; // 5min
 const perfResponseCache = new Map();
 
 function getCachedNetWorth(key) {
