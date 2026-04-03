@@ -376,7 +376,11 @@ async function start() {
         logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
       });
 
-      computeAndStoreSnapshots().catch((err) => {
+      computeAndStoreSnapshots().then(() => {
+        warmInfoCaches().catch((err) => {
+          logger.error('Failed to warm info caches on startup', { error: err.message });
+        });
+      }).catch((err) => {
         logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
       });
 
