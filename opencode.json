@@ -4,18 +4,10 @@
     "mcp-obsidian": {
       "type": "local",
       "command": [
-        "docker",
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "OBSIDIAN_HOST",
-        "-e",
-        "OBSIDIAN_API_KEY",
-        "mcp/obsidian"
+        "uvx",
+        "mcp-obsidian"
       ],
       "environment": {
-        "OBSIDIAN_HOST": "host.docker.internal",
         "OBSIDIAN_API_KEY": "bc1a5c0950745ef3232caedbdcb0d0a8cec16da2e370ed5a6caf80e14a0fd5b9"
       },
     },

@@ -1,8 +1,12 @@
 ---
 description: >-
-  Update existing knowledge base documentation when code changes are made.
-  Ensures docs stay in sync with implementation, adds new docs for new features,
-  and maintains consistency across all documentation.
+  Use this agent ONLY after code changes are complete to update documentation.
+  This agent modifies docs to stay in sync with implementation, adds new docs for
+  new features, and maintains consistency. Trigger when: any code change is made
+  and docs need updating. Do NOT use for: code changes, analysis, refactoring,
+  feature implementation (use senior-feature-engineer), code review (use
+  code-improvement-suggester), writing tests (use test-generator), or commits
+  (use intelligent-commit-writer).
 mode: primary
 ---
 
