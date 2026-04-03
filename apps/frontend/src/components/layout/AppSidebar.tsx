@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
