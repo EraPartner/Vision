@@ -51,6 +51,12 @@ export function AppSidebar() {
   const location = useLocation();
   const { workspace, setWorkspace } = useWorkspace();
   const { t } = useLanguage();
+  const { prefetchNetWorth, prefetchPerformance } = usePortfolioPrefetch(workspace);
+
+  const handleNavHover = useCallback((url: string) => {
+    if (url === "/portfolio/net-worth") prefetchNetWorth();
+    else if (url === "/portfolio/performance") prefetchPerformance();
+  }, [prefetchNetWorth, prefetchPerformance]);
 
   const budgetingGroups = [
     {
