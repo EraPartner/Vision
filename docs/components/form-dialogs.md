@@ -2,9 +2,10 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [components, forms, dialogs]
 description: Modal dialogs for adding and editing data throughout the application
+aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog]
 related_code: ["apps/frontend/src/components/forms"]
 ---
 

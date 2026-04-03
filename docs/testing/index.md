@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [testing, index, quality, vitest]
 description: Testing strategies, patterns, and best practices for the Vision project
 aliases: [testing, tests, QA]
@@ -27,6 +27,7 @@ SORT title ASC
 | Topic | Description |
 |-------|-------------|
 | [[docs/testing/testing\|Testing Guide]] | Comprehensive testing guide with patterns and best practices |
+| [[docs/testing/test-inventory\|Test Inventory]] | Current test coverage status and gaps |
 
 ## Test Types
 

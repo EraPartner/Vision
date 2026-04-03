@@ -1,10 +1,11 @@
 ---
 title: Setup Guide
 type: guide
-description: Complete setup instructions for local development
-date: 2026-03-28
-tags: [guide, setup, development, local]
 status: active
+date: 2026-04-02
+tags: [guide, setup, development, local]
+description: Complete setup instructions for local development
+aliases: [setup-guide, installation, getting-started, local-dev]
 related_code: [[package.json]]
 ---
 

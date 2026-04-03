@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Category management for organizing transactions
-date: 2026-03-18
+date: 2026-04-02
 tags: [api, categories, organization]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]

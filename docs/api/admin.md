@@ -2,9 +2,10 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-03-28
+date: 2026-04-02
 tags: [api, admin, system, updates]
 description: API endpoints for system administration, database management, and application updates
+aliases: [admin, system admin, health, initialization]
 related_code: ["apps/node-backend/src/routes/admin.js"]
 ---
 

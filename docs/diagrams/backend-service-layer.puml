@@ -75,6 +75,18 @@ package "External Services" {
     +fetchLivePrices(investments): Promise<PriceMap>
   }
 
+  class BelgianInflationService {
+    +getInflationRates(opts): Promise<InflationRate[]>
+    +warmInflationCache(): Promise<void>
+    +clearInflationMemoryCache(): void
+  }
+
+  class PortfolioPerformanceSnapshotService {
+    +computeAndStoreSnapshots(currency): Promise<void>
+    +getSnapshots(start, end, currency): Promise<Snapshot[]>
+    +getLatestSnapshot(currency): Promise<Snapshot>
+  }
+
   class BankAdapters {
     +createAdapter(bankName, config): BankParser
     +getSupportedBanks(): string[]

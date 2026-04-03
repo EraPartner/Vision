@@ -2,9 +2,10 @@
 title: Layout Components
 type: component
 status: active
-date: 2025-03-18
+date: 2026-03-18
 tags: [components, layout, navigation]
 description: Core layout components including sidebar, header, and app structure
+aliases: [layout, app layout, sidebar, navigation]
 related_code: ["apps/frontend/src/components/layout"]
 ---
 
@@ -259,7 +260,7 @@ function WorkspaceSwitcher() {
 
 - **No Context Provider**: Unlike other contexts in the app, `WorkspaceContext` does not export a React Context or Provider. It uses `useLocation` and `useNavigate` from React Router directly, treating the router as the state container.
 - **Route-derived**: The workspace is determined solely by whether the current path starts with `/portfolio`.
-- **Used by**: [[docs/components/app-sidebar|AppSidebar]] for workspace switching in the navigation.
+- **Used by**: `AppSidebar` (see [[docs/components/layout|Layout Components]]) for workspace switching in the navigation.
 
 **Code**: [[apps/frontend/src/contexts/WorkspaceContext.tsx]]
 
@@ -270,4 +271,4 @@ function WorkspaceSwitcher() {
 - [[docs/components/index]] - Components Index
 - [[docs/features/views]] - All views
 - [[docs/i18n/index]] - Internationalization
-- [[docs/frontend/contexts]] - Context providers
+- [[docs/components/state-management|State Management]] - Context providers

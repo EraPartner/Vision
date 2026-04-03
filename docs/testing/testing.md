@@ -2,10 +2,11 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-03-28
+date: 2026-04-03
 tags: [testing, vitest, quality]
+aliases: [testing, unit tests, integration tests, vitest, test coverage]
 description: Comprehensive testing documentation including frameworks, patterns, and best practices
-related_code: ["apps/node-backend/tests", "apps/frontend/src/components/__tests__"]
+related_code: ["apps/node-backend/tests", "apps/frontend/src"]
 ---
 
 # Testing Documentation

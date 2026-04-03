@@ -2,9 +2,10 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-03-29
+date: 2026-04-02
 tags: [components, portfolio, investments]
 description: Components for investment portfolio management
+aliases: [portfolio-components, investment-components, holdings-components]
 related_code: ["apps/frontend/src/components/portfolio"]
 ---
 

@@ -2,16 +2,16 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-03-31
+date: 2026-04-03
 tags: [reference, api, endpoints, matrix, overview]
-description: Complete matrix of all 88 API endpoints organized by resource for quick lookup
+description: Complete matrix of all 108 API endpoints organized by resource for quick lookup
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 88 API endpoints across 14 route files. Use this as a quick reference to find any endpoint.
+> All 108 API endpoints across 14 route files. Use this as a quick reference to find any endpoint.
 
 ## Transactions (6 endpoints)
 

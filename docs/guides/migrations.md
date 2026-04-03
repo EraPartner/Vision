@@ -1,10 +1,11 @@
 ---
 title: Database Migration Guide
 type: guide
-date: 2026-03-31
-tags: [guide, database, migrations, alembic, postgresql]
 status: active
+date: 2026-04-02
+tags: [guide, database, migrations, alembic, postgresql]
 description: How to create, run, and manage database migrations using Alembic
+aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
 related_code: ["alembic/", "alembic/env.py", "config/alembic.ini", "docker-entrypoint.sh"]
 ---
 

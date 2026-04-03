@@ -4,6 +4,7 @@ type: adr
 status: Accepted
 date: 2026-03-23
 tags: [bug-fix, frontend, backend, ui, database]
+aliases: [bug fixes, UI state, category names, dashboard charts, date picker, splits, owes]
 description: Fixed UI/data consistency issues across virtual tables, statistics, planned-payment date handling, split settlement/export flows, settings defaults, and transaction filtering
 related_code: 
   - "apps/frontend/src/pages/RecipientsPage.tsx"

@@ -2,9 +2,10 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-03-24
+date: 2026-04-02
 tags: [api, market, stocks, finance]
 description: API endpoints for real-time market data, search, quotes, and charts
+aliases: [market-api, stock-search, quotes-api, yahoo-finance]
 related_code: ["apps/node-backend/src/routes/marketLookup.js"]
 ---
 

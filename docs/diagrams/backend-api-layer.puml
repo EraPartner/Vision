@@ -172,7 +172,11 @@ package "Routes" {
     +GET /net-worth : get net worth
     +GET /recipient-insights : get recipient insights
     +GET /exchange-rates : get exchange rates
+    +POST /exchange-rates/refresh : refresh exchange rates
+    +GET /inflation-rates : get inflation rates
+    +POST /inflation-rates/refresh : refresh inflation rates
     +POST /refresh-views : refresh materialized views
+    +GET /portfolio-performance : get performance snapshots
   }
 
   class AdminRouter {
@@ -182,6 +186,7 @@ package "Routes" {
     +GET /update/check : check for updates
     +POST /update/apply : apply update
     +POST /update/apply-and-restart : apply and restart
+    +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
   }
 }
 

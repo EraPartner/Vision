@@ -2,9 +2,10 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-03-27
+date: 2026-04-03
 tags: [feature, views, pages, frontend, ui]
 description: Complete overview of all views and pages in the Vision application
+aliases: [views, pages, frontend views, application pages, ui views]
 related_code: ["apps/frontend/src/App.tsx", "apps/frontend/src/pages"]
 ---
 
@@ -29,7 +30,18 @@ Import
 Owes (Splits)
 Tax
 Portfolio
+  - Overview
+  - Stocks
+  - Crypto
   - Metals
+  - Real Estate
+  - Savings
+  - Performance
+  - Net Worth
+  - Exchange Rates
+  - Watchlist
+  - Market Lookup
+  - Tax
 ```
 
 ---
@@ -577,7 +589,7 @@ Full analytics page for recipient spending patterns.
 - 3 KPI cards: top recipient, top-10 total spend, average transaction
 - Horizontal bar chart of top 10 recipients by spend
 - Month-over-month change alerts (increases in red, decreases in green)
-- [[docs/components/virtual-data-table|VirtualDataTable]] with paginated recipient details (rank, name, total spend, count, average, first/last seen)
+- [[docs/components/shared-components|VirtualDataTable]] with paginated recipient details (rank, name, total spend, count, average, first/last seen)
 - Accessible from Statistics page via deep link or direct navigation
 
 **Code**: [[apps/frontend/src/pages/RecipientInsightsPage.tsx]]

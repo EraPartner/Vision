@@ -1,10 +1,11 @@
 ---
 title: Deployment Guide
 type: guide
-description: Production deployment instructions
-date: 2026-03-28
-tags: [guide, deployment, production, docker, electron]
 status: active
+date: 2026-04-02
+tags: [guide, deployment, production, docker, electron]
+description: Production deployment instructions
+aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
 ---
 

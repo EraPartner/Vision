@@ -2,9 +2,10 @@
 title: Materialized Views
 type: performance
 status: active
-date: 2025-03-18
+date: 2026-03-18
 tags: [performance, database, materialized-views, optimization]
 description: PostgreSQL materialized views for pre-computing expensive dashboard aggregations
+aliases: [materialized views, pre-computed queries, dashboard optimization]
 related_code: ["apps/node-backend/src/services/materializedViewService.js"]
 ---
 

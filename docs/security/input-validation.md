@@ -2,9 +2,10 @@
 title: Input Validation
 type: security
 status: active
-date: 2025-03-18
+date: 2026-04-02
 tags: [security, validation, sanitization]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, and malformed data
+aliases: [input validation, sanitization, sql injection, xss, validation middleware]
 related_code: ["apps/node-backend/src/middleware/validation.js"]
 ---
 

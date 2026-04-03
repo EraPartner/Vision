@@ -1,10 +1,11 @@
 ---
 title: Contributing Guide
 type: guide
-description: How to contribute to Vision
-date: 2026-03-18
-tags: [guide, contributing, development, workflow]
 status: active
+date: 2026-04-02
+tags: [guide, contributing, development, workflow]
+description: How to contribute to Vision
+aliases: [contributing-guide, development-workflow, code-standards, pull-requests]
 related_code: [[AGENTS.md]]
 ---
 

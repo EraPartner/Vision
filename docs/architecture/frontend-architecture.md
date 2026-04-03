@@ -3,7 +3,7 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: React frontend architecture and diagrams
-date: 2026-03-23
+date: 2026-04-02
 tags: [architecture, frontend, uml, plantuml, react]
 aliases: [frontend architecture, react architecture, frontend design]
 ---
@@ -346,9 +346,6 @@ const queryClient = new QueryClient({
 - Timeout handling (30s default)
 - Error transformation
 
-@enduml
-```
-
 ## API Communication
 
 Frontend to Backend request/response flow with React Query integration.
@@ -399,9 +396,6 @@ note right of ApiClient
   Max retries: 2
   Exponential backoff
 end note
-
-@enduml
-```
 
 @enduml
 ```
@@ -576,7 +570,7 @@ To regenerate these diagrams after code changes:
 ---
 
 **Related Documentation**
-- [[Backend Architecture]] - Backend diagrams
-- [[API Documentation]] - API endpoint details
-- [[Components]] - Component documentation
-- [[Hooks]] - Custom hooks reference
+- [[docs/architecture/backend-architecture|Backend Architecture]] - Backend diagrams
+- [[docs/api/index|API Documentation]] - API endpoint details
+- [[docs/components/index|Components]] - Component documentation
+- [[docs/components/hooks|Hooks]] - Custom hooks reference

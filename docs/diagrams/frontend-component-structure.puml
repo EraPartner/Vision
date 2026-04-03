@@ -137,6 +137,7 @@ package "Feature Components - Portfolio" {
   class PortfolioNewsFeed
   class InvestmentDetailDialog
   class WatchlistChartDialog
+  class MetalsHoldingsCard
 }
 
 package "Feature Components - Statistics" {

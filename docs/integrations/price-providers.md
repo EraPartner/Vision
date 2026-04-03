@@ -2,8 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live price feeds for stocks, crypto, and other investments
-date: 2026-03-28
+date: 2026-04-03
 tags: [integration, price, stocks, crypto, api]
+aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js]]
 ---

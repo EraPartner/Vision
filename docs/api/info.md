@@ -2,9 +2,10 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
+aliases: [info-api, analytics-api, statistics-api, dashboard-api]
 related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js"]
 ---
 

@@ -2,7 +2,7 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [architecture, index, uml, plantuml, diagrams]
 description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams
 aliases: [architecture, diagrams, UML, system design]
@@ -76,12 +76,15 @@ Located in `docs/diagrams/`:
 | PlannedTransaction State | PlannedTransaction lifecycle | `planned-transaction-state.puml` |
 | Transaction State | Transaction lifecycle states | `transaction-state.puml` |
 
-## Diagram Documentation
+## Architecture Documentation
 
-Detailed documentation with embedded diagrams:
+Detailed architectural analysis:
 
-- [[Backend Architecture]] - Backend-specific diagrams
-- [[Frontend Architecture]] - Frontend-specific diagrams
+- [[docs/architecture/backend-architecture|Backend Architecture]] - Backend-specific diagrams
+- [[docs/architecture/frontend-architecture|Frontend Architecture]] - Frontend-specific diagrams
+- [[docs/architecture/deep-dive|Architecture Deep Dive]] - Design patterns, data flow, system organization
+- [[docs/architecture/electron|Electron Desktop Architecture]] - Electron packaging, IPC, security
+- [[docs/architecture/trade-offs|System Design Trade-offs]] - Analysis of key architectural trade-offs and alternatives
 
 ## Regenerating Diagrams
 

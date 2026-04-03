@@ -29,10 +29,13 @@ SORT title ASC
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 
 ### Development
-- [[docs/guides/contributing\|Contributing Guide]] - How to contribute to Vision
-- [[docs/guides/migrations\|Database Migration Guide]] - Creating, running, and managing Alembic migrations
-- [[docs/guides/how-to-add-api-endpoint\|How to Add an API Endpoint]] - Step-by-step backend API guide
-- [[docs/guides/how-to-add-react-component\|How to Add a React Component]] - Step-by-step frontend component guide
+
+- [[docs/guides/contributing|Contributing Guide]] - How to contribute to Vision
+- [[docs/guides/migrations|Database Migration Guide]] - Creating, running, and managing Alembic migrations
+- [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]] - Step-by-step backend API guide
+- [[docs/guides/how-to-add-new-page|How to Add a New Page]] - Step-by-step frontend page guide
+- [[docs/guides/how-to-add-react-component|How to Add a React Component]] - Step-by-step frontend component guide
+- [[docs/guides/debugging|Debugging Guide]] - Error handling, debugging techniques, common failure modes
 
 ### Deployment
 - [[docs/guides/deployment\|Deployment Guide]] - Production deployment (Docker, Electron)

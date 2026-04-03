@@ -25,5 +25,5 @@ SORT title ASC
 
 - [[docs/security/input-validation|Input Validation]] - Input sanitization and validation
 - [[docs/security/rate-limiting|Rate Limiting]] - Request rate controls
+- [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, data protection, privacy
 - Authentication and authorization (future)
-- Data protection (future)

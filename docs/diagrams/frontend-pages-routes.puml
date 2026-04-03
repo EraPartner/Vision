@@ -85,6 +85,11 @@ package "Portfolio Pages" {
     +Crypto Transactions
   }
 
+  class MetalsPage {
+    +Metals Holdings
+    +Metals Transactions
+  }
+
   class RealEstatePage {
     +Properties
     +Property Details
@@ -165,6 +170,7 @@ AppLayout --> PortfolioOverviewPage : "/portfolio"
 PortfolioOverviewPage --> MarketLookupPage : "/portfolio/market"
 PortfolioOverviewPage --> StocksPage : "/portfolio/stocks"
 PortfolioOverviewPage --> CryptoPage : "/portfolio/crypto"
+PortfolioOverviewPage --> MetalsPage : "/portfolio/metals"
 PortfolioOverviewPage --> RealEstatePage : "/portfolio/real-estate"
 PortfolioOverviewPage --> SavingsPage : "/portfolio/savings"
 PortfolioOverviewPage --> PerformancePage : "/portfolio/performance"

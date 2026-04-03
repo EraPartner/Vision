@@ -2,9 +2,10 @@
 title: Recipient Bank Accounts API
 type: endpoint
 status: active
-date: 2025-03-18
+date: 2026-03-18
 tags: [api, recipients, banking, iban]
 description: API endpoints for managing bank accounts linked to recipients
+aliases: [iban, bank accounts, recipient banking]
 related_code: ["apps/node-backend/src/routes/recipientBankAccounts.js", "apps/node-backend/src/repositories/recipientBankAccountRepository.js", "apps/node-backend/src/services/iban.js"]
 ---
 

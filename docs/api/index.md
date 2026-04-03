@@ -24,7 +24,7 @@ TABLE WITHOUT FILE
   method AS "Methods",
   description AS "Description"
 FROM "docs/api"
-WHERE type = "endpoint" OR type = "api"
+WHERE type = "endpoint"
 SORT path ASC
 ```
 

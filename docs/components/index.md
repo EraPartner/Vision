@@ -2,7 +2,7 @@
 title: Components Documentation Index
 type: components-index
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [components, index, frontend, react]
 description: Documentation for all frontend React components, hooks, and utilities
 aliases: [components, UI, frontend components]
@@ -23,6 +23,11 @@ aliases: [components, UI, frontend components]
 | [[docs/components/layout\|Layout]] | App shell and navigation | AppLayout, AppSidebar |
 | [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist |
 | [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio |
+| [[docs/components/shared-components\|Shared Components]] | Cross-cutting utilities | VirtualDataTable, dateUtils, ErrorBoundary |
+
+## State Management
+
+- [[docs/components/state-management\|State Management Deep Dive]] — React Query + Context architecture, patterns, and optimization
 
 ## All Components
 

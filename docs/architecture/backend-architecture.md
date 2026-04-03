@@ -1107,6 +1107,6 @@ To regenerate these diagrams after code changes:
 ---
 
 **Related Documentation**
-- [[API Documentation]] - API endpoint details
-- [[Database Schema]] - Detailed schema documentation
-- [[Features Overview]] - Feature descriptions
+- [[docs/api/index|API Documentation]] - API endpoint details
+- [[docs/adr/002-database-schema|Database Schema]] - Detailed schema documentation
+- [[docs/features/index|Features Overview]] - Feature descriptions

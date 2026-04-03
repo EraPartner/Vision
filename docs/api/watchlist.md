@@ -4,9 +4,10 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-03-18
+date: 2026-04-02
 tags: [api, watchlist, investments]
 status: active
+aliases: [watchlist-api, tracked-symbols, watch list]
 related_code: [[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]
 ---
 

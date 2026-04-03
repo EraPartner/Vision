@@ -4,9 +4,10 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-03-26
+date: 2026-04-02
 tags: [api, settings, preferences]
 status: active
+aliases: [settings-api, preferences-api, user-settings, app-settings]
 related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]]
 ---
 

@@ -19,7 +19,7 @@ aliases: [tag guide, tagging, categories, labels]
 
 | Tag | Use For |
 |-----|---------|
-| `index` | Index/overview pages |
+| `index` | Index/overview pages (e.g., `features-index`) |
 | `endpoint` | API endpoint documentation |
 | `feature` | Feature documentation |
 | `integration` | External service integration docs |
@@ -31,8 +31,9 @@ aliases: [tag guide, tagging, categories, labels]
 | `architecture` | Architecture documentation |
 | `i18n` | Localization documentation |
 | `security` | Security documentation |
-| `reference` | Reference docs (glossary, tag taxonomy) |
+| `reference` | Reference docs (code patterns, algorithms, env vars) |
 | `map-of-content` | Maps of Content (MOCs) |
+| `template` | Documentation templates |
 
 ### Domain (use 1-3)
 

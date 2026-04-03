@@ -2,9 +2,10 @@
 title: Saved Charts API
 type: endpoint
 status: active
-date: 2026-03-18
+date: 2026-04-02
 tags: [api, charts, analytics]
 description: API endpoints for saving and managing custom chart configurations
+aliases: [saved-charts-api, custom-charts, chart-config, analytics-saved]
 related_code: ["apps/node-backend/src/routes/savedCharts.js", "apps/node-backend/src/repositories/savedChartsRepository.js"]
 ---
 

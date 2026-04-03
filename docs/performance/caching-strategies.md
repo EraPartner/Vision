@@ -2,9 +2,10 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-03-28
+date: 2026-04-02
 tags: [performance, caching, optimization]
 description: In-memory caching implementation for exchange rates and price feeds
+aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
 related_code: ["apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/priceProviderService.js"]
 ---
 

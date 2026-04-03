@@ -2,9 +2,10 @@
 title: UI Components
 type: component
 status: active
-date: 2026-03-23
+date: 2026-04-02
 tags: [components, ui, radix, shadcn]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS
+aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
 

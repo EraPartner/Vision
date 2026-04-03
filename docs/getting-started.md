@@ -38,9 +38,16 @@ Get a high-level view before diving into code:
 - [[AGENTS.md]] - Coding standards and build commands
 
 ### 4. Understand Key Features
-- [[docs/features/views\|Views & Pages]] - All application pages
-- [[docs/features/transactions\|Transactions]] - Core feature
-- [[docs/features/portfolio\|Portfolio]] - Investment tracking
+- [[docs/features/views|Views & Pages]] - All application pages
+- [[docs/features/transactions|Transactions]] - Core feature
+- [[docs/features/portfolio|Portfolio]] - Investment tracking
+
+### 5. Use Documentation Templates
+When creating new docs, use the templates:
+- [[docs/templates/index|Templates Index]] - All available templates
+- [[docs/templates/api-endpoint|API Template]] - For new API endpoints
+- [[docs/templates/feature|Feature Template]] - For new features
+- [[docs/templates/component|Component Template]] - For React components
 
 ## 🔍 I Need to Find Something
 

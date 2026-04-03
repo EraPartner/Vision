@@ -2,7 +2,7 @@
 title: Features Documentation Index
 type: features-index
 status: active
-date: 2026-03-31
+date: 2026-04-02
 tags: [features, index, documentation]
 description: Feature documentation for all major capabilities of the Vision application
 aliases: [features, capabilities]
@@ -38,12 +38,26 @@ SORT title ASC
 
 ### Portfolio & Investments
 - [[docs/features/portfolio\|Portfolio]] - Investment tracking (stocks, ETFs, crypto, metals, real estate, savings, bonds)
+- [[docs/features/net-worth\|Net Worth]] - Daily net worth tracking with zoomable charts and LTTB downsampling
+- [[docs/features/exchange-rates\|Exchange Rates]] - Live ECB rates, fallback rates, and manual refresh
+- [[docs/features/watchlist\|Watchlist]] - Security tracking with target price alerts
+- [[docs/features/market-lookup\|Market Lookup]] - Search and add securities to portfolio
+- [[docs/features/portfolio-tax\|Portfolio Tax]] - Investment tax tracking with manual adjustments
 
 ### Tax
-- [[docs/adr/002-database-schema\|Belgian Tax]] - Tax profile and deductions (schema)
+- [[docs/features/belgian-tax\|Belgian Tax]] - Tax profile, cadastral income, deductions, inflation
 
-### Analytics
-- [[docs/api/marketLookup\|Analytics]] - Statistics and reporting
+### Shared Expenses
+- [[docs/features/splits\|Splits & Owes]] - Transaction splitting and debt tracking
+
+### Analytics & Reporting
+- [[docs/features/statistics\|Statistics]] - Comprehensive analytics with charts, pivot tables, and exclusions
+- [[docs/features/recipient-insights\|Recipient Insights]] - Merchant spending analytics with MoM alerts
+- [[docs/features/saved-charts\|Saved Charts]] - Custom category charts that persist across sessions
+
+### User Experience
+- [[docs/features/onboarding\|Onboarding]] - First-run setup wizard
+- [[docs/features/settings\|Settings]] - Application preferences with JSONB storage and preload optimization
 
 ## Related Documentation
 

@@ -2,9 +2,10 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-03-28
+date: 2026-04-02
 tags: [i18n, translations, localization, internationalization]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
+aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
 ---
 

@@ -34,8 +34,11 @@ SORT title ASC
 - [[docs/integrations/currency-conversion\|Currency Conversion]] - Exchange rate services (ECB, open.er-api)
 
 ### Government Data
-> [!info] Belgian Inflation
-> Belgian inflation data is sourced from **Statbel** (primary) and **Eurostat HICP** (fallback). Documented in [[docs/features/portfolio\|Portfolio]] and [[docs/api/info\|Info API]].
+- [[docs/integrations/belgian-inflation\|Belgian Inflation]] - Statbel/Eurostat HICP inflation data sourcing
+
+### Financial Services
+- [[docs/integrations/kinesis-price-provider\|Kinesis Price Provider]] - Metals and commodity price feeds
+- [[docs/integrations/loan-repayment-service\|Loan Repayment Service]] - Amortization calculations for planned loans
 
 ## Related Documentation
 

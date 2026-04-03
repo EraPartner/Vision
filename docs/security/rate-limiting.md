@@ -2,9 +2,10 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2025-03-18
+date: 2026-03-18
 tags: [security, rate-limiting, ddos]
 description: Rate limiting implementation to protect against abuse and ensure fair resource usage
+aliases: [rate limit, ddos protection, throttling]
 related_code: ["apps/node-backend/src/middleware/rateLimiter.js"]
 ---
 

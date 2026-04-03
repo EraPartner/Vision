@@ -2,9 +2,10 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-03-23
+date: 2026-04-02
 tags: [components, dashboard, charts, widgets]
 description: Dashboard-specific components for financial overview and visualization
+aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
 

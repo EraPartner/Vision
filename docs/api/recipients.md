@@ -4,9 +4,10 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management
-date: 2026-03-31
+date: 2026-04-02
 tags: [api, recipients, payees]
 status: active
+aliases: [recipients-api, payee, payer, counterparty, recipient-management]
 related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]]
 ---
 
