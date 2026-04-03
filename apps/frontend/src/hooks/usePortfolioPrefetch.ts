@@ -3,16 +3,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 
-const PREFETCH_STALE_TIME = 120_000; // 2min - don't re-prefetch if already cached
+const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 
 /**
  * Prefetches heavy portfolio endpoints (net-worth, portfolio-performance)
  * so they are warm when the user navigates to those pages.
  *
- * - On mount (when workspace = portfolio): kicks off both fetches immediately.
+ * - On mount: kicks off both fetches **immediately** (no workspace gate).
  * - Exposes `prefetchNetWorth` / `prefetchPerformance` for hover-triggered warming.
  */
-export function usePortfolioPrefetch(workspace: string) {
+export function usePortfolioPrefetch(_workspace?: string) {
   const queryClient = useQueryClient();
   const { appSettings } = useAppSettings();
   const currency = appSettings.defaultCurrency || "EUR";
@@ -33,16 +33,12 @@ export function usePortfolioPrefetch(workspace: string) {
     });
   }, [queryClient, currency]);
 
-  // Eagerly prefetch when entering the portfolio workspace
+  // Fire both prefetches immediately on mount – no delay, no workspace check.
+  // The backend warms these caches on startup so the response should be instant.
   useEffect(() => {
-    if (workspace !== "portfolio") return;
-    // Small delay to let critical UI settle first
-    const timer = setTimeout(() => {
-      prefetchNetWorth();
-      prefetchPerformance();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [workspace, prefetchNetWorth, prefetchPerformance]);
+    prefetchNetWorth();
+    prefetchPerformance();
+  }, [prefetchNetWorth, prefetchPerformance]);
 
   return { prefetchNetWorth, prefetchPerformance };
 }
