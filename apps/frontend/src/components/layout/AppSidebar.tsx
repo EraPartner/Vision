@@ -194,7 +194,7 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                        <NavLink to={item.url}>
+                        <NavLink to={item.url} onMouseEnter={() => handleNavHover(item.url)}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </NavLink>
