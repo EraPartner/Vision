@@ -31,6 +31,7 @@ import {
 } from './services/priceProviderService.js';
 import { getKinesisAssetConfig } from './config/kinesisConfig.js';
 import { computeAndStoreSnapshots } from './services/portfolioPerformanceSnapshotService.js';
+import { warmInfoCaches } from './routes/info.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
