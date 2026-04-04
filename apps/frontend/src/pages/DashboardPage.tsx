@@ -436,19 +436,20 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8 animate-in">
             {/* Page header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('dashboard.subtitle')}</p>
-                </div>
-                <WidgetVisibilityDialog
-                    widgets={widgetDefs}
-                    isVisible={isVisible}
-                    setWidgetVisible={setWidgetVisible}
-                    setAllVisible={setAllVisible}
-                    resetToDefaults={resetToDefaults}
-                />
-            </div>
+            <PageHeader
+                title={t('dashboard.title')}
+                subtitle={t('dashboard.subtitle')}
+                icon={LayoutDashboard}
+                actions={
+                    <WidgetVisibilityDialog
+                        widgets={widgetDefs}
+                        isVisible={isVisible}
+                        setWidgetVisible={setWidgetVisible}
+                        setAllVisible={setAllVisible}
+                        resetToDefaults={resetToDefaults}
+                    />
+                }
+            />
 
             {/* Stats */}
             {isVisible('statCards') && (
