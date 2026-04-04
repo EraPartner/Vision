@@ -130,6 +130,12 @@ All colors MUST be HSL.
         outline-offset: 2px;
     }
 
+    /* Subtle selection color */
+    ::selection {
+        background: hsl(var(--primary) / 0.15);
+        color: hsl(var(--foreground));
+    }
+
     /* Better scrollbar styling */
     ::-webkit-scrollbar {
         width: 8px;
