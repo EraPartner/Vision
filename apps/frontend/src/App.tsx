@@ -107,6 +107,7 @@ const App = () => {
                                                 v7_relativeSplatPath: true,
                                             }}
                                         >
+                                            <ScrollToTop />
                                             <AppLayout>
                                                 <Suspense fallback={<PageLoader />}>
                                                     <Routes>
