@@ -54,7 +54,14 @@ const queryClient = new QueryClient({
 function PageLoader() {
     return (
         <div className="flex items-center justify-center h-96">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                </div>
+                <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
+            </div>
         </div>
     );
 }
