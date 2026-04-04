@@ -422,10 +422,7 @@ export default function DashboardPage() {
         const errorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || 'Unknown error';
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
-                    <p className="text-destructive mt-1">{t('dashboard.errorLoading', { msg: String(errorMessage) })}</p>
-                </div>
+                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(errorMessage) })} icon={LayoutDashboard} />
             </div>
         );
     }
