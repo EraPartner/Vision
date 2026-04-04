@@ -131,7 +131,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/20">
+          <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/90 to-accent/60 flex items-center justify-center shadow-lg shadow-primary/25 transition-transform duration-300 hover:scale-105">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (

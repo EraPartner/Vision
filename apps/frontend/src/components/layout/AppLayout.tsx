@@ -45,7 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
-                        className="h-14 border-b border-border/50 bg-background/80 backdrop-blur-md flex items-center px-4 sticky top-0 z-30 supports-[backdrop-filter]:bg-background/60">
+                        className="h-14 border-b border-border/40 bg-background/80 backdrop-blur-md flex items-center px-4 sticky top-0 z-30 supports-[backdrop-filter]:bg-background/60 shadow-[0_1px_3px_0_hsl(var(--foreground)/0.04)]">
                         <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
                         <UpdateNotification />
