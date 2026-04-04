@@ -15,6 +15,7 @@ import { configureCurrencyFormatDefaults, numberFormatToLocale } from "@/utils/c
 import { lazy, Suspense, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
 import PortfolioTaxPage from "@/pages/portfolio/PortfolioTaxPage.tsx";
 
@@ -106,6 +107,7 @@ const App = () => {
                                                 v7_relativeSplatPath: true,
                                             }}
                                         >
+                                            <ScrollToTop />
                                             <AppLayout>
                                                 <Suspense fallback={<PageLoader />}>
                                                     <Routes>

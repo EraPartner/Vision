@@ -7,10 +7,11 @@ import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
 import { DataTable } from "@/components/shared/DataTable";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, DollarSign, Receipt, TrendingDown, Tags } from "lucide-react";
+import { ArrowUpRight, DollarSign, LayoutDashboard, Receipt, TrendingDown, Tags } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -378,10 +379,7 @@ export default function DashboardPage() {
     if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading || recentTransactionsLoading) {
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('dashboard.loadingData')}</p>
-                </div>
+                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.loadingData')} icon={LayoutDashboard} />
                 {/* Stat cards skeleton */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {[...Array(4)].map((_, i) => (
@@ -424,10 +422,7 @@ export default function DashboardPage() {
         const errorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || 'Unknown error';
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
-                    <p className="text-destructive mt-1">{t('dashboard.errorLoading', { msg: String(errorMessage) })}</p>
-                </div>
+                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(errorMessage) })} icon={LayoutDashboard} />
             </div>
         );
     }
@@ -435,19 +430,20 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8 animate-in">
             {/* Page header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('dashboard.subtitle')}</p>
-                </div>
-                <WidgetVisibilityDialog
-                    widgets={widgetDefs}
-                    isVisible={isVisible}
-                    setWidgetVisible={setWidgetVisible}
-                    setAllVisible={setAllVisible}
-                    resetToDefaults={resetToDefaults}
-                />
-            </div>
+            <PageHeader
+                title={t('dashboard.title')}
+                subtitle={t('dashboard.subtitle')}
+                icon={LayoutDashboard}
+                actions={
+                    <WidgetVisibilityDialog
+                        widgets={widgetDefs}
+                        isVisible={isVisible}
+                        setWidgetVisible={setWidgetVisible}
+                        setAllVisible={setAllVisible}
+                        resetToDefaults={resetToDefaults}
+                    />
+                }
+            />
 
             {/* Stats */}
             {isVisible('statCards') && (

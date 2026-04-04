@@ -210,9 +210,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
         {!collapsed && (
-          <p className="text-[11px] text-muted-foreground/60 text-center font-medium tracking-wide uppercase">
-            Vision v1.0
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+            <p className="text-[11px] text-muted-foreground/60 text-center font-medium tracking-wide uppercase">
+              Vision v1.0
+            </p>
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>
