@@ -233,9 +233,9 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all ${active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-200 ${active
+          ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
         }`}
     >
       {icon}
