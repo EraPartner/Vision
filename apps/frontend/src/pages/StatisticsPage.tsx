@@ -762,6 +762,7 @@ export default function StatisticsPage() {
     return (
       <div className="space-y-6 animate-in">
         <PageHeader title={t('statsPage.title')} icon={BarChart3} />
+        <Card>
           <CardContent className="pt-6">
             <p className="text-destructive">{t('statsPage.error', { msg: error?.message })}</p>
           </CardContent>
