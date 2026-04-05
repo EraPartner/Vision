@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
-import { ArrowLeft, Check, DollarSign, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Check, DollarSign, HandCoins, Trash2, Users } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { Progress } from "@/components/ui/progress";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNavigate } from "react-router-dom";
@@ -32,10 +33,7 @@ export default function OwesPage() {
     if (isLoading) {
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('owesPage.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('owesPage.subtitle')}</p>
-                </div>
+                <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {[...Array(3)].map((_, i) => (
                         <Skeleton key={i} className="h-32" />
@@ -54,10 +52,7 @@ export default function OwesPage() {
 
     return (
         <div className="space-y-8 animate-in">
-            <div>
-                <h2 className="text-3xl font-bold text-foreground">{t('owesPage.title')}</h2>
-                <p className="text-muted-foreground mt-1">{t('owesPage.subtitle')}</p>
-            </div>
+            <PageHeader title={t('owesPage.title')} subtitle={t('owesPage.subtitle')} icon={HandCoins} />
 
             {totalOwed > 0 && (
                 <Card className="bg-primary/5 border-primary/20">
