@@ -773,12 +773,9 @@ export default function StatisticsPage() {
 
   if (!data || data.monthlyData.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-in">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
-            <p className="text-muted-foreground mt-1">{t('statsPage.subtitle')}</p>
-          </div>
+          <PageHeader title={t('statsPage.title')} subtitle={t('statsPage.subtitle')} icon={BarChart3} />
           <WidgetVisibilityDialog
               widgets={widgets}
               isVisible={isVisible}
@@ -804,12 +801,9 @@ export default function StatisticsPage() {
   const chartCardProps = { getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in">
       <div className="flex items-center justify-between">
-      <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('statsPage.subtitle')}</p>
-        </div>
+        <PageHeader title={t('statsPage.title')} subtitle={t('statsPage.subtitle')} icon={BarChart3} />
         <WidgetVisibilityDialog
           widgets={widgets}
           isVisible={isVisible}
