@@ -13,6 +13,7 @@ import {
   Area, AreaChart,
 } from "recharts";
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Import } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
