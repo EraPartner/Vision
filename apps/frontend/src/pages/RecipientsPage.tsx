@@ -5,7 +5,10 @@ import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
 import { AddRecipientDialog } from "@/components/forms/AddRecipientDialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
@@ -126,8 +129,18 @@ export default function RecipientsPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="space-y-8 animate-in">
+                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+                <Card>
+                    <CardHeader className="pb-3">
+                        <Skeleton className="h-6 w-44" />
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {[...Array(8)].map((_, i) => (
+                            <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -135,10 +148,8 @@ export default function RecipientsPage() {
     if (error) {
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('recipientsPage.tableTitle')}</h2>
-                    <p className="text-destructive mt-1">{t('recipientsPage.error', { msg: error.message })}</p>
-                </div>
+                <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
+                <Card><CardContent className="pt-6"><p className="text-destructive">{t('recipientsPage.error', { msg: error.message })}</p></CardContent></Card>
             </div>
         );
     }

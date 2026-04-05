@@ -4,7 +4,9 @@ import {useNavigate} from "react-router-dom";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Loader2, Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, Pencil} from "lucide-react";
+import {Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown, FolderOpen, Folder, Pencil, Tags} from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Skeleton } from "@/components/ui/skeleton";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
 import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
 import {cn} from "@/lib/utils";
@@ -92,19 +94,25 @@ export default function CategoriesPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-primary"/>
+            <div className="space-y-6 animate-in">
+                <PageHeader title={t('categories.title')} icon={Tags} />
+                <Card>
+                    <CardHeader className="pb-3"><Skeleton className="h-6 w-44" /></CardHeader>
+                    <CardContent className="space-y-2">
+                        {[...Array(6)].map((_, i) => (
+                            <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('categories.title')}</h2>
-                    <p className="text-destructive mt-1">{t('categoriesPage.error', { msg: error.message })}</p>
-                </div>
+            <div className="space-y-6 animate-in">
+                <PageHeader title={t('categories.title')} icon={Tags} />
+                <Card><CardContent className="pt-6"><p className="text-destructive">{t('categoriesPage.error', { msg: error.message })}</p></CardContent></Card>
             </div>
         );
     }
@@ -116,12 +124,11 @@ export default function CategoriesPage() {
         <>
         <div className="space-y-6 animate-in">
             <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('categories.title')}</h2>
-                    <p className="text-muted-foreground mt-1">
-                        {t('categoriesPage.subtitle', { n: totalItems, g: grouped.length })}
-                    </p>
-                </div>
+                <PageHeader
+                    title={t('categories.title')}
+                    subtitle={t('categoriesPage.subtitle', { n: totalItems, g: grouped.length })}
+                    icon={Tags}
+                />
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
