@@ -561,11 +561,17 @@ export default function PlannedPaymentsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">{t('plannedPage.loading')}</p>
+      <div className="space-y-8 animate-in">
+        <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="border-none shadow-md">
+              <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
+              <CardContent><Skeleton className="h-8 w-20" /></CardContent>
+            </Card>
+          ))}
         </div>
+        <Skeleton className="h-[300px] w-full rounded-xl" />
       </div>
     );
   }
@@ -574,10 +580,7 @@ export default function PlannedPaymentsPage() {
     <>
       <div className="space-y-8 animate-in">
         <div className="flex items-start justify-between">
-            <div>
-            <h2 className="text-3xl font-bold text-foreground">{t('plannedPage.title')}</h2>
-            <p className="text-muted-foreground mt-1">{t('plannedPage.subtitle')}</p>
-          </div>
+            <PageHeader title={t('plannedPage.title')} subtitle={t('plannedPage.subtitle')} icon={CalendarClock} />
           <div className="flex gap-2">
               <Button
                 variant="outline"

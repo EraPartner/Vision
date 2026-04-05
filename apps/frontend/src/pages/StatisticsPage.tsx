@@ -746,8 +746,8 @@ export default function StatisticsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
+      <div className="space-y-6 animate-in">
+        <PageHeader title={t('statsPage.title')} icon={BarChart3} />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i}><CardContent className="pt-6"><Skeleton className="h-20 w-full" /></CardContent></Card>
@@ -760,9 +760,8 @@ export default function StatisticsPage() {
 
   if (isError) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('statsPage.title')}</h1>
-        <Card>
+      <div className="space-y-6 animate-in">
+        <PageHeader title={t('statsPage.title')} icon={BarChart3} />
           <CardContent className="pt-6">
             <p className="text-destructive">{t('statsPage.error', { msg: error?.message })}</p>
           </CardContent>
