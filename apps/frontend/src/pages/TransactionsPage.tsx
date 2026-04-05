@@ -306,10 +306,7 @@ export default function TransactionsPage() {
     if (isLoading) {
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('txPage.subtitle')}</p>
-                </div>
+                <PageHeader title={t('txPage.title')} subtitle={t('txPage.subtitle')} icon={Receipt} />
                 <Card>
                     <CardHeader className="pb-3">
                         <Skeleton className="h-6 w-44" />
@@ -328,10 +325,8 @@ export default function TransactionsPage() {
     if (error) {
         return (
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
-                    <p className="text-destructive mt-1">{t('txPage.error', { msg: error.message })}</p>
-                </div>
+                <PageHeader title={t('txPage.title')} icon={Receipt} />
+                <Card><CardContent className="pt-6"><p className="text-destructive">{t('txPage.error', { msg: error.message })}</p></CardContent></Card>
             </div>
         );
     }
