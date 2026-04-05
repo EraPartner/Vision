@@ -4,6 +4,7 @@ import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RecurringDetectionPanel } from "@/components/planned/RecurringDetectionPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
