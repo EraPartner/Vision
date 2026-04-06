@@ -6,6 +6,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { chartTooltipStyle } from "@/components/shared/chartStyles";
 
 interface DayData {
   day: number;
@@ -53,13 +54,7 @@ function CashFlowLineChart({ data, currentDay }: { data: DayData[]; currentDay: 
             width={70}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "12px",
-              padding: "12px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-            }}
+            contentStyle={chartTooltipStyle}
             formatter={(value: number, name: string) => [
               formatCurrency(value, defaultCurrency, locale),
               name === 'average' ? t('cashflow.24monthAvg') : t('cashflow.thisMonth'),

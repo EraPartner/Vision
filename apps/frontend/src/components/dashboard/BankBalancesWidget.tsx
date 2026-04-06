@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, parseISO } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { chartTooltipStyle } from "@/components/shared/chartStyles";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--primary))",
@@ -183,12 +184,7 @@ export function BankBalancesWidget() {
                                     tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
                                 />
                                 <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
+                                    contentStyle={chartTooltipStyle}
                                     formatter={(value: number, name: string) => [
                                         formatCurrency(value, defaultCurrency, locale),
                                         name.length > 12 ? shortAccountName(name) : name,
