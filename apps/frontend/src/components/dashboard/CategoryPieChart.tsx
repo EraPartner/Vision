@@ -3,6 +3,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recha
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { chartTooltipStyle } from "@/components/shared/chartStyles";
 
 const COLORS = [
     "hsl(var(--primary))",
@@ -46,12 +47,7 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
                         ))}
                     </Pie>
                     <Tooltip
-                        contentStyle={{
-                            borderRadius: "var(--radius)",
-                            border: "1px solid hsl(var(--border))",
-                            background: "hsl(var(--card))",
-                            color: "hsl(var(--card-foreground))",
-                        }}
+                        contentStyle={chartTooltipStyle}
                         formatter={(value: number) => [formatCurrency(value, defaultCurrency, locale), t('categoryPie.amount')]}
                     />
                     <Legend

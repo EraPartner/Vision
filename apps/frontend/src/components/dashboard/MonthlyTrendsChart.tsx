@@ -4,6 +4,7 @@ import { TrendingUp } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { chartTooltipStyle, chartTooltipLabelStyle } from "@/components/shared/chartStyles";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 
 interface MonthlyTrendsChartProps {
@@ -76,19 +77,14 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             tickFormatter={(value) => formatCompactCurrency(value)}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "12px",
-              padding: "12px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-            }}
+            contentStyle={chartTooltipStyle}
             formatter={(value: number, name: string) => {
               const formattedValue = formatCurrency(value, defaultCurrency, locale);
               const label = name === "income" ? t('monthlyTrends.income') : name === "spending" ? t('monthlyTrends.spending') : t('monthlyTrends.transactions');
               return [formattedValue, label];
             }}
-            labelStyle={{ fontWeight: "600", marginBottom: "4px" }}
+            labelStyle={chartTooltipLabelStyle}
+            cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
           />
           <Legend
             verticalAlign="top"
