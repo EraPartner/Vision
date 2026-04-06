@@ -194,9 +194,13 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                        <NavLink to={item.url} onMouseEnter={() => handleNavHover(item.url)}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
+                        <NavLink
+                          to={item.url}
+                          onMouseEnter={() => handleNavHover(item.url)}
+                          className={isActive ? "relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary" : ""}
+                        >
+                          <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? "text-primary" : ""}`} />
+                          <span className={isActive ? "font-semibold" : ""}>{item.title}</span>
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
