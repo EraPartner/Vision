@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { format, parseISO } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { chartTooltipStyle } from "@/components/shared/chartStyles";
 
 const ACCOUNT_COLORS = [
     "hsl(var(--primary))",
@@ -110,7 +111,7 @@ export function BankBalancesWidget() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-3xl font-bold bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
+                    <div className="text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
                         {formatCurrency(total_net_position, defaultCurrency, locale)}
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
@@ -127,21 +128,21 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="border shadow-sm hover:shadow-md transition-shadow">
+                            <Card key={acct.bank_account} className="group border shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <div
-                                                className="h-3 w-3 rounded-full shrink-0"
-                                                style={{ backgroundColor: color }}
+                                                className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-300 group-hover:scale-125"
+                                                style={{ backgroundColor: color, ringColor: color }}
                                             />
                                             <span className="text-xs font-mono text-muted-foreground truncate" title={acct.bank_account}>
                                                 {shortAccountName(acct.bank_account)}
                                             </span>
                                         </div>
-                                        <Landmark className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                                        <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
-                                    <div className={`text-xl font-bold ${acctPositive ? "text-foreground" : "text-destructive"}`}>
+                                    <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-destructive"}`}>
                                         {formatCurrency(acct.balance, defaultCurrency, locale)}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
@@ -183,12 +184,7 @@ export function BankBalancesWidget() {
                                     tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
                                 />
                                 <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
+                                    contentStyle={chartTooltipStyle}
                                     formatter={(value: number, name: string) => [
                                         formatCurrency(value, defaultCurrency, locale),
                                         name.length > 12 ? shortAccountName(name) : name,
