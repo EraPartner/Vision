@@ -427,11 +427,21 @@ export default function DashboardPage() {
         );
     }
 
+    // Time-of-day greeting
+    const greetingKey = (() => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'dashboard.greetingMorning';
+        if (hour < 18) return 'dashboard.greetingAfternoon';
+        return 'dashboard.greetingEvening';
+    })();
+
+    const currencyFormatter = (n: number) => formatCurrency(n, appSettings.defaultCurrency, locale);
+
     return (
         <div className="space-y-8 animate-in">
             {/* Page header */}
             <PageHeader
-                title={t('dashboard.title')}
+                title={t(greetingKey) || t('dashboard.title')}
                 subtitle={t('dashboard.subtitle')}
                 icon={LayoutDashboard}
                 actions={
@@ -448,12 +458,12 @@ export default function DashboardPage() {
             {/* Stats */}
             {isVisible('statCards') && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
-                <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} icon={Receipt} />
-                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={formatCurrency(totalSpending, appSettings.defaultCurrency, locale)} icon={TrendingDown} trend="expense"
+                <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} numericValue={totalTransactions} formatValue={(n) => integerLocaleFormatter.format(Math.round(n))} icon={Receipt} />
+                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={currencyFormatter(totalSpending)} numericValue={totalSpending} formatValue={currencyFormatter} icon={TrendingDown} trend="expense"
                     subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={formatCurrency(totalIncome, appSettings.defaultCurrency, locale)} icon={ArrowUpRight} trend="income"
+                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={currencyFormatter(totalIncome)} numericValue={totalIncome} formatValue={currencyFormatter} icon={ArrowUpRight} trend="income"
                     subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthNet')} value={formatCurrency(netBalance, appSettings.defaultCurrency, locale)} icon={DollarSign}
+                <StatCard title={t('dashboard.stat.lastMonthNet')} value={currencyFormatter(netBalance)} numericValue={netBalance} formatValue={currencyFormatter} icon={DollarSign}
                     trend={netBalance >= 0 ? "income" : "expense"}
                     subtitle={netBalance >= 0 ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')} />
             </div>

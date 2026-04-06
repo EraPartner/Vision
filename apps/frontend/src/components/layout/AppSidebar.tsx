@@ -194,9 +194,13 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                        <NavLink to={item.url} onMouseEnter={() => handleNavHover(item.url)}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
+                        <NavLink
+                          to={item.url}
+                          onMouseEnter={() => handleNavHover(item.url)}
+                          className={isActive ? "relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary" : ""}
+                        >
+                          <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? "text-primary" : ""}`} />
+                          <span className={isActive ? "font-semibold" : ""}>{item.title}</span>
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -236,12 +240,12 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-200 ${active
-          ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-300 ${active
+          ? "bg-background text-foreground shadow-md ring-1 ring-primary/20 scale-[1.02]"
           : "text-muted-foreground hover:text-foreground hover:bg-background/50"
         }`}
     >
-      {icon}
+      <span className={`transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>
       {label}
     </button>
   );
