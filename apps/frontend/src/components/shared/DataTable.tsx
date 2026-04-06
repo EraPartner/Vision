@@ -429,7 +429,7 @@ export function DataTable<T extends Record<string, any>>({
                                     return (
                                         <TableRow
                                             key={idx}
-                                            className={`transition-colors ${isEditing ? "bg-primary/5" : ""}`}
+                                            className={`transition-colors duration-150 ${isEditing ? "bg-primary/5" : idx % 2 === 1 ? "bg-muted/30" : ""} hover:bg-muted/50`}
                                         >
                                             {columns.map((col) => (
                                                 <TableCell key={col.key} className={`whitespace-normal break-words [overflow-wrap:anywhere] align-top ${col.className || ""}`}>

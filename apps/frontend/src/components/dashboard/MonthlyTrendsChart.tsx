@@ -96,8 +96,8 @@ export function MonthlyTrendsChart({ data, embedded = false }: MonthlyTrendsChar
             iconType="square"
             formatter={(value) => (value === "income" ? t('monthlyTrends.income') : t('monthlyTrends.spending'))}
           />
-          <Bar dataKey="income" fill="url(#incomeGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} isAnimationActive={false} />
-          <Bar dataKey="spending" fill="url(#spendingGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} isAnimationActive={false} />
+          <Bar dataKey="income" fill="url(#incomeGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} isAnimationActive animationDuration={800} animationEasing="ease-out" />
+          <Bar dataKey="spending" fill="url(#spendingGradient)" radius={[8, 8, 0, 0]} maxBarSize={40} isAnimationActive animationDuration={800} animationEasing="ease-out" animationBegin={200} />
         </BarChart>
       </ResponsiveContainer>
 

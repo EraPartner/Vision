@@ -37,7 +37,9 @@ export function CategoryPieChart({ data, embedded = false }: CategoryPieChartPro
                         paddingAngle={3}
                         dataKey="value"
                         stroke="none"
-                        isAnimationActive={false}
+                        isAnimationActive
+                        animationDuration={900}
+                        animationEasing="ease-out"
                     >
                         {data.map((_, index) => (
                             <Cell key={index} fill={COLORS[index % COLORS.length]} />
