@@ -383,7 +383,7 @@ export default function DashboardPage() {
                 {/* Stat cards skeleton */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {[...Array(4)].map((_, i) => (
-                        <Card key={i} className="border-none shadow-lg">
+                        <Card key={i} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                             <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                                 <Skeleton className="h-4 w-28" />
                                 <Skeleton className="h-10 w-10 rounded-xl" />

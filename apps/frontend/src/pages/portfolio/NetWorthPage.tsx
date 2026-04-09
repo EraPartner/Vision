@@ -558,7 +558,7 @@ export default function NetWorthPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((c) => (
-          <Card key={c.title}>
+          <Card key={c.title} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
               <c.icon className={`h-4 w-4 ${c.cls}`} />
@@ -708,7 +708,7 @@ export default function NetWorthPage() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.peak')}</CardTitle>
           </CardHeader>
@@ -716,7 +716,7 @@ export default function NetWorthPage() {
             <p className="text-xl font-bold text-foreground">{fmt(peak)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.lowest')}</CardTitle>
           </CardHeader>
@@ -724,7 +724,7 @@ export default function NetWorthPage() {
             <p className="text-xl font-bold text-foreground">{fmt(trough)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
           </CardHeader>

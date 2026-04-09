@@ -80,7 +80,7 @@ export default function CryptoPage() {
           <h1 className="text-3xl font-bold text-foreground">{t('crypto.title')}</h1>
           <AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />
         </div>
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Bitcoin className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold mb-1">{t('crypto.noCrypto')}</h3>
@@ -104,7 +104,7 @@ export default function CryptoPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <DollarSign className="h-3 w-3" /> {t('portfolio.portfolioValue')}
@@ -115,7 +115,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <ArrowUpRight className="h-3 w-3" /> {t('portfolio.realizedPnl')}
@@ -128,7 +128,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> {t('portfolio.unrealizedPnl')}
@@ -150,7 +150,7 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
         
-        <Card className={cn("border-l-4", netGain >= 0 ? "border-l-accent" : "border-l-destructive")}>
+        <Card className={cn("border-none border-l-4 shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5", netGain >= 0 ? "border-l-accent" : "border-l-destructive")}>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>

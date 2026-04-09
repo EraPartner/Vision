@@ -124,7 +124,7 @@ export default function ExchangeRatesPage() {
 
             {/* Summary cards */}
             <div className="grid gap-4 sm:grid-cols-3">
-                <Card>
+                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Database className="h-4 w-4" /> {t('exchangeRates.storedRates')}
@@ -135,7 +135,7 @@ export default function ExchangeRatesPage() {
                         <p className="text-xs text-muted-foreground">{t('exchangeRates.storedRatesDesc')}</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Globe className="h-4 w-4" /> {t('exchangeRates.fallbackCurrencies')}
@@ -146,7 +146,7 @@ export default function ExchangeRatesPage() {
                         <p className="text-xs text-muted-foreground">{t('exchangeRates.fallbackCurrenciesDesc')}</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <RefreshCw className="h-4 w-4" /> {t('exchangeRates.latestFetch')}
