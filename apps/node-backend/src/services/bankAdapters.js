@@ -10,6 +10,31 @@ import { parse } from 'csv-parse/sync';
 import { cleanRecipientName, cleanKbcRecipientName, normalizeToUppercase } from './textNormalization.js';
 import { logger } from '../config/logger.js';
 
+function parseDayMonthYear(dateStr) {
+  const dateParts = dateStr.split('/');
+  if (dateParts.length !== 3) return null;
+
+  const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function parseCommaDecimal(value) {
+  return parseFloat(String(value).replace(',', '.'));
+}
+
+function buildOptionalComment(commentParts) {
+  return commentParts.length ? commentParts.join(' | ') : null;
+}
+
+function parseCsvFile(filePath, options, encoding = 'utf-8') {
+  const content = fs.readFileSync(filePath, encoding);
+  return parse(content, options);
+}
+
+function buildRawRowString(row) {
+  return Object.values(row).join('|');
+}
+
 // ─── Transaction Data Structure ───
 
 /**
@@ -73,13 +98,10 @@ function parseBelfius(filePath) {
     const countryCode = parts[13] ? parts[13].trim() : '';
     const additionalMessage = parts[14] ? parts[14].trim() : '';
 
-    // Parse date DD/MM/YYYY
-    const dateParts = transactionDateStr.split('/');
-    if (dateParts.length !== 3) continue;
-    const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
-    if (isNaN(date.getTime())) continue;
+    const date = parseDayMonthYear(transactionDateStr);
+    if (!date) continue;
 
-    const amount = parseFloat(amountStr.replace(',', '.'));
+    const amount = parseCommaDecimal(amountStr);
     if (isNaN(amount)) continue;
 
     let fullRecipient = recipientName || transactionDescription;
@@ -98,7 +120,7 @@ function parseBelfius(filePath) {
     if (bicCode) commentParts.push(`BIC: ${bicCode}`);
     if (countryCode) commentParts.push(`Country: ${countryCode}`);
     if (additionalMessage) commentParts.push(additionalMessage);
-    const comment = commentParts.length ? commentParts.join(' | ') : null;
+    const comment = buildOptionalComment(commentParts);
 
     transactions.push({
       date,
@@ -137,8 +159,7 @@ function parseBelfius(filePath) {
 // ─── Revolut Adapter ───
 
 function parseRevolut(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const records = parse(content, { columns: false, skip_empty_lines: true, relax_column_count: true });
+  const records = parseCsvFile(filePath, { columns: false, skip_empty_lines: true, relax_column_count: true });
   const transactions = [];
 
   for (let i = 0; i < records.length; i++) {
@@ -188,7 +209,7 @@ function parseRevolut(filePath) {
     if (product) commentParts.push(`Product: ${product}`);
     if (fee > 0) commentParts.push(`Fee: ${fee.toFixed(2)} ${currency}`);
     if (state) commentParts.push(`State: ${state}`);
-    const comment = commentParts.length ? commentParts.join(' | ') : null;
+    const comment = buildOptionalComment(commentParts);
 
     // Build raw data with normalized date for consistent hashing
     const normalizedDate = date.toISOString().split('T')[0];
@@ -256,24 +277,21 @@ function parseKBC(filePath) {
     const structuredCommunication = parts[16] ? parts[16].trim() : '';
     const freeCommunication = parts[17] ? parts[17].trim() : '';
 
-    // Parse date DD/MM/YYYY
-    const dateParts = transactionDateStr.split('/');
-    if (dateParts.length !== 3) continue;
-    const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
-    if (isNaN(date.getTime())) continue;
+    const date = parseDayMonthYear(transactionDateStr);
+    if (!date) continue;
 
-    const amount = parseFloat(amountStr.replace(',', '.'));
+    const amount = parseCommaDecimal(amountStr);
     if (isNaN(amount)) continue;
 
-    const balance = balanceStr ? parseFloat(balanceStr.replace(',', '.')) : null;
+    const balance = balanceStr ? parseCommaDecimal(balanceStr) : null;
 
     let transactionType = null;
     if (creditStr && creditStr.trim()) {
-      const cv = parseFloat(creditStr.replace(',', '.'));
+      const cv = parseCommaDecimal(creditStr);
       if (!isNaN(cv) && Math.abs(cv) > 0) transactionType = 'CREDIT';
     }
     if (debitStr && debitStr.trim()) {
-      const dv = parseFloat(debitStr.replace(',', '.'));
+      const dv = parseCommaDecimal(debitStr);
       if (!isNaN(dv) && Math.abs(dv) > 0) transactionType = 'DEBIT';
     }
 
@@ -291,7 +309,7 @@ function parseKBC(filePath) {
     if (counterpartyBic) commentParts.push(`BIC: ${counterpartyBic}`);
     if (structuredCommunication) commentParts.push(`Structured: ${structuredCommunication}`);
     if (freeCommunication) commentParts.push(`Free: ${freeCommunication}`);
-    const comment = commentParts.length ? commentParts.join(' | ') : null;
+    const comment = buildOptionalComment(commentParts);
 
     transactions.push({
       date,
@@ -316,14 +334,13 @@ function parseKBC(filePath) {
 // ─── Generic CSV Adapter ───
 
 function parseGenericCSV(filePath, config) {
-  const content = fs.readFileSync(filePath, config.encoding || 'utf-8');
-  const records = parse(content, {
+  const records = parseCsvFile(filePath, {
     columns: true,
     skip_empty_lines: true,
     delimiter: config.separator || ',',
     from: (config.skip_rows || 0) + 1,
     relax_column_count: true,
-  });
+  }, config.encoding || 'utf-8');
 
   const colMap = config.column_mapping;
   const transactions = [];
@@ -366,7 +383,7 @@ function parseGenericCSV(filePath, config) {
         if (!isNaN(bv)) balance = bv;
       }
 
-      const rawData = Object.values(row).join('|');
+      const rawData = buildRawRowString(row);
       const bankName = config.bank_name || 'CUSTOM';
       const accountType = config.account_type;
       const bankAccount = accountType ? `${bankName} ${accountType.toUpperCase()}` : bankName;
@@ -397,8 +414,7 @@ function parseGenericCSV(filePath, config) {
 // ─── Vision (self-import) Adapter ───
 
 function parseVision(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const records = parse(content, {
+  const records = parseCsvFile(filePath, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
@@ -432,9 +448,9 @@ function parseVision(filePath) {
       const commentParts = [];
       if (category) commentParts.push(`Imported Category: ${category}`);
       if (comment) commentParts.push(comment);
-      const fullComment = commentParts.length ? commentParts.join(' | ') : null;
+      const fullComment = buildOptionalComment(commentParts);
 
-      const rawData = Object.values(row).join('|');
+      const rawData = buildRawRowString(row);
 
       transactions.push({
         date,
@@ -462,8 +478,7 @@ function parseVision(filePath) {
 // ─── SABB Adapter ───
 
 function parseSABB(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const records = parse(content, {
+  const records = parseCsvFile(filePath, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
@@ -505,13 +520,13 @@ function parseSABB(filePath) {
       if (status) commentParts.push(`Status: ${status}`);
       if (postingDate) commentParts.push(`Posting Date: ${postingDate}`);
       if (otherCurrency) commentParts.push(`Other Currency: ${otherCurrency}`);
-      const comment = commentParts.length ? commentParts.join(' | ') : null;
+      const comment = buildOptionalComment(commentParts);
 
       // Currency extracted from Amount(SAR) field
       const currencyMatch = amountRaw.match(/[A-Z]{3}/);
       const currency = currencyMatch ? currencyMatch[0] : 'SAR';
 
-      const rawData = Object.values(row).join('|');
+      const rawData = buildRawRowString(row);
 
       transactions.push({
         date,
@@ -539,8 +554,7 @@ function parseSABB(filePath) {
 // ─── Wise Adapter ───
 
 function parseWise(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const records = parse(content, {
+  const records = parseCsvFile(filePath, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,
@@ -611,12 +625,12 @@ function parseWise(filePath) {
         commentParts.push(`${sourceAmountStr} ${sourceCurrency} → ${targetAmountStr} ${targetCurrency}`);
       }
       if (batch) commentParts.push(`Batch: ${batch}`);
-      const comment = commentParts.length ? commentParts.join(' | ') : null;
+      const comment = buildOptionalComment(commentParts);
 
       // Bank account based on currency
       const bankAccount = `WISE ${currency}`;
 
-      const rawData = Object.values(row).join('|');
+      const rawData = buildRawRowString(row);
 
       transactions.push({
         date,

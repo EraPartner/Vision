@@ -10,20 +10,23 @@ import { query } from '../database/connection.js';
 let userSettingsTableReady = false;
 
 function normalizeSettingValue(value) {
+  let normalizedValue = value;
+
   try {
-    if (value && typeof value === 'object') {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      normalizedValue = { ...value };
       if (Array.isArray(value.excludedCategoryIds)) {
-        value.excludedCategoryIds = value.excludedCategoryIds.map(Number);
+        normalizedValue.excludedCategoryIds = value.excludedCategoryIds.map(Number);
       }
       if (Array.isArray(value.excludedRecipientIds)) {
-        value.excludedRecipientIds = value.excludedRecipientIds.map(Number);
+        normalizedValue.excludedRecipientIds = value.excludedRecipientIds.map(Number);
       }
     }
   } catch {
     // ignore normalization errors — DB will still store original value
   }
 
-  return value;
+  return normalizedValue;
 }
 
 async function ensureUserSettingsTable() {
@@ -107,17 +110,20 @@ export const settingsRepository = {
     const entries = Object.entries(settings);
     if (entries.length === 0) return;
 
+    const keys = [];
+    const values = [];
     for (const [key, value] of entries) {
-      const normalized = normalizeSettingValue(value);
-      const jsonValue = JSON.stringify(normalized);
-
-      await query(
-        `INSERT INTO user_settings (key, value, updated_at)
-         VALUES ($1, $2::jsonb, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
-        [key, jsonValue]
-      );
+      keys.push(key);
+      values.push(JSON.stringify(normalizeSettingValue(value)));
     }
+
+    await query(
+      `INSERT INTO user_settings (key, value, updated_at)
+       SELECT u.key, u.value::jsonb, NOW()
+       FROM UNNEST($1::text[], $2::text[]) AS u(key, value)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [keys, values]
+    );
   },
 };
 

@@ -5,59 +5,69 @@
 import { describe, it, expect } from 'vitest';
 import { calculateNextDate } from '../src/services/recurrenceService.js';
 
+function toUtcDate(year, monthIndex, day) {
+  return new Date(Date.UTC(year, monthIndex, day));
+}
+
+function utcParts(date) {
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth(),
+    day: date.getUTCDate(),
+  };
+}
+
 describe('Recurrence Fix - Edge Cases', () => {
   describe('monthly recurrence', () => {
     it('should maintain the same day of month', () => {
-      const current = new Date(2026, 1, 15); // Feb 15
+      const current = toUtcDate(2026, 1, 15); // Feb 15 UTC
       const next = calculateNextDate(current, 'monthly');
-      expect(next.getFullYear()).toBe(2026);
-      expect(next.getMonth()).toBe(2); // March
-      expect(next.getDate()).toBe(15);
+      expect(utcParts(next).year).toBe(2026);
+      expect(utcParts(next).month).toBe(2); // March
+      expect(utcParts(next).day).toBe(15);
     });
 
     it('should handle month-end edge case (Jan 31 -> Feb/Mar)', () => {
-      const current = new Date(2026, 0, 31); // Jan 31
+      const current = toUtcDate(2026, 0, 31); // Jan 31 UTC
       const next = calculateNextDate(current, 'monthly');
-      // JS Date overflows: Jan 31 + 1 month = Mar 3 (since Feb has 28 days)
-      // This is expected JS behavior - the Python version handles it differently
-      expect(next.getMonth()).toBeGreaterThanOrEqual(1); // Feb or Mar
-      expect(next.getDate()).toBeLessThanOrEqual(31);
+      expect(utcParts(next).month).toBe(1); // February
+      expect(utcParts(next).day).toBe(28);
     });
   });
 
   describe('weekly recurrence', () => {
     it('should add 7 days', () => {
-      const current = new Date(2026, 1, 15); // Feb 15
+      const current = toUtcDate(2026, 1, 15); // Feb 15 UTC
       const next = calculateNextDate(current, 'weekly');
-      expect(next.getFullYear()).toBe(2026);
-      expect(next.getMonth()).toBe(1); // still Feb
-      expect(next.getDate()).toBe(22);
+      expect(utcParts(next).year).toBe(2026);
+      expect(utcParts(next).month).toBe(1); // still Feb
+      expect(utcParts(next).day).toBe(22);
     });
   });
 
   describe('custom day intervals', () => {
     it('should handle "every 10 days"', () => {
-      const current = new Date(2026, 1, 15);
+      const current = toUtcDate(2026, 1, 15);
       const next = calculateNextDate(current, 'every 10 days');
-      expect(next.getDate()).toBe(25);
+      expect(utcParts(next).day).toBe(25);
     });
 
     it('should handle "every 1 day" (singular)', () => {
-      const current = new Date(2026, 1, 15);
+      const current = toUtcDate(2026, 1, 15);
       const next = calculateNextDate(current, 'every 1 day');
-      expect(next.getDate()).toBe(16);
+      expect(utcParts(next).day).toBe(16);
     });
 
     it('should handle "every 45 days" crossing months', () => {
-      const current = new Date(2026, 1, 15); // Feb 15
+      const current = toUtcDate(2026, 1, 15); // Feb 15 UTC
       const next = calculateNextDate(current, 'every 45 days');
-      expect(next.getMonth()).toBe(3); // April
-      expect(next.getDate()).toBe(1);
+      expect(utcParts(next).month).toBe(3); // April
+      expect(utcParts(next).day).toBe(1);
     });
   });
 
   describe('all standard patterns from Feb 15, 2026', () => {
-    const current = new Date(2026, 1, 15);
+    const current = toUtcDate(2026, 1, 15);
 
     const cases = [
       ['daily', { month: 1, day: 16 }],
@@ -71,9 +81,9 @@ describe('Recurrence Fix - Edge Cases', () => {
     for (const [pattern, expected] of cases) {
       it(`should calculate ${pattern} correctly`, () => {
         const next = calculateNextDate(current, pattern);
-        if (expected.year) expect(next.getFullYear()).toBe(expected.year);
-        expect(next.getMonth()).toBe(expected.month);
-        expect(next.getDate()).toBe(expected.day);
+        if (expected.year) expect(utcParts(next).year).toBe(expected.year);
+        expect(utcParts(next).month).toBe(expected.month);
+        expect(utcParts(next).day).toBe(expected.day);
       });
     }
   });

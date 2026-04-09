@@ -8,15 +8,28 @@ import { logger } from '../config/logger.js';
 
 const router = Router();
 
+function parseWatchlistLimit(limit) {
+  const parsed = parseInt(limit, 10);
+  return Math.min(Math.max(Number.isNaN(parsed) ? 50 : parsed, 1), 5000);
+}
+
+function parseWatchlistOffset(offset) {
+  const parsed = parseInt(offset, 10);
+  return Math.max(Number.isNaN(parsed) ? 0 : parsed, 0);
+}
+
 // GET /api/watchlist
 router.get('/', async (req, res) => {
   try {
     const { limit = 50, offset = 0, asset_class } = req.query;
-    const opts = { limit: parseInt(limit, 10), offset: parseInt(offset, 10), assetClass: asset_class || null };
-    const [items, total] = await Promise.all([
-      watchlistRepository.getAll(opts),
-      watchlistRepository.getCount(opts),
-    ]);
+    const opts = {
+      limit: parseWatchlistLimit(limit),
+      offset: parseWatchlistOffset(offset),
+      assetClass: asset_class || null,
+    };
+    const result = await watchlistRepository.getAllWithCount(opts);
+    const items = result.rows;
+    const total = result.total;
     res.json({ items, total, limit: opts.limit, offset: opts.offset });
   } catch (err) {
     logger.error('Failed to list watchlist', { error: err.message });

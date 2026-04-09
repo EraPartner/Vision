@@ -2,7 +2,7 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-04-03
+date: 2026-04-04
 tags: [feature, views, pages, frontend, ui]
 description: Complete overview of all views and pages in the Vision application
 aliases: [views, pages, frontend views, application pages, ui views]
@@ -476,6 +476,7 @@ Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]]
 
 - Monthly heatmap uses relative monthly returns (%) derived from investment value performance adjusted for monthly net contributions/withdrawals.
 - Heatmap excludes liquid-cash effects and keeps month coverage from first investment month through current month.
+- Portfolio Value Over Time chart removes duplicate Area series so legend labels are unique (Stocks & ETFs, Crypto, Metals, Portfolio Value) while preserving chart visuals and line semantics ([[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]).
 
 Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]
 

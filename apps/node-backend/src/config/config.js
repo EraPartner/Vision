@@ -12,6 +12,21 @@ import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function deepFreeze(object) {
+  Object.freeze(object);
+  for (const key of Object.getOwnPropertyNames(object)) {
+    const value = object[key];
+    if (
+      value
+      && (typeof value === 'object' || typeof value === 'function')
+      && !Object.isFrozen(value)
+    ) {
+      deepFreeze(value);
+    }
+  }
+  return object;
+}
+
 // Load .env.local if present
 const envLocalPath = join(__dirname, '..', '..', '.env.local');
 if (existsSync(envLocalPath)) {
@@ -34,7 +49,7 @@ if (existsSync(envLocalPath)) {
 }
 
 /** @type {import('./types').Settings} */
-const settings = {
+const settings = deepFreeze({
   debug: (process.env.DEBUG || 'true').toLowerCase() === 'true',
 
   server: {
@@ -68,7 +83,7 @@ const settings = {
   isDevelopment() {
     return this.server.environment.toLowerCase() === 'development';
   },
-};
+});
 
 export function getSettings() {
   return settings;

@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-03-31
+date: 2026-04-09
 tags: [feature, portfolio, investments, stocks, crypto, metals]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
@@ -48,6 +48,9 @@ POST /api/investments
   "price_provider_id": "AAPL"
 }
 ```
+
+Implementation notes:
+- Backend route parsing/normalization for investment list and transaction-list endpoints now reuses shared helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving endpoint defaults/clamping/validation behavior ([[apps/node-backend/src/routes/investments.js]]).
 
 ### Price Providers
 
@@ -137,6 +140,10 @@ POST /api/investments/:id/transactions
 
 - `fx_rate_to_eur` is optional and persisted per transaction to preserve the effective FX used at booking time.
 - Add/Edit portfolio transaction dialogs now expose an optional `fx_rate_to_eur` input so users can lock a manual booking FX per transaction.
+- Backend create path reuses preloaded investment metadata by passing `preloaded_asset_class` from investments route into `portfolioTransactionRepository.create(...)`, removing a duplicate asset-class lookup query while preserving validation and response behavior.
+- Investment live price refresh now applies bounded write concurrency (batched updates) instead of an unbounded all-at-once write fan-out, reducing pool contention risk while preserving refresh result payload semantics.
+- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips, preserving filters, ordering, and response payloads while reducing DB calls ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Portfolio transaction update now reuses `existing.asset_class` from the already-loaded transaction and falls back to a DB lookup only when missing, reducing redundant lookups while preserving validation and write behavior ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 
 ### Editing Portfolio Transactions
 
@@ -289,6 +296,7 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 - Relative chart scaling fix: chained performance index baseline is `1` (not `100`), and plotted percentage now uses `(index - 1) * 100`; this removes 10x/100x over-scaling (for example, `2000%` shown instead of `200%`).
 - Performance absolute chart now explicitly plots class lines for stocks+ETFs, crypto, and metals; stocks+ETFs line uses a red stroke for faster visual separation from total portfolio.
 - Relative performance chart keeps stocks+ETFs line in red to align class-color semantics between absolute and relative views.
+- Performance Portfolio Value Over Time legend de-duplicates Area series so each label appears once (Stocks & ETFs, Crypto, Metals, Portfolio Value) with no visual regression in plotted data ([[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]).
 - Monthly heatmap remains **month-based** and represents relative monthly investment returns (%) (investment performance only; no liquid-cash component).
 - Monthly heatmap return formula: `monthlyReturn = (currValue - prevValue - netFlow) / denominator`, with `denominator = prevValue + netFlow / 2` and fallback `denominator = prevValue` when computed denominator `<= 0`.
 - Heatmap first month is now `null` (no data) instead of forced `0.00%`, so the first displayed month does not imply a measured return without a prior month anchor; YTD is compounded from available non-null monthly returns.

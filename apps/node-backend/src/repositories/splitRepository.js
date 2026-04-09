@@ -2,7 +2,7 @@
  * Split Repository - data access for transaction_splits and split_payments tables.
  */
 
-import { query } from '../database/connection.js';
+import { getClient, query } from '../database/connection.js';
 
 export const splitRepository = {
   /**
@@ -39,6 +39,26 @@ export const splitRepository = {
   },
 
   /**
+   * Create multiple splits in a single query.
+   */
+  async createSplitsBatch({ transaction_id, splits }) {
+    if (!Array.isArray(splits) || splits.length === 0) return [];
+
+    const recipientIds = splits.map((split) => split.recipient_id);
+    const amounts = splits.map((split) => split.amount);
+    const notes = splits.map((split) => split.note || null);
+
+    const sql = `
+      INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
+      SELECT $1, s.recipient_id, s.amount, s.note
+      FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
+      RETURNING *
+    `;
+    const result = await query(sql, [transaction_id, recipientIds, amounts, notes]);
+    return result.rows;
+  },
+
+  /**
    * Get all splits for a specific transaction.
    */
   async getSplitsByTransaction(transactionId) {
@@ -64,37 +84,6 @@ export const splitRepository = {
       SELECT ts.recipient_id,
              r.name AS recipient_name,
              SUM(ts.amount) AS total_owed,
-             COALESCE(SUM(paid.total_paid), 0) AS total_paid,
-             COUNT(ts.id) AS split_count
-      FROM transaction_splits ts
-      JOIN recipients r ON ts.recipient_id = r.id
-      WHERE ts.is_settled = false
-      GROUP BY ts.recipient_id, r.name
-      ORDER BY SUM(ts.amount) - COALESCE(SUM(paid.total_paid), 0) DESC
-    `;
-    // Subquery approach for paid amounts
-    const sql2 = `
-      SELECT ts.recipient_id,
-             r.name AS recipient_name,
-             SUM(ts.amount) AS total_owed,
-             COALESCE(paid_totals.total_paid, 0) AS total_paid,
-             COUNT(ts.id) AS split_count
-      FROM transaction_splits ts
-      JOIN recipients r ON ts.recipient_id = r.id
-      LEFT JOIN (
-        SELECT sp.split_id, SUM(sp.amount) AS total_paid
-        FROM split_payments sp
-        GROUP BY sp.split_id
-      ) paid_totals ON paid_totals.split_id = ts.id
-      WHERE ts.is_settled = false
-      GROUP BY ts.recipient_id, r.name, paid_totals.total_paid
-      ORDER BY r.name
-    `;
-    // Actually we need a cleaner approach - aggregate at recipient level
-    const sql3 = `
-      SELECT ts.recipient_id,
-             r.name AS recipient_name,
-             SUM(ts.amount) AS total_owed,
              COALESCE(SUM(sp_agg.paid), 0) AS total_paid,
              COUNT(DISTINCT ts.id) AS split_count
       FROM transaction_splits ts
@@ -103,11 +92,11 @@ export const splitRepository = {
         SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
       ) sp_agg ON sp_agg.split_id = ts.id
       WHERE ts.is_settled = false
-      GROUP BY ts.recipient_id, r.name
-      HAVING SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) > 0
-      ORDER BY SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) DESC
+       GROUP BY ts.recipient_id, r.name
+       HAVING SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) > 0
+       ORDER BY SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) DESC
     `;
-    const result = await query(sql3, []);
+    const result = await query(sql, []);
     return result.rows.map(row => ({
       recipient_id: row.recipient_id,
       recipient_name: row.recipient_name,
@@ -205,31 +194,43 @@ export const splitRepository = {
    * Record a payment against a split.
    */
   async addPayment({ split_id, amount, note, paid_at }) {
-    const sql = `
-      INSERT INTO split_payments (split_id, amount, note, paid_at)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `;
-    const result = await query(sql, [split_id, amount, note || null, paid_at || new Date().toISOString().split('T')[0]]);
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
 
-    // Check if split is fully paid and auto-settle
-    const splitResult = await query(`
-      SELECT ts.amount AS owed,
-             COALESCE(SUM(sp.amount), 0) AS paid
-      FROM transaction_splits ts
-      LEFT JOIN split_payments sp ON sp.split_id = ts.id
-      WHERE ts.id = $1
-      GROUP BY ts.amount
-    `, [split_id]);
+      const insertSql = `
+        INSERT INTO split_payments (split_id, amount, note, paid_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `;
+      const result = await client.query(insertSql, [
+        split_id,
+        amount,
+        note || null,
+        paid_at || new Date().toISOString().split('T')[0],
+      ]);
 
-    if (splitResult.rows.length > 0) {
-      const { owed, paid } = splitResult.rows[0];
-      if (parseFloat(paid) >= parseFloat(owed)) {
-        await query(`UPDATE transaction_splits SET is_settled = true WHERE id = $1`, [split_id]);
-      }
+      await client.query(
+        `UPDATE transaction_splits ts
+         SET is_settled = true
+         WHERE ts.id = $1
+           AND ts.is_settled = false
+           AND (
+             SELECT COALESCE(SUM(sp.amount), 0)
+             FROM split_payments sp
+             WHERE sp.split_id = ts.id
+           ) >= ts.amount`,
+        [split_id]
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    return result.rows[0];
   },
 
   /**

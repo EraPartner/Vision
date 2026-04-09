@@ -19,6 +19,7 @@ vi.mock('express', () => ({
 vi.mock('../../src/repositories/infoRepository.js', () => ({
   default: {
     getStatistics: vi.fn(),
+    getCategoryBreakdown: vi.fn(),
     getBanks: vi.fn(),
     getTransactionCount: vi.fn(),
     getTransactionSummary: vi.fn(),
@@ -339,6 +340,34 @@ describe('Info Routes', () => {
       const req = { query: {} };
       const res = mockResponse();
       await routeHandlers['get:/bank-balances'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /category-breakdown', () => {
+    it('should return category list with links', async () => {
+      infoRepository.getCategoryBreakdown.mockResolvedValue([
+        { id: 1, name: 'FOOD:GROCERIES', count: 3, total: -120.55 },
+      ]);
+
+      const req = { query: { currency: 'EUR' } };
+      const res = mockResponse();
+      await routeHandlers['get:/category-breakdown'](req, res);
+
+      expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith('EUR');
+      expect(res.json).toHaveBeenCalledWith({
+        categories: [{ id: 1, name: 'FOOD:GROCERIES', count: 3, total: -120.55 }],
+        links: [],
+      });
+    });
+
+    it('should handle category breakdown errors', async () => {
+      infoRepository.getCategoryBreakdown.mockRejectedValue(new Error('DB error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/category-breakdown'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });

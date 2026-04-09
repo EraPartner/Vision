@@ -5,13 +5,135 @@
  */
 
 import { Router } from 'express';
+import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/loanRepaymentService.js';
+import { calculateNextDate } from '../services/recurrenceService.js';
 
 const router = Router();
+
+function parseRouteId(req) {
+  return parseInt(req.params.id, 10);
+}
+
+function removePatchOnlyReadOnlyFields(fields) {
+  delete fields.links;
+  delete fields.id;
+  delete fields.executions;
+  delete fields.execution_count;
+  delete fields.executed_transaction_id;
+}
+
+async function resolveRecipientIdFromName(fields) {
+  if (!fields.recipient_name || fields.recipient_id) {
+    delete fields.recipient_name;
+    return;
+  }
+
+  const normalized = fields.recipient_name.toUpperCase().trim();
+  const recipientResult = await dbQuery(
+    `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
+    [normalized]
+  );
+  if (recipientResult.rows.length > 0) {
+    fields.recipient_id = recipientResult.rows[0].id;
+  }
+
+  delete fields.recipient_name;
+}
+
+async function resolveCategoryIdFromName(fields) {
+  if (!fields.category_name || fields.category_id) {
+    delete fields.category_name;
+    return;
+  }
+
+  const normalized = fields.category_name.toUpperCase().trim();
+  const parts = normalized.split(':');
+  if (parts.length === 2) {
+    const catResult = await dbQuery(
+      `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+      [parts[0].trim(), parts[1].trim()]
+    );
+    if (catResult.rows.length > 0) {
+      fields.category_id = catResult.rows[0].id;
+    }
+  }
+
+  delete fields.category_name;
+}
+
+function applyLoanPatchDefaults(fields, existing) {
+  let generatedLoanSchedule;
+
+  const loanFieldsChanged = [
+    'loan_type', 'loan_principal', 'loan_annual_interest_rate',
+    'loan_term_months', 'loan_start_date', 'loan_payment_day',
+  ].some((k) => fields[k] !== undefined);
+  const resultingIsLoan = fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
+
+  if (resultingIsLoan && (loanFieldsChanged || fields.is_loan === true)) {
+    generatedLoanSchedule = generateLoanRepaymentSchedule({
+      loan_type: fields.loan_type ?? existing.loan_type,
+      loan_principal: fields.loan_principal ?? existing.loan_principal,
+      loan_annual_interest_rate: fields.loan_annual_interest_rate ?? existing.loan_annual_interest_rate,
+      loan_term_months: fields.loan_term_months ?? existing.loan_term_months,
+      loan_start_date: fields.loan_start_date ?? existing.loan_start_date,
+      loan_payment_day: fields.loan_payment_day ?? existing.loan_payment_day,
+    });
+
+    fields.loan_regular_payment_amount = generatedLoanSchedule.regular_payment_amount;
+    fields.loan_first_payment_date = generatedLoanSchedule.first_due_date;
+    if (fields.amount === undefined) {
+      fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
+    }
+    if (fields.planned_date === undefined) {
+      fields.planned_date = generatedLoanSchedule.first_due_date;
+    }
+    if (fields.is_recurring === undefined) {
+      fields.is_recurring = true;
+    }
+    if (fields.recurrence_pattern === undefined) {
+      fields.recurrence_pattern = 'monthly';
+    }
+  } else if (fields.is_loan === false && existing.is_loan) {
+    fields.loan_type = null;
+    fields.loan_principal = null;
+    fields.loan_annual_interest_rate = null;
+    fields.loan_term_months = null;
+    fields.loan_start_date = null;
+    fields.loan_payment_day = null;
+    fields.loan_regular_payment_amount = null;
+    fields.loan_first_payment_date = null;
+  }
+
+  return generatedLoanSchedule;
+}
+
+function getCurrentDateString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function handlePlannedTransactionWriteError(res, err, action) {
+  const statusCode = Number(err.statusCode) || 500;
+  logger.error(`Error ${action} planned transaction`, { error: err.message, statusCode });
+  res.status(statusCode).json({ detail: `Failed to ${action} planned transaction: ${err.message}` });
+}
+
+async function updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing) {
+  if (generatedLoanSchedule) {
+    await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
+    return true;
+  } else if (fields.is_loan === false && existing.is_loan) {
+    await plannedTransactionRepository.replaceLoanSchedule(id, []);
+    return true;
+  }
+
+  return false;
+}
 
 // GET /api/planned-transactions
 router.get('/', async (req, res) => {
@@ -90,16 +212,15 @@ router.post('/', async (req, res) => {
     const created = await plannedTransactionRepository.create(data);
     res.status(201).json(formatPlannedTransaction(created));
   } catch (err) {
-    const statusCode = Number(err.statusCode) || 500;
-    logger.error('Error creating planned transaction', { error: err.message, statusCode });
-    res.status(statusCode).json({ detail: `Failed to create planned transaction: ${err.message}` });
+    handlePlannedTransactionWriteError(res, err, 'create');
   }
 });
 
 // GET /api/planned-transactions/:id
 router.get('/:id', validateIdParam, async (req, res) => {
   try {
-    const pt = await plannedTransactionRepository.getById(parseInt(req.params.id, 10));
+    const id = parseRouteId(req);
+    const pt = await plannedTransactionRepository.getById(id);
     if (!pt) {
       return res.status(404).json({ detail: `Planned transaction ${req.params.id} not found` });
     }
@@ -121,113 +242,40 @@ router.patch(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'planned-transactions-patch' }),
   async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseRouteId(req);
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) {
       return res.status(404).json({ detail: `Planned transaction ${id} not found` });
     }
 
     const fields = { ...req.body };
-    delete fields.links;
-    delete fields.id;
-    delete fields.executions;
-    delete fields.execution_count;
-    delete fields.executed_transaction_id;
+    removePatchOnlyReadOnlyFields(fields);
+    await Promise.all([
+      resolveRecipientIdFromName(fields),
+      resolveCategoryIdFromName(fields),
+    ]);
 
-    // Resolve recipient_name to recipient_id (mirrors Python PATCH)
-    if (fields.recipient_name && !fields.recipient_id) {
-      const normalized = fields.recipient_name.toUpperCase().trim();
-      const { query: dbQuery } = await import('../database/connection.js');
-      const recipientResult = await dbQuery(
-        `SELECT id FROM recipients WHERE UPPER(name) = $1 LIMIT 1`,
-        [normalized]
-      );
-      if (recipientResult.rows.length > 0) {
-        fields.recipient_id = recipientResult.rows[0].id;
-      }
-    }
-    delete fields.recipient_name;
-
-    // Resolve category_name to category_id (mirrors Python PATCH)
-    if (fields.category_name && !fields.category_id) {
-      const normalized = fields.category_name.toUpperCase().trim();
-      const parts = normalized.split(':');
-      if (parts.length === 2) {
-        const { query: dbQuery } = await import('../database/connection.js');
-        const catResult = await dbQuery(
-          `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-          [parts[0].trim(), parts[1].trim()]
-        );
-        if (catResult.rows.length > 0) {
-          fields.category_id = catResult.rows[0].id;
-        }
-      }
-    }
-    delete fields.category_name;
-
-    let generatedLoanSchedule = null;
-    const loanFieldsChanged = [
-      'loan_type', 'loan_principal', 'loan_annual_interest_rate',
-      'loan_term_months', 'loan_start_date', 'loan_payment_day',
-    ].some((k) => fields[k] !== undefined);
-    const resultingIsLoan = fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
-
-    if (resultingIsLoan && (loanFieldsChanged || fields.is_loan === true)) {
-    
-      generatedLoanSchedule = generateLoanRepaymentSchedule({
-        loan_type: fields.loan_type ?? existing.loan_type,
-        loan_principal: fields.loan_principal ?? existing.loan_principal,
-        loan_annual_interest_rate: fields.loan_annual_interest_rate ?? existing.loan_annual_interest_rate,
-        loan_term_months: fields.loan_term_months ?? existing.loan_term_months,
-        loan_start_date: fields.loan_start_date ?? existing.loan_start_date,
-        loan_payment_day: fields.loan_payment_day ?? existing.loan_payment_day,
-      });
-      fields.loan_regular_payment_amount = generatedLoanSchedule.regular_payment_amount;
-      fields.loan_first_payment_date = generatedLoanSchedule.first_due_date;
-      if (fields.amount === undefined) {
-        fields.amount = -Math.abs(generatedLoanSchedule.regular_payment_amount);
-      }
-      if (fields.planned_date === undefined) {
-        fields.planned_date = generatedLoanSchedule.first_due_date;
-      }
-      if (fields.is_recurring === undefined) {
-        fields.is_recurring = true;
-      }
-      if (fields.recurrence_pattern === undefined) {
-        fields.recurrence_pattern = 'monthly';
-      }
-    } else if (fields.is_loan === false && existing.is_loan) {
-      fields.loan_type = null;
-      fields.loan_principal = null;
-      fields.loan_annual_interest_rate = null;
-      fields.loan_term_months = null;
-      fields.loan_start_date = null;
-      fields.loan_payment_day = null;
-      fields.loan_regular_payment_amount = null;
-      fields.loan_first_payment_date = null;
-    }
+    const generatedLoanSchedule = applyLoanPatchDefaults(fields, existing);
 
     const updated = await plannedTransactionRepository.update(id, fields);
 
-    if (generatedLoanSchedule) {
-      await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
-    } else if (fields.is_loan === false && existing.is_loan) {
-      await plannedTransactionRepository.replaceLoanSchedule(id, []);
+    const loanScheduleChanged = await updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing);
+
+    if (loanScheduleChanged) {
+      const withSchedule = await plannedTransactionRepository.getById(id);
+      return res.json(formatPlannedTransaction(withSchedule || updated));
     }
 
-    const withSchedule = await plannedTransactionRepository.getById(id);
-    res.json(formatPlannedTransaction(withSchedule || updated));
+    res.json(formatPlannedTransaction(updated));
   } catch (err) {
-    const statusCode = Number(err.statusCode) || 500;
-    logger.error('Error updating planned transaction', { error: err.message, statusCode });
-    res.status(statusCode).json({ detail: `Failed to update planned transaction: ${err.message}` });
+    handlePlannedTransactionWriteError(res, err, 'update');
   }
 });
 
 // POST /api/planned-transactions/:id/execute
 router.post('/:id/execute', validateIdParam, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseRouteId(req);
     const { executed_transaction_id, execution_date } = req.body;
 
     if (!executed_transaction_id) {
@@ -243,7 +291,7 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
     await plannedTransactionRepository.addExecution(id, executed_transaction_id, execution_date);
 
     // Update is_executed and last_executed_date
-    const execDate = execution_date || new Date().toISOString().split('T')[0];
+    const execDate = execution_date || getCurrentDateString();
     const updateFields = {
       is_executed: !existing.is_recurring, // For recurring, keep false
       last_executed_date: execDate,
@@ -251,7 +299,6 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
 
     // For recurring transactions, calculate and set next planned_date
     if (existing.is_recurring && existing.recurrence_pattern) {
-      const { calculateNextDate } = await import('../services/recurrenceService.js');
       const baseDate = new Date(existing.planned_date);
       const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
       if (nextDate) {
@@ -272,7 +319,7 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
 // DELETE /api/planned-transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseRouteId(req);
     const deleted = await plannedTransactionRepository.hardDelete(id);
     if (!deleted) {
       return res.status(404).json({ detail: `Planned transaction ${id} not found` });

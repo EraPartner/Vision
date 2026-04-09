@@ -356,6 +356,30 @@ export const investmentRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  async getAllWithCount({ limit = 50, offset = 0, assetClass = null, active = true } = {}) {
+    let sql = `
+      SELECT i.*, COUNT(*) OVER () AS total_count
+      FROM investments i
+      WHERE 1=1
+    `;
+    const params = [];
+    let idx = 1;
+
+    if (active) sql += ` AND i.is_active = true`;
+    if (assetClass) {
+      sql += ` AND i.asset_class = $${idx++}`;
+      params.push(assetClass);
+    }
+
+    sql += ` ORDER BY i.name LIMIT $${idx++} OFFSET $${idx++}`;
+    params.push(limit, offset);
+
+    const result = await query(sql, params);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const rows = result.rows.map(({ total_count, ...row }) => row);
+    return { rows, total };
+  },
+
   async getById(id) {
     const result = await query('SELECT * FROM investments WHERE id = $1', [id]);
     return result.rows[0] || null;

@@ -61,6 +61,11 @@ Retrieve a list of recipients.
 }
 ```
 
+Implementation note:
+- Recipient list route now fetches `items` and `total` via `Promise.all` because both repository calls are independent; response payload and filtering behavior are unchanged ([[apps/node-backend/src/routes/recipients.js]]).
+- Recipient repository list query now computes `primary_bank_account` via `LEFT JOIN LATERAL` and alias totals via a pre-aggregated join instead of per-row correlated subqueries, preserving sortable fields and response shape while improving scalability on larger recipient sets ([[apps/node-backend/src/repositories/recipientRepository.js]]).
+- Recipient `getById` now uses the same lateral/pre-aggregated enrichment pattern as list queries (instead of correlated subqueries), and recipient update now returns enriched fields via a single CTE update-and-select query instead of update + follow-up read; API payloads and not-found behavior are unchanged ([[apps/node-backend/src/repositories/recipientRepository.js]]).
+
 ### POST /api/recipients
 
 Create a new recipient.

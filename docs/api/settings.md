@@ -4,7 +4,7 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-04-02
+date: 2026-04-09
 tags: [api, settings, preferences]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -71,6 +71,10 @@ Storage behavior:
 - `excludedCategoryIds` and `excludedRecipientIds` must be arrays of positive integers
 - `excludeHiddenCategories` must be boolean
 - `exclusionScope` must be one of `everywhere`, `dashboard`, `statistics`
+
+Implementation note:
+- Route-level validation was refactored into shared helpers (`validateSettingKeyLength`, `getSettingKeyTooLongError`, `normalizeDashboardSettingsValue`) reused by single-key and bulk upsert endpoints while preserving endpoint-specific error-message text and validation semantics ([[apps/node-backend/src/routes/settings.js]]).
+- Repository normalization (`normalizeSettingValue`) now uses a shallow-clone strategy for object values, avoiding in-place mutation of caller-provided payload objects while preserving stored JSONB output and validation behavior ([[apps/node-backend/src/repositories/settingsRepository.js]]).
 
 ### PUT /api/settings
 

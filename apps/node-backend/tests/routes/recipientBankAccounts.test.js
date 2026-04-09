@@ -49,9 +49,9 @@ describe('Recipient Bank Account Routes', () => {
         { id: 1, recipient_id: 1, account_number: 'BE61734041478017', bank_name: 'BELFIUS', is_primary: true },
       ]);
 
-      const req = { params: { recipientId: '1' } };
+      const req = { params: { id: '1' }, query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/:recipientId/bank-accounts'](req, res);
+      await routeHandlers['get:/:id/bank-accounts'](req, res);
 
       const data = res.json.mock.calls[0][0];
       expect(data.items).toHaveLength(1);
@@ -61,9 +61,9 @@ describe('Recipient Bank Account Routes', () => {
     it('should return empty list', async () => {
       bankAccountRepo.getByRecipientId.mockResolvedValue([]);
 
-      const req = { params: { recipientId: '999' } };
+      const req = { params: { id: '999' }, query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/:recipientId/bank-accounts'](req, res);
+      await routeHandlers['get:/:id/bank-accounts'](req, res);
 
       expect(res.json.mock.calls[0][0].items).toEqual([]);
     });
@@ -77,11 +77,11 @@ describe('Recipient Bank Account Routes', () => {
       });
 
       const req = {
-        params: { recipientId: '1' },
+        params: { id: '1' },
         body: { account_number: 'BE61734041478017', bank_name: 'Belfius' },
       };
       const res = mockResponse();
-      await routeHandlers['post:/:recipientId/bank-accounts'](req, res);
+      await routeHandlers['post:/:id/bank-accounts'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -93,19 +93,19 @@ describe('Recipient Bank Account Routes', () => {
       });
 
       const req = {
-        params: { recipientId: '1' },
+        params: { id: '1' },
         body: { account_number: 'BE61734041478017' },
       };
       const res = mockResponse();
-      await routeHandlers['post:/:recipientId/bank-accounts'](req, res);
+      await routeHandlers['post:/:id/bank-accounts'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
     it('should return 400 for missing account_number', async () => {
-      const req = { params: { recipientId: '1' }, body: {} };
+      const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/:recipientId/bank-accounts'](req, res);
+      await routeHandlers['post:/:id/bank-accounts'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });

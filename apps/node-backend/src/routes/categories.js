@@ -25,8 +25,10 @@ router.get('/', async (req, res) => {
       active: active !== 'false',
     };
 
-    const items = await categoryRepository.getAll(opts);
-    const total = await categoryRepository.getCount(opts);
+    const [items, total] = await Promise.all([
+      categoryRepository.getAll(opts),
+      categoryRepository.getCount(opts),
+    ]);
 
     res.json({
       items: items.map(c => ({ ...c, links: [] })),

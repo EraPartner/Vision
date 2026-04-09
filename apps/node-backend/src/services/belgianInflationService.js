@@ -65,6 +65,24 @@ function normalizeMonthInput(value) {
   return undefined;
 }
 
+function monthKeyFromDatabaseValue(value) {
+  if (value === null || value === undefined) return undefined;
+
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString().slice(0, 7);
+  }
+
+  const normalized = normalizeMonthInput(value);
+  if (normalized) return normalized;
+
+  const parsed = new Date(value);
+  if (Number.isFinite(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 7);
+  }
+
+  return undefined;
+}
+
 function parseNumeric(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value !== 'string') return undefined;
@@ -361,10 +379,12 @@ async function loadFromDatabase(startMonth, endMonth) {
     [startMonth ? `${startMonth}-01` : null, endMonth ? `${endMonth}-01` : null]
   );
 
-  return result.rows.map((row) => ({
-    month: String(row.month_date.toISOString()).slice(0, 7),
-    monthly_rate: Number(row.monthly_rate),
-  }));
+  return result.rows
+    .map((row) => ({
+      month: monthKeyFromDatabaseValue(row.month_date),
+      monthly_rate: Number(row.monthly_rate),
+    }))
+    .filter((row) => row.month);
 }
 
 async function saveToDatabase(rates, source = 'statbel') {

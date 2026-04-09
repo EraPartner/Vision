@@ -2,7 +2,7 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-03-31
+date: 2026-04-09
 tags: [feature, planned, recurring, bills, loans]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
@@ -155,6 +155,30 @@ Useful for:
 ---
 
 ## Supporting Services
+
+## Backend Route Implementation Notes
+
+Recent backend route refactoring consolidated duplicated logic in [[apps/node-backend/src/routes/plannedTransactions.js]] while preserving endpoint behavior:
+
+- Shared route-id parsing via `parseRouteId(req)` across `GET /:id`, `PATCH /:id`, `POST /:id/execute`, and `DELETE /:id`
+- Shared PATCH sanitization via `removePatchOnlyReadOnlyFields(fields)`
+- Shared name→id resolution helpers for recipient/category updates (`resolveRecipientIdFromName`, `resolveCategoryIdFromName`)
+- Shared loan recalculation/defaulting helper for PATCH updates (`applyLoanPatchDefaults`)
+- Shared execution-date fallback helper (`getCurrentDateString`)
+- Shared write-path error handling helper for POST/PATCH (`handlePlannedTransactionWriteError`)
+- Shared PATCH loan-schedule persistence branch helper (`updateLoanScheduleForPatch`)
+
+Performance/efficiency follow-ups (behavior-preserving):
+
+- List repository now computes `total` from `COUNT(*) OVER()` in the paginated query and only executes a fallback count query when the page is empty.
+- List query removed redundant pre-aggregated execution-count join and now derives `execution_count` from the already batched executions fetch.
+- Update repository path now returns enriched updated row via single CTE query (`WITH updated ... SELECT ...`) before attaching executions/schedule.
+- Route-level recipient/category name resolution and recurring execute-date calculation now use module-scoped imports (`dbQuery`, `calculateNextDate`) instead of per-request dynamic imports.
+- PATCH recipient/category name-resolution now executes in parallel via `Promise.all`, preserving unresolved-name behavior while reducing sequential lookup latency when both fields are present.
+
+These changes preserve API payloads/status semantics while reducing hot-path overhead.
+
+This refactor reduced handler duplication and improved maintainability without changing API contracts, response payload shapes, or status-code behavior.
 
 ### `recurrenceService.js`
 **File:** [[apps/node-backend/src/services/recurrenceService.js]]

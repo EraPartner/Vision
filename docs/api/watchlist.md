@@ -31,6 +31,12 @@ Retrieve all watchlist items.
 | offset | integer | 0 | Items to skip |
 | asset_class | string | null | Filter by asset class (stock, etf, crypto) |
 
+Notes:
+- `limit` is normalized to a safe range of `1..5000` (default `50`).
+- `offset` is normalized to a minimum of `0` (default `0`).
+- This preserves endpoint response shape while preventing unbounded list-page scans on malformed or extreme inputs ([[apps/node-backend/src/routes/watchlist.js]]).
+- Watchlist list retrieval now uses repository one-query pagination (`getAllWithCount`) instead of separate `getAll` + `getCount` calls in route code; ordering/filter behavior and response shape are unchanged ([[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]).
+
 **Response:**
 ```json
 {

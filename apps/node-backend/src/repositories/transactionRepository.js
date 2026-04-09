@@ -206,6 +206,110 @@ export const transactionRepository = {
   },
 
   /**
+   * Get uncategorised transactions plus total in a single round-trip.
+   *
+   * Important behavior note:
+   * - `rows` preserve uncategorised filtering semantics from getUncategorised().
+   * - `total` preserves historical route semantics from getCount(), which may include
+   *   additional filters such as search/category that are not applied to uncategorised rows.
+   */
+  async getUncategorisedWithCount({
+    transactionId = null,
+    limit = 50,
+    offset = 0,
+    startDate = null,
+    endDate = null,
+    bankAccount = null,
+    categoryId = null,
+    recipientId = null,
+    recipientName = null,
+    search = null,
+    active = true,
+  } = {}) {
+    const {
+      where: totalWhere,
+      params: totalParams,
+      nextParam: totalNextParam,
+    } = buildWhereClause({
+      transactionId,
+      startDate,
+      endDate,
+      bankAccount,
+      categoryId,
+      recipientId,
+      recipientName,
+      search,
+      active,
+    });
+
+    const params = [...totalParams];
+    let paramIdx = totalNextParam;
+
+    let uncategorisedWhere = `
+      t.is_active = true
+      AND t.category_id IS NULL
+      AND (r.default_category_id IS NULL)
+    `;
+
+    if (startDate) {
+      uncategorisedWhere += ` AND t.date >= $${paramIdx++}`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      uncategorisedWhere += ` AND t.date <= $${paramIdx++}`;
+      params.push(endDate);
+    }
+    if (bankAccount) {
+      uncategorisedWhere += ` AND t.bank_account ILIKE $${paramIdx++}`;
+      params.push(`%${bankAccount}%`);
+    }
+    if (recipientId != null) {
+      uncategorisedWhere += ` AND t.recipient_id = $${paramIdx++}`;
+      params.push(recipientId);
+    }
+    if (recipientName) {
+      uncategorisedWhere += ` AND r.name ILIKE $${paramIdx++}`;
+      params.push(`%${recipientName}%`);
+    }
+
+    const limitParam = paramIdx++;
+    const offsetParam = paramIdx++;
+    params.push(limit, offset);
+
+    const sql = `
+      WITH total_cte AS (
+        SELECT count(*)::int AS total
+        FROM transactions t
+        ${TRANSACTION_JOINS}
+        WHERE ${totalWhere}
+      ),
+      uncategorised_rows AS (
+        SELECT t.*,
+               r.name AS recipient_name,
+               NULL AS category_name
+        FROM transactions t
+        LEFT JOIN recipients r ON t.recipient_id = r.id
+        WHERE ${uncategorisedWhere}
+        ORDER BY t.date DESC
+        LIMIT $${limitParam} OFFSET $${offsetParam}
+      )
+      SELECT u.*,
+             tc.total AS total_count
+      FROM total_cte tc
+      LEFT JOIN uncategorised_rows u ON true
+      ORDER BY u.date DESC NULLS LAST, u.id DESC NULLS LAST
+    `;
+
+    const result = await query(sql, params);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const rows = result.rows
+      .filter((row) => row.id != null)
+      .map(({ total_count, ...row }) => row);
+
+    return { rows, total };
+  },
+
+  /**
    * Get a single transaction by ID.
    */
   async getById(id) {
@@ -274,6 +378,7 @@ export const transactionRepository = {
    * Returns: { rows: [...], total: number }
    */
   async getAllWithCount({
+    transactionId = null,
     limit = 50,
     offset = 0,
     startDate = null,
@@ -288,7 +393,7 @@ export const transactionRepository = {
     sortDir = null,
   } = {}) {
     const { where, params, nextParam: p } = buildWhereClause({
-      startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';
@@ -345,10 +450,28 @@ export const transactionRepository = {
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const sql = `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
+    const sql = `
+      WITH updated AS (
+        UPDATE transactions
+        SET ${setClauses.join(', ')}
+        WHERE id = $${paramIdx}
+        RETURNING *
+      )
+      SELECT t.*,
+             r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM updated t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+    `;
+
     const result = await query(sql, params);
-    if (result.rows.length === 0) return null;
-    return this.getById(id);
+    return result.rows[0] || null;
   },
 
   /**

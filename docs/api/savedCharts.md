@@ -2,7 +2,7 @@
 title: Saved Charts API
 type: endpoint
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [api, charts, analytics]
 description: API endpoints for saving and managing custom chart configurations
 aliases: [saved-charts-api, custom-charts, chart-config, analytics-saved]
@@ -134,6 +134,9 @@ Delete a saved chart configuration.
 - **name**: Must be a non-empty string, max 500 characters
 - **chartType**: Must be one of `line`, `bar`, or `area`
 - **categoryIds**: Array of positive integers
+
+Implementation note:
+- Route handlers now reuse shared validation/parsing helpers (`parseChartIdParam`, `validateChartType`, `validateCategoryIds`) across create/update/delete flows, preserving existing error texts and response behavior ([[apps/node-backend/src/routes/savedCharts.js]]).
 
 ## See Also
 

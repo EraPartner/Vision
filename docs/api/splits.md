@@ -2,7 +2,7 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-03-31
+date: 2026-04-09
 tags: [api, splits, transactions, debt]
 aliases: [splits-api, owes, debt-tracking, shared-expenses, settle-up, transaction-split]
 description: API endpoints for transaction splitting and debt tracking between recipients
@@ -49,6 +49,9 @@ Only unsettled splits with a positive remaining balance are included.
   ]
 }
 ```
+
+Implementation note:
+- Repository cleanup removed unused alternative SQL drafts in `getOwedSummary` and keeps a single active aggregation query path; API behavior and response shape are unchanged ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
 
@@ -114,6 +117,9 @@ Important behavior:
 **Error Responses:**
 
 - `404 Not Found` when no unsettled owed transactions exist for that recipient.
+
+Implementation notes:
+- Internal route refactor extracted shared CSV helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) to reduce duplication and keep export formatting behavior unchanged ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -187,6 +193,9 @@ Create a new split for a transaction.
 }
 ```
 
+Implementation notes:
+- Route now reuses shared split-validation helpers (`getTransactionSplitTotalsOr404`, `hasPositiveSplitAmount`, `exceedsTransactionTotal`) without changing validation responses or status codes ([[apps/node-backend/src/routes/splits.js]]).
+
 ---
 
 ### POST /api/splits/batch
@@ -227,6 +236,10 @@ Create multiple splits for a transaction at once.
 }
 ```
 
+Implementation notes:
+- Internal refactor extracted `computeBatchSplitAmounts` and reused shared transaction-total validation helpers to reduce repetition while preserving batch-create behavior ([[apps/node-backend/src/routes/splits.js]]).
+- Batch insert optimization now persists valid split rows through repository bulk insert (`createSplitsBatch`) instead of serial inserts, preserving validation rules and response shape while reducing DB round-trips ([[apps/node-backend/src/routes/splits.js]], [[apps/node-backend/src/repositories/splitRepository.js]]).
+
 ---
 
 ### POST /api/splits/:id/pay
@@ -246,6 +259,9 @@ Record a payment towards a split.
 | `amount` | number | Yes | Payment amount (positive number) |
 | `note` | string | No | Optional note |
 | `paid_at` | string | No | Payment date (ISO 8601) |
+
+Implementation note:
+- Payment recording now runs in a single DB transaction and performs conditional auto-settlement atomically after insert in `addPayment`, preserving API behavior while reducing concurrent race windows ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 **Response:** `201 Created`
 

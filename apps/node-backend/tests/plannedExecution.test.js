@@ -18,6 +18,18 @@ vi.mock('../src/config/logger.js', () => ({
 
 import { query } from '../src/database/connection.js';
 
+function toUtcDate(year, monthIndex, day) {
+  return new Date(Date.UTC(year, monthIndex, day));
+}
+
+function utcParts(date) {
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth(),
+    day: date.getUTCDate(),
+  };
+}
+
 describe('Planned Transaction Execution', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -44,29 +56,29 @@ describe('Planned Transaction Execution', () => {
     });
 
     it('should calculate all pattern next dates', () => {
-      const base = new Date(2026, 1, 15); // Feb 15, 2026
+      const base = toUtcDate(2026, 1, 15); // Feb 15, 2026 UTC
 
       const daily = calculateNextDate(base, 'daily');
-      expect(daily.getDate()).toBe(16);
+      expect(utcParts(daily).day).toBe(16);
 
       const weekly = calculateNextDate(base, 'weekly');
-      expect(weekly.getDate()).toBe(22);
+      expect(utcParts(weekly).day).toBe(22);
 
       const biweekly = calculateNextDate(base, 'biweekly');
-      expect(biweekly.getMonth()).toBe(2); // March
-      expect(biweekly.getDate()).toBe(1);
+      expect(utcParts(biweekly).month).toBe(2); // March
+      expect(utcParts(biweekly).day).toBe(1);
 
       const monthly = calculateNextDate(base, 'monthly');
-      expect(monthly.getMonth()).toBe(2); // March
-      expect(monthly.getDate()).toBe(15);
+      expect(utcParts(monthly).month).toBe(2); // March
+      expect(utcParts(monthly).day).toBe(15);
 
       const quarterly = calculateNextDate(base, 'quarterly');
-      expect(quarterly.getMonth()).toBe(4); // May
-      expect(quarterly.getDate()).toBe(15);
+      expect(utcParts(quarterly).month).toBe(4); // May
+      expect(utcParts(quarterly).day).toBe(15);
 
       const yearly = calculateNextDate(base, 'yearly');
-      expect(yearly.getFullYear()).toBe(2027);
-      expect(yearly.getMonth()).toBe(1);
+      expect(utcParts(yearly).year).toBe(2027);
+      expect(utcParts(yearly).month).toBe(1);
     });
   });
 
@@ -119,17 +131,17 @@ describe('Planned Transaction Execution', () => {
   // ── Recurring Execution ────────────────────────────────────
   describe('Recurring Execution', () => {
     it('should execute and advance date for recurring transaction', async () => {
-      const currentDate = new Date(2026, 1, 15); // Feb 15
+      const currentDate = toUtcDate(2026, 1, 15); // Feb 15 UTC
       const nextDate = calculateNextDate(currentDate, 'monthly');
 
       // After execution, the planned_date should advance
-      expect(nextDate.getMonth()).toBe(2); // March
-      expect(nextDate.getDate()).toBe(15);
+      expect(utcParts(nextDate).month).toBe(2); // March
+      expect(utcParts(nextDate).day).toBe(15);
     });
 
     it('should allow multiple executions of recurring transaction', async () => {
       // Execute 3 times monthly starting Feb 15
-      let currentDate = new Date(2026, 1, 15);
+      let currentDate = toUtcDate(2026, 1, 15);
       const executionDates = [currentDate];
 
       for (let i = 0; i < 3; i++) {
@@ -138,9 +150,9 @@ describe('Planned Transaction Execution', () => {
       }
 
       expect(executionDates).toHaveLength(4); // original + 3 executions
-      expect(executionDates[1].getMonth()).toBe(2); // March
-      expect(executionDates[2].getMonth()).toBe(3); // April
-      expect(executionDates[3].getMonth()).toBe(4); // May
+      expect(utcParts(executionDates[1]).month).toBe(2); // March
+      expect(utcParts(executionDates[2]).month).toBe(3); // April
+      expect(utcParts(executionDates[3]).month).toBe(4); // May
     });
 
     it('should track execution history', async () => {
@@ -162,25 +174,25 @@ describe('Planned Transaction Execution', () => {
   // ── Edge Cases ─────────────────────────────────────────────
   describe('Edge Cases', () => {
     it('should handle month-end dates correctly', () => {
-      const jan31 = new Date(2026, 0, 31); // Jan 31
+      const jan31 = toUtcDate(2026, 0, 31); // Jan 31 UTC
       const next = calculateNextDate(jan31, 'monthly');
       // Should go to Feb 28 (or handle overflow)
-      expect(next.getMonth()).toBe(1); // February
-      expect(next.getDate()).toBeLessThanOrEqual(28);
+      expect(utcParts(next).month).toBe(1); // February
+      expect(utcParts(next).day).toBeLessThanOrEqual(28);
     });
 
     it('should handle year boundary', () => {
-      const dec15 = new Date(2026, 11, 15); // Dec 15
+      const dec15 = toUtcDate(2026, 11, 15); // Dec 15 UTC
       const next = calculateNextDate(dec15, 'monthly');
-      expect(next.getFullYear()).toBe(2027);
-      expect(next.getMonth()).toBe(0); // January
+      expect(utcParts(next).year).toBe(2027);
+      expect(utcParts(next).month).toBe(0); // January
     });
 
     it('should handle leap year', () => {
-      const jan31 = new Date(2028, 0, 31); // 2028 is leap year
+      const jan31 = toUtcDate(2028, 0, 31); // 2028 is leap year UTC
       const next = calculateNextDate(jan31, 'monthly');
-      expect(next.getMonth()).toBe(1); // February
-      expect(next.getDate()).toBeLessThanOrEqual(29);
+      expect(utcParts(next).month).toBe(1); // February
+      expect(utcParts(next).day).toBeLessThanOrEqual(29);
     });
   });
 });

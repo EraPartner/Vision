@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET
 path: /api/import
 description: CSV import for transactions, recipients, and categories
-date: 2026-03-18
+date: 2026-04-09
 tags: [api, import, csv, bank]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -136,6 +136,11 @@ FOOD,GROCERIES,Supermarket purchases
 FOOD,RESTAURANTS,Restaurant and cafe
 TRANSPORT,GAS,Fuel purchases
 ```
+
+Implementation note:
+- Route temp-file cleanup now uses non-blocking async unlink (`fs.promises.unlink(...).catch(...)`) instead of synchronous filesystem calls, preserving silent-failure cleanup semantics while reducing event-loop blocking under concurrent imports ([[apps/node-backend/src/routes/importRoutes.js]]).
+- Raw-import service now processes parsed rows in bounded concurrent batches (`RAW_IMPORT_BATCH_SIZE = 20`) using `Promise.allSettled`, preserving imported/duplicate/error accounting semantics while improving throughput on larger files ([[apps/node-backend/src/services/rawTransactionImportService.js]]).
+- Raw-import and streaming-import fallback dedup checks now use module-scoped `isRawDuplicate` with fallback to `isDuplicateByFields`, preserving duplicate-detection behavior while removing remaining hot-path dynamic import overhead ([[apps/node-backend/src/services/rawTransactionImportService.js]], [[apps/node-backend/src/services/streamingImportService.js]]).
 
 ## Import Behavior
 

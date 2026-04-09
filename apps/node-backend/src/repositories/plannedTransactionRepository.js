@@ -7,87 +7,185 @@
 import { getClient, query } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 
+function buildPlannedTransactionWhereClause({
+  startDate = null,
+  endDate = null,
+  bankAccount = null,
+  categoryId = null,
+  recipientId = null,
+  isRecurring = null,
+  isExecuted = null,
+  search = null,
+  active = true,
+} = {}) {
+  let whereClause = 'WHERE 1=1';
+  const params = [];
+  let paramIdx = 1;
+
+  if (active) whereClause += ` AND pt.is_active = true`;
+  if (startDate) { whereClause += ` AND pt.planned_date >= $${paramIdx++}`; params.push(startDate); }
+  if (endDate) { whereClause += ` AND pt.planned_date <= $${paramIdx++}`; params.push(endDate); }
+  if (bankAccount) { whereClause += ` AND pt.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
+  if (categoryId != null) { whereClause += ` AND pt.category_id = $${paramIdx++}`; params.push(categoryId); }
+  if (recipientId != null) { whereClause += ` AND pt.recipient_id = $${paramIdx++}`; params.push(recipientId); }
+  if (isRecurring != null) { whereClause += ` AND pt.is_recurring = $${paramIdx++}`; params.push(isRecurring); }
+  if (isExecuted != null) { whereClause += ` AND pt.is_executed = $${paramIdx++}`; params.push(isExecuted); }
+  if (search) {
+    const sp = `%${search}%`;
+    whereClause += ` AND (
+      pt.memo ILIKE $${paramIdx} OR
+      pt.comment ILIKE $${paramIdx} OR
+      pt.bank_account ILIKE $${paramIdx} OR
+      r.name ILIKE $${paramIdx} OR
+      c.general ILIKE $${paramIdx} OR
+      c.detail ILIKE $${paramIdx} OR
+      rc.general ILIKE $${paramIdx} OR
+      rc.detail ILIKE $${paramIdx}
+    )`;
+    paramIdx++;
+    params.push(sp);
+  }
+
+  return { whereClause, params };
+}
+
+async function insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries = []) {
+  if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
+
+  const values = [];
+  const params = [];
+  let paramIdx = 1;
+
+  for (const installment of scheduleEntries) {
+    values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`);
+    params.push(
+      plannedTransactionId,
+      installment.installment_number,
+      installment.due_date,
+      installment.payment_amount,
+      installment.principal_amount,
+      installment.interest_amount,
+      installment.remaining_principal
+    );
+  }
+
+  await client.query(
+    `INSERT INTO planned_transaction_loan_schedule (
+       planned_transaction_id, installment_number, due_date,
+       payment_amount, principal_amount, interest_amount, remaining_principal
+     ) VALUES ${values.join(', ')}`,
+    params
+  );
+}
+
 export const plannedTransactionRepository = {
   async getAll({
     limit = 50, offset = 0, startDate = null, endDate = null,
     bankAccount = null, categoryId = null, recipientId = null,
     isRecurring = null, isExecuted = null, search = null, active = true,
   } = {}) {
-    let sql = `
+    const { whereClause, params } = buildPlannedTransactionWhereClause({
+      startDate,
+      endDate,
+      bankAccount,
+      categoryId,
+      recipientId,
+      isRecurring,
+      isExecuted,
+      search,
+      active,
+    });
+
+    const limitParam = params.length + 1;
+    const offsetParam = params.length + 2;
+    const sql = `
       SELECT pt.*,
              r.name AS recipient_name,
              CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE NULL
-             END AS category_name,
-             (SELECT count(*) FROM planned_transaction_executions pte WHERE pte.planned_transaction_id = pt.id) AS execution_count
+                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+                ELSE NULL
+              END AS category_name,
+             COUNT(*) OVER() AS total_count
       FROM planned_transactions pt
       LEFT JOIN recipients r ON pt.recipient_id = r.id
       LEFT JOIN categories c ON pt.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
-      WHERE 1=1
+      ${whereClause}
+      ORDER BY pt.planned_date DESC
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
     `;
-    const params = [];
-    let paramIdx = 1;
 
-    if (active) sql += ` AND pt.is_active = true`;
-    if (startDate) { sql += ` AND pt.planned_date >= $${paramIdx++}`; params.push(startDate); }
-    if (endDate) { sql += ` AND pt.planned_date <= $${paramIdx++}`; params.push(endDate); }
-    if (bankAccount) { sql += ` AND pt.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
-    if (categoryId != null) { sql += ` AND pt.category_id = $${paramIdx++}`; params.push(categoryId); }
-    if (recipientId != null) { sql += ` AND pt.recipient_id = $${paramIdx++}`; params.push(recipientId); }
-    if (isRecurring != null) { sql += ` AND pt.is_recurring = $${paramIdx++}`; params.push(isRecurring); }
-    if (isExecuted != null) { sql += ` AND pt.is_executed = $${paramIdx++}`; params.push(isExecuted); }
-    if (search) {
-      const sp = `%${search}%`;
-      sql += ` AND (
-        pt.memo ILIKE $${paramIdx} OR
-        pt.comment ILIKE $${paramIdx} OR
-        pt.bank_account ILIKE $${paramIdx} OR
-        r.name ILIKE $${paramIdx} OR
-        c.general ILIKE $${paramIdx} OR
-        c.detail ILIKE $${paramIdx} OR
-        rc.general ILIKE $${paramIdx} OR
-        rc.detail ILIKE $${paramIdx}
-      )`;
-      paramIdx++;
-      params.push(sp);
+    const result = await query(sql, [...params, limit, offset]);
+    let total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    if (result.rows.length === 0) {
+      const countSql = `
+        SELECT count(*)
+        FROM planned_transactions pt
+        LEFT JOIN recipients r ON pt.recipient_id = r.id
+        LEFT JOIN categories c ON pt.category_id = c.id
+        LEFT JOIN categories rc ON r.default_category_id = rc.id
+        ${whereClause}
+      `;
+      const countResult = await query(countSql, params);
+      total = parseInt(countResult.rows[0]?.count, 10) || 0;
     }
+    const rows = result.rows.map(({ total_count, ...row }) => row);
 
-    // Count query — wrap the filtered query and count its rows
-    const countSql = `SELECT count(*) FROM (${sql}) AS _counted`;
-    const countResult = await query(countSql, params);
-    const total = parseInt(countResult.rows[0].count, 10);
-
-    sql += ` ORDER BY pt.planned_date DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
-    params.push(limit, offset);
-
-    const result = await query(sql, params);
-
-    // Fetch executions for each
-    for (const row of result.rows) {
-      const execResult = await query(
-        `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
-        [row.id]
+    const plannedTransactionIds = rows.map((row) => row.id);
+    const executionsByPlannedTransactionId = new Map();
+    if (plannedTransactionIds.length > 0) {
+      const executionResult = await query(
+        `SELECT *
+         FROM planned_transaction_executions
+         WHERE planned_transaction_id = ANY($1::int[])
+         ORDER BY planned_transaction_id ASC, execution_date DESC`,
+        [plannedTransactionIds]
       );
-      row.executions = execResult.rows;
-      row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
-      if (row.is_loan) {
-        const scheduleResult = await query(
-          `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
-             FROM planned_transaction_loan_schedule
-            WHERE planned_transaction_id = $1
-            ORDER BY installment_number ASC`,
-          [row.id]
-        );
-        row.loan_schedule = scheduleResult.rows;
-      } else {
-        row.loan_schedule = [];
+
+      for (const execution of executionResult.rows) {
+        if (!executionsByPlannedTransactionId.has(execution.planned_transaction_id)) {
+          executionsByPlannedTransactionId.set(execution.planned_transaction_id, []);
+        }
+        executionsByPlannedTransactionId.get(execution.planned_transaction_id).push(execution);
       }
     }
 
-    return { items: result.rows, total };
+    const loanPlannedTransactionIds = rows
+      .filter((row) => row.is_loan)
+      .map((row) => row.id);
+
+    const schedulesByPlannedTransactionId = new Map();
+    if (loanPlannedTransactionIds.length > 0) {
+      const scheduleResult = await query(
+        `SELECT planned_transaction_id, installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
+           FROM planned_transaction_loan_schedule
+          WHERE planned_transaction_id = ANY($1::int[])
+          ORDER BY planned_transaction_id ASC, installment_number ASC`,
+        [loanPlannedTransactionIds]
+      );
+
+      for (const scheduleRow of scheduleResult.rows) {
+        if (!schedulesByPlannedTransactionId.has(scheduleRow.planned_transaction_id)) {
+          schedulesByPlannedTransactionId.set(scheduleRow.planned_transaction_id, []);
+        }
+        const { planned_transaction_id, ...loanScheduleEntry } = scheduleRow;
+        schedulesByPlannedTransactionId.get(planned_transaction_id).push(loanScheduleEntry);
+      }
+    }
+
+    for (const row of rows) {
+      const executions = executionsByPlannedTransactionId.get(row.id) || [];
+      row.executions = executions;
+      row.execution_count = executions.length;
+      row.executed_transaction_id = executions.length > 0 ? executions[0].executed_transaction_id : null;
+      row.loan_schedule = row.is_loan
+        ? (schedulesByPlannedTransactionId.get(row.id) || [])
+        : [];
+    }
+
+    return { items: rows, total };
   },
 
   async getById(id) {
@@ -204,23 +302,7 @@ export const plannedTransactionRepository = {
       const plannedId = result.rows[0].id;
 
       if (is_loan && Array.isArray(loan_schedule) && loan_schedule.length > 0) {
-        for (const installment of loan_schedule) {
-          await client.query(
-            `INSERT INTO planned_transaction_loan_schedule (
-               planned_transaction_id, installment_number, due_date,
-               payment_amount, principal_amount, interest_amount, remaining_principal
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-              plannedId,
-              installment.installment_number,
-              installment.due_date,
-              installment.payment_amount,
-              installment.principal_amount,
-              installment.interest_amount,
-              installment.remaining_principal,
-            ]
-          );
-        }
+        await insertLoanScheduleBatch(client, plannedId, loan_schedule);
       }
 
       await client.query('COMMIT');
@@ -250,9 +332,52 @@ export const plannedTransactionRepository = {
 
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
-    const sql = `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
-    await query(sql, params);
-    return this.getById(id);
+    const sql = `
+      WITH updated AS (
+        UPDATE planned_transactions
+        SET ${setClauses.join(', ')}
+        WHERE id = $${paramIdx}
+        RETURNING *
+      )
+      SELECT pt.*,
+             r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM updated pt
+      LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN categories c ON pt.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+    `;
+
+    const result = await query(sql, params);
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    const execResult = await query(
+      `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
+      [id]
+    );
+    row.executions = execResult.rows;
+    row.execution_count = execResult.rows.length;
+    row.executed_transaction_id = execResult.rows.length > 0 ? execResult.rows[0].executed_transaction_id : null;
+
+    if (row.is_loan) {
+      const scheduleResult = await query(
+        `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
+           FROM planned_transaction_loan_schedule
+          WHERE planned_transaction_id = $1
+          ORDER BY installment_number ASC`,
+        [id]
+      );
+      row.loan_schedule = scheduleResult.rows;
+    } else {
+      row.loan_schedule = [];
+    }
+
+    return row;
   },
 
   async hardDelete(id) {
@@ -277,23 +402,7 @@ export const plannedTransactionRepository = {
         [plannedTransactionId]
       );
 
-      for (const installment of scheduleEntries) {
-        await client.query(
-          `INSERT INTO planned_transaction_loan_schedule (
-             planned_transaction_id, installment_number, due_date,
-             payment_amount, principal_amount, interest_amount, remaining_principal
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            plannedTransactionId,
-            installment.installment_number,
-            installment.due_date,
-            installment.payment_amount,
-            installment.principal_amount,
-            installment.interest_amount,
-            installment.remaining_principal,
-          ]
-        );
-      }
+      await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
 
       await client.query('COMMIT');
     } catch (err) {

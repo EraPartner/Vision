@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-03-28
+date: 2026-04-09
 tags: [api, investments, portfolio, stocks, crypto, metals]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -75,6 +75,11 @@ Retrieve a list of investments.
   "links": []
 }
 ```
+
+Notes:
+- Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.js]]).
+- Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.js]]).
+- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 
 ### GET /api/investments/providers
 
@@ -363,6 +368,8 @@ Create-path compatibility:
 - Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
 - Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]]).
 - Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/frontend/src/types/api.ts]]).
+- `POST /api/investments/:id/transactions` now forwards preloaded investment `asset_class` from route lookup into repository create (`preloaded_asset_class`) so repository can skip a duplicate investment metadata query; validation and response behavior remain unchanged ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/components/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).

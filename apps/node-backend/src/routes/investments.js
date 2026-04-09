@@ -16,10 +16,95 @@ const router = Router();
 const INVESTMENTS_CACHE_TTL_MS = 60_000;
 let investmentsCache = { data: undefined, expiresAt: 0 };
 let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+const REFRESH_PRICE_CONCURRENCY = 10;
+
+function parseInteger(value) {
+  return parseInt(value, 10);
+}
+
+function parseRequestId(req) {
+  return parseInteger(req.params.id);
+}
+
+function parseTxnRequestId(req) {
+  return parseInteger(req.params.txnId);
+}
+
+function parseAndValidateTxnRequestId(req, res) {
+  const txnId = parseTxnRequestId(req);
+  if (isNaN(txnId) || txnId <= 0) {
+    res.status(400).json({ detail: 'Invalid transaction ID' });
+    return undefined;
+  }
+  return txnId;
+}
+
+function handleValidationError(res, err) {
+  if (err?.code !== 'VALIDATION_ERROR') return false;
+  res.status(400).json({ detail: err.message });
+  return true;
+}
+
+function parseInvestmentIdsQuery(rawInvestmentIds) {
+  return String(rawInvestmentIds)
+    .split(',')
+    .map((value) => parseInteger(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
+function parseDbOnlyQueryValue(raw) {
+  return raw === '1'
+    || raw === 'true'
+    || raw === 1
+    || raw === true;
+}
+
+function parseDefaultListOptions(query) {
+  const { limit = 200, offset = 0, asset_class, active = 'true' } = query;
+  return {
+    limit: Math.min(parseInteger(limit) || 200, 1000),
+    offset: parseInteger(offset) || 0,
+    assetClass: asset_class || null,
+    active: active !== 'false',
+  };
+}
+
+function parseBulkTransactionsOptions(query, investmentIds) {
+  const { type, per_investment_limit = 1000, limit, offset = 0 } = query;
+  return {
+    investmentIds,
+    type: type || null,
+    perInvestmentLimit: Math.max(1, Math.min(parseInteger(per_investment_limit) || 1000, 5000)),
+    limit: limit == null || limit === ''
+      ? null
+      : Math.max(1, Math.min(parseInteger(limit) || 1, 200000)),
+    offset: Math.max(0, parseInteger(offset) || 0),
+  };
+}
+
+function parseInvestmentTransactionsOptions(query, investmentId) {
+  const { type, limit = 200, offset = 0 } = query;
+  return {
+    investmentId,
+    type: type || null,
+    limit: Math.min(parseInteger(limit) || 200, 1000),
+    offset: parseInteger(offset) || 0,
+  };
+}
 
 function clearInvestmentsCaches() {
   investmentsCache = { data: undefined, expiresAt: 0 };
   bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+}
+
+async function processInBatches(items, batchSize, worker) {
+  const results = [];
+  for (let index = 0; index < items.length; index += batchSize) {
+    const chunk = items.slice(index, index + batchSize);
+    const chunkResults = await Promise.all(chunk.map(worker));
+    results.push(...chunkResults);
+  }
+  return results;
 }
 
 function hasLivePriceRefreshConfig(investment) {
@@ -50,13 +135,7 @@ function hasLivePriceRefreshConfig(investment) {
 // GET /api/investments
 router.get('/', async (req, res) => {
   try {
-    const { limit = 200, offset = 0, asset_class, active = 'true' } = req.query;
-    const opts = {
-      limit: Math.min(parseInt(limit, 10) || 200, 1000),
-      offset: parseInt(offset, 10) || 0,
-      assetClass: asset_class || null,
-      active: active !== 'false',
-    };
+    const opts = parseDefaultListOptions(req.query);
 
     // Cache the default request that the frontend hits on every page (limit=500, active=false, no filter)
     const isDefaultRequest = opts.limit >= 500 && !opts.assetClass && !opts.active && opts.offset === 0;
@@ -64,10 +143,9 @@ router.get('/', async (req, res) => {
       return res.json(investmentsCache.data);
     }
 
-    const [items, total] = await Promise.all([
-      investmentRepository.getAll(opts),
-      investmentRepository.getCount(opts),
-    ]);
+    const result = await investmentRepository.getAllWithCount(opts);
+    const items = result.rows;
+    const total = result.total;
     const payload = { items, total, limit: opts.limit, offset: opts.offset, links: [] };
 
     if (isDefaultRequest) {
@@ -161,9 +239,11 @@ router.post('/refresh-prices', async (req, res) => {
     const prices = await fetchLivePricesDetailed(toRefresh, { cachedPricesByInvestmentId });
     const priceSources = {};
 
-    // Update all investments in parallel — each update targets a different row
-    const updateResults = await Promise.all(
-      Object.entries(prices).map(async ([investmentId, priceData]) => {
+    const priceEntries = Object.entries(prices);
+    const updateResults = await processInBatches(
+      priceEntries,
+      REFRESH_PRICE_CONCURRENCY,
+      async ([investmentId, priceData]) => {
         const { price, source } = priceData || {};
         if (price != null && !isNaN(price)) {
           priceSources[investmentId] = source || 'live';
@@ -176,7 +256,7 @@ router.post('/refresh-prices', async (req, res) => {
           return 1;
         }
         return 0;
-      })
+      }
     );
     const updated = updateResults.reduce((sum, n) => sum + n, 0);
 
@@ -201,25 +281,13 @@ router.get('/transactions', async (req, res) => {
       return res.status(400).json({ detail: 'investment_ids is required' });
     }
 
-    const investmentIds = String(rawInvestmentIds)
-      .split(',')
-      .map((value) => parseInt(value, 10))
-      .filter((value) => Number.isInteger(value) && value > 0);
+    const investmentIds = parseInvestmentIdsQuery(rawInvestmentIds);
 
     if (investmentIds.length === 0) {
       return res.status(400).json({ detail: 'investment_ids must include at least one valid id' });
     }
 
-    const { type, per_investment_limit = 1000, limit, offset = 0 } = req.query;
-    const opts = {
-      investmentIds,
-      type: type || null,
-      perInvestmentLimit: Math.max(1, Math.min(parseInt(per_investment_limit, 10) || 1000, 5000)),
-      limit: limit == null || limit === ''
-        ? null
-        : Math.max(1, Math.min(parseInt(limit, 10) || 1, 200000)),
-      offset: Math.max(0, parseInt(offset, 10) || 0),
-    };
+    const opts = parseBulkTransactionsOptions(req.query, investmentIds);
 
     // Cache bulk transactions for the default request pattern
     const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.offset}`;
@@ -254,17 +322,13 @@ router.get('/transactions', async (req, res) => {
 // GET /api/investments/:id
 router.get('/:id/price-history', validateIdParam, async (req, res) => {
   try {
-    const investmentId = parseInt(req.params.id, 10);
+    const investmentId = parseRequestId(req);
     const inv = await investmentRepository.getById(investmentId);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
 
     const fromMs = req.query.from_ms;
     const toMs = req.query.to_ms;
-    const dbOnlyRaw = req.query.db_only;
-    const dbOnly = dbOnlyRaw === '1'
-      || dbOnlyRaw === 'true'
-      || dbOnlyRaw === 1
-      || dbOnlyRaw === true;
+    const dbOnly = parseDbOnlyQueryValue(req.query.db_only);
 
     const points = await fetchHistoricalPrices(inv, {
       fromMs: fromMs !== undefined ? Number(fromMs) : undefined,
@@ -286,7 +350,7 @@ router.get('/:id/price-history', validateIdParam, async (req, res) => {
 // GET /api/investments/:id
 router.get('/:id', validateIdParam, async (req, res) => {
   try {
-    const inv = await investmentRepository.getById(parseInt(req.params.id, 10));
+    const inv = await investmentRepository.getById(parseRequestId(req));
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
     res.json(inv);
   } catch (err) {
@@ -297,14 +361,12 @@ router.get('/:id', validateIdParam, async (req, res) => {
 // PATCH /api/investments/:id
 router.patch('/:id', validateIdParam, async (req, res) => {
   try {
-    const inv = await investmentRepository.update(parseInt(req.params.id, 10), req.body);
+    const inv = await investmentRepository.update(parseRequestId(req), req.body);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
     clearInvestmentsCaches();
     res.json(inv);
   } catch (err) {
-    if (err?.code === 'VALIDATION_ERROR') {
-      return res.status(400).json({ detail: err.message });
-    }
+    if (handleValidationError(res, err)) return;
     logger.error('Failed to update investment', { error: err.message });
     res.status(500).json({ detail: 'Failed to update investment' });
   }
@@ -313,7 +375,7 @@ router.patch('/:id', validateIdParam, async (req, res) => {
 // DELETE /api/investments/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   try {
-    const ok = await investmentRepository.hardDelete(parseInt(req.params.id, 10));
+    const ok = await investmentRepository.hardDelete(parseRequestId(req));
     if (!ok) return res.status(404).json({ detail: 'Investment not found' });
     clearInvestmentsCaches();
     res.status(204).end();
@@ -328,18 +390,10 @@ router.delete('/:id', validateIdParam, async (req, res) => {
 // GET /api/investments/:id/transactions
 router.get('/:id/transactions', validateIdParam, async (req, res) => {
   try {
-    const investmentId = parseInt(req.params.id, 10);
-    const { type, limit = 200, offset = 0 } = req.query;
-    const opts = {
-      investmentId,
-      type: type || null,
-      limit: Math.min(parseInt(limit, 10) || 200, 1000),
-      offset: parseInt(offset, 10) || 0,
-    };
-    const [items, total] = await Promise.all([
-      portfolioTransactionRepository.getAll(opts),
-      portfolioTransactionRepository.getCount(opts),
-    ]);
+    const opts = parseInvestmentTransactionsOptions(req.query, parseRequestId(req));
+    const result = await portfolioTransactionRepository.getAllWithCount(opts);
+    const items = result.rows;
+    const total = result.total;
     res.json({ items, total, limit: opts.limit, offset: opts.offset, links: [] });
   } catch (err) {
     logger.error('Failed to get portfolio transactions', { error: err.message });
@@ -350,7 +404,7 @@ router.get('/:id/transactions', validateIdParam, async (req, res) => {
 // POST /api/investments/:id/transactions
 router.post('/:id/transactions', validateIdParam, async (req, res) => {
   try {
-    const investment_id = parseInt(req.params.id, 10);
+    const investment_id = parseRequestId(req);
     const inv = await investmentRepository.getById(investment_id);
     if (!inv) return res.status(404).json({ detail: 'Investment not found' });
 
@@ -360,13 +414,12 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
     const txn = await portfolioTransactionRepository.create({
       investment_id, type, date, amount, units, price_per_unit, fees, taxes,
       currency: currency || inv.currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur,
+      preloaded_asset_class: inv.asset_class,
     });
     clearInvestmentsCaches();
     res.status(201).json(txn);
   } catch (err) {
-    if (err?.code === 'VALIDATION_ERROR') {
-      return res.status(400).json({ detail: err.message });
-    }
+    if (handleValidationError(res, err)) return;
     logger.error('Failed to create portfolio transaction', { error: err.message });
     res.status(500).json({ detail: 'Failed to create portfolio transaction' });
   }
@@ -375,8 +428,8 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
 // DELETE /api/investments/transactions/:txnId
 router.delete('/transactions/:txnId', async (req, res) => {
   try {
-    const txnId = parseInt(req.params.txnId, 10);
-    if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
+    const txnId = parseAndValidateTxnRequestId(req, res);
+    if (txnId === undefined) return;
     const ok = await portfolioTransactionRepository.hardDelete(txnId);
     if (!ok) return res.status(404).json({ detail: 'Portfolio transaction not found' });
     clearInvestmentsCaches();
@@ -390,16 +443,14 @@ router.delete('/transactions/:txnId', async (req, res) => {
 // PATCH /api/investments/transactions/:txnId
 router.patch('/transactions/:txnId', async (req, res) => {
   try {
-    const txnId = parseInt(req.params.txnId, 10);
-    if (isNaN(txnId) || txnId <= 0) return res.status(400).json({ detail: 'Invalid transaction ID' });
+    const txnId = parseAndValidateTxnRequestId(req, res);
+    if (txnId === undefined) return;
     const txn = await portfolioTransactionRepository.update(txnId, req.body || {});
     if (!txn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
     clearInvestmentsCaches();
     res.json(txn);
   } catch (err) {
-    if (err?.code === 'VALIDATION_ERROR') {
-      return res.status(400).json({ detail: err.message });
-    }
+    if (handleValidationError(res, err)) return;
     logger.error('Failed to update portfolio transaction', { error: err.message });
     res.status(500).json({ detail: 'Failed to update portfolio transaction' });
   }
@@ -408,7 +459,7 @@ router.patch('/transactions/:txnId', async (req, res) => {
 // GET /api/investments/:id/summary
 router.get('/:id/summary', validateIdParam, async (req, res) => {
   try {
-    const investmentId = parseInt(req.params.id, 10);
+    const investmentId = parseRequestId(req);
     const summary = await portfolioTransactionRepository.getSummary(investmentId);
     res.json({ investment_id: investmentId, breakdown: summary });
   } catch (err) {

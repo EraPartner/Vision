@@ -23,6 +23,11 @@ import {
   rawReferenceRepo,
   isRawDuplicate,
 } from '../repositories/rawTransactionRepository.js';
+import { importCSV } from './importService.js';
+import { isDuplicateByFields } from './deduplication.js';
+import { normalizeForMatching } from './textNormalization.js';
+
+const RAW_IMPORT_BATCH_SIZE = 20;
 
 /**
  * Determine bank type from bank name string.
@@ -287,85 +292,22 @@ export async function importCSVWithRawStorage(filePath, bankName, customConfig =
     // If bank type is generic (no raw table), fall back to the legacy dedup
     if (bankType === 'generic') {
       logger.warn('No raw table for generic bank type, using legacy import');
-      // Import using the old importService
-      const { importCSV } = await import('./importService.js');
       return importCSV(filePath, bankName, customConfig);
     }
 
-    for (const txData of transactionDataList) {
-      try {
-        if (!txData.rawData) {
-          // No raw data available — skip raw storage
+    for (let i = 0; i < transactionDataList.length; i += RAW_IMPORT_BATCH_SIZE) {
+      const batch = transactionDataList.slice(i, i + RAW_IMPORT_BATCH_SIZE);
+      const settled = await Promise.allSettled(batch.map((txData) => processRawImportRow(txData, bankType)));
+
+      for (const outcome of settled) {
+        if (outcome.status === 'fulfilled') {
+          if (outcome.value === 'imported') results.imported++;
+          else if (outcome.value === 'duplicate') results.duplicates++;
+          else results.errors++;
+        } else {
+          logger.warn(`Error processing transaction: ${outcome.reason?.message || outcome.reason}`);
           results.errors++;
-          continue;
         }
-
-        // Step 1: Check raw table deduplication
-        const dedupHash = computeHash(txData.rawData);
-        let isDup = false;
-        try {
-          if (bankType === 'belfius') isDup = await belfiusRawRepo.existsByHash(dedupHash);
-          else if (bankType === 'revolut') isDup = await revolutRawRepo.existsByHash(dedupHash);
-          else if (bankType === 'kbc') isDup = await kbcRawRepo.existsByHash(dedupHash);
-          else if (bankType === 'sabb') isDup = await sabbRawRepo.existsByHash(dedupHash);
-          else if (bankType === 'wise') isDup = await wiseRawRepo.existsByHash(dedupHash);
-          else if (bankType === 'vision') isDup = await visionRawRepo.existsByHash(dedupHash);
-        } catch {
-          // Raw table may not exist yet — fall back to old dedup
-          const { isDuplicateByFields } = await import('./deduplication.js');
-          const dateStr = txData.date.toISOString().split('T')[0];
-          isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
-        }
-
-        if (isDup) {
-          results.duplicates++;
-          continue;
-        }
-
-        // Step 2: Store in bank-specific raw table
-        let rawTxn = null;
-        try {
-          if (bankType === 'belfius') rawTxn = await storeBelfiusRaw(txData, dedupHash);
-          else if (bankType === 'revolut') rawTxn = await storeRevolutRaw(txData, dedupHash);
-          else if (bankType === 'kbc') rawTxn = await storeKbcRaw(txData, dedupHash);
-          else if (bankType === 'sabb') rawTxn = await storeSABBRaw(txData, dedupHash);
-          else if (bankType === 'wise') rawTxn = await storeWiseRaw(txData, dedupHash);
-          else if (bankType === 'vision') rawTxn = await storeVisionRaw(txData, dedupHash);
-        } catch (rawErr) {
-          logger.warn(`Raw storage failed (table may not exist): ${rawErr.message}`);
-          // Continue without raw storage — still create normalized transaction
-        }
-
-        // Step 3: Get or create recipient
-        const recipientId = await getOrCreateRecipient(
-          txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
-        );
-
-        // Step 4: Create normalized transaction
-        const dateStr = txData.date.toISOString().split('T')[0];
-        const txResult = await query(
-          `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING id`,
-          [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
-        );
-
-        // Step 5: Create raw reference link
-        if (rawTxn && txResult.rows[0]) {
-          try {
-            await rawReferenceRepo.create({
-              transactionId: txResult.rows[0].id,
-              rawSourceType: bankType,
-              rawSourceId: rawTxn.id,
-            });
-          } catch (refErr) {
-            logger.warn(`Raw reference creation failed: ${refErr.message}`);
-          }
-        }
-
-        results.imported++;
-      } catch (err) {
-        logger.warn(`Error processing transaction: ${err.message}`);
-        results.errors++;
       }
     }
 
@@ -384,12 +326,67 @@ export async function importCSVWithRawStorage(filePath, bankName, customConfig =
   }
 }
 
+async function processRawImportRow(txData, bankType) {
+  if (!txData.rawData) {
+    return 'error';
+  }
+
+  const dedupHash = computeHash(txData.rawData);
+  let isDup = false;
+  try {
+    isDup = await isRawDuplicate(bankType, txData.rawData);
+  } catch {
+    const dateStr = txData.date.toISOString().split('T')[0];
+    isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
+  }
+
+  if (isDup) {
+    return 'duplicate';
+  }
+
+  let rawTxn = null;
+  try {
+    if (bankType === 'belfius') rawTxn = await storeBelfiusRaw(txData, dedupHash);
+    else if (bankType === 'revolut') rawTxn = await storeRevolutRaw(txData, dedupHash);
+    else if (bankType === 'kbc') rawTxn = await storeKbcRaw(txData, dedupHash);
+    else if (bankType === 'sabb') rawTxn = await storeSABBRaw(txData, dedupHash);
+    else if (bankType === 'wise') rawTxn = await storeWiseRaw(txData, dedupHash);
+    else if (bankType === 'vision') rawTxn = await storeVisionRaw(txData, dedupHash);
+  } catch (rawErr) {
+    logger.warn(`Raw storage failed (table may not exist): ${rawErr.message}`);
+  }
+
+  const recipientId = await getOrCreateRecipient(
+    txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
+  );
+
+  const dateStr = txData.date.toISOString().split('T')[0];
+  const txResult = await query(
+    `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) RETURNING id`,
+    [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
+  );
+
+  if (rawTxn && txResult.rows[0]) {
+    try {
+      await rawReferenceRepo.create({
+        transactionId: txResult.rows[0].id,
+        rawSourceType: bankType,
+        rawSourceId: rawTxn.id,
+      });
+    } catch (refErr) {
+      logger.warn(`Raw reference creation failed: ${refErr.message}`);
+    }
+  }
+
+  return 'imported';
+}
+
 /**
  * Get or create a recipient by name (reused from importService).
  */
 async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (!name) name = 'UNKNOWN';
-  const { normalizeForMatching } = await import('./textNormalization.js');
   const upperName = name.toUpperCase().trim();
   const normalizedName = normalizeForMatching(name);
 

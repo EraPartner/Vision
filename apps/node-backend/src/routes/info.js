@@ -5,11 +5,18 @@
  */
 
 import { Router } from 'express';
+import { query as dbQuery } from '../database/connection.js';
 import infoRepository from '../repositories/infoRepository.js';
 import { detectRecurringPatterns } from '../services/recurringDetectionService.js';
 import { refreshMaterializedViews } from '../services/materializedViewService.js';
 import { logger } from '../config/logger.js';
 import { rateLimiter, adminRateLimiter } from '../middleware/rateLimiter.js';
+import {
+  FALLBACK_RATES,
+  warmCache,
+  clearMemoryCache,
+} from '../services/currencyConversionService.js';
+import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
 import {
   getInflationRates,
   clearInflationMemoryCache,
@@ -22,20 +29,93 @@ const netWorthResponseCache = new Map();
 
 const PERF_CACHE_TTL_MS = 300_000; // 5min
 const perfResponseCache = new Map();
+const MAX_CACHE_ENTRIES = 100;
 
-function getCachedNetWorth(key) {
-  const cached = netWorthResponseCache.get(key);
+function pruneExpiredCacheEntries(cache) {
+  const now = Date.now();
+  for (const [key, value] of cache.entries()) {
+    const hasInflight = Boolean(value?.inflight);
+    if (!hasInflight && (value?.expiresAt || 0) <= now) {
+      cache.delete(key);
+    }
+  }
+}
+
+function enforceCacheSizeLimit(cache, maxEntries = MAX_CACHE_ENTRIES) {
+  if (cache.size <= maxEntries) return;
+
+  const overflow = cache.size - maxEntries;
+  const removableKeys = [];
+  for (const [key, value] of cache.entries()) {
+    if (!value?.inflight) {
+      removableKeys.push(key);
+    }
+    if (removableKeys.length >= overflow) break;
+  }
+
+  for (const key of removableKeys) {
+    cache.delete(key);
+  }
+}
+
+function getFreshCachedData(cache, key, { requireData = false } = {}) {
+  pruneExpiredCacheEntries(cache);
+  const cached = cache.get(key);
   if (!cached) return undefined;
-  if (cached.expiresAt > Date.now() && cached.data) return cached.data;
+  if (cached.expiresAt > Date.now() && (!requireData || cached.data)) return cached.data;
+  if (!cached.inflight) {
+    cache.delete(key);
+  }
   return undefined;
 }
 
-function setCachedNetWorth(key, data) {
-  netWorthResponseCache.set(key, {
+function setCachedData(cache, key, data, ttlMs) {
+  pruneExpiredCacheEntries(cache);
+  cache.set(key, {
     data,
     inflight: undefined,
-    expiresAt: Date.now() + NET_WORTH_CACHE_TTL_MS,
+    expiresAt: Date.now() + ttlMs,
   });
+  enforceCacheSizeLimit(cache);
+}
+
+function setInflightCache(cache, key, inflight, { keepPreviousData = false } = {}) {
+  pruneExpiredCacheEntries(cache);
+  const current = cache.get(key);
+  cache.set(key, {
+    data: keepPreviousData ? current?.data : undefined,
+    inflight,
+    expiresAt: keepPreviousData ? (current?.expiresAt || 0) : 0,
+  });
+  enforceCacheSizeLimit(cache);
+}
+
+async function resolveCacheWithInflight(cache, key, { ttlMs, requireData = false, keepPreviousData = false, loader }) {
+  const cachedData = getFreshCachedData(cache, key, { requireData });
+  if (cachedData !== undefined) {
+    return cachedData;
+  }
+
+  const cachedEntry = cache.get(key);
+  if (cachedEntry?.inflight) {
+    return cachedEntry.inflight;
+  }
+
+  const inflight = loader()
+    .then((data) => {
+      setCachedData(cache, key, data, ttlMs);
+      return data;
+    })
+    .catch((error) => {
+      const current = cache.get(key);
+      if (current?.inflight === inflight) {
+        cache.delete(key);
+      }
+      throw error;
+    });
+
+  setInflightCache(cache, key, inflight, { keepPreviousData });
+  return inflight;
 }
 
 function getTargetCurrency(req) {
@@ -62,6 +142,47 @@ function isTruthyQueryParam(raw) {
     return normalized === 'true' || normalized === '1';
   }
   return false;
+}
+
+function parseNumericArrayQueryParam(raw) {
+  if (!raw) return [];
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values.map(Number);
+}
+
+function getCurrentDateString() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function parseSnapshotNumber(value) {
+  return parseFloat(value) || 0;
+}
+
+function mapPortfolioPerformanceSnapshot(snapshot) {
+  return {
+    date: snapshot.snapshot_date,
+    invested: parseSnapshotNumber(snapshot.invested),
+    value: parseSnapshotNumber(snapshot.value),
+    stocks_etfs_value: parseSnapshotNumber(snapshot.stocks_etfs_value),
+    crypto_value: parseSnapshotNumber(snapshot.crypto_value),
+    metals_value: parseSnapshotNumber(snapshot.metals_value),
+    stocks_etfs_invested: parseSnapshotNumber(snapshot.stocks_etfs_invested),
+    crypto_invested: parseSnapshotNumber(snapshot.crypto_invested),
+    metals_invested: parseSnapshotNumber(snapshot.metals_invested),
+    inflation_adjusted_value:
+      parseSnapshotNumber(snapshot.inflation_adjusted_value) || parseSnapshotNumber(snapshot.value) || 0,
+    gain_loss: parseSnapshotNumber(snapshot.gain_loss),
+    return_pct: parseSnapshotNumber(snapshot.return_pct),
+  };
+}
+
+function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots) {
+  return {
+    currency: targetCurrency,
+    start_date: startDate,
+    end_date: endDate,
+    snapshots: snapshots.map(mapPortfolioPerformanceSnapshot),
+  };
 }
 
 // GET /api/info
@@ -134,13 +255,7 @@ router.get('/transaction-summary', async (req, res) => {
 router.get('/monthly-summary', async (req, res) => {
   try {
     const targetCurrency = getTargetCurrency(req);
-    let excludedCategoryIds = req.query.excluded_category_ids;
-    if (excludedCategoryIds) {
-      if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
-      excludedCategoryIds = excludedCategoryIds.map(Number);
-    } else {
-      excludedCategoryIds = [];
-    }
+    const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
 
     logger.debug('Monthly summary request', { excludedCategoryIds });
     const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds, targetCurrency);
@@ -180,20 +295,8 @@ router.get('/average-vs-current-spending', async (req, res) => {
 router.get('/cashflow-comparison', async (req, res) => {
   try {
     const targetCurrency = getTargetCurrency(req);
-    let excludedCategoryIds = req.query.excluded_category_ids;
-    if (excludedCategoryIds) {
-      if (!Array.isArray(excludedCategoryIds)) excludedCategoryIds = [excludedCategoryIds];
-      excludedCategoryIds = excludedCategoryIds.map(Number);
-    } else {
-      excludedCategoryIds = [];
-    }
-    let excludedRecipientIds = req.query.excluded_recipient_ids;
-    if (excludedRecipientIds) {
-      if (!Array.isArray(excludedRecipientIds)) excludedRecipientIds = [excludedRecipientIds];
-      excludedRecipientIds = excludedRecipientIds.map(Number);
-    } else {
-      excludedRecipientIds = [];
-    }
+    const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
+    const excludedRecipientIds = parseNumericArrayQueryParam(req.query.excluded_recipient_ids);
     const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds, targetCurrency);
     res.json(data);
   } catch (err) {
@@ -206,9 +309,9 @@ router.get('/cashflow-comparison', async (req, res) => {
 router.get('/category-breakdown', async (req, res) => {
   try {
     const targetCurrency = getTargetCurrency(req);
-    const stats = await infoRepository.getStatistics(targetCurrency);
+    const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
     res.json({
-      categories: stats.categories,
+      categories,
       links: [],
     });
   } catch (err) {
@@ -249,37 +352,12 @@ router.get(
     const targetCurrency = getTargetCurrency(req);
     const cacheKey = targetCurrency;
 
-    const cachedData = getCachedNetWorth(cacheKey);
-    if (cachedData) {
-      return res.json(cachedData);
-    }
-
-    const cachedEntry = netWorthResponseCache.get(cacheKey);
-    if (cachedEntry?.inflight) {
-      const data = await cachedEntry.inflight;
-      return res.json(data);
-    }
-
-    const inflight = infoRepository.getNetWorth(targetCurrency)
-      .then((data) => {
-        setCachedNetWorth(cacheKey, data);
-        return data;
-      })
-      .catch((error) => {
-        const current = netWorthResponseCache.get(cacheKey);
-        if (current?.inflight === inflight) {
-          netWorthResponseCache.delete(cacheKey);
-        }
-        throw error;
-      });
-
-    netWorthResponseCache.set(cacheKey, {
-      data: cachedEntry?.data,
-      inflight,
-      expiresAt: cachedEntry?.expiresAt || 0,
+    const data = await resolveCacheWithInflight(netWorthResponseCache, cacheKey, {
+      ttlMs: NET_WORTH_CACHE_TTL_MS,
+      requireData: true,
+      keepPreviousData: true,
+      loader: () => infoRepository.getNetWorth(targetCurrency),
     });
-
-    const data = await inflight;
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving net worth', { error: err.message });
@@ -307,9 +385,6 @@ router.get(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
   async (req, res) => {
   try {
-    const { query: dbQuery } = await import('../database/connection.js');
-    const { FALLBACK_RATES, warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
-
     // Fetch the latest stored rates (one row per currency)
     const result = await dbQuery(`
       SELECT currency_code, rate_to_eur, rate_date, fetched_at
@@ -326,7 +401,7 @@ router.get(
     }));
 
     // If the stored rates are from a previous day, kick off a background refresh
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentDateString();
     const storedDate = rates.length > 0 ? rates[0].rate_date : null;
     if (!storedDate || storedDate < today) {
       clearMemoryCache();
@@ -350,7 +425,6 @@ router.get(
 // This endpoint triggers an expensive refresh; restrict it with the admin limiter.
 router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
   try {
-    const { warmCache, clearMemoryCache } = await import('../services/currencyConversionService.js');
     // Clear memory cache to force fresh fetch from ECB API
     clearMemoryCache();
     // Fetch fresh rates from ECB and save to database
@@ -419,51 +493,16 @@ router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests
   try {
     const targetCurrency = getTargetCurrency(req);
     const startDate = req.query.start_date || '2000-01-01';
-    const endDate = req.query.end_date || new Date().toISOString().split('T')[0];
+    const endDate = req.query.end_date || getCurrentDateString();
     const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
 
-    const cached = perfResponseCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return res.json(cached.data);
-    }
-
-    if (cached?.inflight) {
-      const data = await cached.inflight;
-      return res.json(data);
-    }
-
-    const { getSnapshots } = await import('../services/portfolioPerformanceSnapshotService.js');
-
-    const inflight = getSnapshots(startDate, endDate, targetCurrency).then(snapshots => {
-      const payload = {
-        currency: targetCurrency,
-        start_date: startDate,
-        end_date: endDate,
-        snapshots: snapshots.map(s => ({
-          date: s.snapshot_date,
-          invested: parseFloat(s.invested) || 0,
-          value: parseFloat(s.value) || 0,
-          stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
-          crypto_value: parseFloat(s.crypto_value) || 0,
-          metals_value: parseFloat(s.metals_value) || 0,
-          stocks_etfs_invested: parseFloat(s.stocks_etfs_invested) || 0,
-          crypto_invested: parseFloat(s.crypto_invested) || 0,
-          metals_invested: parseFloat(s.metals_invested) || 0,
-          inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
-          gain_loss: parseFloat(s.gain_loss) || 0,
-          return_pct: parseFloat(s.return_pct) || 0,
-        })),
-      };
-      perfResponseCache.set(cacheKey, { data: payload, expiresAt: Date.now() + PERF_CACHE_TTL_MS });
-      return payload;
-    }).catch(error => {
-      const current = perfResponseCache.get(cacheKey);
-      if (current?.inflight === inflight) perfResponseCache.delete(cacheKey);
-      throw error;
+    const data = await resolveCacheWithInflight(perfResponseCache, cacheKey, {
+      ttlMs: PERF_CACHE_TTL_MS,
+      loader: async () => {
+        const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
+        return buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots);
+      },
     });
-
-    perfResponseCache.set(cacheKey, { inflight, expiresAt: 0 });
-    const data = await inflight;
     res.json(data);
   } catch (err) {
     logger.error('Error retrieving portfolio performance', { error: err.message });
@@ -479,7 +518,7 @@ export async function warmInfoCaches(targetCurrency = 'EUR') {
   try {
     logger.info('Warming net-worth cache...', { targetCurrency });
     const nwData = await infoRepository.getNetWorth(targetCurrency);
-    setCachedNetWorth(targetCurrency, nwData);
+    setCachedData(netWorthResponseCache, targetCurrency, nwData, NET_WORTH_CACHE_TTL_MS);
     logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
   } catch (err) {
     logger.error('Failed to warm net-worth cache', { error: err.message });
@@ -487,31 +526,12 @@ export async function warmInfoCaches(targetCurrency = 'EUR') {
 
   try {
     logger.info('Warming portfolio-performance cache...', { targetCurrency });
-    const { getSnapshots } = await import('../services/portfolioPerformanceSnapshotService.js');
     const startDate = '2000-01-01';
-    const endDate = new Date().toISOString().split('T')[0];
+    const endDate = getCurrentDateString();
     const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
     const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
-    const payload = {
-      currency: targetCurrency,
-      start_date: startDate,
-      end_date: endDate,
-      snapshots: snapshots.map(s => ({
-        date: s.snapshot_date,
-        invested: parseFloat(s.invested) || 0,
-        value: parseFloat(s.value) || 0,
-        stocks_etfs_value: parseFloat(s.stocks_etfs_value) || 0,
-        crypto_value: parseFloat(s.crypto_value) || 0,
-        metals_value: parseFloat(s.metals_value) || 0,
-        stocks_etfs_invested: parseFloat(s.stocks_etfs_invested) || 0,
-        crypto_invested: parseFloat(s.crypto_invested) || 0,
-        metals_invested: parseFloat(s.metals_invested) || 0,
-        inflation_adjusted_value: parseFloat(s.inflation_adjusted_value) || parseFloat(s.value) || 0,
-        gain_loss: parseFloat(s.gain_loss) || 0,
-        return_pct: parseFloat(s.return_pct) || 0,
-      })),
-    };
-    perfResponseCache.set(cacheKey, { data: payload, expiresAt: Date.now() + PERF_CACHE_TTL_MS });
+    const payload = buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots);
+    setCachedData(perfResponseCache, cacheKey, payload, PERF_CACHE_TTL_MS);
     logger.info('Portfolio-performance cache warmed', { targetCurrency, snapshots: payload.snapshots.length });
   } catch (err) {
     logger.error('Failed to warm portfolio-performance cache', { error: err.message });

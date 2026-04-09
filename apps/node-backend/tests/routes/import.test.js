@@ -26,20 +26,36 @@ vi.mock('multer', () => {
   return { default: multer };
 });
 
-vi.mock('fs', () => ({
-  default: { existsSync: vi.fn(() => false), unlinkSync: vi.fn() },
-  existsSync: vi.fn(() => false),
-  unlinkSync: vi.fn(),
-}));
+vi.mock('fs', () => {
+  const unlink = vi.fn().mockResolvedValue(undefined);
+  return {
+    default: {
+      existsSync: vi.fn(() => false),
+      unlinkSync: vi.fn(),
+      promises: { unlink },
+    },
+    existsSync: vi.fn(() => false),
+    unlinkSync: vi.fn(),
+    promises: { unlink },
+  };
+});
 
 vi.mock('os', () => ({
   default: { tmpdir: vi.fn(() => '/tmp') },
   tmpdir: vi.fn(() => '/tmp'),
 }));
 
-vi.mock('path', () => ({
-  default: { join: vi.fn((...args) => args.join('/')) },
-}));
+vi.mock('path', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      join: vi.fn((...args) => args.join('/')),
+    },
+    join: vi.fn((...args) => args.join('/')),
+  };
+});
 
 vi.mock('../../src/services/importService.js', () => ({
   importCSV: vi.fn(),

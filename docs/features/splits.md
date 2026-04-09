@@ -2,7 +2,7 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [feature, splits, owes, debts, shared-expenses]
 description: Transaction splitting and debt tracking between recipients
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
@@ -91,6 +91,14 @@ The **owed summary** aggregates all unsettled splits to show who owes whom and h
 | GET | `/api/splits/:id/payments` | Get payment history |
 | POST | `/api/splits/:id/settle` | Mark split as settled |
 | POST | `/api/splits/owed/:id/settle-all` | Settle all splits for a recipient |
+
+Implementation notes:
+- Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers to reduce repeated conversion code without changing validation semantics ([[apps/node-backend/src/routes/splits.js]]).
+- Owed CSV export now uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) so CSV formatting/escaping is centralized while preserving output shape and headers ([[apps/node-backend/src/routes/splits.js]]).
+- Split creation flows reuse shared validation helpers (`getTransactionSplitTotalsOr404`, `hasPositiveSplitAmount`, `computeBatchSplitAmounts`, `exceedsTransactionTotal`) to reduce duplicate checks while keeping status codes and error payloads unchanged ([[apps/node-backend/src/routes/splits.js]]).
+- Batch split creation now persists rows through repository bulk insert (`createSplitsBatch`) after existing route validations, preserving API response shape while reducing per-split insert round-trips ([[apps/node-backend/src/routes/splits.js]], [[apps/node-backend/src/repositories/splitRepository.js]]).
+- Split payment recording (`addPayment`) now wraps insert + conditional settle update in a single DB transaction, preserving settlement behavior while reducing concurrent race windows ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Repository cleanup removed unused alternative SQL drafts in `getOwedSummary`, keeping one canonical owed-aggregation query path with unchanged response semantics ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
 

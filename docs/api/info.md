@@ -2,7 +2,7 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -166,6 +166,11 @@ Get monthly financial summary for the last 12 months.
 Notes:
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
+- Internal repository refactor extracted shared monthly summary aggregation logic (`buildMonthlySummary`) to remove duplicate summary reducers across MV and fallback paths without changing endpoint output semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Internal repository refactor now also reuses a shared row-mapping helper (`mapRowsForAmountConversion`) across summary/cashflow/planned/insights conversions to remove repeated `parseFloat` mapping while preserving all endpoint contracts and conversion semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Internal repository refactor additionally consolidates repeated date-to-`YYYY-MM-DD` normalization behind `formatDateToYmd()` to reduce formatting duplication without changing output fields or date semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Internal repository refactor also centralizes repeated month-key formatting/extraction (`formatYearMonthKey`, `extractYearMonth`, `formatDateToYm`) used by monthly summary, bank history, spending trend, and MoM period logic; response fields and values remain unchanged ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged ([[apps/node-backend/src/repositories/infoRepository.js]]).
 
 ---
 
@@ -286,6 +291,10 @@ Get spending breakdown by category.
 }
 ```
 
+Implementation note:
+- Route now calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
+- Category aggregation in MV-backed breakdown/statistics paths now uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.js]]).
+
 ---
 
 ### GET /api/info/bank-balances
@@ -296,6 +305,7 @@ Notes:
 - For non-EUR targets, conversion is date-aware for both the current account balances and monthly history rows.
 - Historical FX lookup uses each row `date` when converting bank-balance datasets.
 - If historical conversion fails for a row set, conversion retries with latest available rates so the endpoint still returns balance data.
+- Internal repository refactor extracted shared historical-FX fallback conversion helper for current balances and history rows, preserving identical fallback behavior while reducing duplication ([[apps/node-backend/src/repositories/infoRepository.js]]).
 
 **Query Parameters:**
 
@@ -438,6 +448,8 @@ Notes:
 - Stats endpoints can be requested in any valid 3-letter code (ISO-style), with EUR fallback when invalid.
 - Core tested currencies include EUR, USD, GBP, SAR, AED.
 - Latest exchange-rate rows are updated per currency while historical rows are preserved.
+- Route imports for DB/currency services are now module-scoped (instead of per-request dynamic imports) to remove avoidable hot-path import overhead while preserving endpoint behavior and response contracts ([[apps/node-backend/src/routes/info.js]]).
+- In-memory net-worth and portfolio-performance response caches now prune expired entries opportunistically and enforce a bounded size (`MAX_CACHE_ENTRIES`) to avoid unbounded growth across many currency/date key combinations while preserving cache-hit/inflight-dedupe semantics ([[apps/node-backend/src/routes/info.js]]).
 
 **Response:** `200 OK`
 
@@ -542,6 +554,12 @@ Notes:
 - Returns daily snapshots with per-class value/invested breakdowns (stocks+ETFs, crypto, metals).
 - Includes inflation-adjusted values using Belgian monthly inflation rates.
 - Route-level rate limited (`30 req / 60s`) to protect against excessive queries.
+- Internal route refactor extracted shared snapshot payload mapping and date-string helpers (`mapPortfolioPerformanceSnapshot`, `buildPortfolioPerformancePayload`, `getCurrentDateString`) to remove duplication without changing response shape or field semantics ([[apps/node-backend/src/routes/info.js]]).
+- Snapshot service import is now module-scoped for this route and cache warmer (`warmInfoCaches`) to remove repeated dynamic-import overhead while preserving cache semantics and response payloads ([[apps/node-backend/src/routes/info.js]]).
+
+Caching behavior (route-level):
+- Shared cache/inflight utilities (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) now power both `/api/info/net-worth` and `/api/info/portfolio-performance` response caches.
+- This keeps TTL and concurrent-request deduplication behavior consistent while preserving existing API contracts and payloads ([[apps/node-backend/src/routes/info.js]]).
 
 **Response:** `200 OK`
 

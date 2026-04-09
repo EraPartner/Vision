@@ -19,10 +19,8 @@ import { normalizeForMatching } from '../services/textNormalization.js';
 const RECIPIENT_SORT_COLUMNS = {
   name: 'r.name',
   default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END`,
-  primary_bank_account: `(SELECT rba.account_number FROM recipient_bank_accounts rba
-                          WHERE rba.recipient_id = r.id AND rba.is_active = true
-                          ORDER BY rba.is_primary DESC LIMIT 1)`,
-  alias_count: `(SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id)`,
+  primary_bank_account: 'primary_bank_account',
+  alias_count: 'alias_count',
   notes: 'r.notes',
   is_active: 'r.is_active',
 };
@@ -71,14 +69,25 @@ export const recipientRepository = {
     const sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
-             (SELECT rba.account_number FROM recipient_bank_accounts rba
-              WHERE rba.recipient_id = r.id AND rba.is_active = true
-              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account,
+             pba.account_number AS primary_bank_account,
              pr.name AS primary_recipient_name,
-             (SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id) AS alias_count
+             COALESCE(ac.alias_count, 0) AS alias_count
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN LATERAL (
+        SELECT rba.account_number
+        FROM recipient_bank_accounts rba
+        WHERE rba.recipient_id = r.id AND rba.is_active = true
+        ORDER BY rba.is_primary DESC
+        LIMIT 1
+      ) pba ON true
+      LEFT JOIN (
+        SELECT primary_recipient_id, count(*)::int AS alias_count
+        FROM recipients
+        WHERE primary_recipient_id IS NOT NULL
+        GROUP BY primary_recipient_id
+      ) ac ON ac.primary_recipient_id = r.id
       ${where}
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
@@ -103,14 +112,25 @@ export const recipientRepository = {
     const sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
-             (SELECT rba.account_number FROM recipient_bank_accounts rba
-              WHERE rba.recipient_id = r.id AND rba.is_active = true
-              ORDER BY rba.is_primary DESC LIMIT 1) AS primary_bank_account,
+             pba.account_number AS primary_bank_account,
              pr.name AS primary_recipient_name,
-             (SELECT count(*) FROM recipients alias WHERE alias.primary_recipient_id = r.id) AS alias_count
+             COALESCE(ac.alias_count, 0) AS alias_count
       FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN LATERAL (
+        SELECT rba.account_number
+        FROM recipient_bank_accounts rba
+        WHERE rba.recipient_id = r.id AND rba.is_active = true
+        ORDER BY rba.is_primary DESC
+        LIMIT 1
+      ) pba ON true
+      LEFT JOIN (
+        SELECT primary_recipient_id, count(*)::int AS alias_count
+        FROM recipients
+        WHERE primary_recipient_id IS NOT NULL
+        GROUP BY primary_recipient_id
+      ) ac ON ac.primary_recipient_id = r.id
       WHERE r.id = $1
     `;
     const result = await query(sql, [id]);
@@ -193,10 +213,37 @@ export const recipientRepository = {
 
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
-    const sql = `UPDATE recipients SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
+    const sql = `
+      WITH updated AS (
+        UPDATE recipients
+        SET ${setClauses.join(', ')}
+        WHERE id = $${paramIdx}
+        RETURNING *
+      )
+      SELECT u.*,
+             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE NULL END AS default_category_name,
+             pba.account_number AS primary_bank_account,
+             pr.name AS primary_recipient_name,
+             COALESCE(ac.alias_count, 0) AS alias_count
+      FROM updated u
+      LEFT JOIN categories c ON u.default_category_id = c.id
+      LEFT JOIN recipients pr ON u.primary_recipient_id = pr.id
+      LEFT JOIN LATERAL (
+        SELECT rba.account_number
+        FROM recipient_bank_accounts rba
+        WHERE rba.recipient_id = u.id AND rba.is_active = true
+        ORDER BY rba.is_primary DESC
+        LIMIT 1
+      ) pba ON true
+      LEFT JOIN (
+        SELECT primary_recipient_id, count(*)::int AS alias_count
+        FROM recipients
+        WHERE primary_recipient_id IS NOT NULL
+        GROUP BY primary_recipient_id
+      ) ac ON ac.primary_recipient_id = u.id
+    `;
     const result = await query(sql, params);
-    if (result.rows.length === 0) return null;
-    return this.getById(id);
+    return result.rows[0] || null;
   },
 
   async hardDelete(id) {

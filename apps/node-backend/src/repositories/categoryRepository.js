@@ -73,16 +73,20 @@ export const categoryRepository = {
     const g = general.toUpperCase().trim();
     const d = detail.toUpperCase().trim();
 
-    // Try to find existing
-    const existing = await this.getByGeneralDetail(g, d);
-    if (existing) return { category: existing, created: false };
-
-    const result = await query(
+    const insertResult = await query(
       `INSERT INTO categories (general, detail, description, is_active)
-       VALUES ($1, $2, $3, true) RETURNING *`,
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (general, detail) DO NOTHING
+       RETURNING *`,
       [g, d, description]
     );
-    return { category: enrichCategory(result.rows[0]), created: true };
+
+    if (insertResult.rows.length > 0) {
+      return { category: enrichCategory(insertResult.rows[0]), created: true };
+    }
+
+    const existing = await this.getByGeneralDetail(g, d);
+    return { category: existing, created: false };
   },
 
   async update(id, { general, detail, description, is_active }) {

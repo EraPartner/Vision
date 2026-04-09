@@ -9,9 +9,34 @@
 
 import { Router } from 'express';
 import savedChartsRepository from '../repositories/savedChartsRepository.js';
+import { validateIntArray } from '../middleware/validation.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
+
+function parseChartIdParam(req) {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    return { error: 'Invalid chart id' };
+  }
+  return { id };
+}
+
+function validateChartType(chartType, { required = false } = {}) {
+  const validTypes = ['line', 'bar', 'area'];
+  if ((required && !chartType) || (chartType !== undefined && !validTypes.includes(chartType))) {
+    return `"chartType" must be one of: ${validTypes.join(', ')}`;
+  }
+  return null;
+}
+
+function validateCategoryIds(categoryIds) {
+  const validated = validateIntArray(categoryIds, 'categoryIds');
+  if (!validated.valid) {
+    return { error: validated.error };
+  }
+  return { value: validated.value };
+}
 
 // GET /api/saved-charts
 router.get('/', async (req, res) => {
@@ -31,14 +56,12 @@ router.post('/', async (req, res) => {
     if (!name || typeof name !== 'string' || name.trim().length === 0)
       return res.status(400).json({ detail: 'Missing or invalid "name"' });
     // categoryIds must be an array of positive integers
-    const { validateIntArray } = await import('../middleware/validation.js');
-    const validated = validateIntArray(categoryIds, 'categoryIds');
-    if (!validated.valid) return res.status(400).json({ detail: validated.error });
+    const categoryIdsResult = validateCategoryIds(categoryIds);
+    if (categoryIdsResult.error) return res.status(400).json({ detail: categoryIdsResult.error });
     // use normalized numeric array
-    const normalizedCategoryIds = validated.value;
-    const validTypes = ['line', 'bar', 'area'];
-    if (chartType && !validTypes.includes(chartType))
-      return res.status(400).json({ detail: `"chartType" must be one of: ${validTypes.join(', ')}` });
+    const normalizedCategoryIds = categoryIdsResult.value;
+    const chartTypeError = validateChartType(chartType);
+    if (chartTypeError) return res.status(400).json({ detail: chartTypeError });
 
     const chart = await savedChartsRepository.create({
       name: name.trim(),
@@ -55,23 +78,22 @@ router.post('/', async (req, res) => {
 // PATCH /api/saved-charts/:id
 router.patch('/:id', async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ detail: 'Invalid chart id' });
+    const parsedChartId = parseChartIdParam(req);
+    if (parsedChartId.error) return res.status(400).json({ detail: parsedChartId.error });
+    const { id } = parsedChartId;
 
     const { name, chartType } = req.body;
     let { categoryIds } = req.body;
     if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0))
       return res.status(400).json({ detail: 'Invalid "name"' });
-    const validTypes = ['line', 'bar', 'area'];
-    if (chartType !== undefined && !validTypes.includes(chartType))
-      return res.status(400).json({ detail: `"chartType" must be one of: ${validTypes.join(', ')}` });
+    const chartTypeError = validateChartType(chartType);
+    if (chartTypeError) return res.status(400).json({ detail: chartTypeError });
     // If provided, categoryIds must be an array of positive integers
     if (categoryIds !== undefined) {
-      const { validateIntArray } = await import('../middleware/validation.js');
-      const validated = validateIntArray(categoryIds, 'categoryIds');
-      if (!validated.valid) return res.status(400).json({ detail: validated.error });
+      const categoryIdsResult = validateCategoryIds(categoryIds);
+      if (categoryIdsResult.error) return res.status(400).json({ detail: categoryIdsResult.error });
       // replace with normalized array
-      categoryIds = validated.value;
+      categoryIds = categoryIdsResult.value;
     }
 
     const updated = await savedChartsRepository.update(id, {
@@ -90,8 +112,9 @@ router.patch('/:id', async (req, res) => {
 // DELETE /api/saved-charts/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ detail: 'Invalid chart id' });
+    const parsedChartId = parseChartIdParam(req);
+    if (parsedChartId.error) return res.status(400).json({ detail: parsedChartId.error });
+    const { id } = parsedChartId;
 
     const deleted = await savedChartsRepository.delete(id);
     if (!deleted) return res.status(404).json({ detail: 'Saved chart not found' });

@@ -761,6 +761,30 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
   return results;
 }
 
+function _filterHistoricalPoints(points, fromMs, toMs) {
+  return _filterPointsByRange(points, { fromMs, toMs });
+}
+
+function _fallbackHistoricalPoints(cachedDbPoints, fromMs, toMs) {
+  return _filterHistoricalPoints(cachedDbPoints, fromMs, toMs);
+}
+
+async function _persistAndResolveHistoricalPoints(
+  investmentId,
+  points,
+  source,
+  cachedDbPoints,
+  { fromMs, toMs } = {}
+) {
+  await _saveHistoricalPointsToDatabase(investmentId, points, source);
+  const persistedPoints = await _loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs });
+  const resolved = persistedPoints.length > 0
+    ? persistedPoints
+    : _normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
+
+  return _filterHistoricalPoints(resolved, fromMs, toMs);
+}
+
 export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly = false } = {}) {
   if (!investment) return [];
   const provider = (investment.price_provider || 'manual');
@@ -772,10 +796,10 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
   if (dbOnlyMode) {
     if (provider === 'kinesis') {
       const sanitizedCachedPoints = _sanitizeKinesisIsolatedSpikes(cachedDbPoints);
-      return _filterPointsByRange(sanitizedCachedPoints, { fromMs: from, toMs: to });
+      return _filterHistoricalPoints(sanitizedCachedPoints, from, to);
     }
 
-    return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+    return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
   if (!_needsHistoryRefresh(cachedDbPoints, { fromMs: from, toMs: to })) {
@@ -785,10 +809,10 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       if (changed > 0) {
         await _saveHistoricalPointsToDatabase(investment.id, sanitizedCachedPoints, 'kinesis');
       }
-      return _filterPointsByRange(sanitizedCachedPoints, { fromMs: from, toMs: to });
+      return _filterHistoricalPoints(sanitizedCachedPoints, from, to);
     }
 
-    return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+    return _filterHistoricalPoints(cachedDbPoints, from, to);
   }
 
   if (provider === 'yahoo') {
@@ -817,15 +841,17 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         _cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Yahoo history fetch error for ${symbol}: ${err.message}`);
-        return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
-    await _saveHistoricalPointsToDatabase(investment.id, points, 'yahoo');
-    const persistedPoints = await _loadHistoricalPointsFromDatabase(investment.id, { fromMs: from, toMs: to });
-    const resolved = persistedPoints.length > 0 ? persistedPoints : _normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
-
-    return _filterPointsByRange(resolved, { fromMs: from, toMs: to });
+    return _persistAndResolveHistoricalPoints(
+      investment.id,
+      points,
+      'yahoo',
+      cachedDbPoints,
+      { fromMs: from, toMs: to }
+    );
   }
 
   if (provider === 'binance') {
@@ -864,15 +890,17 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
         _cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Binance history fetch error for ${symbol}: ${err.message}`);
-        return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
-    await _saveHistoricalPointsToDatabase(investment.id, points, 'binance');
-    const persistedPoints = await _loadHistoricalPointsFromDatabase(investment.id, { fromMs: from, toMs: to });
-    const resolved = persistedPoints.length > 0 ? persistedPoints : _normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
-
-    return _filterPointsByRange(resolved, { fromMs: from, toMs: to });
+    return _persistAndResolveHistoricalPoints(
+      investment.id,
+      points,
+      'binance',
+      cachedDbPoints,
+      { fromMs: from, toMs: to }
+    );
   }
 
   if (provider === 'kinesis') {
@@ -880,7 +908,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
     if (!symbol) {
       logger.warn(`Kinesis history: no symbol configured for investment ${investment.id}`);
-      return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+      return _fallbackHistoricalPoints(cachedDbPoints, from, to);
     }
 
     const cacheKey = `kinesis-history:${symbol}:${timeframe}`;
@@ -897,7 +925,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
         if (!res.ok) {
           logger.warn(`Kinesis history API error: ${res.status} for ${symbol}`);
-          return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+          return _fallbackHistoricalPoints(cachedDbPoints, from, to);
         }
 
         const data = await res.json();
@@ -905,26 +933,28 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
 
         if (!Array.isArray(rawPoints)) {
           logger.warn(`Kinesis history: invalid data for ${symbol}`);
-          return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+          return _fallbackHistoricalPoints(cachedDbPoints, from, to);
         }
 
         points = _parseKinesisTrendlinePoints(rawPoints);
         _cacheSet(cacheKey, { points, source: 'live' });
       } catch (err) {
         logger.warn(`Kinesis history fetch error for ${symbol}: ${err.message}`);
-        return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+        return _fallbackHistoricalPoints(cachedDbPoints, from, to);
       }
     }
 
-    await _saveHistoricalPointsToDatabase(investment.id, points, 'kinesis');
-    const persistedPoints = await _loadHistoricalPointsFromDatabase(investment.id, { fromMs: from, toMs: to });
-    const resolved = persistedPoints.length > 0 ? persistedPoints : _normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
-
-    return _filterPointsByRange(resolved, { fromMs: from, toMs: to });
+    return _persistAndResolveHistoricalPoints(
+      investment.id,
+      points,
+      'kinesis',
+      cachedDbPoints,
+      { fromMs: from, toMs: to }
+    );
   }
 
   if (provider !== 'custom') {
-    return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+    return _fallbackHistoricalPoints(cachedDbPoints, from, to);
   }
 
   const config = _resolveCustomHistoryConfig(investment);
@@ -941,15 +971,17 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       _cacheSet(cacheKey, { points, source: 'live' });
     } catch (err) {
       logger.warn(`Custom history fetch error for investment ${investment.id}: ${err.message}`);
-      return _filterPointsByRange(cachedDbPoints, { fromMs: from, toMs: to });
+      return _fallbackHistoricalPoints(cachedDbPoints, from, to);
     }
   }
 
-  await _saveHistoricalPointsToDatabase(investment.id, points, 'custom');
-  const persistedPoints = await _loadHistoricalPointsFromDatabase(investment.id, { fromMs: from, toMs: to });
-  const resolved = persistedPoints.length > 0 ? persistedPoints : _normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
-
-  return _filterPointsByRange(resolved, { fromMs: from, toMs: to });
+  return _persistAndResolveHistoricalPoints(
+    investment.id,
+    points,
+    'custom',
+    cachedDbPoints,
+    { fromMs: from, toMs: to }
+  );
 }
 
 export async function backfillHistoricalAssetQuotes() {

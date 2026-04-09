@@ -2,7 +2,7 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [feature, settings, configuration, preferences, frontend, backend]
 description: Application settings system with JSONB storage, preload optimization, and propagation across all pages
 aliases: [preferences, configuration, app settings, user settings]
@@ -82,6 +82,10 @@ Upserts a single setting.
 ```json
 { "value": "EUR" }
 ```
+
+Implementation note:
+- Backend route logic now reuses shared key-length and `dashboard_settings` normalization/validation helpers across single-key and bulk writes (`validateSettingKeyLength`, `getSettingKeyTooLongError`, `normalizeDashboardSettingsValue`) without changing API behavior.
+- Backend repository normalization now avoids mutating caller-provided setting objects in place by normalizing through a shallow clone, preserving stored JSON output while reducing side-effect risk in calling code (`normalizeSettingValue`) ([[apps/node-backend/src/repositories/settingsRepository.js]]).
 
 #### PUT /api/settings (bulk)
 

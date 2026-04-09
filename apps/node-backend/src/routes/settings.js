@@ -15,6 +15,50 @@ import { logger } from '../config/logger.js';
 
 const router = Router();
 
+function getSettingKeyTooLongError(key, includeKeyInMessage) {
+  return includeKeyInMessage
+    ? `Setting key '${key}' too long (max 100 chars)`
+    : 'Setting key too long (max 100 chars)';
+}
+
+function validateSettingKeyLength(key, includeKeyInMessage = false) {
+  if (key.length > 100) {
+    return getSettingKeyTooLongError(key, includeKeyInMessage);
+  }
+  return null;
+}
+
+function normalizeDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'dashboard_settings must be an object' };
+  }
+
+  if (value.excludedCategoryIds !== undefined) {
+    const cat = validateIntArray(value.excludedCategoryIds, 'excludedCategoryIds');
+    if (!cat.valid) return { ok: false, error: cat.error };
+    value.excludedCategoryIds = cat.value;
+  }
+
+  if (value.excludedRecipientIds !== undefined) {
+    const rec = validateIntArray(value.excludedRecipientIds, 'excludedRecipientIds');
+    if (!rec.valid) return { ok: false, error: rec.error };
+    value.excludedRecipientIds = rec.value;
+  }
+
+  if (validateExcludeHiddenCategories
+    && value.excludeHiddenCategories !== undefined
+    && typeof value.excludeHiddenCategories !== 'boolean') {
+    return { ok: false, error: 'excludeHiddenCategories must be boolean' };
+  }
+
+  if (validateExclusionScope && value.exclusionScope !== undefined) {
+    const allowed = ['everywhere', 'dashboard', 'statistics'];
+    if (!allowed.includes(value.exclusionScope)) return { ok: false, error: 'Invalid exclusionScope' };
+  }
+
+  return { ok: true };
+}
+
 // GET /api/settings — all settings
 router.get('/', async (req, res) => {
   try {
@@ -79,8 +123,9 @@ router.put('/:key', async (req, res) => {
   const { key } = req.params;
   const { value } = req.body;
 
-    if (key.length > 100) {
-      return res.status(400).json({ detail: 'Setting key too long (max 100 chars)' });
+    const keyLengthError = validateSettingKeyLength(key);
+    if (keyLengthError) {
+      return res.status(400).json({ detail: keyLengthError });
     }
     if (value === undefined) {
       return res.status(400).json({ detail: 'Missing "value" in request body' });
@@ -88,27 +133,12 @@ router.put('/:key', async (req, res) => {
 
     // Special-case validation for dashboard_settings key
     if (key === 'dashboard_settings') {
-      if (typeof value !== 'object' || Array.isArray(value)) {
-        return res.status(400).json({ detail: 'dashboard_settings must be an object' });
-      }
-      // Validate excludedCategoryIds and excludedRecipientIds
-      if (value.excludedCategoryIds !== undefined) {
-        const cat = validateIntArray(value.excludedCategoryIds, 'excludedCategoryIds');
-        if (!cat.valid) return res.status(400).json({ detail: cat.error });
-        // normalize
-        value.excludedCategoryIds = cat.value;
-      }
-      if (value.excludedRecipientIds !== undefined) {
-        const rec = validateIntArray(value.excludedRecipientIds, 'excludedRecipientIds');
-        if (!rec.valid) return res.status(400).json({ detail: rec.error });
-        value.excludedRecipientIds = rec.value;
-      }
-      if (value.excludeHiddenCategories !== undefined && typeof value.excludeHiddenCategories !== 'boolean') {
-        return res.status(400).json({ detail: 'excludeHiddenCategories must be boolean' });
-      }
-      if (value.exclusionScope !== undefined) {
-        const allowed = ['everywhere', 'dashboard', 'statistics'];
-        if (!allowed.includes(value.exclusionScope)) return res.status(400).json({ detail: 'Invalid exclusionScope' });
+      const validatedDashboardSettings = normalizeDashboardSettingsValue(value, {
+        validateExcludeHiddenCategories: true,
+        validateExclusionScope: true,
+      });
+      if (!validatedDashboardSettings.ok) {
+        return res.status(400).json({ detail: validatedDashboardSettings.error });
       }
     }
 
@@ -130,26 +160,18 @@ router.put('/', async (req, res) => {
 
     // Validate keys
     for (const key of Object.keys(settings)) {
-      if (key.length > 100) {
-        return res.status(400).json({ detail: `Setting key '${key}' too long (max 100 chars)` });
+      const keyLengthError = validateSettingKeyLength(key, true);
+      if (keyLengthError) {
+        return res.status(400).json({ detail: keyLengthError });
       }
     }
 
     // Validate known structured keys
     for (const [key, value] of Object.entries(settings)) {
       if (key === 'dashboard_settings') {
-        if (typeof value !== 'object' || Array.isArray(value)) {
-          return res.status(400).json({ detail: 'dashboard_settings must be an object' });
-        }
-        if (value.excludedCategoryIds !== undefined) {
-          const cat = validateIntArray(value.excludedCategoryIds, 'excludedCategoryIds');
-          if (!cat.valid) return res.status(400).json({ detail: cat.error });
-          value.excludedCategoryIds = cat.value;
-        }
-        if (value.excludedRecipientIds !== undefined) {
-          const rec = validateIntArray(value.excludedRecipientIds, 'excludedRecipientIds');
-          if (!rec.valid) return res.status(400).json({ detail: rec.error });
-          value.excludedRecipientIds = rec.value;
+        const validatedDashboardSettings = normalizeDashboardSettingsValue(value);
+        if (!validatedDashboardSettings.ok) {
+          return res.status(400).json({ detail: validatedDashboardSettings.error });
         }
       }
     }

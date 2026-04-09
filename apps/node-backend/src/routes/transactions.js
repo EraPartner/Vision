@@ -5,56 +5,138 @@
  */
 
 import { Router } from 'express';
+import { query as dbQuery } from '../database/connection.js';
 import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currencyConversionService.js';
+import { normalizeForMatching } from '../services/textNormalization.js';
 import { logger } from '../config/logger.js';
-import { validateIdParam, validatePagination, validateDateString, sanitizeString } from '../middleware/validation.js';
+import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
+function parseRouteId(req) {
+  return parseInt(req.params.id, 10);
+}
+
+function parseTransactionListQuery(query) {
+  const {
+    limit = 50, offset = 0,
+    transaction_id,
+    start_date, end_date, bank_account,
+    category_id, recipient_id, recipient_name,
+    active = 'true', search,
+    sort_by, sort_dir,
+  } = query;
+
+  return {
+    limit: Math.min(parseInt(limit, 10) || 50, 5000),
+    offset: parseInt(offset, 10) || 0,
+    transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
+    startDate: start_date || null,
+    endDate: end_date || null,
+    bankAccount: bank_account || null,
+    categoryId: category_id ? parseInt(category_id, 10) : null,
+    recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
+    recipientName: recipient_name || null,
+    search: search ? String(search).slice(0, 200) : null,
+    active: active !== 'false',
+    sortBy: sort_by || null,
+    sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
+  };
+}
+
+function escapeCsvValue(value) {
+  if (value == null) return '';
+  const stringValue = String(value);
+  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
+    ? `"${stringValue.replace(/"/g, '""')}"`
+    : stringValue;
+}
+
+function buildTransactionCsvRow(row) {
+  return [
+    row.date, row.bank_account, row.recipient_name, row.memo,
+    row.amount, row.currency, row.balance, row.category_name, row.comment,
+  ].map(escapeCsvValue).join(',');
+}
+
+function buildTransactionExportFilename() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  return `transactions_export_${timestamp}.csv`;
+}
+
+function normalizeTransactionPatchFields(body) {
+  const fields = { ...body };
+
+  if (fields.date) {
+    fields.transaction_date = fields.date;
+    delete fields.date;
+  }
+
+  delete fields.links;
+  delete fields.id;
+  delete fields.created_at;
+
+  return fields;
+}
+
+async function resolveRecipientNameToId(fields) {
+  if (fields.recipient_name && !fields.recipient_id) {
+    const normalized = normalizeForMatching(fields.recipient_name);
+    const recipientResult = await dbQuery(
+      `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
+      [normalized]
+    );
+    if (recipientResult.rows.length === 0) {
+      return `Recipient with name '${fields.recipient_name}' does not exist`;
+    }
+    fields.recipient_id = recipientResult.rows[0].id;
+  }
+
+  delete fields.recipient_name;
+  return null;
+}
+
+async function resolveCategoryNameToId(fields) {
+  if (fields.category_name && !fields.category_id) {
+    const normalized = fields.category_name.toUpperCase().trim();
+    if (!normalized.includes(':')) {
+      return `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`;
+    }
+    const [general, detail] = normalized.split(':', 2).map(s => s.trim());
+    const catResult = await dbQuery(
+      `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
+      [general, detail]
+    );
+    if (catResult.rows.length === 0) {
+      return `Category '${normalized}' does not exist. Please create it first or use an existing category.`;
+    }
+    fields.category_id = catResult.rows[0].id;
+  }
+
+  delete fields.category_name;
+  return null;
+}
+
 // GET /api/transactions
 router.get('/', async (req, res) => {
   try {
-    const {
-      limit = 50, offset = 0,
-      transaction_id,
-      start_date, end_date, bank_account,
-      category_id, recipient_id, recipient_name,
-      uncategorised, active = 'true', search, normalize_to_eur = 'false', target_currency,
-      sort_by, sort_dir,
-    } = req.query;
-
-    const opts = {
-      limit: Math.min(parseInt(limit, 10) || 50, 5000),
-      offset: parseInt(offset, 10) || 0,
-      transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
-      startDate: start_date || null,
-      endDate: end_date || null,
-      bankAccount: bank_account || null,
-      categoryId: category_id ? parseInt(category_id, 10) : null,
-      recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
-      recipientName: recipient_name || null,
-      search: search ? String(search).slice(0, 200) : null,
-      active: active !== 'false',
-      sortBy: sort_by || null,
-      sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
-    };
+    const { uncategorised, normalize_to_eur = 'false', target_currency } = req.query;
+    const opts = parseTransactionListQuery(req.query);
 
     // Fetch items and total count in parallel — they're fully independent queries
     let items, total;
     if (uncategorised === 'true') {
-      [items, total] = await Promise.all([
-        transactionRepository.getUncategorised(opts),
-        transactionRepository.getCount(opts),
-      ]);
+      const result = await transactionRepository.getUncategorisedWithCount(opts);
+      items = result.rows;
+      total = result.total;
     } else {
-      [items, total] = await Promise.all([
-        transactionRepository.getAll(opts),
-        transactionRepository.getCount(opts),
-      ]);
+      const result = await transactionRepository.getAllWithCount(opts);
+      items = result.rows;
+      total = result.total;
     }
 
     if (normalize_to_eur === 'true') {
@@ -114,7 +196,6 @@ router.get(
 
     sql += ` ORDER BY t.date ASC`;
 
-    const { query: dbQuery } = await import('../database/connection.js');
     const result = await dbQuery(sql, params);
 
     if (result.rows.length === 0) {
@@ -123,21 +204,10 @@ router.get(
 
     // Build CSV
     const header = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
-    const csvRows = result.rows.map(row => {
-      const escape = (v) => {
-        if (v == null) return '';
-        const s = String(v);
-        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-      };
-      return [
-        row.date, row.bank_account, row.recipient_name, row.memo,
-        row.amount, row.currency, row.balance, row.category_name, row.comment,
-      ].map(escape).join(',');
-    });
+    const csvRows = result.rows.map(buildTransactionCsvRow);
 
     const csv = [header, ...csvRows].join('\n');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `transactions_export_${timestamp}.csv`;
+    const filename = buildTransactionExportFilename();
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
@@ -223,7 +293,6 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/transactions/:id
 // Mirrors Python's TransactionService.update() with name-to-ID resolution
-// PATCH /api/transactions/:id
 // Apply per-route rate limiting because this handler performs several DB lookups
 // (recipient/category resolution) and updates which could be abused.
 router.patch(
@@ -232,58 +301,20 @@ router.patch(
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-patch' }),
   async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    const fields = { ...req.body };
+    const id = parseRouteId(req);
+    const fields = normalizeTransactionPatchFields(req.body);
 
-    // Handle date alias
-    if (fields.date) {
-      fields.transaction_date = fields.date;
-      delete fields.date;
+    const [recipientResolutionError, categoryResolutionError] = await Promise.all([
+      resolveRecipientNameToId(fields),
+      resolveCategoryNameToId(fields),
+    ]);
+
+    if (recipientResolutionError) {
+      return res.status(400).json({ detail: recipientResolutionError });
     }
-
-    // Remove fields that shouldn't be set directly
-    delete fields.links;
-    delete fields.id;
-    delete fields.created_at;
-
-    // Resolve recipient_name to recipient_id (mirrors Python TransactionService.update)
-    if (fields.recipient_name && !fields.recipient_id) {
-      const { normalizeForMatching } = await import('../services/textNormalization.js');
-      const normalized = normalizeForMatching(fields.recipient_name);
-      const { query: dbQuery } = await import('../database/connection.js');
-      const recipientResult = await dbQuery(
-        `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-        [normalized]
-      );
-      if (recipientResult.rows.length === 0) {
-        return res.status(400).json({ detail: `Recipient with name '${fields.recipient_name}' does not exist` });
-      }
-      fields.recipient_id = recipientResult.rows[0].id;
+    if (categoryResolutionError) {
+      return res.status(400).json({ detail: categoryResolutionError });
     }
-    delete fields.recipient_name;
-
-    // Resolve category_name to category_id (mirrors Python TransactionService.update)
-    if (fields.category_name && !fields.category_id) {
-      const normalized = fields.category_name.toUpperCase().trim();
-      if (!normalized.includes(':')) {
-        return res.status(400).json({
-          detail: `Invalid category name format '${normalized}'. Expected format: 'General:Detail' (e.g., 'FOOD:BEVERAGES')`,
-        });
-      }
-      const [general, detail] = normalized.split(':', 2).map(s => s.trim());
-      const { query: dbQuery } = await import('../database/connection.js');
-      const catResult = await dbQuery(
-        `SELECT id FROM categories WHERE general = $1 AND detail = $2 LIMIT 1`,
-        [general, detail]
-      );
-      if (catResult.rows.length === 0) {
-        return res.status(400).json({
-          detail: `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
-        });
-      }
-      fields.category_id = catResult.rows[0].id;
-    }
-    delete fields.category_name;
 
     const updated = await transactionRepository.update(id, fields);
     if (!updated) {
@@ -301,7 +332,7 @@ router.patch(
 // DELETE /api/transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseRouteId(req);
     const deleted = await transactionRepository.hardDelete(id);
     if (!deleted) {
       return res.status(404).json({ detail: `Transaction with ID ${id} not found` });

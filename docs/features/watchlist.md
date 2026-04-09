@@ -56,6 +56,10 @@ interface WatchlistItem {
 
 Returns all watchlist items with current prices.
 
+Implementation note:
+- Backend list pagination now normalizes `limit` and `offset` (`limit` clamped to `1..5000`, `offset` floored at `0`) to prevent pathological page sizes while preserving payload shape (`{ items, total, limit, offset }`) ([[apps/node-backend/src/routes/watchlist.js]]).
+- Backend watchlist list endpoint now uses repository one-query pagination (`getAllWithCount`) instead of separate list + count calls, preserving filter/order/response semantics while reducing DB round-trips ([[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]).
+
 ### POST /api/watchlist
 
 Adds a security to the watchlist.

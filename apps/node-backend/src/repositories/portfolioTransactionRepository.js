@@ -67,6 +67,23 @@ const TRANSACTION_TABLE_BY_ASSET_CLASS = {
 
 const UNIT_BASED_ASSET_CLASSES = new Set(['stock', 'etf', 'crypto', 'metals']);
 
+function buildListWhereClause({ investmentId = null, type = null } = {}) {
+  let where = 'WHERE 1=1';
+  const params = [];
+  let idx = 1;
+
+  if (investmentId) {
+    where += ` AND investment_id = $${idx++}`;
+    params.push(investmentId);
+  }
+  if (type) {
+    where += ` AND type = $${idx++}`;
+    params.push(type);
+  }
+
+  return { where, params, nextParam: idx };
+}
+
 function makeValidationError(message) {
   const err = new Error(message);
   err.code = 'VALIDATION_ERROR';
@@ -421,18 +438,34 @@ async function updateThroughInheritanceTables(id, fields, getByIdFn) {
 
 export const portfolioTransactionRepository = {
   async getAll({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
-    let sql = `SELECT * FROM portfolio_transactions WHERE 1=1`;
-    const params = [];
-    let idx = 1;
-
-    if (investmentId) { sql += ` AND investment_id = $${idx++}`; params.push(investmentId); }
-    if (type) { sql += ` AND type = $${idx++}`; params.push(type); }
+    const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
+    let sql = `SELECT * FROM portfolio_transactions ${where}`;
+    let idx = nextParam;
 
     sql += ` ORDER BY date DESC, id DESC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
     return result.rows;
+  },
+
+  async getAllWithCount({ investmentId = null, type = null, limit = 200, offset = 0 } = {}) {
+    const { where, params, nextParam } = buildListWhereClause({ investmentId, type });
+    let idx = nextParam;
+
+    const sql = `
+      SELECT pt.*, COUNT(*) OVER () AS total_count
+      FROM portfolio_transactions pt
+      ${where.replace(/\binvestment_id\b/g, 'pt.investment_id').replace(/\btype\b/g, 'pt.type')}
+      ORDER BY pt.date DESC, pt.id DESC
+      LIMIT $${idx++} OFFSET $${idx++}
+    `;
+
+    const queryParams = [...params, limit, offset];
+    const result = await query(sql, queryParams);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const rows = result.rows.map(({ total_count, ...row }) => row);
+    return { rows, total };
   },
 
   async getAllByInvestmentIds({
@@ -521,9 +554,12 @@ export const portfolioTransactionRepository = {
     return result.rows[0] || null;
   },
 
-  async create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur }) {
-    const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [investment_id]);
-    const assetClass = investmentResult.rows[0]?.asset_class;
+  async create({ investment_id, type, date, amount, units, price_per_unit, fees, taxes, currency = 'EUR', note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, preloaded_asset_class }) {
+    let assetClass = preloaded_asset_class;
+    if (!assetClass) {
+      const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [investment_id]);
+      assetClass = investmentResult.rows[0]?.asset_class;
+    }
 
     if (!assetClass) {
       throw makeValidationError('Investment not found');
@@ -607,8 +643,11 @@ export const portfolioTransactionRepository = {
       ...existing,
       ...fields,
     };
-    const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [existing.investment_id]);
-    const assetClass = investmentResult.rows[0]?.asset_class;
+    let assetClass = existing.asset_class;
+    if (!assetClass) {
+      const investmentResult = await query('SELECT asset_class FROM investments WHERE id = $1', [existing.investment_id]);
+      assetClass = investmentResult.rows[0]?.asset_class;
+    }
     const hasAmountInPatch = Object.prototype.hasOwnProperty.call(fields, 'amount');
     const hasUnitsInPatch = Object.prototype.hasOwnProperty.call(fields, 'units');
     const hasPriceInPatch = Object.prototype.hasOwnProperty.call(fields, 'price_per_unit');

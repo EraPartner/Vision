@@ -49,6 +49,9 @@ Optimized for large files with real-time progress reporting via callbacks (used 
 - **Fire-and-forget non-critical writes**: Bank account linking and raw reference creation don't block import outcome
 - **Promise.allSettled per batch**: One bad row doesn't stall others
 
+Implementation note:
+- Remaining dynamic dedup import in the generic/legacy streaming path was removed; the service now uses module-scoped `isRawDuplicate` with fallback to `isDuplicateByFields`, preserving duplicate-detection behavior while reducing runtime import overhead.
+
 **Progress phases:** `counting` → `parsing` → `importing` → `complete`/`error`
 
 **Use case:** Large CSV files, UI progress display, SSE streaming endpoint (`POST /api/import/csv/stream`).
@@ -64,6 +67,11 @@ Orchestrates CSV import with full raw data preservation. Architecture:
 5. Link transaction to raw data via `transaction_raw_references`
 
 Falls back to `importService.js` for generic/unsupported bank types.
+
+Implementation notes:
+- Raw import processing now uses bounded concurrent batching (`RAW_IMPORT_BATCH_SIZE = 20`) with `Promise.allSettled`, preserving imported/duplicate/error accounting semantics while reducing end-to-end latency on larger files.
+- Hot-path dynamic imports were replaced with module-scoped imports (`importCSV`, `isDuplicateByFields`, `normalizeForMatching`) to remove per-row/per-request import resolution overhead.
+- Raw duplicate checking now prefers repository-level `isRawDuplicate(...)` with fallback to field-based dedup when repository/raw-table paths fail, preserving fallback semantics.
 
 **Use case:** Audit trail requirements, re-import capability, supported banks (Belfius, Revolut, KBC, SABB, Wise, Vision).
 
@@ -124,6 +132,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 - Date formats converted to YYYY-MM-DD
 - Amounts normalized (handle different decimal separators)
 - Text normalized (trimming, encoding)
+- Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.js]]).
 
 ### 3. Deduplication
 Uses SHA-256 hash of:

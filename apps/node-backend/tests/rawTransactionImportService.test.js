@@ -21,15 +21,21 @@ vi.mock('../src/repositories/rawTransactionRepository.js', () => ({
   computeHash: vi.fn(() => 'abc123hash'),
   belfiusRawRepo: {
     create: vi.fn(),
-    existsByHash: vi.fn(),
   },
   revolutRawRepo: {
     create: vi.fn(),
-    existsByHash: vi.fn(),
   },
   kbcRawRepo: {
     create: vi.fn(),
-    existsByHash: vi.fn(),
+  },
+  sabbRawRepo: {
+    create: vi.fn(),
+  },
+  wiseRawRepo: {
+    create: vi.fn(),
+  },
+  visionRawRepo: {
+    create: vi.fn(),
   },
   rawReferenceRepo: {
     create: vi.fn(),
@@ -40,7 +46,14 @@ vi.mock('../src/repositories/rawTransactionRepository.js', () => ({
 import { importCSVWithRawStorage } from '../src/services/rawTransactionImportService.js';
 import { createAdapter } from '../src/services/bankAdapters.js';
 import { query } from '../src/database/connection.js';
-import { belfiusRawRepo, revolutRawRepo, kbcRawRepo, rawReferenceRepo, computeHash } from '../src/repositories/rawTransactionRepository.js';
+import {
+  belfiusRawRepo,
+  revolutRawRepo,
+  kbcRawRepo,
+  rawReferenceRepo,
+  computeHash,
+  isRawDuplicate,
+} from '../src/repositories/rawTransactionRepository.js';
 
 describe('Raw Transaction Import Service', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -56,7 +69,7 @@ describe('Raw Transaction Import Service', () => {
       },
     ]);
 
-    belfiusRawRepo.existsByHash.mockResolvedValue(false);
+    isRawDuplicate.mockResolvedValue(false);
     belfiusRawRepo.create.mockResolvedValue({ id: 1 });
     query.mockResolvedValue({ rows: [{ id: 100 }] });
     rawReferenceRepo.create.mockResolvedValue({});
@@ -77,7 +90,7 @@ describe('Raw Transaction Import Service', () => {
       },
     ]);
 
-    belfiusRawRepo.existsByHash.mockResolvedValue(true);
+    isRawDuplicate.mockResolvedValue(true);
 
     const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
 
@@ -93,7 +106,7 @@ describe('Raw Transaction Import Service', () => {
       },
     ]);
 
-    revolutRawRepo.existsByHash.mockResolvedValue(false);
+    isRawDuplicate.mockResolvedValue(false);
     revolutRawRepo.create.mockResolvedValue({ id: 1 });
     query.mockResolvedValue({ rows: [{ id: 200 }] });
 
@@ -110,7 +123,7 @@ describe('Raw Transaction Import Service', () => {
       },
     ]);
 
-    kbcRawRepo.existsByHash.mockResolvedValue(false);
+    isRawDuplicate.mockResolvedValue(false);
     kbcRawRepo.create.mockResolvedValue({ id: 1 });
     query.mockResolvedValue({ rows: [{ id: 300 }] });
 
@@ -152,7 +165,7 @@ describe('Raw Transaction Import Service', () => {
       },
     ]);
 
-    belfiusRawRepo.existsByHash.mockResolvedValue(false);
+    isRawDuplicate.mockResolvedValue(false);
     belfiusRawRepo.create.mockRejectedValue(new Error('relation does not exist'));
     query.mockResolvedValue({ rows: [{ id: 100 }] });
 
@@ -171,7 +184,7 @@ describe('Raw Transaction Import Service', () => {
     ]);
 
     // First: new, Second: duplicate, Third: new
-    belfiusRawRepo.existsByHash
+    isRawDuplicate
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);

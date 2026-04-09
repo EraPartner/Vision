@@ -264,9 +264,8 @@ router.use((err, req, res, next) => {
 });
 
 function cleanup(filePath) {
-  try {
-    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch { /* ignore */ }
+  if (!filePath) return;
+  void fs.promises.unlink(filePath).catch(() => {});
 }
 
 export default router;

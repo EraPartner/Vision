@@ -21,6 +21,7 @@ vi.mock('express', () => ({
 vi.mock('../../src/repositories/investmentRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getAllWithCount: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
     create: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('../../src/repositories/investmentRepository.js', () => ({
 vi.mock('../../src/repositories/portfolioTransactionRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getAllWithCount: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
     create: vi.fn(),
@@ -92,10 +94,10 @@ describe('Investment Routes', () => {
   // ── GET /api/investments ───────────────────────────────────
   describe('GET /', () => {
     it('should return investments list', async () => {
-      investmentRepository.getAll.mockResolvedValue([
-        { id: 1, name: 'Bitcoin', asset_class: 'crypto' },
-      ]);
-      investmentRepository.getCount.mockResolvedValue(1);
+      investmentRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 1, name: 'Bitcoin', asset_class: 'crypto' }],
+        total: 1,
+      });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -107,8 +109,7 @@ describe('Investment Routes', () => {
     });
 
     it('should return empty list', async () => {
-      investmentRepository.getAll.mockResolvedValue([]);
-      investmentRepository.getCount.mockResolvedValue(0);
+      investmentRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -118,20 +119,19 @@ describe('Investment Routes', () => {
     });
 
     it('should respect pagination and filters', async () => {
-      investmentRepository.getAll.mockResolvedValue([]);
-      investmentRepository.getCount.mockResolvedValue(0);
+      investmentRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
       const req = { query: { limit: '10', offset: '5', asset_class: 'crypto', active: 'true' } };
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(investmentRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({
+      expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({
         limit: 10, offset: 5, assetClass: 'crypto', active: true,
       }));
     });
 
     it('should handle errors with 500', async () => {
-      investmentRepository.getAll.mockRejectedValue(new Error('DB error'));
+      investmentRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
       const req = { query: {} };
       const res = mockResponse();
@@ -426,10 +426,10 @@ describe('Investment Routes', () => {
   // ── GET /api/investments/:id/transactions ──────────────────
   describe('GET /:id/transactions', () => {
     it('should return portfolio transactions', async () => {
-      portfolioTransactionRepository.getAll.mockResolvedValue([
-        { id: 1, type: 'buy', amount: 1000 },
-      ]);
-      portfolioTransactionRepository.getCount.mockResolvedValue(1);
+      portfolioTransactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 1, type: 'buy', amount: 1000 }],
+        total: 1,
+      });
 
       const req = { params: { id: '1' }, query: {} };
       const res = mockResponse();
@@ -441,20 +441,19 @@ describe('Investment Routes', () => {
     });
 
     it('should filter by type', async () => {
-      portfolioTransactionRepository.getAll.mockResolvedValue([]);
-      portfolioTransactionRepository.getCount.mockResolvedValue(0);
+      portfolioTransactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
       const req = { params: { id: '1' }, query: { type: 'buy' } };
       const res = mockResponse();
       await routeHandlers['get:/:id/transactions'](req, res);
 
-      expect(portfolioTransactionRepository.getAll).toHaveBeenCalledWith(
+      expect(portfolioTransactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'buy' })
       );
     });
 
     it('should handle errors with 500', async () => {
-      portfolioTransactionRepository.getAll.mockRejectedValue(new Error('DB error'));
+      portfolioTransactionRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, query: {} };
       const res = mockResponse();

@@ -6,10 +6,10 @@ function roundMoney(value) {
 
 function addMonthsAtDay(baseDateStr, monthOffset, preferredDay) {
   const [year, month] = baseDateStr.split('-').map(Number);
-  const firstOfTarget = new Date(year, month - 1 + monthOffset, 1);
-  const lastDay = new Date(firstOfTarget.getFullYear(), firstOfTarget.getMonth() + 1, 0).getDate();
+  const firstOfTarget = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
+  const lastDay = new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0)).getUTCDate();
   const day = Math.max(1, Math.min(Number(preferredDay) || 1, lastDay));
-  const result = new Date(firstOfTarget.getFullYear(), firstOfTarget.getMonth(), day, 0, 0, 0, 0);
+  const result = new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth(), day, 0, 0, 0, 0));
   return result.toISOString().split('T')[0];
 }
 

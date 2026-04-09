@@ -2,7 +2,7 @@
 title: Recipient Insights Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [feature, recipients, analytics, insights, frontend, merchant]
 description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables
 aliases: [merchant insights, spending insights, recipient analytics]
@@ -115,6 +115,12 @@ The backend endpoint `GET /api/info/recipient-insights` in `[[apps/node-backend/
 
 1. **Top merchants**: SUM of expenses grouped by recipient, ordered by total spend descending
 2. **Month-over-month changes**: Compares current month vs previous month spending per recipient
+
+Implementation notes:
+- Recipient repository `getById` now uses lateral/pre-aggregated joins (matching list-query enrichment strategy) instead of correlated subqueries, preserving response fields while improving scalability characteristics.
+- Recipient repository `update` now returns enriched recipient fields via a single CTE update-and-select query (instead of update + follow-up read), preserving payload semantics while reducing one round-trip.
+
+Code link: [[apps/node-backend/src/repositories/recipientRepository.js]]
 
 ## Related Features
 

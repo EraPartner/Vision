@@ -2,7 +2,7 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance]
 description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables
 aliases: [net worth, networth, wealth tracking, financial health]
@@ -60,6 +60,12 @@ if (cachedEntry?.inflight) {
   return res.json(data);
 }
 ```
+
+Implementation notes:
+- Route-level cache behavior in `info` routes is now centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
+- `GET /api/info/category-breakdown` now uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
+- Info-route response caches now opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
+- Net-worth historical unit-price backfill now fetches per-investment historical quotes with bounded concurrency (`NET_WORTH_HISTORICAL_FETCH_CONCURRENCY`) instead of unbounded fan-out, preserving daily valuation logic while improving stability on large portfolios ([[apps/node-backend/src/repositories/infoRepository.js]]).
 
 ## Chart Architecture
 

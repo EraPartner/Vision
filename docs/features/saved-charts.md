@@ -2,7 +2,7 @@
 title: Saved Charts Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [feature, saved-charts, charts, customization, statistics]
 description: User-defined custom category charts that persist across sessions and render within the Statistics page
 aliases: [custom charts, chart presets, saved chart configurations]
@@ -77,6 +77,9 @@ Updates an existing saved chart.
 ### DELETE /api/saved-charts/:id
 
 Deletes a saved chart.
+
+Implementation note:
+- Backend route refactor extracted shared id parsing and payload validation helpers (`parseChartIdParam`, `validateChartType`, `validateCategoryIds`) to remove duplication while keeping route contracts unchanged ([[apps/node-backend/src/routes/savedCharts.js]]).
 
 ## Frontend Hooks
 

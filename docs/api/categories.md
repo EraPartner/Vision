@@ -56,6 +56,9 @@ Retrieve a list of categories.
 }
 ```
 
+Implementation note:
+- Category list route now retrieves `items` and `total` concurrently with `Promise.all` (independent repository calls), keeping response shape and filtering semantics unchanged while reducing endpoint latency ([[apps/node-backend/src/routes/categories.js]]).
+
 ### POST /api/categories
 
 Create a new category or get existing category.
@@ -72,6 +75,9 @@ Create a new category or get existing category.
 **Required Fields:** general, detail
 
 **Behavior:** Returns existing category if "GENERAL:DETAIL" combination already exists (idempotent create-or-get).
+
+Implementation note:
+- Repository `createOrGet` now uses `INSERT ... ON CONFLICT (general, detail) DO NOTHING RETURNING *` with existing-row fallback lookup, preserving idempotent create-or-get semantics while reducing race-window risk and extra round-trips under concurrent requests ([[apps/node-backend/src/repositories/categoryRepository.js]]).
 
 **Response:** 201 if created, 200 if existing category returned.
 

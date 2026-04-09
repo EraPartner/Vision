@@ -5,15 +5,23 @@
 import { query } from '../database/connection.js';
 
 export const watchlistRepository = {
-  async getAll({ limit = 50, offset = 0, assetClass = null } = {}) {
-    let sql = `SELECT * FROM watchlist WHERE 1=1`;
+  buildWhereClause({ assetClass = null } = {}) {
+    let where = 'WHERE 1=1';
     const params = [];
     let idx = 1;
 
     if (assetClass) {
-      sql += ` AND asset_class = $${idx++}`;
+      where += ` AND asset_class = $${idx++}`;
       params.push(assetClass);
     }
+
+    return { where, params, nextParam: idx };
+  },
+
+  async getAll({ limit = 50, offset = 0, assetClass = null } = {}) {
+    const { where, params, nextParam } = this.buildWhereClause({ assetClass });
+    let sql = `SELECT * FROM watchlist ${where}`;
+    let idx = nextParam;
 
     sql += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(limit, offset);
@@ -22,12 +30,26 @@ export const watchlistRepository = {
     return result.rows;
   },
 
-  async getCount({ assetClass = null } = {}) {
-    let sql = `SELECT count(*) FROM watchlist WHERE 1=1`;
-    const params = [];
-    let idx = 1;
+  async getAllWithCount({ limit = 50, offset = 0, assetClass = null } = {}) {
+    const { where, params, nextParam } = this.buildWhereClause({ assetClass });
+    let idx = nextParam;
+    const sql = `
+      SELECT w.*, COUNT(*) OVER () AS total_count
+      FROM watchlist w
+      ${where.replace(/\basset_class\b/g, 'w.asset_class')}
+      ORDER BY w.created_at DESC
+      LIMIT $${idx++} OFFSET $${idx++}
+    `;
+    const queryParams = [...params, limit, offset];
+    const result = await query(sql, queryParams);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    const rows = result.rows.map(({ total_count, ...row }) => row);
+    return { rows, total };
+  },
 
-    if (assetClass) { sql += ` AND asset_class = $${idx++}`; params.push(assetClass); }
+  async getCount({ assetClass = null } = {}) {
+    const { where, params } = this.buildWhereClause({ assetClass });
+    const sql = `SELECT count(*) FROM watchlist ${where}`;
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);

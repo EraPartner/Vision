@@ -7,10 +7,6 @@ vi.mock('../src/database/connection.js', () => ({
 
 import { query } from '../src/database/connection.js';
 import settingsRepository from '../src/repositories/settingsRepository.js';
-import settingsRouter from '../src/routes/settings.js';
-import express from 'express';
-import bodyParser from 'body-parser';
-import request from 'supertest';
 
 describe('Settings storage and retrieval', () => {
   beforeEach(() => {
@@ -61,19 +57,28 @@ describe('Settings storage and retrieval', () => {
   });
 
   it('settings API routes should upsert and return settings', async () => {
-    const app = express();
-    app.use(bodyParser.json());
-    app.use('/api/settings', settingsRouter);
-
-    // Mock repository.set to return the saved key/value
     query.mockResolvedValue({});
 
-    const payload = { value: { excludedCategoryIds: [7], excludedRecipientIds: [8] } };
-    const resp = await request(app)
-      .put('/api/settings/dashboard_settings')
-      .send(payload)
-      .expect(200);
+    const settingsRouter = (await import('../src/routes/settings.js')).default;
+    const stackLayer = settingsRouter.stack.find(
+      (layer) => layer.route?.path === '/:key' && layer.route?.methods?.put
+    );
 
-    expect(resp.body).toEqual({ key: 'dashboard_settings', value: payload.value });
+    expect(stackLayer).toBeTruthy();
+
+    const handler = stackLayer.route.stack.at(-1).handle;
+    const payload = { value: { excludedCategoryIds: [7], excludedRecipientIds: [8] } };
+    const req = { params: { key: 'dashboard_settings' }, body: payload };
+    const res = mockResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ key: 'dashboard_settings', value: payload.value });
   });
 });
+
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  res.status.mockReturnValue(res);
+  return res;
+}

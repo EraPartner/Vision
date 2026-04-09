@@ -21,6 +21,7 @@ import { logger } from '../config/logger.js';
  * (e.g. after bulk import) via clearMvCache().
  */
 const mvCache = new Map();
+const NET_WORTH_HISTORICAL_FETCH_CONCURRENCY = 10;
 
 function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
   if (!Array.isArray(snapshots) || snapshots.length < 3) return Array.isArray(snapshots) ? snapshots : [];
@@ -54,8 +55,8 @@ function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
     if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
       const correctedInvestments = Math.sqrt(prev * next);
       const liquid = Number(sanitized[i]?.liquid) || 0;
-      sanitized[i].investments = Math.round(correctedInvestments * 100) / 100;
-      sanitized[i].netWorth = Math.round((liquid + correctedInvestments) * 100) / 100;
+      sanitized[i].investments = roundToCents(correctedInvestments);
+      sanitized[i].netWorth = roundToCents(liquid + correctedInvestments);
     }
   }
 
@@ -79,6 +80,98 @@ async function mvAvailable(viewName) {
   }
 }
 
+function roundToCents(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatDateToYmd(date) {
+  return date.toISOString().split('T')[0];
+}
+
+function formatDateToYm(date) {
+  return date.toISOString().substring(0, 7);
+}
+
+function formatYearMonthKey(year, month) {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function extractYearMonth(value) {
+  return String(value).substring(0, 7);
+}
+
+function buildMonthlySummary(months) {
+  return {
+    total_spending: months.reduce((sum, month) => sum + month.total_spending, 0),
+    total_income: months.reduce((sum, month) => sum + month.total_income, 0),
+    net_amount: months.reduce((sum, month) => sum + month.net_amount, 0),
+    transaction_count: months.reduce((sum, month) => sum + month.transaction_count, 0),
+    period_start: months[0]?.period_start,
+    period_end: months[months.length - 1]?.period_end,
+  };
+}
+
+function mapRowsForAmountConversion(rows, amountField = 'amount', fallbackToZero = true) {
+  return rows.map(row => ({
+    ...row,
+    amount: fallbackToZero
+      ? parseFloat(row[amountField] || 0)
+      : parseFloat(row[amountField]),
+  }));
+}
+
+function getCategoryKey(categoryId) {
+  return categoryId === -1 ? 'null' : String(categoryId);
+}
+
+function parseCategoryId(categoryId) {
+  return categoryId === -1 ? null : parseInt(categoryId, 10);
+}
+
+function buildCategoryFromConvertedRows(convertedRows) {
+  const categoryMap = new Map();
+
+  for (const row of convertedRows) {
+    const key = getCategoryKey(row.category_id);
+    const eur = row.amount_eur;
+    const count = parseInt(row.count, 10);
+
+    const existing = categoryMap.get(key);
+    if (existing) {
+      existing.count += count;
+      existing.total += roundToCents(eur);
+      continue;
+    }
+
+    categoryMap.set(key, {
+      id: parseCategoryId(row.category_id),
+      name: row.name,
+      count,
+      total: roundToCents(eur),
+    });
+  }
+
+  return Array.from(categoryMap.values());
+}
+
+async function convertRowsWithHistoricalRateFallback(rows, targetCurrency, dateField = 'date') {
+  try {
+    return await convertRowsToEur(rows, targetCurrency, { useHistoricalRatesByDate: true, dateField });
+  } catch (err) {
+    return await convertRowsToEur(rows, targetCurrency);
+  }
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.all(batch.map(mapper));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 /**
  * Clear the materialized-view availability cache.
  * Call after schema changes or when views are known to have been recreated.
@@ -95,32 +188,17 @@ export const infoRepository = {
 
       // Category totals from MV (already grouped) — batch-convert all rows at once
       const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
-      const convertedRows = await convertRowsToEur(catResult.rows.map(r => ({ ...r, amount: parseFloat(r.total || 0) })), targetCurrency);
+      const convertedRows = await convertRowsToEur(
+        mapRowsForAmountConversion(catResult.rows, 'total', true),
+        targetCurrency
+      );
 
-      const categories = [];
-      let totalEur = 0;
-
-      for (const row of convertedRows) {
-        const eur = row.amount_eur;
-        totalEur += eur;
-        // Merge same category across currencies
-        const existing = categories.find(c => c.id === (row.category_id === -1 ? null : row.category_id));
-        if (existing) {
-          existing.count += parseInt(row.count, 10);
-          existing.total += Math.round(eur * 100) / 100;
-        } else {
-          categories.push({
-            id: row.category_id === -1 ? null : parseInt(row.category_id, 10),
-            name: row.name,
-            count: parseInt(row.count, 10),
-            total: Math.round(eur * 100) / 100,
-          });
-        }
-      }
+      const categories = buildCategoryFromConvertedRows(convertedRows);
+      const totalEur = categories.reduce((sum, category) => sum + category.total, 0);
 
       return {
         total_transactions: parseInt(countResult.rows[0].count, 10),
-        total_amount: Math.round(totalEur * 100) / 100,
+        total_amount: roundToCents(totalEur),
         categories,
       };
     }
@@ -135,10 +213,10 @@ export const infoRepository = {
     `);
 
     // Batch-convert all rows in one rates fetch
-    const txConverted = await convertRowsToEur(txResult.rows.map(r => ({
-      ...r,
-      amount: parseFloat(r.amount),
-    })), targetCurrency);
+    const txConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(txResult.rows, 'amount', false),
+      targetCurrency
+    );
     let totalEur = txConverted.reduce((s, r) => s + r.amount_eur, 0);
 
     const categoryAmountResult = await query(`
@@ -154,10 +232,10 @@ export const infoRepository = {
     `);
 
     // Batch-convert category rows
-    const catConverted = await convertRowsToEur(categoryAmountResult.rows.map(r => ({
-      ...r,
-      amount: parseFloat(r.amount),
-    })), targetCurrency);
+    const catConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(categoryAmountResult.rows, 'amount', false),
+      targetCurrency
+    );
 
     const categories = [];
     const catMap = {};
@@ -172,15 +250,64 @@ export const infoRepository = {
       catMap[key].total += eur;
     }
     for (const cat of Object.values(catMap)) {
-      categories.push({ ...cat, total: Math.round(cat.total * 100) / 100 });
+      categories.push({ ...cat, total: roundToCents(cat.total) });
     }
     categories.sort((a, b) => b.count - a.count);
 
     return {
       total_transactions: parseInt(countResult.rows[0].count, 10),
-      total_amount: Math.round(totalEur * 100) / 100,
+      total_amount: roundToCents(totalEur),
       categories,
     };
+  },
+
+  async getCategoryBreakdown(targetCurrency = 'EUR') {
+    // Keep behavior identical to stats.categories while avoiding unrelated top-level computations.
+    if (await mvAvailable('mv_category_totals')) {
+      const catResult = await query('SELECT * FROM mv_category_totals ORDER BY count DESC');
+      const convertedRows = await convertRowsToEur(
+        mapRowsForAmountConversion(catResult.rows, 'total', true),
+        targetCurrency
+      );
+
+      return buildCategoryFromConvertedRows(convertedRows);
+    }
+
+    const categoryAmountResult = await query(`
+      SELECT COALESCE(c.id, -1) AS category_id,
+             COALESCE(c.general || ':' || c.detail, 'UNCATEGORISED') AS name,
+             t.amount,
+             t.currency,
+             t.date
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      WHERE t.is_active = true
+    `);
+
+    const catConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(categoryAmountResult.rows, 'amount', false),
+      targetCurrency
+    );
+
+    const categories = [];
+    const catMap = {};
+    for (const row of catConverted) {
+      const catId = row.category_id === -1 ? null : parseInt(row.category_id, 10);
+      const eur = row.amount_eur;
+      const key = catId ?? 'null';
+      if (!catMap[key]) {
+        catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
+      }
+      catMap[key].count++;
+      catMap[key].total += eur;
+    }
+    for (const cat of Object.values(catMap)) {
+      categories.push({ ...cat, total: roundToCents(cat.total) });
+    }
+    categories.sort((a, b) => b.count - a.count);
+
+    return categories;
   },
 
   async getBanks() {
@@ -215,7 +342,10 @@ export const infoRepository = {
     }
 
     // Batch-convert all rows in a single rates fetch
-    const converted = await convertRowsToEur(result.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
+    const converted = await convertRowsToEur(
+      mapRowsForAmountConversion(result.rows, 'amount', false),
+      targetCurrency
+    );
     let total = 0;
     let min = Infinity;
     let max = -Infinity;
@@ -229,10 +359,10 @@ export const infoRepository = {
     const count = result.rows.length;
     return {
       total_count: count,
-      total_amount: Math.round(total * 100) / 100,
-      average: Math.round((total / count) * 100) / 100,
-      min: Math.round(min * 100) / 100,
-      max: Math.round(max * 100) / 100,
+      total_amount: roundToCents(total),
+      average: roundToCents(total / count),
+      min: roundToCents(min),
+      max: roundToCents(max),
     };
   },
 
@@ -255,24 +385,15 @@ export const infoRepository = {
       `);
 
       const monthMap = {};
-      // Batch-convert all MV rows in one rates fetch
-      const mvConverted = await convertRowsToEur(mvResult.rows.map(r => ({
-        ...r,
-        // Use month_start as a representative date for the rate lookup
-        date: r.month_start,
-        currency: r.currency,
-        amount: parseFloat(r.total_income),
-        _spending: parseFloat(r.total_spending),
-      })), targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' });
-
       // convertRowsToEur only converts 'amount', so we need a second pass for spending
       // Use the same rates by calling getRates once - instead batch both into separate rows
       // More efficient: merge income+spending into one array, convert all, then split
       const mergedRows = [];
       for (const r of mvResult.rows) {
-        const dateStr = r.month_start instanceof Date ? r.month_start.toISOString().split('T')[0] : String(r.month_start);
-        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_income), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'income', _row: r, date: dateStr });
-        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_spending), _key: `${r.year}-${String(r.month).padStart(2, '0')}`, _type: 'spending', _row: r, date: dateStr });
+        const dateStr = r.month_start instanceof Date ? formatDateToYmd(r.month_start) : String(r.month_start);
+        const monthKey = formatYearMonthKey(r.year, r.month);
+        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_income), _key: monthKey, _type: 'income', _row: r, date: dateStr });
+        mergedRows.push({ currency: r.currency, amount: parseFloat(r.total_spending), _key: monthKey, _type: 'spending', _row: r, date: dateStr });
       }
       const mergedConverted = await convertRowsToEur(mergedRows, targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' });
 
@@ -305,22 +426,13 @@ export const infoRepository = {
         .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
         .map(m => ({
           ...m,
-          period_end: new Date(m.year, m.month, 0).toISOString().split('T')[0],
-          total_spending: Math.round(m.total_spending * 100) / 100,
-          total_income: Math.round(m.total_income * 100) / 100,
-          net_amount: Math.round(m.net_amount * 100) / 100,
+          period_end: formatDateToYmd(new Date(m.year, m.month, 0)),
+          total_spending: roundToCents(m.total_spending),
+          total_income: roundToCents(m.total_income),
+          net_amount: roundToCents(m.net_amount),
         }));
 
-      const summary = {
-        total_spending: months.reduce((s, m) => s + m.total_spending, 0),
-        total_income: months.reduce((s, m) => s + m.total_income, 0),
-        net_amount: months.reduce((s, m) => s + m.net_amount, 0),
-        transaction_count: months.reduce((s, m) => s + m.transaction_count, 0),
-        period_start: months[0]?.period_start,
-        period_end: months[months.length - 1]?.period_end,
-      };
-
-      return { months, summary };
+      return { months, summary: buildMonthlySummary(months) };
     }
 
     // ── Fallback: live query with exclusions ──
@@ -365,9 +477,11 @@ export const infoRepository = {
 
     // Group by month and convert amounts — batch all in one rates fetch
     const liveConverted = await convertRowsToEur(
-      result.rows
-        .filter(r => r.txn_id != null)
-        .map(r => ({ ...r, amount: parseFloat(r.amount) })),
+      mapRowsForAmountConversion(
+        result.rows.filter(r => r.txn_id != null),
+        'amount',
+        false
+      ),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -375,7 +489,7 @@ export const infoRepository = {
     const monthMap = {};
     // Pre-populate all months (including empty ones) from the full result set
     for (const row of result.rows) {
-      const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+      const key = formatYearMonthKey(row.year, row.month);
       if (!monthMap[key]) {
         monthMap[key] = {
           month: row.month,
@@ -391,7 +505,7 @@ export const infoRepository = {
     }
 
     for (const row of liveConverted) {
-      const key = `${row.year}-${String(row.month).padStart(2, '0')}`;
+      const key = formatYearMonthKey(row.year, row.month);
       const eur = row.amount_eur;
 
       monthMap[key].transaction_count++;
@@ -407,21 +521,12 @@ export const infoRepository = {
       })
       .map(m => ({
         ...m,
-        total_spending: Math.round(m.total_spending * 100) / 100,
-        total_income: Math.round(m.total_income * 100) / 100,
-        net_amount: Math.round(m.net_amount * 100) / 100,
+        total_spending: roundToCents(m.total_spending),
+        total_income: roundToCents(m.total_income),
+        net_amount: roundToCents(m.net_amount),
       }));
 
-    const summary = {
-      total_spending: months.reduce((s, m) => s + m.total_spending, 0),
-      total_income: months.reduce((s, m) => s + m.total_income, 0),
-      net_amount: months.reduce((s, m) => s + m.net_amount, 0),
-      transaction_count: months.reduce((s, m) => s + m.transaction_count, 0),
-      period_start: months[0]?.period_start,
-      period_end: months[months.length - 1]?.period_end,
-    };
-
-    return { months, summary };
+    return { months, summary: buildMonthlySummary(months) };
   },
 
   async getPlannedExpensesNextMonth(targetCurrency = 'EUR') {
@@ -449,21 +554,21 @@ export const infoRepository = {
     `;
 
     const result = await query(sql, [
-      nextMonth.toISOString().split('T')[0],
-      monthAfter.toISOString().split('T')[0],
+      formatDateToYmd(nextMonth),
+      formatDateToYmd(monthAfter),
     ]);
 
     // Batch-convert all planned rows in one rates fetch
-    const plannedConverted = await convertRowsToEur(result.rows.map(r => ({
-      ...r,
-      amount: parseFloat(r.amount),
-    })), targetCurrency);
+    const plannedConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(result.rows, 'amount', false),
+      targetCurrency
+    );
 
     // Group by date
     const dailyMap = {};
     for (const row of plannedConverted) {
       const dateStr = row.planned_date instanceof Date
-        ? row.planned_date.toISOString().split('T')[0]
+        ? formatDateToYmd(row.planned_date)
         : String(row.planned_date);
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { date: dateStr, total_income: 0, total_expenses: 0, transactions: [] };
@@ -474,7 +579,7 @@ export const infoRepository = {
       dailyMap[dateStr].transactions.push({
         id: row.id,
         recipient_name: row.recipient_name,
-        amount: Math.round(eur * 100) / 100,
+        amount: roundToCents(eur),
         category_name: row.category_name,
         is_recurring: row.is_recurring,
         recurrence_pattern: row.recurrence_pattern,
@@ -497,13 +602,13 @@ export const infoRepository = {
     return {
       month: nextMonth.getMonth() + 1,
       year: nextMonth.getFullYear(),
-      period_start: nextMonth.toISOString().split('T')[0],
-      period_end: lastDay.toISOString().split('T')[0],
+      period_start: formatDateToYmd(nextMonth),
+      period_end: formatDateToYmd(lastDay),
       daily_data: dailyData,
       summary: {
-        total_income: Math.round(totalIncome * 100) / 100,
-        total_expenses: Math.round(totalExpenses * 100) / 100,
-        net_amount: Math.round((totalIncome + totalExpenses) * 100) / 100,
+        total_income: roundToCents(totalIncome),
+        total_expenses: roundToCents(totalExpenses),
+        net_amount: roundToCents(totalIncome + totalExpenses),
         transaction_count: result.rows.length,
       },
     };
@@ -521,15 +626,18 @@ export const infoRepository = {
     const past6Result = await query(sql6m);
 
     // Batch-convert all past-6-months rows in one rates fetch
-    const past6Converted = await convertRowsToEur(past6Result.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
+    const past6Converted = await convertRowsToEur(
+      mapRowsForAmountConversion(past6Result.rows, 'amount', false),
+      targetCurrency
+    );
 
     // Convert and group by month
     const monthlySpending = {};
     const monthlyDays = {};
     for (const row of past6Converted) {
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
       const eur = row.amount_eur;
-      const monthKey = dateStr.substring(0, 7);
+      const monthKey = extractYearMonth(dateStr);
       if (!monthlySpending[monthKey]) { monthlySpending[monthKey] = 0; monthlyDays[monthKey] = new Set(); }
       if (eur < 0) monthlySpending[monthKey] += Math.abs(eur);
       monthlyDays[monthKey].add(dateStr);
@@ -553,11 +661,14 @@ export const infoRepository = {
     const currentResult = await query(sqlCurrent);
 
     // Batch-convert current month rows in one rates fetch
-    const currentConverted = await convertRowsToEur(currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })), targetCurrency);
+    const currentConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(currentResult.rows, 'amount', false),
+      targetCurrency
+    );
 
     const dailyMap = {};
     for (const row of currentConverted) {
-      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
       const eur = row.amount_eur;
       if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
       if (eur < 0) dailyMap[dateStr].spending += Math.abs(eur);
@@ -568,8 +679,8 @@ export const infoRepository = {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => ({
         date,
-        spending: Math.round(d.spending * 100) / 100,
-        income: Math.round(d.income * 100) / 100,
+        spending: roundToCents(d.spending),
+        income: roundToCents(d.income),
       }));
 
     const totalCurrentSpending = dailyData.reduce((s, d) => s + d.spending, 0);
@@ -580,21 +691,21 @@ export const infoRepository = {
 
     return {
       past_6_months: {
-        avg_daily_spending: Math.round(avgDailySpending * 100) / 100,
-        avg_monthly_spending: Math.round(avgMonthlySpending * 100) / 100,
+        avg_daily_spending: roundToCents(avgDailySpending),
+        avg_monthly_spending: roundToCents(avgMonthlySpending),
         months_counted: monthsCount,
       },
       current_month: {
         daily_data: dailyData,
-        total_spending: Math.round(totalCurrentSpending * 100) / 100,
+        total_spending: roundToCents(totalCurrentSpending),
         days_elapsed: daysElapsed,
         days_in_month: daysInMonth,
       },
       comparison: {
-        projected_monthly_total: Math.round(projectedTotal * 100) / 100,
-        avg_monthly_spending: Math.round(avgMonthlySpending * 100) / 100,
-        variance: Math.round((projectedTotal - avgMonthlySpending) * 100) / 100,
-        pace: avgDailySpending > 0 ? Math.round(((totalCurrentSpending / daysElapsed) / avgDailySpending) * 100) / 100 : null,
+        projected_monthly_total: roundToCents(projectedTotal),
+        avg_monthly_spending: roundToCents(avgMonthlySpending),
+        variance: roundToCents(projectedTotal - avgMonthlySpending),
+        pace: avgDailySpending > 0 ? roundToCents((totalCurrentSpending / daysElapsed) / avgDailySpending) : null,
       },
     };
   },
@@ -658,7 +769,7 @@ export const infoRepository = {
 
     // Batch-convert all historical rows in one rates fetch
     const pastConverted = await convertRowsToEur(
-      pastResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
+      mapRowsForAmountConversion(pastResult.rows, 'amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -705,7 +816,7 @@ export const infoRepository = {
 
     // Batch-convert current month rows
     const currentCashflowConverted = await convertRowsToEur(
-      currentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
+      mapRowsForAmountConversion(currentResult.rows, 'amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
@@ -736,7 +847,7 @@ export const infoRepository = {
 
     // Batch-convert planned current month rows
     const plannedCurrentConverted = await convertRowsToEur(
-      plannedCurrentResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
+      mapRowsForAmountConversion(plannedCurrentResult.rows, 'amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'planned_date' }
     );
@@ -761,7 +872,7 @@ export const infoRepository = {
 
     // Batch-convert historical planned rows
     const plannedHistConverted = await convertRowsToEur(
-      plannedHistResult.rows.map(r => ({ ...r, amount: parseFloat(r.amount) })),
+      mapRowsForAmountConversion(plannedHistResult.rows, 'amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'planned_date' }
     );
@@ -800,8 +911,8 @@ export const infoRepository = {
 
       withoutPlanned.push({
         day,
-        average: Math.round(avg * 100) / 100,
-        current: current !== null ? Math.round(current * 100) / 100 : null,
+        average: roundToCents(avg),
+        current: current !== null ? roundToCents(current) : null,
       });
 
       const avgPlanned = avgPlannedCumByDay[day] !== undefined ? avgPlannedCumByDay[day] : (avgPlannedCumByDay[day - 1] || 0);
@@ -810,8 +921,8 @@ export const infoRepository = {
 
       withPlanned.push({
         day,
-        average: Math.round((avg + avgPlanned) * 100) / 100,
-        current: currentWithPlanned !== null ? Math.round(currentWithPlanned * 100) / 100 : null,
+        average: roundToCents(avg + avgPlanned),
+        current: currentWithPlanned !== null ? roundToCents(currentWithPlanned) : null,
       });
     }
 
@@ -852,30 +963,18 @@ export const infoRepository = {
     `);
 
     // Batch-convert current balances in one rates fetch
-    let currentBalancesConverted;
-    try {
-      currentBalancesConverted = await convertRowsToEur(
-        latestBalanceResult.rows.map(r => ({
-          ...r,
-          amount: parseFloat(r.balance),
-          currency: r.currency || 'EUR',
-        })),
-        targetCurrency,
-        { useHistoricalRatesByDate: true, dateField: 'date' }
-      );
-    } catch (err) {
-      currentBalancesConverted = await convertRowsToEur(
-        latestBalanceResult.rows.map(r => ({
-          ...r,
-          amount: parseFloat(r.balance),
-          currency: r.currency || 'EUR',
-        })),
-        targetCurrency
-      );
-    }
+    const currentBalancesConverted = await convertRowsWithHistoricalRateFallback(
+      latestBalanceResult.rows.map(r => ({
+        ...r,
+        amount: parseFloat(r.balance),
+        currency: r.currency || 'EUR',
+      })),
+      targetCurrency,
+      'date'
+    );
 
     for (const row of currentBalancesConverted) {
-      const balance = Math.round(row.amount_eur * 100) / 100;
+      const balance = roundToCents(row.amount_eur);
 
       accounts.push({
         bank_account: row.bank_account,
@@ -926,31 +1025,17 @@ export const infoRepository = {
     `);
 
     // Batch-convert all history rows in one rates fetch
-    let historyConverted;
-    try {
-      historyConverted = await convertRowsToEur(
-        historyResult.rows
-          .filter(r => r.bank_account)
-          .map(r => ({
-            ...r,
-            amount: parseFloat(r.balance),
-            currency: r.currency || 'EUR',
-          })),
-        targetCurrency,
-        { useHistoricalRatesByDate: true, dateField: 'date' }
-      );
-    } catch (err) {
-      historyConverted = await convertRowsToEur(
-        historyResult.rows
-          .filter(r => r.bank_account)
-          .map(r => ({
-            ...r,
-            amount: parseFloat(r.balance),
-            currency: r.currency || 'EUR',
-          })),
-        targetCurrency
-      );
-    }
+    const historyConverted = await convertRowsWithHistoricalRateFallback(
+      historyResult.rows
+        .filter(r => r.bank_account)
+        .map(r => ({
+          ...r,
+          amount: parseFloat(r.balance),
+          currency: r.currency || 'EUR',
+        })),
+      targetCurrency,
+      'date'
+    );
 
     // Group monthly history by account
     const historyMap = {};
@@ -959,11 +1044,11 @@ export const infoRepository = {
       if (!historyMap[key]) historyMap[key] = [];
 
       const monthStr = row.month_start instanceof Date
-        ? row.month_start.toISOString().split('T')[0]
+        ? formatDateToYmd(row.month_start)
         : row.month_start;
 
-      const monthKey = monthStr.substring(0, 7);
-      historyMap[key].push({ month: monthKey, balance: Math.round(row.amount_eur * 100) / 100 });
+      const monthKey = extractYearMonth(monthStr);
+      historyMap[key].push({ month: monthKey, balance: roundToCents(row.amount_eur) });
     }
 
     // Sort each account's history
@@ -980,12 +1065,12 @@ export const infoRepository = {
         const entry = acct.find(h => h.month === month);
         if (entry) total += entry.balance;
       }
-      totalHistory.push({ month, balance: Math.round(total * 100) / 100 });
+      totalHistory.push({ month, balance: roundToCents(total) });
     }
 
     return {
       accounts,
-      total_net_position: Math.round(totalNetPosition * 100) / 100,
+      total_net_position: roundToCents(totalNetPosition),
       history: historyMap,
       total_history: totalHistory,
     };
@@ -1041,7 +1126,7 @@ export const infoRepository = {
 
     const firstDataDateYmd = firstDataDate
       ? (firstDataDate instanceof Date
-        ? firstDataDate.toISOString().split('T')[0]
+        ? formatDateToYmd(firstDataDate)
         : String(firstDataDate).split('T')[0])
       : null;
 
@@ -1094,28 +1179,11 @@ export const infoRepository = {
       ORDER BY d.day, a.bank_account
     `, [firstDataDateYmd]);
 
-    const convertHistoricalRows = async (rows, amountField = 'amount') => {
-      try {
-        return await convertRowsToEur(
-          rows.map(r => ({
-            ...r,
-            amount: parseFloat(r[amountField] || 0),
-          })),
-          targetCurrency,
-          { useHistoricalRatesByDate: true, dateField: 'day' }
-        );
-      } catch (err) {
-        return await convertRowsToEur(
-          rows.map(r => ({
-            ...r,
-            amount: parseFloat(r[amountField] || 0),
-          })),
-          targetCurrency
-        );
-      }
-    };
-
-    let bankHistoryConverted = await convertHistoricalRows(bankHistoryResult.rows, 'balance');
+    let bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
+      mapRowsForAmountConversion(bankHistoryResult.rows, 'balance'),
+      targetCurrency,
+      'day'
+    );
 
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
@@ -1173,7 +1241,11 @@ export const infoRepository = {
         ORDER BY day, currency
       `, [firstDataDateYmd]);
 
-      bankHistoryConverted = await convertHistoricalRows(liquidFlowResult.rows, 'value');
+      bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(liquidFlowResult.rows, 'value'),
+        targetCurrency,
+        'day'
+      );
     }
 
     const liquidByDay = {};
@@ -1249,7 +1321,11 @@ export const infoRepository = {
       ORDER BY day, currency
     `, [firstDataDateYmd]);
 
-    const portfolioHistoryConverted = await convertHistoricalRows(portfolioHistoryResult.rows, 'value');
+    const portfolioHistoryConverted = await convertRowsWithHistoricalRateFallback(
+      mapRowsForAmountConversion(portfolioHistoryResult.rows, 'value'),
+      targetCurrency,
+      'day'
+    );
 
     const investmentsByDay = {};
     for (const row of portfolioHistoryConverted) {
@@ -1396,14 +1472,16 @@ export const infoRepository = {
     const rangeEndMs = rangeEndDate.getTime();
 
     const historicalPointsByInvestment = new Map();
-    const historicalPointsEntries = await Promise.all(
-      unitInvestmentsResult.rows.map(async (investment) => {
+    const historicalPointsEntries = await mapWithConcurrency(
+      unitInvestmentsResult.rows,
+      NET_WORTH_HISTORICAL_FETCH_CONCURRENCY,
+      async (investment) => {
         const points = await fetchHistoricalPrices(investment, {
           fromMs: rangeStartMs,
           toMs: rangeEndMs,
         });
-        return [Number(investment.id), points] ;
-      })
+        return [Number(investment.id), points];
+      }
     );
     for (const [investmentId, points] of historicalPointsEntries) {
       historicalPointsByInvestment.set(investmentId, points);
@@ -1415,12 +1493,12 @@ export const infoRepository = {
       const unitPriceMap = unitPriceByInvestment[invId] || {};
       const firstTxDate = investment.first_tx_date
         ? (investment.first_tx_date instanceof Date
-          ? investment.first_tx_date.toISOString().split('T')[0]
+          ? formatDateToYmd(investment.first_tx_date)
           : String(investment.first_tx_date).split('T')[0])
         : null;
       const createdDate = investment.created_date
         ? (investment.created_date instanceof Date
-          ? investment.created_date.toISOString().split('T')[0]
+          ? formatDateToYmd(investment.created_date)
           : String(investment.created_date).split('T')[0])
         : null;
       const startDateYmd = firstTxDate || createdDate || firstDataDateYmd;
@@ -1485,7 +1563,11 @@ export const infoRepository = {
     );
 
     if (unitInvestmentRows.length > 0) {
-      const unitInvestmentConverted = await convertHistoricalRows(unitInvestmentRows, 'amount');
+      const unitInvestmentConverted = await convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(unitInvestmentRows, 'amount'),
+        targetCurrency,
+        'day'
+      );
       for (const row of unitInvestmentConverted) {
         const key = row.day;
         if (!investmentsByDay[key]) investmentsByDay[key] = 0;
@@ -1512,10 +1594,7 @@ export const infoRepository = {
 
     if (fixedIncomeInvestments.rows.length > 0) {
       const fixedIncomeConverted = await convertRowsToEur(
-        fixedIncomeInvestments.rows.map(r => ({
-          ...r,
-          amount: parseFloat(r.current_price) || 0,
-        })),
+        mapRowsForAmountConversion(fixedIncomeInvestments.rows, 'current_price', true),
         targetCurrency
       );
       // Add fixed income investments to all days from their creation date
@@ -1524,7 +1603,7 @@ export const infoRepository = {
         if (value <= 0) continue;
         const createdDate = row.created_date
           ? (row.created_date instanceof Date
-            ? row.created_date.toISOString().split('T')[0]
+            ? formatDateToYmd(row.created_date)
             : String(row.created_date).split('T')[0])
           : firstDataDateYmd;
         const invStartDate = new Date(Math.max(start.getTime(), new Date(createdDate).getTime()));
@@ -1545,20 +1624,20 @@ export const infoRepository = {
       const mm = String(day.getMonth() + 1).padStart(2, '0');
       const dd = String(day.getDate()).padStart(2, '0');
       const dayKey = `${yyyy}-${mm}-${dd}`;
-      const liquid = Math.round((liquidByDay[dayKey] || 0) * 100) / 100;
-      const investments = Math.round((investmentsByDay[dayKey] || 0) * 100) / 100;
+      const liquid = roundToCents(liquidByDay[dayKey] || 0);
+      const investments = roundToCents(investmentsByDay[dayKey] || 0);
       snapshots.push({
         date: dayKey,
         liquid,
         investments,
-        netWorth: Math.round((liquid + investments) * 100) / 100,
+        netWorth: roundToCents(liquid + investments),
       });
     }
 
     const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
     const latest = sanitizedSnapshots[sanitizedSnapshots.length - 1] || { liquid: 0, investments: 0, netWorth: 0 };
-    const currentMonthPrefix = latest.date ? latest.date.substring(0, 7) : null;
+    const currentMonthPrefix = latest.date ? extractYearMonth(latest.date) : null;
     const firstCurrentMonthIdx = currentMonthPrefix
       ? sanitizedSnapshots.findIndex(s => s.date.startsWith(currentMonthPrefix))
       : -1;
@@ -1576,8 +1655,8 @@ export const infoRepository = {
         investments: latest.investments,
         netWorth: latest.netWorth,
       },
-      monthlyChange: Math.round(monthlyChange * 100) / 100,
-      monthlyChangePercent: Math.round(monthlyChangePercent * 100) / 100,
+      monthlyChange: roundToCents(monthlyChange),
+      monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
     };
 
@@ -1624,10 +1703,10 @@ export const infoRepository = {
     `);
 
     // Batch-convert all rows (one per recipient+currency) in a single rates fetch
-    const topConverted = await convertRowsToEur(topRawResult.rows.map(r => ({
-      ...r,
-      amount: parseFloat(r.total_abs_amount),
-    })), targetCurrency);
+    const topConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
+      targetCurrency
+    );
 
     // Aggregate by recipient across currencies
     const recipientAgg = {};
@@ -1659,8 +1738,8 @@ export const infoRepository = {
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .map(r => ({
         ...r,
-        totalSpend: Math.round(r.totalSpend * 100) / 100,
-        avgAmount: Math.round((r.totalSpend / r.transactionCount) * 100) / 100,
+        totalSpend: roundToCents(r.totalSpend),
+        avgAmount: roundToCents(r.totalSpend / r.transactionCount),
       }));
 
     // Month-over-month comparison (current vs previous month) — also group by recipient+currency
@@ -1681,15 +1760,15 @@ export const infoRepository = {
     `);
 
     // Batch-convert MoM rows in one rates fetch
-    const momConverted = await convertRowsToEur(momRawResult.rows.map(r => ({
-      ...r,
-      amount: parseFloat(r.abs_amount),
-    })), targetCurrency);
+    const momConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),
+      targetCurrency
+    );
 
-    const currentPeriod = new Date().toISOString().substring(0, 7);
+    const currentPeriod = formatDateToYm(new Date());
     const prevDate = new Date();
     prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevPeriod = prevDate.toISOString().substring(0, 7);
+    const prevPeriod = formatDateToYm(prevDate);
 
     const momAgg = {}; // { recipientId: { name, current: eurTotal, previous: eurTotal } }
     for (const row of momConverted) {
@@ -1706,8 +1785,8 @@ export const infoRepository = {
       .map(([rid, v]) => ({
         recipientId: parseInt(rid, 10),
         name: v.name,
-        currentSpend: Math.round(v.current * 100) / 100,
-        previousSpend: Math.round(v.previous * 100) / 100,
+        currentSpend: roundToCents(v.current),
+        previousSpend: roundToCents(v.previous),
         changePercent: Math.round(((v.current - v.previous) / v.previous * 100) * 10) / 10,
       }))
       .sort((a, b) => b.currentSpend - a.currentSpend)

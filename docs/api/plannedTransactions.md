@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-04-02
+date: 2026-04-09
 tags: [api, planned, recurring, schedule]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -154,6 +154,15 @@ Update a planned transaction.
 
 **Rate Limited:** 30 requests per minute
 
+Implementation notes:
+- Internal route refactor extracted shared helpers for PATCH flow (`parseRouteId`, `removePatchOnlyReadOnlyFields`, `resolveRecipientIdFromName`, `resolveCategoryIdFromName`, `applyLoanPatchDefaults`).
+- Refactor preserves existing behavior: unresolved `recipient_name` / `category_name` does not introduce new validation errors, and loan schedule regeneration/clearing semantics remain unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+- Follow-up refactor extracted shared write-path error handling (`handlePlannedTransactionWriteError`) for POST/PATCH and isolated PATCH loan schedule persistence branching in `updateLoanScheduleForPatch`; response shapes and status-code behavior remain unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+- List-path optimization now computes `total` from the main paginated query via `COUNT(*) OVER()` and only runs a fallback count query when the returned page is empty; list response semantics are preserved while reducing round-trips for non-empty pages. The list also removes a redundant `exec_counts` join and derives `execution_count` from the already batched executions fetch ([[apps/node-backend/src/repositories/plannedTransactionRepository.js]]).
+- Update-path optimization now returns the enriched updated row via single CTE query (`WITH updated ... SELECT ...`) before attaching executions/loan schedule, removing update+base-refetch overhead while preserving response fields and null/not-found behavior ([[apps/node-backend/src/repositories/plannedTransactionRepository.js]]).
+- Name-resolution helpers and recurring execute-date calculation now use module-scoped imports (`dbQuery`, `calculateNextDate`) rather than per-request dynamic imports; endpoint behavior is unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+- PATCH name-resolution lookups for `recipient_name` and `category_name` now run concurrently via `Promise.all`, preserving current unresolved-name behavior while reducing avoidable sequential latency when both are provided ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+
 ### POST /api/planned-transactions/:id/execute
 
 Mark a planned transaction as executed.
@@ -170,6 +179,9 @@ Mark a planned transaction as executed.
 - For recurring: Calculates next occurrence and resets is_executed
 - For one-time: Sets is_executed = true
 - Records execution in planned_transaction_executions table
+
+Implementation note:
+- Internal route refactor now uses shared `getCurrentDateString()` fallback helper for `execution_date` defaulting; response/side-effect behavior remains unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
 
 ### DELETE /api/planned-transactions/:id
 

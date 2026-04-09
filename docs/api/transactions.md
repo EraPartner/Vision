@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-03-25
+date: 2026-04-09
 tags: [api, transactions, finance]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -47,6 +47,9 @@ Retrieve a list of transactions with filtering and pagination.
 Notes:
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
+- Non-`uncategorised` list requests now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips; filters, totals, and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- `uncategorised=true` list requests now use a dedicated single-round-trip repository path (`getUncategorisedWithCount`) instead of route-level dual queries; uncategorised row filtering and historical total-count semantics are preserved ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 
 **Response:**
 ```json
@@ -92,6 +95,9 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 ```
 
 **Rate Limited:** 30 requests per minute
+
+Implementation note:
+- CSV export row escaping/assembly and filename creation are now handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id
 
@@ -161,6 +167,12 @@ Update an existing transaction.
 **Special Handling:**
 - `recipient_name`: Resolves to recipient_id automatically
 - `category_name`: Resolves to category_id using "GENERAL:DETAIL" format
+
+Implementation notes:
+- Internal PATCH flow now delegates to extracted helpers for payload normalization and name→id resolution (`normalizeTransactionPatchFields`, `resolveRecipientNameToId`, `resolveCategoryNameToId`, `parseRouteId`) while preserving status codes and response messages.
+- Recipient/category name-resolution and CSV export DB access now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports; endpoint behavior, payloads, and validation messages remain unchanged ([[apps/node-backend/src/routes/transactions.js]]).
+- Recipient/category name-resolution checks in PATCH now run concurrently and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without changing validation outcomes ([[apps/node-backend/src/routes/transactions.js]]).
+- Repository update path now returns the enriched updated row in a single CTE query (`WITH updated ... SELECT ...`) instead of `UPDATE` + follow-up `getById` round-trip; response shape and not-found semantics are unchanged ([[apps/node-backend/src/repositories/transactionRepository.js]]).
 
 **Rate Limited:** 30 requests per minute
 

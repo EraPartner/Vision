@@ -10,10 +10,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock express Router
 const routeHandlers = {};
 const mockRouter = {
-  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
-  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
-  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
-  delete: vi.fn((path, handler) => { routeHandlers[`delete:${path}`] = handler; }),
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
+  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
+  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
   use: vi.fn(),
 };
 

@@ -2,7 +2,7 @@
 title: Transactions
 type: feature
 status: active
-date: 2026-03-23
+date: 2026-04-09
 tags: [feature, transactions, finance]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities
@@ -96,6 +96,14 @@ Transactions support rich filtering:
 - Bank account
 - Currency
 
+Implementation note:
+- Backend route parsing/normalization for list filters is centralized in `parseTransactionListQuery`, preserving existing defaults and coercion behavior while reducing duplicate parsing logic ([[apps/node-backend/src/routes/transactions.js]]).
+- Backend non-`uncategorised` list path now uses repository one-query pagination (`getAllWithCount`) instead of separate list and count queries, reducing DB round-trips while preserving filters/totals/response shape ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- Backend `uncategorised=true` list path now uses dedicated repository one-query pagination (`getUncategorisedWithCount`) instead of route-level dual queries, preserving uncategorised row filtering and historical total semantics while reducing route round-trips ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
+- PATCH name-resolution and CSV export DB-access helpers now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports, preserving route behavior while removing avoidable import overhead on hot paths ([[apps/node-backend/src/routes/transactions.js]]).
+- PATCH recipient/category name-resolution now runs concurrently and keeps existing recipient-first/category-second validation error precedence, reducing avoidable sequential lookup latency when both fields are provided ([[apps/node-backend/src/routes/transactions.js]]).
+- Repository transaction update now returns the enriched row via one CTE query (update + joins) instead of update followed by `getById`, preserving response shape and not-found behavior while reducing one DB round-trip per update ([[apps/node-backend/src/repositories/transactionRepository.js]]).
+
 #### Table Search Sync Behavior
 
 - Transaction table search input updates immediately in the UI and persists after execution.
@@ -124,6 +132,9 @@ Export transactions to CSV for external analysis:
 ```
 GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18
 ```
+
+Implementation note:
+- CSV escaping, row construction, and filename generation now use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
 
 ---
 

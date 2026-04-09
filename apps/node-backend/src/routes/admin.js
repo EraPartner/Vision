@@ -47,6 +47,41 @@ function fetchLatestRelease() {
   });
 }
 
+function hasValidReleaseTag(release) {
+  return !(release.message === 'Not Found' || !release.tag_name);
+}
+
+function detectCurrentAppVersion() {
+  return process.env.APP_VERSION || process.env.APP_IMAGE_TAG || 'unknown';
+}
+
+function buildUpdateCheckPayload(release, currentVersion) {
+  const latestVersion = release.tag_name;
+  const upToDate = latestVersion === currentVersion || latestVersion === `v${currentVersion}`;
+
+  return {
+    payload: {
+      up_to_date: upToDate,
+      current_version: currentVersion,
+      latest_version: latestVersion,
+      published_at: release.published_at,
+      release_notes: release.body || '',
+      html_url: release.html_url,
+    },
+    latestVersion,
+    upToDate,
+  };
+}
+
+function formatAdminStatusPayload(isConnected, tableCount) {
+  return {
+    is_initialised: isConnected && tableCount > 0,
+    table_count: tableCount,
+    timestamp: new Date().toISOString(),
+    links: [],
+  };
+}
+
 const router = Router();
 
 // GET /api/admin
@@ -55,12 +90,7 @@ router.get('/', async (req, res) => {
     const isConnected = await checkConnection();
     const tableCount = isConnected ? await getTableCount() : 0;
 
-    res.json({
-      is_initialised: isConnected && tableCount > 0,
-      table_count: tableCount,
-      timestamp: new Date().toISOString(),
-      links: [],
-    });
+    res.json(formatAdminStatusPayload(isConnected, tableCount));
   } catch (err) {
     logger.error('Admin status retrieval failed', { error: err.message });
     res.status(500).json({ detail: 'Failed to retrieve administration status' });
@@ -117,26 +147,18 @@ router.get('/update/check', async (req, res) => {
   try {
     const release = await fetchLatestRelease();
 
-    if (release.message === 'Not Found' || !release.tag_name) {
+    if (!hasValidReleaseTag(release)) {
       return res.json({ up_to_date: true, error: 'No published releases found', latest_version: null });
     }
 
-    const latestVersion = release.tag_name;          // e.g. "v1.2.3"
+    // e.g. "v1.2.3"
     // The running image is tagged with the same semver at build time via CI.
     // Fall back to APP_IMAGE_TAG env var (set in docker-compose.yml) or "unknown".
-    const currentVersion = process.env.APP_VERSION || process.env.APP_IMAGE_TAG || 'unknown';
-
-    const upToDate = latestVersion === currentVersion || latestVersion === `v${currentVersion}`;
+    const currentVersion = detectCurrentAppVersion();
+    const { payload, latestVersion, upToDate } = buildUpdateCheckPayload(release, currentVersion);
 
     logger.info('Update check via GitHub Releases', { currentVersion, latestVersion, upToDate });
-    return res.json({
-      up_to_date: upToDate,
-      current_version: currentVersion,
-      latest_version: latestVersion,
-      published_at: release.published_at,
-      release_notes: release.body || '',
-      html_url: release.html_url,
-    });
+    return res.json(payload);
   } catch (err) {
     logger.error('Update check failed', { error: err.message });
     res.status(500).json({ detail: `Update check failed: ${err.message}` });

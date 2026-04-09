@@ -28,8 +28,10 @@ router.get('/', async (req, res) => {
       sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     };
 
-    const items = await recipientRepository.getAll(opts);
-    const total = await recipientRepository.getCount(opts);
+    const [items, total] = await Promise.all([
+      recipientRepository.getAll(opts),
+      recipientRepository.getCount(opts),
+    ]);
 
     res.json({
       items: items.map(r => ({ ...r, links: [] })),

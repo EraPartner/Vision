@@ -33,7 +33,9 @@ import {
   wiseRawRepo,
   visionRawRepo,
   rawReferenceRepo,
+  isRawDuplicate,
 } from '../repositories/rawTransactionRepository.js';
+import { isDuplicateByFields } from './deduplication.js';
 
 // Number of rows processed concurrently within each import batch.
 // Tune this against your DB pool.max setting; keep it <= pool.max / 2.
@@ -183,9 +185,10 @@ async function processRow(txData, bankType) {
     }
 
     // Generic / legacy path — use field-based dedup
-    const { isDuplicateByFields } = await import('./deduplication.js');
     const dateStr = txData.date.toISOString().split('T')[0];
-    const isDup = await isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
+    const isDup = await isRawDuplicate(bankType, txData.rawData).catch(async () => {
+      return isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
+    });
 
     if (isDup) return 'duplicate';
 

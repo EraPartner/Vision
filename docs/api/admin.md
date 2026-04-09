@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [api, admin, system, updates]
 description: API endpoints for system administration, database management, and application updates
 aliases: [admin, system admin, health, initialization]
@@ -43,6 +43,9 @@ Get system health and initialization status.
   "detail": "Failed to retrieve administration status"
 }
 ```
+
+Implementation note:
+- Internal route refactor extracted `formatAdminStatusPayload(isConnected, tableCount)` to centralize status payload construction while preserving response shape and status codes ([[apps/node-backend/src/routes/admin.js]]).
 
 ---
 
@@ -176,6 +179,10 @@ Check for application updates via GitHub Releases API.
   "detail": "Update check failed: Connection timeout"
 }
 ```
+
+Implementation notes:
+- Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
+- The endpoint behavior is unchanged: same no-release fallback payload, same up-to-date comparison (`latest === current` or `latest === v${current}`), and same response fields ([[apps/node-backend/src/routes/admin.js]]).
 
 ---
 

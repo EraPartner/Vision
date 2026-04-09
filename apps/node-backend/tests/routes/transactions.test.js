@@ -6,10 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const routeHandlers = {};
 const mockRouter = {
-  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
-  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
-  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
-  delete: vi.fn((path, handler) => { routeHandlers[`delete:${path}`] = handler; }),
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = handlers[handlers.length - 1]; }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = handlers[handlers.length - 1]; }),
+  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = handlers[handlers.length - 1]; }),
+  delete: vi.fn((path, ...handlers) => { routeHandlers[`delete:${path}`] = handlers[handlers.length - 1]; }),
   use: vi.fn(),
 };
 
@@ -21,7 +21,9 @@ vi.mock('express', () => ({
 vi.mock('../../src/repositories/transactionRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getAllWithCount: vi.fn(),
     getUncategorised: vi.fn(),
+    getUncategorisedWithCount: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
     create: vi.fn(),
@@ -34,6 +36,15 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('../../src/services/deduplication.js', () => ({
+  isManualDuplicate: vi.fn(async () => ({ isDuplicate: false })),
+  recordManualRawTransaction: vi.fn(async () => undefined),
+}));
+
+vi.mock('../../src/services/materializedViewService.js', () => ({
+  scheduleRefresh: vi.fn(),
+}));
+
 import transactionRepository from '../../src/repositories/transactionRepository.js';
 await import('../../src/routes/transactions.js');
 
@@ -42,8 +53,7 @@ describe('Transaction Routes', () => {
 
   describe('GET /', () => {
     it('should return empty list', async () => {
-      transactionRepository.getAll.mockResolvedValue([]);
-      transactionRepository.getCount.mockResolvedValue(0);
+      transactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -55,10 +65,10 @@ describe('Transaction Routes', () => {
     });
 
     it('should return transactions with data', async () => {
-      transactionRepository.getAll.mockResolvedValue([
-        { id: 1, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 },
-      ]);
-      transactionRepository.getCount.mockResolvedValue(1);
+      transactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 1, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 }],
+        total: 1,
+      });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -68,8 +78,7 @@ describe('Transaction Routes', () => {
     });
 
     it('should respect pagination', async () => {
-      transactionRepository.getAll.mockResolvedValue([]);
-      transactionRepository.getCount.mockResolvedValue(10);
+      transactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 10 });
 
       const req = { query: { limit: '2', offset: '3' } };
       const res = mockResponse();
@@ -81,28 +90,26 @@ describe('Transaction Routes', () => {
     });
 
     it('should handle uncategorised filter', async () => {
-      transactionRepository.getUncategorised.mockResolvedValue([]);
-      transactionRepository.getCount.mockResolvedValue(0);
+      transactionRepository.getUncategorisedWithCount.mockResolvedValue({ rows: [], total: 0 });
 
       const req = { query: { uncategorised: 'true' } };
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(transactionRepository.getUncategorised).toHaveBeenCalled();
+      expect(transactionRepository.getUncategorisedWithCount).toHaveBeenCalled();
     });
 
     it('should support filtering by transaction_id', async () => {
-      transactionRepository.getAll.mockResolvedValue([
-        { id: 42, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 },
-      ]);
-      transactionRepository.getCount.mockResolvedValue(1);
+      transactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 42, date: '2026-01-15', bank_account: 'Chase', amount: '25.50', recipient_id: 1 }],
+        total: 1,
+      });
 
       const req = { query: { transaction_id: '42' } };
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(transactionRepository.getAll).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
-      expect(transactionRepository.getCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
+      expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
       expect(res.json.mock.calls[0][0].items).toHaveLength(1);
     });
   });
