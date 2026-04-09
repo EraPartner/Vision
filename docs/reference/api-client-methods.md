@@ -2,7 +2,7 @@
 title: API Client Methods Reference
 type: reference
 status: active
-date: 2026-04-02
+date: 2026-04-09
 tags: [reference, api-client, frontend, typescript, http]
 description: Complete reference of all frontend API client methods in api.ts
 aliases: [api client, HTTP client, fetch methods, apiClient]
@@ -202,4 +202,11 @@ apiClient.method() → request() → rawFetch() → fetch()
 - **`rawFetch()`**: Low-level fetch with AbortController and timeout
 - **`request()`**: High-level method with retry, error parsing, and JSON response handling
 - **`buildQuery()`**: Converts params object to URL query string
+- **`requestWithQuery()`**: Shared GET helper that composes `buildQuery()` + conditional query append to eliminate repeated URL assembly in read methods
+- **`buildExclusionQuery()`**: Shared query builder for analytics endpoints that accept repeated `excluded_category_ids` / `excluded_recipient_ids` and optional `currency`
+- **`createWithStatus()`**: Shared POST helper used by create-style methods that return `{ data, wasCreated }` based on `201 Created`
+- **`postMultipartImport()`**: Shared multipart/form-data import helper used by CSV/recipient/category import endpoints
+- **`getElectronUpdater()` / `getElectronBackup()`**: Centralized Electron bridge accessors to remove repeated window casting/message chains
 - **`activeControllers`**: Set of all active AbortControllers for `cancelAll()`
+
+Internal refactor note (2026-04-09): helper extraction reduced duplication in `api.ts` (including shared query-request composition via `requestWithQuery()`) without changing public method signatures, endpoint paths, request semantics, or return payload shapes ([[apps/frontend/src/lib/api.ts]]).

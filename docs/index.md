@@ -66,7 +66,7 @@ LIMIT 5
 > 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/file.js]]` format
 > 6. **Search first** - Use `obsidian_simple_search` to find existing docs
 
-**Start here:** [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage]] → [[docs/guides/kb-maintenance|KB Maintenance]]
+**Start here:** [[CLAUDE.md]] → [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage]] → [[docs/guides/kb-maintenance|KB Maintenance]]
 
 ### 🔬 For Computer Scientists
 

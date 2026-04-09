@@ -2,7 +2,7 @@
 title: Integration - Price Providers
 type: integration
 description: Live price feeds for stocks, crypto, and other investments
-date: 2026-04-03
+date: 2026-04-09
 tags: [integration, price, stocks, crypto, api]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -67,6 +67,7 @@ Price providers fetch live market prices for investments, supporting multiple as
 - Kinesis sanitization is applied before latest extraction and before historical cache/persist writes so cached history avoids isolated trendline needles ([[apps/node-backend/src/services/priceProviderService.js]]).
 - `fetchHistoricalPrices` now also sanitizes Kinesis points on the early-return path when requested range is already fully covered by persisted DB history; when sanitizer changes points, corrected values are upserted through `_saveHistoricalPointsToDatabase(..., 'kinesis')` before returning ([[apps/node-backend/src/services/priceProviderService.js]]).
 - Persisted Kinesis history can be re-sanitized in place via `sanitizePersistedKinesisHistory()`: it scans `investments.price_provider='kinesis'`, loads persisted `asset_price_history` points, applies isolated spike sanitization, upserts corrected points with source `kinesis`, and returns `{ processed, updated, correctedPoints, failed }`.
+- Internal historical-fetch refactor in `fetchHistoricalPrices` extracts shared range-filter and persist+resolve helpers to reduce duplication while preserving provider-specific behavior, cache keys, and fallback semantics ([[apps/node-backend/src/services/priceProviderService.js]]).
 
 ## Usage
 

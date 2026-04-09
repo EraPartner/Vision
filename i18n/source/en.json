@@ -1174,6 +1174,7 @@
   "plannedPage.link.linkAndExecute": "Link & Execute",
   "plannedPage.link.loading": "Loading transactions...",
   "plannedPage.link.matchAmount": "Match amount",
+  "plannedPage.link.pickDate": "Pick a date",
   "plannedPage.link.recipient": "Recipient",
   "plannedPage.link.searchPlaceholder": "Search memo, recipient, amount...",
   "plannedPage.link.selectTx": "Please select a transaction to link.",

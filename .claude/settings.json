@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/computer/Documents/Personal/Scripts/Projects/Vision/.claude/hooks/post-edit.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/computer/Documents/Personal/Scripts/Projects/Vision/.claude/hooks/stop.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

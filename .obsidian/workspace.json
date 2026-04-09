@@ -11,10 +11,10 @@
             "id": "df7a3f626f3a4b36",
             "type": "leaf",
             "state": {
-              "type": "empty",
+              "type": "graph",
               "state": {},
-              "icon": "lucide-file",
-              "title": "New tab"
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
             }
           }
         ]
@@ -74,7 +74,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "right": {
     "id": "8a8e1dba37d03938",
@@ -183,7 +184,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 653.5
+    "width": 653.5,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -199,6 +201,21 @@
   },
   "active": "df7a3f626f3a4b36",
   "lastOpenFiles": [
+    "docs/security/data-protection.md",
+    "docs/reference/typescript-types.md",
+    "docs/architecture/electron.md",
+    "docs/architecture/deep-dive.md",
+    "docs/integrations/loan-repayment-service.md",
+    "docs/integrations/kinesis-price-provider.md",
+    "docs/integrations/belgian-inflation.md",
+    "docs/features/onboarding.md",
+    "docs/features/belgian-tax.md",
+    "docs/features/splits.md",
+    "docs/adr/007-streaming-imports.md",
+    "docs/adr/006-three-layer-architecture.md",
+    "docs/adr/005-materialized-views.md",
+    "docs/adr/004-postgresql-table-inheritance.md",
+    "docs/reference/algorithms.md",
     "docs/troubleshooting.md",
     "docs/getting-started.md",
     "docs/tag-taxonomy.md",
@@ -216,22 +233,7 @@
     "docs/guides/ai-agent-kb-usage.md",
     "docs/reference/error-codes.md",
     "docs/reference/code-patterns.md",
-    "docs/glossary.md",
-    "docs/index.md",
-    "docs/api/index.md",
-    "copilot/copilot-conversations/If_a_lead_ball_and_a_feather_are_dropped_simultaneously@20260401_092407.md",
-    "copilot/copilot-conversations/What's_the_longest_river_in_the_world@20260401_083426.md",
-    "docs/performance/chart-downsampling.md",
-    "packaging/electron/node_modules/node-gyp/docs/Force-npm-to-use-global-node-gyp.md",
-    "docs/guides/backend-configuration.md",
-    "docs/guides/migrations.md",
-    "docs/adr/002-database-schema.md",
-    "docs/features/portfolio.md",
-    "copilot/copilot-conversations/Identifying_the_app_from_code@20260329_220043.md",
-    "copilot/copilot-conversations/Information_about_the_indexed_vault@20260329_185319.md",
-    "copilot/copilot-conversations/Inquiry_about_a_vault@20260329_174810.md",
     "copilot/copilot-conversations",
-    "copilot/copilot-custom-prompts/Clip Web Page.md",
     "copilot/copilot-custom-prompts",
     "copilot",
     "config/requirements.txt",

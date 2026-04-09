@@ -98,10 +98,7 @@ class ApiClient {
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     }): Promise<TransactionsListResponse> {
-        const query = this.buildQuery(params);
-        const res = await this.request<TransactionsListResponse>(
-            `/api/transactions${query ? `?${query}` : ''}`
-        );
+        const res = await this.requestWithQuery<TransactionsListResponse>('/api/transactions', params);
         res.items = res.items.map((tx: any) => ({
             ...tx,
             transaction_date: tx.transaction_date ?? tx.date,
@@ -141,10 +138,7 @@ class ApiClient {
         active?: boolean;
         search?: string;
     }): Promise<CategoriesListResponse> {
-        const query = this.buildQuery(params);
-        return this.request<CategoriesListResponse>(
-            `/api/categories${query ? `?${query}` : ''}`
-        );
+        return this.requestWithQuery<CategoriesListResponse>('/api/categories', params);
     }
 
     async getCategory(id: number): Promise<Category> {
@@ -152,20 +146,8 @@ class ApiClient {
     }
 
     async createCategory(category: CategoryCreate): Promise<{ category: Category; wasCreated: boolean }> {
-        const url = `${API_BASE_URL}/api/categories`;
-        const response = await this.rawFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(category),
-        });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-
-        const data = await response.json();
-        return { category: data, wasCreated: response.status === 201 };
+        const { data, wasCreated } = await this.createWithStatus<CategoryCreate, Category>('/api/categories', category);
+        return { category: data, wasCreated };
     }
 
     async updateCategory(id: number, category: CategoryUpdate): Promise<Category> {
@@ -192,10 +174,7 @@ class ApiClient {
         sort_by?: string;
         sort_dir?: 'asc' | 'desc';
     }): Promise<RecipientsListResponse> {
-        const query = this.buildQuery(params);
-        return this.request<RecipientsListResponse>(
-            `/api/recipients${query ? `?${query}` : ''}`
-        );
+        return this.requestWithQuery<RecipientsListResponse>('/api/recipients', params);
     }
 
     async getRecipient(id: number): Promise<Recipient> {
@@ -203,20 +182,8 @@ class ApiClient {
     }
 
     async createRecipient(recipient: RecipientCreate): Promise<{ recipient: Recipient; wasCreated: boolean }> {
-        const url = `${API_BASE_URL}/api/recipients`;
-        const response = await this.rawFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(recipient),
-        });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-
-        const data = await response.json();
-        return { recipient: data, wasCreated: response.status === 201 };
+        const { data, wasCreated } = await this.createWithStatus<RecipientCreate, Recipient>('/api/recipients', recipient);
+        return { recipient: data, wasCreated };
     }
 
     async updateRecipient(id: number, recipient: RecipientUpdate): Promise<Recipient> {
@@ -260,10 +227,7 @@ class ApiClient {
         active?: boolean;
         search?: string;
     }): Promise<PlannedTransactionsListResponse> {
-        const query = this.buildQuery(params);
-        return this.request<PlannedTransactionsListResponse>(
-            `/api/planned-transactions${query ? `?${query}` : ''}`
-        );
+        return this.requestWithQuery<PlannedTransactionsListResponse>('/api/planned-transactions', params);
     }
 
     async getPlannedTransaction(id: number): Promise<PlannedTransaction> {
@@ -298,21 +262,9 @@ class ApiClient {
     // ==================== CSV Import Methods ====================
 
     async importCSV(file: File, bankName: string): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
-        const formData = new FormData();
-        formData.append('file', file);
-
         const queryParams = new URLSearchParams();
         queryParams.append('bank_name', bankName);
-
-        const url = `${API_BASE_URL}/api/import/csv?${queryParams.toString()}`;
-        const response = await this.rawFetch(url, { method: 'POST', body: formData });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-
-        return response.json();
+        return this.postMultipartImport('/api/import/csv', file, queryParams);
     }
 
     /**
@@ -407,9 +359,6 @@ class ApiClient {
         encoding: string = 'utf-8',
         skipRows: number = 0
     ): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
-        const formData = new FormData();
-        formData.append('file', file);
-
         const queryParams = new URLSearchParams();
         queryParams.append('bank_name', bankName);
         queryParams.append('date_format', dateFormat);
@@ -421,15 +370,7 @@ class ApiClient {
         queryParams.append('encoding', encoding);
         queryParams.append('skip_rows', skipRows.toString());
 
-        const url = `${API_BASE_URL}/api/import/csv/custom?${queryParams.toString()}`;
-        const response = await this.rawFetch(url, { method: 'POST', body: formData });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-
-        return response.json();
+        return this.postMultipartImport('/api/import/csv/custom', file, queryParams);
     }
 
     // ==================== Settings Methods ====================
@@ -461,16 +402,8 @@ class ApiClient {
         separator: string = ',',
         encoding: string = 'utf-8',
     ): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
-        const formData = new FormData();
-        formData.append('file', file);
         const queryParams = new URLSearchParams({ separator, encoding });
-        const url = `${API_BASE_URL}/api/import/recipients?${queryParams}`;
-        const response = await this.rawFetch(url, { method: 'POST', body: formData });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-        return response.json();
+        return this.postMultipartImport('/api/import/recipients', file, queryParams);
     }
 
     async importCategories(
@@ -478,16 +411,8 @@ class ApiClient {
         separator: string = ',',
         encoding: string = 'utf-8',
     ): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
-        const formData = new FormData();
-        formData.append('file', file);
         const queryParams = new URLSearchParams({ separator, encoding });
-        const url = `${API_BASE_URL}/api/import/categories?${queryParams}`;
-        const response = await this.rawFetch(url, { method: 'POST', body: formData });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-            throw new Error(error.detail || error.message || 'Request failed');
-        }
-        return response.json();
+        return this.postMultipartImport('/api/import/categories', file, queryParams);
     }
 
     // ==================== Update Methods ====================
@@ -501,19 +426,7 @@ class ApiClient {
         html_url?: string;
         error?: string;
     }> {
-        const updater = (window as Window & {
-            electronUpdater?: {
-                checkRelease?: () => Promise<{
-                    up_to_date: boolean;
-                    current_version: string;
-                    latest_version: string | null;
-                    published_at?: string;
-                    release_notes?: string;
-                    html_url?: string;
-                    error?: string;
-                }>;
-            };
-        }).electronUpdater;
+        const updater = this.getElectronUpdater();
         if (updater?.checkRelease) {
             return updater.checkRelease();
         }
@@ -526,24 +439,20 @@ class ApiClient {
      * Returns null when called from a browser context.
      */
     async triggerDockerUpdate(): Promise<{ success: boolean; wasNew: boolean; error?: string } | null> {
-        const updater = (window as Window & { electronUpdater?: { pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }> } }).electronUpdater;
+        const updater = this.getElectronUpdater();
         if (!updater) return null;
         return updater.pullImage();
     }
 
     async installShellUpdate(): Promise<{ success: boolean; version?: string; error?: string } | null> {
-        const updater = (window as Window & {
-            electronUpdater?: {
-                installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
-            }
-        }).electronUpdater;
+        const updater = this.getElectronUpdater();
         if (!updater?.installShellUpdate) return null;
         return updater.installShellUpdate();
     }
 
     /** Whether the app is running inside the Electron desktop wrapper. */
     isElectron(): boolean {
-        return !!(window as Window & { electronUpdater?: unknown }).electronUpdater;
+        return !!this.getElectronUpdater();
     }
 
     // ==================== Backup Methods (Electron only) ====================
@@ -554,7 +463,7 @@ class ApiClient {
      * Returns null when called from a browser context.
      */
     async runBackup(destDir: string): Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string } | null> {
-        const backup = (window as Window & { electronBackup?: { runBackup: (d: string) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup) return null;
         return backup.runBackup(destDir);
     }
@@ -564,7 +473,7 @@ class ApiClient {
      * Only available inside the Electron desktop app.
      */
     async selectBackupFile(): Promise<string | null> {
-        const backup = (window as Window & { electronBackup?: { selectFile: () => Promise<string | null> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup) return null;
         return backup.selectFile();
     }
@@ -577,7 +486,7 @@ class ApiClient {
      * Only available inside the Electron desktop app.
      */
     async restoreBackup(sqlFilePath: string): Promise<{ success: boolean; file?: string; error?: string } | null> {
-        const backup = (window as Window & { electronBackup?: { restoreBackup: (f: string) => Promise<{ success: boolean; file?: string; error?: string }> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup) return null;
         return backup.restoreBackup(sqlFilePath);
     }
@@ -587,7 +496,7 @@ class ApiClient {
      * Only available inside the Electron desktop app.
      */
     async selectBackupDir(): Promise<string | null> {
-        const backup = (window as Window & { electronBackup?: { selectDir: () => Promise<string | null> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup) return null;
         return backup.selectDir();
     }
@@ -602,7 +511,7 @@ class ApiClient {
         // Primary: persist to DB
         await this.saveSetting('backup_settings', settings);
         // Secondary: mirror to Electron settings.json (best-effort, non-blocking)
-        const backup = (window as Window & { electronBackup?: { saveSettings: (s: { backupDir: string; backupOnQuit: boolean }) => Promise<void> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (backup) backup.saveSettings(settings).catch(() => {});
     }
 
@@ -611,7 +520,7 @@ class ApiClient {
      * Falls back to Electron settings.json (via IPC) if the backend is not yet available.
      */
     async loadBackupSettings(): Promise<{ backupDir: string; backupOnQuit: boolean } | null> {
-        const backup = (window as Window & { electronBackup?: { loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }> } }).electronBackup;
+        const backup = this.getElectronBackup();
         if (backup) {
             try {
                 return await backup.loadSettings();
@@ -632,21 +541,13 @@ class ApiClient {
     }
 
     async getBackupEncryptionStatus(): Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean } | null> {
-        const backup = (window as Window & {
-            electronBackup?: {
-                getEncryptionStatus: () => Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>
-            }
-        }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup?.getEncryptionStatus) return null;
         return backup.getEncryptionStatus();
     }
 
     async setBackupPassphrase(passphrase: string): Promise<{ success: boolean; available: boolean; error?: string } | null> {
-        const backup = (window as Window & {
-            electronBackup?: {
-                setPassphrase: (p: string) => Promise<{ success: boolean; available: boolean; error?: string }>
-            }
-        }).electronBackup;
+        const backup = this.getElectronBackup();
         if (!backup?.setPassphrase) return null;
         return backup.setPassphrase(passphrase);
     }
@@ -658,8 +559,7 @@ class ApiClient {
         total_amount: number;
         categories: Array<{ name: string; count: number }>;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info', params);
     }
 
     async getSupportedParsers(): Promise<{
@@ -687,8 +587,7 @@ class ApiClient {
         min: number | null;
         max: number | null;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/transaction-summary${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/transaction-summary', params);
     }
 
     async getTransactionCount(): Promise<{ total_transactions: number }> {
@@ -707,17 +606,7 @@ class ApiClient {
         without_planned: Array<{ day: number; average: number; current: number | null }>;
         with_planned: Array<{ day: number; average: number; current: number | null }>;
     }> {
-        const queryParams = new URLSearchParams();
-        if (params?.excluded_category_ids?.length) {
-            params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
-        }
-        if (params?.excluded_recipient_ids?.length) {
-            params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
-        }
-        if (params?.currency) {
-            queryParams.set('currency', params.currency);
-        }
-        const q = queryParams.toString();
+        const q = this.buildExclusionQuery(params);
         return this.request(`/api/info/cashflow-comparison${q ? `?${q}` : ''}`);
     }
 
@@ -745,17 +634,7 @@ class ApiClient {
             period_end: string;
         };
     }> {
-        const queryParams = new URLSearchParams();
-        if (params?.excluded_category_ids?.length) {
-            params.excluded_category_ids.forEach(id => queryParams.append('excluded_category_ids', String(id)));
-        }
-        if (params?.excluded_recipient_ids?.length) {
-            params.excluded_recipient_ids.forEach(id => queryParams.append('excluded_recipient_ids', String(id)));
-        }
-        if (params?.currency) {
-            queryParams.set('currency', params.currency);
-        }
-        const q = queryParams.toString();
+        const q = this.buildExclusionQuery(params);
         return this.request(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
     }
 
@@ -771,8 +650,7 @@ class ApiClient {
         history: Record<string, Array<{ month: string; balance: number }>>;
         total_history: Array<{ month: string; balance: number }>;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/bank-balances${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/bank-balances', params);
     }
 
     async getBelgianInflationRates(params?: { start_month?: string; end_month?: string; db_only?: boolean }): Promise<{
@@ -780,8 +658,7 @@ class ApiClient {
         total_rates: number;
         rates: Array<{ month: string; monthly_rate: number }>;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/inflation-rates${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/inflation-rates', params);
     }
 
     async getRecurringPatterns(): Promise<{
@@ -831,8 +708,7 @@ class ApiClient {
         asset_class?: string;
         active?: boolean;
     }): Promise<InvestmentsListResponse> {
-        const query = this.buildQuery(params);
-        return this.request<InvestmentsListResponse>(`/api/investments${query ? `?${query}` : ''}`);
+        return this.requestWithQuery<InvestmentsListResponse>('/api/investments', params);
     }
 
     async getInvestment(id: number): Promise<Investment> {
@@ -864,8 +740,7 @@ class ApiClient {
         to_ms?: number;
         db_only?: boolean;
     }): Promise<{ investment_id: number; provider: string; points: Array<{ timestampMs: number; price: number }> }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/investments/${investmentId}/price-history${query ? `?${query}` : ''}`);
+        return this.requestWithQuery(`/api/investments/${investmentId}/price-history`, params);
     }
 
     async getPortfolioTransactions(investmentId: number, params?: {
@@ -873,8 +748,7 @@ class ApiClient {
         limit?: number;
         offset?: number;
     }): Promise<PortfolioTransactionsListResponse> {
-        const query = this.buildQuery(params);
-        const res = await this.request<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions${query ? `?${query}` : ''}`);
+        const res = await this.requestWithQuery<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions`, params);
         res.items = res.items.map((tx) => ({
             ...tx,
             date: tx.date ?? tx.transaction_date,
@@ -889,8 +763,7 @@ class ApiClient {
         limit?: number;
         offset?: number;
     }): Promise<PortfolioTransactionsListResponse> {
-        const query = this.buildQuery(params);
-        const res = await this.request<PortfolioTransactionsListResponse>(`/api/investments/transactions${query ? `?${query}` : ''}`);
+        const res = await this.requestWithQuery<PortfolioTransactionsListResponse>('/api/investments/transactions', params);
         res.items = res.items.map((tx) => ({
             ...tx,
             date: tx.date ?? tx.transaction_date,
@@ -920,15 +793,13 @@ class ApiClient {
         const params: Record<string, any> = {};
         if (symbols?.length) params.symbols = symbols.join(',');
         if (count) params.count = count;
-        const query = this.buildQuery(params);
-        return this.request(`/api/market/news${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/market/news', params);
     }
 
     // ==================== Net Worth ====================
 
     async getNetWorth(params?: { currency?: string }): Promise<NetWorthResponse> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/net-worth${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/net-worth', params);
     }
 
     // ==================== Portfolio Performance ====================
@@ -953,8 +824,7 @@ class ApiClient {
             return_pct: number;
         }>;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/portfolio-performance${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/portfolio-performance', params);
     }
 
     // ==================== Recipient Insights ====================
@@ -977,8 +847,7 @@ class ApiClient {
             changePercent: number;
         }>;
     }> {
-        const query = this.buildQuery(params);
-        return this.request(`/api/info/recipient-insights${query ? `?${query}` : ''}`);
+        return this.requestWithQuery('/api/info/recipient-insights', params);
     }
 
     // ==================== Splits / Owes Methods ====================
@@ -1060,6 +929,121 @@ class ApiClient {
             }
         });
         return queryParams.toString();
+    }
+
+    /**
+     * Build query string when present and perform a GET request.
+     */
+    private requestWithQuery<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+        const query = this.buildQuery(params);
+        return this.request<T>(`${endpoint}${query ? `?${query}` : ''}`);
+    }
+
+    private buildExclusionQuery(params?: {
+        excluded_category_ids?: number[];
+        excluded_recipient_ids?: number[];
+        currency?: string;
+    }): string {
+        const queryParams = new URLSearchParams();
+
+        if (params?.excluded_category_ids?.length) {
+            params.excluded_category_ids.forEach((id) => queryParams.append('excluded_category_ids', String(id)));
+        }
+        if (params?.excluded_recipient_ids?.length) {
+            params.excluded_recipient_ids.forEach((id) => queryParams.append('excluded_recipient_ids', String(id)));
+        }
+        if (params?.currency) {
+            queryParams.set('currency', params.currency);
+        }
+
+        return queryParams.toString();
+    }
+
+    private async createWithStatus<TPayload, TData>(endpoint: string, payload: TPayload): Promise<{ data: TData; wasCreated: boolean }> {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const response = await this.rawFetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        const data = await response.json();
+        return { data, wasCreated: response.status === 201 };
+    }
+
+    private async postMultipartImport<T>(endpoint: string, file: File, queryParams: URLSearchParams): Promise<T> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const query = queryParams.toString();
+        const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ''}`;
+        const response = await this.rawFetch(url, { method: 'POST', body: formData });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            throw new Error(error.detail || error.message || 'Request failed');
+        }
+
+        return response.json();
+    }
+
+    private getElectronUpdater(): {
+        checkRelease?: () => Promise<{
+            up_to_date: boolean;
+            current_version: string;
+            latest_version: string | null;
+            published_at?: string;
+            release_notes?: string;
+            html_url?: string;
+            error?: string;
+        }>;
+        pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }>;
+        installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
+    } | undefined {
+        return (window as Window & {
+            electronUpdater?: {
+                checkRelease?: () => Promise<{
+                    up_to_date: boolean;
+                    current_version: string;
+                    latest_version: string | null;
+                    published_at?: string;
+                    release_notes?: string;
+                    html_url?: string;
+                    error?: string;
+                }>;
+                pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }>;
+                installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
+            };
+        }).electronUpdater;
+    }
+
+    private getElectronBackup(): {
+        runBackup: (destDir: string) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
+        selectFile: () => Promise<string | null>;
+        restoreBackup: (sqlFilePath: string) => Promise<{ success: boolean; file?: string; error?: string }>;
+        selectDir: () => Promise<string | null>;
+        saveSettings: (settings: { backupDir: string; backupOnQuit: boolean }) => Promise<void>;
+        loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
+        getEncryptionStatus?: () => Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>;
+        setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
+    } | undefined {
+        return (window as Window & {
+            electronBackup?: {
+                runBackup: (destDir: string) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
+                selectFile: () => Promise<string | null>;
+                restoreBackup: (sqlFilePath: string) => Promise<{ success: boolean; file?: string; error?: string }>;
+                selectDir: () => Promise<string | null>;
+                saveSettings: (settings: { backupDir: string; backupOnQuit: boolean }) => Promise<void>;
+                loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
+                getEncryptionStatus?: () => Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>;
+                setPassphrase?: (passphrase: string) => Promise<{ success: boolean; available: boolean; error?: string }>;
+            };
+        }).electronBackup;
     }
 
     // ==================== Saved Charts Methods ====================

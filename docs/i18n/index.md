@@ -2,7 +2,7 @@
 title: Localization Documentation Index
 type: i18n-index
 status: active
-date: 2026-03-31
+date: 2026-04-04
 tags: [i18n, index, localization, translations]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
 aliases: [i18n, localization, translations, languages]
@@ -91,10 +91,11 @@ Added in source JSON and regenerated locale bundles (`apps/frontend/src/locales/
 - `nav.metals`
 - `portfolio.assetClass.metals`
 - `portfolio.assetGroup.metals`
+- `plannedPage.link.pickDate`
 
 Source-of-truth reminder: translation keys are maintained in `i18n/source/*.json`; generated frontend locale bundles are derived artifacts and should be regenerated after key changes.
 
-Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
 
 ## Key Naming Convention
 

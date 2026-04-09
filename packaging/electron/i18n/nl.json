@@ -1174,6 +1174,7 @@
   "plannedPage.link.linkAndExecute": "Koppelen & uitvoeren",
   "plannedPage.link.loading": "Transacties laden...",
   "plannedPage.link.matchAmount": "Bedrag matchen",
+  "plannedPage.link.pickDate": "Kies een datum",
   "plannedPage.link.recipient": "Ontvanger",
   "plannedPage.link.searchPlaceholder": "Zoek memo, ontvanger, bedrag...",
   "plannedPage.link.selectTx": "Selecteer een transactie om te koppelen.",

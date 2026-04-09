@@ -2,7 +2,7 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-02
+date: 2026-04-04
 tags: [i18n, translations, localization, internationalization]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
@@ -165,10 +165,11 @@ bun run build
 - `portfolio.assetClass.metals`
 - `portfolio.assetGroup.metals`
 - `addInv.provider.hint.kinesis`
+- `plannedPage.link.pickDate`
 
-These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts` (including provider-hint updates for `binance`/`kinesis`).
+These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts` (including provider-hint updates for `binance`/`kinesis` and the planned-page date-picker label).
 
-Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
 
 ### Step 3: Use in Component
 
