@@ -224,7 +224,7 @@ Local state is managed with `useState` and `useReducer` within individual compon
 | Table pagination | `useState` | Page number, page size |
 | Search/filter | `useState` + `useDebounce` | Transaction search with 200ms debounce |
 | Confirmation | `useConfirmDialog` | Delete confirmations |
-| Toast notifications | `use-toast` | Success/error messages |
+| Toast notifications | `sonner/toast` | Success/error messages |
 | Mobile detection | `use-mobile` | Responsive breakpoints |
 | Widget visibility | `useWidgetVisibility` | Dashboard widget show/hide |
 
@@ -246,7 +246,6 @@ Local state is managed with `useState` and `useReducer` within individual compon
 | `useConfirmDialog` | [[apps/frontend/src/hooks/useConfirmDialog.tsx]] | Confirmation dialog state |
 | `useDebounce` | [[apps/frontend/src/hooks/useDebounce.ts]] | Generic debounce utility |
 | `use-mobile` | [[apps/frontend/src/hooks/use-mobile.tsx]] | Mobile breakpoint detection |
-| `use-toast` | [[apps/frontend/src/hooks/use-toast.ts]] | Toast notification hook |
 
 ---
 

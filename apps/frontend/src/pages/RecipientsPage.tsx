@@ -17,6 +17,8 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { PageError } from "@/components/shared/PageError";
 
 type TableRecipient = {
     id: number;
@@ -149,7 +151,11 @@ export default function RecipientsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('recipientsPage.tableTitle')} icon={Users} />
-                <Card><CardContent className="pt-6"><p className="text-destructive">{t('recipientsPage.error', { msg: error.message })}</p></CardContent></Card>
+                <Card>
+                    <CardContent className="pt-0">
+                        <PageError message={t('recipientsPage.error', { msg: error.message })} />
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -284,7 +290,7 @@ export default function RecipientsPage() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            className="icon-touch-target text-muted-foreground hover:text-foreground"
                             title={t('recipientsPage.unmergeTitle')}
                             onClick={(e) => { e.stopPropagation(); unmergeMutation.mutate(row.id); }}
                             disabled={unmergeMutation.isPending}
@@ -295,7 +301,7 @@ export default function RecipientsPage() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         onClick={async () => {
                             const ok = await confirm({
                                 title: t('recipientsPage.delete.title'),
@@ -350,10 +356,11 @@ export default function RecipientsPage() {
     return (
         <>
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('recipientsPage.tableTitle')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('recipientsPage.tableSubtitle', { n: totalItems })}</p>
-                </div>
+                <PageHeader
+                    title={t('recipientsPage.tableTitle')}
+                    subtitle={t('recipientsPage.tableSubtitle', { n: totalItems })}
+                    icon={Users}
+                />
 
                 <VirtualDataTable
                     title={t('recipientsPage.tableTitle')}
@@ -364,7 +371,13 @@ export default function RecipientsPage() {
                     onRowDoubleClick={(row) => {
                         navigate(`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`);
                     }}
-                    emptyMessage={t('recipientsPage.empty')}
+                    emptyMessage={(
+                        <EmptyState
+                            icon={Users}
+                            title={t('recipientsPage.empty')}
+                            description={t('recipientsPage.tableSubtitle', { n: 0 })}
+                        />
+                    )}
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}
                     onLoadMore={loadMore}

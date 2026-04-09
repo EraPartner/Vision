@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 import { downsampleLTTB } from "@/utils/downsample";
 
@@ -225,7 +226,7 @@ export default function PerformancePage() {
     if (isLoading || filteredSnapshots.length === 0) {
         return (
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
+                <PageHeader title={t('performance.title')} icon={BarChart3} />
                 <Card>
                     <CardContent className="flex items-center justify-center h-48">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -237,12 +238,11 @@ export default function PerformancePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground">{t('performance.title')}</h1>
-                    <p className="text-muted-foreground mt-1">{t('performance.subtitle')}</p>
-                </div>
-            </div>
+            <PageHeader
+                title={t('performance.title')}
+                subtitle={t('performance.subtitle')}
+                icon={BarChart3}
+            />
 
             {/* Period selector */}
             <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">

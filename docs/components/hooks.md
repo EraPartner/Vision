@@ -40,7 +40,6 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | Hook | Description | File |
 |------|-------------|------|
 | `useDebounce()` | Debounce value changes | `useDebounce.ts` |
-| `useToast()` | Toast notifications | `use-toast.ts` |
 | `useIsMobile()` | Responsive breakpoint check | `use-mobile.tsx` |
 
 ### Portfolio Hooks

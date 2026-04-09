@@ -26,6 +26,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentFromMarketDialog } from "@/components/portfolio/AddInvestmentFromMarketDialog";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 import { useSearchParams } from "react-router-dom";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 import { API_BASE_URL } from "@/lib/api";
 
@@ -224,9 +225,7 @@ export default function MarketLookupPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('marketLookup.title')}</h1>
-      </div>
+      <PageHeader title={t('marketLookup.title')} icon={BarChart3} />
 
       {/* Search */}
       <div className="relative max-w-xl">

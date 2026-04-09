@@ -2,8 +2,8 @@ import type { LucideIcon } from "lucide-react";
 
 interface EmptyStateProps {
     icon: LucideIcon;
-    title: string;
-    description?: string;
+    title: React.ReactNode;
+    description?: React.ReactNode;
     action?: React.ReactNode;
 }
 

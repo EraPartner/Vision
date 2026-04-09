@@ -2,7 +2,7 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-04-04
+date: 2026-04-10
 tags: [feature, views, pages, frontend, ui]
 description: Complete overview of all views and pages in the Vision application
 aliases: [views, pages, frontend views, application pages, ui views]
@@ -108,7 +108,7 @@ Full transaction management with advanced filtering and editing.
 - Clearing search (button or character-by-character) updates the query consistently and avoids stale delayed requests.
 - Virtual table rendering uses deferred data (`useDeferredValue`) to keep typing fluid during refreshes.
 
-Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]]
 
 ### Actions
 
@@ -193,7 +193,7 @@ Manage payees and payers (merchants, employers, etc.).
 - Search updates while typing and while removing characters, so broadening a query immediately reflects in the next debounced fetch.
 - Input persistence and clear handling are implemented in `VirtualDataTable` and consumed by `RecipientsPage`.
 
-Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/components/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]]
 
 ### Actions
 
@@ -370,7 +370,7 @@ Track shared expenses and debts between people.
 - **Recipient Table Empty State**: Shows localized empty state text when no recent transactions exist for the recipient
 - **Jump to Source Transaction (Recent Table)**: Double-click a recent transaction row to open Transactions filtered by that row's `transaction_id`
 
-Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
+Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]]
 
 ### Use Cases
 
@@ -390,6 +390,10 @@ Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/compon
 Belgian tax profile and deduction tracking.
 
 ### Features
+
+- **Premium consistency updates**: page-level header/empty-state patterns are standardized across Overview, Stocks, Crypto, Real Estate, Savings, Performance, Net Worth, Exchange Rates, Watchlist, Market Lookup, and Tax pages using shared `PageHeader` and `EmptyState` where applicable
+- **Surface consistency updates**: key summary/KPI cards in Exchange Rates, Recipient Insights, Tax Overview, and Portfolio Tax now use sanctioned surface recipes (`surface-elevated premium-frame micro-lift`) instead of ad-hoc elevated class chains
+- **Touch ergonomics updates**: icon-only actions on portfolio/list/detail flows (including Planned Payments actions and dialog controls) use `icon-touch-target` for consistent hit areas
 
 - **Tax Profile**: Municipality, income details
 - **Cadastral Income**: Property tax tracking
@@ -443,7 +447,7 @@ Investment portfolio management across multiple asset classes.
 - **Refresh Prices**: Update all prices
 - **Default/Reset Currency Source**: Add investment dialog default/reset currency follows `appSettings.defaultCurrency`
 
-Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]]
+Code links: [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/index.css]]
 
 ### Asset Classes
 
@@ -501,6 +505,8 @@ Real-time market data search and quotes.
 
 ### Features
 
+- **Premium consistency updates**: top-level page heading now uses shared `PageHeader` while quote-level heading remains content-scoped
+
 - **Symbol Search**: Find stocks/crypto by name
 - **Quote Details**: Price, change, volume
 - **Fundamentals**: P/E, market cap, dividends
@@ -524,6 +530,8 @@ Track symbols without owning them.
 
 ### Features
 
+- **Premium consistency updates**: page header and empty state use shared primitives, list cards use consistent premium surface recipes, and watchlist toasts run via Sonner (`toast.success` / `toast.error`)
+
 - Add symbols to watchlist
 - View current prices
 - Price alerts (future)
@@ -533,7 +541,7 @@ Track symbols without owning them.
 - Net Worth x-axis month labels follow app language locale (`en-US` / `nl-NL`), while Performance month keys use app date format helpers
 - Runtime-safety hotfix: `formatDisplayCurrency` in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] is defined inside component scope so it closes over in-scope `locale` and `appSettings` (prevents runtime undefined-reference failures)
 
-Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]]
+Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]]
 
 ---
 
@@ -576,6 +584,33 @@ Simple 404 page displayed when no route matches.
 - Uses `useLocation` internally to access the unmatched path
 
 **Code**: [[apps/frontend/src/pages/NotFound.tsx]]
+
+---
+
+## Premium UI Consistency Sweep (April 2026)
+
+Cross-page premium polish now follows shared UI primitives and utility classes for consistent hierarchy, interaction ergonomics, and surface depth.
+
+### What was standardized
+
+- **Page headers**: Top-level page title rows are standardized via `PageHeader` across budgeting and portfolio pages, including key detail subviews where appropriate.
+- **Empty/error states**: Shared `EmptyState` and `PageError` are used in place of bespoke ad-hoc empty/error blocks on high-traffic pages.
+- **Touch ergonomics**: Icon-only actions now use `icon-touch-target` (`2.5rem` hit area) across table rows, dialogs, and detail action bars.
+- **Surface recipes**: Ad-hoc elevated card class chains are replaced in key summary/KPI surfaces by sanctioned recipes (`surface-elevated premium-frame micro-lift`).
+- **Responsive forms**: Remaining narrow fixed two-column filter grids were upgraded to `grid-cols-1 sm:grid-cols-2` in Planned Payments link flow and related import/filter touchpoints.
+- **Toast consistency**: App shell mounts Sonner as the active toaster; watchlist flows were migrated to Sonner toast API.
+- **Toast cleanup completion**: Legacy Radix toast bridge/hook wrappers were removed; Sonner is now the only toast stack in frontend code.
+- **Dashboard surface sweep**: Dashboard page and dashboard chart/stat card wrappers now use sanctioned surface recipes (`surface-elevated premium-frame micro-lift`) for visual consistency with the rest of the app.
+
+### Coverage highlights
+
+- **Budgeting pages**: Transactions, Recipients, Categories, Import, Planned Payments, Owes (including recipient detail actions), Tax Overview, Recipient Insights.
+- **Portfolio pages**: Overview, Stocks, Crypto, Real Estate, Savings, Performance, Net Worth, Exchange Rates, Watchlist, Market Lookup, Portfolio Tax.
+- **Dialogs/components**: SplitTransactionDialog, MergeRecipientsDialog, InvestmentDetailDialog, RecurringDetectionPanel, OnboardingWizard close action.
+
+### Core code links
+
+[[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/index.css]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/CategoriesPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/components/recipients/MergeRecipientsDialog.tsx]], [[apps/frontend/src/components/splits/SplitTransactionDialog.tsx]], [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/package.json]]
 
 ---
 

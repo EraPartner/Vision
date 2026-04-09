@@ -22,7 +22,7 @@ import { Search, Loader2 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 import { API_BASE_URL } from "@/lib/api";
 
@@ -48,7 +48,6 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const debouncedQuery = useDebounce(searchQuery, 300);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -108,10 +107,10 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
       if (!res.ok) throw new Error("Failed to add to watchlist");
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: t('addWatchlist.success') });
+      toast.success(t('addWatchlist.success'));
       handleClose();
-    } catch (err) {
-      toast({ title: t('addWatchlist.error'), description: t('addWatchlist.failed'), variant: 'destructive' });
+    } catch {
+      toast.error(t('addWatchlist.error'), { description: t('addWatchlist.failed') });
     } finally {
       setIsSubmitting(false);
     }
@@ -198,8 +197,8 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label>{t('addWatchlist.assetClass')}</Label>
-                  <Select value={assetClass} onValueChange={(v) => setAssetClass(v as any)}>
+                  <Label>{t('addWatchlist.assetClass')}</Label>
+                  <Select value={assetClass} onValueChange={(v: "stock" | "etf" | "crypto" | "metals") => setAssetClass(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>

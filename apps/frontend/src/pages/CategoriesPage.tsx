@@ -239,7 +239,7 @@ export default function CategoriesPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                            className="icon-touch-target text-muted-foreground hover:text-foreground"
                                                             onClick={(e) => { e.stopPropagation(); openEdit(cat); }}
                                                             title={t('common.edit')}
                                                         >
@@ -248,7 +248,7 @@ export default function CategoriesPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
                                                                 const ok = await confirm({

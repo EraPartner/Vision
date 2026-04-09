@@ -14,6 +14,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useNavigate } from "react-router-dom";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -76,18 +78,19 @@ export default function CryptoPage() {
   if (holdings.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">{t('crypto.title')}</h1>
-          <AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />
-        </div>
+        <PageHeader
+          title={t('crypto.title')}
+          icon={Bitcoin}
+          actions={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
+        />
         <Card className="liquid-glass micro-lift border">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Bitcoin className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">{t('crypto.noCrypto')}</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              {t('crypto.noCryptoDesc')}
-            </p>
-            <AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />
+          <CardContent className="pt-0">
+            <EmptyState
+              icon={Bitcoin}
+              title={t('crypto.noCrypto')}
+              description={t('crypto.noCryptoDesc')}
+              action={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
+            />
           </CardContent>
         </Card>
       </div>
@@ -97,10 +100,11 @@ export default function CryptoPage() {
   return (
     <>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('crypto.title')}</h1>
-        <AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />
-      </div>
+      <PageHeader
+        title={t('crypto.title')}
+        icon={Bitcoin}
+        actions={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -217,13 +221,13 @@ export default function CryptoPage() {
                         <InvestmentDetailDialog 
                           investment={h} 
                           trigger={
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Button variant="ghost" size="icon" className="icon-touch-target">
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
                           }
                         />
                         <AddPortfolioTxnDialog investment={h} />
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                           onClick={async () => { 
                             const ok = await confirm({ 
                               title: t('crypto.deleteAsset'), 

@@ -438,7 +438,7 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                              className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -447,7 +447,7 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
                         >
                           <Trash2 className="h-4 w-4" />

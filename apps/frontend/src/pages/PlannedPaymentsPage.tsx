@@ -272,7 +272,7 @@ export default function PlannedPaymentsPage() {
         <Button
           variant="ghost"
           size="icon"
-          className={`h-8 w-8 ${row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
+          className={`icon-touch-target ${row.is_executed ? "text-accent hover:text-accent" : "text-muted-foreground hover:text-foreground"}`}
             onClick={async (e) => {
               e.stopPropagation();
 
@@ -445,7 +445,7 @@ export default function PlannedPaymentsPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+            className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
             onClick={(e) => { e.stopPropagation(); setEditing(row); setFormOpen(true); }}
             disabled={actionLoading}
           >
@@ -454,7 +454,7 @@ export default function PlannedPaymentsPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={async (e) => {
               e.stopPropagation();
               const ok = await confirm({
@@ -687,7 +687,7 @@ export default function PlannedPaymentsPage() {
             </DialogHeader>
 
             <div className="grid gap-3 py-2">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input placeholder={t('plannedPage.link.searchPlaceholder')} value={txSearchQuery} onChange={(e) => setTxSearchQuery(e.target.value)} />
                   <div className="space-y-1">
                   <DatePicker
@@ -708,7 +708,7 @@ export default function PlannedPaymentsPage() {
 
               {/* Transaction filters (mirrors export filters) */}
               <div className="space-y-3 p-3 border rounded-lg bg-muted/30 mt-2">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="tx-start-date">{t('importPage.startDate')}</Label>
                     <DatePicker
@@ -731,7 +731,7 @@ export default function PlannedPaymentsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="tx-bank-account">{t('importPage.bankAccount')}</Label>
                     <Input id="tx-bank-account" placeholder={t('importPage.bankAccount') || "e.g., Main Account"} value={txFilters.bank_account} onChange={(e) => setTxFilters({ ...txFilters, bank_account: e.target.value })} />
@@ -877,7 +877,7 @@ export default function PlannedPaymentsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="icon-touch-target"
                           title={t('plannedPage.history.openTransaction')}
                           onClick={() => {
                             setHistoryOpen(false);

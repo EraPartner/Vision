@@ -5,15 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, TrendingUp, TrendingDown, Target, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, Target, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { AddToWatchlistDialog } from "@/components/portfolio/AddToWatchlistDialog";
 import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialog";
 import type { WatchlistItem } from "@/types/watchlist";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { toast } from "sonner";
 
 import { API_BASE_URL } from "@/lib/api";
 
@@ -29,7 +31,6 @@ export default function WatchlistPage() {
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -65,7 +66,7 @@ export default function WatchlistPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: t('watchlist.removedSuccess') });
+      toast.success(t('watchlist.removedSuccess'));
     },
   });
 
@@ -89,18 +90,23 @@ export default function WatchlistPage() {
       maximumFractionDigits: appSettings.showDecimalPlaces,
     }).format(value);
 
+  const watchlistEmptyLines = t('watchlist.empty').split('\n');
+  const watchlistEmptyTitle = watchlistEmptyLines[0] ?? t('watchlist.empty');
+  const watchlistEmptyDescriptionLines = watchlistEmptyLines.slice(1);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('watchlist.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('watchlist.subtitle')}</p>
-        </div>
+      <PageHeader
+        title={t('watchlist.title')}
+        subtitle={t('watchlist.subtitle')}
+        icon={Target}
+        actions={
         <Button onClick={() => setAddDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           {t('watchlist.addButton')}
         </Button>
-      </div>
+        }
+      />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -110,16 +116,27 @@ export default function WatchlistPage() {
         </div>
       ) : !data?.items?.length ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Target className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground text-center">
-              {t('watchlist.empty').split('\n').map((line, i) => (
-                <span key={i}>
-                  {line}
-                  {i < t('watchlist.empty').split('\n').length - 1 && <br />}
-                </span>
-              ))}
-            </p>
+          <CardContent className="pt-0">
+            <EmptyState
+              icon={Target}
+              title={watchlistEmptyTitle}
+              description={watchlistEmptyDescriptionLines.length > 0 ? (
+                <>
+                  {watchlistEmptyDescriptionLines.map((line, i) => (
+                    <span key={i}>
+                      {line}
+                      {i < watchlistEmptyDescriptionLines.length - 1 && <br />}
+                    </span>
+                  ))}
+                </>
+              ) : undefined}
+              action={
+                <Button onClick={() => setAddDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('watchlist.addButton')}
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -134,7 +151,7 @@ export default function WatchlistPage() {
               <Card
                 key={item.id}
                 className={cn(
-                  "cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
+                  "surface-elevated premium-frame micro-lift cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
                   isBelowTarget && "ring-2 ring-green-500/50"
                 )}
                 onDoubleClick={() => handleDoubleClick(item)}
@@ -208,7 +225,7 @@ export default function WatchlistPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      className="icon-touch-target text-muted-foreground hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteMutation.mutate(item.id);

@@ -29,6 +29,7 @@ import SuggestedDeductionsCard from "@/components/tax/SuggestedDeductionsCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -222,34 +223,35 @@ export default function TaxOverviewPage() {
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">{t("tax.page.title")}</h1>
-              <p className="text-muted-foreground text-sm mt-1">{t("tax.page.subtitle")}</p>
-              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
-                <Badge variant="secondary">Tax year {profile.taxYear}</Badge>
-                <Badge variant="outline">Region: {profile.region}</Badge>
-                <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
-                <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
-              </div>
-            </div>
-                <div className="flex items-center gap-2">
-                  <TaxProfileDialog
-                    trigger={
-                      <Button variant="default" size="sm" className="gap-2">
-                        <SlidersHorizontal className="h-4 w-4" />
-                        {hasProfile ? t("tax.profile.edit") : t("tax.profile.setup")}
-                      </Button>
-                    }
-                  />
-            <WidgetVisibilityDialog
-              widgets={widgetDefs}
-              isVisible={isVisible}
-              setWidgetVisible={setWidgetVisible}
-              setAllVisible={setAllVisible}
-              resetToDefaults={resetToDefaults}
-            />
-          </div>
+        <PageHeader
+          title={t("tax.page.title")}
+          subtitle={t("tax.page.subtitle")}
+          icon={Landmark}
+          actions={(
+            <>
+              <TaxProfileDialog
+                trigger={
+                  <Button variant="default" size="sm" className="gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    {hasProfile ? t("tax.profile.edit") : t("tax.profile.setup")}
+                  </Button>
+                }
+              />
+              <WidgetVisibilityDialog
+                widgets={widgetDefs}
+                isVisible={isVisible}
+                setWidgetVisible={setWidgetVisible}
+                setAllVisible={setAllVisible}
+                resetToDefaults={resetToDefaults}
+              />
+            </>
+          )}
+        />
+        <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
+          <Badge variant="secondary">Tax year {profile.taxYear}</Badge>
+          <Badge variant="outline">Region: {profile.region}</Badge>
+          <Badge variant="outline">Marginal rate: {calculation.marginalRate.toFixed(0)}%</Badge>
+          <Badge variant="outline">Effective burden: {calculation.effectiveRate.toFixed(1)}%</Badge>
         </div>
 
         <Card className="border-primary/20 bg-primary/5">
@@ -283,7 +285,7 @@ export default function TaxOverviewPage() {
             {isVisible("summaryCards") && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                  <Card key={c.title} className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
                       <c.icon className={`h-4 w-4 ${c.cls}`} />

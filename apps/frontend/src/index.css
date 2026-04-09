@@ -442,6 +442,45 @@ All colors MUST be HSL.
             inset 0 1px 0 hsl(var(--glass-highlight) / 0.18);
     }
 
+    .icon-touch-target {
+        width: 2.5rem;
+        height: 2.5rem;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        border-radius: 0.75rem;
+    }
+
+    .surface-default {
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
+    }
+
+    .surface-elevated {
+        border: 1px solid hsl(var(--border));
+        background: hsl(var(--card));
+        color: hsl(var(--card-foreground));
+        box-shadow:
+            0 1px 2px hsl(var(--foreground) / 0.04),
+            0 4px 12px hsl(var(--foreground) / 0.06),
+            0 12px 28px hsl(var(--foreground) / 0.04);
+    }
+
+    .surface-glass {
+        background:
+            linear-gradient(135deg,
+                hsl(var(--glass-highlight) / 0.58) 0%,
+                hsl(var(--glass-surface) / 0.34) 42%,
+                hsl(var(--glass-surface) / 0.18) 100%);
+        color: hsl(var(--card-foreground));
+        border: 1px solid hsl(var(--glass-border) / 0.56);
+        box-shadow:
+            0 10px 34px hsl(var(--glass-shadow) / 0.16),
+            inset 0 1px 0 hsl(var(--glass-highlight) / 0.72),
+            inset 0 -1px 0 hsl(var(--glass-highlight) / 0.18);
+    }
+
     @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
         .liquid-glass {
             -webkit-backdrop-filter: blur(10px) saturate(170%);
@@ -467,7 +506,11 @@ All colors MUST be HSL.
         .micro-lift,
         .press-feedback,
         .premium-icon-action,
+        .icon-touch-target,
         .premium-frame,
+        .surface-default,
+        .surface-elevated,
+        .surface-glass,
         .liquid-glass,
         .liquid-glass-soft,
         .liquid-glass-hero {

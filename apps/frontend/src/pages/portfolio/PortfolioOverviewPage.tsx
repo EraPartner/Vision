@@ -19,6 +19,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -211,33 +213,36 @@ export default function PortfolioOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('portfolio.overviewTitle')}</h1>
-        <div className="flex items-center gap-2">
-          <WidgetVisibilityDialog
-            widgets={widgetDefs}
-            isVisible={isVisible}
-            setWidgetVisible={setWidgetVisible}
-            setAllVisible={setAllVisible}
-            resetToDefaults={resetToDefaults}
-          />
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
-            {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {t('portfolio.refreshPrices')}
-          </Button>
-          <AddInvestmentDialog />
-        </div>
-      </div>
+      <PageHeader
+        title={t('portfolio.overviewTitle')}
+        icon={PieChartIcon}
+        actions={(
+          <>
+            <WidgetVisibilityDialog
+              widgets={widgetDefs}
+              isVisible={isVisible}
+              setWidgetVisible={setWidgetVisible}
+              setAllVisible={setAllVisible}
+              resetToDefaults={resetToDefaults}
+            />
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
+              {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {t('portfolio.refreshPrices')}
+            </Button>
+            <AddInvestmentDialog />
+          </>
+        )}
+      />
 
       {isEmpty ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <PieChartIcon className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">{t('portfolio.noInvestments')}</h3>
-            <p className="text-muted-foreground text-sm mb-4 max-w-sm">
-              {t('portfolio.noInvestmentsDesc')}
-            </p>
-            <AddInvestmentDialog />
+          <CardContent className="pt-0">
+            <EmptyState
+              icon={PieChartIcon}
+              title={t('portfolio.noInvestments')}
+              description={t('portfolio.noInvestmentsDesc')}
+              action={<AddInvestmentDialog />}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -339,7 +344,7 @@ export default function PortfolioOverviewPage() {
                               <InvestmentDetailDialog investment={inv} />
                               <AddPortfolioTxnDialog investment={inv} />
                               <Button
-                                variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 onClick={async () => {
                                    const ok = await confirm({
                                     title: t('portfolio.deleteInvestment'),

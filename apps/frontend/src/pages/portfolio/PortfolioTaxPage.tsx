@@ -18,6 +18,7 @@ import { TaxProfileDialog } from '@/components/tax/TaxProfileDialog';
 import { PortfolioTaxAdjustmentsDialog } from '@/components/portfolio/PortfolioTaxAdjustmentsDialog';
 import { WidgetVisibilityDialog } from '@/components/shared/WidgetVisibilityDialog';
 import { useWidgetVisibility, type WidgetDefinition } from '@/hooks/useWidgetVisibility';
+import { PageHeader } from '@/components/shared/PageHeader';
 
 type TxnLite = {
   type: string;
@@ -334,35 +335,36 @@ export default function PortfolioTaxPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('tax.portfolioTitle')}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{t('tax.portfolioDesc')}</p>
-          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
-            <Badge variant="secondary">Tax year {txYear}</Badge>
-            <Badge variant="outline">{t('tax.taxes')}: {fmt(totalTaxes)}</Badge>
-            <Badge variant="outline">{t('tax.fees')}: {fmt(totalFees)}</Badge>
-          </div>
-        </div>
+      <PageHeader
+        title={t('tax.portfolioTitle')}
+        subtitle={t('tax.portfolioDesc')}
+        icon={Landmark}
+        actions={(
+          <>
+            <TaxProfileDialog
+              trigger={
+                <Button variant="default" size="sm" className="gap-2">
+                  <Calculator className="h-4 w-4" />
+                  {hasProfile ? t('tax.profile.edit') : t('tax.profile.setup')}
+                </Button>
+              }
+            />
+            <PortfolioTaxAdjustmentsDialog investments={summaries as InvestmentSummary[]} />
+            <WidgetVisibilityDialog
+              widgets={widgetDefs}
+              isVisible={isVisible}
+              setWidgetVisible={setWidgetVisible}
+              setAllVisible={setAllVisible}
+              resetToDefaults={resetToDefaults}
+            />
+          </>
+        )}
+      />
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <TaxProfileDialog
-            trigger={
-              <Button variant="default" size="sm" className="gap-2">
-                <Calculator className="h-4 w-4" />
-                {hasProfile ? t('tax.profile.edit') : t('tax.profile.setup')}
-              </Button>
-            }
-          />
-          <PortfolioTaxAdjustmentsDialog investments={summaries as InvestmentSummary[]} />
-          <WidgetVisibilityDialog
-            widgets={widgetDefs}
-            isVisible={isVisible}
-            setWidgetVisible={setWidgetVisible}
-            setAllVisible={setAllVisible}
-            resetToDefaults={resetToDefaults}
-          />
-        </div>
+      <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
+        <Badge variant="secondary">Tax year {txYear}</Badge>
+        <Badge variant="outline">{t('tax.taxes')}: {fmt(totalTaxes)}</Badge>
+        <Badge variant="outline">{t('tax.fees')}: {fmt(totalFees)}</Badge>
       </div>
 
       {!isEmpty && (
@@ -390,7 +392,7 @@ export default function PortfolioTaxPage() {
           {isVisible('summaryCards') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {cards.map((c) => (
-                <Card key={c.title} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                <Card key={c.title} className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
                     <c.icon className={`h-4 w-4 ${c.cls}`} />

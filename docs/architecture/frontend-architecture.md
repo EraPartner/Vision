@@ -308,7 +308,6 @@ App
 │                   └── LanguageBridge
 │                       └── TooltipProvider
 │                           └── ErrorBoundary
-│                               ├── Toaster
 │                               ├── Sonner
 │                               └── BrowserRouter
 │                                   └── AppLayout

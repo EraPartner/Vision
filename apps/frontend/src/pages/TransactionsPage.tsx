@@ -24,6 +24,8 @@ import { SplitTransactionDialog } from "@/components/splits/SplitTransactionDial
 import type { TransactionUpdate } from "@/types/api";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { PageError } from "@/components/shared/PageError";
 
 type TableTransaction = {
     id: number;
@@ -327,7 +329,11 @@ export default function TransactionsPage() {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('txPage.title')} icon={Receipt} />
-                <Card><CardContent className="pt-6"><p className="text-destructive">{t('txPage.error', { msg: error.message })}</p></CardContent></Card>
+                <Card>
+                    <CardContent className="pt-0">
+                        <PageError message={t('txPage.error', { msg: error.message })} />
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -470,7 +476,7 @@ export default function TransactionsPage() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        className="icon-touch-target text-muted-foreground hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); setInfoTransaction(row); }}
                     >
                         <Info className="h-4 w-4" />
@@ -508,7 +514,7 @@ export default function TransactionsPage() {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDelete(row.id, row.memo || row.recipient)}
                     disabled={deleteMutation.isPending}
                 >
@@ -540,10 +546,11 @@ export default function TransactionsPage() {
     return (
         <>
             <div className="space-y-8 animate-in">
-                <div>
-                    <h2 className="text-3xl font-bold text-foreground">{t('txPage.title')}</h2>
-                    <p className="text-muted-foreground mt-1">{t('txPage.subtitle')}</p>
-                </div>
+                <PageHeader
+                    title={t('txPage.title')}
+                    subtitle={t('txPage.subtitle')}
+                    icon={Receipt}
+                />
 
                 {(transactionIdFilter || recipientIdFilter || categoryIdFilter) && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
@@ -556,7 +563,7 @@ export default function TransactionsPage() {
                                         : `category #${categoryIdFilter}`),
                             })}
                         </span>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={clearFilters}>
+                        <Button variant="ghost" size="icon" className="icon-touch-target ml-auto" onClick={clearFilters}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
@@ -569,18 +576,16 @@ export default function TransactionsPage() {
                     data={transactions}
                     onRowUpdate={handleUpdate}
                     emptyMessage={(
-                        <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <Import className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                            <p className="text-sm font-medium text-foreground mb-1">{t('txPage.empty')}</p>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                {search ? t('txPage.emptySearch') : t('transactions.noTransactions')}
-                            </p>
-                            {!search && (
+                        <EmptyState
+                            icon={Import}
+                            title={t('txPage.empty')}
+                            description={search ? t('txPage.emptySearch') : t('transactions.noTransactions')}
+                            action={!search ? (
                                 <Button asChild size="sm" variant="outline">
                                     <Link to="/import">{t('txPage.importLink')}</Link>
                                 </Button>
-                            )}
-                        </div>
+                            ) : undefined}
+                        />
                     )}
                     totalItems={totalItems}
                     isFetchingMore={isFetchingMore}
@@ -712,7 +717,7 @@ export default function TransactionsPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-7 w-7"
+                                                            className="icon-touch-target"
                                                             onClick={() => { void saveInfoFieldEdit(); }}
                                                             disabled={updateMutation.isPending}
                                                             title={t('common.save')}
@@ -722,7 +727,7 @@ export default function TransactionsPage() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-7 w-7"
+                                                            className="icon-touch-target"
                                                             onClick={() => { setEditingInfoField(null); setEditingInfoValue(""); }}
                                                             disabled={updateMutation.isPending}
                                                             title={t('common.cancel')}
@@ -737,7 +742,7 @@ export default function TransactionsPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                className="icon-touch-target text-muted-foreground hover:text-foreground"
                                                                 onClick={() => startInfoFieldEdit(editField, editValue ?? '')}
                                                                 title={t('common.edit')}
                                                             >

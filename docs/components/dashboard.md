@@ -67,6 +67,14 @@ import { DollarSign } from "lucide-react";
 - Color-coded change indicator
 - Large formatted value with gradient text
 
+### Surface Consistency (April 2026)
+
+- Dashboard stat cards and chart wrapper cards are standardized on sanctioned premium surface recipes:
+  - `surface-elevated premium-frame micro-lift`
+- This replaces ad-hoc elevated class chains (`border-none shadow-lg ... hover:-translate-y-*`) for consistent depth/motion behavior.
+
+Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx]], [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx]], [[apps/frontend/src/index.css]]
+
 ---
 
 ## MonthlyTrendsChart

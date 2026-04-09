@@ -15,6 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -144,7 +145,7 @@ export default function RecipientInsightsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6 p-6">
-        <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
+        <PageHeader title={t('insights.title')} icon={Store} />
         <div className="grid gap-6 md:grid-cols-3">
           {[1, 2, 3].map(i => (
             <Skeleton key={i} className="h-28" />
@@ -158,7 +159,7 @@ export default function RecipientInsightsPage() {
   if (isError || !filteredData) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
+        <PageHeader title={t('insights.title')} icon={Store} />
         <p className="text-muted-foreground mt-2">{t('insights.failedToLoad')}</p>
       </div>
     );
@@ -180,22 +181,21 @@ export default function RecipientInsightsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t('insights.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('insights.subtitle')}</p>
-        </div>
-        {excludedRecipientIds.size > 0 && (
+      <PageHeader
+        title={t('insights.title')}
+        subtitle={t('insights.subtitle')}
+        icon={Store}
+        actions={excludedRecipientIds.size > 0 ? (
           <Badge variant="secondary" className="gap-1.5">
             <Filter className="h-3 w-3" />
             {t('insights.excluded', { n: excludedRecipientIds.size })}
           </Badge>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
@@ -207,7 +207,7 @@ export default function RecipientInsightsPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -217,7 +217,7 @@ export default function RecipientInsightsPage() {
             <p className="text-xs text-muted-foreground">{t('insights.txCount', { n: totalTopTx })}</p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.avgTxn')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />

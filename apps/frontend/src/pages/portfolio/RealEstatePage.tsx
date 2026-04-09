@@ -13,6 +13,8 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 export default function RealEstatePage() {
   const { t } = useLanguage();
@@ -81,18 +83,19 @@ export default function RealEstatePage() {
   if (properties.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
-          <AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />
-        </div>
+        <PageHeader
+          title={t('realestate.title')}
+          icon={Building2}
+          actions={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
+        />
         <Card className="liquid-glass micro-lift border">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">{t('realestate.noProperties')}</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              {t('realestate.noPropertiesDesc')}
-            </p>
-            <AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />
+          <CardContent className="pt-0">
+            <EmptyState
+              icon={Building2}
+              title={t('realestate.noProperties')}
+              description={t('realestate.noPropertiesDesc')}
+              action={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
+            />
           </CardContent>
         </Card>
       </div>
@@ -102,10 +105,11 @@ export default function RealEstatePage() {
   return (
     <>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
-        <AddInvestmentDialog />
-      </div>
+      <PageHeader
+        title={t('realestate.title')}
+        icon={Building2}
+        actions={<AddInvestmentDialog />}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -212,13 +216,13 @@ export default function RealEstatePage() {
                     <InvestmentDetailDialog 
                       investment={p} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="icon-touch-target">
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={p} />
-                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                     <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                       onClick={async () => { 
                         const ok = await confirm({ 
                           title: t('realestate.deleteProperty'), 

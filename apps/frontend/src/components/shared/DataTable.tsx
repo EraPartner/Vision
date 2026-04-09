@@ -254,7 +254,7 @@ export function DataTable<T extends Record<string, any>>({
     };
 
     return (
-        <Card className="premium-frame micro-lift relative overflow-hidden border shadow-lg bg-card">
+        <Card className="surface-elevated premium-frame micro-lift relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16"></div>
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                 <div>
@@ -280,7 +280,7 @@ export function DataTable<T extends Record<string, any>>({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
                             onClick={() => { setLocalSearchQuery(""); if (isServerSearch) onSearchChange!(""); }}
                         >
                             <X className="h-3 w-3" />
@@ -471,7 +471,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-accent hover:text-accent hover:bg-accent/10"
+                                                                className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                                                 onClick={() => saveEditing(idx)}
                                                             >
                                                                 <Check className="h-4 w-4" />
@@ -479,7 +479,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                                className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                                 onClick={cancelEditing}
                                                             >
                                                                 <X className="h-4 w-4" />
@@ -489,7 +489,7 @@ export function DataTable<T extends Record<string, any>>({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                            className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                             onClick={() => startEditing(idx, row)}
                                                         >
                                                             <Pencil className="h-4 w-4" />

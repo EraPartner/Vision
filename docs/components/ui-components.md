@@ -64,11 +64,37 @@ Minimal motion and premium polish utilities:
 - `.press-feedback` for subtle click/tap compression
 - `.premium-icon-action` for premium icon-button hover/focus polish in chrome controls
 - `.premium-frame` for non-glass cards that still need elevated premium depth
+- `.icon-touch-target` for consistent touch-safe icon action hit areas (`2.5rem` square)
+- `.surface-default` / `.surface-elevated` / `.surface-glass` for sanctioned surface recipes used across cards/tables/page sections
 - `liquid-canvas` uses a low-amplitude ambient drift animation with `prefers-reduced-motion` fallback
 
 Shared table shells (`DataTable`, `VirtualDataTable`) now favor `premium-frame` + `micro-lift` (non-glass) for cleaner density and readability.
 
+Reduced-motion behavior also explicitly disables transitions/animations for premium utility classes (including surface aliases and icon touch target) when `prefers-reduced-motion: reduce` is active.
+
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/button.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
+
+## Shared Page Composition Components
+
+Page-level consistency is provided by reusable shared components:
+
+- `PageHeader` for canonical page title/subtitle/icon/actions layout
+- `EmptyState` for standardized empty-state messaging and CTA composition
+- `PageError` for standardized recoverable error presentation
+
+`EmptyState` supports rich content for `title` and `description` via `ReactNode`, enabling multi-line and mixed-content copy while preserving one visual pattern.
+
+Code links: [[apps/frontend/src/components/shared/PageHeader.tsx]], [[apps/frontend/src/components/shared/EmptyState.tsx]], [[apps/frontend/src/components/shared/PageError.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]], [[apps/frontend/src/pages/ImportPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/RecipientInsightsPage.tsx]], [[apps/frontend/src/pages/TaxOverviewPage.tsx]], [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
+
+## Notifications (Toast)
+
+Frontend notification rendering is standardized on Sonner:
+
+- `App` mounts only `Sonner`
+- New and existing flows should use `toast` from `sonner`
+- Legacy Radix toast plumbing (`use-toast` hook wrappers and Radix toaster bridge) has been removed from the frontend package
+
+Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/sonner.tsx]], [[apps/frontend/src/components/portfolio/AddToWatchlistDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/package.json]]
 
 ## Component List
 
@@ -100,7 +126,6 @@ Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/b
 |-----------|-------------|------|
 | Alert | Alert message box | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]] |
 | AlertDialog | Confirmation dialog | [[apps/frontend/src/components/ui/alert-dialog.tsx\|alert-dialog.tsx]] |
-| Toast | Temporary notification | [[apps/frontend/src/components/ui/toast.tsx\|toast.tsx]] |
 | Sonner | Toast notification system | [[apps/frontend/src/components/ui/sonner.tsx\|sonner.tsx]] |
 | Progress | Progress bar | [[apps/frontend/src/components/ui/progress.tsx\|progress.tsx]] |
 | Skeleton | Loading placeholder | [[apps/frontend/src/components/ui/skeleton.tsx\|skeleton.tsx]] |

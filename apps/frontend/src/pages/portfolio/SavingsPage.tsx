@@ -15,6 +15,8 @@ import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 function daysUntil(dateStr?: string) {
   if (!dateStr) return null;
@@ -76,18 +78,19 @@ export default function SavingsPage() {
   if (accounts.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-foreground">{t('savings.title')}</h1>
-          <AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />
-        </div>
+        <PageHeader
+          title={t('savings.title')}
+          icon={PiggyBank}
+          actions={<AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />}
+        />
         <Card className="liquid-glass micro-lift border">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <PiggyBank className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold mb-1">{t('savings.noAccounts')}</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              {t('savings.noAccountsDesc')}
-            </p>
-            <AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />
+          <CardContent className="pt-0">
+            <EmptyState
+              icon={PiggyBank}
+              title={t('savings.noAccounts')}
+              description={t('savings.noAccountsDesc')}
+              action={<AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />}
+            />
           </CardContent>
         </Card>
       </div>
@@ -97,10 +100,11 @@ export default function SavingsPage() {
   return (
     <>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('savings.title')}</h1>
-        <AddInvestmentDialog />
-      </div>
+      <PageHeader
+        title={t('savings.title')}
+        icon={PiggyBank}
+        actions={<AddInvestmentDialog />}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -191,13 +195,13 @@ export default function SavingsPage() {
                     <InvestmentDetailDialog 
                       investment={a} 
                       trigger={
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="icon-touch-target">
                           <Eye className="h-4 w-4" />
                         </Button>
                       }
                     />
                     <AddPortfolioTxnDialog investment={a} />
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                       onClick={async () => { 
                         const ok = await confirm({ 
                           title: t('savings.deleteAccount'), 

@@ -17,6 +17,7 @@ import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-re
 import { cn } from "@/lib/utils";
 import { formatDateWithAppSettings, parseLocalDateFromYmd } from "@/components/shared/dateUtils";
 import { downsampleLTTB } from "@/utils/downsample";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 function fmtDay(date: string, appDateFormat: string) {
   return formatDateWithAppSettings(parseLocalDateFromYmd(date), appDateFormat);
@@ -452,7 +453,7 @@ export default function NetWorthPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
+        <PageHeader title={t('networth.title')} icon={Wallet} />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
             <Card key={i}><CardContent className="pt-6"><Skeleton className="h-16 w-full" /></CardContent></Card>
@@ -466,7 +467,7 @@ export default function NetWorthPage() {
   if (error || !data) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
+        <PageHeader title={t('networth.title')} icon={Wallet} />
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Wallet className="h-12 w-12 text-muted-foreground/40 mb-4" />
@@ -545,16 +546,19 @@ export default function NetWorthPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">{t('networth.title')}</h1>
-        <Badge variant="outline" className={cn(
-          "text-sm px-3 py-1",
-          allTimeChange >= 0 ? "border-accent/30 text-accent" : "border-destructive/30 text-destructive"
-        )}>
-          {allTimeChange >= 0 ? <TrendingUp className="h-3.5 w-3.5 mr-1" /> : <TrendingDown className="h-3.5 w-3.5 mr-1" />}
-          {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
-        </Badge>
-      </div>
+      <PageHeader
+        title={t('networth.title')}
+        icon={Wallet}
+        actions={(
+          <Badge variant="outline" className={cn(
+            "text-sm px-3 py-1",
+            allTimeChange >= 0 ? "border-accent/30 text-accent" : "border-destructive/30 text-destructive"
+          )}>
+            {allTimeChange >= 0 ? <TrendingUp className="h-3.5 w-3.5 mr-1" /> : <TrendingDown className="h-3.5 w-3.5 mr-1" />}
+            {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
+          </Badge>
+        )}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((c) => (

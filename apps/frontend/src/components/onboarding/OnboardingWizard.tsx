@@ -249,7 +249,7 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                             </div>
                             <span className="font-bold text-foreground">Vision</span>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onComplete}>
+                        <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onComplete}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>

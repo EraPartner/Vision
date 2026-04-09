@@ -186,31 +186,32 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
 
     return (
         <div className="space-y-6 animate-in">
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" onClick={onBack}>
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <div>
-                        <h2 className="text-2xl font-bold text-foreground">{recipient.name}</h2>
-                        <p className="text-muted-foreground text-sm">{t('owesPage.outstandingSplits')}</p>
-                    </div>
-                </div>
-                <Button
-                    variant="outline"
-                    onClick={handleSettleAll}
-                    disabled={!items.length || settleAllSplitsByRecipient.isPending}
-                >
-                    {settleAllSplitsByRecipient.isPending ? t('owesPage.settleAll.loading') : t('owesPage.settleAll.button')}
-                </Button>
-                <Button
-                    variant="outline"
-                    onClick={handleExportCsv}
-                    disabled={!items.length || isExportingCsv}
-                >
-                    {isExportingCsv ? t('owesPage.export.loading') : t('owesPage.export.button')}
-                </Button>
-            </div>
+            <PageHeader
+                title={recipient.name}
+                subtitle={t('owesPage.outstandingSplits')}
+                icon={HandCoins}
+                actions={(
+                    <>
+                        <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onBack} title={t('common.back')}>
+                            <ArrowLeft className="h-5 w-5" />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={handleSettleAll}
+                            disabled={!items.length || settleAllSplitsByRecipient.isPending}
+                        >
+                            {settleAllSplitsByRecipient.isPending ? t('owesPage.settleAll.loading') : t('owesPage.settleAll.button')}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={handleExportCsv}
+                            disabled={!items.length || isExportingCsv}
+                        >
+                            {isExportingCsv ? t('owesPage.export.loading') : t('owesPage.export.button')}
+                        </Button>
+                    </>
+                )}
+            />
 
             {isLoading ? (
                 <div className="space-y-3">
@@ -266,21 +267,21 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
                                                     {formatCurrency(split.remaining, defaultCurrency, locale)}
                                                 </span>
                                                 <Button
-                                                    variant="ghost" size="icon" className="h-8 w-8 text-accent hover:text-accent"
+                                                    variant="ghost" size="icon" className="icon-touch-target text-accent hover:text-accent"
                                                     title={t('owesPage.recordPayment')}
                                                     onClick={() => { setPayDialog({ splitId: split.id, remaining: split.remaining }); setPayAmount(String(split.remaining)); }}
                                                 >
                                                     <DollarSign className="h-4 w-4" />
                                                 </Button>
                                                 <Button
-                                                    variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-accent"
+                                                    variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-accent"
                                                     title={t('owesPage.markSettled')}
                                                     onClick={() => settleSplit.mutate(split.id)}
                                                 >
                                                     <Check className="h-4 w-4" />
                                                 </Button>
                                                 <Button
-                                                    variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                    variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive"
                                                     title={t('owesPage.deleteSplit')}
                                                     onClick={() => deleteSplit.mutate(split.id)}
                                                 >

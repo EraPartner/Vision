@@ -383,7 +383,7 @@ export default function DashboardPage() {
                 {/* Stat cards skeleton */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {[...Array(4)].map((_, i) => (
-                        <Card key={i} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                        <Card key={i} className="surface-elevated premium-frame micro-lift">
                             <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
                                 <Skeleton className="h-4 w-28" />
                                 <Skeleton className="h-10 w-10 rounded-xl" />
@@ -475,7 +475,7 @@ export default function DashboardPage() {
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
                 {isVisible('monthlyTrends') && monthlyData.length > 0 && (
-                    <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm">
+                    <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary transition-transform duration-300 group-hover:scale-105">
@@ -499,7 +499,7 @@ export default function DashboardPage() {
                     </Card>
                 )}
                 {isVisible('categoryPie') && (
-                <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm">
+                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-chart-4/20 to-chart-4/5 flex items-center justify-center shadow-sm text-chart-4 transition-transform duration-300 group-hover:scale-105">
@@ -526,7 +526,7 @@ export default function DashboardPage() {
 
             {/* Cash Flow Comparison */}
             {isVisible('cashflowComparison') && effectiveCashflowData && (
-                <Card className="group relative overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 bg-card backdrop-blur-sm lg:col-span-2">
+                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center shadow-sm text-accent transition-transform duration-300 group-hover:scale-105">

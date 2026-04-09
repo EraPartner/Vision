@@ -26,7 +26,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { WatchlistItem } from "@/types/watchlist";
 
 import { API_BASE_URL } from "@/lib/api";
@@ -57,7 +57,6 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   const [selectedRange, setSelectedRange] = useState(RANGES[0]);
   const [editingPrice, setEditingPrice] = useState(false);
   const [newTargetPrice, setNewTargetPrice] = useState("");
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: chartData, isLoading: isChartLoading } = useQuery({
@@ -98,11 +97,11 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       if (!res.ok) throw new Error("Failed to update");
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast({ title: t('watchlist.targetUpdated') });
+      toast.success(t('watchlist.targetUpdated'));
       setEditingPrice(false);
       setNewTargetPrice("");
     } catch {
-      toast({ title: t('common.error'), description: t('watchlist.updateFailed'), variant: "destructive" });
+      toast.error(t('common.error'), { description: t('watchlist.updateFailed') });
     }
   };
 

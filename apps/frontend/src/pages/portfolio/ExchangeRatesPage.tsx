@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 interface ExchangeRate {
     currency: string;
@@ -111,20 +112,21 @@ export default function ExchangeRatesPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground">{t('exchangeRates.title')}</h1>
-                    <p className="text-muted-foreground mt-1">{t('exchangeRates.subtitle')}</p>
-                </div>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
-                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                    {t('exchangeRates.refresh')}
-                </Button>
-            </div>
+            <PageHeader
+                title={t('exchangeRates.title')}
+                subtitle={t('exchangeRates.subtitle')}
+                icon={Database}
+                actions={(
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => refreshMutation.mutate()} disabled={isRefreshing}>
+                        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                        {t('exchangeRates.refresh')}
+                    </Button>
+                )}
+            />
 
             {/* Summary cards */}
             <div className="grid gap-4 sm:grid-cols-3">
-                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Database className="h-4 w-4" /> {t('exchangeRates.storedRates')}
@@ -135,7 +137,7 @@ export default function ExchangeRatesPage() {
                         <p className="text-xs text-muted-foreground">{t('exchangeRates.storedRatesDesc')}</p>
                     </CardContent>
                 </Card>
-                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <Globe className="h-4 w-4" /> {t('exchangeRates.fallbackCurrencies')}
@@ -146,7 +148,7 @@ export default function ExchangeRatesPage() {
                         <p className="text-xs text-muted-foreground">{t('exchangeRates.fallbackCurrenciesDesc')}</p>
                     </CardContent>
                 </Card>
-                <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <RefreshCw className="h-4 w-4" /> {t('exchangeRates.latestFetch')}

@@ -254,7 +254,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
                                             onClick={() => dismiss(pattern.recipientId)}
                                         >
                                             <X className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="icon-touch-target"
                                 onClick={() => setExpanded(!expanded)}
                             >
                                 {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

@@ -29,13 +29,16 @@ import {
   CloudUpload,
   Download,
   File,
+  Landmark,
   Loader2,
+  PencilLine,
   Tags,
   Trash2,
   Upload,
   Users,
   XCircle,
 } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
 
 interface ImportProgress {
   phase: string;
@@ -363,11 +366,11 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-8 animate-in max-w-2xl mx-auto">
-      {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-foreground">{t('importPage.title')}</h2>
-        <p className="text-muted-foreground mt-1">{t('importPage.subtitle')}</p>
-      </div>
+      <PageHeader
+        title={t('importPage.title')}
+        subtitle={t('importPage.subtitle')}
+        icon={Upload}
+      />
 
       {/* Import Card */}
       <Card>
@@ -397,13 +400,21 @@ export default function ImportPage() {
                 ) : adapters.length > 0 ? (
                   adapters.map((adapter) => (
                     <SelectItem key={adapter.key} value={adapter.key}>
-                      🏦 {adapter.name}
+                      <span className="inline-flex items-center gap-2">
+                        <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+                        {adapter.name}
+                      </span>
                     </SelectItem>
                   ))
                 ) : (
                   <SelectItem value="none" disabled>{t('importPage.noParsers')}</SelectItem>
                 )}
-                <SelectItem value="custom">✏️ {t('importPage.customOther')}</SelectItem>
+                <SelectItem value="custom">
+                  <span className="inline-flex items-center gap-2">
+                    <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+                    {t('importPage.customOther')}
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -426,7 +437,7 @@ export default function ImportPage() {
                  {t('importPage.customConfig')}
                </p>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="date-column">{t('importPage.dateCol')}</Label>
                   <Input
@@ -474,7 +485,7 @@ export default function ImportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="recipient-column">{t('importPage.recipientCol')}</Label>
                   <Input
@@ -506,7 +517,7 @@ export default function ImportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="memo-column">{t('importPage.memoCol')}</Label>
                   <Input
@@ -543,7 +554,7 @@ export default function ImportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="encoding">{t('importPage.encoding')}</Label>
                   <Select
@@ -742,7 +753,7 @@ export default function ImportPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           {/* Options row */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="recipient-separator">{t('importPage.separator')}</Label>
               <Select value={recipientSeparator} onValueChange={setRecipientSeparator}>
@@ -838,7 +849,7 @@ export default function ImportPage() {
           </CardHeader>
         <CardContent className="space-y-5">
           {/* Separator option */}
-          <div className="w-1/2 space-y-2">
+          <div className="w-full sm:w-1/2 space-y-2">
             <Label htmlFor="category-separator">{t('importPage.separator')}</Label>
             <Select value={categorySeparator} onValueChange={setCategorySeparator}>
               <SelectTrigger id="category-separator">
@@ -935,7 +946,7 @@ export default function ImportPage() {
           {/* Export filters form */}
           {showExportFilters && (
             <div className="space-y-4 mb-4 p-4 border rounded-lg bg-muted/30">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="start-date">{t('importPage.startDate')}</Label>
                   <DatePicker
@@ -959,7 +970,7 @@ export default function ImportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="bank-account">{t('importPage.bankAccount')}</Label>
                    <Input
