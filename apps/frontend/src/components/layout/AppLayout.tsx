@@ -41,11 +41,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     return (
         <SidebarProvider>
-            <div className="min-h-screen flex w-full">
+            <div className="liquid-canvas relative min-h-screen flex w-full overflow-hidden">
+                <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+                    <div className="absolute -left-24 top-[-8rem] h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+                    <div className="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+                    <div className="absolute bottom-[-10rem] left-1/4 h-72 w-72 rounded-full bg-primary/8 blur-3xl" />
+                </div>
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
-                        className="h-14 border-b border-border/40 bg-background/80 backdrop-blur-md flex items-center px-4 sticky top-0 z-30 supports-[backdrop-filter]:bg-background/60 shadow-[0_1px_3px_0_hsl(var(--foreground)/0.04)]">
+                        className="app-topbar h-14 border-b border-border/60 flex items-center px-4 sticky top-0 z-30">
                         <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
                         <UpdateNotification />
@@ -54,7 +59,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="ml-auto mr-2"
+                                    className="premium-icon-action ml-auto mr-2"
                                     title={t('layout.settings')}
                                     aria-label={t('layout.openSettings')}
                                 >
@@ -129,14 +134,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                             variant="ghost"
                             size="icon"
                             onClick={() => setSettingsOpen(true)}
-                            className="ml-2"
+                            className="premium-icon-action ml-2"
                             title={t('layout.settings')}
                             aria-label={t('layout.openSettings')}
                         >
                             <Settings className="h-5 w-5" />
                         </Button>
                     </header>
-                    <main className="flex-1 p-4 md:p-6 bg-gradient-to-b from-background to-muted/20 min-h-[calc(100vh-3.5rem)]">
+                    <main className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)]">
                         <UpcomingPaymentsNotification />
                         {children}
                     </main>

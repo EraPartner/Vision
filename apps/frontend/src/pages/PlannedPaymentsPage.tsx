@@ -620,7 +620,7 @@ export default function PlannedPaymentsPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+          <Card className="liquid-glass micro-lift border">
               <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
             </CardHeader>
@@ -628,7 +628,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold">{pending}</p>
             </CardContent>
           </Card>
-          <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+          <Card className="liquid-glass micro-lift border">
               <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4" /> {t('plannedPage.executed')}
@@ -638,7 +638,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold text-accent">{executed}</p>
             </CardContent>
           </Card>
-          <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+          <Card className="liquid-glass micro-lift border">
               <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                 <Repeat className="h-4 w-4" /> {t('plannedPage.estMonthly')}
@@ -648,7 +648,7 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
             </CardContent>
           </Card>
-          <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+          <Card className="liquid-glass micro-lift border">
               <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                 <CalendarClock className="h-4 w-4" /> {t('plannedPage.dueThisWeek')}

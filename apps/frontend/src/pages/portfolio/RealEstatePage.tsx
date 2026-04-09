@@ -85,7 +85,7 @@ export default function RealEstatePage() {
           <h1 className="text-3xl font-bold text-foreground">{t('realestate.title')}</h1>
           <AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />
         </div>
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Building2 className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold mb-1">{t('realestate.noProperties')}</h3>
@@ -109,7 +109,7 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <DollarSign className="h-3 w-3" /> {t('portfolio.totalValue')}
@@ -120,7 +120,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
         
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <Home className="h-3 w-3" /> {t('portfolio.totalCost')}
@@ -131,7 +131,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
         
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> {t('portfolio.appreciation')}
@@ -144,7 +144,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
         
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
@@ -154,7 +154,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <Percent className="h-3 w-3" /> {t('portfolio.yield')}
@@ -166,7 +166,7 @@ export default function RealEstatePage() {
           </CardContent>
         </Card>
         
-        <Card className={cn("border-none border-l-4 shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+        <Card className={cn("liquid-glass micro-lift border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>

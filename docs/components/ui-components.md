@@ -2,7 +2,7 @@
 title: UI Components
 type: component
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [components, ui, radix, shadcn]
 description: Reusable UI components built on Radix UI primitives with Tailwind CSS
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
@@ -16,6 +16,59 @@ Vision uses a comprehensive set of UI components built on [Radix UI](https://rad
 ## Overview
 
 All UI components are located in `apps/frontend/src/components/ui/` and are based on [shadcn/ui](https://ui.shadcn.com) design patterns.
+
+## Surface Styling (Liquid Glass)
+
+The UI primitives use a shared liquid-glass surface system defined in [[apps/frontend/src/index.css\|index.css]]:
+
+- `.liquid-glass` — stronger frosted surface for overlays and selected surfaces
+- `.liquid-glass-soft` — softer frosted surface for subtle controls/shell areas
+- `.liquid-glass-hero` — enhanced high-emphasis glass surface for spotlight widgets
+- `.liquid-glass-trend-up` / `.liquid-glass-trend-down` — trend-tinted glass variants used for performance semantics
+
+The utilities include a graceful fallback for environments without `backdrop-filter` and automatically adapt in dark mode via `--glass-*` tokens.
+
+Current recipe aligns more closely with Glass UI-style glassmorphism:
+
+- vivid layered gradient canvas behind translucent surfaces (`.liquid-canvas`)
+- semitransparent glass panels with brighter top highlight and soft edge border
+- moderate blur + saturation for readability-first depth (`blur(10px) saturate(170%)`)
+
+Applied defaults:
+
+- `Card` root uses standard app surface (`bg-card`) and does not force glass globally ([[apps/frontend/src/components/ui/card.tsx\|card.tsx]])
+- `Button` `outline` and `secondary` variants use `.liquid-glass-soft` ([[apps/frontend/src/components/ui/button.tsx\|button.tsx]])
+- Overlay content surfaces (`Dialog`, `Sheet`, `Popover`, `DropdownMenu`) use `.liquid-glass`
+  ([[apps/frontend/src/components/ui/dialog.tsx\|dialog.tsx]], [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]], [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]], [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]])
+
+Overlay positioning safety:
+
+- shared glass utilities no longer force `position: relative`, preventing conflicts with Radix overlays that require `fixed` positioning
+- `Dialog` and `Sheet` content explicitly use `!fixed` to guarantee modal visibility with backdrop
+
+Hero usage:
+
+- Dashboard stat cards use `.liquid-glass-hero` for stronger foreground hierarchy
+  ([[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]])
+
+Selective summary-card usage:
+
+- summary cards in Statistics, Planned Payments, Portfolio Overview, Net Worth, and investment pages (Stocks/Crypto/Real Estate/Savings, including Metals via Stocks reuse) now use `.liquid-glass` with subtle `micro-lift`
+- Performance metric cards use `.liquid-glass` plus trend tints (`.liquid-glass-trend-up` / `.liquid-glass-trend-down`) to preserve green/red semantics
+
+Code links: [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]]
+
+Minimal motion and premium polish utilities:
+
+- `.micro-lift` for very small hover elevation
+- `.press-feedback` for subtle click/tap compression
+- `.premium-icon-action` for premium icon-button hover/focus polish in chrome controls
+- `.premium-frame` for non-glass cards that still need elevated premium depth
+- `liquid-canvas` uses a low-amplitude ambient drift animation with `prefers-reduced-motion` fallback
+
+Shared table shells (`DataTable`, `VirtualDataTable`) now favor `premium-frame` + `micro-lift` (non-glass) for cleaner density and readability.
+
+Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/button.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
 
 ## Component List
 
@@ -183,6 +236,8 @@ Content container with header, content, and footer sections.
 - `CardDescription` - Description text
 - `CardContent` - Main content
 - `CardFooter` - Footer/actions
+
+`Card` uses standard app surface defaults and glass can be applied selectively via `className` utilities.
 
 ---
 

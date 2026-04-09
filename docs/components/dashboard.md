@@ -2,7 +2,7 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [components, dashboard, charts, widgets]
 description: Dashboard-specific components for financial overview and visualization
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -62,6 +62,7 @@ import { DollarSign } from "lucide-react";
 ### Visual Features
 
 - Gradient background based on trend type
+- Hero glass treatment (`.liquid-glass-hero`) for stronger emphasis over standard cards
 - Animated hover effect (lift + shadow)
 - Color-coded change indicator
 - Large formatted value with gradient text
@@ -233,6 +234,8 @@ interface BankBalancesWidgetProps {
 - Date range of transactions
 - Currency formatting
 - Integer transaction counts use app locale formatter for consistent separators/grouping
+- Total net-position card now uses non-glass `premium-frame` treatment for clearer hierarchy against dashboard hero stat cards
+- Per-account balance cards use a subtle `premium-frame` treatment (non-glass) to keep dense data readable
 
 Code links: [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
 

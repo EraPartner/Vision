@@ -2,7 +2,7 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-03-18
+date: 2026-04-09
 tags: [components, layout, navigation]
 description: Core layout components including sidebar, header, and app structure
 aliases: [layout, app layout, sidebar, navigation]
@@ -57,6 +57,7 @@ function App() {
 - Workspace context provider
 - Notification system integration
 - Dark/light theme support
+- Subtle ambient gradient backdrop accents with a premium non-glass top header surface
 
 ### Props
 
@@ -272,3 +273,11 @@ function WorkspaceSwitcher() {
 - [[docs/features/views]] - All views
 - [[docs/i18n/index]] - Internationalization
 - [[docs/components/state-management|State Management]] - Context providers
+
+## Visual Surface Notes
+
+`AppLayout` uses a dedicated `liquid-canvas` layered gradient backdrop for Glass UI-style depth while keeping the top header intentionally non-glass via `app-topbar` for a cleaner premium chrome.
+
+The canvas includes a very subtle ambient drift animation and respects reduced-motion preferences.
+
+Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/index.css]]

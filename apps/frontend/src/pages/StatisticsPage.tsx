@@ -122,7 +122,7 @@ function SummaryCards({ data }: { data: StatisticsData }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger">
       {cards.map((card) => (
-        <Card key={card.title} className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card key={card.title} className="liquid-glass micro-lift border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
             <card.icon className={`h-4 w-4 ${card.className}`} />

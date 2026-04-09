@@ -100,7 +100,7 @@ export function BankBalancesWidget() {
     return (
         <div className="space-y-4">
             {/* Total Net Position Card */}
-            <Card className="relative overflow-hidden border-none shadow-lg bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm">
+            <Card className="premium-frame micro-lift group relative overflow-hidden border shadow-lg bg-gradient-to-br from-primary/10 to-primary/5">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -mr-16 -mt-16" />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                     <CardTitle className="text-sm font-semibold text-muted-foreground">
@@ -128,7 +128,7 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="group border shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                            <Card key={acct.bank_account} className="premium-frame group border shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">

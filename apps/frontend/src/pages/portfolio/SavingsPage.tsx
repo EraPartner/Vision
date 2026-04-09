@@ -80,7 +80,7 @@ export default function SavingsPage() {
           <h1 className="text-3xl font-bold text-foreground">{t('savings.title')}</h1>
           <AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />
         </div>
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <PiggyBank className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold mb-1">{t('savings.noAccounts')}</h3>
@@ -104,7 +104,7 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <DollarSign className="h-3 w-3" /> {t('portfolio.totalBalance')}
@@ -115,7 +115,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
         
-        <Card className="border-none shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <Percent className="h-3 w-3" /> {t('portfolio.avgInterestRate')}
@@ -126,7 +126,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="liquid-glass micro-lift border">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> {t('portfolio.interestEarned')}
@@ -137,7 +137,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
         
-        <Card className="border-none border-l-4 border-l-primary shadow-lg card-elevated hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="liquid-glass micro-lift border-l-4 border-l-primary">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
           </CardHeader>

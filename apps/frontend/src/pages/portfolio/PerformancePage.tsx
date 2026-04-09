@@ -525,15 +525,13 @@ function MetricCard({
     title: string; value: string; subtitle: string;
     icon: React.ComponentType<{ className?: string }>; trend: boolean;
 }) {
-    const gradient = trend
-        ? "from-emerald-500/10 to-green-500/5"
-        : "from-rose-500/10 to-red-500/5";
     const iconBg = trend
         ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
         : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
+    const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
 
     return (
-        <Card className={`relative overflow-hidden border-none shadow-lg bg-gradient-to-br ${gradient} backdrop-blur-sm`}>
+        <Card className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-lg`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
