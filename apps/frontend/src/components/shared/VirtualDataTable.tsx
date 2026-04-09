@@ -44,6 +44,8 @@ interface VirtualDataTableProps<T> {
     onLoadMore?: () => void;
     /** Whether there are more items to load */
     hasMore?: boolean;
+    /** Number of rows from the end before triggering onLoadMore */
+    loadMoreOffset?: number;
     /** Server-side search callback */
     onSearchChange?: (query: string) => void;
     searchValue?: string;
@@ -87,6 +89,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     isFetchingMore = false,
     onLoadMore,
     hasMore = false,
+    loadMoreOffset = 15,
     onSearchChange,
     searchValue,
     onSortChange,
@@ -293,6 +296,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
 
     // Virtualizer
     const parentRef = useRef<HTMLDivElement>(null);
+    const loadRequestedForLengthRef = useRef<number | null>(null);
     const virtualizer = useVirtualizer({
         count: processedData.length,
         getScrollElement: () => parentRef.current,
@@ -300,18 +304,40 @@ export function VirtualDataTable<T extends Record<string, any>>({
         overscan: 10,
     });
 
-    // Infinite scroll: load more when near bottom
-    useEffect(() => {
+    const maybeLoadMore = useCallback(() => {
         if (!onLoadMore || !hasMore || isFetchingMore) return;
 
-        const items = virtualizer.getVirtualItems();
-        if (items.length === 0) return;
+        const parentEl = parentRef.current;
+        if (!parentEl) return;
 
-        const lastItem = items[items.length - 1];
-        if (lastItem && lastItem.index >= processedData.length - 15) {
-            onLoadMore();
-        }
-    }, [virtualizer.getVirtualItems(), processedData.length, onLoadMore, hasMore, isFetchingMore]);
+        const distanceToBottom = parentEl.scrollHeight - (parentEl.scrollTop + parentEl.clientHeight);
+        const thresholdPx = Math.max(1, loadMoreOffset) * rowHeight;
+
+        if (distanceToBottom > thresholdPx) return;
+
+        if (loadRequestedForLengthRef.current === processedData.length) return;
+        loadRequestedForLengthRef.current = processedData.length;
+        onLoadMore();
+    }, [onLoadMore, hasMore, isFetchingMore, loadMoreOffset, rowHeight, processedData.length]);
+
+    useEffect(() => {
+        loadRequestedForLengthRef.current = null;
+    }, [processedData.length]);
+
+    // Infinite scroll: trigger load checks from actual scroll events only.
+    useEffect(() => {
+        const parentEl = parentRef.current;
+        if (!parentEl || !onLoadMore) return;
+
+        const handleScroll = () => {
+            maybeLoadMore();
+        };
+
+        parentEl.addEventListener("scroll", handleScroll, { passive: true });
+        return () => {
+            parentEl.removeEventListener("scroll", handleScroll);
+        };
+    }, [onLoadMore, maybeLoadMore]);
 
     const startEditing = (idx: number, row: T) => {
         setEditingRow(idx);

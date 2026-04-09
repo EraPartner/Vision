@@ -48,6 +48,7 @@ export default function TransactionsPage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const pageSize = appSettings.defaultPageSize;
+    const loadMoreOffset = Math.min(50, Math.max(15, Math.floor(pageSize / 5)));
     const [searchParams, setSearchParams] = useSearchParams();
     const [showAll, setShowAll] = useState(false);
     const [search, setSearch] = useState("");
@@ -585,6 +586,7 @@ export default function TransactionsPage() {
                     isFetchingMore={isFetchingMore}
                     onLoadMore={loadMore}
                     hasMore={hasMoreRef.current}
+                    loadMoreOffset={loadMoreOffset}
                     onSearchChange={setSearch}
                     searchValue={search}
                     onSortChange={handleSortChange}
