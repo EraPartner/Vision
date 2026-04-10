@@ -1,22 +1,22 @@
 # AGENTS.md - Vision Project Guidelines
 
-File: guidelines for agentic coding agents in this repo.
+This file provides guidelines for agentic coding agents working in this repository.
 
 ## Quick Start
 
-1. **Read docs first** — Search Obsidian KB (`docs/`) before touching code
-2. **Follow conventions** — Match existing patterns; no new ones
+1. **Read docs first** — Search the Obsidian KB (`docs/`) before touching code
+2. **Follow conventions** — Match existing patterns; do not introduce new ones
 3. **Write tests** — All new features and bug fixes need test coverage
 4. **Update docs** — Call `vision-kb-updater` after every code change
-5. **Commit when asked** — Never commit unless user explicitly requests it
+5. **Commit when asked** — Never commit unless the user explicitly requests it
 
 ## Agent Usage Rules
 
 ### Subagent-Only Usage
 
-Agents are **specialized subagents** — each has strict, narrow purpose. Main agent must delegate to correct subagent per task. Never use agent outside defined scope:
+Agents are **specialized subagents** — each has a strict, narrow purpose. The main agent must delegate to the correct subagent for each task. Never use an agent outside its defined scope:
 
-**Invocation rule:** For `vision-kb-updater` only, invoke directly as custom subagent (`subagent_type: "vision-kb-updater"` from `.opencode/agent/vision-kb-updater.md`). Do **not** load via Awesome instruction loaders/search. Keep standard loading for all other agents/instructions.
+**Invocation rule:** For `vision-kb-updater` only, invoke it directly as a custom subagent (`subagent_type: "vision-kb-updater"` from `.opencode/agent/vision-kb-updater.md`). Do **not** try to load it via Awesome instruction loaders/search. Keep standard loading behavior for all other agents/instructions.
 
 | Agent                        | Use For                                                          | Do NOT Use For                           |
 | ---------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
@@ -30,20 +30,20 @@ Agents are **specialized subagents** — each has strict, narrow purpose. Main a
 
 ### Knowledge Base Workflow
 
-**Before any code changes or architectural decisions, agents MUST learn codebase:**
+**Before making any code changes or architectural decisions, agents MUST learn about the codebase:**
 
-1. **Search Obsidian KB first** via Obsidian MCP tools:
+1. **Search the Obsidian knowledge base first** using Obsidian MCP tools:
    - `mcp-obsidian_obsidian_simple_search` — Full-text search across all docs
    - `mcp-obsidian_obsidian_complex_search` — Query by tags, paths, frontmatter
-   - `mcp-obsidian_obsidian_list_files_in_dir` — List docs in specific folder
+   - `mcp-obsidian_obsidian_list_files_in_dir` — List docs in a specific folder
    - `mcp-obsidian_obsidian_get_file_contents` — Read specific doc files
 
-2. **Check relevant docs** — See **Knowledge Base** section below for full structure. Key entry points:
-   - `docs/common-tasks.md` — Task-oriented quick reference (start here if you know what to do)
+2. **Check relevant documentation** — See the **Knowledge Base** section below for the full structure. Key entry points:
+   - `docs/common-tasks.md` — Task-oriented quick reference (start here if you know what you want to do)
    - `docs/glossary.md` — Terminology with aliases and search tips
    - `docs/getting-started.md` — New developer onboarding map
    - `docs/adr/` — Architecture Decision Records (read before architectural changes)
-   - `docs/api/` — API docs (check before creating/modifying endpoints)
+   - `docs/api/` — API documentation (check before creating/modifying endpoints)
    - `docs/features/` — Feature docs (understand existing behavior)
    - `docs/guides/` — How-to guides and patterns
    - `docs/reference/` — Code patterns, scripts, environment variables
@@ -55,13 +55,13 @@ Agents are **specialized subagents** — each has strict, narrow purpose. Main a
 
 4. **Update after changes:**
    - Call `vision-kb-updater` subagent after completing code changes
-   - Keeps docs in sync with implementation
+   - This keeps docs in sync with implementation
 
-**Rationale:** KB contains architectural decisions, API contracts, feature specs, system diagrams. Skipping leads to duplicated work, inconsistent patterns, broken contracts.
+**Rationale:** The knowledge base contains architectural decisions, API contracts, feature specifications, and system diagrams. Skipping this step leads to duplicated work, inconsistent patterns, and broken contracts.
 
 ## Project Overview
 
-Vision: financial transaction management app with:
+Vision is a financial transaction management application with:
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + Radix UI
 - **Backend**: Node.js (Bun) + Express + PostgreSQL
@@ -72,14 +72,14 @@ Vision: financial transaction management app with:
 
 ### Monorepo Structure
 
-Bun workspaces monorepo, two packages:
+This is a Bun workspaces monorepo with two packages:
 
 | Package                              | Path                 | Description                |
 | ------------------------------------ | -------------------- | -------------------------- |
 | `vision-frontend`                    | `apps/frontend/`     | React frontend application |
 | `financial-transaction-manager-node` | `apps/node-backend/` | Node.js backend API        |
 
-For filtered commands, use workspace names:
+When running filtered commands, use the workspace names:
 
 ```bash
 bun run --filter 'vision-frontend' <script>
@@ -88,17 +88,17 @@ bun run --filter 'financial-transaction-manager-node' <script>
 
 ## Terminology
 
-See `docs/glossary.md` for complete glossary with aliases and search tips. Key terms:
+See `docs/glossary.md` for the complete glossary with aliases and search tips. Key terms:
 
-- **Transaction**: Financial record (negative = expense, positive = income).
-- **Category**: Label in `GENERAL:DETAIL` format (e.g., `FOOD:GROCERIES`).
-- **Recipient**: Person or entity on a transaction (payee or payer).
-- **Planned Transaction**: Future-dated transaction, optionally recurring.
+- **Transaction**: A financial record (negative = expense, positive = income).
+- **Category**: A label in `GENERAL:DETAIL` format (e.g., `FOOD:GROCERIES`).
+- **Recipient**: The person or entity associated with a transaction (payee or payer).
+- **Planned Transaction**: A future-dated transaction, optionally recurring.
 - **Import**: Bringing transaction data from external bank CSV files.
-- **Export**: Generating CSV of transaction data.
-- **Portfolio**: Collection of investments (stocks, crypto, real estate, savings, bonds).
-- **Split**: Division of transaction amount among multiple recipients.
-- **Bank Adapter**: Code parsing a specific bank's CSV format.
+- **Export**: Generating a CSV file of transaction data.
+- **Portfolio**: A collection of investments (stocks, crypto, real estate, savings, bonds).
+- **Split**: Division of a transaction amount among multiple recipients.
+- **Bank Adapter**: Code that parses a specific bank's CSV format.
 
 ## Build Commands
 
@@ -143,7 +143,7 @@ bun run validate-locales       # Validate locale file integrity
 
 ### Database Commands
 
-Requires Python venv with Alembic installed (`venv/`).
+Requires a Python virtual environment with Alembic installed (`venv/`).
 
 ```bash
 bun run db:setup         # Setup PostgreSQL
@@ -188,8 +188,8 @@ bun run electron:clean   # Desktop app with clean compose
 ### TypeScript (Frontend)
 
 - **Strict mode** enabled in `tsconfig.json`
-- Interfaces for props, state, component definitions
-- Union types for component variants and states
+- Use interfaces for props, state, and component definitions
+- Use union types for component variants and states
 - Path alias: `@/*` maps to `apps/frontend/src/*`
 - Enable `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`
 - Validate inputs with Zod
@@ -197,7 +197,7 @@ bun run electron:clean   # Desktop app with clean compose
 ### JavaScript/Node.js (Backend)
 
 - **ES2022+** features, ESM modules
-- `async/await` for all async code
+- Use `async/await` for all asynchronous code
 - **Never use `null`** — use `undefined` for optional values
 - Prefer functions over classes
 - No comments unless absolutely necessary
@@ -207,16 +207,16 @@ bun run electron:clean   # Desktop app with clean compose
 
 - Functional components with hooks as default
 - PascalCase for components, camelCase for functions/variables
-- Custom hooks for reusable stateful logic
-- Single responsibility principle
-- Proper prop validation with TypeScript
-- React Query (`@tanstack/react-query`) for server state
+- Use custom hooks for reusable stateful logic
+- Follow single responsibility principle
+- Implement proper prop validation with TypeScript
+- Use React Query (`@tanstack/react-query`) for server state
 
 ### Styling
 
 - Tailwind CSS with `tailwind-merge` and `clsx`
-- `class-variance-authority` for component variants
-- Mobile-first responsive design
+- Use `class-variance-authority` for component variants
+- Follow mobile-first responsive design
 
 ### ESLint Rules
 
@@ -226,14 +226,14 @@ bun run electron:clean   # Desktop app with clean compose
 
 ### Error Handling
 
-- Error Boundaries for component-level errors
-- Proper error states in data fetching
+- Implement Error Boundaries for component-level errors
+- Use proper error states in data fetching
 - Handle async errors in effects and event handlers
-- Meaningful error messages to users
+- Provide meaningful error messages to users
 
 ## Existing Agent Instructions
 
-Load from Awesome MCP server via `awesome-copilot_load_instruction` **before** writing code in relevant area:
+Load these from the Awesome MCP server using `awesome-copilot_load_instruction` **before** writing code in the relevant area:
 
 - `nodejs-javascript-vitest.instructions.md` — Load before writing backend code
 - `reactjs.instructions.md` — Load before writing frontend React components
@@ -245,21 +245,21 @@ Load from Awesome MCP server via `awesome-copilot_load_instruction` **before** w
 
 - Located in `alembic/versions/`
 - Create migrations with: `bun run db:revision -- "message"`
-- Test migrations locally before committing
+- Always test migrations locally before committing
 - Provide rollback plan for schema changes
-- Don't execute migrations automatically; let users handle that
+- Don't execute migrations automatically; let the users handle that
 
 ### Testing Guidelines
 
 - Write tests for all new features and bug fixes
 - Cover edge cases and error handling
-- Never modify original code to ease testing
-- Vitest for backend unit/integration tests
+- Never modify original code to make testing easier
+- Use Vitest for backend unit/integration tests
 
 ### API Design
 
 - RESTful endpoints in Express
-- Proper HTTP status codes
+- Use proper HTTP status codes
 - Validate inputs with Zod on frontend
 
 ## Key File Locations
@@ -279,7 +279,7 @@ Load from Awesome MCP server via `awesome-copilot_load_instruction` **before** w
 
 ## Knowledge Base
 
-Docs KB in `docs/` — designed for Obsidian and AI agent usage.
+The project has a documentation knowledge base in `docs/` designed for Obsidian and AI agent usage.
 
 ### Structure
 
@@ -303,7 +303,7 @@ Docs KB in `docs/` — designed for Obsidian and AI agent usage.
 
 ### Knowledge Base Maintenance
 
-**After any code changes, agents MUST call `vision-kb-updater` subagent** (`.opencode/agent/vision-kb-updater.md`). Keeps docs in sync. Updater will:
+**After completing any code changes, agents MUST call the `vision-kb-updater` subagent** (`.opencode/agent/vision-kb-updater.md`). This ensures docs stay in sync with implementation. The updater will:
 
 1. Identify what changed based on modified files
 2. Update existing docs to reflect changes
@@ -312,27 +312,27 @@ Docs KB in `docs/` — designed for Obsidian and AI agent usage.
 5. Update frontmatter dates
 6. Update UML diagrams if relevant
 
-**Mandatory** — all agents call KB updater before finishing.
+**This is mandatory** — all agents should call the KB updater before finishing their run.
 
 ## Environment Variables
 
-- Copy `.env` to `.env.local` for local dev
+- Copy `.env` to `.env.local` for local development
 - `VITE_API_URL` — Backend API URL (defaults to `http://localhost:3002`)
-- See `docs/reference/environment-variables.md` for complete reference
+- See `docs/reference/environment-variables.md` for the complete reference
 
 ## Security Guidelines
 
 - **Never commit secrets** — Use `.env.local` (gitignored) for all credentials
 - **Never log sensitive data** — No API keys, tokens, passwords, or PII in logs
-- **Validate all inputs** — Zod on frontend, server-side validation on backend
-- **Least privilege** — DB users get minimal required permissions
+- **Validate all inputs** — Use Zod on frontend, server-side validation on backend
+- **Follow least privilege** — Database users should have minimal required permissions
 - **Rate limit public endpoints** — Protect against abuse
-- **Audit dependencies** — Check for vulnerabilities before adding packages
+- **Audit dependencies** — Check for known vulnerabilities before adding packages
 
 ## When Stuck
 
-If docs and code unclear:
+If docs and code are unclear:
 
 1. Check `docs/troubleshooting.md` for known issues
 2. Search `docs/reference/error-codes.md` for error context
-3. Ask user for clarification rather than guessing
+3. Ask the user for clarification rather than guessing

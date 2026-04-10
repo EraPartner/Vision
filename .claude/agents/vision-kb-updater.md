@@ -55,25 +55,17 @@ When called after code changes:
 4. **Ensure consistency** — cross-check related docs, verify wiki-links work, update index files
 5. **Update UML diagrams when relevant** — see diagram section below
 
-## Obsidian Operations
+## Obsidian Operations (MCP Preferred)
 
-Use the `obsidian` CLI (from the `obsidian:obsidian-cli` skill) to interact with the live vault when Obsidian is open:
+Use Obsidian MCP tools first when available:
 
-```bash
-# Search across all vault notes
-obsidian vault="Vision" search query="portfolio performance"
+1. `obsidian_simple_search` / `obsidian_complex_search` to find relevant docs, tags, and cross-references
+2. `obsidian_list_files_in_dir` to confirm section coverage (API/features/ADR/indexes)
+3. `obsidian_get_file_contents` to read notes
+4. `obsidian_patch_content` / `obsidian_append_content` to update notes in place
+5. `obsidian_delete_file` only for intentional cleanup of obsolete docs
 
-# Read a specific note
-obsidian vault="Vision" read path="docs/features/portfolio.md"
-
-# Append to an existing note
-obsidian vault="Vision" append path="docs/features/portfolio.md" content="## Recent changes\n..."
-
-# Create a new note from a template
-obsidian vault="Vision" create name="ADR-042-new-decision" template="ADR Template" silent
-```
-
-Fall back to direct file Read/Write/Edit tools when Obsidian is not running.
+If Obsidian MCP is unavailable (for example, connection errors), fall back to direct file `Read`/`Write`/`Edit` tools and continue. In your final output, state where fallback was used.
 
 ## Obsidian Markdown Conventions
 
@@ -85,6 +77,14 @@ Follow the `obsidian:obsidian-markdown` skill for correct syntax. Key rules for 
 - Callouts for important notes: `> [!warning]`, `> [!info]`, `> [!tip]`
 - ADRs are **append-only** — never rewrite a past decision; add a new one that supersedes it
 - Use dataview queries in index files for dynamic listings
+
+## Backlinks and Dataview Expectations
+
+- Backlinks: ensure each new or heavily updated doc is linked from at least one relevant index/MOC note and at least one related feature/API/guide note
+- `## Related` sections: add meaningful bidirectional links so docs are discoverable through the graph
+- Dataview: prefer dynamic index listings based on frontmatter (`type`, `status`, `tags`, `date`) instead of static lists when practical
+- If a new doc does not appear in an expected Dataview listing, update frontmatter first, then adjust the query if needed
+- Avoid orphan notes: every doc should be reachable through links and/or Dataview indexes
 
 ## Diagram Updates
 
@@ -105,4 +105,5 @@ Embed updated diagrams in the relevant architecture doc using fenced ` ```plantu
 ## Output
 
 - Summary of what docs were changed/added
+- Whether Obsidian MCP was used, and where fallback file tools were used (if any)
 - Any gaps that need human attention

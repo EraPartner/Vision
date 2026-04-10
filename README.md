@@ -7,12 +7,11 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" /></a>
-  <a href="https://github.com/EraPartner/Vision/releases"><img src="https://img.shields.io/github/v/release/EraPartner/Vision" alt="Latest release" /></a>
-  <a href="https://github.com/EraPartner/Vision/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/EraPartner/Vision/release.yml?label=release" alt="Release workflow status" /></a>
   <a href="https://github.com/EraPartner/Vision/stargazers"><img src="https://img.shields.io/github/stars/EraPartner/Vision?style=social" alt="GitHub stars" /></a>
   <img src="https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB" alt="Frontend: React + TypeScript" />
   <img src="https://img.shields.io/badge/Backend-Node.js%20(Express)-339933" alt="Backend: Node.js + Express" />
   <img src="https://img.shields.io/badge/Runtime-Bun-black" alt="Runtime: Bun" />
+  <img src="https://img.shields.io/badge/Monorepo-Bun%20workspaces-black" alt="Monorepo: Bun workspaces" />
   <img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1" alt="Database: PostgreSQL" />
   <img src="https://img.shields.io/badge/Desktop-Electron-47848F" alt="Desktop: Electron" />
   <img src="https://img.shields.io/badge/i18n-EN%20%7C%20NL-success" alt="Languages: EN | NL" />
@@ -34,22 +33,26 @@ Most finance apps trade convenience for privacy. Vision gives you both:
 ## Feature Highlights
 
 ### 💳 Transactions & Imports
+
 - Import CSV data from **Belfius, Revolut, KBC, SABB, Wise**, plus a **generic CSV mapper**
 - Fast filtering, categorization, deduplication, and recurring pattern detection
 - Manual transaction entry when you need quick edits
 
 ### 📅 Budgeting & Planned Payments
+
 - Categories and recipients with rules and exclusions
 - Planned/recurring payments with forecasting and execution history
 - Dashboard widgets for account-level visibility and cash position tracking
 
 ### 📈 Portfolio & Net Worth
+
 - Track **stocks, crypto, real estate, savings, bonds**
 - Monitor net worth and performance over time
 - Use market lookup/watchlist features for portfolio decision support
 - Currency conversion with ECB and fallback exchange-rate sources
 
 ### 🧩 Product Experience
+
 - Modern UI built on Radix/shadcn patterns + Tailwind
 - English and Dutch localization
 - Desktop mode via Electron
@@ -70,6 +73,7 @@ bun run electron:prod
 ```
 
 Notes:
+
 - This is the recommended end-user flow.
 - Docker Desktop must be installed/running.
 - On first launch, Vision can generate missing local runtime config (like `.env`) automatically.
@@ -153,6 +157,7 @@ bun run dev
 ```
 
 Default dev URLs:
+
 - Frontend: `http://localhost:5174`
 - Backend API: `http://localhost:3002`
 
