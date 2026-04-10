@@ -178,6 +178,12 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 ### Recent Additions
 
+- Settings and middleware validation coverage additions for this branch:
+  - [[apps/node-backend/tests/routes/settings.test.js]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
+  - [[apps/node-backend/tests/validation.test.js]] extends middleware coverage for `validateIdParam` in [[apps/node-backend/src/middleware/validation.js]] (missing-id pass-through, invalid-id 400 detail response, valid-id numeric coercion + `next()`).
+- Database connection module coverage additions for this branch:
+  - [[apps/node-backend/tests/connection.test.js]] covers [[apps/node-backend/src/database/connection.js]] pool idle-client error logging, transient retry behavior (`ECONNRESET`, `08006`), non-transient no-retry behavior, max-retry exhaustion path, plus utility/helper methods (`checkConnection`, `getTableCount`, `getPoolStats`, `closePool`, `queryPrepared`, `getClient`).
+
 - Security/config regression additions for this branch:
   - [[apps/node-backend/tests/config.test.js]] covers optional `ADMIN_AUTH_TOKEN` config mapping and trimming behavior.
   - [[apps/node-backend/tests/main.test.js]] covers admin auth middleware behavior (token required only when configured).
@@ -339,3 +345,21 @@ bun vitest --ui
 - [[docs/adr/002-database-schema]] - Database Schema
 - [Vitest Docs](https://vitest.dev)
 - [React Testing Library Docs](https://testing-library.com)
+
+## Test Additions (2026-04-10)
+
+- [[apps/node-backend/tests/rateLimiter.test.js]] adds middleware-factory coverage for allow-under-limit, `429` over-limit, window reset behavior, and client key fallback order (`req.ip` → `remoteAddress` → `unknown`). It also verifies stricter presets: `adminRateLimiter` (`10 req/min`) and `importRateLimiter` (`5 req/min`).
+- [[apps/node-backend/tests/routes/admin.test.js]] adds admin update endpoint coverage:
+  - `GET /api/admin/update/check` for GitHub release payload handling, `APP_VERSION`/`APP_IMAGE_TAG` resolution, no-release fallback payload, and invalid JSON path returning sanitized `500`.
+  - `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart` success responses.
+- [[apps/node-backend/tests/routes/marketLookup.test.js]] adds market endpoint coverage:
+  - `GET /api/market/quote` missing `symbols` (`400`), quote+summary mapping, and quote failure fallback to `quotes: []`.
+  - `GET /api/market/news` dedup by title, thumbnail normalization, and partial-failure tolerance (`articles: []` when news search fails).
+
+Validation run (passed): `bun vitest run tests/rateLimiter.test.js tests/routes/admin.test.js tests/routes/marketLookup.test.js`
+
+## Related
+
+- [[docs/api/admin]]
+- [[docs/api/marketLookup]]
+- [[docs/security/rate-limiting]]

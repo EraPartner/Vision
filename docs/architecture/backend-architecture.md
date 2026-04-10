@@ -409,6 +409,9 @@ Recent update note (2026-04-10):
 - Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/config/config.js]]).
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.js]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/importRoutes.js]], [[apps/node-backend/src/routes/transactions.js]]).
+- Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.js]] against [[apps/node-backend/src/routes/settings.js]].
+- Database connection/pool resilience paths are now regression-covered in [[apps/node-backend/tests/connection.test.js]] for [[apps/node-backend/src/database/connection.js]] (idle pool error handler, transient retry/backoff, non-transient fail-fast, helper methods and pool stats).
+- Validation middleware id-param coercion and error semantics are explicitly covered in [[apps/node-backend/tests/validation.test.js]] for [[apps/node-backend/src/middleware/validation.js]].
 
 ## Database Schema
 

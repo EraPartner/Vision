@@ -4,7 +4,7 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, settings, preferences]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -71,6 +71,8 @@ Storage behavior:
 - `excludedCategoryIds` and `excludedRecipientIds` must be arrays of positive integers
 - `excludeHiddenCategories` must be boolean
 - `exclusionScope` must be one of `everywhere`, `dashboard`, `statistics`
+- If `value` is missing from request body, endpoint returns `400` with `Missing "value" in request body`
+- If `:key` length exceeds 100 chars, endpoint returns `400` with `Setting key too long (max 100 chars)`
 
 Implementation note:
 - Route-level validation was refactored into shared helpers (`validateSettingKeyLength`, `getSettingKeyTooLongError`, `normalizeDashboardSettingsValue`) reused by single-key and bulk upsert endpoints while preserving endpoint-specific error-message text and validation semantics ([[apps/node-backend/src/routes/settings.js]]).
@@ -82,6 +84,11 @@ Bulk create/update multiple settings in one request.
 
 Storage behavior:
 - Each key is serialized and cast with `::jsonb` before upsert for consistent JSONB persistence
+
+Validation behavior:
+- Body must be a JSON object (`400` for arrays/non-objects)
+- Any key longer than 100 chars returns `400` and includes the offending key in the detail text
+- `dashboard_settings` is normalized/validated during bulk upsert (`excludedCategoryIds` / `excludedRecipientIds` positive-int arrays)
 
 **Request Body:**
 ```json
@@ -100,6 +107,9 @@ Storage behavior:
 ### DELETE /api/settings/:key
 
 Delete a setting key.
+
+Response semantics:
+- Returns `404` with `Setting '<key>' not found` when deleting a non-existing key.
 
 ## Common Settings
 
@@ -152,3 +162,5 @@ Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/fronten
 - [[docs/features/views|Views & Pages]] - How settings affect page rendering
 - [[docs/components/form-dialogs|Form Dialogs]] - Settings propagation to forms
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
+- [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
+- Coverage code links: [[apps/node-backend/tests/routes/settings.test.js]], [[apps/node-backend/tests/validation.test.js]]
