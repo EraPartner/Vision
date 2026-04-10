@@ -12,7 +12,8 @@
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
-    "vitest": "^1.6.0"
+    "@vitest/coverage-v8": "^4.1.4",
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "compression": "^1.8.1",
