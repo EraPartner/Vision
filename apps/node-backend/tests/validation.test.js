@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   validateId, sanitizeString, validateNumber,
   validateDateString, validatePagination,
-  sanitizeUpdateFields, validateIntArray,
+  sanitizeUpdateFields, validateIntArray, validateIdParam,
 } from '../src/middleware/validation.js';
 
 describe('Validation Middleware', () => {
@@ -131,4 +131,47 @@ describe('Validation Middleware', () => {
       expect(validateIntArray([0]).valid).toBe(false);
     });
   });
+
+  describe('validateIdParam', () => {
+    it('calls next when req.params.id is missing', () => {
+      const req = { params: {} };
+      const res = mockResponse();
+      const next = vi.fn();
+
+      validateIdParam(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 with detail for invalid id and does not call next', () => {
+      const req = { params: { id: 'abc' } };
+      const res = mockResponse();
+      const next = vi.fn();
+
+      validateIdParam(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'id must be a positive integer' });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('coerces valid id to number and calls next', () => {
+      const req = { params: { id: '123' } };
+      const res = mockResponse();
+      const next = vi.fn();
+
+      validateIdParam(req, res, next);
+
+      expect(req.params.id).toBe(123);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+  });
 });
+
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn() };
+  res.status.mockReturnValue(res);
+  return res;
+}
