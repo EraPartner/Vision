@@ -48,9 +48,20 @@ function parseTransactionListQuery(query) {
   };
 }
 
+const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(['=', '+', '-', '@']);
+
+function neutralizeCsvFormula(value) {
+  if (!value) return value;
+  const trimmedStart = value.trimStart();
+  if (!trimmedStart) return value;
+  const firstChar = trimmedStart.charAt(0);
+  if (!DANGEROUS_CSV_FORMULA_PREFIXES.has(firstChar)) return value;
+  return `'${value}`;
+}
+
 function escapeCsvValue(value) {
   if (value == null) return '';
-  const stringValue = String(value);
+  const stringValue = neutralizeCsvFormula(String(value));
   return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
     ? `"${stringValue.replace(/"/g, '""')}"`
     : stringValue;
@@ -214,7 +225,7 @@ router.get(
     res.send(csv);
   } catch (err) {
     logger.error('Error exporting transactions', { error: err.message });
-    res.status(500).json({ detail: `Error exporting transactions: ${err.message}` });
+    res.status(500).json({ detail: 'Error exporting transactions' });
   }
 });
 
@@ -325,7 +336,7 @@ router.patch(
     res.json(formatTransaction(updated));
   } catch (err) {
     logger.error('Error updating transaction', { error: err.message });
-    res.status(500).json({ detail: `Error updating transaction: ${err.message}` });
+    res.status(500).json({ detail: 'Error updating transaction' });
   }
 });
 

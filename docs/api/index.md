@@ -2,7 +2,7 @@
 title: API Documentation Index
 type: api-index
 status: active
-date: 2026-03-31
+date: 2026-04-10
 tags: [api, index, rest, endpoints]
 description: Complete REST API documentation for the Vision backend
 aliases: [API, endpoints, REST]
@@ -65,7 +65,13 @@ SORT path ASC
 > [!warning] Rate Limits
 > - **Standard endpoints**: 100 requests per minute
 > - **Export/Patch endpoints**: 30 requests per minute
+> - **Admin refresh endpoints**: stricter limits (e.g., `/api/info/refresh-views` uses admin limiter)
 > - Check `X-RateLimit-*` headers for current usage
+
+## Authentication Notes
+
+- Most endpoints are currently workspace-internal and do not require user auth.
+- `/api/admin/*` supports optional Bearer-token protection via `ADMIN_AUTH_TOKEN`; when configured, requests must include `Authorization: Bearer <token>`.
 
 ## Error Handling
 

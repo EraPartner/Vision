@@ -112,8 +112,8 @@ export default function RecipientsPage() {
         hasMoreRef.current = true;
     }, []);
 
-    const handleUpdate = (idx: number, updated: TableRecipient) => {
-        const originalRecipient = allItems[idx];
+    const handleUpdate = (sourceIndex: number, updated: TableRecipient) => {
+        const originalRecipient = allItems[sourceIndex];
         if (!originalRecipient) return;
         updateMutation.mutate({
             id: originalRecipient.id,

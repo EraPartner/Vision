@@ -2,7 +2,7 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-03-31
+date: 2026-04-10
 tags: [moc, tasks, quick-reference, navigation, how-to]
 description: Task-oriented navigation — find the right docs for what you want to do
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
@@ -25,6 +25,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Create a database migration | [[docs/guides/migrations\|Migration Guide]] | [[docs/reference/migration-dependencies\|Migration Dependencies]] |
 | Debug a database issue | [[docs/troubleshooting\|Troubleshooting]] | [[docs/reference/database-triggers\|Triggers]] |
 | Configure environment variables | [[docs/reference/environment-variables\|Environment Variables]] | [[docs/guides/backend-configuration\|Backend Configuration]] |
+| Protect admin endpoints with token auth | [[docs/reference/environment-variables\|Environment Variables]] (`ADMIN_AUTH_TOKEN`) | [[docs/api/admin\|Admin API]], [[docs/security/index\|Security]] |
 | Set up the project locally | [[docs/guides/setup\|Setup Guide]] | [[docs/reference/scripts\|Scripts Reference]] |
 | Deploy to production | [[docs/guides/deployment\|Deployment Guide]] | [[docs/reference/environment-variables\|Environment Variables]] |
 
@@ -77,6 +78,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Fix a rate limit error | [[docs/reference/error-codes\|Error Codes]] | [[docs/security/rate-limiting\|Rate Limiting]] |
 | Fix a chart rendering issue | [[docs/performance/chart-downsampling\|Chart Downsampling]] | [[docs/troubleshooting\|Troubleshooting]] |
 | Fix a React Query cache issue | [[docs/reference/react-query-keys\|React Query Keys]] | [[docs/performance/caching-strategies\|Caching Strategies]] |
+| Remediate dependency vulnerabilities | [[docs/security/dependency-security-remediation-2026-04\|Dependency Security Remediation (2026-04)]] | [[docs/reference/scripts\|Scripts Reference]] |
 
 ## KB Tasks
 

@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [testing, index, quality, vitest]
 description: Testing strategies, patterns, and best practices for the Vision project
 aliases: [testing, tests, QA]
@@ -43,6 +43,7 @@ SORT title ASC
 - Currency conversion
 - Bank adapters
 - API routes
+- Security hardening regressions (sanitized errors, auth middleware, CSV export safety)
 - Split route validation and CSV export responses
 - Investment repository inheritance compatibility tests
 - React components

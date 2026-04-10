@@ -2,12 +2,14 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [component, shared, utility, frontend, reference]
 description: Reference documentation for shared utility components used across the application
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
+  - apps/frontend/src/components/shared/DataTable.tsx
+  - apps/frontend/src/components/shared/ColumnFilter.tsx
   - apps/frontend/src/components/shared/dateUtils.ts
   - apps/frontend/src/components/shared/ErrorBoundary.tsx
   - apps/frontend/src/components/shared/CategoryCombobox.tsx
@@ -34,6 +36,7 @@ The most complex shared component — a high-performance virtualized data table 
 - **Server-side search**: Optional `onSearchChange` callback for database-level search
 - **Column sorting**: Client-side or server-side (via `onSortChange`)
 - **Column filtering**: Per-column popover filters with unique value selection
+- **Stable source row mapping**: Filter/sort/search pipelines preserve row identity through `sourceIndex` mapping so row actions/edit handlers target original source rows
 - **Inline editing**: Double-click to edit editable columns (Enter to save, Escape to cancel)
 - **Column resizing**: Drag column borders to resize
 - **Infinite scroll**: `onLoadMore` callback for pagination
@@ -124,6 +127,28 @@ Date formatting utilities that respect app settings:
 | `formatDateTimeStringWithAppSettings(dateStr, dateFormat, locale)` | Formats an ISO datetime string |
 | `parseLocalDateFromYmd(ymd)` | Parses YYYY-MM-DD to a local Date object |
 
+## DataTable
+
+**Path:** `[[apps/frontend/src/components/shared/DataTable.tsx]]`
+
+Non-virtualized shared table used on pages where full virtualization is not required.
+
+Key behaviors:
+- Uses the same source-row identity strategy as `VirtualDataTable` via `sourceIndex`, so filtered/sorted rows still map safely to original row handlers.
+- Uses shared `ColumnFilter` instead of local duplicated filter implementations.
+- Cleans up debounced search timers on unmount and safely syncs controlled `searchValue` updates.
+
+## ColumnFilter
+
+**Path:** `[[apps/frontend/src/components/shared/ColumnFilter.tsx]]`
+
+Reusable column-filter popover component extracted from previous inline/duplicated implementations.
+
+Responsibilities:
+- Renders selectable unique values for a column.
+- Applies/clears column filter state consistently across table variants.
+- Centralizes filter UI behavior used by both `DataTable` and `VirtualDataTable`.
+
 ## ErrorBoundary
 
 **Path:** `[[apps/frontend/src/components/shared/ErrorBoundary.tsx]]`
@@ -179,6 +204,8 @@ Shows notifications for upcoming planned/recurring payments.
 | Component | Used In |
 |-----------|---------|
 | VirtualDataTable | Transactions, Recipients, Owes, Net Worth, Portfolio Tax |
+| DataTable | Shared non-virtualized list/table views |
+| ColumnFilter | DataTable + VirtualDataTable column filtering |
 | dateUtils | Every page (date formatting) |
 | CategoryCombobox | Transaction forms, filters, category assignment |
 | RecipientCombobox | Transaction forms, filters |

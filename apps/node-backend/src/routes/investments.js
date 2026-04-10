@@ -290,7 +290,7 @@ router.get('/transactions', async (req, res) => {
     const opts = parseBulkTransactionsOptions(req.query, investmentIds);
 
     // Cache bulk transactions for the default request pattern
-    const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.offset}`;
+    const cacheKey = `${investmentIds.join(',')}:${opts.type || ''}:${opts.perInvestmentLimit}:${opts.limit ?? ''}:${opts.offset}`;
     if (bulkTxnCache.key === cacheKey && bulkTxnCache.data && bulkTxnCache.expiresAt > Date.now()) {
       return res.json(bulkTxnCache.data);
     }

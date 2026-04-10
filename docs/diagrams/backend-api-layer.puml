@@ -35,6 +35,7 @@ package "Middleware" {
     +cors: cors middleware
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
+    +adminAuth middleware (optional bearer token)
   }
 }
 
@@ -175,7 +176,7 @@ package "Routes" {
     +POST /exchange-rates/refresh : refresh exchange rates
     +GET /inflation-rates : get inflation rates
     +POST /inflation-rates/refresh : refresh inflation rates
-    +POST /refresh-views : refresh materialized views
+    +POST /refresh-views : refresh materialized views (admin limiter)
     +GET /portfolio-performance : get performance snapshots
   }
 
@@ -187,6 +188,7 @@ package "Routes" {
     +POST /update/apply : apply update
     +POST /update/apply-and-restart : apply and restart
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
+    +/api/admin/* : optional bearer auth gate
   }
 }
 

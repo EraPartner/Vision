@@ -2,11 +2,11 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, admin, system, updates]
 description: API endpoints for system administration, database management, and application updates
 aliases: [admin, system admin, health, initialization]
-related_code: ["apps/node-backend/src/routes/admin.js"]
+related_code: ["apps/node-backend/src/routes/admin.js", "apps/node-backend/src/main.js", "apps/node-backend/src/config/config.js"]
 ---
 
 # Admin API
@@ -69,7 +69,7 @@ Verify database connection and initialization status.
 
 ```json
 {
-  "detail": "Cannot connect to database"
+  "detail": "Administrative operation failed"
 }
 ```
 
@@ -176,7 +176,7 @@ Check for application updates via GitHub Releases API.
 
 ```json
 {
-  "detail": "Update check failed: Connection timeout"
+  "detail": "Administrative operation failed"
 }
 ```
 
@@ -220,12 +220,15 @@ Apply update and restart the application (backwards compatibility endpoint).
 |----------|-------------|
 | `APP_VERSION` | Current application version |
 | `APP_IMAGE_TAG` | Docker image tag (fallback for version) |
+| `ADMIN_AUTH_TOKEN` | Optional Bearer token required for `/api/admin/*` routes when set |
 
 ## Security
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
-- Endpoint requires no authentication (internal use)
+- Optional admin auth middleware is enforced for `/api/admin/*` when `ADMIN_AUTH_TOKEN` is configured; requests must send `Authorization: Bearer <token>`.
+- When `ADMIN_AUTH_TOKEN` is unset, admin behavior remains backward-compatible (no token required).
+- Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 
 ## See Also
 

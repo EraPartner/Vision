@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET
 path: /api/import
 description: CSV import for transactions, recipients, and categories
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, import, csv, bank]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -92,6 +92,13 @@ event: complete
 data: {"imported": 150, "duplicates_skipped": 5, "errors": 0, "status": "completed"}
 ```
 
+SSE implementation notes:
+- Client parsing (`importCSVWithProgress`) now handles SSE event blocks by blank-line delimiters and supports multi-line `data:` fields robustly.
+- Client moved away from `new Promise(async ...)` anti-pattern for stream handling and now uses safer async control flow with explicit parser/error paths.
+- Malformed SSE payloads and backend error events are surfaced with sanitized, user-safe error extraction.
+
+Code link: [[apps/frontend/src/lib/api.ts]]
+
 ### GET /api/import/supported-banks
 
 Get list of supported bank adapters.
@@ -156,7 +163,8 @@ Implementation note:
 ### Error Handling
 - Returns count of errors in response
 - Partial imports complete even with some errors
-- Error details in response message
+- Import route failures now return generic `detail: "Import failed"` style responses and avoid leaking raw internal exception strings.
+- SSE error events also use sanitized generic details to keep payloads safe for frontend display.
 
 ## Rate Limits
 

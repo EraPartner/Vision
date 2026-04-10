@@ -28,6 +28,7 @@ type AddCategoryDialogProps =
 export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
     const { t } = useLanguage();
     const isEditMode = props.mode === "edit";
+    const editProps = isEditMode ? props : undefined;
 
     // Create-mode state
     const [createOpen, setCreateOpen] = useState(false);
@@ -39,10 +40,10 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
 
     // Sync form when edit dialog reopens with new values
     useEffect(() => {
-        if (isEditMode) {
-            setForm(props.initialValues);
+        if (editProps) {
+            setForm(editProps.initialValues);
         }
-    }, [isEditMode ? (props as any).initialValues : null, isEditMode ? (props as any).open : null]);
+    }, [editProps, editProps?.initialValues, editProps?.open]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,7 +56,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
         };
 
         if (isEditMode) {
-            (props as any).onSave(values);
+            editProps?.onSave(values);
         } else {
             createMutation.mutate(
                 { general: values.general, detail: values.detail, description: values.description || undefined },
@@ -69,9 +70,9 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
         }
     };
 
-    const open = isEditMode ? (props as any).open : createOpen;
-    const onOpenChange = isEditMode ? (props as any).onOpenChange : setCreateOpen;
-    const isPending = isEditMode ? ((props as any).isSaving ?? false) : createMutation.isPending;
+    const open = editProps?.open ?? createOpen;
+    const onOpenChange = editProps?.onOpenChange ?? setCreateOpen;
+    const isPending = editProps?.isSaving ?? createMutation.isPending;
 
     const dialogContent = (
         <DialogContent className="sm:max-w-md">

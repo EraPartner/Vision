@@ -2,11 +2,11 @@
 title: Transactions
 type: feature
 status: active
-date: 2026-04-09
+date: 2026-04-10
 tags: [feature, transactions, finance]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/frontend/src/components/shared/VirtualDataTable.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/frontend/src/components/shared/VirtualDataTable.tsx", "apps/frontend/src/components/shared/DataTable.tsx", "apps/frontend/src/components/shared/ColumnFilter.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -110,8 +110,10 @@ Implementation note:
 - Server filtering is debounced at 200ms through `VirtualDataTable` for a more live feel while keeping request volume controlled.
 - Search reacts correctly when loosening terms (character-by-character deletion) and when clearing entirely.
 - Table rows are rendered from a deferred data value (`useDeferredValue`) so typing remains responsive while results refresh.
+- Filter/sort/search pipelines preserve stable source-row identity through `sourceIndex` mapping, so row edits/actions always target the original source row even when table ordering changes.
+- `TransactionsPage` handlers now consistently consume `sourceIndex` semantics from shared table components.
 
-Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
 
 ---
 
@@ -135,6 +137,8 @@ GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18
 
 Implementation note:
 - CSV escaping, row construction, and filename generation now use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
+- CSV export now neutralizes spreadsheet-formula-leading values (`=`, `+`, `-`, `@`) before writing cells to reduce formula-injection risk in spreadsheet tools.
+- Export and PATCH error responses now avoid leaking internal exception details and return sanitized generic `detail` payloads.
 
 ---
 

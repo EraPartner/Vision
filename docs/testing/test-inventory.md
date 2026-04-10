@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [testing, inventory, coverage, vitest, react-testing-library]
 description: Inventory of existing tests and coverage areas across frontend and backend
 aliases: [test coverage, test list, test inventory]
@@ -47,6 +47,17 @@ bun run test
 ```
 
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
+
+### Recently Updated Backend Coverage (2026-04-10)
+
+| File | Area | Coverage Added |
+|------|------|----------------|
+| `apps/node-backend/tests/config.test.js` | Config/security | `ADMIN_AUTH_TOKEN` mapping + trim behavior |
+| `apps/node-backend/tests/routes/investments.test.js` | Performance/regression | Bulk transactions cache-key includes `limit` |
+| `apps/node-backend/tests/routes/transactions.test.js` | Security | CSV formula neutralization + sanitized route errors |
+| `apps/node-backend/tests/routes/import.test.js` | Security | Sanitized import errors and stream error expectations |
+| `apps/node-backend/tests/routes/admin.test.js` | Security | Sanitized admin errors and auth behavior assertions |
+| `apps/node-backend/tests/routes/info.test.js` | Security/perf | `/api/info/refresh-views` route + limiter assertions |
 
 ## Coverage Gaps
 

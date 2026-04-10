@@ -2,7 +2,7 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [performance, caching, optimization]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -94,6 +94,21 @@ const mvCache = new Map();
 - Route-level throttling (`30 req / 60s`) to protect expensive compute path
 
 Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]
+
+---
+
+### 5. Investments Bulk-Transactions Route Cache
+
+**Route:** `GET /api/investments/transactions`  
+**Storage:** In-memory route cache (router-level)
+
+**Important keying rule:**
+- Cache key includes query dimensions including `limit` to avoid cross-request collisions when callers request different result sizes.
+
+Regression coverage:
+- Differing-limit collision prevention is validated in [[apps/node-backend/tests/routes/investments.test.js]].
+
+Code link: [[apps/node-backend/src/routes/investments.js]]
 
 ---
 

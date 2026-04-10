@@ -18,12 +18,26 @@ import { scheduleRefresh } from '../services/materializedViewService.js';
 
 const router = Router();
 
+const GENERIC_IMPORT_FAILED_DETAIL = 'Import failed';
+
+function isLikelyCsvFile(file) {
+  const originalName = file?.originalname?.toLowerCase() || '';
+  const mimeType = file?.mimetype?.toLowerCase() || '';
+  const hasCsvExtension = originalName.endsWith('.csv');
+  const hasLikelyCsvMimeType = mimeType.includes('csv')
+    || mimeType.includes('text/plain')
+    || mimeType.includes('application/vnd.ms-excel')
+    || mimeType === 'application/octet-stream'
+    || mimeType === '';
+  return hasCsvExtension && hasLikelyCsvMimeType;
+}
+
 // Configure multer for file uploads (50MB max)
 const upload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (!file.originalname.toLowerCase().endsWith('.csv')) {
+    if (!isLikelyCsvFile(file)) {
       cb(new Error('File must be a CSV'));
     } else {
       cb(null, true);
@@ -68,7 +82,7 @@ router.post('/csv', upload.single('file'), async (req, res) => {
     if (err.message.includes('No configuration found')) {
       return res.status(400).json({ detail: `Invalid bank configuration: ${err.message}` });
     }
-    res.status(500).json({ detail: `Import failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_IMPORT_FAILED_DETAIL });
   }
 });
 
@@ -124,7 +138,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   } catch (err) {
     cleanup(req.file.path);
     logger.error('Custom CSV import error', { error: err.message });
-    res.status(500).json({ detail: `Import failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_IMPORT_FAILED_DETAIL });
   }
 });
 
@@ -182,7 +196,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
     cleanup(req.file.path);
     logger.error('Streaming CSV import error', { error: err.message });
     if (!aborted) {
-      sendEvent('error', { detail: err.message });
+      sendEvent('error', { detail: GENERIC_IMPORT_FAILED_DETAIL });
       res.end();
     }
   }
@@ -219,7 +233,7 @@ router.post('/recipients', upload.single('file'), async (req, res) => {
   } catch (err) {
     cleanup(req.file.path);
     logger.error('Recipient CSV import error', { error: err.message });
-    res.status(500).json({ detail: `Import failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_IMPORT_FAILED_DETAIL });
   }
 });
 
@@ -245,7 +259,7 @@ router.post('/categories', upload.single('file'), async (req, res) => {
   } catch (err) {
     cleanup(req.file.path);
     logger.error('Category CSV import error', { error: err.message });
-    res.status(500).json({ detail: `Import failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_IMPORT_FAILED_DETAIL });
   }
 });
 

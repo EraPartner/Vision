@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,6 +9,7 @@ import {
     Pencil, Search, X,
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ColumnFilter } from "@/components/shared/ColumnFilter";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -69,14 +69,19 @@ interface VirtualDataTableProps<T> {
     onEditingChange?: (editing: boolean) => void;
 }
 
-function getSortValue(val: any): string | number {
+interface IndexedRow<T> {
+    row: T;
+    sourceIndex: number;
+}
+
+function getSortValue(val: unknown): string | number {
     if (val == null) return "";
     if (typeof val === "number") return val;
     if (typeof val === "boolean") return val ? 1 : 0;
     return String(val).toLowerCase();
 }
 
-export function VirtualDataTable<T extends Record<string, any>>({
+export function VirtualDataTable<T extends Record<string, unknown>>({
     title,
     subtitle,
     columns,
@@ -103,7 +108,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     const { t } = useLanguage();
     const isServerSort = !!onSortChange;
     const [editingRow, setEditingRow] = useState<number | null>(null);
-    const [editValues, setEditValues] = useState<Record<string, any>>({});
+    const [editValues, setEditValues] = useState<Record<string, unknown>>({});
     const isServerSearch = !!onSearchChange;
     const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
 
@@ -258,12 +263,12 @@ export function VirtualDataTable<T extends Record<string, any>>({
     // Client-side filter/sort pipeline
     // NOTE: when onSortChange is provided (server-sort mode) the sort step is
     // skipped — the server already returns rows in the correct order.
-    const processedData = useMemo(() => {
-        let result = [...deferredData];
+    const processedRows = useMemo(() => {
+        let result: IndexedRow<T>[] = deferredData.map((row, sourceIndex) => ({ row, sourceIndex }));
 
         for (const [key, filterVal] of Object.entries(columnFilters)) {
             const q = filterVal.toLowerCase();
-            result = result.filter((row) => {
+            result = result.filter(({ row }) => {
                 const v = row[key];
                 return v != null && String(v).toLowerCase().includes(q);
             });
@@ -271,7 +276,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
 
         if (!isServerSearch && localSearchQuery.trim()) {
             const q = localSearchQuery.toLowerCase();
-            result = result.filter((row) =>
+            result = result.filter(({ row }) =>
                 columns.some((col) => {
                     const val = row[col.key];
                     return val != null && String(val).toLowerCase().includes(q);
@@ -282,8 +287,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
         // Only apply client-side sort when NOT in server-sort mode
         if (!isServerSort && sortKey && sortDir) {
             result.sort((a, b) => {
-                const va = getSortValue(a[sortKey]);
-                const vb = getSortValue(b[sortKey]);
+                const va = getSortValue(a.row[sortKey]);
+                const vb = getSortValue(b.row[sortKey]);
                 let cmp = 0;
                 if (typeof va === "number" && typeof vb === "number") cmp = va - vb;
                 else cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
@@ -298,7 +303,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
     const parentRef = useRef<HTMLDivElement>(null);
     const loadRequestedForLengthRef = useRef<number | null>(null);
     const virtualizer = useVirtualizer({
-        count: processedData.length,
+        count: processedRows.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => rowHeight,
         overscan: 10,
@@ -315,14 +320,14 @@ export function VirtualDataTable<T extends Record<string, any>>({
 
         if (distanceToBottom > thresholdPx) return;
 
-        if (loadRequestedForLengthRef.current === processedData.length) return;
-        loadRequestedForLengthRef.current = processedData.length;
+        if (loadRequestedForLengthRef.current === processedRows.length) return;
+        loadRequestedForLengthRef.current = processedRows.length;
         onLoadMore();
-    }, [onLoadMore, hasMore, isFetchingMore, loadMoreOffset, rowHeight, processedData.length]);
+    }, [onLoadMore, hasMore, isFetchingMore, loadMoreOffset, rowHeight, processedRows.length]);
 
     useEffect(() => {
         loadRequestedForLengthRef.current = null;
-    }, [processedData.length]);
+    }, [processedRows.length]);
 
     // Infinite scroll: trigger load checks from actual scroll events only.
     useEffect(() => {
@@ -339,9 +344,9 @@ export function VirtualDataTable<T extends Record<string, any>>({
         };
     }, [onLoadMore, maybeLoadMore]);
 
-    const startEditing = (idx: number, row: T) => {
-        setEditingRow(idx);
-        const values: Record<string, any> = {};
+    const startEditing = (sourceIndex: number, row: T) => {
+        setEditingRow(sourceIndex);
+        const values: Record<string, unknown> = {};
         columns.forEach((col) => {
             if (col.editable) values[col.key] = row[col.key];
         });
@@ -350,12 +355,10 @@ export function VirtualDataTable<T extends Record<string, any>>({
 
     const cancelEditing = () => { setEditingRow(null); setEditValues({}); };
 
-    const saveEditing = (idx: number) => {
+    const saveEditing = (sourceIndex: number, row: T) => {
         if (onRowUpdate) {
-            const updatedRow = { ...processedData[idx], ...editValues } as T;
-            // Find original index in data array
-            const originalIdx = data.indexOf(processedData[idx]);
-            onRowUpdate(originalIdx >= 0 ? originalIdx : idx, updatedRow);
+            const updatedRow = { ...row, ...editValues } as T;
+            onRowUpdate(sourceIndex, updatedRow);
         }
         setEditingRow(null);
         setEditValues({});
@@ -493,7 +496,6 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-56 p-2" align="start">
                                                     <ColumnFilter
-                                                        columnKey={col.key}
                                                         header={col.header}
                                                         value={columnFilters[col.key] || ""}
                                                         onChange={(v) => setColumnFilter(col.key, v)}
@@ -532,7 +534,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                     className="overflow-auto"
                     style={{ maxHeight: `${maxHeight}px` }}
                 >
-                    {processedData.length === 0 ? (
+                    {processedRows.length === 0 ? (
                         <div className="text-center text-muted-foreground py-12">
                             {localSearchQuery || activeFilterCount > 0
                                 ? t('table.noFilterResults')
@@ -541,9 +543,11 @@ export function VirtualDataTable<T extends Record<string, any>>({
                     ) : (
                         <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
                             {virtualizer.getVirtualItems().map((virtualRow) => {
-                                const row = processedData[virtualRow.index];
-                                const idx = virtualRow.index;
-                                const isEditing = editingRow === idx;
+                                const indexedRow = processedRows[virtualRow.index];
+                                if (!indexedRow) return null;
+                                const row = indexedRow.row;
+                                const sourceIndex = indexedRow.sourceIndex;
+                                const isEditing = editingRow === sourceIndex;
 
                                 return (
                                     <div
@@ -560,9 +564,9 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                         }}
                                         onDoubleClick={() => {
                                             if (onRowDoubleClick) {
-                                                onRowDoubleClick(row, idx);
+                                                onRowDoubleClick(row, sourceIndex);
                                             } else if (hasEditableColumns && !isEditing) {
-                                                startEditing(idx, row);
+                                                startEditing(sourceIndex, row);
                                             }
                                         }}
                                     >
@@ -587,13 +591,13 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                                 }))
                                                             }
                                                             onKeyDown={(e) => {
-                                                                if (e.key === "Enter") { e.preventDefault(); saveEditing(idx); }
+                                                                if (e.key === "Enter") { e.preventDefault(); saveEditing(sourceIndex, row); }
                                                                 else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
                                                             }}
                                                             className="h-8 text-sm"
                                                         />
                                                     ) : col.render ? (
-                                                        col.render(row, isEditing, idx)
+                                                        col.render(row, isEditing, sourceIndex)
                                                     ) : (
                                                         String(row[col.key] ?? "")
                                                     )}
@@ -606,7 +610,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                     <div className="flex items-center justify-end gap-1">
                                                         <Button variant="ghost" size="icon"
                                                             className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
-                                                            onClick={() => saveEditing(idx)}>
+                                                            onClick={() => saveEditing(sourceIndex, row)}>
                                                             <Check className="h-4 w-4" />
                                                         </Button>
                                                         <Button variant="ghost" size="icon"
@@ -618,7 +622,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                                                 ) : (
                                                     <Button variant="ghost" size="icon"
                                                         className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                        onClick={() => startEditing(idx, row)}>
+                                                        onClick={() => startEditing(sourceIndex, row)}>
                                                         <Pencil className="h-4 w-4" />
                                                     </Button>
                                                 )}
@@ -642,86 +646,13 @@ export function VirtualDataTable<T extends Record<string, any>>({
                 {/* Footer: count */}
                 <div className="flex items-center justify-between border-t px-6 py-3">
                     <p className="text-sm text-muted-foreground">
-                        {processedData.length !== data.length
-                            ? t('table.shownOfFiltered', { shown: processedData.length.toString(), total: displayTotal.toString() })
+                        {processedRows.length !== data.length
+                            ? t('table.shownOfFiltered', { shown: processedRows.length.toString(), total: displayTotal.toString() })
                             : t('table.loadedOf', { loaded: data.length.toString(), total: displayTotal.toString() })}
                         {hasMore && ` · ${t('table.scrollForMore')}`}
                     </p>
                 </div>
             </CardContent>
         </Card>
-    );
-}
-
-// ─── Column Filter (same as DataTable) ──────────────────────
-function ColumnFilter({
-    columnKey,
-    header,
-    value,
-    onChange,
-    uniqueValues,
-    onClose,
-}: {
-    columnKey: string;
-    header: string;
-    value: string;
-    onChange: (val: string) => void;
-    uniqueValues: string[];
-    onClose: () => void;
-}) {
-    const { t } = useLanguage();
-    const [filterSearch, setFilterSearch] = useState("");
-    const filtered = uniqueValues.filter(v =>
-        v.toLowerCase().includes(filterSearch.toLowerCase())
-    );
-
-    return (
-        <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground px-1">{t('table.filterLabel', { header })}</p>
-            <Input
-                placeholder={t('table.filterInputPlaceholder', { header: header.toLowerCase() })}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="h-8 text-sm"
-                autoFocus
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); onClose(); }
-                    if (e.key === "Escape") { e.preventDefault(); onChange(""); onClose(); }
-                }}
-            />
-            {uniqueValues.length > 0 && uniqueValues.length <= 100 && (
-                <>
-                    {uniqueValues.length > 8 && (
-                        <Input
-                            placeholder={t('table.searchValues')}
-                            value={filterSearch}
-                            onChange={(e) => setFilterSearch(e.target.value)}
-                            className="h-7 text-xs"
-                        />
-                    )}
-                    <div className="max-h-40 overflow-y-auto space-y-0.5">
-                        {filtered.slice(0, 30).map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => { onChange(v); onClose(); }}
-                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
-                                    }`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                        {filtered.length > 30 && (
-                            <p className="text-[10px] text-muted-foreground px-2">{t('table.moreValues', { count: (filtered.length - 30).toString() })}</p>
-                        )}
-                    </div>
-                </>
-            )}
-            {value && (
-                <Button variant="ghost" size="sm" onClick={() => { onChange(""); onClose(); }}
-                    className="w-full text-xs h-7 text-muted-foreground">
-                    {t('table.clearFilter')}
-                </Button>
-            )}
-        </div>
     );
 }

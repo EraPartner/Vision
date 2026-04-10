@@ -50,6 +50,11 @@ await import('../../src/routes/info.js');
 describe('Info Routes', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('should register /refresh-views and /inflation-rates/refresh routes', () => {
+    expect(routeHandlers['post:/refresh-views']).toBeTypeOf('function');
+    expect(routeHandlers['post:/inflation-rates/refresh']).toBeTypeOf('function');
+  });
+
   describe('GET /', () => {
     it('should return statistics', async () => {
       infoRepository.getStatistics.mockResolvedValue({

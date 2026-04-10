@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-03
+date: 2026-04-10
 tags: [testing, vitest, quality]
 aliases: [testing, unit tests, integration tests, vitest, test coverage]
 description: Comprehensive testing documentation including frameworks, patterns, and best practices
@@ -125,6 +125,25 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 ```
 
+### Vitest 4 constructor-compatible mocks
+
+With Vitest 4, some module mocks must preserve constructor-compatible behavior when the imported dependency is instantiated.
+
+Example pattern (used for `yahoo-finance2`):
+
+```javascript
+vi.mock('yahoo-finance2', () => ({
+  default: vi.fn().mockImplementation(function MockYahooFinance() {
+    return {
+      quote: mockYahooQuote,
+      chart: mockYahooChart,
+    };
+  }),
+}));
+```
+
+Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
+
 ## Test Coverage Areas
 
 ### Recent provider propagation coverage
@@ -159,6 +178,16 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 
 ### Recent Additions
 
+- Security/config regression additions for this branch:
+  - [[apps/node-backend/tests/config.test.js]] covers optional `ADMIN_AUTH_TOKEN` config mapping and trimming behavior.
+  - [[apps/node-backend/tests/main.test.js]] covers admin auth middleware behavior (token required only when configured).
+- Route hardening/perf regression additions for this branch:
+  - [[apps/node-backend/tests/routes/investments.test.js]] covers bulk-transactions cache-key correctness for differing `limit` values.
+  - [[apps/node-backend/tests/routes/transactions.test.js]] covers CSV formula neutralization and sanitized route error responses.
+  - [[apps/node-backend/tests/routes/import.test.js]] covers sanitized import errors/SSE error behavior.
+  - [[apps/node-backend/tests/routes/admin.test.js]] covers sanitized admin error responses and auth-related expectations.
+  - [[apps/node-backend/tests/routes/info.test.js]] covers `/api/info/refresh-views` registration + limiter/security assertions.
+
 - `apps/node-backend/tests/investmentRepository.test.js` covers PostgreSQL inheritance-backed investment writes/reads through compatibility views.
 - `apps/node-backend/tests/routes/splits.test.js` validates split amount bounds, per-recipient settle-all behavior, and owed CSV export flows.
 - `apps/frontend/src/components/shared/dateUtils.test.ts` adds coverage for semantic month label helpers: `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` and `formatMonthLabelWithLocale(date, locale?, width?)`.
@@ -169,6 +198,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - Watchlist locale runtime-safety hotfix: `formatDisplayCurrency` moved into component scope in [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]] so `locale` and `appSettings` are in scope at runtime.
 - Validation snapshot: locale/language undefined-name sweep after patch reports no `Cannot find name 'locale'` or `Cannot find name 'language'`, and frontend build passes.
 - Validation status for this implementation batch: targeted frontend tests passed, frontend build passed, and root build passed.
+- Dependency remediation validation snapshot (2026-04): `bun audit` reports no vulnerabilities, backend tests pass on Vitest 4, frontend build passes on Vite 8, and frontend lint still reports pre-existing unrelated issues.
 - Schema-init compatibility validation: startup bootstrap now safely skips index/trigger creation on non-base relations (including `investments` view in inheritance setups), preventing `cannot create index on relation "investments"` during idempotent startup re-runs ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
 - Validation code links: [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/node-backend/src/database/schemaInit.js]]
 - News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
@@ -177,6 +207,8 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - `apps/node-backend/tests/infoRepository.test.js` adds regression coverage for `/api/info/net-worth` snapshot sanitization of isolated one-day unit investment spikes, asserting outlier-day correction between neighbors and stable current investment totals ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
 
 Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/components/portfolio/WatchlistChartDialog.tsx]], [[apps/frontend/src/components/ui/chart.tsx]], [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/frontend/src/hooks/useStatistics.test.ts]], [[apps/frontend/src/hooks/statisticsProcessing.ts]], [[apps/frontend/src/utils/currency.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/contexts/SettingsContext.tsx]], [[apps/node-backend/tests/routes/info.test.js]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/node-backend/tests/currencyConversionService.test.js]]
+
+Dependency remediation links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/package.json]], [[apps/frontend/package.json]], [[package.json]]
 
 ## Test Examples
 

@@ -2,7 +2,7 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-03-31
+date: 2026-04-10
 tags: [reference, environment, configuration, deployment]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -38,6 +38,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `PROJECT_ROOT` | _(auto-detected)_ | No | Project root directory path | [[apps/node-backend/src/main.js\|main.js]] |
 | `APP_VERSION` | `unknown` | No | Application version string | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `APP_IMAGE_TAG` | _(fallback for APP_VERSION)_ | No | Docker image tag as version | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
+| `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`; when unset, admin routes remain open for backward compatibility | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
 
 ## Kinesis Price Provider
 

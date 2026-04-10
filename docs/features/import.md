@@ -2,7 +2,7 @@
 title: Feature - CSV Import & Deduplication
 type: feature
 status: active
-date: 2026-03-31
+date: 2026-04-10
 tags: [feature, import, csv, deduplication]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
@@ -215,6 +215,14 @@ data: {"processed": 50, "total": 150, "status": "processing"}
 event: complete  
 data: {"imported": 145, "duplicates_skipped": 5, "errors": 0}
 ```
+
+Frontend SSE robustness updates:
+- Stream parsing in [[apps/frontend/src/lib/api.ts]] now consumes blank-line-delimited event blocks correctly and supports multi-line `data:` fields.
+- Import progress handling no longer uses the async Promise executor anti-pattern; stream lifecycle/error propagation is now explicit and safer.
+- Malformed/partial SSE payloads are tolerated with defensive parsing and sanitized fallback errors.
+
+Backend error-hardening updates:
+- Import routes now return generic error details (`Import failed`) and avoid exposing internal exception messages in JSON and SSE error events ([[apps/node-backend/src/routes/importRoutes.js]]).
 
 ## Raw Transaction Storage
 

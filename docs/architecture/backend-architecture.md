@@ -3,7 +3,7 @@ title: Backend Architecture
 type: architecture
 status: active
 description: Node.js backend architecture and diagrams
-date: 2026-03-28
+date: 2026-04-10
 tags: [architecture, backend, uml, plantuml]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -404,6 +404,11 @@ InvestmentsRouter --> IR
 
 @enduml
 ```
+
+Recent update note (2026-04-10):
+- Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/config/config.js]]).
+- `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.js]]).
+- Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/routes/importRoutes.js]], [[apps/node-backend/src/routes/transactions.js]]).
 
 ## Database Schema
 

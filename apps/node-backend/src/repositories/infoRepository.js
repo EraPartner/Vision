@@ -96,6 +96,31 @@ function formatYearMonthKey(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
+function addDaysUtc(date, days = 1) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function getDayKeyUtc(date) {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getUtcDayEndTimestamp(date) {
+  return Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    23,
+    59,
+    59,
+    999
+  );
+}
+
 function extractYearMonth(value) {
   return String(value).substring(0, 7);
 }
@@ -1468,7 +1493,7 @@ export const infoRepository = {
     const unitInvestmentByDayCurrency = {};
     const rangeStartMs = new Date(`${firstDataDateYmd}T00:00:00Z`).getTime();
     const rangeEndDate = new Date();
-    rangeEndDate.setHours(0, 0, 0, 0);
+    rangeEndDate.setUTCHours(0, 0, 0, 0);
     const rangeEndMs = rangeEndDate.getTime();
 
     const historicalPointsByInvestment = new Map();
@@ -1512,12 +1537,9 @@ export const infoRepository = {
 
       let units = 0;
       let fallbackUnitPrice;
-      const startDate = new Date(`${startDateYmd}T00:00:00`);
-      for (const day = new Date(startDate); day <= rangeEndDate; day.setDate(day.getDate() + 1)) {
-        const yyyy = day.getFullYear();
-        const mm = String(day.getMonth() + 1).padStart(2, '0');
-        const dd = String(day.getDate()).padStart(2, '0');
-        const dayKey = `${yyyy}-${mm}-${dd}`;
+      const startDate = new Date(`${startDateYmd}T00:00:00Z`);
+      for (let day = new Date(startDate); day <= rangeEndDate; day = addDaysUtc(day)) {
+        const dayKey = getDayKeyUtc(day);
 
         units += Number(deltaMap[dayKey] || 0);
         const heldUnits = Math.max(0, units);
@@ -1528,7 +1550,7 @@ export const infoRepository = {
           fallbackUnitPrice = txUnitPrice;
         }
 
-        const dayEndTimestamp = Date.UTC(yyyy, Number(mm) - 1, Number(dd), 23, 59, 59, 999);
+        const dayEndTimestamp = getUtcDayEndTimestamp(day);
         const historicalPrice = getHistoricalPriceAt(historicalPoints, dayEndTimestamp);
         
         let unitPrice = historicalPrice;
@@ -1576,9 +1598,9 @@ export const infoRepository = {
     }
 
     // Date range for calculations (needed for fixed income investments)
-    const start = new Date(`${firstDataDateYmd}T00:00:00`);
+    const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
     const end = new Date();
-    end.setHours(0, 0, 0, 0);
+    end.setUTCHours(0, 0, 0, 0);
 
     // Fetch non-unit investments (real_estate, savings, bond) that store value in current_price
     const fixedIncomeInvestments = await query(`
@@ -1606,12 +1628,10 @@ export const infoRepository = {
             ? formatDateToYmd(row.created_date)
             : String(row.created_date).split('T')[0])
           : firstDataDateYmd;
-        const invStartDate = new Date(Math.max(start.getTime(), new Date(createdDate).getTime()));
-        for (const day = new Date(invStartDate); day <= end; day.setDate(day.getDate() + 1)) {
-          const yyyy = day.getFullYear();
-          const mm = String(day.getMonth() + 1).padStart(2, '0');
-          const dd = String(day.getDate()).padStart(2, '0');
-          const dayKey = `${yyyy}-${mm}-${dd}`;
+        const createdDateUtc = new Date(`${createdDate}T00:00:00Z`);
+        const invStartDate = new Date(Math.max(start.getTime(), createdDateUtc.getTime()));
+        for (let day = new Date(invStartDate); day <= end; day = addDaysUtc(day)) {
+          const dayKey = getDayKeyUtc(day);
           if (!investmentsByDay[dayKey]) investmentsByDay[dayKey] = 0;
           investmentsByDay[dayKey] += value;
         }
@@ -1619,11 +1639,8 @@ export const infoRepository = {
     }
 
     const snapshots = [];
-    for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
-      const yyyy = day.getFullYear();
-      const mm = String(day.getMonth() + 1).padStart(2, '0');
-      const dd = String(day.getDate()).padStart(2, '0');
-      const dayKey = `${yyyy}-${mm}-${dd}`;
+    for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
+      const dayKey = getDayKeyUtc(day);
       const liquid = roundToCents(liquidByDay[dayKey] || 0);
       const investments = roundToCents(investmentsByDay[dayKey] || 0);
       snapshots.push({

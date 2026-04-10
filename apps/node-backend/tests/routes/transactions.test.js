@@ -45,7 +45,12 @@ vi.mock('../../src/services/materializedViewService.js', () => ({
   scheduleRefresh: vi.fn(),
 }));
 
+vi.mock('../../src/database/connection.js', () => ({
+  query: vi.fn(),
+}));
+
 import transactionRepository from '../../src/repositories/transactionRepository.js';
+import { query as dbQuery } from '../../src/database/connection.js';
 await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {
@@ -138,6 +143,49 @@ describe('Transaction Routes', () => {
     });
   });
 
+  describe('GET /export/csv', () => {
+    it('should neutralize spreadsheet formula values in CSV export', async () => {
+      dbQuery.mockResolvedValue({
+        rows: [
+          {
+            date: '2026-01-15',
+            bank_account: 'Main',
+            recipient_name: '=HYPERLINK("http://evil")',
+            memo: '+cmd',
+            amount: '-100.00',
+            currency: 'EUR',
+            balance: '1000.00',
+            category_name: '@danger',
+            comment: '-comment',
+          },
+        ],
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      expect(res.send).toHaveBeenCalledTimes(1);
+      const csv = res.send.mock.calls[0][0];
+      expect(csv).toContain(`'=HYPERLINK(""http://evil"")`);
+      expect(csv).toContain("'+cmd");
+      expect(csv).toContain("'-100.00");
+      expect(csv).toContain("'@danger");
+      expect(csv).toContain("'-comment");
+    });
+
+    it('should sanitize server error detail when export fails', async () => {
+      dbQuery.mockRejectedValue(new Error('sensitive db failure'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error exporting transactions' });
+    });
+  });
+
   describe('POST /', () => {
     it('should create transaction with 201', async () => {
       transactionRepository.create.mockResolvedValue({
@@ -187,6 +235,17 @@ describe('Transaction Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
+
+    it('should sanitize server error detail when patch fails', async () => {
+      transactionRepository.update.mockRejectedValue(new Error('constraint: internal detail'));
+
+      const req = { params: { id: '1' }, body: { amount: -75.00 } };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error updating transaction' });
+    });
   });
 
   describe('DELETE /:id', () => {
@@ -213,7 +272,7 @@ describe('Transaction Routes', () => {
 });
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), setHeader: vi.fn() };
   res.status.mockReturnValue(res);
   return res;
 }

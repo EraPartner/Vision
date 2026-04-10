@@ -168,7 +168,26 @@ describe('Import Routes', () => {
       await routeHandlers['post:/csv'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json.mock.calls[0][0].detail).toContain('Import failed');
+      expect(res.json.mock.calls[0][0].detail).toBe('Import failed');
+    });
+
+    it('should not leak internal error details on import failure', async () => {
+      importCSVWithRawStorage.mockRejectedValue(new Error('sensitive parser trace'));
+
+      const req = {
+        file: {
+          path: '/tmp/test.csv',
+          originalname: 'test.csv',
+          mimetype: 'text/csv',
+        },
+        query: { bank_name: 'belfius' },
+        body: {},
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/csv'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
     });
   });
 
@@ -248,6 +267,7 @@ describe('Import Routes', () => {
       await routeHandlers['post:/csv/custom'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
     });
   });
 

@@ -180,8 +180,8 @@ export default function TransactionsPage() {
         updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
 
-    const handleUpdate = (idx: number, updated: TableTransaction) => {
-        const originalTransaction = allItems[idx];
+    const handleUpdate = (sourceIndex: number, updated: TableTransaction) => {
+        const originalTransaction = allItems[sourceIndex];
         if (!originalTransaction) return;
         updateMutation.mutate({
             id: originalTransaction.id,

@@ -3,7 +3,7 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: React frontend architecture and diagrams
-date: 2026-04-02
+date: 2026-04-10
 tags: [architecture, frontend, uml, plantuml, react]
 aliases: [frontend architecture, react architecture, frontend design]
 ---
@@ -542,6 +542,9 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `transaction-creation-sequence.puml` - Transaction create flow
 - `use-case-diagram.puml` - User interactions overview
 - `transaction-state.puml` - Transaction lifecycle states
+
+Recent update note (2026-04-10):
+- Shared table architecture now includes extracted `ColumnFilter` and explicit source-row identity (`sourceIndex`) mapping semantics used by `DataTable` and `VirtualDataTable` ([[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]).
 
 **System-Wide:**
 - `api-communication.puml` - Frontend to Backend communication

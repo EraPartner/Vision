@@ -285,7 +285,35 @@ class ApiClient {
 
         const url = `${API_BASE_URL}/api/import/csv/stream?${queryParams.toString()}`;
 
-        const result = new Promise<ImportResult>(async (resolve, reject) => {
+        const parseSseBlock = (block: string): { eventName: string; dataRaw: string } | undefined => {
+            let eventName = 'message';
+            const dataLines: string[] = [];
+
+            for (const rawLine of block.split(/\r?\n/)) {
+                if (!rawLine || rawLine.startsWith(':')) continue;
+                if (rawLine.startsWith('event:')) {
+                    const parsedName = rawLine.slice('event:'.length).trim();
+                    eventName = parsedName || 'message';
+                    continue;
+                }
+                if (rawLine.startsWith('data:')) {
+                    dataLines.push(rawLine.slice('data:'.length).trimStart());
+                }
+            }
+
+            if (dataLines.length === 0) return undefined;
+            return { eventName, dataRaw: dataLines.join('\n') };
+        };
+
+        const extractErrorDetail = (payload: unknown): string => {
+            if (payload && typeof payload === 'object' && 'detail' in payload) {
+                const detail = (payload as { detail?: unknown }).detail;
+                if (typeof detail === 'string' && detail.trim()) return detail;
+            }
+            return 'Import failed';
+        };
+
+        const result = (async (): Promise<ImportResult> => {
             try {
                 const response = await fetch(url, {
                     method: 'POST',
@@ -305,41 +333,77 @@ class ApiClient {
                 let buffer = '';
                 let finalResult: ImportResult | null = null;
 
+                const processEventBlock = (block: string) => {
+                    const parsedEvent = parseSseBlock(block);
+                    if (!parsedEvent) return;
+
+                    let payload: unknown;
+                    try {
+                        payload = JSON.parse(parsedEvent.dataRaw);
+                    } catch {
+                        throw new Error('Invalid import stream payload');
+                    }
+
+                    if (parsedEvent.eventName === 'progress') {
+                        onProgress(payload as ImportProgress);
+                        return;
+                    }
+
+                    if (parsedEvent.eventName === 'complete') {
+                        finalResult = payload as ImportResult;
+                        onProgress({
+                            ...(payload as Partial<ImportProgress>),
+                            phase: 'complete',
+                            percent: 100,
+                        } as ImportProgress);
+                        return;
+                    }
+
+                    if (parsedEvent.eventName === 'error') {
+                        throw new Error(extractErrorDetail(payload));
+                    }
+                };
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
                     buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
 
-                    let currentEvent = '';
-                    for (const line of lines) {
-                        if (line.startsWith('event: ')) {
-                            currentEvent = line.slice(7).trim();
-                        } else if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(6));
-                            if (currentEvent === 'progress') {
-                                onProgress(data);
-                            } else if (currentEvent === 'complete') {
-                                finalResult = data;
-                                onProgress({ ...data, phase: 'complete', percent: 100 });
-                            } else if (currentEvent === 'error') {
-                                throw new Error(data.detail || 'Import failed');
-                            }
-                        }
+                    let separatorMatch = buffer.match(/\r?\n\r?\n/);
+                    while (separatorMatch) {
+                        const separatorIndex = separatorMatch.index ?? -1;
+                        if (separatorIndex < 0) break;
+
+                        const block = buffer.slice(0, separatorIndex);
+                        buffer = buffer.slice(separatorIndex + separatorMatch[0].length);
+                        processEventBlock(block);
+                        separatorMatch = buffer.match(/\r?\n\r?\n/);
                     }
                 }
 
-                resolve(finalResult || { total_processed: 0, imported: 0, duplicates: 0, errors: 0, status: 'completed' });
+                const trailing = decoder.decode();
+                if (trailing) {
+                    buffer += trailing;
+                }
+                if (buffer.trim()) {
+                    processEventBlock(buffer.trimEnd());
+                }
+
+                return finalResult || {
+                    total_processed: 0,
+                    imported: 0,
+                    duplicates: 0,
+                    errors: 0,
+                    status: 'completed',
+                };
             } catch (err) {
                 if ((err as Error).name === 'AbortError') {
-                    reject(new Error('Import cancelled'));
-                } else {
-                    reject(err);
+                    throw new Error('Import cancelled');
                 }
+                throw err;
             }
-        });
+        })();
 
         return {
             abort: () => controller.abort(),

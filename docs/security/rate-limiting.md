@@ -2,11 +2,11 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-03-18
+date: 2026-04-10
 tags: [security, rate-limiting, ddos]
 description: Rate limiting implementation to protect against abuse and ensure fair resource usage
 aliases: [rate limit, ddos protection, throttling]
-related_code: ["apps/node-backend/src/middleware/rateLimiter.js"]
+related_code: ["apps/node-backend/src/middleware/rateLimiter.js", "apps/node-backend/src/routes/info.js", "apps/node-backend/src/routes/transactions.js"]
 ---
 
 # Rate Limiting
@@ -55,9 +55,10 @@ Certain endpoints have custom rate limits:
 | Endpoint | Limit | Reason |
 |----------|-------|--------|
 | `PATCH /api/transactions/:id` | 30/min | Database-heavy operation |
-| `POST /api/transactions/export-csv` | 30/min | Export is resource-intensive |
+| `GET /api/transactions/export/csv` | 30/min | Export is resource-intensive |
 | `PATCH /api/planned-transactions/:id` | 30/min | Database-heavy operation |
 | `GET /api/info/exchange-rates` | 30/min | External API calls |
+| `POST /api/info/refresh-views` | 10/min | Administrative, expensive materialized-view refresh |
 
 ## Response Headers
 

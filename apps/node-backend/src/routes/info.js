@@ -477,7 +477,7 @@ router.post('/inflation-rates/refresh', adminRateLimiter, async (req, res) => {
 });
 
 // POST /api/info/refresh-views - Manually refresh materialized views
-router.post('/refresh-views', async (req, res) => {
+router.post('/refresh-views', adminRateLimiter, async (req, res) => {
   try {
     const start = Date.now();
     await refreshMaterializedViews();

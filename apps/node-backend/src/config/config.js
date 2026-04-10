@@ -74,6 +74,7 @@ const settings = deepFreeze({
 
   admin: {
     enableResetDb: (process.env.ENABLE_RESET_DB || 'false').toLowerCase() === 'true',
+    authToken: (process.env.ADMIN_AUTH_TOKEN || '').trim(),
   },
 
   isProduction() {

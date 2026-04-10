@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, investments, portfolio, stocks, crypto, metals]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -276,6 +276,7 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 - Repository uses per-investment ranking (`ROW_NUMBER() OVER (PARTITION BY investment_id ORDER BY date DESC, id DESC)`) so each investment contributes at most `per_investment_limit` rows.
 - Final result is globally ordered by `date DESC, id DESC`.
 - `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
+- Route cache key for bulk transactions now includes `limit` to prevent collisions between requests that differ only by limit value.
 
 **Response:**
 ```json

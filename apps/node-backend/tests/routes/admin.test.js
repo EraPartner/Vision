@@ -112,6 +112,17 @@ describe('Admin Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
+
+    it('should sanitize internal errors when init check throws', async () => {
+      checkConnection.mockRejectedValue(new Error('driver stack trace'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/database/init'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Administrative operation failed' });
+    });
   });
 
   describe('POST /database/reset', () => {

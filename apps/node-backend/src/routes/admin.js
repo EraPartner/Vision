@@ -22,6 +22,7 @@ import { sanitizePersistedKinesisHistory } from '../services/priceProviderServic
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+const GENERIC_ADMIN_ERROR_DETAIL = 'Administrative operation failed';
 
 /**
  * Fetch the latest GitHub Release metadata.
@@ -112,7 +113,7 @@ router.post('/database/init', async (req, res) => {
     });
   } catch (err) {
     logger.error('Database init check failed', { error: err.message });
-    res.status(500).json({ detail: `Database initialisation failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_ADMIN_ERROR_DETAIL });
   }
 });
 
@@ -161,7 +162,7 @@ router.get('/update/check', async (req, res) => {
     return res.json(payload);
   } catch (err) {
     logger.error('Update check failed', { error: err.message });
-    res.status(500).json({ detail: `Update check failed: ${err.message}` });
+    res.status(500).json({ detail: GENERIC_ADMIN_ERROR_DETAIL });
   }
 });
 

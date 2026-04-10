@@ -2,7 +2,7 @@
  * Investment route tests.
  * Tests all CRUD endpoints for investments and portfolio transactions.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const routeHandlers = {};
 const mockRouter = {
@@ -34,6 +34,7 @@ vi.mock('../../src/repositories/investmentRepository.js', () => ({
 vi.mock('../../src/repositories/portfolioTransactionRepository.js', () => ({
   default: {
     getAll: vi.fn(),
+    getAllByInvestmentIds: vi.fn(),
     getAllWithCount: vi.fn(),
     getCount: vi.fn(),
     getById: vi.fn(),
@@ -82,6 +83,8 @@ import portfolioTransactionRepository from '../../src/repositories/portfolioTran
 import { fetchHistoricalPrices, fetchLivePricesDetailed } from '../../src/services/priceProviderService.js';
 await import('../../src/routes/investments.js');
 
+let nowSpy;
+
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), end: vi.fn() };
   res.status.mockReturnValue(res);
@@ -89,7 +92,65 @@ function mockResponse() {
 }
 
 describe('Investment Routes', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+  });
+
+  afterEach(() => {
+    nowSpy?.mockRestore();
+  });
+
+  describe('GET /transactions', () => {
+    it('should cache and differentiate entries by limit parameter', async () => {
+      const reqLimit10 = {
+        query: {
+          investment_ids: '1,2',
+          per_investment_limit: '1000',
+          limit: '10',
+          offset: '0',
+        },
+      };
+      const reqLimit20 = {
+        query: {
+          investment_ids: '1,2',
+          per_investment_limit: '1000',
+          limit: '20',
+          offset: '0',
+        },
+      };
+
+      const repoResultA = [{ id: 101, amount: 1 }];
+      const repoResultB = [{ id: 202, amount: 2 }];
+
+      portfolioTransactionRepository.getAllByInvestmentIds
+        .mockResolvedValueOnce(repoResultA)
+        .mockResolvedValueOnce(repoResultB);
+      portfolioTransactionRepository.getCount.mockResolvedValue(2);
+
+      const resA1 = mockResponse();
+      await routeHandlers['get:/transactions'](reqLimit10, resA1);
+      expect(resA1.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultA, limit: 10 }));
+
+      const resA2 = mockResponse();
+      await routeHandlers['get:/transactions'](reqLimit10, resA2);
+      expect(resA2.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultA, limit: 10 }));
+
+      const resB = mockResponse();
+      await routeHandlers['get:/transactions'](reqLimit20, resB);
+      expect(resB.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultB, limit: 20 }));
+
+      expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenCalledTimes(2);
+      expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ limit: 10 })
+      );
+      expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ limit: 20 })
+      );
+    });
+  });
 
   // ── GET /api/investments ───────────────────────────────────
   describe('GET /', () => {

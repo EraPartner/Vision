@@ -20,6 +20,7 @@ const ENV_KEYS = [
   'DB_MAX_OVERFLOW',
   'CORS_ORIGINS',
   'ENABLE_RESET_DB',
+  'ADMIN_AUTH_TOKEN',
 ];
 
 const originalEnv = process.env;
@@ -76,6 +77,7 @@ describe('Configuration Management', () => {
       const { getSettings } = await importConfigFresh();
       const settings = getSettings();
       expect(settings.admin.enableResetDb).toBe(false);
+      expect(settings.admin.authToken).toBe('');
     });
 
     it('should have debug enabled by default', async () => {
@@ -135,6 +137,12 @@ describe('Configuration Management', () => {
       process.env.ENABLE_RESET_DB = 'true';
       const { getSettings } = await importConfigFresh();
       expect(getSettings().admin.enableResetDb).toBe(true);
+    });
+
+    it('should trim and override admin auth token from env', async () => {
+      process.env.ADMIN_AUTH_TOKEN = '  super-secret-token  ';
+      const { getSettings } = await importConfigFresh();
+      expect(getSettings().admin.authToken).toBe('super-secret-token');
     });
 
     it('should override debug from env', async () => {

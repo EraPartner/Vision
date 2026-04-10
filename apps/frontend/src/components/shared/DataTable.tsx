@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ColumnFilter } from "@/components/shared/ColumnFilter";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -40,14 +41,24 @@ interface DataTableProps<T> {
     searchValue?: string;
 }
 
-function getSortValue(val: any): string | number {
+interface IndexedRow<T> {
+    row: T;
+    sourceIndex: number;
+}
+
+function getRowKey<T extends Record<string, unknown>>(row: T, fallbackIndex: number): string | number {
+    const candidate = row.id;
+    return (typeof candidate === "string" || typeof candidate === "number") ? candidate : fallbackIndex;
+}
+
+function getSortValue(val: unknown): string | number {
     if (val == null) return "";
     if (typeof val === "number") return val;
     if (typeof val === "boolean") return val ? 1 : 0;
     return String(val).toLowerCase();
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
     title,
     subtitle,
     columns,
@@ -64,10 +75,9 @@ export function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
     const { t } = useLanguage();
     const [editingRow, setEditingRow] = useState<number | null>(null);
-    const [editValues, setEditValues] = useState<Record<string, any>>({});
-    const [localSearchQuery, setLocalSearchQuery] = useState("");
+    const [editValues, setEditValues] = useState<Record<string, unknown>>({});
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchValue ?? "");
     const isServerSearch = !!onSearchChange;
-    const searchQuery = isServerSearch ? (searchValue ?? "") : localSearchQuery;
 
     // Debounced server-side search
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,6 +96,26 @@ export function DataTable<T extends Record<string, any>>({
             setLocalSearchQuery(value);
         }
     }, [isServerSearch, onSearchChange, onPageChange]);
+
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+                debounceRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isServerSearch) return;
+        if (debounceRef.current) return;
+
+        const externalQuery = searchValue ?? "";
+        if (externalQuery !== localSearchQuery) {
+            setLocalSearchQuery(externalQuery);
+        }
+    }, [isServerSearch, searchValue, localSearchQuery]);
+
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDirection>(null);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -168,13 +198,13 @@ export function DataTable<T extends Record<string, any>>({
     }, [data, columns]);
 
     // Filter + search + sort pipeline
-    const processedData = useMemo(() => {
-        let result = [...data];
+    const processedRows = useMemo(() => {
+        let result: IndexedRow<T>[] = data.map((row, sourceIndex) => ({ row, sourceIndex }));
 
         // Apply column filters
         for (const [key, filterVal] of Object.entries(columnFilters)) {
             const q = filterVal.toLowerCase();
-            result = result.filter((row) => {
+            result = result.filter(({ row }) => {
                 const v = row[key];
                 return v != null && String(v).toLowerCase().includes(q);
             });
@@ -183,7 +213,7 @@ export function DataTable<T extends Record<string, any>>({
         // Apply global search (only for client-side search)
         if (!isServerSearch && localSearchQuery.trim()) {
             const q = localSearchQuery.toLowerCase();
-            result = result.filter((row) =>
+            result = result.filter(({ row }) =>
                 columns.some((col) => {
                     const val = row[col.key];
                     return val != null && String(val).toLowerCase().includes(q);
@@ -194,8 +224,8 @@ export function DataTable<T extends Record<string, any>>({
         // Apply sort
         if (sortKey && sortDir) {
             result.sort((a, b) => {
-                const va = getSortValue(a[sortKey]);
-                const vb = getSortValue(b[sortKey]);
+                const va = getSortValue(a.row[sortKey]);
+                const vb = getSortValue(b.row[sortKey]);
                 let cmp = 0;
                 if (typeof va === "number" && typeof vb === "number") {
                     cmp = va - vb;
@@ -209,9 +239,9 @@ export function DataTable<T extends Record<string, any>>({
         return result;
     }, [data, columnFilters, localSearchQuery, isServerSearch, sortKey, sortDir, columns]);
 
-    const startEditing = (idx: number, row: T) => {
-        setEditingRow(idx);
-        const values: Record<string, any> = {};
+    const startEditing = (sourceIndex: number, row: T) => {
+        setEditingRow(sourceIndex);
+        const values: Record<string, unknown> = {};
         columns.forEach((col) => {
             if (col.editable) {
                 values[col.key] = row[col.key];
@@ -225,16 +255,20 @@ export function DataTable<T extends Record<string, any>>({
         setEditValues({});
     };
 
-    const saveEditing = (idx: number) => {
+    const saveEditing = (sourceIndex: number, currentRow: T) => {
         if (onRowUpdate) {
-            const updatedRow = { ...data[idx], ...editValues } as T;
-            onRowUpdate(idx, updatedRow);
+            const updatedRow = { ...currentRow, ...editValues } as T;
+            onRowUpdate(sourceIndex, updatedRow);
         }
         setEditingRow(null);
         setEditValues({});
     };
 
     const clearAllFilters = () => {
+        if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+            debounceRef.current = null;
+        }
         setColumnFilters({});
         setLocalSearchQuery("");
         if (isServerSearch) onSearchChange!("");
@@ -272,7 +306,7 @@ export function DataTable<T extends Record<string, any>>({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder={isServerSearch ? t('table.searchDatabase') : t('table.searchAllColumns')}
-                        value={isServerSearch ? localSearchQuery : localSearchQuery}
+                        value={localSearchQuery}
                         onChange={(e) => handleSearchInput(e.target.value)}
                         className="pl-9 h-9"
                     />
@@ -281,7 +315,14 @@ export function DataTable<T extends Record<string, any>>({
                             variant="ghost"
                             size="icon"
                             className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
-                            onClick={() => { setLocalSearchQuery(""); if (isServerSearch) onSearchChange!(""); }}
+                            onClick={() => {
+                                if (debounceRef.current) {
+                                    clearTimeout(debounceRef.current);
+                                    debounceRef.current = null;
+                                }
+                                setLocalSearchQuery("");
+                                if (isServerSearch) onSearchChange!("");
+                            }}
                         >
                             <X className="h-3 w-3" />
                         </Button>
@@ -378,7 +419,6 @@ export function DataTable<T extends Record<string, any>>({
                                                         </PopoverTrigger>
                                                         <PopoverContent className="w-56 p-2" align="start">
                                                             <ColumnFilter
-                                                                columnKey={col.key}
                                                                 header={col.header}
                                                                 value={columnFilters[col.key] || ""}
                                                                 onChange={(v) => setColumnFilter(col.key, v)}
@@ -412,7 +452,7 @@ export function DataTable<T extends Record<string, any>>({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {processedData.length === 0 ? (
+                            {processedRows.length === 0 ? (
                                 <TableRow>
                                     <TableCell
                                         colSpan={columns.length + (hasEditableColumns ? 1 : 0)}
@@ -424,12 +464,12 @@ export function DataTable<T extends Record<string, any>>({
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                processedData.map((row, idx) => {
-                                    const isEditing = editingRow === idx;
+                                processedRows.map(({ row, sourceIndex }, visibleIndex) => {
+                                    const isEditing = editingRow === sourceIndex;
                                     return (
                                         <TableRow
-                                            key={idx}
-                                            className={`transition-colors duration-150 ${isEditing ? "bg-primary/5" : idx % 2 === 1 ? "bg-muted/30" : ""} hover:bg-muted/50`}
+                                            key={getRowKey(row, sourceIndex)}
+                                            className={`transition-colors duration-150 ${isEditing ? "bg-primary/5" : visibleIndex % 2 === 1 ? "bg-muted/30" : ""} hover:bg-muted/50`}
                                         >
                                             {columns.map((col) => (
                                                 <TableCell key={col.key} className={`whitespace-normal break-words [overflow-wrap:anywhere] align-top ${col.className || ""}`}>
@@ -449,7 +489,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             onKeyDown={(e) => {
                                                                 if (e.key === "Enter") {
                                                                     e.preventDefault();
-                                                                    saveEditing(idx);
+                                                                    saveEditing(sourceIndex, row);
                                                                 } else if (e.key === "Escape") {
                                                                     e.preventDefault();
                                                                     cancelEditing();
@@ -458,7 +498,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             className="h-8 text-sm"
                                                         />
                                                     ) : col.render ? (
-                                                        col.render(row, isEditing, idx)
+                                                        col.render(row, isEditing, sourceIndex)
                                                     ) : (
                                                         String(row[col.key] ?? "")
                                                     )}
@@ -472,7 +512,7 @@ export function DataTable<T extends Record<string, any>>({
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
-                                                                onClick={() => saveEditing(idx)}
+                                                                onClick={() => saveEditing(sourceIndex, row)}
                                                             >
                                                                 <Check className="h-4 w-4" />
                                                             </Button>
@@ -490,7 +530,7 @@ export function DataTable<T extends Record<string, any>>({
                                                             variant="ghost"
                                                             size="icon"
                                                             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                            onClick={() => startEditing(idx, row)}
+                                                            onClick={() => startEditing(sourceIndex, row)}
                                                         >
                                                             <Pencil className="h-4 w-4" />
                                                         </Button>
@@ -508,8 +548,8 @@ export function DataTable<T extends Record<string, any>>({
                 {/* Result count + Pagination */}
                 <div className="flex items-center justify-between border-t px-6 py-3">
                     <p className="text-sm text-muted-foreground">
-                        {processedData.length !== data.length
-                            ? t('table.shownOf', { shown: processedData.length.toString(), total: (hasPagination ? totalItems! : data.length).toString() })
+                        {processedRows.length !== data.length
+                            ? t('table.shownOf', { shown: processedRows.length.toString(), total: (hasPagination ? totalItems! : data.length).toString() })
                             : hasPagination && totalItems! > 0
                                 ? t('table.showingRange', { from: (currentPage * pageSize + 1).toString(), to: Math.min((currentPage + 1) * pageSize, totalItems!).toString(), total: totalItems!.toString() })
                                 : t('table.items', { count: data.length.toString() })
@@ -549,82 +589,5 @@ export function DataTable<T extends Record<string, any>>({
                 </div>
             </CardContent>
         </Card>
-    );
-}
-
-// ─── Column Filter Component ──────────────────────────────
-function ColumnFilter({
-    columnKey,
-    header,
-    value,
-    onChange,
-    uniqueValues,
-    onClose,
-}: {
-    columnKey: string;
-    header: string;
-    value: string;
-    onChange: (val: string) => void;
-    uniqueValues: string[];
-    onClose: () => void;
-}) {
-    const { t } = useLanguage();
-    const [filterSearch, setFilterSearch] = useState("");
-    const filtered = uniqueValues.filter(v =>
-        v.toLowerCase().includes(filterSearch.toLowerCase())
-    );
-
-    return (
-        <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground px-1">{t('table.filterLabel', { header })}</p>
-            <Input
-                placeholder={t('table.filterInputPlaceholder', { header: header.toLowerCase() })}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="h-8 text-sm"
-                autoFocus
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); onClose(); }
-                    if (e.key === "Escape") { e.preventDefault(); onChange(""); onClose(); }
-                }}
-            />
-            {uniqueValues.length > 0 && uniqueValues.length <= 100 && (
-                <>
-                    {uniqueValues.length > 8 && (
-                        <Input
-                            placeholder={t('table.searchValues')}
-                            value={filterSearch}
-                            onChange={(e) => setFilterSearch(e.target.value)}
-                            className="h-7 text-xs"
-                        />
-                    )}
-                    <div className="max-h-40 overflow-y-auto space-y-0.5">
-                        {filtered.slice(0, 30).map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => { onChange(v); onClose(); }}
-                                className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors truncate ${value === v ? "bg-primary/10 text-primary font-medium" : "text-foreground"
-                                    }`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                        {filtered.length > 30 && (
-                            <p className="text-[10px] text-muted-foreground px-2">{t('table.moreValues', { count: (filtered.length - 30).toString() })}</p>
-                        )}
-                    </div>
-                </>
-            )}
-            {value && (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { onChange(""); onClose(); }}
-                    className="w-full text-xs h-7 text-muted-foreground"
-                >
-                    {t('table.clearFilter')}
-                </Button>
-            )}
-        </div>
     );
 }

@@ -63,6 +63,26 @@ function isValidStoredPrice(value) {
   return Number.isFinite(number) && number > 0;
 }
 
+function extractAdminBearerToken(authorizationHeader) {
+  if (typeof authorizationHeader !== 'string') return undefined;
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : undefined;
+}
+
+function adminAuthMiddleware(req, res, next) {
+  const configuredToken = settings.admin.authToken;
+  if (!configuredToken) {
+    return next();
+  }
+
+  const providedToken = extractAdminBearerToken(req.headers.authorization);
+  if (!providedToken || providedToken !== configuredToken) {
+    return res.status(401).json({ detail: 'Unauthorized' });
+  }
+
+  return next();
+}
+
 async function persistRefreshedPrices(prices) {
   const updateResults = await Promise.all(
     Object.entries(prices).map(async ([investmentId, priceData]) => {
@@ -222,7 +242,7 @@ app.use('/api/recipients', recipientsRouter);
 app.use('/api/recipients', recipientBankAccountsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
-app.use('/api/admin', adminRateLimiter, adminRouter);
+app.use('/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
 app.use('/api/settings', settingsRouter);

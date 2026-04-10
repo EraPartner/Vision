@@ -94,12 +94,20 @@ package "Shared Components" {
     +server-side search
     +column resize
     +column filters
+    +sourceIndex row mapping
     +inline editing
     +cancelEditingRef
   }
 
   class DataTable {
     +sortable/filterable table
+    +debounced search sync + cleanup
+    +sourceIndex row mapping
+  }
+
+  class ColumnFilter {
+    +shared column-filter popover
+    +multi-value filtering UI
   }
 
   class ExclusionToggle {
@@ -187,6 +195,8 @@ AppLayout --> AppSidebar
 
 AddTransactionDialog --> CategoryCombobox
 AddTransactionDialog --> RecipientCombobox
+VirtualDataTable --> ColumnFilter
+DataTable --> ColumnFilter
 
 note right of ImportPage
   Import wizard integrated

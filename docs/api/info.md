@@ -2,7 +2,7 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -384,6 +384,7 @@ Notes:
 - Historical unit-priced investment valuation uses persisted/provider historical quotes first and falls back to transaction-derived unit price carry-forward when quote history is missing; it does not backfill past days from mutable `current_price`.
 - Backend emits debug/warn/info logs for net worth computation context (`firstDataDate`, snapshot count, current totals, fallback usage) to speed up production troubleshooting without changing API shape.
 - Daily net-worth snapshots are sanitized for isolated one-day investment spikes/troughs: confirmed outlier days are replaced with geometric interpolation (`sqrt(prev*next)`) and `netWorth` is recomputed with unchanged liquid value; `monthlyChange` and baseline calculations use sanitized snapshots ([[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/tests/infoRepository.test.js]]).
+- Net-worth daily timeline loops were refactored around shared UTC/day helpers (`addDaysUtc`, `getDayKeyUtc`, `getUtcDayEndTimestamp`) to reduce repeated ad-hoc date key/timestamp construction while preserving endpoint behavior and output semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
 
 **Response:** `200 OK`
 
@@ -601,6 +602,12 @@ Manually refresh materialized views.
   "duration_ms": 150
 }
 ```
+
+Security/performance notes:
+- Endpoint now uses `adminRateLimiter` to protect materialized-view refresh from abuse bursts.
+- Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.js]].
+
+Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/middleware/rateLimiter.js]]
 
 ---
 

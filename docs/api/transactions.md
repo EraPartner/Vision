@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-04-09
+date: 2026-04-10
 tags: [api, transactions, finance]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -98,6 +98,8 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 
 Implementation note:
 - CSV export row escaping/assembly and filename creation are now handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
+- CSV export now neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
+- Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id
 
@@ -173,6 +175,7 @@ Implementation notes:
 - Recipient/category name-resolution and CSV export DB access now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports; endpoint behavior, payloads, and validation messages remain unchanged ([[apps/node-backend/src/routes/transactions.js]]).
 - Recipient/category name-resolution checks in PATCH now run concurrently and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without changing validation outcomes ([[apps/node-backend/src/routes/transactions.js]]).
 - Repository update path now returns the enriched updated row in a single CTE query (`WITH updated ... SELECT ...`) instead of `UPDATE` + follow-up `getById` round-trip; response shape and not-found semantics are unchanged ([[apps/node-backend/src/repositories/transactionRepository.js]]).
+- PATCH route internal errors now return sanitized generic details instead of leaking backend exception strings ([[apps/node-backend/src/routes/transactions.js]]).
 
 **Rate Limited:** 30 requests per minute
 
