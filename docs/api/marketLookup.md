@@ -2,11 +2,20 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-04-02
-tags: [api, market, stocks, finance]
+date: 2026-04-10
+tags:
+  - api
+  - market
+  - stocks
+  - finance
 description: API endpoints for real-time market data, search, quotes, and charts
-aliases: [market-api, stock-search, quotes-api, yahoo-finance]
-related_code: ["apps/node-backend/src/routes/marketLookup.js"]
+aliases:
+  - market-api
+  - stock-search
+  - quotes-api
+  - yahoo-finance
+related_code:
+  - apps/node-backend/src/routes/marketLookup.js
 ---
 
 # Market Lookup API
@@ -205,3 +214,14 @@ Data is provided by Yahoo Finance via the `yahoo-finance2` library. Some data ma
 - [[docs/api/index]] - API Index
 - [[docs/api/investments]] - Investments API
 - [[docs/api/watchlist]] - Watchlist API
+
+## Test Coverage Notes (2026-04-10)
+
+Recent backend tests validate:
+- `GET /api/market/quote` missing `symbols` request validation (`400`).
+- Quote + summary mapping behavior when provider responses are available.
+- Quote failure fallback behavior returning `{"quotes": []}` for partial failure tolerance.
+- `GET /api/market/news` deduplication by title and server-side thumbnail normalization.
+- News search failure tolerance returning `{"articles": []}`.
+
+Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.js]]

@@ -10,10 +10,12 @@ const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
 }));
 
 vi.mock('yahoo-finance2', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    quote: mockYahooQuote,
-    chart: mockYahooChart,
-  })),
+  default: vi.fn().mockImplementation(function MockYahooFinance() {
+    return {
+      quote: mockYahooQuote,
+      chart: mockYahooChart,
+    };
+  }),
 }));
 
 vi.mock('../src/config/logger.js', () => ({

@@ -3,10 +3,22 @@ title: Admin API
 type: endpoint
 status: active
 date: 2026-04-10
-tags: [api, admin, system, updates]
-description: API endpoints for system administration, database management, and application updates
-aliases: [admin, system admin, health, initialization]
-related_code: ["apps/node-backend/src/routes/admin.js", "apps/node-backend/src/main.js", "apps/node-backend/src/config/config.js"]
+tags:
+  - api
+  - admin
+  - system
+  - updates
+description: API endpoints for system administration, database management, and
+  application updates
+aliases:
+  - admin
+  - system admin
+  - health
+  - initialization
+related_code:
+  - apps/node-backend/src/routes/admin.js
+  - apps/node-backend/src/main.js
+  - apps/node-backend/src/config/config.js
 ---
 
 # Admin API
@@ -236,3 +248,11 @@ Apply update and restart the application (backwards compatibility endpoint).
 - [[docs/adr/002-database-schema]] - Database Schema
 
 Code links: [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+
+## Test Coverage Notes (2026-04-10)
+
+Recent backend tests validate admin update behavior for:
+- `GET /api/admin/update/check`: GitHub releases response parsing, version resolution precedence (`APP_VERSION` then `APP_IMAGE_TAG`), no-release fallback payload, and invalid JSON path returning sanitized `500`.
+- `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart`: expected success response contracts.
+
+Code links: [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/src/routes/admin.js]]

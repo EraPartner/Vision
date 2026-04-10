@@ -2,7 +2,7 @@
 title: Package.json Scripts Reference
 type: reference
 status: active
-date: 2026-03-31
+date: 2026-04-10
 tags: [reference, scripts, npm, bun, build, commands]
 description: Complete reference of all npm/bun scripts available in the Vision project
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
@@ -37,6 +37,15 @@ aliases: [scripts, npm scripts, bun scripts, commands, build commands, run comma
 | `lint` | `eslint apps/frontend/src` | ESLint on frontend code | Before committing |
 | `lint:fix` | `eslint apps/frontend/src --fix` | ESLint with auto-fix | Fixing lint errors |
 | `typecheck` | `bun --cwd apps/frontend run typecheck` | TypeScript type checking | Before committing |
+
+## Security & Dependency Hygiene
+
+| Script / Command | Command | Description | When to Use |
+|--------|---------|-------------|-------------|
+| `bun audit` | `bun audit` | Scan lockfile/dependencies for known vulnerabilities | Before release, after dependency updates |
+| `bun update` | `bun update` | Refresh dependency graph to latest allowed versions | Planned maintenance windows |
+
+For transitive vulnerability remediation patterns, see [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] and root config in [[package.json]].
 
 ## Testing
 

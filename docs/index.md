@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-02
+date: 2026-04-10
 tags: [knowledge-base, index, project, overview]
 description: Main entry point to the Vision project documentation - financial transaction management application
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -164,6 +164,12 @@ LIMIT 10
 - **Fixed frontend-architecture.md**: Removed stray `@enduml` artifacts and fixed bare wiki-links
 - **Enhanced main index**: Added audience-specific navigation paths for developers, AI agents, and computer scientists
 - **Updated tag taxonomy**: Added `template` tag for documentation templates
+
+### 2026-04-10 Security & Toolchain Updates
+
+- **Dependency Security Remediation**: Added workspace-level remediation record for root `overrides`/`resolutions` hardening and toolchain updates ([[docs/security/dependency-security-remediation-2026-04]]).
+- **Toolchain baseline updated**: Frontend Vite upgraded to `^8.0.8` with `@vitejs/plugin-react-swc` `^4.3.0`; backend Vitest upgraded to `^4.1.4` ([[apps/frontend/package.json]], [[apps/node-backend/package.json]]).
+- **Test compatibility note**: Documented constructor-compatible Vitest 4 mock pattern for `yahoo-finance2` ([[apps/node-backend/tests/priceProviderService.test.js]]).
 
 ### 2026-04-02 KB Consistency Updates
 

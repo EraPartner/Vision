@@ -3,10 +3,20 @@ title: Rate Limiting
 type: security
 status: active
 date: 2026-04-10
-tags: [security, rate-limiting, ddos]
-description: Rate limiting implementation to protect against abuse and ensure fair resource usage
-aliases: [rate limit, ddos protection, throttling]
-related_code: ["apps/node-backend/src/middleware/rateLimiter.js", "apps/node-backend/src/routes/info.js", "apps/node-backend/src/routes/transactions.js"]
+tags:
+  - security
+  - rate-limiting
+  - ddos
+description: Rate limiting implementation to protect against abuse and ensure
+  fair resource usage
+aliases:
+  - rate limit
+  - ddos protection
+  - throttling
+related_code:
+  - apps/node-backend/src/middleware/rateLimiter.js
+  - apps/node-backend/src/routes/info.js
+  - apps/node-backend/src/routes/transactions.js
 ---
 
 # Rate Limiting
@@ -100,3 +110,13 @@ For production deployments:
 - [[docs/security/index]] - Security Documentation Index
 - [[docs/security/input-validation]] - Input Validation
 - [[docs/api/index]] - API Index
+
+## Test Coverage Notes (2026-04-10)
+
+Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
+- allow-under-limit and `429 Too Many Requests` over-limit behavior,
+- rolling window reset behavior,
+- client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
+- stricter presets: `adminRateLimiter` (`10 req/min`) and `importRateLimiter` (`5 req/min`).
+
+Related code: [[apps/node-backend/src/middleware/rateLimiter.js]]
