@@ -18,7 +18,7 @@ related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/dat
 
 ## Connection Architecture
 
-**File:** [[apps/node-backend/src/database/postgresManager.js]]
+**File:** [[apps/node-backend/src/database/connection.js]]
 
 ```
 ┌─────────────────────────────────────────────┐

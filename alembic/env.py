@@ -16,7 +16,7 @@ if os.path.exists(env_local_path):
 # Get database URL from environment variable
 database_url = os.getenv(
     "DATABASE_URL",
-    "postgresql://ftm_user@localhost:5433/financial_transactions"
+    "postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions",
 )
 
 # Handle SQLite path resolution if using SQLite
@@ -29,8 +29,9 @@ target_metadata = None
 try:
     sys.path.insert(0, os.path.join(config_dir, "apps", "backend"))
     from database.models import Base
+
     target_metadata = Base.metadata
-    
+
     try:
         from database import raw_transaction_models  # noqa: F401
     except Exception:
@@ -39,9 +40,10 @@ except Exception as e:
     # If models can't be imported, Alembic will still work for migrations
     # but autogenerate functionality will be limited
     import logging
+
     logging.getLogger(__name__).warning(
-        f'Could not import database models for autogenerate support: {e}\n'
-        'Alembic will still work for manual migrations.'
+        f"Could not import database models for autogenerate support: {e}\n"
+        "Alembic will still work for manual migrations."
     )
 
 # this is the Alembic Config object, which provides
@@ -61,12 +63,12 @@ if config.config_file_name is not None:
 def _render_as_batch_for_sqlite(connectable_or_url):
     try:
         name = None
-        if hasattr(connectable_or_url, 'dialect'):
+        if hasattr(connectable_or_url, "dialect"):
             name = connectable_or_url.dialect.name
         elif isinstance(connectable_or_url, str):
             # URL string like sqlite:////path
-            name = connectable_or_url.split(':', 1)[0]
-        return name == 'sqlite'
+            name = connectable_or_url.split(":", 1)[0]
+        return name == "sqlite"
     except Exception:
         return False
 

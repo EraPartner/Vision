@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-04-09
+date: 2026-04-11
 tags: [api, planned, recurring, schedule]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -210,3 +210,10 @@ When creating/updating a loan, the system generates an amortization schedule:
 
 - [[docs/api/transactions|Transactions API]]
 - [[docs/api/recipients|Recipients API]]
+
+## Testing Coverage Note (2026-04-11)
+
+Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]] verifies:
+- loan term bounds validation,
+- patch `recipient_name`/`category_name` name-to-id resolution,
+- loan toggle-off behavior clearing schedule and loan-specific fields.

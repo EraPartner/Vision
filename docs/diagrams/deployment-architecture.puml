@@ -10,7 +10,7 @@ package "Development Environment" {
   node "Local Machine" as Dev {
     component "Frontend (Vite)" as FrontendDev
     component "Node.js (Bun)" as BackendDev
-    component "PostgreSQL" as PostgresDev
+    component "PostgreSQL (Docker db service)" as PostgresDev
     component "Hot Reload" as HMR
   }
 }

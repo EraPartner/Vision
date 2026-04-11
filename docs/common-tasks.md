@@ -94,7 +94,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 ```bash
 # Development
 bun run dev              # Start backend + frontend
-bun run db:start         # Start PostgreSQL
+bun run docker:dev       # Start Docker dev stack
 bun run db:upgrade       # Run migrations
 
 # Testing
@@ -107,6 +107,7 @@ bun run build:dev        # Development build
 
 # Docker
 bun run docker:dev       # Start Docker dev environment
+bun run docker:dev:down  # Stop Docker dev environment
 ```
 
 See [[docs/reference/scripts\|Scripts Reference]] for the complete list.

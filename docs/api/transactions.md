@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-04-10
+date: 2026-04-11
 tags: [api, transactions, finance]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -276,3 +276,12 @@ await apiClient.deleteTransaction(123);
 - [[docs/api/categories|Categories API]]
 - [[docs/api/recipients|Recipients API]]
 - [[docs/api/imports|Imports API]]
+
+## Testing Coverage Note (2026-04-11)
+
+Recent coverage in [[apps/node-backend/tests/routes/transactions.test.js]] verifies:
+- `normalize_to_eur` conversion path behavior,
+- duplicate detection returning `409`,
+- unresolved `recipient_name`/`category_name` validation branches in patch flow.
+
+Related service: [[apps/node-backend/src/services/currencyConversionService.js]]

@@ -2,11 +2,20 @@
 title: Saved Charts API
 type: endpoint
 status: active
-date: 2026-04-09
-tags: [api, charts, analytics]
+date: 2026-04-10
+tags:
+  - api
+  - charts
+  - analytics
 description: API endpoints for saving and managing custom chart configurations
-aliases: [saved-charts-api, custom-charts, chart-config, analytics-saved]
-related_code: ["apps/node-backend/src/routes/savedCharts.js", "apps/node-backend/src/repositories/savedChartsRepository.js"]
+aliases:
+  - saved-charts-api
+  - custom-charts
+  - chart-config
+  - analytics-saved
+related_code:
+  - apps/node-backend/src/routes/savedCharts.js
+  - apps/node-backend/src/repositories/savedChartsRepository.js
 ---
 
 # Saved Charts API
@@ -142,3 +151,10 @@ Implementation note:
 
 - [[docs/api/index]] - API Index
 - [[docs/features/portfolio]] - Portfolio Features
+
+## Testing references (2026-04-10)
+
+- [[apps/node-backend/tests/routes/savedCharts.test.js]] adds route-level regression coverage for payload validation/error paths, normalization/defaulting behavior, and not-found responses.
+- Route source: [[apps/node-backend/src/routes/savedCharts.js]].
+
+Related docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].

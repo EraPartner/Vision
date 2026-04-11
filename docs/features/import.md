@@ -241,3 +241,11 @@ This allows:
 - [[docs/api/imports|API: Imports]]
 - [[docs/api/transactions|API: Transactions]]
 - [[docs/api/recipients|API: Recipients]]
+
+## Testing references (2026-04-10)
+
+- [[apps/node-backend/tests/routes/import.test.js]] extends route-level import coverage for SSE stream behavior, recipients/categories route handling, and multer middleware error paths.
+- [[apps/node-backend/tests/dataImportService.test.js]] adds recipients/categories bulk import service coverage.
+- [[apps/node-backend/tests/streamingImportService.test.js]] adds streaming import progress/error and result aggregation coverage.
+
+Related testing docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].

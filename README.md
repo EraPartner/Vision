@@ -136,7 +136,7 @@ Vision/
 │   └── electron/       # Desktop wrapper
 ├── alembic/            # DB migrations
 ├── docs/               # Obsidian-style knowledge base
-└── scripts/            # Tooling and local DB helpers
+└── scripts/            # Tooling helpers
 ```
 
 ### Local Development Setup
@@ -146,12 +146,10 @@ git clone https://github.com/EraPartner/Vision.git
 cd Vision
 bun install
 
-# Local Postgres helpers
-bun run db:setup
-bun run db:start
-
 cp .env.example .env
 # edit .env as needed
+
+bun run docker:dev
 
 bun run dev
 ```
@@ -170,11 +168,10 @@ bun run build:dev      # Development-mode build
 bun run lint           # Frontend lint
 bun run test           # Backend Vitest suite
 
-bun run db:setup       # Initialize local PostgreSQL
-bun run db:start       # Start local PostgreSQL
 bun run db:upgrade     # Apply Alembic migrations
 
 bun run docker:dev     # Compose dev stack
+bun run docker:dev:down
 bun run docker:logs    # Tail app logs
 
 bun run electron:dev   # Desktop mode (dev)

@@ -4,7 +4,7 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-04-10
+date: 2026-04-11
 tags: [api, settings, preferences]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -164,3 +164,4 @@ Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/fronten
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
 - [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
 - Coverage code links: [[apps/node-backend/tests/routes/settings.test.js]], [[apps/node-backend/tests/validation.test.js]]
+- Coverage follow-up (2026-04-11): settings route tests now also cover GET all/key behavior, known-default fallback, unknown-key `404`, and success/error branches for single PUT, bulk PUT, and DELETE.

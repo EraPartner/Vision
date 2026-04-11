@@ -268,7 +268,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | File | Purpose |
 |------|---------|
 | [[apps/node-backend/src/database/connection.js]] | Database connection setup |
-| [[apps/node-backend/src/database/postgresManager.js]] | Connection pool manager |
+| [[apps/node-backend/src/main.js]] | DB readiness retry loop + server startup |
 | [[apps/node-backend/src/database/schemaInit.js]] | Schema initialization (indexes, triggers) |
 
 ### Migrations
