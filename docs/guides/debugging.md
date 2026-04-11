@@ -135,10 +135,8 @@ bun run dev
 #### 2. Database Query Logging
 
 ```javascript
-// In postgresManager.js, enable query logging
-pool.on('error', (err) => {
-    logger.error('Database error:', err);
-});
+// In connection.js consumers, log database errors from caught query failures
+logger.error('Database error', { error: err.message });
 ```
 
 #### 3. Test Individual Services
@@ -153,9 +151,9 @@ bun vitest run src/tests/deduplication.test.js
 
 ```bash
 # From project root
-bun run db:start
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
 # Verify connection
-psql -h localhost -U postgres -d vision
+psql -h localhost -p 5432 -U ftm_user -d financial_transactions
 ```
 
 ### Frontend Debugging
@@ -229,8 +227,8 @@ ipcMain.on('channel-name', (event, data) => {
 
 **Resolution:**
 ```bash
-bun run db:start
-# Verify: psql -h localhost -U postgres -d vision
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+# Verify: psql -h localhost -p 5432 -U ftm_user -d financial_transactions
 ```
 
 ### 2. Import Failures
@@ -335,7 +333,8 @@ curl http://localhost:3002/api/info/transaction-count
 ### Database Health
 
 ```bash
-# Check PostgreSQL status
+# Check PostgreSQL container and migration status
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db
 bun run db:current
 ```
 

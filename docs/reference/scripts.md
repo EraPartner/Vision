@@ -59,19 +59,24 @@ For transitive vulnerability remediation patterns, see [[docs/security/dependenc
 
 | Script | Command | Description | When to Use |
 |--------|---------|-------------|-------------|
-| `db:setup` | `node scripts/setup-postgres.js` | Setup local PostgreSQL instance | First-time setup |
-| `db:start` | `node scripts/start-postgres.js` | Start local PostgreSQL server | Starting dev environment |
-| `db:stop` | `node scripts/stop-postgres.js` | Stop local PostgreSQL server | Stopping dev environment |
-| `db:upgrade` | `cd alembic && ../venv/bin/python3 -m alembic -c ../config/alembic.ini upgrade head` | Run all pending migrations | After pulling new migrations |
-| `db:revision` | `cd alembic && ../venv/bin/python3 -m alembic -c ../config/alembic.ini revision --autogenerate -m` | Create new migration | After schema changes |
+| `db:upgrade` | `venv/bin/alembic -c config/alembic.ini upgrade head` | Run all pending migrations | After pulling new migrations |
+| `db:downgrade` | `venv/bin/alembic -c config/alembic.ini downgrade -1` | Roll back the latest migration | Migration recovery/testing |
+| `db:current` | `venv/bin/alembic -c config/alembic.ini current` | Show current migration version | Verify schema state |
+| `db:history` | `venv/bin/alembic -c config/alembic.ini history` | Show migration history | Inspect revision chain |
+| `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations | Recovery/bootstrap workflows |
+| `db:revision` | `venv/bin/alembic -c config/alembic.ini revision --autogenerate -m` | Create new migration | After schema changes |
 
 ## Docker
 
 | Script | Command | Description | When to Use |
 |--------|---------|-------------|-------------|
-| `docker:dev` | `docker compose up --build` | Start dev environment with Docker | Docker-based development |
-| `docker:dev:down` | `docker compose down` | Stop Docker dev environment | Stopping Docker |
-| `docker:dev:rebuild` | `docker compose up --build --force-recreate` | Rebuild Docker containers | After Dockerfile changes |
+| `docker:dev` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | Start dev environment with Docker | Docker-based development |
+| `docker:dev:down` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml down` | Stop Docker dev environment | Stopping Docker |
+| `docker:dev:rebuild` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.dev.yml down && docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` | Rebuild Docker containers | After Dockerfile changes |
+| `docker:clean` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Start clean-slate environment | First-run/onboarding testing |
+| `docker:clean:down` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down` | Stop clean-slate environment | End clean test run |
+| `docker:clean:reset` | `npm run generate-locales-if-not-ci && docker compose -f docker-compose.yml -f docker-compose.clean.yml down -v && docker compose -f docker-compose.yml -f docker-compose.clean.yml up --build` | Reset clean volume and restart | Repeat clean-state tests |
+| `docker:logs` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app` | Tail backend logs | Runtime debugging |
 
 ## Electron
 
@@ -84,8 +89,8 @@ For transitive vulnerability remediation patterns, see [[docs/security/dependenc
 
 ### Starting Development
 ```bash
-bun run db:start      # Start database
-bun run dev           # Start backend + frontend
+bun run docker:dev    # Start Docker stack (db + app)
+bun run dev           # Optional web-only frontend+backend loop
 ```
 
 ### Before Committing

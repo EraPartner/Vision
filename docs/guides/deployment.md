@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-04-02
+date: 2026-04-11
 tags: [guide, deployment, production, docker, electron]
 description: Production deployment instructions
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
@@ -205,7 +205,6 @@ The Electron app is in `packaging/electron/`. For packaging into distributable f
 | `PORT` | 3002 | Server port |
 | `LOG_LEVEL` | info | Logging level (debug, info, warn, error) |
 | `CORS_ORIGINS` | http://localhost:5173 | Allowed origins |
-| `EXTERNAL_DATABASE` | false | Use external database |
 
 ## Security Checklist
 

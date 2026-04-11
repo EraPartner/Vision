@@ -20,7 +20,7 @@ Start with the [[docs/guides/setup\|Setup Guide]] to get the project running loc
 
 ```
 Setup Guide
-├── Prerequisites (Node.js, Bun, PostgreSQL)
+├── Prerequisites (Node.js, Bun, Docker)
 ├── Clone & Install
 ├── Environment Variables
 ├── Database Setup
@@ -108,6 +108,7 @@ When creating new docs, use the templates:
 ### Build Commands
 ```bash
 bun install           # Install dependencies
+bun run docker:dev    # Start Docker stack
 bun run dev           # Start dev server
 bun run build         # Production build
 bun run test          # Run all tests

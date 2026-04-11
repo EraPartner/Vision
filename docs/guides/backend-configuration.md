@@ -4,8 +4,8 @@ type: guide
 date: 2026-03-31
 tags: [guide, backend, configuration, logging, database, infrastructure]
 status: active
-description: Backend configuration management, logging, and PostgreSQL lifecycle utilities
-related_code: ["apps/node-backend/src/config/config.js", "apps/node-backend/src/config/logger.js", "apps/node-backend/src/database/postgresManager.js"]
+description: Backend configuration management, logging, and database startup behavior
+related_code: ["apps/node-backend/src/config/config.js", "apps/node-backend/src/config/logger.js", "apps/node-backend/src/main.js", "apps/node-backend/src/database/schemaInit.js"]
 ---
 
 # Backend Configuration & Infrastructure
@@ -35,7 +35,7 @@ On import, the module:
     environment: string,       // ENVIRONMENT or NODE_ENV (default: development)
   },
   database: {
-    url: string,               // DATABASE_URL (default: postgresql://ftm_user@localhost:5433/...)
+    url: string,               // DATABASE_URL (default: postgresql://ftm_user:ftm_password@localhost:5432/...)
     echo: boolean,             // DB_ECHO (default: false)
     poolSize: number,          // DB_POOL_SIZE (default: 5)
     maxOverflow: number,       // DB_MAX_OVERFLOW (default: 10)
@@ -109,72 +109,23 @@ logger.error('Database connection failed', { error: err.message });
 
 ---
 
-## PostgreSQL Manager
+## Database Startup Behavior
 
-**File:** [[apps/node-backend/src/database/postgresManager.js]]
+**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/schemaInit.js]]
 
-Utility for managing the lifecycle of a local PostgreSQL server during development. Uses `pg_ctl` for server control.
+The backend no longer manages a local PostgreSQL process. It always connects to `DATABASE_URL` and waits for database readiness during startup.
 
-> **Note:** This is for **local development only**. Production uses Docker-managed PostgreSQL containers.
+### Startup Sequence
 
-### Class: PostgresManager
+1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
+2. Runs `initializeSchema()` once a DB connection is available
+3. Starts the HTTP server only after DB readiness is confirmed
 
-```javascript
-import PostgresManager from './database/postgresManager.js';
+### Operational Model
 
-const manager = new PostgresManager(); // Uses project root detection
-// Or override: new PostgresManager('/custom/project/root');
-```
-
-### Methods
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `isInitialized()` | `boolean` | Checks if `postgres_data/base` directory exists |
-| `isRunning()` | `boolean` | Checks if PostgreSQL server is running via `pg_ctl status` |
-| `setup()` | `Promise<boolean>` | Initializes data directory with `initdb` |
-| `start()` | `Promise<boolean>` | Starts server with `pg_ctl start` (15s timeout) |
-| `stop()` | `Promise<boolean>` | Stops server with `pg_ctl stop -m fast` (10s timeout) |
-| `getStatus()` | `Promise<object>` | Returns `{running, message, port, dataDir, logFile}` |
-
-### Default Configuration
-
-| Setting | Value |
-|---------|-------|
-| Data directory | `<projectRoot>/postgres_data` |
-| Log file | `<projectRoot>/postgres_data/postgres.log` |
-| Port | 5433 (non-standard to avoid conflicts) |
-
-### Usage Flow
-
-```javascript
-const manager = new PostgresManager();
-
-// Setup if needed
-if (!manager.isInitialized()) {
-  await manager.setup();
-}
-
-// Start server
-await manager.start();
-
-// Check status
-const status = await manager.getStatus();
-console.log(status.message); // "PostgreSQL is running"
-
-// Stop server
-await manager.stop();
-```
-
-### Integration with npm Scripts
-
-The `db:start`, `db:stop`, and `db:setup` npm scripts wrap this functionality:
-
-```bash
-bun run db:setup    # Initialize PostgreSQL data directory
-bun run db:start    # Start local PostgreSQL server
-bun run db:stop     # Stop local PostgreSQL server
-```
+- Database lifecycle is managed by Docker Compose (`db` service)
+- Backend process lifecycle is managed by Node/Bun and container restart policy
+- Alembic migrations remain available via `bun run db:*` commands
 
 ---
 
