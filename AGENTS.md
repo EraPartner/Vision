@@ -146,9 +146,6 @@ bun run validate-locales       # Validate locale file integrity
 Requires Python venv with Alembic installed (`venv/`).
 
 ```bash
-bun run db:setup         # Setup PostgreSQL
-bun run db:start         # Start PostgreSQL
-bun run db:stop          # Stop PostgreSQL
 bun run db:upgrade       # Run Alembic migrations
 bun run db:downgrade     # Rollback last migration
 bun run db:current       # Show current migration state
@@ -171,7 +168,6 @@ bun run docker:clean:down    # Stop clean environment
 bun run docker:clean:reset   # Reset volumes and rebuild
 
 # Utilities
-bun run docker:import-data   # Export data to Docker format
 bun run docker:logs          # Tail app container logs
 ```
 
