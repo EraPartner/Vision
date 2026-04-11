@@ -380,6 +380,27 @@ describe('Price Provider Service', () => {
       expect(result[1]).toBeUndefined();
     });
 
+    it('should re-use provider cache and apply cached-price fallback map', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([{ symbol: 'BTCUSDT', price: '50000.00' }]),
+      });
+
+      const inv = { id: 1, price_provider: 'binance', price_provider_id: 'BTCUSDT', currency: 'USD' };
+      const first = await fetchLivePricesDetailed([inv]);
+      const second = await fetchLivePricesDetailed([inv]);
+
+      expect(first[1]).toEqual({ price: 50000, source: 'live' });
+      expect(second[1]).toEqual({ price: 50000, source: 'live' });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      const fallbackResult = await fetchLivePricesDetailed(
+        [{ id: 9, price_provider: 'custom', price_provider_url: 'https://bad.example' }],
+        { cachedPricesByInvestmentId: { 9: 123.45 } }
+      );
+      expect(fallbackResult[9]).toEqual({ price: 123.45, source: 'cached' });
+    });
+
     it('should handle mixed providers', async () => {
       // Will fail all fetches but should not throw
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network'));
@@ -612,6 +633,79 @@ describe('Price Provider Service', () => {
       expect(points[3]?.price).toBe(61);
       expect(points[4]?.price).toBe(62);
     });
+
+    it('returns empty history for yahoo when symbol cannot be resolved', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+
+      const points = await fetchHistoricalPrices({ id: 1, price_provider: 'yahoo', price_provider_id: '', symbol: '' }, {});
+      expect(points).toEqual([]);
+    });
+
+    it('fetches and persists binance history points', async () => {
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ price_date: '2026-01-01', close_price: '100' }] });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          [Date.UTC(2026, 0, 1), '0', '0', '0', '100', '0'],
+        ]),
+      });
+
+      const points = await fetchHistoricalPrices({ id: 11, price_provider: 'binance', price_provider_id: 'BTCUSDT' }, {});
+
+      expect(points).toHaveLength(1);
+      expect(points[0].price).toBe(100);
+    });
+
+    it('falls back to cached db points when kinesis has no symbol', async () => {
+      query.mockResolvedValueOnce({ rows: [{ price_date: '2026-01-03', close_price: '104.5' }] });
+
+      const points = await fetchHistoricalPrices(
+        { id: 12, price_provider: 'kinesis', price_provider_id: '', name: 'unknown-asset' },
+        {}
+      );
+
+      expect(points).toEqual([
+        { timestampMs: Date.UTC(2026, 0, 3, 12, 0, 0, 0), price: 104.5 },
+      ]);
+    });
+
+    it('returns db-only custom history when dbOnly mode is enabled', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          { price_date: '2026-01-01', close_price: '99' },
+          { price_date: '2026-01-02', close_price: '101' },
+        ],
+      });
+
+      const points = await fetchHistoricalPrices(
+        {
+          id: 13,
+          price_provider: 'custom',
+          price_provider_history_url: 'https://example.com/history',
+          price_provider_history_path: 'points',
+          price_provider_history_ts_path: 'timestamp_ms',
+          price_provider_history_price_path: 'price',
+        },
+        { dbOnly: true }
+      );
+
+      expect(points).toHaveLength(2);
+      expect(points[0].price).toBe(99);
+    });
+
+    it('returns db fallback for unsupported providers', async () => {
+      query.mockResolvedValueOnce({ rows: [{ price_date: '2026-01-04', close_price: '88' }] });
+
+      const points = await fetchHistoricalPrices({ id: 14, price_provider: 'manual' }, {});
+
+      expect(points).toEqual([
+        { timestampMs: Date.UTC(2026, 0, 4, 12, 0, 0, 0), price: 88 },
+      ]);
+    });
   });
 
   describe('backfillHistoricalAssetQuotes', () => {
@@ -654,6 +748,46 @@ describe('Price Provider Service', () => {
 
       expect(result).toEqual({ processed: 1, withHistory: 1, failed: 0 });
     });
+
+    it('increments failed count when historical fetch throws', async () => {
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 55,
+            asset_class: 'stock',
+            currency: 'USD',
+            price_provider: 'yahoo',
+            price_provider_id: 'AAPL',
+            symbol: 'AAPL',
+            price_provider_url: null,
+            price_provider_latest_url: null,
+            price_provider_latest_path: null,
+            price_provider_history_url: null,
+            price_provider_history_path: null,
+            price_provider_history_ts_path: null,
+            price_provider_history_price_path: null,
+            first_tx_date: '2025-01-01',
+            held_units: '2',
+          },
+        ],
+      });
+
+      query.mockImplementationOnce(async () => ({ rows: [{
+        id: 55,
+        asset_class: 'stock',
+        currency: 'USD',
+        price_provider: 'yahoo',
+        price_provider_id: 'AAPL',
+        symbol: 'AAPL',
+        first_tx_date: '2025-01-01',
+      }] }));
+
+      // next call inside fetchHistoricalPrices should throw
+      query.mockRejectedValueOnce(new Error('db load failed'));
+
+      const result = await backfillHistoricalAssetQuotes();
+      expect(result).toEqual({ processed: 1, withHistory: 0, failed: 1 });
+    });
   });
 
   describe('sanitizePersistedKinesisHistory', () => {
@@ -683,6 +817,16 @@ describe('Price Provider Service', () => {
 
       expect(result).toEqual({ processed: 1, updated: 1, correctedPoints: 1, failed: 0 });
       expect(query).toHaveBeenCalledTimes(3);
+    });
+
+    it('increments failed count when loading persisted points throws', async () => {
+      query
+        .mockResolvedValueOnce({ rows: [{ id: 42 }] })
+        .mockRejectedValueOnce(new Error('history load failed'));
+
+      const result = await sanitizePersistedKinesisHistory();
+
+      expect(result).toEqual({ processed: 1, updated: 0, correctedPoints: 0, failed: 1 });
     });
   });
 

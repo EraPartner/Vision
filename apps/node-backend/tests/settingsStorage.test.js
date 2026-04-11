@@ -75,6 +75,54 @@ describe('Settings storage and retrieval', () => {
 
     expect(res.json).toHaveBeenCalledWith({ key: 'dashboard_settings', value: payload.value });
   });
+
+  it('settingsRepository.getAll should parse JSON string values and preserve invalid JSON strings', async () => {
+    query.mockResolvedValue({
+      rows: [
+        { key: 'dashboard_settings', value: '{"excludedCategoryIds":[1]}' },
+        { key: 'raw_string', value: 'not-json' },
+      ],
+    });
+
+    const result = await settingsRepository.getAll();
+
+    expect(result).toEqual({
+      dashboard_settings: { excludedCategoryIds: [1] },
+      raw_string: 'not-json',
+    });
+  });
+
+  it('settingsRepository.setMany should normalize object values before bulk upsert', async () => {
+    query.mockResolvedValue({});
+
+    await settingsRepository.setMany({
+      dashboard_settings: {
+        excludedCategoryIds: ['1', '2'],
+        excludedRecipientIds: ['10'],
+      },
+    });
+
+    const upsertCall = query.mock.calls.find(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO user_settings'));
+    expect(upsertCall).toBeTruthy();
+    expect(upsertCall[1][0]).toEqual(['dashboard_settings']);
+    expect(upsertCall[1][1]).toEqual([
+      JSON.stringify({
+        excludedCategoryIds: [1, 2],
+        excludedRecipientIds: [10],
+      }),
+    ]);
+  });
+
+  it('settingsRepository.setMany should return early for empty object payload', async () => {
+    query.mockResolvedValue({});
+
+    await settingsRepository.setMany({});
+
+    const hasBulkUpsert = query.mock.calls.some(
+      ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO user_settings')
+    );
+    expect(hasBulkUpsert).toBe(false);
+  });
 });
 
 function mockResponse() {

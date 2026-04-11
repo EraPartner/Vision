@@ -3,6 +3,14 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    existsSync: vi.fn(() => false),
+  };
+});
+
 vi.mock('../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -58,7 +66,7 @@ describe('Configuration Management', () => {
     it('should have default database settings', async () => {
       const { getSettings } = await importConfigFresh();
       const settings = getSettings();
-      expect(settings.database.url).toBe('postgresql://ftm_user@localhost:5433/financial_transactions');
+      expect(settings.database.url).toBe('postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions');
       expect(settings.database.echo).toBe(false);
       expect(settings.database.poolSize).toBe(5);
       expect(settings.database.maxOverflow).toBe(10);
@@ -70,7 +78,7 @@ describe('Configuration Management', () => {
       expect(settings.api.title).toBe('Financial Transaction Manager');
       expect(settings.api.version).toBe('1.0.0');
       expect(settings.api.description).toBe('Import and manage financial transactions from various banks');
-      expect(settings.api.corsOrigins).toEqual(['http://localhost:8080', 'http://localhost:5174']);
+      expect(settings.api.corsOrigins).toEqual(['http://localhost:5174', 'http://localhost:8080']);
     });
 
     it('should have default admin settings', async () => {

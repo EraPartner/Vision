@@ -2,11 +2,23 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-04-09
-tags: [api, splits, transactions, debt]
-aliases: [splits-api, owes, debt-tracking, shared-expenses, settle-up, transaction-split]
+date: 2026-04-11
+tags:
+  - api
+  - splits
+  - transactions
+  - debt
+aliases:
+  - splits-api
+  - owes
+  - debt-tracking
+  - shared-expenses
+  - settle-up
+  - transaction-split
 description: API endpoints for transaction splitting and debt tracking between recipients
-related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js"]
+related_code:
+  - apps/node-backend/src/routes/splits.js
+  - apps/node-backend/src/repositories/splitRepository.js
 ---
 
 # Splits API

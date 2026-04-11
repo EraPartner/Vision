@@ -22,6 +22,7 @@ vi.mock('../../src/repositories/recipientBankAccountRepository.js', () => ({
   default: {
     getByRecipientId: vi.fn(),
     getByAccountNumber: vi.fn(),
+    getById: vi.fn(),
     createOrGet: vi.fn(),
     update: vi.fn(),
     softDelete: vi.fn(),
@@ -108,6 +109,161 @@ describe('Recipient Bank Account Routes', () => {
       await routeHandlers['post:/:id/bank-accounts'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe('PATCH /:recipientId/bank-accounts/:accountId', () => {
+    it('should return 400 for invalid account ID', async () => {
+      const req = { params: { id: '1', accountId: '0' }, body: {} };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      expect(bankAccountRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when account does not exist', async () => {
+      bankAccountRepo.update.mockResolvedValue(null);
+
+      const req = {
+        params: { id: '1', accountId: '99' },
+        body: { bank_name: 'Belfius' },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(bankAccountRepo.update).toHaveBeenCalledWith(99, {
+        bankName: 'Belfius',
+        address: undefined,
+        accountLabel: undefined,
+      });
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found' });
+    });
+
+    it('should return updated account with links when update succeeds', async () => {
+      bankAccountRepo.update.mockResolvedValue({ id: 5, bank_name: 'Updated Bank' });
+
+      const req = {
+        params: { id: '1', accountId: '5' },
+        body: { bank_name: 'Updated Bank', address: 'Main Street 1', account_label: 'Primary' },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(bankAccountRepo.update).toHaveBeenCalledWith(5, {
+        bankName: 'Updated Bank',
+        address: 'Main Street 1',
+        accountLabel: 'Primary',
+      });
+      expect(res.json).toHaveBeenCalledWith({ id: 5, bank_name: 'Updated Bank', links: [] });
+    });
+
+    it('should return 500 when update throws', async () => {
+      bankAccountRepo.update.mockRejectedValue(new Error('boom'));
+
+      const req = {
+        params: { id: '1', accountId: '5' },
+        body: { bank_name: 'Updated Bank' },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error updating bank account' });
+    });
+  });
+
+  describe('DELETE /:recipientId/bank-accounts/:accountId', () => {
+    it('should return 400 for invalid account ID', async () => {
+      const req = { params: { id: '1', accountId: '0' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      expect(bankAccountRepo.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when delete target does not exist', async () => {
+      bankAccountRepo.softDelete.mockResolvedValue(false);
+
+      const req = { params: { id: '1', accountId: '15' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found' });
+    });
+
+    it('should deactivate account and return message when delete succeeds', async () => {
+      bankAccountRepo.softDelete.mockResolvedValue(true);
+
+      const req = { params: { id: '1', accountId: '15' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ message: 'Bank account 15 deactivated', links: [] });
+    });
+
+    it('should return 500 when delete throws', async () => {
+      bankAccountRepo.softDelete.mockRejectedValue(new Error('boom'));
+
+      const req = { params: { id: '1', accountId: '15' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error deleting bank account' });
+    });
+  });
+
+  describe('POST /:recipientId/bank-accounts/:accountId/set-primary', () => {
+    it('should return 404 when setPrimary fails', async () => {
+      bankAccountRepo.setPrimary.mockResolvedValue(false);
+
+      const req = { params: { id: '1', accountId: '99' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
+
+      expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(99, 1);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found or does not belong to this recipient' });
+    });
+
+    it('should return 400 when account ID is invalid', async () => {
+      const req = { params: { id: '1', accountId: 'invalid' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      expect(bankAccountRepo.setPrimary).not.toHaveBeenCalled();
+    });
+
+    it('should return account payload when setting primary succeeds', async () => {
+      bankAccountRepo.setPrimary.mockResolvedValue(true);
+      bankAccountRepo.getById.mockResolvedValue({ id: 2, recipient_id: 1, is_primary: true });
+
+      const req = { params: { id: '1', accountId: '2' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
+
+      expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(2, 1);
+      expect(bankAccountRepo.getById).toHaveBeenCalledWith(2);
+      expect(res.json).toHaveBeenCalledWith({ id: 2, recipient_id: 1, is_primary: true, links: [] });
+    });
+
+    it('should return 500 when setPrimary throws', async () => {
+      bankAccountRepo.setPrimary.mockRejectedValue(new Error('boom'));
+
+      const req = { params: { id: '1', accountId: '2' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error setting primary bank account' });
     });
   });
 });

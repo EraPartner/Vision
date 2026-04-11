@@ -136,6 +136,153 @@ describe('Market Lookup Routes', () => {
     });
   });
 
+  describe('GET /search', () => {
+    it('returns empty list for empty query', async () => {
+      const req = { query: { q: '' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/search'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ items: [] });
+      expect(mockYahooSearch).not.toHaveBeenCalled();
+    });
+
+    it('returns mapped search results for non-empty query', async () => {
+      mockYahooSearch.mockResolvedValue({
+        quotes: [
+          {
+            symbol: 'AAPL',
+            shortname: 'Apple Inc.',
+            quoteType: 'EQUITY',
+            exchDisp: 'NasdaqGS',
+          },
+          {
+            symbol: 'VUSA.AS',
+            longname: 'Vanguard S&P 500 UCITS ETF',
+            quoteType: 'ETF',
+            exchange: 'AEX',
+          },
+        ],
+      });
+
+      const req = { query: { q: 'apple' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/search'](req, res);
+
+      expect(mockYahooSearch).toHaveBeenCalledWith('apple', { quotesCount: 8, newsCount: 0 });
+      expect(res.json).toHaveBeenCalledWith({
+        items: [
+          {
+            symbol: 'AAPL',
+            name: 'Apple Inc.',
+            type: 'EQUITY',
+            exchange: 'NasdaqGS',
+          },
+          {
+            symbol: 'VUSA.AS',
+            name: 'Vanguard S&P 500 UCITS ETF',
+            type: 'ETF',
+            exchange: 'AEX',
+          },
+        ],
+      });
+    });
+
+    it('returns 502 when upstream search throws', async () => {
+      mockYahooSearch.mockRejectedValue(new Error('upstream down'));
+
+      const req = { query: { q: 'apple' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/search'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(502);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Market search unavailable' });
+    });
+
+    it('filters entries without symbol and applies fallback fields', async () => {
+      mockYahooSearch.mockResolvedValue({
+        quotes: [
+          { shortname: 'No Symbol' },
+          { symbol: 'TSLA' },
+        ],
+      });
+
+      const req = { query: { q: 'tsla' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/search'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        items: [
+          {
+            symbol: 'TSLA',
+            name: 'TSLA',
+            type: 'UNKNOWN',
+            exchange: '',
+          },
+        ],
+      });
+    });
+  });
+
+  describe('GET /chart', () => {
+    it('returns 400 when symbol is missing', async () => {
+      const req = { query: {} };
+      const res = mockResponse();
+
+      await routeHandlers['get:/chart'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'symbol parameter required' });
+      expect(mockYahooChart).not.toHaveBeenCalled();
+    });
+
+    it('returns empty points when chart payload is empty', async () => {
+      mockYahooChart.mockResolvedValue(null);
+
+      const req = { query: { symbol: 'AAPL' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/chart'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ points: [] });
+    });
+
+    it('maps chart points and filters null closes', async () => {
+      mockYahooChart.mockResolvedValue({
+        meta: { symbol: 'AAPL', currency: 'USD' },
+        quotes: [
+          { date: '2026-01-01T00:00:00.000Z', close: null, high: 1, low: 1, volume: 1 },
+          { date: '2026-01-02T00:00:00.000Z', close: 200, high: 201, low: 199, volume: 10 },
+        ],
+      });
+
+      const req = { query: { symbol: 'AAPL', range: '5y', interval: '1wk' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/chart'](req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.symbol).toBe('AAPL');
+      expect(payload.currency).toBe('USD');
+      expect(payload.points).toHaveLength(1);
+      expect(payload.points[0]).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
+    });
+
+    it('returns 502 when chart request crashes', async () => {
+      mockYahooChart.mockRejectedValue(new Error('chart error'));
+      const req = { query: { symbol: 'AAPL', range: 'max' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/chart'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(502);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Market chart unavailable' });
+    });
+  });
+
   describe('GET /news', () => {
     it('should deduplicate articles by title and normalize thumbnails', async () => {
       mockYahooSearch
@@ -192,6 +339,123 @@ describe('Market Lookup Routes', () => {
 
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ articles: [] });
+    });
+
+    it('uses default symbols and caps count at 50', async () => {
+      mockYahooSearch.mockResolvedValue({
+        news: [{ title: 'One', link: 'l', publisher: 'p', providerPublishTime: 1, thumbnail: {} }],
+      });
+
+      const req = { query: { count: '500' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/news'](req, res);
+
+      expect(mockYahooSearch).toHaveBeenCalledTimes(3);
+      expect(mockYahooSearch).toHaveBeenCalledWith('SPY', { quotesCount: 0, newsCount: 50 });
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('returns 502 when news query parsing fails unexpectedly', async () => {
+      const req = { query: { symbols: 123 } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/news'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(502);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Market news unavailable' });
+    });
+  });
+
+  describe('GET /quote additional branches', () => {
+    it('returns 502 on unexpected quote route failure', async () => {
+      const req = { query: { symbols: 123 } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/quote'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(502);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Market quote unavailable' });
+    });
+
+    it('uses summary fallback buckets and quote defaults', async () => {
+      mockYahooQuote.mockResolvedValue({ symbol: 'MSFT', regularMarketPrice: 10 });
+      mockYahooQuoteSummary.mockResolvedValue({
+        recommendationTrend: { trend: [{ period: '1m', strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 }] },
+        upgradeDowngradeHistory: { history: Array.from({ length: 12 }, (_, i) => ({ epochGradeDate: i, firm: `F${i}`, toGrade: 'Buy', action: 'up' })) },
+      });
+
+      const req = { query: { symbols: 'MSFT' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/quote'](req, res);
+
+      const quote = res.json.mock.calls[0][0].quotes[0];
+      expect(quote.name).toBe('MSFT');
+      expect(quote.currency).toBe('USD');
+      expect(quote.analystConsensus).toEqual({ strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 });
+      expect(quote.recentAnalystActions).toHaveLength(10);
+    });
+
+    it('still returns quote when quoteSummary fails', async () => {
+      mockYahooQuote.mockResolvedValue({
+        symbol: 'NVDA',
+        regularMarketPrice: 900,
+        regularMarketPreviousClose: 890,
+        quoteType: 'EQUITY',
+      });
+      mockYahooQuoteSummary.mockRejectedValue(new Error('summary unavailable'));
+
+      const req = { query: { symbols: 'NVDA' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/quote'](req, res);
+
+      const quote = res.json.mock.calls[0][0].quotes[0];
+      expect(quote.symbol).toBe('NVDA');
+      expect(quote.price).toBe(900);
+      expect(quote.analystConsensus).toBeNull();
+      expect(quote.recentAnalystActions).toEqual([]);
+    });
+  });
+
+  describe('GET /chart range mapping branches', () => {
+    it('handles all supported/default ranges without errors', async () => {
+      mockYahooChart.mockResolvedValue({ meta: { symbol: 'AAPL', currency: 'USD' }, quotes: [] });
+
+      const ranges = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max', 'unknown'];
+      for (const range of ranges) {
+        const req = { query: { symbol: 'AAPL', range, interval: '1d' } };
+        const res = mockResponse();
+        await routeHandlers['get:/chart'](req, res);
+        expect(res.status).not.toHaveBeenCalled();
+      }
+
+      expect(mockYahooChart).toHaveBeenCalledTimes(ranges.length);
+    });
+  });
+
+  describe('GET /news thumbnail normalization branch', () => {
+    it('returns null thumbnail when URL is unsupported', async () => {
+      mockYahooSearch.mockResolvedValue({
+        news: [
+          {
+            title: 'Unsupported thumb',
+            link: 'https://example.com/x',
+            publisher: 'Publisher',
+            providerPublishTime: 1712600000,
+            thumbnail: { resolutions: [{ url: 'ftp://img.example.com/x.jpg' }, { url: 'img.example.com/y.jpg' }] },
+          },
+        ],
+      });
+
+      const req = { query: { symbols: 'AAPL', count: '1' } };
+      const res = mockResponse();
+
+      await routeHandlers['get:/news'](req, res);
+
+      const article = res.json.mock.calls[0][0].articles[0];
+      expect(article.thumbnail).toBeNull();
     });
   });
 });

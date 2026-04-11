@@ -2,7 +2,7 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-04-10
+date: 2026-04-11
 tags: [reference, environment, configuration, deployment]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -20,7 +20,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 
 | Variable | Default | Required | Description | Code |
 |----------|---------|----------|-------------|------|
-| `DATABASE_URL` | `postgresql://ftm_user@localhost:5433/financial_transactions` | Yes | PostgreSQL connection string | [[apps/node-backend/src/config/config.js\|config.js]] |
+| `DATABASE_URL` | `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions` | Yes | PostgreSQL connection string | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `PORT` | `3002` | No | Backend server port | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `SERVER_HOST` | `localhost` | No | Backend server host | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `HOSTNAME` | _(fallback for SERVER_HOST)_ | No | Alternative host variable | [[apps/node-backend/src/config/config.js\|config.js]] |
@@ -34,8 +34,6 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `LOG_LEVEL` | `debug` (dev), `info` (prod) | No | Log level: debug, info, warn, error | [[apps/node-backend/src/config/logger.js\|logger.js]] |
 | `ENABLE_LOGGING` | `true` | No | Enable/disable logging | [[apps/node-backend/src/config/logger.js\|logger.js]] |
 | `ENABLE_RESET_DB` | `false` | No | Enable database reset endpoint | [[apps/node-backend/src/config/config.js\|config.js]] |
-| `EXTERNAL_DATABASE` | `false` | No | Skip local PostgreSQL management | [[apps/node-backend/src/main.js\|main.js]] |
-| `PROJECT_ROOT` | _(auto-detected)_ | No | Project root directory path | [[apps/node-backend/src/main.js\|main.js]] |
 | `APP_VERSION` | `unknown` | No | Application version string | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `APP_IMAGE_TAG` | _(fallback for APP_VERSION)_ | No | Docker image tag as version | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`; when unset, admin routes remain open for backward compatibility | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
@@ -63,7 +61,6 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `POSTGRES_PASSWORD` | _(none)_ | Yes | PostgreSQL admin password | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_USER` | `ftm_user` | No | PostgreSQL username | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_DB` | `financial_transactions` | No | PostgreSQL database name | [[docker-compose.yml\|docker-compose.yml]] |
-| `POSTGRES_PORT` | `5433` | No | PostgreSQL port mapping | [[docker-compose.yml\|docker-compose.yml]] |
 
 ## Related
 

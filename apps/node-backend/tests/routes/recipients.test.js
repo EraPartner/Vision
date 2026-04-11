@@ -26,6 +26,9 @@ vi.mock('../../src/repositories/recipientRepository.js', () => ({
     createOrGet: vi.fn(),
     update: vi.fn(),
     hardDelete: vi.fn(),
+    mergeRecipients: vi.fn(),
+    getAliases: vi.fn(),
+    unmergeRecipient: vi.fn(),
   },
 }));
 
@@ -167,6 +170,116 @@ describe('Recipient Routes', () => {
       await routeHandlers['delete:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe('POST /:id/merge', () => {
+    it('should return 400 when alias_ids is missing', async () => {
+      const req = { params: { id: '1' }, body: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/merge'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing required field: alias_ids (array of recipient IDs)' });
+    });
+
+    it('should return 400 when primary recipient is itself an alias', async () => {
+      recipientRepository.getById.mockResolvedValue({ id: 1, primary_recipient_id: 2 });
+
+      const req = { params: { id: '1' }, body: { alias_ids: [3] } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/merge'](req, res);
+
+      expect(recipientRepository.getById).toHaveBeenCalledWith(1);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        detail: 'Cannot merge into a recipient that is itself an alias. Use its primary instead.',
+      });
+    });
+
+    it('should merge aliases and return primary plus aliases', async () => {
+      recipientRepository.getById
+        .mockResolvedValueOnce({ id: 1, name: 'PRIMARY', primary_recipient_id: null })
+        .mockResolvedValueOnce({ id: 1, name: 'PRIMARY', primary_recipient_id: null });
+      recipientRepository.mergeRecipients.mockResolvedValue([3, 4]);
+      recipientRepository.getAliases.mockResolvedValue([
+        { id: 3, name: 'ALIAS A' },
+        { id: 4, name: 'ALIAS B' },
+      ]);
+
+      const req = { params: { id: '1' }, body: { alias_ids: ['3', '4'] } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/merge'](req, res);
+
+      expect(recipientRepository.mergeRecipients).toHaveBeenCalledWith(1, [3, 4]);
+      expect(res.json).toHaveBeenCalledWith({
+        primary: { id: 1, name: 'PRIMARY', primary_recipient_id: null, links: [] },
+        merged_ids: [3, 4],
+        aliases: [
+          { id: 3, name: 'ALIAS A' },
+          { id: 4, name: 'ALIAS B' },
+        ],
+      });
+    });
+
+    it('should return 404 when primary recipient does not exist', async () => {
+      recipientRepository.getById.mockResolvedValue(null);
+
+      const req = { params: { id: '123' }, body: { alias_ids: [5] } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/merge'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Primary recipient not found' });
+    });
+  });
+
+  describe('POST /:id/unmerge', () => {
+    it('should return 404 when recipient cannot be unmerged', async () => {
+      recipientRepository.unmergeRecipient.mockResolvedValue(false);
+
+      const req = { params: { id: '44' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/unmerge'](req, res);
+
+      expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Recipient not found' });
+    });
+
+    it('should return updated recipient when unmerge succeeds', async () => {
+      recipientRepository.unmergeRecipient.mockResolvedValue(true);
+      recipientRepository.getById.mockResolvedValue({ id: 44, name: 'UNMERGED', primary_recipient_id: null });
+
+      const req = { params: { id: '44' } };
+      const res = mockResponse();
+      await routeHandlers['post:/:id/unmerge'](req, res);
+
+      expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
+      expect(recipientRepository.getById).toHaveBeenCalledWith(44);
+      expect(res.json).toHaveBeenCalledWith({ id: 44, name: 'UNMERGED', primary_recipient_id: null, links: [] });
+    });
+  });
+
+  describe('GET /:id/aliases', () => {
+    it('should return aliases with items and total', async () => {
+      recipientRepository.getAliases.mockResolvedValue([
+        { id: 10, name: 'Alias One', primary_recipient_id: 1 },
+        { id: 11, name: 'Alias Two', primary_recipient_id: 1 },
+      ]);
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:id/aliases'](req, res);
+
+      expect(recipientRepository.getAliases).toHaveBeenCalledWith(1);
+      expect(res.json).toHaveBeenCalledWith({
+        items: [
+          { id: 10, name: 'Alias One', primary_recipient_id: 1, links: [] },
+          { id: 11, name: 'Alias Two', primary_recipient_id: 1, links: [] },
+        ],
+        total: 2,
+      });
     });
   });
 });

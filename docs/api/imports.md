@@ -178,3 +178,14 @@ Implementation note:
 - [[docs/api/transactions|Transactions API]]
 - [[docs/api/recipients|Recipients API]]
 - [[docs/integrations/index|Integrations]]
+
+## Test Coverage Notes (2026-04-10)
+
+- [[apps/node-backend/tests/routes/import.test.js]] verifies route-level error hardening, including SSE stream error behavior, recipients/categories import route handling, and multer middleware error paths.
+- [[apps/node-backend/tests/dataImportService.test.js]] adds regression coverage for recipients/categories bulk import service behavior.
+- [[apps/node-backend/tests/streamingImportService.test.js]] adds regression coverage for streaming import progress/error handling and result aggregation.
+
+## Related
+
+- [[docs/testing/testing|Testing Documentation]]
+- [[docs/testing/test-inventory|Test Inventory]]

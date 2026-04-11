@@ -387,12 +387,11 @@ export const apiClient = new ApiClient();
 
 ### Startup Sequence
 
-1. Start PostgreSQL (unless `EXTERNAL_DATABASE=true`)
-2. Wait for DB with exponential backoff (40 attempts, 50ms to 1s)
-3. `initializeSchema()` — idempotent table creation
-4. `app.listen()` on configured port
-5. Warm caches (exchange rates, inflation) — fire-and-forget
-6. Set up 12h refresh interval for external data
+1. Wait for DB with exponential backoff (40 attempts, 50ms to 1s)
+2. `initializeSchema()` — idempotent table creation
+3. `app.listen()` on configured port
+4. Warm caches (exchange rates, inflation) — fire-and-forget
+5. Set up 12h refresh interval for external data
 
 ### Graceful Shutdown
 

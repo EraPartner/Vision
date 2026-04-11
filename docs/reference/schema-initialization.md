@@ -9,7 +9,7 @@ aliases: [schema init, database initialization, table creation, startup schema]
 related_code:
   - apps/node-backend/src/database/schemaInit.js
   - apps/node-backend/src/database/connection.js
-  - apps/node-backend/src/database/postgresManager.js
+  - apps/node-backend/src/main.js
 ---
 
 # Schema Initialization Reference
@@ -23,13 +23,13 @@ The `schemaInit.js` module handles idempotent database schema initialization at 
 ### Initialization Flow
 
 ```
-Application Start → postgresManager.init() → schemaInit.js
-                                              ↓
-                                    1. Core tables (CREATE TABLE IF NOT EXISTS)
-                                    2. Indexes (CREATE INDEX IF NOT EXISTS)
-                                    3. Triggers (CREATE OR REPLACE)
-                                    4. Compatibility views
-                                    5. Materialized views (via service)
+Application Start → checkConnection() retry loop → schemaInit.js
+                                                    ↓
+                                          1. Core tables (CREATE TABLE IF NOT EXISTS)
+                                          2. Indexes (CREATE INDEX IF NOT EXISTS)
+                                          3. Triggers (CREATE OR REPLACE)
+                                          4. Compatibility views
+                                          5. Materialized views (via service)
 ```
 
 ### Key Design Principles

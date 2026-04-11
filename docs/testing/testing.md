@@ -2,11 +2,23 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-10
-tags: [testing, vitest, quality]
-aliases: [testing, unit tests, integration tests, vitest, test coverage]
-description: Comprehensive testing documentation including frameworks, patterns, and best practices
-related_code: ["apps/node-backend/tests", "apps/frontend/src"]
+date: 2026-04-11T10:19:03.000Z
+tags:
+  - testing
+  - vitest
+  - quality
+aliases:
+  - testing
+  - unit tests
+  - integration tests
+  - vitest
+  - test coverage
+description: >-
+  Comprehensive testing documentation including frameworks, patterns, and best
+  practices
+related_code:
+  - apps/node-backend/tests
+  - apps/frontend/src
 ---
 
 # Testing Documentation
@@ -363,3 +375,139 @@ Validation run (passed): `bun vitest run tests/rateLimiter.test.js tests/routes/
 - [[docs/api/admin]]
 - [[docs/api/marketLookup]]
 - [[docs/security/rate-limiting]]
+
+## Coverage Update (2026-04-11)
+
+- [[apps/node-backend/tests/currencyConversionService.test.js]] adds fallback/edge coverage for unsupported currencies, `warmCache` dual-API failure fallback, and ECB 90-day historical backfill behavior.
+- [[apps/node-backend/tests/routes/plannedTransactions.test.js]] adds route coverage for loan term bounds validation, `recipient_name`/`category_name` patch name-to-id resolution, and loan toggle-off schedule/field clearing.
+- [[apps/node-backend/tests/routes/transactions.test.js]] adds route coverage for `normalize_to_eur` conversion path behavior, duplicate detection (`409`), and unresolved recipient/category validation branches in patch flow.
+
+Validation runs (passed):
+- `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
+- `npm test -- --coverage`
+
+Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+
+### Additional backend repository/schema coverage (2026-04-11)
+
+- [[apps/node-backend/tests/schemaInit.test.js]] adds schema bootstrap coverage for warm-start short-circuit behavior (skip DDL/materialized-view helpers when current schema version is present) and fallback initialization/stamping when `schema_version` lookup fails.
+- [[apps/node-backend/tests/categoryRepository.test.js]] adds repository coverage for `createOrGet` normalization (`general/detail` trim+uppercase), insert success (`created: true`), and conflict fallback returning the existing enriched category (`created: false`).
+- [[apps/node-backend/tests/plannedTransactionRepository.test.js]] adds pagination and query-efficiency coverage for `getAll`: fallback count query on empty pages and no execution/loan-schedule follow-up queries when no planned rows exist.
+
+Related code: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+
+Validation run (passed): `bun vitest run tests/schemaInit.test.js tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
+
+
+### Incremental coverage addendum (2026-04-11)
+
+- [[apps/node-backend/tests/currencyConversionService.test.js]] now includes historical miss-cache coverage to ensure duplicate historical-rate DB lookups are avoided for repeated misses.
+- Related code: [[apps/node-backend/src/services/currencyConversionService.js]]
+- Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (`74.18/59.54/78.47/77.68`).
+
+
+### Incremental backend repository coverage addendum (2026-04-11)
+
+- [[apps/node-backend/tests/categoryRepository.test.js]] expanded coverage for:
+  - `getAll` filtered query + enrichment
+  - `getCount`
+  - `getById` null path
+  - `update` no-op and normalization paths
+  - `hardDelete`
+  - `assignToRecipients`
+- [[apps/node-backend/tests/plannedTransactionRepository.test.js]] expanded coverage for:
+  - `getAll` rows-present branch with executions + loan schedule hydration
+  - `getById` null and loan hydration paths
+  - `create` loan success, rollback-on-schedule-failure, and non-loan no-schedule path
+  - `update` empty sanitized-field fallback, null update result, and loan hydration path
+  - `hardDelete` true/false
+  - `addExecution` with provided date and default current-date behavior
+  - `replaceLoanSchedule` success and rollback paths
+- Validation runs (passed):
+  - `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`
+  - `npm test -- --coverage`
+- Latest coverage snapshot: statements **76.84%**, branches **61.72%**, functions **80.74%**, lines **80.29%**.
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+
+
+### Incremental backend test addendum (2026-04-11, adapter + raw import branches)
+
+- Added bank-adapter parsing regression coverage:
+  - [[apps/node-backend/tests/wiseAdapter.test.js]]
+  - [[apps/node-backend/tests/sabbAdapter.test.js]]
+  - [[apps/node-backend/tests/visionAdapter.test.js]]
+- Expanded [[apps/node-backend/tests/rawTransactionImportService.test.js]] with additional branch coverage for:
+  - dedup fallback (`isRawDuplicate` throws → `isDuplicateByFields` fallback)
+  - generic bank delegation to `importCSV`
+  - non-fatal raw-reference create failure path
+  - existing recipient + new bank-account insertion
+  - new recipient + primary bank account + notes update path
+  - sabb/wise/vision raw repository routing
+
+Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/rawTransactionImportService.js]]
+
+Validation runs (passed):
+- `bun vitest run tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (3 files, 15 tests)
+- `bun vitest run tests/rawTransactionImportService.test.js tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (4 files, 31 tests)
+- `bun vitest run --coverage --exclude tests/config.test.js` → coverage snapshot: statements **79.59%**, branches **65.78%**, functions **81.55%**, lines **82.97%**
+
+Known unrelated local issue:
+- Full `npm test -- --coverage` can fail in [[apps/node-backend/tests/config.test.js]] when local `.env.local` DB URL overrides expected default config behavior.
+
+
+### Incremental backend info-route test addendum (2026-04-11)
+
+- [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.js]] using explicit mocks for:
+  - [[apps/node-backend/src/database/connection.js]] query behavior
+  - [[apps/node-backend/src/services/recurringDetectionService.js]]
+  - [[apps/node-backend/src/services/materializedViewService.js]]
+  - [[apps/node-backend/src/services/currencyConversionService.js]] cache helpers
+  - [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+- Added assertions for:
+  - `GET /recurring-patterns` success + detector-failure fallback (`{ patterns: [], total: 0 }`)
+  - `GET /exchange-rates` stale-rate background refresh behavior, current-date no-refresh behavior, warm-failure warning log path, and DB-failure `500`
+  - `POST /exchange-rates/refresh` success + error path
+  - `POST /refresh-views` success (duration payload) + failure path
+  - `GET /portfolio-performance` mapped snapshot payload + default date range, invalid-currency fallback to EUR, and error `500`
+  - `warmInfoCaches` export behavior: net-worth + portfolio prewarm, net-worth failure isolation, and portfolio warm-failure logging
+- Date-sensitive assertions now use deterministic fake timers for stable route behavior validation.
+
+Validation runs (passed):
+- `bun vitest run tests/routes/info.test.js`
+- `npm test -- --coverage`
+
+Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+
+### Incremental backend repository coverage addendum (2026-04-11, portfolio transactions)
+
+- [[apps/node-backend/tests/portfolioTransactionRepository.test.js]] expanded branch coverage for:
+  - `getAllByInvestmentIds`: empty-normalized-id early return, id/type sanitization, clamped `perInvestmentLimit`/`limit`/`offset`, and omitted type/limit branch
+  - `getCount`: single `investmentId` + `type`, normalized `investmentIds` array, and all-invalid-ids branch that skips `ANY(...)` and applies type-only filtering
+  - `getSummary`: grouped summary row return path
+- Related code: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
+- Validation runs (passed):
+  - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
+  - `npm test -- --coverage` (827 tests)
+- Coverage snapshot after full run: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
+
+
+### Incremental backend coverage addendum (2026-04-11, managed loop safe/sequential)
+
+- Managed loop coverage run completed with stop condition met.
+- Latest backend coverage snapshot: **Statements 87.78%**, **Branches 75.00%**, **Functions 91.71%**, **Lines 90.89%**.
+- Latest passing suite snapshot: **54 test files**, **871 tests passing**.
+
+Expanded/updated test files:
+- [[apps/node-backend/tests/routes/marketLookup.test.js]]
+- [[apps/node-backend/tests/priceProviderService.test.js]]
+- [[apps/node-backend/tests/investmentRepository.test.js]]
+- [[apps/node-backend/tests/streamingImportService.test.js]]
+- [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
+- [[apps/node-backend/tests/infoRepository.test.js]]
+- [[apps/node-backend/tests/materializedViewService.test.js]]
+
+Coverage loop artifacts:
+- [[.claude/baselines/test-coverage-baseline-20260411-101903.md]]
+- [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
+
+Related areas: market lookup routes, price-provider behavior, investment repository compatibility, streaming import pipeline, portfolio snapshot calculation paths, info repository aggregation, and materialized view refresh behavior.

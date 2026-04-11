@@ -47,7 +47,7 @@ Set via environment variables or `.env.local` file in the `apps/node-backend/` d
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/financial_transactions` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions` | PostgreSQL connection string |
 | `PORT` | `3002` | Server port |
 | `HOSTNAME` | `localhost` | Server host |
 | `CORS_ORIGINS` | `http://localhost:5174` | Allowed CORS origins |

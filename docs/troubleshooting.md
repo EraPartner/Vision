@@ -17,22 +17,22 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 
 ### PostgreSQL won't start
 
-**Symptom:** `bun run db:start` fails with connection error.
+**Symptom:** `bun run docker:dev` fails because the database service does not become healthy.
 
 **Solutions:**
-1. Check if port 5433 is already in use: `lsof -i :5433`
-2. Kill existing process: `kill <PID>` or use `bun run db:stop` first
-3. Check logs: `cat postgres_data/postgres.log`
-4. Ensure `postgres_data` directory exists and is writable
+1. Check db container logs: `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs db`
+2. Verify container status: `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps`
+3. If state is corrupted, reset dev volumes: `bun run docker:clean:reset`
+4. Ensure Docker Desktop is running and has enough disk space
 
 ### Database connection refused
 
 **Symptom:** `DATABASE_URL` connection fails.
 
 **Solutions:**
-1. Verify PostgreSQL is running: `bun run db:start`
+1. Verify PostgreSQL container is running: `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db`
 2. Check `DATABASE_URL` in `.env.local` matches the actual connection string
-3. Default URL: `postgresql://ftm_user@localhost:5433/ftm_db`
+3. Default local backend URL: `postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions`
 
 ### Migration fails
 
@@ -142,8 +142,8 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 **Solutions:**
 1. Check logs: `docker compose logs app`
 2. Verify `.env` file exists with required variables
-3. Ensure PostgreSQL container starts before the app container
-4. Check port conflicts: `docker compose ps`
+3. Check container state and restarts: `docker compose ps`
+4. Check port conflicts on host: `lsof -i :3002` and `lsof -i :5432`
 
 ### Database not initialized in Docker
 

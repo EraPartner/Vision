@@ -59,7 +59,7 @@ const settings = deepFreeze({
   },
 
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://ftm_user@localhost:5433/financial_transactions',
+    url: process.env.DATABASE_URL || 'postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions',
     echo: (process.env.DB_ECHO || 'false').toLowerCase() === 'true',
     poolSize: parseInt(process.env.DB_POOL_SIZE || '5', 10),
     maxOverflow: parseInt(process.env.DB_MAX_OVERFLOW || '10', 10),

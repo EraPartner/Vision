@@ -3,7 +3,7 @@
 # Builds the app image from local source instead of pulling from GHCR.
 # Uses an isolated volume so your production Docker data is never touched.
 #
-# Usage (with your real data — after running scripts/db/export-to-docker.sh once):
+# Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 #   # or:  bun run docker:dev
 

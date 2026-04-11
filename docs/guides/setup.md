@@ -18,8 +18,7 @@ This guide covers setting up Vision for local development.
 | Tool | Version | Notes |
 |------|---------|-------|
 | [Bun](https://bun.sh/) | Latest | Package manager and runtime |
-| [PostgreSQL](https://www.postgresql.org/) | 18+ | Database (or use Docker) |
-| [Docker](https://www.docker.com/) | Latest | Optional, for database/containerized dev |
+| [Docker](https://www.docker.com/) | Latest | Required for local database workflow |
 | [Node.js](https://nodejs.org/) | 20+ | Required for Electron packaging |
 
 ## Quick Start
@@ -74,16 +73,6 @@ bun run docker:clean:reset
 
 This recreates the clean Postgres volume before boot.
 
-#### Option B: Local PostgreSQL
-
-```bash
-# Setup local PostgreSQL
-bun run db:setup
-
-# Run migrations
-bun run db:upgrade
-```
-
 ### 4. Start Development Server
 
 ```bash
@@ -112,9 +101,6 @@ The application will be available at:
 
 | Command | Description |
 |---------|-------------|
-| `bun run db:setup` | Setup PostgreSQL |
-| `bun run db:start` | Start PostgreSQL |
-| `bun run db:stop` | Stop PostgreSQL |
 | `bun run db:upgrade` | Run Alembic migrations |
 | `bun run db:revision` | Create new migration |
 
@@ -189,8 +175,8 @@ Tests for the frontend use React Testing Library. See [[docs/testing/index|Testi
 ### Database Connection Issues
 
 ```bash
-# Check if PostgreSQL is running
-bun run db:start
+# Check if db container is running
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps db
 
 # Verify database connection
 psql $DATABASE_URL -c "SELECT 1"

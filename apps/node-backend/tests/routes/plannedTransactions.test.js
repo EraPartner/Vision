@@ -30,6 +30,10 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
   },
 }));
 
+vi.mock('../../src/database/connection.js', () => ({
+  query: vi.fn(),
+}));
+
 vi.mock('../../src/services/loanRepaymentService.js', () => ({
   generateLoanRepaymentSchedule: vi.fn(() => ({
     regular_payment_amount: 850,
@@ -52,6 +56,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
+import { query as dbQuery } from '../../src/database/connection.js';
 await import('../../src/routes/plannedTransactions.js');
 
 describe('Planned Transaction Routes', () => {
@@ -177,6 +182,21 @@ describe('Planned Transaction Routes', () => {
         })
       );
     });
+
+    it('should return 400 when loan_term_months is out of bounds', async () => {
+      const req = {
+        body: {
+          bank_account: 'Mortgage',
+          is_loan: true,
+          loan_term_months: 601,
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET /:id', () => {
@@ -223,6 +243,78 @@ describe('Planned Transaction Routes', () => {
       await routeHandlers['patch:/:id'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('should resolve recipient_name and category_name to IDs', async () => {
+      plannedTransactionRepository.getById.mockResolvedValue({ id: 1, is_loan: false });
+      plannedTransactionRepository.update.mockResolvedValue({
+        id: 1,
+        recipient_id: 11,
+        category_id: 22,
+      });
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{ id: 11 }] })
+        .mockResolvedValueOnce({ rows: [{ id: 22 }] });
+
+      const req = {
+        params: { id: '1' },
+        body: {
+          recipient_name: 'John',
+          category_name: 'FOOD:GROCERIES',
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          recipient_id: 11,
+          category_id: 22,
+        })
+      );
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should clear loan fields and loan schedule when toggled off', async () => {
+      plannedTransactionRepository.getById
+        .mockResolvedValueOnce({
+          id: 1,
+          is_loan: true,
+          loan_type: 'amortizing',
+          loan_principal: 10000,
+          loan_annual_interest_rate: 6,
+          loan_term_months: 12,
+          loan_start_date: '2026-04-01',
+          loan_payment_day: 1,
+        })
+        .mockResolvedValueOnce({ id: 1, is_loan: false, loan_schedule: [] });
+      plannedTransactionRepository.update.mockResolvedValue({ id: 1, is_loan: false });
+      plannedTransactionRepository.replaceLoanSchedule.mockResolvedValue(undefined);
+
+      const req = {
+        params: { id: '1' },
+        body: { is_loan: false },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          is_loan: false,
+          loan_type: null,
+          loan_principal: null,
+          loan_annual_interest_rate: null,
+          loan_term_months: null,
+          loan_start_date: null,
+          loan_payment_day: null,
+          loan_regular_payment_amount: null,
+          loan_first_payment_date: null,
+        })
+      );
+      expect(plannedTransactionRepository.replaceLoanSchedule).toHaveBeenCalledWith(1, []);
+      expect(res.json).toHaveBeenCalled();
     });
   });
 

@@ -4,11 +4,13 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-04-02
+date: 2026-04-10
 tags: [api, watchlist, investments]
 status: active
 aliases: [watchlist-api, tracked-symbols, watch list]
-related_code: [[apps/node-backend/src/routes/watchlist.js]], [[apps/node-backend/src/repositories/watchlistRepository.js]]
+related_code:
+  - apps/node-backend/src/routes/watchlist.js
+  - apps/node-backend/src/repositories/watchlistRepository.js
 ---
 
 # Watchlist API
@@ -94,3 +96,9 @@ Remove item from watchlist.
 ## Related
 
 - [[docs/api/investments|Investments API]]
+
+## Testing references (2026-04-10)
+
+- [[apps/node-backend/tests/routes/watchlist.test.js]] adds route-level regression coverage for query normalization (`limit`, `offset`), validation/error paths, defaulting behavior, and not-found responses for `GET /api/watchlist/:id`.
+
+Related docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].

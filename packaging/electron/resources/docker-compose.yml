@@ -28,7 +28,6 @@ services:
     ports:
       - "${PORT:-3002}:3002"
     environment:
-      EXTERNAL_DATABASE: "true"
       SERVER_HOST: "0.0.0.0"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       # Expose version to the backend so /api/admin/update/check can report it

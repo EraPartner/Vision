@@ -22,9 +22,6 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 | `alembic current` | — | Check current schema version |
 | `alembic history` | — | View full migration chain |
 | `alembic downgrade -1` | — | Rollback last migration |
-| `bun run db:setup` | — | Setup PostgreSQL (local dev) |
-| `bun run db:start` | — | Start PostgreSQL (local dev) |
-| `bun run db:stop` | — | Stop PostgreSQL (local dev) |
 
 ## How Migrations Work
 

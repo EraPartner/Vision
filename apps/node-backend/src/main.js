@@ -22,7 +22,6 @@ import {
   warmInflationCache,
   clearInflationMemoryCache,
 } from './services/belgianInflationService.js';
-import PostgresManager from './database/postgresManager.js';
 import investmentRepository from './repositories/investmentRepository.js';
 import {
   fetchLivePricesDetailed,
@@ -299,38 +298,12 @@ app.use((err, req, res, _next) => {
 
 const PORT = settings.server.port;
 const HOST = settings.server.host;
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const defaultProjectRoot = resolve(moduleDir, '..', '..', '..');
 
-// PostgreSQL manager instance
-let postgresManager = null;
 // Exchange rate refresh interval handle
 let exchangeRateRefreshInterval = null;
 
 async function start() {
   try {
-    // Initialize PostgreSQL manager with project root
-    const projectRoot = process.env.PROJECT_ROOT || defaultProjectRoot;
-    postgresManager = new PostgresManager(projectRoot);
-
-    // Start PostgreSQL server (initialize if needed)
-    if (process.env.EXTERNAL_DATABASE === 'true') {
-      logger.info('EXTERNAL_DATABASE mode: skipping local PostgreSQL management, expecting external DB at DATABASE_URL');
-    } else {
-      logger.info('PostgreSQL initialization and startup...');
-      try {
-        await postgresManager.start();
-        logger.info('PostgreSQL server is ready');
-      } catch (error) {
-        logger.error('Failed to start PostgreSQL', {
-          error: error.message,
-          dataDir: postgresManager.postgresDataDir,
-        });
-        logger.error('Make sure PostgreSQL is installed: brew install postgresql@15');
-        throw error;
-      }
-    }
-
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in
     // parallel. On a cold first-ever start postgres can take up to ~30s to
@@ -425,16 +398,6 @@ async function start() {
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });
-    // Stop PostgreSQL if it was started
-    if (postgresManager) {
-      try {
-        await postgresManager.stop();
-      } catch (stopError) {
-        logger.error('Error stopping PostgreSQL during startup failure', {
-          error: stopError.message,
-        });
-      }
-    }
     process.exit(1);
   }
 }
@@ -444,15 +407,6 @@ process.on('SIGINT', async () => {
   logger.info('Shutting down...');
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   await closePool();
-  if (postgresManager) {
-    try {
-      await postgresManager.stop();
-    } catch (error) {
-      logger.warn('Error stopping PostgreSQL during shutdown', {
-        error: error.message,
-      });
-    }
-  }
   process.exit(0);
 });
 
@@ -460,15 +414,6 @@ process.on('SIGTERM', async () => {
   logger.info('Shutting down...');
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
   await closePool();
-  if (postgresManager) {
-    try {
-      await postgresManager.stop();
-    } catch (error) {
-      logger.warn('Error stopping PostgreSQL during shutdown', {
-        error: error.message,
-      });
-    }
-  }
   process.exit(0);
 });
 

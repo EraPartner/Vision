@@ -229,6 +229,29 @@ describe('portfolioTransactionRepository.hardDelete', () => {
     expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM portfolio_transactions_base WHERE id = $1', [44]);
     expect(deleted).toBe(true);
   });
+
+  it('returns false when direct delete affects no rows', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: null }] })
+      .mockResolvedValueOnce({ rowCount: 0 });
+
+    const deleted = await portfolioTransactionRepository.hardDelete(99);
+
+    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM portfolio_transactions WHERE id = $1', [99]);
+    expect(deleted).toBe(false);
+  });
+
+  it('falls back to base-table delete when direct delete hits non-updatable view', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ portfolio_transactions_base: null }] })
+      .mockRejectedValueOnce({ message: 'cannot delete from view "portfolio_transactions"', code: '55000' })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const deleted = await portfolioTransactionRepository.hardDelete(55);
+
+    expect(query).toHaveBeenNthCalledWith(3, 'DELETE FROM portfolio_transactions_base WHERE id = $1', [55]);
+    expect(deleted).toBe(true);
+  });
 });
 
 describe('portfolioTransactionRepository.update', () => {
@@ -333,6 +356,23 @@ describe('portfolioTransactionRepository.update', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'type cannot be changed' });
   });
 
+  it('returns null when update target does not exist', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    const result = await portfolioTransactionRepository.update(404, { note: 'x' });
+
+    expect(result).toBeNull();
+  });
+
+  it('returns existing row unchanged when patch has no allowed fields', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 21, investment_id: 1, type: 'dividend', amount: '100', asset_class: 'stock' }] });
+
+    const result = await portfolioTransactionRepository.update(21, { unsupported: 'field' });
+
+    expect(result).toEqual({ id: 21, investment_id: 1, type: 'dividend', amount: '100', asset_class: 'stock' });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects sell update when sell units exceed holdings on the effective date', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 13, investment_id: 1, type: 'sell', date: '2026-03-24', amount: '1000', units: '1', price_per_unit: '1000', fees: '0', taxes: '0' }] })
@@ -342,5 +382,149 @@ describe('portfolioTransactionRepository.update', () => {
     await expect(
       portfolioTransactionRepository.update(13, { units: 1, price_per_unit: 1000 })
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'sell units exceed available holdings' });
+  });
+});
+
+describe('portfolioTransactionRepository.getAllByInvestmentIds', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __resetPortfolioTransactionSchemaCache();
+  });
+
+  it('returns empty list when investmentIds normalize to empty', async () => {
+    const rows = await portfolioTransactionRepository.getAllByInvestmentIds({
+      investmentIds: ['x', 0, -2, null],
+    });
+
+    expect(rows).toEqual([]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('applies sanitized ids, type filter, and clamps pagination limits', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 9 }] });
+
+    const rows = await portfolioTransactionRepository.getAllByInvestmentIds({
+      investmentIds: [1, '2', '2', 'invalid', -7],
+      type: 'buy',
+      perInvestmentLimit: 7000,
+      limit: 999999,
+      offset: -5,
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('pt.investment_id = ANY($1::int[])');
+    expect(sql).toContain('AND pt.type = $3');
+    expect(sql).toContain('WHERE rn <= $2');
+    expect(sql).toContain('LIMIT $4');
+    expect(sql).toContain('OFFSET $5');
+    expect(params).toEqual([[1, 2], 5000, 'buy', 200000, 0]);
+    expect(rows).toEqual([{ id: 9 }]);
+  });
+
+  it('omits type and limit clauses when not provided', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 44 }] });
+
+    const rows = await portfolioTransactionRepository.getAllByInvestmentIds({
+      investmentIds: [44],
+      perInvestmentLimit: 0,
+      limit: null,
+      offset: 3,
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain('AND pt.type');
+    expect(sql).not.toContain(' LIMIT ');
+    expect(sql).toContain('OFFSET $3');
+    expect(params).toEqual([[44], 1000, 3]);
+    expect(rows).toEqual([{ id: 44 }]);
+  });
+});
+
+describe('portfolioTransactionRepository.getCount', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __resetPortfolioTransactionSchemaCache();
+  });
+
+  it('counts by single investmentId and type', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '7' }] });
+
+    const total = await portfolioTransactionRepository.getCount({
+      investmentId: 10,
+      type: 'buy',
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('investment_id = $1');
+    expect(sql).toContain('type = $2');
+    expect(params).toEqual([10, 'buy']);
+    expect(total).toBe(7);
+  });
+
+  it('counts by normalized investmentIds array', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '9' }] });
+
+    const total = await portfolioTransactionRepository.getCount({
+      investmentIds: ['3', 0, '3', 'abc', 4],
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('investment_id = ANY($1::int[])');
+    expect(params).toEqual([[3, 4]]);
+    expect(total).toBe(9);
+  });
+
+  it('skips investmentIds clause when all ids are invalid', async () => {
+    query.mockResolvedValueOnce({ rows: [{ count: '2' }] });
+
+    const total = await portfolioTransactionRepository.getCount({
+      investmentIds: ['bad', 0, -1],
+      type: 'sell',
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain('ANY(');
+    expect(sql).toContain('type = $1');
+    expect(params).toEqual(['sell']);
+    expect(total).toBe(2);
+  });
+});
+
+describe('portfolioTransactionRepository.getSummary', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __resetPortfolioTransactionSchemaCache();
+  });
+
+  it('returns grouped summary rows for an investment', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          type: 'buy',
+          total_amount: '1000.00',
+          total_units: '5.00000000',
+          total_fees: '2.00',
+          total_taxes: '1.00',
+          count: '2',
+        },
+      ],
+    });
+
+    const rows = await portfolioTransactionRepository.getSummary(77);
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM portfolio_transactions'),
+      [77]
+    );
+    expect(rows).toEqual([
+      {
+        type: 'buy',
+        total_amount: '1000.00',
+        total_units: '5.00000000',
+        total_fees: '2.00',
+        total_taxes: '1.00',
+        count: '2',
+      },
+    ]);
   });
 });
