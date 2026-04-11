@@ -30,6 +30,7 @@ import { query } from '../src/database/connection.js';
 import { convertRowsToEur } from '../src/services/currencyConversionService.js';
 import { fetchHistoricalPrices } from '../src/services/priceProviderService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
+import { clearMvCache } from '../src/repositories/infoRepository.js';
 
 vi.mock('../src/config/logger.js', () => ({
   logger: {
@@ -45,6 +46,7 @@ import { logger } from '../src/config/logger.js';
 describe('InfoRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearMvCache();
     // Default: mvAvailable returns false (no materialized views)
     query.mockImplementation(async (sql) => {
       if (typeof sql === 'string' && sql.includes('SELECT 1 FROM')) {
@@ -777,6 +779,142 @@ describe('InfoRepository', () => {
       expect(fallbackSql).toContain('LEFT JOIN recipients r ON t.recipient_id = r.id');
       expect(fallbackSql).toContain('COALESCE(t.category_id, r.default_category_id) NOT IN ($1,$2)');
       expect(fallbackSql).toContain('LEFT JOIN filtered_transactions t ON t.date >= m.month_start');
+    });
+  });
+
+  describe('general infoRepository methods', () => {
+    it('should compute statistics from materialized view fast path', async () => {
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM mv_category_totals LIMIT 1')) return { rows: [{ '?column?': 1 }] };
+        if (sql.includes('SELECT count(*) FROM transactions')) return { rows: [{ count: '3' }] };
+        if (sql.includes('SELECT * FROM mv_category_totals')) {
+          return {
+            rows: [
+              { category_id: 1, name: 'FOOD:GROCERIES', count: '2', total: '-10', currency: 'EUR' },
+              { category_id: 1, name: 'FOOD:GROCERIES', count: '1', total: '-5', currency: 'USD' },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+
+      convertRowsToEur.mockResolvedValue([
+        { category_id: 1, name: 'FOOD:GROCERIES', count: '2', amount_eur: -10 },
+        { category_id: 1, name: 'FOOD:GROCERIES', count: '1', amount_eur: -4 },
+      ]);
+
+      const result = await infoRepository.getStatistics('EUR');
+      expect(result.total_transactions).toBe(3);
+      expect(result.total_amount).toBe(-14);
+      expect(result.categories).toHaveLength(1);
+      expect(result.categories[0]).toMatchObject({ id: 1, count: 3, total: -14 });
+    });
+
+    it('should compute statistics and category breakdown from fallback queries', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      query.mockImplementation(async (sql) => {
+        if (sql.includes('SELECT 1 FROM mv_category_totals LIMIT 1')) return { rows: [] };
+        if (sql.includes('SELECT count(*) FROM transactions')) return { rows: [{ count: '2' }] };
+        if (sql.includes('FROM transactions t') && sql.includes('WHERE t.is_active = true') && !sql.includes('COALESCE(c.id')) {
+          return { rows: [{ amount: '-3', currency: 'EUR', date: '2026-01-01' }, { amount: '-2', currency: 'USD', date: '2026-01-02' }] };
+        }
+        if (sql.includes('COALESCE(c.id, -1) AS category_id')) {
+          return {
+            rows: [
+              { category_id: 2, name: 'TRANSPORT:FUEL', amount: '-3', currency: 'EUR', date: '2026-01-01' },
+              { category_id: -1, name: 'UNCATEGORISED', amount: '-2', currency: 'USD', date: '2026-01-02' },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+
+      const stats = await infoRepository.getStatistics('EUR');
+      expect(stats.total_transactions).toBe(2);
+      expect(stats.total_amount).toBe(-5);
+      expect(stats.categories).toHaveLength(2);
+
+      const breakdown = await infoRepository.getCategoryBreakdown('EUR');
+      expect(breakdown).toHaveLength(2);
+    });
+
+    it('should return bank names and transaction count helpers', async () => {
+      query
+        .mockResolvedValueOnce({ rows: [{ bank_account: 'A' }, { bank_account: 'B' }] })
+        .mockResolvedValueOnce({ rows: [{ count: '42' }] });
+
+      const banks = await infoRepository.getBanks();
+      const count = await infoRepository.getTransactionCount();
+
+      expect(banks).toEqual(['A', 'B']);
+      expect(count).toBe(42);
+    });
+
+    it('should summarize transactions with filters and empty fallback', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ amount: '-4', currency: 'EUR', date: '2026-01-01' }, { amount: '2', currency: 'EUR', date: '2026-01-02' }] });
+
+      const empty = await infoRepository.getTransactionSummary({ bankAccount: 'REV' });
+      expect(empty).toEqual({ total_count: 0, total_amount: 0, average: 0, min: null, max: null });
+
+      const result = await infoRepository.getTransactionSummary({ startDate: '2026-01-01', endDate: '2026-01-02', targetCurrency: 'EUR' });
+      expect(result).toMatchObject({ total_count: 2, total_amount: -2, average: -1, min: -4, max: 2 });
+    });
+
+    it('should build planned expenses summary grouped by day', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      query.mockResolvedValueOnce({
+        rows: [
+          { id: 1, planned_date: '2026-02-01', amount: '-20', currency: 'EUR', recipient_name: 'Rent', category_name: 'HOME:RENT', is_recurring: true, recurrence_pattern: 'monthly' },
+          { id: 2, planned_date: '2026-02-01', amount: '50', currency: 'EUR', recipient_name: 'Salary', category_name: null, is_recurring: false, recurrence_pattern: null },
+        ],
+      });
+
+      const result = await infoRepository.getPlannedExpensesNextMonth('EUR');
+      expect(result.daily_data).toHaveLength(1);
+      expect(result.summary.net_amount).toBe(30);
+      expect(result.summary.transaction_count).toBe(2);
+    });
+
+    it('should compute average-vs-current spending projections', async () => {
+      convertRowsToEur.mockImplementation(async (rows) => rows.map((row) => ({
+        ...row,
+        amount_eur: Number(row.amount ?? 0),
+      })));
+
+      query
+        .mockResolvedValueOnce({
+          rows: [
+            { amount: '-10', currency: 'EUR', date: '2026-01-01' },
+            { amount: '-20', currency: 'EUR', date: '2026-01-02' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { amount: '-5', currency: 'EUR', date: '2026-01-03' },
+            { amount: '1', currency: 'EUR', date: '2026-01-03' },
+          ],
+        });
+
+      const result = await infoRepository.getAverageVsCurrentSpending('EUR');
+      // Two transaction days, total spending 30 => 15/day
+      expect(result.past_6_months.avg_daily_spending).toBe(15);
+      expect(result.current_month.total_spending).toBe(5);
+      expect(result.comparison).toHaveProperty('projected_monthly_total');
     });
   });
 });

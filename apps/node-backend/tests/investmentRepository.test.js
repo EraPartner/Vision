@@ -428,4 +428,89 @@ describe('investmentRepository.hardDelete', () => {
     expect(query).toHaveBeenNthCalledWith(3, 'DELETE FROM investments_base WHERE id = $1', [9]);
     expect(deleted).toBe(true);
   });
+
+  it('deletes directly from investments view when updatable', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ investments_base: null }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const deleted = await investmentRepository.hardDelete(10);
+
+    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM investments WHERE id = $1', [10]);
+    expect(deleted).toBe(true);
+  });
+
+  it('deletes through inheritance table when schema exists', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const deleted = await investmentRepository.hardDelete(11);
+
+    expect(query).toHaveBeenNthCalledWith(2, 'DELETE FROM investments_base WHERE id = $1', [11]);
+    expect(deleted).toBe(true);
+  });
+
+  it('falls back to legacy delete when inheritance relation is missing', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] })
+      .mockRejectedValueOnce({ code: '42P01', message: 'relation "investments_base" does not exist' })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    const deleted = await investmentRepository.hardDelete(12);
+
+    expect(query).toHaveBeenNthCalledWith(3, 'DELETE FROM investments WHERE id = $1', [12]);
+    expect(deleted).toBe(true);
+  });
+});
+
+describe('investmentRepository read helpers and extra branches', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __resetInvestmentSchemaCache();
+  });
+
+  it('supports getAll/getCount/getAllWithCount/getById branch paths', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 1, name: 'A' }] })
+      .mockResolvedValueOnce({ rows: [{ count: '3' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 2, name: 'B', total_count: '5' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const all = await investmentRepository.getAll({ limit: 10, offset: 0, active: false, assetClass: 'stock' });
+    const count = await investmentRepository.getCount({ active: false, assetClass: 'stock' });
+    const withCount = await investmentRepository.getAllWithCount({ limit: 1, offset: 2, active: true, assetClass: null });
+    const byId = await investmentRepository.getById(999);
+
+    expect(all).toHaveLength(1);
+    expect(count).toBe(3);
+    expect(withCount.total).toBe(5);
+    expect(withCount.rows[0]).toMatchObject({ id: 2, name: 'B' });
+    expect(byId).toBeNull();
+  });
+
+  it('returns existing row when update has no allowed fields', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 5, asset_class: 'stock', name: 'AAPL' }] });
+
+    const result = await investmentRepository.update(5, { unknownField: 'x' });
+
+    expect(result).toEqual({ id: 5, asset_class: 'stock', name: 'AAPL' });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null when updating non-existing investment', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    const result = await investmentRepository.update(404, { name: 'Nope' });
+
+    expect(result).toBeNull();
+  });
+
+  it('throws for unsupported inheritance asset class in create path', async () => {
+    query.mockResolvedValueOnce({ rows: [{ investments_base: 'investments_base' }] });
+
+    await expect(
+      investmentRepository.create({ name: 'X', asset_class: 'unsupported', currency: 'EUR' })
+    ).rejects.toThrow('Unsupported asset_class: unsupported');
+  });
 });
