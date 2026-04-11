@@ -23,6 +23,12 @@ dist/
 *.swo
 *~
 
+# Agent/Dev Tools (local only)
+.obsidian/
+.claude/
+.opencode/
+AGENTS.*
+
 # OS
 .DS_Store
 Thumbs.db
@@ -30,18 +36,15 @@ Thumbs.db
 # Build
 build/
 *.log
+coverage/
 
 # Data
-
 postgres_data/
 Backups/
 *.csv
 *.db*
 htmlcov/
 *.tmp
-
-
-
 
 # Ignore Smart Environment folder
 .smart-env
