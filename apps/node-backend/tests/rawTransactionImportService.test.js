@@ -17,6 +17,14 @@ vi.mock('../src/services/bankAdapters.js', () => ({
   createAdapter: vi.fn(),
 }));
 
+vi.mock('../src/services/importService.js', () => ({
+  importCSV: vi.fn(),
+}));
+
+vi.mock('../src/services/deduplication.js', () => ({
+  isDuplicateByFields: vi.fn(),
+}));
+
 vi.mock('../src/repositories/rawTransactionRepository.js', () => ({
   computeHash: vi.fn(() => 'abc123hash'),
   belfiusRawRepo: {
@@ -45,29 +53,48 @@ vi.mock('../src/repositories/rawTransactionRepository.js', () => ({
 
 import { importCSVWithRawStorage } from '../src/services/rawTransactionImportService.js';
 import { createAdapter } from '../src/services/bankAdapters.js';
+import { importCSV } from '../src/services/importService.js';
+import { isDuplicateByFields } from '../src/services/deduplication.js';
 import { query } from '../src/database/connection.js';
 import {
   belfiusRawRepo,
   revolutRawRepo,
   kbcRawRepo,
+  sabbRawRepo,
+  wiseRawRepo,
+  visionRawRepo,
   rawReferenceRepo,
   computeHash,
   isRawDuplicate,
 } from '../src/repositories/rawTransactionRepository.js';
 
+function makeTx(overrides = {}) {
+  return {
+    date: new Date('2026-01-15T00:00:00.000Z'),
+    amount: -50,
+    recipient: 'SHOP',
+    bankAccount: 'Main Account',
+    currency: 'EUR',
+    balance: 1000,
+    memo: 'Payment',
+    comment: '',
+    rawData: 'line1;data;here',
+    recipientAccount: 'BE123',
+    recipientAddress: null,
+    recipientBankName: 'TestBank',
+    ...overrides,
+  };
+}
+
 describe('Raw Transaction Import Service', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isDuplicateByFields.mockResolvedValue(false);
+  });
 
   // ── Successful import ──────────────────────────────────────
   it('should import belfius transactions successfully', async () => {
-    createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -50.00, recipient: 'SHOP',
-        bankAccount: 'Belfius', currency: 'EUR', balance: 1000,
-        memo: 'Payment', comment: '', rawData: 'line1;data;here',
-        recipientAccount: 'BE123', recipientAddress: null, recipientBankName: 'Belfius',
-      },
-    ]);
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Belfius', recipientBankName: 'Belfius' })]);
 
     isRawDuplicate.mockResolvedValue(false);
     belfiusRawRepo.create.mockResolvedValue({ id: 1 });
@@ -83,12 +110,7 @@ describe('Raw Transaction Import Service', () => {
   });
 
   it('should detect duplicates via hash', async () => {
-    createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -50.00, recipient: 'SHOP',
-        bankAccount: 'Belfius', currency: 'EUR', rawData: 'duplicate;line',
-      },
-    ]);
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Belfius', rawData: 'duplicate;line' })]);
 
     isRawDuplicate.mockResolvedValue(true);
 
@@ -100,10 +122,7 @@ describe('Raw Transaction Import Service', () => {
 
   it('should handle revolut imports', async () => {
     createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -25.00, recipient: 'STORE',
-        bankAccount: 'Revolut', currency: 'EUR', rawData: 'revolut,data,line',
-      },
+      makeTx({ amount: -25.00, recipient: 'STORE', bankAccount: 'Revolut', rawData: 'revolut,data,line' }),
     ]);
 
     isRawDuplicate.mockResolvedValue(false);
@@ -117,10 +136,7 @@ describe('Raw Transaction Import Service', () => {
 
   it('should handle kbc imports', async () => {
     createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -100.00, recipient: 'MERCHANT',
-        bankAccount: 'KBC', currency: 'EUR', rawData: 'kbc;data;line',
-      },
+      makeTx({ amount: -100.00, recipient: 'MERCHANT', bankAccount: 'KBC', rawData: 'kbc;data;line' }),
     ]);
 
     isRawDuplicate.mockResolvedValue(false);
@@ -143,12 +159,7 @@ describe('Raw Transaction Import Service', () => {
   });
 
   it('should skip transactions without rawData', async () => {
-    createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -50.00, recipient: 'SHOP',
-        bankAccount: 'Belfius', currency: 'EUR', rawData: null, // missing
-      },
-    ]);
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Belfius', rawData: null })]);
 
     const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
 
@@ -158,11 +169,7 @@ describe('Raw Transaction Import Service', () => {
 
   it('should continue when raw storage fails (table not exists)', async () => {
     createAdapter.mockReturnValue(() => [
-      {
-        date: new Date('2026-01-15'), amount: -50.00, recipient: 'SHOP',
-        bankAccount: 'Belfius', currency: 'EUR', rawData: 'line;data',
-        recipientAccount: null, recipientAddress: null, recipientBankName: null,
-      },
+      makeTx({ bankAccount: 'Belfius', rawData: 'line;data', recipientAccount: null, recipientAddress: null, recipientBankName: null }),
     ]);
 
     isRawDuplicate.mockResolvedValue(false);
@@ -178,9 +185,9 @@ describe('Raw Transaction Import Service', () => {
   // ── Multiple transactions ──────────────────────────────────
   it('should process multiple transactions with mixed results', async () => {
     createAdapter.mockReturnValue(() => [
-      { date: new Date('2026-01-15'), amount: -50, recipient: 'A', bankAccount: 'Belfius', currency: 'EUR', rawData: 'line1' },
-      { date: new Date('2026-01-16'), amount: -30, recipient: 'B', bankAccount: 'Belfius', currency: 'EUR', rawData: 'line2' },
-      { date: new Date('2026-01-17'), amount: -20, recipient: 'C', bankAccount: 'Belfius', currency: 'EUR', rawData: 'line3' },
+      makeTx({ date: new Date('2026-01-15T00:00:00.000Z'), amount: -50, recipient: 'A', bankAccount: 'Belfius', rawData: 'line1' }),
+      makeTx({ date: new Date('2026-01-16T00:00:00.000Z'), amount: -30, recipient: 'B', bankAccount: 'Belfius', rawData: 'line2' }),
+      makeTx({ date: new Date('2026-01-17T00:00:00.000Z'), amount: -20, recipient: 'C', bankAccount: 'Belfius', rawData: 'line3' }),
     ]);
 
     // First: new, Second: duplicate, Third: new
@@ -198,16 +205,169 @@ describe('Raw Transaction Import Service', () => {
     expect(result.duplicates).toBe(1);
   });
 
+  it('should use dedup fallback when raw duplicate check throws and mark duplicate', async () => {
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Belfius' })]);
+    isRawDuplicate.mockRejectedValue(new Error('raw table missing'));
+    isDuplicateByFields.mockResolvedValue(true);
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
+
+    expect(result).toEqual({ total_processed: 1, imported: 0, duplicates: 1, errors: 0 });
+    expect(isDuplicateByFields).toHaveBeenCalledWith('2026-01-15', -50, 'SHOP', 'Payment');
+    expect(belfiusRawRepo.create).not.toHaveBeenCalled();
+  });
+
   // ── Generic bank fallback ──────────────────────────────────
-  it('should use legacy import for generic/unknown bank type', async () => {
-    // For generic banks, it dynamically imports importService
-    // We can't easily test this without more complex mocking, but we verify
-    // the function doesn't crash for unknown bank names
-    createAdapter.mockReturnValue(() => []);
+  it('should delegate unknown bank imports to importCSV and return its result', async () => {
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Unknown Account' })]);
+    importCSV.mockResolvedValue({ total_processed: 7, imported: 5, duplicates: 1, errors: 1 });
 
     const result = await importCSVWithRawStorage('/tmp/test.csv', 'UnknownBank');
 
-    // Generic bank with no transactions returns 0
-    expect(result.total_processed).toBe(0);
+    expect(importCSV).toHaveBeenCalledWith('/tmp/test.csv', 'UnknownBank', null);
+    expect(result).toEqual({ total_processed: 7, imported: 5, duplicates: 1, errors: 1 });
+  });
+
+  it('should keep import successful when raw reference creation fails', async () => {
+    createAdapter.mockReturnValue(() => [makeTx({ bankAccount: 'Belfius' })]);
+    isRawDuplicate.mockResolvedValue(false);
+    belfiusRawRepo.create.mockResolvedValue({ id: 10 });
+    query.mockResolvedValue({ rows: [{ id: 100 }] });
+    rawReferenceRepo.create.mockRejectedValue(new Error('reference insert failed'));
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
+
+    expect(result.imported).toBe(1);
+    expect(result.errors).toBe(0);
+    expect(rawReferenceRepo.create).toHaveBeenCalled();
+  });
+
+  it('should add a new bank account for an existing recipient when account is missing', async () => {
+    createAdapter.mockReturnValue(() => [
+      makeTx({ bankAccount: 'Belfius', recipient: 'Known Recipient', recipientAccount: 'BE999', recipientBankName: 'Belfius' }),
+    ]);
+    isRawDuplicate.mockResolvedValue(false);
+    belfiusRawRepo.create.mockResolvedValue({ id: 1 });
+    rawReferenceRepo.create.mockResolvedValue({});
+
+    query.mockImplementation(async (sql) => {
+      if (sql.includes('SELECT id FROM recipients WHERE normalized_name = $1')) {
+        return { rows: [{ id: 42 }] };
+      }
+      if (sql.includes('SELECT id FROM recipient_bank_accounts')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO recipient_bank_accounts')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO transactions')) {
+        return { rows: [{ id: 500 }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
+
+    expect(result.imported).toBe(1);
+    expect(query.mock.calls.some(
+      ([sql, params]) => typeof sql === 'string'
+        && sql.includes('INSERT INTO recipient_bank_accounts')
+        && sql.includes('false, true')
+        && params[0] === 42
+        && params[1] === 'BE999'
+    )).toBe(true);
+  });
+
+  it('should create recipient, primary bank account, and address notes for new recipient', async () => {
+    createAdapter.mockReturnValue(() => [
+      makeTx({
+        bankAccount: 'Belfius',
+        recipient: 'Brand New',
+        recipientAccount: 'BE222',
+        recipientAddress: 'New Street 123',
+        recipientBankName: 'Belfius',
+      }),
+    ]);
+    isRawDuplicate.mockResolvedValue(false);
+    belfiusRawRepo.create.mockResolvedValue({ id: 3 });
+    rawReferenceRepo.create.mockResolvedValue({});
+
+    query.mockImplementation(async (sql) => {
+      if (sql.includes('SELECT id FROM recipients WHERE normalized_name = $1')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO recipients')) {
+        return { rows: [{ id: 77 }] };
+      }
+      if (sql.includes('INSERT INTO recipient_bank_accounts')) {
+        return { rows: [] };
+      }
+      if (sql.includes('UPDATE recipients SET notes = $1 WHERE id = $2')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO transactions')) {
+        return { rows: [{ id: 900 }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'belfius');
+
+    expect(result.imported).toBe(1);
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO recipients'))).toBe(true);
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO recipient_bank_accounts') && sql.includes('true, true'))).toBe(true);
+    expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('UPDATE recipients SET notes = $1 WHERE id = $2'))).toBe(true);
+  });
+
+  it('should use sabb raw repository for SABB bank names', async () => {
+    createAdapter.mockReturnValue(() => [
+      makeTx({
+        bankAccount: 'SABB',
+        currency: 'SAR',
+        rawData: '15/01/2026|15/01/2026|Salary Payment|1000||POSTED',
+      }),
+    ]);
+    isRawDuplicate.mockResolvedValue(false);
+    sabbRawRepo.create.mockResolvedValue({ id: 6 });
+    query.mockResolvedValue({ rows: [{ id: 100 }] });
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'SABB Personal');
+
+    expect(result.imported).toBe(1);
+    expect(sabbRawRepo.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('should use wise raw repository for Wise bank names', async () => {
+    createAdapter.mockReturnValue(() => [
+      makeTx({
+        bankAccount: 'Wise',
+        rawData: 'id|COMPLETED|OUT|2026-01-15|2026-01-15|Source|100|1|EUR|EUR|Target|99|EUR|1.0|ref|batch|cat|note',
+      }),
+    ]);
+    isRawDuplicate.mockResolvedValue(false);
+    wiseRawRepo.create.mockResolvedValue({ id: 7 });
+    query.mockResolvedValue({ rows: [{ id: 100 }] });
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'Wise Europe');
+
+    expect(result.imported).toBe(1);
+    expect(wiseRawRepo.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('should use vision raw repository for Vision bank names', async () => {
+    createAdapter.mockReturnValue(() => [
+      makeTx({
+        bankAccount: 'Vision',
+        rawData: '2026-01-15|-20|Vision|Store|Memo|EUR|1000|FOOD|Comment',
+      }),
+    ]);
+    isRawDuplicate.mockResolvedValue(false);
+    visionRawRepo.create.mockResolvedValue({ id: 8 });
+    query.mockResolvedValue({ rows: [{ id: 100 }] });
+
+    const result = await importCSVWithRawStorage('/tmp/test.csv', 'Vision Main');
+
+    expect(result.imported).toBe(1);
+    expect(visionRawRepo.create).toHaveBeenCalledTimes(1);
   });
 });

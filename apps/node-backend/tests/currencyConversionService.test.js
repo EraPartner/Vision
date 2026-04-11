@@ -22,6 +22,9 @@ import {
   backfillPortfolioHistoricalRates,
 } from '../src/services/currencyConversionService.js';
 import { query } from '../src/database/connection.js';
+import { logger } from '../src/config/logger.js';
+
+const originalFetch = global.fetch;
 
 describe('Currency Conversion Service', () => {
   beforeEach(() => {
@@ -29,6 +32,14 @@ describe('Currency Conversion Service', () => {
     clearMemoryCache();
     // Mock DB to return no cached rates so we hit fallback
     query.mockResolvedValue({ rows: [] });
+  });
+
+  afterEach(() => {
+    if (originalFetch) {
+      global.fetch = originalFetch;
+      return;
+    }
+    delete global.fetch;
   });
 
   // ── EUR identity ──────────────────────────────────────────
@@ -168,6 +179,27 @@ describe('Currency Conversion Service', () => {
     expect(result).toBeCloseTo(40, 6);
   });
 
+  it('should fall back to EUR conversion when target currency is unsupported', async () => {
+    query.mockResolvedValue({
+      rows: [{ currency_code: 'USD', rate_to_eur: 0.5 }],
+    });
+
+    const result = await convertToCurrency(100, 'USD', 'ZZZ');
+    expect(result).toBeCloseTo(50, 6);
+  });
+
+  it('should use 1:1 row conversion when source currency is unsupported', async () => {
+    const [row] = await convertRowsToEur([{ amount: 50, currency: 'XYZ' }], 'EUR');
+    expect(row.amount_eur).toBe(50);
+  });
+
+  it('should fall back to EUR row conversion when target currency is unsupported', async () => {
+    const [row] = await convertRowsToEur([{ amount: 50, currency: 'USD' }], 'ZZZ');
+    const expectedEur = await convertToEur(50, 'USD');
+
+    expect(row.amount_eur).toBeCloseTo(expectedEur, 6);
+  });
+
   it('should use nearest historical DB rate when exact date is missing', async () => {
     query
       // getRates() initial load
@@ -184,6 +216,42 @@ describe('Currency Conversion Service', () => {
     // With indexed historical prefetch, converter may use latest in-memory rate
     // when no historical rows exist for currency/date.
     expect(converted[0].amount_eur).toBeCloseTo(90, 6);
+  });
+
+  it('should cache historical miss per currency/date and avoid duplicate DB lookups', async () => {
+    query
+      // getRates() initial load
+      .mockResolvedValueOnce({ rows: [] })
+      // historical index prefetch
+      .mockResolvedValueOnce({ rows: [] })
+      // exact historical lookup for ZZZ/date
+      .mockResolvedValueOnce({ rows: [] })
+      // nearest historical lookup for ZZZ/date
+      .mockResolvedValueOnce({ rows: [] });
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => '',
+    });
+
+    const rows = [
+      { amount: 10, currency: 'ZZZ', day: '2020-01-15' },
+      { amount: 20, currency: 'ZZZ', day: '2020-01-15' },
+    ];
+
+    const converted = await convertRowsToEur(rows, 'EUR', { useHistoricalRatesByDate: true, dateField: 'day' });
+
+    expect(converted).toHaveLength(2);
+    expect(converted[0].amount_eur).toBe(10);
+    expect(converted[1].amount_eur).toBe(20);
+
+    const sqlCalls = query.mock.calls.map(([sql]) => String(sql));
+    const exactLookups = sqlCalls.filter(sql => sql.includes('WHERE currency_code = $1 AND rate_date = $2::date'));
+    const nearestLookups = sqlCalls.filter(sql => sql.includes('ORDER BY ABS(rate_date - $2::date) ASC'));
+
+    expect(exactLookups).toHaveLength(1);
+    expect(nearestLookups).toHaveLength(1);
   });
 
   it('should backfill only missing portfolio date-currency rates', async () => {
@@ -204,8 +272,50 @@ describe('Currency Conversion Service', () => {
     expect(result.missing).toBeGreaterThanOrEqual(0);
   });
 
+  it('should use ECB historical feed during backfill when exact date exists in 90d feed', async () => {
+    query.mockReset();
+    clearMemoryCache();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "<Cube><Cube time='2026-02-01'><Cube currency='USD' rate='2.0000'/></Cube></Cube>",
+    });
+
+    query
+      // missing pairs scan
+      .mockResolvedValueOnce({ rows: [{ currency_code: 'USD', rate_date: '2026-02-01' }] })
+      // exact lookup in getRateToEurForDate -> none
+      .mockResolvedValueOnce({ rows: [] })
+      // saveHistoricalRate from getRateToEurForDate
+      .mockResolvedValueOnce({ rows: [] })
+      // exactCheck before insert -> none
+      .mockResolvedValueOnce({ rows: [] })
+      // saveHistoricalRate from backfill insert path
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await backfillPortfolioHistoricalRates();
+
+    expect(result).toEqual({ inserted: 1, missing: 0 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('eurofxref-hist-90d.xml'),
+      expect.any(Object)
+    );
+  });
+
   // ── warmCache ─────────────────────────────────────────────
   it('should warm cache without throwing', async () => {
     await expect(warmCache()).resolves.not.toThrow();
+  });
+
+  it('should warm cache from fallback when both APIs are unavailable', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => '' })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+
+    await warmCache();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('all APIs unavailable'));
   });
 });

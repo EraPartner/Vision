@@ -29,6 +29,8 @@ function createResponse() {
 
 describe('rateLimiter middleware', () => {
   afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -155,5 +157,27 @@ describe('rateLimiter middleware', () => {
     expect(next).toHaveBeenCalledTimes(5);
     expect(blockedNext).not.toHaveBeenCalled();
     expect(blockedRes.status).toHaveBeenCalledWith(429);
+  });
+
+  it('cleans up stale entries on the interval sweep', async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const { rateLimiter: isolatedRateLimiter } = await import('../src/middleware/rateLimiter.js');
+    const limiter = isolatedRateLimiter({ windowMs: 120_000, maxRequests: 1, keyPrefix: 'cleanup-sweep' });
+    const req = createRequest({ ip: '10.0.0.12' });
+
+    limiter(req, createResponse(), vi.fn());
+
+    vi.setSystemTime(new Date('2026-01-01T00:01:01.000Z'));
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    const res = createResponse();
+    const next = vi.fn();
+    limiter(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
   });
 });

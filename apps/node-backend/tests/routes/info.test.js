@@ -44,11 +44,48 @@ const mockInflationService = {
 
 vi.mock('../../src/services/belgianInflationService.js', () => mockInflationService);
 
+const mockDbQuery = vi.fn();
+const mockDetectRecurringPatterns = vi.fn();
+const mockRefreshMaterializedViews = vi.fn();
+const mockWarmCache = vi.fn();
+const mockClearMemoryCache = vi.fn();
+const mockGetSnapshots = vi.fn();
+
+vi.mock('../../src/database/connection.js', () => ({
+  query: mockDbQuery,
+}));
+
+vi.mock('../../src/services/recurringDetectionService.js', () => ({
+  detectRecurringPatterns: mockDetectRecurringPatterns,
+}));
+
+vi.mock('../../src/services/materializedViewService.js', () => ({
+  refreshMaterializedViews: mockRefreshMaterializedViews,
+}));
+
+vi.mock('../../src/services/currencyConversionService.js', () => ({
+  FALLBACK_RATES: { USD: 1.1 },
+  warmCache: mockWarmCache,
+  clearMemoryCache: mockClearMemoryCache,
+}));
+
+vi.mock('../../src/services/portfolioPerformanceSnapshotService.js', () => ({
+  getSnapshots: mockGetSnapshots,
+}));
+
 import infoRepository from '../../src/repositories/infoRepository.js';
-await import('../../src/routes/info.js');
+import { logger } from '../../src/config/logger.js';
+const { warmInfoCaches } = await import('../../src/routes/info.js');
 
 describe('Info Routes', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockWarmCache.mockResolvedValue(undefined);
+    mockRefreshMaterializedViews.mockResolvedValue(undefined);
+    mockDetectRecurringPatterns.mockResolvedValue({ patterns: [], total: 0 });
+    mockDbQuery.mockResolvedValue({ rows: [] });
+    mockGetSnapshots.mockResolvedValue([]);
+  });
 
   it('should register /refresh-views and /inflation-rates/refresh routes', () => {
     expect(routeHandlers['post:/refresh-views']).toBeTypeOf('function');
@@ -475,6 +512,365 @@ describe('Info Routes', () => {
       await routeHandlers['get:/recipient-insights'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('GET /recurring-patterns', () => {
+    it('should return recurring patterns payload', async () => {
+      mockDetectRecurringPatterns.mockResolvedValue({
+        patterns: [{ recipient: 'Netflix', interval_days: 30 }],
+        total: 1,
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/recurring-patterns'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        patterns: [{ recipient: 'Netflix', interval_days: 30 }],
+        total: 1,
+      });
+    });
+
+    it('should return empty recurring payload when detector fails', async () => {
+      mockDetectRecurringPatterns.mockRejectedValue(new Error('detector failed'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/recurring-patterns'](req, res);
+
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error detecting recurring patterns; returning empty result',
+        expect.objectContaining({ error: 'detector failed' })
+      );
+      expect(res.json).toHaveBeenCalledWith({ patterns: [], total: 0 });
+    });
+  });
+
+  describe('GET /exchange-rates', () => {
+    it('should return mapped rates and trigger background refresh when stale', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        mockDbQuery.mockResolvedValue({
+          rows: [
+            {
+              currency_code: 'USD',
+              rate_to_eur: '1.2345',
+              rate_date: '2026-04-10',
+              fetched_at: '2026-04-10T08:30:00.000Z',
+            },
+          ],
+        });
+
+        const req = { query: {} };
+        const res = mockResponse();
+        await routeHandlers['get:/exchange-rates'](req, res);
+
+        expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
+        expect(mockWarmCache).toHaveBeenCalledTimes(1);
+        expect(res.json).toHaveBeenCalledWith({
+          total_rates: 1,
+          rates: [
+            {
+              currency: 'USD',
+              rate_to_eur: 1.2345,
+              rate_date: '2026-04-10',
+              fetched_at: '2026-04-10T08:30:00.000Z',
+            },
+          ],
+          fallback_rates: { USD: 1.1 },
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not trigger background refresh when rates are current', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        mockDbQuery.mockResolvedValue({
+          rows: [
+            {
+              currency_code: 'GBP',
+              rate_to_eur: '0.89',
+              rate_date: new Date('2026-04-11T00:00:00.000Z'),
+              fetched_at: '2026-04-11T01:00:00.000Z',
+            },
+          ],
+        });
+
+        const req = { query: {} };
+        const res = mockResponse();
+        await routeHandlers['get:/exchange-rates'](req, res);
+
+        expect(mockClearMemoryCache).not.toHaveBeenCalled();
+        expect(mockWarmCache).not.toHaveBeenCalled();
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            total_rates: 1,
+            rates: [expect.objectContaining({ currency: 'GBP', rate_date: '2026-04-11' })],
+          })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should log warning when background refresh fails', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        mockDbQuery.mockResolvedValue({
+          rows: [
+            {
+              currency_code: 'USD',
+              rate_to_eur: '1.2',
+              rate_date: '2026-04-10',
+              fetched_at: '2026-04-10T08:30:00.000Z',
+            },
+          ],
+        });
+        mockWarmCache.mockRejectedValueOnce(new Error('refresh failed'));
+
+        const req = { query: {} };
+        const res = mockResponse();
+        await routeHandlers['get:/exchange-rates'](req, res);
+        await Promise.resolve();
+
+        expect(logger.warn).toHaveBeenCalledWith(
+          'Background exchange rate refresh failed',
+          expect.objectContaining({ error: 'refresh failed' })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should handle exchange-rate query errors', async () => {
+      mockDbQuery.mockRejectedValue(new Error('query failed'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/exchange-rates'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error retrieving exchange rates' });
+    });
+  });
+
+  describe('POST /exchange-rates/refresh', () => {
+    it('should clear cache and refresh exchange rates', async () => {
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/exchange-rates/refresh'](req, res);
+
+      expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
+      expect(mockWarmCache).toHaveBeenCalledTimes(1);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Exchange rates refreshed from ECB' });
+    });
+
+    it('should handle exchange refresh errors', async () => {
+      mockWarmCache.mockRejectedValueOnce(new Error('ecb down'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/exchange-rates/refresh'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error refreshing exchange rates' });
+    });
+  });
+
+  describe('POST /refresh-views', () => {
+    it('should refresh materialized views and return duration', async () => {
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/refresh-views'](req, res);
+
+      expect(mockRefreshMaterializedViews).toHaveBeenCalledTimes(1);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Materialized views refreshed', duration_ms: expect.any(Number) })
+      );
+    });
+
+    it('should handle refresh-view failures', async () => {
+      mockRefreshMaterializedViews.mockRejectedValueOnce(new Error('view refresh failed'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['post:/refresh-views'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error refreshing materialized views' });
+    });
+  });
+
+  describe('GET /portfolio-performance', () => {
+    it('should return mapped snapshots with default date range', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        mockGetSnapshots.mockResolvedValue([
+          {
+            snapshot_date: '2026-04-10',
+            invested: '1000.5',
+            value: '1234.56',
+            stocks_etfs_value: '500',
+            crypto_value: '200',
+            metals_value: '100',
+            stocks_etfs_invested: '450',
+            crypto_invested: '180',
+            metals_invested: '90',
+            inflation_adjusted_value: null,
+            gain_loss: '234.06',
+            return_pct: '23.4',
+          },
+        ]);
+
+        const req = { query: { currency: 'USD' } };
+        const res = mockResponse();
+        await routeHandlers['get:/portfolio-performance'](req, res);
+
+        expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'USD');
+        expect(res.json).toHaveBeenCalledWith({
+          currency: 'USD',
+          start_date: '2000-01-01',
+          end_date: '2026-04-11',
+          snapshots: [
+            {
+              date: '2026-04-10',
+              invested: 1000.5,
+              value: 1234.56,
+              stocks_etfs_value: 500,
+              crypto_value: 200,
+              metals_value: 100,
+              stocks_etfs_invested: 450,
+              crypto_invested: 180,
+              metals_invested: 90,
+              inflation_adjusted_value: 1234.56,
+              gain_loss: 234.06,
+              return_pct: 23.4,
+            },
+          ],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should default invalid currency input to EUR', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        mockGetSnapshots.mockResolvedValue([]);
+
+        const req = { query: { currency: 'invalid-currency' } };
+        const res = mockResponse();
+        await routeHandlers['get:/portfolio-performance'](req, res);
+
+        expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'EUR');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should handle portfolio performance errors', async () => {
+      mockGetSnapshots.mockRejectedValue(new Error('snapshots failed'));
+
+      const req = { query: { start_date: '2026-01-01', end_date: '2026-01-31' } };
+      const res = mockResponse();
+      await routeHandlers['get:/portfolio-performance'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Error retrieving portfolio performance' });
+    });
+  });
+
+  describe('warmInfoCaches', () => {
+    it('should prewarm both caches and serve warmed values without extra repository calls', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        const netWorthPayload = {
+          current: { liquid: 10, investments: 20, netWorth: 30 },
+          snapshots: [{ date: '2026-04-10', netWorth: 30 }],
+        };
+        infoRepository.getNetWorth.mockResolvedValue(netWorthPayload);
+        mockGetSnapshots.mockResolvedValue([
+          {
+            snapshot_date: '2026-04-10',
+            invested: '10',
+            value: '12',
+            stocks_etfs_value: '5',
+            crypto_value: '4',
+            metals_value: '3',
+            stocks_etfs_invested: '4',
+            crypto_invested: '3',
+            metals_invested: '2',
+            inflation_adjusted_value: '11',
+            gain_loss: '2',
+            return_pct: '20',
+          },
+        ]);
+
+        await warmInfoCaches('JPY');
+
+        const netWorthReq = { query: { currency: 'JPY' } };
+        const netWorthRes = mockResponse();
+        await routeHandlers['get:/net-worth'](netWorthReq, netWorthRes);
+
+        const perfReq = { query: { currency: 'JPY' } };
+        const perfRes = mockResponse();
+        await routeHandlers['get:/portfolio-performance'](perfReq, perfRes);
+
+        expect(infoRepository.getNetWorth).toHaveBeenCalledTimes(1);
+        expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
+        expect(netWorthRes.json).toHaveBeenCalledWith(netWorthPayload);
+        expect(perfRes.json).toHaveBeenCalledWith(
+          expect.objectContaining({ currency: 'JPY', start_date: '2000-01-01', end_date: '2026-04-11' })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should continue warming portfolio cache when net-worth warm fails', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        infoRepository.getNetWorth.mockRejectedValueOnce(new Error('net-worth warm failed'));
+        mockGetSnapshots.mockResolvedValue([]);
+
+        await warmInfoCaches('CAD');
+
+        expect(logger.error).toHaveBeenCalledWith(
+          'Failed to warm net-worth cache',
+          expect.objectContaining({ error: 'net-worth warm failed' })
+        );
+        expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'CAD');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should log portfolio warm failures', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
+        infoRepository.getNetWorth.mockResolvedValue({ current: {}, snapshots: [] });
+        mockGetSnapshots.mockRejectedValueOnce(new Error('portfolio warm failed'));
+
+        await warmInfoCaches('AUD');
+
+        expect(logger.error).toHaveBeenCalledWith(
+          'Failed to warm portfolio-performance cache',
+          expect.objectContaining({ error: 'portfolio warm failed' })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

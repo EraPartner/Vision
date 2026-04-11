@@ -36,6 +36,73 @@ describe('Settings Routes', () => {
     vi.clearAllMocks();
   });
 
+  describe('GET /', () => {
+    it('returns all settings', async () => {
+      settingsRepository.getAll.mockResolvedValue({ app_settings: { defaultCurrency: 'EUR' } });
+
+      const req = { params: {}, query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ app_settings: { defaultCurrency: 'EUR' } });
+    });
+
+    it('returns 500 when fetching all settings fails', async () => {
+      settingsRepository.getAll.mockRejectedValue(new Error('boom'));
+
+      const req = { params: {}, query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to fetch settings' });
+    });
+  });
+
+  describe('GET /:key', () => {
+    it('returns stored setting value when present', async () => {
+      settingsRepository.get.mockResolvedValue({ defaultCurrency: 'USD' });
+
+      const req = { params: { key: 'app_settings' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ key: 'app_settings', value: { defaultCurrency: 'USD' } });
+    });
+
+    it('returns default for known key when missing', async () => {
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'onboarding_complete' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ key: 'onboarding_complete', value: false });
+    });
+
+    it('returns 404 for unknown missing key', async () => {
+      settingsRepository.get.mockResolvedValue(null);
+
+      const req = { params: { key: 'unknown_key' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ detail: "Setting 'unknown_key' not found" });
+    });
+
+    it('returns 500 when fetching setting fails', async () => {
+      settingsRepository.get.mockRejectedValue(new Error('boom'));
+
+      const req = { params: { key: 'app_settings' } };
+      const res = mockResponse();
+      await routeHandlers['get:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to fetch setting' });
+    });
+  });
+
   describe('PUT /:key', () => {
     it('returns 400 when key length exceeds maximum', async () => {
       const req = { params: { key: 'k'.repeat(101) }, body: { value: true } };
@@ -82,6 +149,28 @@ describe('Settings Routes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ detail: 'excludedCategoryIds contains invalid value: abc' });
     });
+
+    it('saves setting when payload is valid', async () => {
+      settingsRepository.set.mockResolvedValue({ key: 'theme_settings', value: { theme: 'dark' } });
+
+      const req = { params: { key: 'theme_settings' }, body: { value: { theme: 'dark' } } };
+      const res = mockResponse();
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(settingsRepository.set).toHaveBeenCalledWith('theme_settings', { theme: 'dark' });
+      expect(res.json).toHaveBeenCalledWith({ key: 'theme_settings', value: { theme: 'dark' } });
+    });
+
+    it('returns 500 when single setting save fails', async () => {
+      settingsRepository.set.mockRejectedValue(new Error('boom'));
+
+      const req = { params: { key: 'theme_settings' }, body: { value: { theme: 'dark' } } };
+      const res = mockResponse();
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to save setting' });
+    });
   });
 
   describe('PUT /', () => {
@@ -115,6 +204,47 @@ describe('Settings Routes', () => {
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ detail: `Setting key '${longKey}' too long (max 100 chars)` });
     });
+
+    it('returns 400 when dashboard_settings payload is not an object', async () => {
+      const req = { body: { dashboard_settings: 'invalid' } };
+      const res = mockResponse();
+
+      await routeHandlers['put:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'dashboard_settings must be an object' });
+    });
+
+    it('bulk saves settings when payload is valid', async () => {
+      settingsRepository.setMany.mockResolvedValue(undefined);
+
+      const req = {
+        body: {
+          onboarding_complete: true,
+          dashboard_settings: { excludedCategoryIds: [1, 2] },
+        },
+      };
+      const res = mockResponse();
+
+      await routeHandlers['put:/'](req, res);
+
+      expect(settingsRepository.setMany).toHaveBeenCalledWith({
+        onboarding_complete: true,
+        dashboard_settings: { excludedCategoryIds: [1, 2] },
+      });
+      expect(res.json).toHaveBeenCalledWith({ saved: 2 });
+    });
+
+    it('returns 500 when bulk save fails', async () => {
+      settingsRepository.setMany.mockRejectedValue(new Error('boom'));
+
+      const req = { body: { onboarding_complete: true } };
+      const res = mockResponse();
+      await routeHandlers['put:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to save settings' });
+    });
   });
 
   describe('DELETE /:key', () => {
@@ -128,6 +258,29 @@ describe('Settings Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ detail: "Setting 'missing_key' not found" });
+    });
+
+    it('returns deleted true when setting exists', async () => {
+      settingsRepository.delete.mockResolvedValue(true);
+
+      const req = { params: { key: 'theme_settings' } };
+      const res = mockResponse();
+
+      await routeHandlers['delete:/:key'](req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ deleted: true });
+    });
+
+    it('returns 500 when deleting setting fails', async () => {
+      settingsRepository.delete.mockRejectedValue(new Error('boom'));
+
+      const req = { params: { key: 'theme_settings' } };
+      const res = mockResponse();
+
+      await routeHandlers['delete:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to delete setting' });
     });
   });
 });

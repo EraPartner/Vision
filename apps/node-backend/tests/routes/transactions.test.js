@@ -45,12 +45,18 @@ vi.mock('../../src/services/materializedViewService.js', () => ({
   scheduleRefresh: vi.fn(),
 }));
 
+vi.mock('../../src/services/currencyConversionService.js', () => ({
+  convertRowsToEur: vi.fn(async (rows) => rows),
+}));
+
 vi.mock('../../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
 import transactionRepository from '../../src/repositories/transactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
+import { isManualDuplicate } from '../../src/services/deduplication.js';
+import { convertRowsToEur } from '../../src/services/currencyConversionService.js';
 await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {
@@ -116,6 +122,26 @@ describe('Transaction Routes', () => {
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
       expect(res.json.mock.calls[0][0].items).toHaveLength(1);
+    });
+
+    it('should normalize rows when normalize_to_eur is true', async () => {
+      transactionRepository.getAllWithCount.mockResolvedValue({
+        rows: [{ id: 1, date: '2026-01-15', amount: '10', currency: 'USD' }],
+        total: 1,
+      });
+      convertRowsToEur.mockResolvedValue([
+        { id: 1, date: '2026-01-15', amount: '10', currency: 'USD', amount_eur: 9 },
+      ]);
+
+      const req = { query: { normalize_to_eur: 'true', target_currency: 'GBP' } };
+      const res = mockResponse();
+      await routeHandlers['get:/'](req, res);
+
+      expect(convertRowsToEur).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 1 })]),
+        'GBP'
+      );
+      expect(res.json).toHaveBeenCalled();
     });
   });
 
@@ -211,6 +237,30 @@ describe('Transaction Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
+
+    it('should return 409 when manual duplicate is detected', async () => {
+      isManualDuplicate.mockResolvedValue({ isDuplicate: true, existingTransactionId: 99 });
+
+      const req = {
+        body: {
+          transaction_date: '2026-01-15',
+          bank_account: 'Chase',
+          recipient_id: 1,
+          amount: -50,
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['post:/'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: 'Duplicate transaction detected',
+          existing_transaction_id: 99,
+        })
+      );
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('PATCH /:id', () => {
@@ -245,6 +295,50 @@ describe('Transaction Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ detail: 'Error updating transaction' });
+    });
+
+    it('should return 400 when recipient_name cannot be resolved', async () => {
+      dbQuery.mockResolvedValueOnce({ rows: [] });
+
+      const req = {
+        params: { id: '1' },
+        body: { recipient_name: 'Missing Name' },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for invalid category_name format', async () => {
+      const req = {
+        params: { id: '1' },
+        body: { category_name: 'INVALID' },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when category_name does not exist', async () => {
+      dbQuery.mockResolvedValueOnce({ rows: [{ id: 11 }] });
+      dbQuery.mockResolvedValueOnce({ rows: [] });
+
+      const req = {
+        params: { id: '1' },
+        body: {
+          recipient_name: 'Known Recipient',
+          category_name: 'FOOD:UNKNOWN',
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['patch:/:id'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(transactionRepository.update).not.toHaveBeenCalled();
     });
   });
 

@@ -8,7 +8,10 @@ const routeHandlers = {};
 const mockRouter = {
   get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
   post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
-  use: vi.fn(),
+  use: vi.fn((...args) => {
+    routeHandlers.use = routeHandlers.use || [];
+    routeHandlers.use.push(args[args.length - 1]);
+  }),
 };
 
 vi.mock('express', () => ({
@@ -69,12 +72,28 @@ vi.mock('../../src/services/bankAdapters.js', () => ({
   getSupportedBanks: vi.fn(() => ['belfius', 'kbc', 'revolut']),
 }));
 
+vi.mock('../../src/services/streamingImportService.js', () => ({
+  importCSVStreaming: vi.fn(),
+}));
+
+vi.mock('../../src/services/dataImportService.js', () => ({
+  importRecipientsCSV: vi.fn(),
+  importCategoriesCSV: vi.fn(),
+}));
+
+vi.mock('../../src/services/materializedViewService.js', () => ({
+  scheduleRefresh: vi.fn(),
+}));
+
 vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 import { importCSVWithRawStorage } from '../../src/services/rawTransactionImportService.js';
 import { getSupportedBanks } from '../../src/services/bankAdapters.js';
+import { importCSVStreaming } from '../../src/services/streamingImportService.js';
+import { importRecipientsCSV, importCategoriesCSV } from '../../src/services/dataImportService.js';
+import multer from 'multer';
 await import('../../src/routes/importRoutes.js');
 
 describe('Import Routes', () => {
@@ -272,6 +291,289 @@ describe('Import Routes', () => {
   });
 
   // ──────────────────────────────────────────
+  // POST /api/import/csv/stream
+  // ──────────────────────────────────────────
+  describe('POST /csv/stream', () => {
+    it('should stream progress and complete SSE events on success', async () => {
+      importCSVStreaming.mockImplementation(async (filePath, bankName, customConfig, onProgress) => {
+        onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
+        return { total_processed: 2, imported: 2, duplicates: 0, errors: 0 };
+      });
+
+      const req = {
+        file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
+        query: { bank_name: 'belfius' },
+        body: {},
+        on: vi.fn(),
+      };
+      const res = mockSseResponse();
+
+      await routeHandlers['post:/csv/stream'](req, res);
+
+      expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+        'Content-Type': 'text/event-stream',
+      }));
+
+      const writes = res.write.mock.calls.map(([payload]) => payload);
+      expect(writes.some(payload => payload.includes('event: progress'))).toBe(true);
+      expect(writes.some(payload => payload.includes('event: complete'))).toBe(true);
+      expect(res.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return 400 when bank_name missing', async () => {
+      const req = {
+        file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
+        query: {},
+        body: {},
+        on: vi.fn(),
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/csv/stream'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing required parameter: bank_name' });
+    });
+
+    it('should emit SSE error event and end response on failure', async () => {
+      importCSVStreaming.mockRejectedValue(new Error('adapter failed'));
+
+      const req = {
+        file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
+        query: { bank_name: 'belfius' },
+        body: {},
+        on: vi.fn(),
+      };
+      const res = mockSseResponse();
+
+      await routeHandlers['post:/csv/stream'](req, res);
+
+      const writes = res.write.mock.calls.map(([payload]) => payload);
+      expect(writes.some(payload => payload.includes('event: error'))).toBe(true);
+      expect(writes.some(payload => payload.includes('Import failed'))).toBe(true);
+      expect(res.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not emit complete or error event after client abort', async () => {
+      let closeHandler;
+      importCSVStreaming.mockImplementation(async (filePath, bankName, customConfig, onProgress) => {
+        onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
+        closeHandler();
+        return { total_processed: 2, imported: 2, duplicates: 0, errors: 0 };
+      });
+
+      const req = {
+        file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
+        query: { bank_name: 'belfius' },
+        body: {},
+        on: vi.fn((event, cb) => {
+          if (event === 'close') closeHandler = cb;
+        }),
+      };
+      const res = mockSseResponse();
+
+      await routeHandlers['post:/csv/stream'](req, res);
+
+      const writes = res.write.mock.calls.map(([payload]) => payload);
+      expect(writes.some(payload => payload.includes('event: complete'))).toBe(false);
+      expect(writes.some(payload => payload.includes('event: error'))).toBe(false);
+      expect(res.end).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // POST /api/import/recipients
+  // ──────────────────────────────────────────
+  describe('POST /recipients', () => {
+    it('should return 201 with completed status on successful import', async () => {
+      importRecipientsCSV.mockResolvedValue({ total_processed: 2, imported: 2, skipped: 0, errors: 0 });
+
+      const req = {
+        file: { path: '/tmp/recipients.csv', originalname: 'recipients.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/recipients'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+    });
+
+    it('should return 201 with completed_with_errors status when errors > 0', async () => {
+      importRecipientsCSV.mockResolvedValue({ total_processed: 2, imported: 1, skipped: 0, errors: 1 });
+
+      const req = {
+        file: { path: '/tmp/recipients.csv', originalname: 'recipients.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/recipients'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed_with_errors' }));
+    });
+
+    it('should return 400 for invalid separator', async () => {
+      const req = {
+        file: { path: '/tmp/recipients.csv', originalname: 'recipients.csv' },
+        query: { separator: ';;' },
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/recipients'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'separator must be a single character' });
+    });
+
+    it('should return 500 on service error', async () => {
+      importRecipientsCSV.mockRejectedValue(new Error('boom'));
+
+      const req = {
+        file: { path: '/tmp/recipients.csv', originalname: 'recipients.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/recipients'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // POST /api/import/categories
+  // ──────────────────────────────────────────
+  describe('POST /categories', () => {
+    it('should return 201 with completed status on successful import', async () => {
+      importCategoriesCSV.mockResolvedValue({ total_processed: 2, imported: 2, skipped: 0, errors: 0 });
+
+      const req = {
+        file: { path: '/tmp/categories.csv', originalname: 'categories.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/categories'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+    });
+
+    it('should return 201 with completed_with_errors status when errors > 0', async () => {
+      importCategoriesCSV.mockResolvedValue({ total_processed: 2, imported: 1, skipped: 0, errors: 1 });
+
+      const req = {
+        file: { path: '/tmp/categories.csv', originalname: 'categories.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/categories'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed_with_errors' }));
+    });
+
+    it('should return 400 for invalid separator', async () => {
+      const req = {
+        file: { path: '/tmp/categories.csv', originalname: 'categories.csv' },
+        query: { separator: ';;' },
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/categories'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'separator must be a single character' });
+    });
+
+    it('should return 500 on service error', async () => {
+      importCategoriesCSV.mockRejectedValue(new Error('boom'));
+
+      const req = {
+        file: { path: '/tmp/categories.csv', originalname: 'categories.csv' },
+        query: {},
+        body: {},
+      };
+      const res = mockResponse();
+
+      await routeHandlers['post:/categories'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+    });
+  });
+
+  describe('multer error middleware', () => {
+    it('should return 400 for LIMIT_FILE_SIZE', () => {
+      const errorHandler = routeHandlers.use.at(-1);
+      const err = new multer.MulterError('LIMIT_FILE_SIZE');
+      const req = {};
+      const res = mockResponse();
+      const next = vi.fn();
+
+      errorHandler(err, req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'File size exceeds maximum of 50MB' });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for generic multer errors', () => {
+      const errorHandler = routeHandlers.use.at(-1);
+      const err = new multer.MulterError('LIMIT_UNEXPECTED_FILE');
+      err.message = 'unexpected file';
+      const req = {};
+      const res = mockResponse();
+      const next = vi.fn();
+
+      errorHandler(err, req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'Upload error: unexpected file' });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for non-csv errors', () => {
+      const errorHandler = routeHandlers.use.at(-1);
+      const err = new Error('File must be a CSV');
+      const req = {};
+      const res = mockResponse();
+      const next = vi.fn();
+
+      errorHandler(err, req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'File must be a CSV' });
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should pass unknown errors to next middleware', () => {
+      const errorHandler = routeHandlers.use.at(-1);
+      const err = new Error('unknown');
+      const req = {};
+      const res = mockResponse();
+      const next = vi.fn();
+
+      errorHandler(err, req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+      expect(res.status).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────
   // GET /api/import/supported-banks
   // ──────────────────────────────────────────
   describe('GET /supported-banks', () => {
@@ -294,4 +596,12 @@ function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
   return res;
+}
+
+function mockSseResponse() {
+  return {
+    writeHead: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+  };
 }
