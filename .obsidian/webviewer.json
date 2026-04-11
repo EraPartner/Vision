@@ -1,6 +1,0 @@
-{
-  "openExternalURLs": true,
-  "enableAdblocking": true,
-  "customSearchEngine": "https://search.flain.win/search?q=%s",
-  "searchEngine": "custom"
-}
