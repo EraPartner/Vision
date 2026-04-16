@@ -2,7 +2,7 @@
 title: Architecture Decision Records Index
 type: adr-index
 status: active
-date: 2026-03-31
+date: 2026-04-16
 tags: [adr, index, architecture, decisions]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
@@ -40,6 +40,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Changing a fundamental architectural pattern
 > - Documenting a significant bug fix with architectural implications
 > - Recording a decision that affects multiple parts of the system
+
+## Recent Decisions
+
+### 2026-04-16: Performance Page Rewrite
+
+[[docs/adr/008-performance-page-server-computed-response|ADR-008]] — Moved performance computations from frontend to backend, fixed contribution-adjusted heatmap formula.
 
 ## Related Documentation
 

@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-10
+date: 2026-04-16
 tags: [knowledge-base, index, project, overview]
 description: Main entry point to the Vision project documentation - financial transaction management application
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -155,6 +155,16 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-16 Performance Page Rewrite
+
+- **API Enhancement**: `/api/info/portfolio-performance` now returns pre-computed metrics, heatmap, and per-investment breakdown with new `period` query param (1m/3m/6m/1y/3y/all)
+- **Backend Services**: New `portfolioPerformanceSnapshotService.js` with `computeMetrics()`, `computeHeatmap()`, `getBreakdownSummary()` functions
+- **Downsampling**: LTTB algorithm ported to backend for server-side snapshot reduction to ~400 points
+- **Heatmap Fix**: Contribution-adjusted formula now correctly isolates investment returns from cash flow effects
+- **Frontend Simplification**: Eliminated 4 heavy useMemo chains; page now makes 1 API call instead of 4 sequential requests
+- **Performance Gain**: Payload reduced 30-40x for filtered periods (1000 snapshots → ~30 points)
+- **Architecture Decision**: See [[docs/adr/008-performance-page-server-computed-response|ADR-008]]
 
 ### 2026-04-02 KB Enhancements
 

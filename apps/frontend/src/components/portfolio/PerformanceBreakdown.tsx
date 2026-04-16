@@ -1,14 +1,23 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { usePortfolio } from "@/hooks/usePortfolio";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react";
 import { formatMonthLabelWithLocale } from "@/components/shared/dateUtils";
 import type { AssetClass } from "@/types/api";
+
+interface BreakdownItem {
+    id: number;
+    name: string;
+    symbol: string;
+    assetClass: string;
+    currency: string;
+    currentValue: number;
+    totalInvested: number;
+    gainLoss: number;
+    gainLossPercent: number;
+}
 
 interface Props {
     heatmapData: {
@@ -16,6 +25,7 @@ interface Props {
         data: Record<number, (number | null)[]>;
         maxAbsPct: number;
     };
+    breakdownSummary: BreakdownItem[];
 }
 
 function getHeatColor(val: number | null, maxAbsPct: number): string {
@@ -35,36 +45,11 @@ function getHeatColor(val: number | null, maxAbsPct: number): string {
     return "bg-rose-400/80 text-rose-950";
 }
 
-export default function PerformanceBreakdown({ heatmapData }: Props) {
+export default function PerformanceBreakdown({ heatmapData, breakdownSummary }: Props) {
     const { t, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
-    const { summaries } = usePortfolio();
-
-    const { data: exchangeData } = useQuery({
-        queryKey: ['exchange-rates', defaultCurrency],
-        queryFn: () => apiClient.request('/api/info/exchange-rates'),
-        staleTime: 60_000,
-    });
-
-    const ratesToEur: Record<string, number> = useMemo(() => ({
-        EUR: 1,
-        ...Object.fromEntries(
-            (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
-        ),
-        ...(exchangeData?.fallback_rates || {}),
-    }), [exchangeData]);
-
-    const convertToTarget = (amount: number, fromCurrency?: string) => {
-        const from = (fromCurrency || 'EUR').toUpperCase();
-        const to = defaultCurrency.toUpperCase();
-        if (from === to) return amount;
-        const rateFrom = ratesToEur[from];
-        const rateTo = ratesToEur[to];
-        if (!rateFrom || !rateTo) return amount;
-        return (amount * rateFrom) / rateTo;
-    };
 
     const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
 
@@ -76,13 +61,15 @@ export default function PerformanceBreakdown({ heatmapData }: Props) {
 
     const assetClassBreakdown = useMemo(() => {
         const grouped = new Map<AssetClass, { count: number; value: number; invested: number; gain: number }>();
-        for (const summary of summaries) {
-            const existing = grouped.get(summary.assetClass) || { count: 0, value: 0, invested: 0, gain: 0 };
-            existing.count += 1;
-            existing.value += convertToTarget(summary.currentValue, summary.currency);
-            existing.invested += convertToTarget(summary.totalInvested, summary.currency);
-            existing.gain += convertToTarget(summary.gainLoss, summary.currency);
-            grouped.set(summary.assetClass, existing);
+        for (const item of breakdownSummary) {
+            const ac = item.assetClass as AssetClass;
+            const existing = grouped.get(ac) || { count: 0, value: 0, invested: 0, gain: 0 };
+            grouped.set(ac, {
+                count: existing.count + 1,
+                value: existing.value + item.currentValue,
+                invested: existing.invested + item.totalInvested,
+                gain: existing.gain + item.gainLoss,
+            });
         }
 
         return Array.from(grouped.entries()).map(([assetClass, data]) => {
@@ -97,19 +84,19 @@ export default function PerformanceBreakdown({ heatmapData }: Props) {
                 classPct: pct,
             };
         });
-    }, [summaries, convertToTarget, t]);
+    }, [breakdownSummary, t]);
 
     const { topPerformers, bottomPerformers } = useMemo(() => {
-        const sorted = [...summaries].sort((a, b) => a.gainLossPercent - b.gainLossPercent);
+        const sorted = [...breakdownSummary].sort((a, b) => a.gainLossPercent - b.gainLossPercent);
         return {
             topPerformers: sorted.slice(-5).reverse(),
             bottomPerformers: sorted.slice(0, 5),
         };
-    }, [summaries]);
+    }, [breakdownSummary]);
 
     const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 
-    if (summaries.length === 0) return null;
+    if (breakdownSummary.length === 0) return null;
 
     return (
         <>
@@ -236,7 +223,7 @@ export default function PerformanceBreakdown({ heatmapData }: Props) {
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
+                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
                                         </p>
                                     </div>
                                 </div>
@@ -265,7 +252,7 @@ export default function PerformanceBreakdown({ heatmapData }: Props) {
                                             {inv.gainLossPercent >= 0 ? "+" : ""}{inv.gainLossPercent.toFixed(1)}%
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(convertToTarget(inv.gainLoss, inv.currency), defaultCurrency, locale)}
+                                            {formatCurrency(inv.gainLoss, defaultCurrency, locale)}
                                         </p>
                                     </div>
                                 </div>

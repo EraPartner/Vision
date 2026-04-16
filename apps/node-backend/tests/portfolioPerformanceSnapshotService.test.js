@@ -17,6 +17,8 @@ import {
   computeAndStoreSnapshots,
   getSnapshots,
   getLatestSnapshot,
+  computeMetrics,
+  computeHeatmap,
 } from '../src/services/portfolioPerformanceSnapshotService.js';
 
 function buildQueryResponses({ includeData = true, emptyLatest = false } = {}) {
@@ -284,5 +286,191 @@ describe('portfolioPerformanceSnapshotService', () => {
 
     expect(rows).toHaveLength(1);
     expect(query.mock.calls[0][1]).toEqual(['EUR', '2026-01-01', '2026-01-31']);
+  });
+});
+
+describe('computeMetrics', () => {
+  it('returns null for empty or missing snapshots', () => {
+    expect(computeMetrics(null)).toBeNull();
+    expect(computeMetrics([])).toBeNull();
+  });
+
+  it('computes basic metrics from two snapshots', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-01', invested: 1000, value: 1000, gain_loss: 0, inflation_adjusted_value: 1000 },
+      { snapshot_date: '2026-01-01', invested: 1000, value: 1100, gain_loss: 100, inflation_adjusted_value: 1080 },
+    ];
+
+    const metrics = computeMetrics(snapshots);
+
+    expect(metrics.currentValue).toBe(1100);
+    expect(metrics.totalInvested).toBe(1000);
+    expect(metrics.totalGainLoss).toBe(100);
+    expect(metrics.totalReturnPct).toBe(10);
+  });
+
+  it('computes annualized return correctly over ~1 year', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-01', invested: 1000, value: 1000, gain_loss: 0, inflation_adjusted_value: 1000 },
+      { snapshot_date: '2026-01-01', invested: 1000, value: 1100, gain_loss: 100, inflation_adjusted_value: 1080 },
+    ];
+
+    const metrics = computeMetrics(snapshots);
+
+    // ~10% over ~1 year => annualized ≈ 10%
+    expect(metrics.annualizedReturn).toBeCloseTo(10, 0);
+  });
+
+  it('computes real return adjusted for inflation', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-01', invested: 1000, value: 1000, gain_loss: 0, inflation_adjusted_value: 1000 },
+      { snapshot_date: '2026-01-01', invested: 1000, value: 1100, gain_loss: 100, inflation_adjusted_value: 1080 },
+    ];
+
+    const metrics = computeMetrics(snapshots);
+
+    // realReturn = (1080 - 1000) / 1000 * 100 = 8%
+    expect(metrics.realReturnPct).toBe(8);
+    // cumulativeInflation = (1100/1080 - 1) * 100 ≈ 1.85%
+    expect(metrics.cumulativeInflation).toBeCloseTo(1.9, 0);
+  });
+
+  it('handles zero invested gracefully', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-01', invested: 0, value: 0, gain_loss: 0, inflation_adjusted_value: 0 },
+      { snapshot_date: '2026-01-01', invested: 0, value: 0, gain_loss: 0, inflation_adjusted_value: 0 },
+    ];
+
+    const metrics = computeMetrics(snapshots);
+
+    expect(metrics.totalReturnPct).toBe(0);
+    expect(metrics.annualizedReturn).toBe(0);
+    expect(metrics.realReturnPct).toBe(0);
+  });
+
+  it('handles single snapshot', () => {
+    const snapshots = [
+      { snapshot_date: '2025-06-15', invested: 500, value: 520, gain_loss: 20, inflation_adjusted_value: 510 },
+    ];
+
+    const metrics = computeMetrics(snapshots);
+
+    expect(metrics.currentValue).toBe(520);
+    expect(metrics.totalInvested).toBe(500);
+    expect(metrics.totalGainLoss).toBe(20);
+    expect(metrics.totalReturnPct).toBe(4);
+  });
+});
+
+describe('computeHeatmap', () => {
+  it('returns empty structure for insufficient data', () => {
+    expect(computeHeatmap(null)).toEqual({ years: [], data: {}, maxAbsPct: 0 });
+    expect(computeHeatmap([])).toEqual({ years: [], data: {}, maxAbsPct: 0 });
+    expect(computeHeatmap([{ snapshot_date: '2025-01-15', value: 100, invested: 100 }]))
+      .toEqual({ years: [], data: {}, maxAbsPct: 0 });
+  });
+
+  it('computes monthly return for a market gain with no cash flow', () => {
+    // Value goes up 10%, invested stays same => +10% return
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 1000 },
+      { snapshot_date: '2025-02-28', value: 1100, invested: 1000 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.years).toEqual([2025]);
+    // February (index 1) should show +10%
+    expect(result.data[2025][1]).toBe(10);
+    // January (index 0) should be null (first month, no prior)
+    expect(result.data[2025][0]).toBeNull();
+  });
+
+  it('returns 0% when flat market with deposit (contribution-adjusted)', () => {
+    // User deposits 1000 extra, but market is flat
+    // Jan: value=1000, invested=1000, ratio=1.0
+    // Feb: value=2000, invested=2000, ratio=1.0
+    // return = (1.0 / 1.0 - 1) * 100 = 0%
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 1000 },
+      { snapshot_date: '2025-02-28', value: 2000, invested: 2000 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.data[2025][1]).toBe(0);
+  });
+
+  it('detects market loss even with withdrawal', () => {
+    // Market drops 10%, user also withdraws
+    // Jan: value=1000, invested=1000, ratio=1.0
+    // Feb: value=450, invested=500, ratio=0.9
+    // return = (0.9 / 1.0 - 1) * 100 = -10%
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 1000 },
+      { snapshot_date: '2025-02-28', value: 450, invested: 500 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.data[2025][1]).toBe(-10);
+  });
+
+  it('returns null when invested is zero (edge case)', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 0 },
+      { snapshot_date: '2025-02-28', value: 500, invested: 0 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.data[2025][1]).toBeNull();
+  });
+
+  it('computes YTD via geometric compounding of monthly returns', () => {
+    // 3 months: +10%, -5%, +8%
+    // ratio: Jan=1.0, Feb=1.1, Mar=1.045, Apr=1.1286
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 1000 },
+      { snapshot_date: '2025-02-28', value: 1100, invested: 1000 },
+      { snapshot_date: '2025-03-31', value: 1045, invested: 1000 },
+      { snapshot_date: '2025-04-30', value: 1128.6, invested: 1000 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.data[2025][1]).toBe(10);      // Feb
+    expect(result.data[2025][2]).toBe(-5);       // Mar
+    expect(result.data[2025][3]).toBe(8);        // Apr
+    // YTD = (1.1 * 0.95 * 1.08 - 1) * 100 ≈ 12.86%
+    // (verified in PerformanceBreakdown's ytd calculation)
+  });
+
+  it('spans multiple years correctly', () => {
+    const snapshots = [
+      { snapshot_date: '2024-11-30', value: 1000, invested: 1000 },
+      { snapshot_date: '2024-12-31', value: 1050, invested: 1000 },
+      { snapshot_date: '2025-01-31', value: 1100, invested: 1000 },
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.years).toEqual([2024, 2025]);
+    // Dec 2024 (index 11) = +5%
+    expect(result.data[2024][11]).toBe(5);
+    // Jan 2025 (index 0) ≈ (1100/1000)/(1050/1000) - 1 ≈ 4.76%
+    expect(result.data[2025][0]).toBeCloseTo(4.76, 1);
+  });
+
+  it('tracks maxAbsPct across all months', () => {
+    const snapshots = [
+      { snapshot_date: '2025-01-31', value: 1000, invested: 1000 },
+      { snapshot_date: '2025-02-28', value: 800, invested: 1000 },   // -20%
+      { snapshot_date: '2025-03-31', value: 1050, invested: 1000 },  // +31.25%
+    ];
+
+    const result = computeHeatmap(snapshots);
+
+    expect(result.maxAbsPct).toBeCloseTo(31.25, 1);
   });
 });

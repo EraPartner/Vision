@@ -2,7 +2,7 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-03
+date: 2026-04-16
 tags: [reference, api, endpoints, matrix, overview]
 description: Complete matrix of all 108 API endpoints organized by resource for quick lookup
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
@@ -189,7 +189,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/api/info/inflation-rates` | Inflation rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/inflation-rates/refresh` | Refresh inflation | admin | [[docs/api/info\|Info]] |
 | POST | `/api/info/refresh-views` | Refresh materialized views | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/portfolio-performance` | Performance snapshots | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap | 30 req/min | [[docs/api/info\|Info]] |
 
 ## Summary
 

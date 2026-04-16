@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
@@ -12,30 +12,12 @@ import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     DollarSign, Activity,
 } from "lucide-react";
-import { format, parseISO, differenceInDays, isAfter, subMonths, subYears } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
-
-import { downsampleLTTB } from "@/utils/downsample";
-
-const LazyPerformanceBreakdown = lazy(() => import("@/components/portfolio/PerformanceBreakdown"));
+import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
-
-interface PerformanceSnapshot {
-    date: string;
-    invested: number;
-    value: number;
-    stocks_etfs_value: number;
-    crypto_value: number;
-    metals_value: number;
-    stocks_etfs_invested: number;
-    crypto_invested: number;
-    metals_invested: number;
-    inflation_adjusted_value: number;
-    gain_loss: number;
-    return_pct: number;
-}
 
 const PERIOD_KEYS = ["1m", "3m", "6m", "1y", "3y", "all"] as const;
 
@@ -61,10 +43,11 @@ export default function PerformancePage() {
     const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
 
     const { data: portfolioPerformanceData, isLoading } = useQuery({
-        queryKey: ["portfolio-performance", defaultCurrency],
-        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency }),
+        queryKey: ["portfolio-performance", defaultCurrency, selectedPeriod],
+        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: selectedPeriod }),
         staleTime: 300_000,
         gcTime: 10 * 60_000,
+        placeholderData: keepPreviousData,
     });
 
     const PERIOD_LABELS: Record<Period, string> = {
@@ -83,37 +66,13 @@ export default function PerformancePage() {
         [monthLabelLocale],
     );
 
-    // ─── Filter snapshots by selected period ───
-    const filteredSnapshots: PerformanceSnapshot[] = useMemo(() => {
-        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
-        if (allSnapshots.length === 0) return [];
+    const snapshots = portfolioPerformanceData?.snapshots ?? [];
+    const overallMetrics = portfolioPerformanceData?.metrics ?? null;
+    const heatmapData = portfolioPerformanceData?.heatmap ?? { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
+    const breakdownSummary = portfolioPerformanceData?.breakdownSummary ?? [];
 
-        const now = new Date();
-        let cutoff: Date;
-        switch (selectedPeriod) {
-            case "1m": cutoff = subMonths(now, 1); break;
-            case "3m": cutoff = subMonths(now, 3); break;
-            case "6m": cutoff = subMonths(now, 6); break;
-            case "1y": cutoff = subYears(now, 1); break;
-            case "3y": cutoff = subYears(now, 3); break;
-            default: cutoff = new Date(0); break;
-        }
-
-        return allSnapshots.filter(s => {
-            const snapDate = parseISO(s.date);
-            return isAfter(snapDate, cutoff) || s.date === allSnapshots[0].date;
-        });
-    }, [portfolioPerformanceData?.snapshots, selectedPeriod]);
-
-    // ─── Downsample then map chart data ───
-    const MAX_CHART_POINTS = 400;
-
-    const downsampledSnapshots = useMemo(() => {
-        if (filteredSnapshots.length <= MAX_CHART_POINTS) return filteredSnapshots;
-        return downsampleLTTB(filteredSnapshots, MAX_CHART_POINTS, (_item, i) => i, (item) => item.value);
-    }, [filteredSnapshots]);
-
-    const chartData = useMemo(() => downsampledSnapshots.map((s) => ({
+    // Lightweight mapping of already-downsampled snapshots to chart format
+    const chartData = useMemo(() => snapshots.map((s) => ({
         day: s.date,
         [CHART_KEYS.invested]: Math.round(s.invested * 100) / 100,
         [CHART_KEYS.inflationAdjusted]: Math.round(s.inflation_adjusted_value * 100) / 100,
@@ -121,109 +80,26 @@ export default function PerformancePage() {
         [CHART_KEYS.stocksEtfs]: Math.round(s.stocks_etfs_value * 100) / 100,
         [CHART_KEYS.crypto]: Math.round(s.crypto_value * 100) / 100,
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
-    })), [downsampledSnapshots]);
+    })), [snapshots]);
 
-    // ─── Relative performance (percentage-based) ───
-    // Cumulative return = (current_value - invested_capital) / invested_capital × 100
-    // This is the standard finance formula for measuring true return on capital deployed.
+    // Relative performance (percentage-based) from already-downsampled snapshots
     const relativePerformanceData = useMemo(() => {
-        if (downsampledSnapshots.length < 2) return [];
+        if (snapshots.length < 2) return [];
 
         const cumulativeReturn = (value: number, invested: number) =>
             invested > 0 ? Math.round(((value / invested) - 1) * 10000) / 100 : 0;
 
-        return downsampledSnapshots.map((s) => ({
+        return snapshots.map((s) => ({
             day: s.date,
             [CHART_KEYS.relativePortfolio]: cumulativeReturn(s.value, s.invested),
             [CHART_KEYS.relativeStocksEtfs]: cumulativeReturn(s.stocks_etfs_value, s.stocks_etfs_invested),
             [CHART_KEYS.relativeCrypto]: cumulativeReturn(s.crypto_value, s.crypto_invested),
             [CHART_KEYS.relativeMetals]: cumulativeReturn(s.metals_value, s.metals_invested),
             [CHART_KEYS.relativeInflationAdjusted]: cumulativeReturn(s.inflation_adjusted_value, s.invested),
-    }));
-    }, [downsampledSnapshots]);
+        }));
+    }, [snapshots]);
 
-    // ─── Overall metrics ───
-    const overallMetrics = useMemo(() => {
-        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
-        if (allSnapshots.length < 1) return null;
-
-        const last = allSnapshots[allSnapshots.length - 1];
-        const first = allSnapshots[0];
-        const days = differenceInDays(parseISO(last.date), parseISO(first.date)) || 1;
-
-        const totalInvested = last.invested;
-        const currentValue = last.value;
-        const totalGainLoss = last.gain_loss;
-        const totalReturnPct = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
-
-        const years = days / 365.25;
-        const annualizedReturn = totalInvested > 0 && years > 0 && currentValue > 0
-            ? (Math.pow(currentValue / totalInvested, 1 / years) - 1) * 100
-            : 0;
-
-        const realReturnPct = totalInvested > 0
-            ? ((last.inflation_adjusted_value - totalInvested) / totalInvested) * 100
-            : 0;
-
-        const cumulativeInflation = currentValue > 0 && last.inflation_adjusted_value > 0
-            ? ((currentValue / last.inflation_adjusted_value) - 1) * 100
-            : 0;
-
-        return {
-            currentValue: Math.round(currentValue * 100) / 100,
-            totalInvested: Math.round(totalInvested * 100) / 100,
-            totalGainLoss: Math.round(totalGainLoss * 100) / 100,
-            totalReturnPct: Math.round(totalReturnPct * 100) / 100,
-            annualizedReturn: Math.round((Number.isFinite(annualizedReturn) ? annualizedReturn : 0) * 100) / 100,
-            realReturnPct: Math.round(realReturnPct * 100) / 100,
-            cumulativeInflation: Math.round(cumulativeInflation * 10) / 10,
-        };
-    }, [portfolioPerformanceData?.snapshots]);
-
-    // ─── Monthly returns heatmap ───
-    const heatmapData = useMemo(() => {
-        const allSnapshots: PerformanceSnapshot[] = portfolioPerformanceData?.snapshots || [];
-        if (allSnapshots.length < 2) return { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
-
-        // Group by month — take last snapshot of each month
-        const byMonth = new Map<string, PerformanceSnapshot>();
-        for (const s of allSnapshots) {
-            const month = s.date.slice(0, 7);
-            byMonth.set(month, s);
-        }
-
-        const monthKeys = [...byMonth.keys()].sort();
-        const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))].sort();
-        const data: Record<number, (number | null)[]> = {};
-        const monthlyReturns: number[] = [];
-
-        for (const year of years) {
-            data[year] = Array(12).fill(null);
-        }
-
-        for (let i = 1; i < monthKeys.length; i++) {
-            const prevSnap = byMonth.get(monthKeys[i - 1])!;
-            const currSnap = byMonth.get(monthKeys[i])!;
-            const year = parseInt(monthKeys[i].slice(0, 4));
-            const monthIdx = parseInt(monthKeys[i].slice(5, 7)) - 1;
-
-            const base = prevSnap.value;
-            const monthlyReturn = base > 0
-                ? ((currSnap.value - prevSnap.value) / base) * 100
-                : 0;
-
-            const rounded = Math.round(monthlyReturn * 100) / 100;
-            data[year][monthIdx] = rounded;
-            monthlyReturns.push(Math.abs(rounded));
-        }
-
-        return { years, data, maxAbsPct: monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0 };
-    }, [portfolioPerformanceData?.snapshots]);
-
-
-    
-
-    if (isLoading || filteredSnapshots.length === 0) {
+    if (isLoading || snapshots.length === 0) {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
@@ -508,13 +384,7 @@ export default function PerformancePage() {
                 </Card>
             )}
 
-            <Suspense fallback={
-                <Card><CardContent className="flex items-center justify-center h-24">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </CardContent></Card>
-            }>
-                <LazyPerformanceBreakdown heatmapData={heatmapData} />
-            </Suspense>
+            <PerformanceBreakdown heatmapData={heatmapData} breakdownSummary={breakdownSummary} />
         </div>
     );
 }

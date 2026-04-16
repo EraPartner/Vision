@@ -2,11 +2,11 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-09
+date: 2026-04-16
 tags: [feature, portfolio, investments, stocks, crypto, metals]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx"]
 ---
 
 # Feature: Portfolio & Investments
@@ -302,6 +302,38 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 - Heatmap first month is now `null` (no data) instead of forced `0.00%`, so the first displayed month does not imply a measured return without a prior month anchor; YTD is compounded from available non-null monthly returns.
 - Performance month labels for charts and heatmap now always follow app language locale (`en-US`/`nl-NL`) rather than number-format locale, preventing German month names when number format is set to EU style.
 - Performance inflation adjustment now uses Belgian monthly rates from backend (`/api/info/inflation-rates`) instead of hardcoded EU annual assumptions; real return and inflation-adjusted value are compounded month-by-month using backend month keys (`YYYY-MM`).
+
+## Performance Page Rewrite (Server-Computed Response)
+
+The Performance page architecture was significantly refactored to move heavy computations from the client to the server:
+
+**Backend enhancements (`/api/info/portfolio-performance`):**
+- New `period` query parameter: `1m|3m|6m|1y|3y|all` (default `all`) for period-filtered chart data
+- Response now includes **pre-computed metrics, heatmap, and per-investment breakdown** — not just snapshots
+- `metrics` object: `currentValue`, `totalInvested`, `totalGainLoss`, `totalReturnPct`, `annualizedReturn`, `realReturnPct`, `cumulativeInflation`
+- `heatmap` object: contribution-adjusted monthly returns per year-month (fixed formula: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`)
+- `breakdownSummary` array: per-investment values all pre-converted to target currency server-side
+- **Period-filtered snapshots** are downsampled to ~400 points server-side using LTTB, while metrics/heatmap always use full historical data
+- Cache key includes period: `${currency}:${period}` for independent caching per period
+- New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
+- New utility: [[apps/node-backend/src/utils/downsample.js]] — LTTB downsampler ported to backend
+
+**Frontend simplification (`PerformancePage.tsx`, `PerformanceBreakdown.tsx`):**
+- Removed 4 heavy useMemo blocks: `filteredSnapshots`, `downsampledSnapshots`, `overallMetrics`, `heatmapData`
+- Kept only 2 lightweight mapping transforms: `chartData`, `relativePerformanceData`
+- `selectedPeriod` now in query key and API call parameter
+- `PerformanceBreakdown.tsx` now accepts pre-computed `breakdownSummary` and `heatmapData` as props (values already converted by server)
+- Removed `usePortfolio()` hook (eliminated request waterfall)
+- Removed `useQuery` for exchange rates in breakdown component
+- Removed `convertToTarget` helper (server now does all conversions)
+
+**Performance impact:**
+- Page load requests: 4 sequential API calls → 1 single request
+- Payload for 1-month view: ~1000 snapshot rows → ~30 rows + metrics + heatmap + breakdown
+- Client-side memo chains: 6 heavy → 2 lightweight
+- **Heatmap accuracy fix**: Contribution-adjusted returns now correctly account for cash flows; old formula conflated deposits/withdrawals with investment performance
+
+Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 

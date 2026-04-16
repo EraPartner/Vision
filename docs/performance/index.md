@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-04-02
+date: 2026-04-16
 tags: [performance, index, optimization]
 description: Performance optimization strategies including caching, materialized views, and chart downsampling
 aliases: [performance, optimization, speed]
@@ -22,10 +22,15 @@ WHERE type = "performance"
 SORT title ASC
 ```
 
+## Recent Optimizations
+
+**2026-04-16: Performance Page Rewrite** — Moved all computations (metrics, heatmap, breakdown) from client to backend. Page now makes single API request instead of 4 sequential calls. Payload reduced 30-40x for filtered periods. See [[docs/adr/008-performance-page-server-computed-response|ADR-008]].
+
 ## Optimization Strategies
 
 | Strategy | Documentation | Impact |
 |----------|---------------|--------|
+| **Server-Computed Responses** | [[docs/adr/008-performance-page-server-computed-response|ADR-008]] | Pre-computed metrics on backend reduce client overhead |
 | **In-Memory Caching** | [[docs/performance/caching-strategies|Caching Strategies]] | Reduces API calls for exchange rates and prices |
 | **Materialized Views** | [[docs/performance/materialized-views|Materialized Views]] | Pre-computed dashboard aggregations |
 | **Chart Downsampling** | [[docs/performance/chart-downsampling|Chart Downsampling]] | LTTB algorithm for large time-series data |

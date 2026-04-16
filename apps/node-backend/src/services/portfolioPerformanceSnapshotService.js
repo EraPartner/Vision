@@ -7,7 +7,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { convertRowsToEur } from '../services/currencyConversionService.js';
+import { convertRowsToEur, convertToCurrency } from '../services/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 
 function sanitizeIsolatedDailySpikes(snapshots) {
@@ -484,8 +484,337 @@ export async function getLatestSnapshot(currency = 'EUR') {
   return result.rows[0] || null;
 }
 
+/**
+ * Compute overall portfolio metrics from the full snapshot array.
+ * Ported from PerformancePage.tsx overallMetrics useMemo.
+ */
+export function computeMetrics(snapshots) {
+  if (!snapshots || snapshots.length < 1) return null;
+
+  const first = snapshots[0];
+  const last = snapshots[snapshots.length - 1];
+
+  const firstDate = new Date(first.snapshot_date);
+  const lastDate = new Date(last.snapshot_date);
+  const days = Math.max(1, Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24)));
+
+  const totalInvested = parseFloat(last.invested);
+  const currentValue = parseFloat(last.value);
+  const totalGainLoss = parseFloat(last.gain_loss);
+  const inflationAdjustedValue = parseFloat(last.inflation_adjusted_value);
+
+  const totalReturnPct = totalInvested > 0
+    ? (totalGainLoss / totalInvested) * 100
+    : 0;
+
+  const years = days / 365.25;
+  const annualizedReturn = totalInvested > 0 && years > 0 && currentValue > 0
+    ? (Math.pow(currentValue / totalInvested, 1 / years) - 1) * 100
+    : 0;
+
+  const realReturnPct = totalInvested > 0
+    ? ((inflationAdjustedValue - totalInvested) / totalInvested) * 100
+    : 0;
+
+  const cumulativeInflation = currentValue > 0 && inflationAdjustedValue > 0
+    ? ((currentValue / inflationAdjustedValue) - 1) * 100
+    : 0;
+
+  const round2 = (v) => Math.round(v * 100) / 100;
+
+  return {
+    currentValue: round2(currentValue),
+    totalInvested: round2(totalInvested),
+    totalGainLoss: round2(totalGainLoss),
+    totalReturnPct: round2(totalReturnPct),
+    annualizedReturn: round2(Number.isFinite(annualizedReturn) ? annualizedReturn : 0),
+    realReturnPct: round2(realReturnPct),
+    cumulativeInflation: Math.round(cumulativeInflation * 10) / 10,
+  };
+}
+
+/**
+ * Compute monthly returns heatmap from the full snapshot array.
+ * Uses contribution-adjusted formula: change in value/invested ratio,
+ * which isolates investment performance from cash flow effects.
+ */
+export function computeHeatmap(snapshots) {
+  if (!snapshots || snapshots.length < 2) {
+    return { years: [], data: {}, maxAbsPct: 0 };
+  }
+
+  // Group by month — take last snapshot of each month
+  const byMonth = new Map();
+  for (const s of snapshots) {
+    const date = typeof s.snapshot_date === 'string' ? s.snapshot_date : s.snapshot_date.toISOString().slice(0, 10);
+    const month = date.slice(0, 7);
+    byMonth.set(month, s);
+  }
+
+  const monthKeys = [...byMonth.keys()].sort();
+  const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))].sort();
+  const data = {};
+  const monthlyReturns = [];
+
+  for (const year of years) {
+    data[year] = Array(12).fill(null);
+  }
+
+  for (let i = 1; i < monthKeys.length; i++) {
+    const prev = byMonth.get(monthKeys[i - 1]);
+    const curr = byMonth.get(monthKeys[i]);
+    const year = parseInt(monthKeys[i].slice(0, 4));
+    const monthIdx = parseInt(monthKeys[i].slice(5, 7)) - 1;
+
+    const prevValue = parseFloat(prev.value);
+    const prevInvested = parseFloat(prev.invested);
+    const currValue = parseFloat(curr.value);
+    const currInvested = parseFloat(curr.invested);
+
+    let monthlyReturn = null;
+    if (prevInvested > 0 && currInvested > 0 && prevValue > 0) {
+      // Contribution-adjusted: change in value-to-invested ratio
+      // Cancels out cash flow effects (deposits/withdrawals)
+      monthlyReturn = ((currValue / currInvested) / (prevValue / prevInvested) - 1) * 100;
+    }
+
+    const rounded = monthlyReturn !== null ? Math.round(monthlyReturn * 100) / 100 : null;
+    data[year][monthIdx] = rounded;
+    if (rounded !== null) {
+      monthlyReturns.push(Math.abs(rounded));
+    }
+  }
+
+  return {
+    years,
+    data,
+    maxAbsPct: monthlyReturns.length > 0 ? Math.max(...monthlyReturns) : 0,
+  };
+}
+
+/**
+ * Calculate weighted average cost basis (FIFO-like weighted method).
+ * Ported from usePortfolio.ts calculateCostBasis.
+ */
+function calculateCostBasis(txns) {
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+
+  let totalUnits = 0;
+  let totalCost = 0;
+  let realizedGain = 0;
+  let totalBuyCost = 0;
+  let totalSellProceeds = 0;
+
+  for (const txn of sorted) {
+    const units = Number(txn.units) || 0;
+    const amount = Number(txn.amount) || 0;
+    const fees = Number(txn.fees) || 0;
+    const taxes = Number(txn.taxes) || 0;
+
+    if (txn.type === 'buy' || txn.type === 'gift') {
+      const buyCost = amount + fees + taxes;
+      totalUnits += units;
+      totalCost += buyCost;
+      totalBuyCost += buyCost;
+    } else if (txn.type === 'sell') {
+      if (totalUnits > 0 && units > 0) {
+        const sellUnits = Math.min(units, totalUnits);
+        const sellRatio = units > 0 ? sellUnits / units : 0;
+        const avgCost = totalCost / totalUnits;
+        const costOfSoldUnits = avgCost * sellUnits;
+        const netProceeds = (amount - fees - taxes) * sellRatio;
+        realizedGain += netProceeds - costOfSoldUnits;
+        totalUnits -= sellUnits;
+        totalCost -= costOfSoldUnits;
+        totalSellProceeds += amount;
+      }
+    }
+  }
+
+  return {
+    totalUnits: Math.max(0, totalUnits),
+    totalCost: Math.max(0, totalCost),
+    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
+    realizedGain,
+    totalBuyCost,
+    totalSellProceeds,
+  };
+}
+
+/**
+ * Calculate accrued interest for fixed income assets.
+ * Ported from usePortfolio.ts calculateAccruedInterest.
+ */
+function calculateAccruedInterest(txns, principal, interestRate) {
+  if (!interestRate || principal <= 0) return 0;
+
+  const sortedDesc = [...txns].sort((a, b) => b.date.localeCompare(a.date));
+  const lastInterestTxn = sortedDesc.find(t => t.type === 'interest');
+  const firstBuyTxn = [...txns]
+    .filter(t => t.type === 'buy')
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+
+  const startDate = lastInterestTxn?.date || firstBuyTxn?.date;
+  if (!startDate) return 0;
+
+  const start = new Date(startDate);
+  const now = new Date();
+  const daysSinceStart = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+  const dailyRate = interestRate / 100 / 365;
+  return principal * dailyRate * daysSinceStart;
+}
+
+/**
+ * Get per-investment breakdown summary with all values in target currency.
+ * Replaces the frontend's usePortfolio() + exchange-rates fetch waterfall.
+ */
+export async function getBreakdownSummary(targetCurrency = 'EUR') {
+  // 1. Fetch all active investments
+  const investmentsResult = await query(`
+    SELECT id, name, symbol, asset_class, COALESCE(currency, 'EUR') AS currency,
+           COALESCE(current_price, 0) AS current_price,
+           COALESCE(interest_rate, 0) AS interest_rate,
+           is_active
+    FROM investments
+    WHERE is_active = true
+    ORDER BY name
+  `);
+
+  // 2. Fetch all portfolio transactions
+  const txnResult = await query(`
+    SELECT pt.id, pt.investment_id, pt.type,
+           COALESCE(pt.amount, 0) AS amount,
+           COALESCE(pt.units, 0) AS units,
+           COALESCE(pt.fees, 0) AS fees,
+           COALESCE(pt.taxes, 0) AS taxes,
+           to_char(pt.date::date, 'YYYY-MM-DD') AS date,
+           COALESCE(pt.currency, i.currency, 'EUR') AS currency
+    FROM portfolio_transactions pt
+    JOIN investments i ON i.id = pt.investment_id
+    WHERE i.is_active = true
+    ORDER BY pt.date
+  `);
+
+  const investments = investmentsResult.rows;
+  const transactions = txnResult.rows;
+
+  // Group transactions by investment_id
+  const txnsByInvestment = new Map();
+  for (const txn of transactions) {
+    const id = Number(txn.investment_id);
+    if (!txnsByInvestment.has(id)) txnsByInvestment.set(id, []);
+    txnsByInvestment.get(id).push(txn);
+  }
+
+  const summaries = [];
+
+  for (const inv of investments) {
+    const txns = txnsByInvestment.get(Number(inv.id)) ?? [];
+    const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(inv.asset_class);
+    const isFixedIncome = ['savings', 'bond'].includes(inv.asset_class);
+    const isRealEstate = inv.asset_class === 'real_estate';
+
+    let totalDividends = 0;
+    let totalInterestPaid = 0;
+    let totalRent = 0;
+    let totalAppreciation = 0;
+    let totalBuyAmount = 0;
+    let totalBuyOrGiftAmount = 0;
+    let totalSellAmount = 0;
+    let feeTxnAmount = 0;
+    let taxTxnAmount = 0;
+    let feesFieldAmount = 0;
+    let taxesFieldAmount = 0;
+
+    for (const txn of txns) {
+      const amount = Number(txn.amount) || 0;
+      const fees = Number(txn.fees) || 0;
+      const taxes = Number(txn.taxes) || 0;
+      feesFieldAmount += fees;
+      taxesFieldAmount += taxes;
+
+      if (txn.type === 'buy') { totalBuyAmount += amount; totalBuyOrGiftAmount += amount; }
+      else if (txn.type === 'gift') { totalBuyOrGiftAmount += amount; }
+      else if (txn.type === 'sell') { totalSellAmount += amount; }
+      else if (txn.type === 'fee') { feeTxnAmount += amount; }
+      else if (txn.type === 'tax') { taxTxnAmount += amount; }
+      else if (txn.type === 'dividend') { totalDividends += amount; }
+      else if (txn.type === 'interest') { totalInterestPaid += amount; }
+      else if (txn.type === 'rent_income') { totalRent += amount; }
+      else if (txn.type === 'appreciation') { totalAppreciation += amount; }
+    }
+
+    const totalFees = feeTxnAmount + feesFieldAmount;
+    const totalTaxes = taxTxnAmount + taxesFieldAmount;
+
+    let currentValue = 0;
+    let totalInvested = 0;
+    let realizedGain = 0;
+    let unrealizedGain = 0;
+    let totalBuyCost = 0;
+
+    if (isUnitBased) {
+      const costBasis = calculateCostBasis(txns);
+      const currentPrice = Number(inv.current_price) || 0;
+      currentValue = costBasis.totalUnits * currentPrice;
+      totalInvested = costBasis.totalCost;
+      realizedGain = costBasis.realizedGain;
+      unrealizedGain = costBasis.totalUnits > 0
+        ? (currentPrice - costBasis.avgCostBasis) * costBasis.totalUnits : 0;
+      totalBuyCost = costBasis.totalBuyCost;
+    } else if (isFixedIncome) {
+      totalInvested = totalBuyOrGiftAmount - totalSellAmount;
+      totalBuyCost = totalBuyOrGiftAmount;
+      const interestRate = Number(inv.interest_rate) || 0;
+      const accruedInterest = calculateAccruedInterest(txns, totalInvested, interestRate);
+      currentValue = totalInvested + accruedInterest;
+      realizedGain = totalInterestPaid;
+      unrealizedGain = accruedInterest;
+    } else if (isRealEstate) {
+      totalInvested = totalBuyAmount - totalSellAmount;
+      totalBuyCost = totalBuyAmount;
+      currentValue = totalInvested + totalAppreciation;
+      unrealizedGain = totalAppreciation;
+      realizedGain = totalRent - totalFees - totalTaxes;
+    } else {
+      totalInvested = totalBuyAmount - totalSellAmount;
+      currentValue = totalInvested;
+      totalBuyCost = totalBuyAmount;
+    }
+
+    const totalIncome = totalDividends + totalInterestPaid + totalRent;
+    const totalGain = realizedGain + unrealizedGain;
+    const gainLoss = totalGain + totalIncome - totalFees - totalTaxes;
+    const gainLossPercent = totalBuyCost > 0 ? (gainLoss / totalBuyCost) * 100 : 0;
+
+    // Convert to target currency
+    const invCurrency = (inv.currency || 'EUR').toUpperCase();
+    const convert = invCurrency !== targetCurrency.toUpperCase()
+      ? (v) => convertToCurrency(v, invCurrency, targetCurrency)
+      : (v) => Promise.resolve(v);
+
+    summaries.push({
+      id: Number(inv.id),
+      name: inv.name,
+      symbol: inv.symbol,
+      assetClass: inv.asset_class,
+      currency: inv.currency,
+      currentValue: Math.round(await convert(currentValue) * 100) / 100,
+      totalInvested: Math.round(await convert(Math.abs(totalInvested)) * 100) / 100,
+      gainLoss: Math.round(await convert(gainLoss) * 100) / 100,
+      gainLossPercent: Math.round(gainLossPercent * 100) / 100,
+    });
+  }
+
+  return summaries;
+}
+
 export default {
   computeAndStoreSnapshots,
   getSnapshots,
   getLatestSnapshot,
+  computeMetrics,
+  computeHeatmap,
+  getBreakdownSummary,
 };

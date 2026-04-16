@@ -868,10 +868,9 @@ class ApiClient {
 
     // ==================== Portfolio Performance ====================
 
-    async getPortfolioPerformance(params?: { 
+    async getPortfolioPerformance(params?: {
         currency?: string;
-        start_date?: string;
-        end_date?: string;
+        period?: string;
     }): Promise<{
         currency: string;
         start_date: string;
@@ -883,9 +882,37 @@ class ApiClient {
             stocks_etfs_value: number;
             crypto_value: number;
             metals_value: number;
-            cash_value: number;
+            stocks_etfs_invested: number;
+            crypto_invested: number;
+            metals_invested: number;
+            inflation_adjusted_value: number;
             gain_loss: number;
             return_pct: number;
+        }>;
+        metrics: {
+            currentValue: number;
+            totalInvested: number;
+            totalGainLoss: number;
+            totalReturnPct: number;
+            annualizedReturn: number;
+            realReturnPct: number;
+            cumulativeInflation: number;
+        } | null;
+        heatmap: {
+            years: number[];
+            data: Record<number, (number | null)[]>;
+            maxAbsPct: number;
+        };
+        breakdownSummary: Array<{
+            id: number;
+            name: string;
+            symbol: string;
+            assetClass: string;
+            currency: string;
+            currentValue: number;
+            totalInvested: number;
+            gainLoss: number;
+            gainLossPercent: number;
         }>;
     }> {
         return this.requestWithQuery('/api/info/portfolio-performance', params);

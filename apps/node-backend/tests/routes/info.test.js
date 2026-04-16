@@ -71,6 +71,12 @@ vi.mock('../../src/services/currencyConversionService.js', () => ({
 
 vi.mock('../../src/services/portfolioPerformanceSnapshotService.js', () => ({
   getSnapshots: mockGetSnapshots,
+  computeMetrics: vi.fn(() => ({
+    currentValue: 0, totalInvested: 0, totalGainLoss: 0,
+    totalReturnPct: 0, annualizedReturn: 0, realReturnPct: 0, cumulativeInflation: 0,
+  })),
+  computeHeatmap: vi.fn(() => ({ years: [], data: {}, maxAbsPct: 0 })),
+  getBreakdownSummary: vi.fn(async () => []),
 }));
 
 import infoRepository from '../../src/repositories/infoRepository.js';
@@ -734,27 +740,29 @@ describe('Info Routes', () => {
         await routeHandlers['get:/portfolio-performance'](req, res);
 
         expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'USD');
-        expect(res.json).toHaveBeenCalledWith({
-          currency: 'USD',
-          start_date: '2000-01-01',
-          end_date: '2026-04-11',
-          snapshots: [
-            {
-              date: '2026-04-10',
-              invested: 1000.5,
-              value: 1234.56,
-              stocks_etfs_value: 500,
-              crypto_value: 200,
-              metals_value: 100,
-              stocks_etfs_invested: 450,
-              crypto_invested: 180,
-              metals_invested: 90,
-              inflation_adjusted_value: 1234.56,
-              gain_loss: 234.06,
-              return_pct: 23.4,
-            },
-          ],
-        });
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            currency: 'USD',
+            start_date: '2000-01-01',
+            end_date: '2026-04-11',
+            snapshots: [
+              {
+                date: '2026-04-10',
+                invested: 1000.5,
+                value: 1234.56,
+                stocks_etfs_value: 500,
+                crypto_value: 200,
+                metals_value: 100,
+                stocks_etfs_invested: 450,
+                crypto_invested: 180,
+                metals_invested: 90,
+                inflation_adjusted_value: 1234.56,
+                gain_loss: 234.06,
+                return_pct: 23.4,
+              },
+            ],
+          })
+        );
       } finally {
         vi.useRealTimers();
       }

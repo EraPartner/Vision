@@ -2,11 +2,11 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-10
+date: 2026-04-16
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js"]
+related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/utils/downsample.js"]
 ---
 
 # Info & Analytics API
@@ -539,39 +539,39 @@ Notes:
 
 ### GET /api/info/portfolio-performance
 
-Get pre-computed portfolio performance snapshots with per-class breakdowns.
+Get pre-computed portfolio performance snapshots with enriched metrics, heatmap, and breakdown summary.
 
 **Query Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `start_date` | string | `2000-01-01` | Start date filter (YYYY-MM-DD) |
-| `end_date` | string | today | End date filter (YYYY-MM-DD) |
+| `period` | string | `all` | Period filter: `1m`, `3m`, `6m`, `1y`, `3y`, or `all` |
 | `currency` | string | EUR | Target 3-letter currency code |
 | `target_currency` | string | EUR | Alias for `currency` |
 
 Notes:
+- **Backend-computed response**: Metrics, heatmap, and per-investment breakdown are now computed server-side (no client-side computation). Client receives final aggregates ready to render.
+- **Period filtering**: `period` parameter controls which snapshots are returned for charting (1m/3m/6m/1y/3y/all). Metrics and heatmap always use full historical data.
+- **Downsampling**: Period-filtered snapshots are downsampled server-side to 400 points using LTTB algorithm for efficient charting.
+- **Heatmap correction**: Monthly heatmap now uses contribution-adjusted returns: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`. This fixes the old frontend formula which conflated cash deposits/withdrawals with investment performance.
+- **Pre-converted values**: Breakdown summary values are converted to target currency server-side; client receives final amounts.
+- **Cache key**: Response cache key now includes period: `${currency}:${period}` to preserve separate cached responses per period.
 - Reads from the `portfolio_performance_snapshots` table — no on-demand computation.
-- Returns daily snapshots with per-class value/invested breakdowns (stocks+ETFs, crypto, metals).
-- Includes inflation-adjusted values using Belgian monthly inflation rates.
+- Includes per-class value/invested breakdowns (stocks+ETFs, crypto, metals) in metrics.
 - Route-level rate limited (`30 req / 60s`) to protect against excessive queries.
-- Internal route refactor extracted shared snapshot payload mapping and date-string helpers (`mapPortfolioPerformanceSnapshot`, `buildPortfolioPerformancePayload`, `getCurrentDateString`) to remove duplication without changing response shape or field semantics ([[apps/node-backend/src/routes/info.js]]).
-- Snapshot service import is now module-scoped for this route and cache warmer (`warmInfoCaches`) to remove repeated dynamic-import overhead while preserving cache semantics and response payloads ([[apps/node-backend/src/routes/info.js]]).
-
-Caching behavior (route-level):
-- Shared cache/inflight utilities (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) now power both `/api/info/net-worth` and `/api/info/portfolio-performance` response caches.
-- This keeps TTL and concurrent-request deduplication behavior consistent while preserving existing API contracts and payloads ([[apps/node-backend/src/routes/info.js]]).
+- Caching behavior: shared cache/inflight utilities (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) now power both `/api/info/net-worth` and `/api/info/portfolio-performance` response caches for consistent TTL and concurrent-request deduplication ([[apps/node-backend/src/routes/info.js]]).
+- `warmInfoCaches` now warms the `all` period (full historical data) for instant startup responses ([[apps/node-backend/src/routes/info.js]]).
 
 **Response:** `200 OK`
 
 ```json
 {
   "currency": "EUR",
-  "start_date": "2025-01-01",
-  "end_date": "2026-03-31",
+  "start_date": "2000-01-01",
+  "end_date": "2026-04-16",
   "snapshots": [
     {
-      "date": "2025-01-15",
+      "date": "2026-04-01",
       "invested": 50000.00,
       "value": 52500.00,
       "stocks_etfs_value": 30000.00,
@@ -579,14 +579,69 @@ Caching behavior (route-level):
       "metals_value": 12500.00,
       "stocks_etfs_invested": 28000.00,
       "crypto_invested": 9500.00,
-      "metals_invested": 12500.00,
-      "inflation_adjusted_value": 51800.00,
-      "gain_loss": 2500.00,
-      "return_pct": 5.0
+      "metals_invested": 12500.00
+    }
+  ],
+  "metrics": {
+    "currentValue": 52500.00,
+    "totalInvested": 50000.00,
+    "totalGainLoss": 2500.00,
+    "totalReturnPct": 5.0,
+    "annualizedReturn": 3.8,
+    "realReturnPct": 2.1,
+    "cumulativeInflation": 0.035
+  },
+  "heatmap": {
+    "years": [2025, 2026],
+    "data": {
+      "2025": {
+        "01": 1.5,
+        "02": 2.1,
+        "03": -0.8
+      },
+      "2026": {
+        "01": 3.2,
+        "02": 1.9,
+        "03": 0.5,
+        "04": null
+      }
+    },
+    "maxAbsPct": 3.2
+  },
+  "breakdownSummary": [
+    {
+      "id": 1,
+      "name": "Apple Inc.",
+      "symbol": "AAPL",
+      "assetClass": "stock",
+      "currency": "USD",
+      "currentValue": 15000.00,
+      "totalInvested": 12000.00,
+      "gainLoss": 3000.00,
+      "gainLossPercent": 25.0
     }
   ]
 }
 ```
+
+**Response Field Descriptions:**
+
+- `snapshots`: Period-filtered (1m/3m/6m/1y/3y/all) and LTTB-downsampled to ~400 points for efficient charting
+- `metrics`: Overall portfolio performance metrics computed from full historical data
+  - `currentValue`: Latest portfolio value
+  - `totalInvested`: Total buy cost (in target currency)
+  - `totalGainLoss`: Absolute gain/loss (currentValue - totalInvested)
+  - `totalReturnPct`: Simple return percentage
+  - `annualizedReturn`: CAGR (Compound Annual Growth Rate) from inception to today
+  - `realReturnPct`: Inflation-adjusted return using Belgian monthly rates
+  - `cumulativeInflation`: Total inflation impact over period
+- `heatmap`: Monthly contribution-adjusted returns by year-month (uses corrected formula)
+  - `years`: Array of year keys
+  - `data`: Nested object `{year: {month: percent}}`; `null` for missing months
+  - `maxAbsPct`: Max absolute percentage (for chart color scaling)
+- `breakdownSummary`: Per-investment summary with pre-converted currency values
+  - All monetary fields (`currentValue`, `totalInvested`, `gainLoss`) are in target currency
+  - `gainLossPercent`: Per-investment return percentage
 
 ---
 

@@ -16,7 +16,8 @@ import {
   warmCache,
   clearMemoryCache,
 } from '../services/currencyConversionService.js';
-import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
+import { getSnapshots, computeMetrics, computeHeatmap, getBreakdownSummary } from '../services/portfolioPerformanceSnapshotService.js';
+import { downsampleLTTB } from '../utils/downsample.js';
 import {
   getInflationRates,
   clearInflationMemoryCache,
@@ -176,12 +177,56 @@ function mapPortfolioPerformanceSnapshot(snapshot) {
   };
 }
 
-function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots) {
+const DOWNSAMPLE_THRESHOLD = 400;
+
+const PERIOD_OFFSETS = {
+  '1m': 30,
+  '3m': 90,
+  '6m': 180,
+  '1y': 365,
+  '3y': 1095,
+};
+
+function filterSnapshotsByPeriod(snapshots, period) {
+  if (!period || period === 'all' || !PERIOD_OFFSETS[period]) return snapshots;
+  const daysBack = PERIOD_OFFSETS[period];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysBack);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return snapshots.filter(s => {
+    const date = typeof s.snapshot_date === 'string' ? s.snapshot_date : s.snapshot_date.toISOString().slice(0, 10);
+    return date >= cutoffStr;
+  });
+}
+
+async function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, allSnapshots, period) {
+  const mapped = allSnapshots.map(mapPortfolioPerformanceSnapshot);
+
+  // Metrics and heatmap always use full data
+  const metrics = computeMetrics(allSnapshots);
+  const heatmap = computeHeatmap(allSnapshots);
+
+  // Filter snapshots by period for charts, then downsample
+  const periodFiltered = filterSnapshotsByPeriod(allSnapshots, period);
+  const periodMapped = periodFiltered.map(mapPortfolioPerformanceSnapshot);
+  const snapshots = downsampleLTTB(
+    periodMapped,
+    DOWNSAMPLE_THRESHOLD,
+    (_item, i) => i,
+    (item) => item.value,
+  );
+
+  // Breakdown summary (per-investment)
+  const breakdownSummary = await getBreakdownSummary(targetCurrency);
+
   return {
     currency: targetCurrency,
     start_date: startDate,
     end_date: endDate,
-    snapshots: snapshots.map(mapPortfolioPerformanceSnapshot),
+    snapshots,
+    metrics,
+    heatmap,
+    breakdownSummary,
   };
 }
 
@@ -492,15 +537,16 @@ router.post('/refresh-views', adminRateLimiter, async (req, res) => {
 router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30 }), async (req, res) => {
   try {
     const targetCurrency = getTargetCurrency(req);
-    const startDate = req.query.start_date || '2000-01-01';
-    const endDate = req.query.end_date || getCurrentDateString();
-    const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
+    const period = req.query.period || 'all';
+    const startDate = '2000-01-01';
+    const endDate = getCurrentDateString();
+    const cacheKey = `${targetCurrency}:${period}`;
 
     const data = await resolveCacheWithInflight(perfResponseCache, cacheKey, {
       ttlMs: PERF_CACHE_TTL_MS,
       loader: async () => {
         const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
-        return buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots);
+        return buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots, period);
       },
     });
     res.json(data);
@@ -528,9 +574,9 @@ export async function warmInfoCaches(targetCurrency = 'EUR') {
     logger.info('Warming portfolio-performance cache...', { targetCurrency });
     const startDate = '2000-01-01';
     const endDate = getCurrentDateString();
-    const cacheKey = `${targetCurrency}:${startDate}:${endDate}`;
+    const cacheKey = `${targetCurrency}:all`;
     const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
-    const payload = buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots);
+    const payload = await buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots, 'all');
     setCachedData(perfResponseCache, cacheKey, payload, PERF_CACHE_TTL_MS);
     logger.info('Portfolio-performance cache warmed', { targetCurrency, snapshots: payload.snapshots.length });
   } catch (err) {

@@ -2,11 +2,11 @@
 title: Performance - Chart Data Downsampling
 type: performance
 status: active
-date: 2026-04-02
+date: 2026-04-16
 tags: [performance, charts, downsampling, lttb, optimization]
 description: LTTB downsampling algorithm for large time-series chart data
 aliases: [lttb, largest-triangle-three-buckets, downsampling, data reduction, chart optimization]
-related_code: ["apps/frontend/src/utils/downsample.ts"]
+related_code: ["apps/frontend/src/utils/downsample.ts", "apps/node-backend/src/utils/downsample.js"]
 ---
 
 # Chart Data Downsampling
@@ -17,7 +17,8 @@ Vision uses the **Largest-Triangle-Three-Buckets (LTTB)** algorithm to downsampl
 
 ## Algorithm
 
-**File:** [[apps/frontend/src/utils/downsample.ts]]
+**Frontend:** [[apps/frontend/src/utils/downsample.ts]]
+**Backend (ported):** [[apps/node-backend/src/utils/downsample.js]]
 
 ```typescript
 function downsampleLTTB<T>(
@@ -79,8 +80,21 @@ const sampled = downsampleLTTB(
 - **Net Worth daily snapshots** spanning multiple years
 - **Performance charts** with day-level granularity
 - **Any Recharts/Recharts-based visualization** where point count exceeds pixel width
+- **Backend responses** to reduce API payload before transmission (e.g., `/api/info/portfolio-performance`)
+
+## Backend Usage
+
+As of 2026-04-16, the Performance page (`/api/info/portfolio-performance`) uses server-side LTTB downsampling:
+
+- Backend downsamples period-filtered snapshots to ~400 points before response
+- Metrics and heatmap always use full historical data (no filtering)
+- Per-period cache keys allow independent caching of downsampled responses
+- Reduces payload 30-40x for filtered periods (e.g., 1000 snapshots → ~30 points)
+
+See [[docs/adr/008-performance-page-server-computed-response|ADR-008]] for architectural rationale.
 
 ## Related
 
 - [[docs/performance/index]] - Performance Documentation Index
 - [[docs/features/portfolio|Portfolio Performance]] - Performance charts that benefit from downsampling
+- [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]] - Backend downsampling implementation
