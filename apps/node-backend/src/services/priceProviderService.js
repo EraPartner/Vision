@@ -240,7 +240,7 @@ async function _loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs } 
   }
 }
 
-async function _saveHistoricalPointsToDatabase(investmentId, points, source) {
+export async function saveHistoricalPointsToDatabase(investmentId, points, source) {
   const normalized = _normalizeHistoryPoints(points);
   if (!Number.isFinite(Number(investmentId)) || normalized.length === 0) return;
 
@@ -776,7 +776,7 @@ async function _persistAndResolveHistoricalPoints(
   cachedDbPoints,
   { fromMs, toMs } = {}
 ) {
-  await _saveHistoricalPointsToDatabase(investmentId, points, source);
+  await saveHistoricalPointsToDatabase(investmentId, points, source);
   const persistedPoints = await _loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs });
   const resolved = persistedPoints.length > 0
     ? persistedPoints
@@ -807,7 +807,7 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       const sanitizedCachedPoints = _sanitizeKinesisIsolatedSpikes(cachedDbPoints);
       const changed = _countChangedPointPrices(cachedDbPoints, sanitizedCachedPoints);
       if (changed > 0) {
-        await _saveHistoricalPointsToDatabase(investment.id, sanitizedCachedPoints, 'kinesis');
+        await saveHistoricalPointsToDatabase(investment.id, sanitizedCachedPoints, 'kinesis');
       }
       return _filterHistoricalPoints(sanitizedCachedPoints, from, to);
     }
@@ -984,106 +984,6 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
   );
 }
 
-export async function backfillHistoricalAssetQuotes() {
-  const heldInvestmentsResult = await query(
-    `SELECT
-       i.id,
-       i.asset_class,
-       i.currency,
-       i.price_provider,
-       i.price_provider_id,
-       i.symbol,
-       i.price_provider_url,
-       i.price_provider_latest_url,
-       i.price_provider_latest_path,
-       i.price_provider_history_url,
-       i.price_provider_history_path,
-       i.price_provider_history_ts_path,
-       i.price_provider_history_price_path,
-       MIN(pt.date)::date AS first_tx_date,
-       COALESCE(SUM(
-         CASE
-           WHEN pt.type IN ('buy', 'gift') THEN COALESCE(pt.units, 0)
-           WHEN pt.type = 'sell' THEN -COALESCE(pt.units, 0)
-           ELSE 0
-         END
-       ), 0) AS held_units
-     FROM investments i
-     LEFT JOIN portfolio_transactions pt
-       ON pt.investment_id = i.id
-      AND pt.type IN ('buy', 'gift', 'sell')
-     WHERE i.is_active = true
-       AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-      GROUP BY
-        i.id,
-        i.asset_class,
-        i.currency,
-        i.price_provider,
-        i.price_provider_id,
-        i.symbol,
-        i.price_provider_url,
-        i.price_provider_latest_url,
-        i.price_provider_latest_path,
-        i.price_provider_history_url,
-        i.price_provider_history_path,
-        i.price_provider_history_ts_path,
-        i.price_provider_history_price_path
-     HAVING MIN(pt.date) IS NOT NULL
-        AND COALESCE(SUM(
-          CASE
-            WHEN pt.type IN ('buy', 'gift') THEN COALESCE(pt.units, 0)
-            WHEN pt.type = 'sell' THEN -COALESCE(pt.units, 0)
-            ELSE 0
-          END
-        ), 0) > 0`,
-    []
-  );
-
-  const investments = heldInvestmentsResult.rows || [];
-  if (investments.length === 0) {
-    logger.info('Historical asset quote backfill skipped: no held market-priced assets');
-    return { processed: 0, withHistory: 0, failed: 0 };
-  }
-
-  let withHistory = 0;
-  let failed = 0;
-
-  for (const investment of investments) {
-    const fromDate = String(investment.first_tx_date || '');
-    const fromMs = Number.isFinite(Date.parse(`${fromDate}T00:00:00.000Z`))
-      ? Date.parse(`${fromDate}T00:00:00.000Z`)
-      : undefined;
-
-    if (!Number.isFinite(fromMs)) continue;
-
-    try {
-      const points = await fetchHistoricalPrices(investment, {
-        fromMs,
-        toMs: Date.now(),
-      });
-      if (points.length > 0) withHistory += 1;
-    } catch (error) {
-      failed += 1;
-      logger.warn('Historical quote backfill failed for investment', {
-        investmentId: investment.id,
-        error: error?.message,
-      });
-    }
-  }
-
-  logger.info('Historical asset quote backfill complete', {
-    processed: investments.length,
-    withHistory,
-    failed,
-  });
-
-  return {
-    processed: investments.length,
-    withHistory,
-    failed,
-  };
-}
-
 export async function sanitizePersistedKinesisHistory() {
   const investmentsResult = await query(
     `SELECT id
@@ -1110,7 +1010,7 @@ export async function sanitizePersistedKinesisHistory() {
       const sanitized = _sanitizeKinesisIsolatedSpikes(points);
       const changed = _countChangedPointPrices(points, sanitized);
       if (changed > 0) {
-        await _saveHistoricalPointsToDatabase(investment.id, sanitized, 'kinesis');
+        await saveHistoricalPointsToDatabase(investment.id, sanitized, 'kinesis');
         updated += 1;
         correctedPoints += changed;
       }

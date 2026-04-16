@@ -10,7 +10,6 @@
 
 import { query } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currencyConversionService.js';
-import { fetchHistoricalPrices, getHistoricalPriceAt } from '../services/priceProviderService.js';
 import { logger } from '../config/logger.js';
 
 /**
@@ -21,7 +20,6 @@ import { logger } from '../config/logger.js';
  * (e.g. after bulk import) via clearMvCache().
  */
 const mvCache = new Map();
-const NET_WORTH_HISTORICAL_FETCH_CONCURRENCY = 10;
 
 function sanitizeIsolatedDailyInvestmentSpikes(snapshots) {
   if (!Array.isArray(snapshots) || snapshots.length < 3) return Array.isArray(snapshots) ? snapshots : [];
@@ -185,16 +183,6 @@ async function convertRowsWithHistoricalRateFallback(rows, targetCurrency, dateF
   } catch (err) {
     return await convertRowsToEur(rows, targetCurrency);
   }
-}
-
-async function mapWithConcurrency(items, concurrency, mapper) {
-  const results = [];
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map(mapper));
-    results.push(...batchResults);
-  }
-  return results;
 }
 
 /**
@@ -1102,73 +1090,59 @@ export const infoRepository = {
   },
 
   /**
-   * Net Worth — combines liquid assets (bank balances) + investments (portfolio)
-   * into daily snapshots from the first investment date until today.
+   * Net Worth (snapshot-backed) — reads investment values from pre-computed
+   * portfolio_performance_snapshots (populated by portfolioPerformanceSnapshotService).
+   * Bank balances are still derived live from the transactions table.
+   * No network calls — all data from the database.
    */
-  async getNetWorth(targetCurrency = 'EUR') {
-    const firstDataDateResult = await query(`
-      SELECT MIN(first_date)::date AS first_data_date
-      FROM (
-        SELECT MIN(date)::date AS first_date
-        FROM portfolio_transactions
-        UNION ALL
-        SELECT MIN(COALESCE(created_at::date, CURRENT_DATE))::date AS first_date
-        FROM investments
-        WHERE is_active = true
-        UNION ALL
-        SELECT MIN(date)::date AS first_date
-        FROM transactions
-        WHERE is_active = true
-      ) seed
-    `);
+  async getNetWorthFromSnapshots(targetCurrency = 'EUR') {
+    const firstDateResult = await query(`
+      SELECT LEAST(
+        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
+        (SELECT MIN(date)::date FROM transactions WHERE is_active = true)
+      )::date AS first_data_date
+    `, [targetCurrency]);
 
-    let firstDataDate = firstDataDateResult.rows[0]?.first_data_date;
+    let firstDataDate = firstDateResult.rows[0]?.first_data_date;
 
     if (!firstDataDate) {
-      const fallbackFirstDataDateResult = await query(`
-        SELECT MIN(first_date)::date AS first_data_date
-        FROM (
-          SELECT MIN(date)::date AS first_date
-          FROM portfolio_transactions
-          UNION ALL
-          SELECT MIN(COALESCE(created_at::date, CURRENT_DATE))::date AS first_date
-          FROM investments
-          UNION ALL
-          SELECT MIN(date)::date AS first_date
-          FROM transactions
-        ) seed
-      `);
-
-      firstDataDate = fallbackFirstDataDateResult.rows[0]?.first_data_date;
-
-      if (firstDataDate) {
-        logger.warn('Net worth seed date required fallback to include all records', {
-          targetCurrency,
-          firstDataDate,
-        });
-      }
+      const fallbackResult = await query(`
+        SELECT LEAST(
+          (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
+          (SELECT MIN(date)::date FROM transactions)
+        )::date AS first_data_date
+      `, [targetCurrency]);
+      firstDataDate = fallbackResult.rows[0]?.first_data_date;
     }
 
     const firstDataDateYmd = firstDataDate
-      ? (firstDataDate instanceof Date
-        ? formatDateToYmd(firstDataDate)
-        : String(firstDataDate).split('T')[0])
+      ? (firstDataDate instanceof Date ? formatDateToYmd(firstDataDate) : String(firstDataDate).split('T')[0])
       : null;
 
     if (!firstDataDateYmd) {
       logger.info('Net worth has no source records', { targetCurrency });
       return {
-        current: {
-          liquid: 0,
-          investments: 0,
-          netWorth: 0,
-        },
+        current: { liquid: 0, investments: 0, netWorth: 0 },
         monthlyChange: 0,
         monthlyChangePercent: 0,
         snapshots: [],
       };
     }
 
+    // Investment values from pre-computed snapshots — no network calls
+    const snapshotResult = await query(`
+      SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, value AS investments
+      FROM portfolio_performance_snapshots
+      WHERE currency = $1
+      ORDER BY snapshot_date ASC
+    `, [targetCurrency]);
+
+    const investmentsByDay = {};
+    for (const row of snapshotResult.rows) {
+      investmentsByDay[row.day] = Number(row.investments) || 0;
+    }
+
+    // Bank balance history via lateral join (account balance as of each day)
     const bankHistoryResult = await query(`
       WITH bounds AS (
         SELECT $1::date AS start_date, CURRENT_DATE AS end_date
@@ -1210,6 +1184,7 @@ export const infoRepository = {
       'day'
     );
 
+    // Fallback: cumulative transaction flow when no balance column is available
     if (bankHistoryConverted.length === 0) {
       logger.debug('Net worth account balance history empty; using transaction flow fallback', {
         targetCurrency,
@@ -1275,368 +1250,13 @@ export const infoRepository = {
 
     const liquidByDay = {};
     for (const row of bankHistoryConverted) {
-      const key = row.day;
-      if (!liquidByDay[key]) liquidByDay[key] = 0;
-      liquidByDay[key] += row.amount_eur;
+      if (!liquidByDay[row.day]) liquidByDay[row.day] = 0;
+      liquidByDay[row.day] += row.amount_eur;
     }
 
-    const portfolioHistoryResult = await query(`
-      WITH bounds AS (
-        SELECT $1::date AS start_date, CURRENT_DATE AS end_date
-      ),
-      days AS (
-        SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
-        FROM bounds
-      ),
-      currencies AS (
-        SELECT DISTINCT COALESCE(currency, 'EUR') AS currency
-        FROM portfolio_transactions
-      ),
-      tx_daily AS (
-        SELECT
-          pt.date::date AS day,
-          COALESCE(pt.currency, 'EUR') AS currency,
-          COALESCE(SUM(CASE WHEN pt.type IN ('buy', 'gift') THEN pt.amount ELSE 0 END), 0) AS buys,
-          COALESCE(SUM(CASE WHEN pt.type = 'sell' THEN pt.amount ELSE 0 END), 0) AS sells,
-          COALESCE(SUM(CASE WHEN pt.type IN ('dividend', 'interest', 'rent_income') THEN pt.amount ELSE 0 END), 0) AS income,
-          COALESCE(SUM(CASE WHEN pt.type = 'appreciation' THEN pt.amount ELSE 0 END), 0) AS appreciation,
-          COALESCE(SUM(CASE WHEN pt.type = 'fee' THEN pt.amount ELSE 0 END), 0) AS fees,
-          COALESCE(SUM(CASE WHEN pt.type = 'tax' THEN pt.amount ELSE 0 END), 0) AS taxes
-        FROM portfolio_transactions pt
-        LEFT JOIN investments i ON i.id = pt.investment_id
-        WHERE pt.date >= (SELECT start_date FROM bounds)
-          AND pt.date <= (SELECT end_date FROM bounds)
-          AND (
-            i.id IS NULL
-            OR i.asset_class NOT IN ('stock', 'etf', 'crypto', 'metals')
-          )
-        GROUP BY pt.date::date, COALESCE(pt.currency, 'EUR')
-      ),
-      tx_series AS (
-        SELECT
-          d.day,
-          c.currency,
-          COALESCE(td.buys, 0) AS buys,
-          COALESCE(td.sells, 0) AS sells,
-          COALESCE(td.income, 0) AS income,
-          COALESCE(td.appreciation, 0) AS appreciation,
-          COALESCE(td.fees, 0) AS fees,
-          COALESCE(td.taxes, 0) AS taxes
-        FROM days d
-        CROSS JOIN currencies c
-        LEFT JOIN tx_daily td ON td.day = d.day AND td.currency = c.currency
-      ),
-      tx_cumulative AS (
-        SELECT
-          day,
-          currency,
-          SUM(buys) OVER (PARTITION BY currency ORDER BY day) AS cum_buys,
-          SUM(sells) OVER (PARTITION BY currency ORDER BY day) AS cum_sells,
-          SUM(income) OVER (PARTITION BY currency ORDER BY day) AS cum_income,
-          SUM(appreciation) OVER (PARTITION BY currency ORDER BY day) AS cum_appreciation,
-          SUM(fees) OVER (PARTITION BY currency ORDER BY day) AS cum_fees,
-          SUM(taxes) OVER (PARTITION BY currency ORDER BY day) AS cum_taxes
-        FROM tx_series
-      )
-      SELECT
-        to_char(day, 'YYYY-MM-DD') AS day,
-        currency,
-        (cum_buys - cum_sells + cum_income + cum_appreciation - cum_fees - cum_taxes) AS value
-      FROM tx_cumulative
-      ORDER BY day, currency
-    `, [firstDataDateYmd]);
-
-    const portfolioHistoryConverted = await convertRowsWithHistoricalRateFallback(
-      mapRowsForAmountConversion(portfolioHistoryResult.rows, 'value'),
-      targetCurrency,
-      'day'
-    );
-
-    const investmentsByDay = {};
-    for (const row of portfolioHistoryConverted) {
-      const key = row.day;
-      if (!investmentsByDay[key]) investmentsByDay[key] = 0;
-      investmentsByDay[key] += row.amount_eur;
-    }
-
-    const unitInvestmentsResult = await query(`
-      SELECT
-        i.id,
-        COALESCE(i.currency, 'EUR') AS currency,
-        COALESCE(i.current_price, 0) AS current_price,
-        COALESCE(i.price_provider, 'manual') AS price_provider,
-        i.price_provider_id,
-        i.symbol,
-        i.price_provider_url,
-        i.price_provider_latest_url,
-        i.price_provider_latest_path,
-        i.price_provider_history_url,
-        i.price_provider_history_path,
-        i.price_provider_history_ts_path,
-        i.price_provider_history_price_path,
-        MIN(pt.date)::date AS first_tx_date,
-        COALESCE(i.created_at::date, MIN(pt.date)::date, $1::date) AS created_date
-      FROM investments i
-      LEFT JOIN portfolio_transactions pt
-        ON pt.investment_id = i.id
-       AND pt.date >= $1::date
-       AND pt.date <= CURRENT_DATE
-      WHERE i.is_active = true
-        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-      GROUP BY
-        i.id,
-        i.currency,
-        i.current_price,
-        i.price_provider,
-        i.price_provider_id,
-        i.symbol,
-        i.price_provider_url,
-        i.price_provider_latest_url,
-        i.price_provider_latest_path,
-        i.price_provider_history_url,
-        i.price_provider_history_path,
-        i.price_provider_history_ts_path,
-        i.price_provider_history_price_path,
-        i.created_at
-    `, [firstDataDateYmd]);
-
-    const unitDeltasResult = await query(`
-      SELECT
-        pt.investment_id,
-        to_char(pt.date::date, 'YYYY-MM-DD') AS day,
-        COALESCE(SUM(
-          CASE
-            WHEN pt.type IN ('buy', 'gift') THEN COALESCE(pt.units, 0)
-            WHEN pt.type = 'sell' THEN -COALESCE(pt.units, 0)
-            ELSE 0
-          END
-        ), 0) AS unit_delta
-      FROM portfolio_transactions pt
-      JOIN investments i ON i.id = pt.investment_id
-      WHERE i.is_active = true
-        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-        AND pt.date >= $1::date
-        AND pt.date <= CURRENT_DATE
-        AND pt.type IN ('buy', 'gift', 'sell')
-      GROUP BY pt.investment_id, pt.date::date
-      ORDER BY pt.investment_id, pt.date::date
-    `, [firstDataDateYmd]);
-
-    const unitDeltasByInvestment = {};
-    for (const row of unitDeltasResult.rows) {
-      const investmentId = Number(row.investment_id);
-      if (!unitDeltasByInvestment[investmentId]) unitDeltasByInvestment[investmentId] = {};
-      unitDeltasByInvestment[investmentId][row.day] = Number(row.unit_delta) || 0;
-    }
-
-    const unitPriceByInvestmentDateResult = await query(`
-      SELECT
-        pt.investment_id,
-        to_char(pt.date::date, 'YYYY-MM-DD') AS day,
-        COALESCE(
-          NULLIF(
-            SUM(
-              CASE
-                WHEN COALESCE(pt.units, 0) > 0
-                  AND COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) > 0
-                THEN
-                  COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) * COALESCE(pt.units, 0)
-                ELSE 0
-              END
-            ),
-            0
-          ) / NULLIF(
-            SUM(
-              CASE
-                WHEN COALESCE(pt.units, 0) > 0
-                  AND COALESCE(
-                    NULLIF(pt.price_per_unit, 0),
-                    NULLIF(pt.amount, 0) / NULLIF(pt.units, 0),
-                    0
-                  ) > 0
-                THEN COALESCE(pt.units, 0)
-                ELSE 0
-              END
-            ),
-            0
-          ),
-          0
-        ) AS unit_price
-      FROM portfolio_transactions pt
-      JOIN investments i ON i.id = pt.investment_id
-      WHERE i.is_active = true
-        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-        AND pt.date >= $1::date
-        AND pt.date <= CURRENT_DATE
-        AND pt.type IN ('buy', 'gift', 'sell')
-      GROUP BY pt.investment_id, pt.date::date
-      ORDER BY pt.investment_id, pt.date::date
-    `, [firstDataDateYmd]);
-
-    const unitPriceByInvestment = {};
-    for (const row of unitPriceByInvestmentDateResult.rows) {
-      const investmentId = Number(row.investment_id);
-      const unitPrice = Number(row.unit_price) || 0;
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
-      if (!unitPriceByInvestment[investmentId]) unitPriceByInvestment[investmentId] = {};
-      unitPriceByInvestment[investmentId][row.day] = unitPrice;
-    }
-
-    const unitInvestmentByDayCurrency = {};
-    const rangeStartMs = new Date(`${firstDataDateYmd}T00:00:00Z`).getTime();
-    const rangeEndDate = new Date();
-    rangeEndDate.setUTCHours(0, 0, 0, 0);
-    const rangeEndMs = rangeEndDate.getTime();
-
-    const historicalPointsByInvestment = new Map();
-    const historicalPointsEntries = await mapWithConcurrency(
-      unitInvestmentsResult.rows,
-      NET_WORTH_HISTORICAL_FETCH_CONCURRENCY,
-      async (investment) => {
-        const points = await fetchHistoricalPrices(investment, {
-          fromMs: rangeStartMs,
-          toMs: rangeEndMs,
-        });
-        return [Number(investment.id), points];
-      }
-    );
-    for (const [investmentId, points] of historicalPointsEntries) {
-      historicalPointsByInvestment.set(investmentId, points);
-    }
-
-    for (const investment of unitInvestmentsResult.rows) {
-      const invId = Number(investment.id);
-      const deltaMap = unitDeltasByInvestment[invId] || {};
-      const unitPriceMap = unitPriceByInvestment[invId] || {};
-      const firstTxDate = investment.first_tx_date
-        ? (investment.first_tx_date instanceof Date
-          ? formatDateToYmd(investment.first_tx_date)
-          : String(investment.first_tx_date).split('T')[0])
-        : null;
-      const createdDate = investment.created_date
-        ? (investment.created_date instanceof Date
-          ? formatDateToYmd(investment.created_date)
-          : String(investment.created_date).split('T')[0])
-        : null;
-      const startDateYmd = firstTxDate || createdDate || firstDataDateYmd;
-
-      const historicalPoints = historicalPointsByInvestment.get(invId) || [];
-
-      const firstHistoricalPrice = historicalPoints && historicalPoints.length > 0 
-        ? Number(historicalPoints[0].price) 
-        : undefined;
-      const currentInvPrice = Number(investment.current_price) || undefined;
-
-      let units = 0;
-      let fallbackUnitPrice;
-      const startDate = new Date(`${startDateYmd}T00:00:00Z`);
-      for (let day = new Date(startDate); day <= rangeEndDate; day = addDaysUtc(day)) {
-        const dayKey = getDayKeyUtc(day);
-
-        units += Number(deltaMap[dayKey] || 0);
-        const heldUnits = Math.max(0, units);
-        if (heldUnits <= 0) continue;
-
-        const txUnitPrice = Number(unitPriceMap[dayKey]) || 0;
-        if (Number.isFinite(txUnitPrice) && txUnitPrice > 0) {
-          fallbackUnitPrice = txUnitPrice;
-        }
-
-        const dayEndTimestamp = getUtcDayEndTimestamp(day);
-        const historicalPrice = getHistoricalPriceAt(historicalPoints, dayEndTimestamp);
-        
-        let unitPrice = historicalPrice;
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = fallbackUnitPrice;
-        }
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = firstHistoricalPrice;
-        }
-        
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-          unitPrice = currentInvPrice;
-        }
-
-        if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
-
-        if (!unitInvestmentByDayCurrency[dayKey]) unitInvestmentByDayCurrency[dayKey] = {};
-        const currency = investment.currency || 'EUR';
-        if (!unitInvestmentByDayCurrency[dayKey][currency]) unitInvestmentByDayCurrency[dayKey][currency] = 0;
-        unitInvestmentByDayCurrency[dayKey][currency] += heldUnits * unitPrice;
-      }
-    }
-
-    const unitInvestmentRows = Object.entries(unitInvestmentByDayCurrency).flatMap(([day, byCurrency]) =>
-      Object.entries(byCurrency).map(([currency, amount]) => ({
-        day,
-        currency,
-        amount,
-      }))
-    );
-
-    if (unitInvestmentRows.length > 0) {
-      const unitInvestmentConverted = await convertRowsWithHistoricalRateFallback(
-        mapRowsForAmountConversion(unitInvestmentRows, 'amount'),
-        targetCurrency,
-        'day'
-      );
-      for (const row of unitInvestmentConverted) {
-        const key = row.day;
-        if (!investmentsByDay[key]) investmentsByDay[key] = 0;
-        investmentsByDay[key] += row.amount_eur;
-      }
-    }
-
-    // Date range for calculations (needed for fixed income investments)
     const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
     const end = new Date();
     end.setUTCHours(0, 0, 0, 0);
-
-    // Fetch non-unit investments (real_estate, savings, bond) that store value in current_price
-    const fixedIncomeInvestments = await query(`
-      SELECT
-        i.id,
-        COALESCE(i.currency, 'EUR') AS currency,
-        COALESCE(i.current_price, 0) AS current_price,
-        COALESCE(i.created_at::date, $1::date) AS created_date
-      FROM investments i
-      WHERE i.is_active = true
-        AND i.asset_class IN ('real_estate', 'savings', 'bond')
-    `, [firstDataDateYmd]);
-
-    if (fixedIncomeInvestments.rows.length > 0) {
-      const fixedIncomeConverted = await convertRowsToEur(
-        mapRowsForAmountConversion(fixedIncomeInvestments.rows, 'current_price', true),
-        targetCurrency
-      );
-      // Add fixed income investments to all days from their creation date
-      for (const row of fixedIncomeConverted) {
-        const value = row.amount_eur || 0;
-        if (value <= 0) continue;
-        const createdDate = row.created_date
-          ? (row.created_date instanceof Date
-            ? formatDateToYmd(row.created_date)
-            : String(row.created_date).split('T')[0])
-          : firstDataDateYmd;
-        const createdDateUtc = new Date(`${createdDate}T00:00:00Z`);
-        const invStartDate = new Date(Math.max(start.getTime(), createdDateUtc.getTime()));
-        for (let day = new Date(invStartDate); day <= end; day = addDaysUtc(day)) {
-          const dayKey = getDayKeyUtc(day);
-          if (!investmentsByDay[dayKey]) investmentsByDay[dayKey] = 0;
-          investmentsByDay[dayKey] += value;
-        }
-      }
-    }
 
     const snapshots = [];
     for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
@@ -1666,7 +1286,16 @@ export const infoRepository = {
       ? (monthlyChange / Math.abs(baseline.netWorth)) * 100
       : 0;
 
-    const result = {
+    logger.debug('Net worth computed from snapshots', {
+      targetCurrency,
+      firstDataDate: firstDataDateYmd,
+      snapshots: sanitizedSnapshots.length,
+      currentLiquid: latest.liquid,
+      currentInvestments: latest.investments,
+      currentNetWorth: latest.netWorth,
+    });
+
+    return {
       current: {
         liquid: latest.liquid,
         investments: latest.investments,
@@ -1676,20 +1305,8 @@ export const infoRepository = {
       monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
     };
-
-    logger.debug('Net worth computed', {
-      targetCurrency,
-      firstDataDate: firstDataDateYmd,
-      snapshots: sanitizedSnapshots.length,
-      currentLiquid: result.current.liquid,
-      currentInvestments: result.current.investments,
-      currentNetWorth: result.current.netWorth,
-      monthlyChange: result.monthlyChange,
-      monthlyChangePercent: result.monthlyChangePercent,
-    });
-
-    return result;
   },
+
 
   /**
    * Recipient / Merchant Insights

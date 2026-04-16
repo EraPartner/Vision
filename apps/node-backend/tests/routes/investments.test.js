@@ -57,6 +57,10 @@ vi.mock('../../src/services/priceProviderService.js', () => ({
   ],
 }));
 
+vi.mock('../../src/services/quoteBackfillService.js', () => ({
+  refreshQuotesForInvestment: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../src/config/kinesisConfig.js', () => ({
   getKinesisAssetConfig: vi.fn((assetName) => {
     if (assetName === 'kaufen_gold') {
@@ -607,6 +611,7 @@ describe('Investment Routes', () => {
   // ── DELETE /api/investments/transactions/:txnId ────────────
   describe('DELETE /transactions/:txnId', () => {
     it('should delete portfolio transaction with 204', async () => {
+      portfolioTransactionRepository.getById.mockResolvedValue({ id: 1, investment_id: 10 });
       portfolioTransactionRepository.hardDelete.mockResolvedValue(true);
 
       const req = { params: { txnId: '1' } };
@@ -617,7 +622,7 @@ describe('Investment Routes', () => {
     });
 
     it('should return 404 for non-existent', async () => {
-      portfolioTransactionRepository.hardDelete.mockResolvedValue(false);
+      portfolioTransactionRepository.getById.mockResolvedValue(null);
 
       const req = { params: { txnId: '999' } };
       const res = mockResponse();
@@ -635,6 +640,7 @@ describe('Investment Routes', () => {
     });
 
     it('should handle errors with 500', async () => {
+      portfolioTransactionRepository.getById.mockResolvedValue({ id: 1, investment_id: 10 });
       portfolioTransactionRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { txnId: '1' } };

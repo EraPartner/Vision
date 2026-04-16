@@ -6,6 +6,7 @@ import { Router } from 'express';
 import investmentRepository from '../repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../repositories/portfolioTransactionRepository.js';
 import { fetchHistoricalPrices, fetchLivePricesDetailed, SUPPORTED_PROVIDERS } from '../services/priceProviderService.js';
+import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
@@ -417,6 +418,9 @@ router.post('/:id/transactions', validateIdParam, async (req, res) => {
       preloaded_asset_class: inv.asset_class,
     });
     clearInvestmentsCaches();
+    refreshQuotesForInvestment(investment_id).catch((err) => {
+      logger.error('Transaction-triggered quote refresh failed', { investmentId: investment_id, error: err.message });
+    });
     res.status(201).json(txn);
   } catch (err) {
     if (handleValidationError(res, err)) return;
@@ -430,9 +434,14 @@ router.delete('/transactions/:txnId', async (req, res) => {
   try {
     const txnId = parseAndValidateTxnRequestId(req, res);
     if (txnId === undefined) return;
+    const existingTxn = await portfolioTransactionRepository.getById(txnId);
+    if (!existingTxn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
     const ok = await portfolioTransactionRepository.hardDelete(txnId);
     if (!ok) return res.status(404).json({ detail: 'Portfolio transaction not found' });
     clearInvestmentsCaches();
+    refreshQuotesForInvestment(existingTxn.investment_id).catch((err) => {
+      logger.error('Transaction-triggered quote refresh failed', { investmentId: existingTxn.investment_id, error: err.message });
+    });
     res.status(204).end();
   } catch (err) {
     logger.error('Failed to delete portfolio transaction', { error: err.message });
@@ -448,6 +457,9 @@ router.patch('/transactions/:txnId', async (req, res) => {
     const txn = await portfolioTransactionRepository.update(txnId, req.body || {});
     if (!txn) return res.status(404).json({ detail: 'Portfolio transaction not found' });
     clearInvestmentsCaches();
+    refreshQuotesForInvestment(txn.investment_id).catch((err) => {
+      logger.error('Transaction-triggered quote refresh failed', { investmentId: txn.investment_id, error: err.message });
+    });
     res.json(txn);
   } catch (err) {
     if (handleValidationError(res, err)) return;

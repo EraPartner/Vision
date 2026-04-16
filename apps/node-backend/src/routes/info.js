@@ -356,7 +356,7 @@ router.get(
       ttlMs: NET_WORTH_CACHE_TTL_MS,
       requireData: true,
       keepPreviousData: true,
-      loader: () => infoRepository.getNetWorth(targetCurrency),
+      loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
     });
     res.json(data);
   } catch (err) {
@@ -517,7 +517,7 @@ router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests
 export async function warmInfoCaches(targetCurrency = 'EUR') {
   try {
     logger.info('Warming net-worth cache...', { targetCurrency });
-    const nwData = await infoRepository.getNetWorth(targetCurrency);
+    const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency);
     setCachedData(netWorthResponseCache, targetCurrency, nwData, NET_WORTH_CACHE_TTL_MS);
     logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
   } catch (err) {

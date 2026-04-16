@@ -28,7 +28,7 @@ vi.mock('../../src/repositories/infoRepository.js', () => ({
     getAverageVsCurrentSpending: vi.fn(),
     getCashflowComparison: vi.fn(),
     getBankBalances: vi.fn(),
-    getNetWorth: vi.fn(),
+    getNetWorthFromSnapshots: vi.fn(),
     getRecipientInsights: vi.fn(),
   },
 }));
@@ -417,7 +417,7 @@ describe('Info Routes', () => {
 
   describe('GET /net-worth', () => {
     it('should return net worth data with snapshots', async () => {
-      infoRepository.getNetWorth.mockResolvedValue({
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
         current: { liquid: 10000, investments: 5000, netWorth: 15000 },
         monthlyChange: 500,
         monthlyChangePercent: 3.45,
@@ -439,7 +439,7 @@ describe('Info Routes', () => {
     });
 
     it('should return empty data when no assets', async () => {
-      infoRepository.getNetWorth.mockResolvedValue({
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
         current: { liquid: 0, investments: 0, netWorth: 0 },
         monthlyChange: 0,
         monthlyChangePercent: 0,
@@ -456,7 +456,7 @@ describe('Info Routes', () => {
     });
 
     it('should handle errors', async () => {
-      infoRepository.getNetWorth.mockRejectedValue(new Error('DB error'));
+      infoRepository.getNetWorthFromSnapshots.mockRejectedValue(new Error('DB error'));
 
       const req = { query: { currency: 'GBP' } };
       const res = mockResponse();
@@ -797,7 +797,7 @@ describe('Info Routes', () => {
           current: { liquid: 10, investments: 20, netWorth: 30 },
           snapshots: [{ date: '2026-04-10', netWorth: 30 }],
         };
-        infoRepository.getNetWorth.mockResolvedValue(netWorthPayload);
+        infoRepository.getNetWorthFromSnapshots.mockResolvedValue(netWorthPayload);
         mockGetSnapshots.mockResolvedValue([
           {
             snapshot_date: '2026-04-10',
@@ -825,7 +825,7 @@ describe('Info Routes', () => {
         const perfRes = mockResponse();
         await routeHandlers['get:/portfolio-performance'](perfReq, perfRes);
 
-        expect(infoRepository.getNetWorth).toHaveBeenCalledTimes(1);
+        expect(infoRepository.getNetWorthFromSnapshots).toHaveBeenCalledTimes(1);
         expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
         expect(netWorthRes.json).toHaveBeenCalledWith(netWorthPayload);
         expect(perfRes.json).toHaveBeenCalledWith(
@@ -840,7 +840,7 @@ describe('Info Routes', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
-        infoRepository.getNetWorth.mockRejectedValueOnce(new Error('net-worth warm failed'));
+        infoRepository.getNetWorthFromSnapshots.mockRejectedValueOnce(new Error('net-worth warm failed'));
         mockGetSnapshots.mockResolvedValue([]);
 
         await warmInfoCaches('CAD');
@@ -859,7 +859,7 @@ describe('Info Routes', () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date('2026-04-11T10:00:00.000Z'));
-        infoRepository.getNetWorth.mockResolvedValue({ current: {}, snapshots: [] });
+        infoRepository.getNetWorthFromSnapshots.mockResolvedValue({ current: {}, snapshots: [] });
         mockGetSnapshots.mockRejectedValueOnce(new Error('portfolio warm failed'));
 
         await warmInfoCaches('AUD');

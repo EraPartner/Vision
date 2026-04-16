@@ -1,19 +1,22 @@
 ---
 title: Integration - Price Providers
 type: integration
-description: Live price feeds for stocks, crypto, and other investments
-date: 2026-04-09
-tags: [integration, price, stocks, crypto, api]
+description: Live and historical price feeds for stocks, crypto, and other investments
+date: 2026-04-16
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
-related_code: [[apps/node-backend/src/services/priceProviderService.js]]
+related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js]]
 ---
 
 # Integration: Price Providers
 
 ## Overview
 
-Price providers fetch live market prices for investments, supporting multiple asset classes and data sources.
+Price providers fetch live and historical market prices for investments, supporting multiple asset classes and data sources.
+
+> [!info] Note (2026-04-16)
+> The **net worth endpoint** (`GET /api/info/net-worth`) no longer calls price providers at request time. Investment values are now pre-computed daily via `portfolioPerformanceSnapshotService` and persisted to `portfolio_performance_snapshots`. Price providers are used only during snapshot backfill (application startup) and hourly refresh cycles, not during request handling.
 
 ## Supported Providers
 
@@ -59,13 +62,20 @@ Price providers fetch live market prices for investments, supporting multiple as
 
 - Historical quotes for provider-backed assets are persisted in `asset_price_history` (daily close per investment).
 - `GET /api/investments/:id/price-history` uses read-through behavior: read DB first, fetch provider when coverage is missing, then upsert refreshed rows.
-- Startup runs a background backfill for held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from each asset's first transaction date.
+- Startup backfill for held unit-based assets (`stock`, `etf`, `crypto`, `metals`) is orchestrated by [[apps/node-backend/src/services/quoteBackfillService.js|quoteBackfillService]]:
+  - Computes **holding windows** (periods where units > 0) from transaction history
+  - Fetches and sanitizes historical prices (provider-agnostic spike detection)
+  - Persists quotes only within holding windows
+  - Cleans up stale quotes outside windows after backfill
+  - Ignores `is_active` flag — all investments with transaction history get quotes
+- Lightweight hourly refresh via `refreshActiveHoldingQuotes()` updates currently-held investments (7-day lookback, open windows only)
+- Transaction-triggered refresh via `refreshQuotesForInvestment()` (fire-and-forget) handles single-investment updates on buy/sell/edit
 - Startup live refresh now prioritizes fast availability for Kinesis-backed investments: when a valid persisted `current_price` exists, it is used immediately and the external Kinesis refresh is deferred to background execution.
 - If provider fetch fails, history requests fall back to persisted DB rows.
 - `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.
 - Live refresh keeps an explicit Binance batch fetch block in `fetchLivePricesDetailed` for crypto provider efficiency.
 - Kinesis sanitization is applied before latest extraction and before historical cache/persist writes so cached history avoids isolated trendline needles ([[apps/node-backend/src/services/priceProviderService.js]]).
-- `fetchHistoricalPrices` now also sanitizes Kinesis points on the early-return path when requested range is already fully covered by persisted DB history; when sanitizer changes points, corrected values are upserted through `_saveHistoricalPointsToDatabase(..., 'kinesis')` before returning ([[apps/node-backend/src/services/priceProviderService.js]]).
+- `fetchHistoricalPrices` sanitizes Kinesis points and persists through `saveHistoricalPointsToDatabase()` before returning (moved from `_saveHistoricalPointsToDatabase`, now exported) ([[apps/node-backend/src/services/priceProviderService.js]]).
 - Persisted Kinesis history can be re-sanitized in place via `sanitizePersistedKinesisHistory()`: it scans `investments.price_provider='kinesis'`, loads persisted `asset_price_history` points, applies isolated spike sanitization, upserts corrected points with source `kinesis`, and returns `{ processed, updated, correctedPoints, failed }`.
 - Internal historical-fetch refactor in `fetchHistoricalPrices` extracts shared range-filter and persist+resolve helpers to reduce duplication while preserving provider-specific behavior, cache keys, and fallback semantics ([[apps/node-backend/src/services/priceProviderService.js]]).
 

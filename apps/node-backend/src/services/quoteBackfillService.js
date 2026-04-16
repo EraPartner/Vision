@@ -1,0 +1,561 @@
+/**
+ * Quote Backfill Service
+ *
+ * Manages the lifecycle of daily close quotes in asset_price_history.
+ * Computes holding windows from transactions and backfills quotes only
+ * for periods where a position was actually held (units > 0).
+ *
+ * Provides:
+ * - Startup full backfill
+ * - Hourly lightweight refresh (open positions only)
+ * - Transaction-triggered per-investment refresh
+ * - Stale quote cleanup (outside holding windows)
+ * - Provider-agnostic spike sanitization before persistence
+ */
+
+import { logger } from '../config/logger.js';
+import { query } from '../database/connection.js';
+import {
+  fetchHistoricalPrices,
+  saveHistoricalPointsToDatabase,
+} from './priceProviderService.js';
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const UNIT_BASED_ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals'];
+const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
+const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+const HOURLY_LOOKBACK_DAYS = 7;
+
+// ─── Pure Functions ─────────────────────────────────────────────────────────
+
+/**
+ * Compute holding windows from an array of transactions for a single investment.
+ * A holding window is a continuous period where net units > 0.
+ *
+ * @param {Array<{ id: number, type: string, date: string, units: number }>} transactions
+ *   Transactions for ONE investment. Will be sorted internally.
+ * @returns {Array<{ fromDate: string, toDate: string | null }>}
+ *   Holding windows. toDate = null means position is still open.
+ */
+export function computeHoldingWindows(transactions) {
+  if (!Array.isArray(transactions) || transactions.length === 0) return [];
+
+  const sorted = [...transactions].sort((a, b) => {
+    const dateCompare = String(a.date).localeCompare(String(b.date));
+    if (dateCompare !== 0) return dateCompare;
+    return Number(a.id) - Number(b.id);
+  });
+
+  const windows = [];
+  let balance = 0;
+  let windowStart = null;
+
+  for (const tx of sorted) {
+    const units = Number(tx.units) || 0;
+    const prevBalance = balance;
+
+    if (tx.type === 'buy' || tx.type === 'gift') {
+      balance += units;
+    } else if (tx.type === 'sell') {
+      balance -= units;
+    }
+
+    // Clamp to zero to handle floating point drift
+    if (balance < 0) balance = 0;
+
+    if (prevBalance <= 0 && balance > 0) {
+      windowStart = String(tx.date).slice(0, 10);
+    }
+
+    if (prevBalance > 0 && balance <= 0 && windowStart !== null) {
+      windows.push({ fromDate: windowStart, toDate: String(tx.date).slice(0, 10) });
+      windowStart = null;
+    }
+  }
+
+  // Still holding — open window
+  if (balance > 0 && windowStart !== null) {
+    windows.push({ fromDate: windowStart, toDate: null });
+  }
+
+  return windows;
+}
+
+/**
+ * Detect and replace isolated single-day price spikes.
+ * Provider-agnostic — works on any array of { timestampMs, price } points.
+ *
+ * A spike is detected when:
+ * 1. price[i] / price[i-1] > SPIKE_RATIO_THRESHOLD AND price[i] / price[i+1] > SPIKE_RATIO_THRESHOLD (or inverse)
+ * 2. Statistical outlier via MAD-based sigma (second pass for subtler spikes)
+ *
+ * Spikes are replaced with the geometric mean of their neighbors.
+ *
+ * @param {Array<{ timestampMs: number, price: number }>} points - Sorted price points
+ * @returns {Array<{ timestampMs: number, price: number }>} - Cleaned copy (immutable)
+ */
+export function sanitizeIsolatedSpikes(points) {
+  if (!Array.isArray(points) || points.length < 3) return points ? [...points] : [];
+
+  const sanitized = points.map((p) => ({ ...p }));
+
+  // Pass 1: Simple ratio-based detection for obvious spikes (e.g. 10× jumps)
+  for (let i = 1; i < sanitized.length - 1; i += 1) {
+    const prev = sanitized[i - 1]?.price;
+    const current = sanitized[i]?.price;
+    const next = sanitized[i + 1]?.price;
+
+    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next)) continue;
+
+    const jumpUp = current / prev;
+    const jumpDown = current / next;
+    const dropUp = prev / current;
+    const dropDown = next / current;
+
+    const isSpikeUp = jumpUp >= SPIKE_RATIO_THRESHOLD && jumpDown >= SPIKE_RATIO_THRESHOLD;
+    const isSpikeDn = dropUp >= SPIKE_RATIO_THRESHOLD && dropDown >= SPIKE_RATIO_THRESHOLD;
+
+    if (isSpikeUp || isSpikeDn) {
+      sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
+    }
+  }
+
+  // Pass 2: Statistical MAD-based detection for subtler spikes
+  if (sanitized.length < 5) return sanitized;
+
+  const logReturns = [];
+  for (let i = 1; i < sanitized.length; i += 1) {
+    const prev = sanitized[i - 1]?.price;
+    const current = sanitized[i]?.price;
+    if (!_isPositive(prev) || !_isPositive(current)) continue;
+    logReturns.push(Math.log(current / prev));
+  }
+
+  if (logReturns.length < 4) return sanitized;
+
+  const medianReturn = _median(logReturns) ?? 0;
+  const absDeviations = logReturns.map((r) => Math.abs(r - medianReturn));
+  const mad = _median(absDeviations) ?? 0;
+  const robustSigma = Math.max(1.4826 * mad, 0.0015);
+  const spikeThreshold = 6 * robustSigma;
+  const bridgeThreshold = 4 * robustSigma;
+  const minSpikeMove = Math.log(1.18);
+
+  for (let i = 1; i < sanitized.length - 1; i += 1) {
+    const prev = sanitized[i - 1]?.price;
+    const current = sanitized[i]?.price;
+    const next = sanitized[i + 1]?.price;
+    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next)) continue;
+
+    const jump = Math.log(current / prev);
+    const revert = Math.log(next / current);
+    const bridge = Math.log(next / prev);
+
+    const hasLargeJump = Math.abs(jump - medianReturn) > spikeThreshold && Math.abs(jump) > minSpikeMove;
+    const hasLargeRevert = Math.abs(revert - medianReturn) > spikeThreshold && Math.abs(revert) > minSpikeMove;
+    const oppositeDirections = (jump > 0 && revert < 0) || (jump < 0 && revert > 0);
+    const bridgeLooksNormal = Math.abs(bridge - medianReturn) <= bridgeThreshold;
+
+    if (hasLargeJump && hasLargeRevert && oppositeDirections && bridgeLooksNormal) {
+      sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
+    }
+  }
+
+  return sanitized;
+}
+
+// ─── Database Functions ─────────────────────────────────────────────────────
+
+/**
+ * Fetch all unit-based investments with their buy/gift/sell transactions,
+ * compute holding windows, and return a structured map.
+ *
+ * Includes ALL investments with transactions, regardless of is_active flag.
+ *
+ * @returns {Promise<Map<number, { investment: object, holdingWindows: Array }>>}
+ */
+export async function getInvestmentsWithHoldingWindows() {
+  const result = await query(
+    `SELECT
+       i.id,
+       i.asset_class,
+       i.currency,
+       i.price_provider,
+       i.price_provider_id,
+       i.symbol,
+       i.price_provider_url,
+       i.price_provider_latest_url,
+       i.price_provider_latest_path,
+       i.price_provider_history_url,
+       i.price_provider_history_path,
+       i.price_provider_history_ts_path,
+       i.price_provider_history_price_path,
+       pt.id   AS tx_id,
+       pt.type AS tx_type,
+       to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
+       COALESCE(pt.units, 0) AS tx_units
+     FROM investments i
+     JOIN portfolio_transactions pt
+       ON pt.investment_id = i.id
+      AND pt.type IN ('buy', 'gift', 'sell')
+     WHERE i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
+     ORDER BY i.id, pt.date, pt.id`,
+    []
+  );
+
+  const rows = result.rows || [];
+  const investmentMap = new Map();
+
+  for (const row of rows) {
+    const invId = Number(row.id);
+
+    if (!investmentMap.has(invId)) {
+      investmentMap.set(invId, {
+        investment: {
+          id: invId,
+          asset_class: row.asset_class,
+          currency: row.currency,
+          price_provider: row.price_provider,
+          price_provider_id: row.price_provider_id,
+          symbol: row.symbol,
+          price_provider_url: row.price_provider_url,
+          price_provider_latest_url: row.price_provider_latest_url,
+          price_provider_latest_path: row.price_provider_latest_path,
+          price_provider_history_url: row.price_provider_history_url,
+          price_provider_history_path: row.price_provider_history_path,
+          price_provider_history_ts_path: row.price_provider_history_ts_path,
+          price_provider_history_price_path: row.price_provider_history_price_path,
+        },
+        transactions: [],
+      });
+    }
+
+    investmentMap.get(invId).transactions.push({
+      id: Number(row.tx_id),
+      type: row.tx_type,
+      date: row.tx_date,
+      units: Number(row.tx_units),
+    });
+  }
+
+  // Compute holding windows per investment
+  const resultMap = new Map();
+  for (const [invId, { investment, transactions }] of investmentMap) {
+    const holdingWindows = computeHoldingWindows(transactions);
+    if (holdingWindows.length > 0) {
+      resultMap.set(invId, { investment, holdingWindows });
+    }
+  }
+
+  return resultMap;
+}
+
+/**
+ * Fetch holding windows for a single investment by ID.
+ *
+ * @param {number} investmentId
+ * @returns {Promise<{ investment: object, holdingWindows: Array } | null>}
+ */
+async function getInvestmentWithHoldingWindows(investmentId) {
+  const result = await query(
+    `SELECT
+       i.id,
+       i.asset_class,
+       i.currency,
+       i.price_provider,
+       i.price_provider_id,
+       i.symbol,
+       i.price_provider_url,
+       i.price_provider_latest_url,
+       i.price_provider_latest_path,
+       i.price_provider_history_url,
+       i.price_provider_history_path,
+       i.price_provider_history_ts_path,
+       i.price_provider_history_price_path,
+       pt.id   AS tx_id,
+       pt.type AS tx_type,
+       to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
+       COALESCE(pt.units, 0) AS tx_units
+     FROM investments i
+     JOIN portfolio_transactions pt
+       ON pt.investment_id = i.id
+      AND pt.type IN ('buy', 'gift', 'sell')
+     WHERE i.id = $1
+       AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
+     ORDER BY pt.date, pt.id`,
+    [Number(investmentId)]
+  );
+
+  const rows = result.rows || [];
+  if (rows.length === 0) return null;
+
+  const firstRow = rows[0];
+  const investment = {
+    id: Number(firstRow.id),
+    asset_class: firstRow.asset_class,
+    currency: firstRow.currency,
+    price_provider: firstRow.price_provider,
+    price_provider_id: firstRow.price_provider_id,
+    symbol: firstRow.symbol,
+    price_provider_url: firstRow.price_provider_url,
+    price_provider_latest_url: firstRow.price_provider_latest_url,
+    price_provider_latest_path: firstRow.price_provider_latest_path,
+    price_provider_history_url: firstRow.price_provider_history_url,
+    price_provider_history_path: firstRow.price_provider_history_path,
+    price_provider_history_ts_path: firstRow.price_provider_history_ts_path,
+    price_provider_history_price_path: firstRow.price_provider_history_price_path,
+  };
+
+  const transactions = rows.map((row) => ({
+    id: Number(row.tx_id),
+    type: row.tx_type,
+    date: row.tx_date,
+    units: Number(row.tx_units),
+  }));
+
+  const holdingWindows = computeHoldingWindows(transactions);
+  if (holdingWindows.length === 0) return null;
+
+  return { investment, holdingWindows };
+}
+
+// ─── Backfill Orchestration ─────────────────────────────────────────────────
+
+/**
+ * Backfill quotes for a single investment across all its holding windows.
+ * Fetches historical prices, sanitizes spikes, and persists cleaned data.
+ *
+ * @param {object} investment - Investment object with provider config
+ * @param {Array<{ fromDate: string, toDate: string | null }>} holdingWindows
+ * @returns {Promise<{ hasHistory: boolean, windowCount: number }>}
+ */
+async function backfillInvestmentQuotes(investment, holdingWindows) {
+  let hasHistory = false;
+
+  for (const window of holdingWindows) {
+    const fromMs = Date.parse(`${window.fromDate}T00:00:00.000Z`);
+    const toMs = window.toDate !== null
+      ? Date.parse(`${window.toDate}T23:59:59.999Z`)
+      : Date.now();
+
+    if (!Number.isFinite(fromMs)) continue;
+
+    const rawPoints = await fetchHistoricalPrices(investment, { fromMs, toMs });
+
+    if (rawPoints.length > 0) {
+      hasHistory = true;
+      const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
+
+      // Re-save cleaned points — upsert overwrites any bad values
+      const provider = investment.price_provider || 'provider';
+      await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+    }
+  }
+
+  return { hasHistory, windowCount: holdingWindows.length };
+}
+
+/**
+ * Full backfill: fetch and store quotes for ALL investments with holding windows.
+ * Runs on startup. Also cleans up stale quotes outside holding windows.
+ *
+ * @returns {Promise<{ processed: number, withHistory: number, failed: number, spikesCorrected: number }>}
+ */
+export async function backfillHistoricalAssetQuotes() {
+  const investmentWindows = await getInvestmentsWithHoldingWindows();
+
+  if (investmentWindows.size === 0) {
+    logger.info('Historical asset quote backfill skipped: no investments with holding windows');
+    return { processed: 0, withHistory: 0, failed: 0 };
+  }
+
+  let withHistory = 0;
+  let failed = 0;
+
+  for (const [invId, { investment, holdingWindows }] of investmentWindows) {
+    try {
+      const result = await backfillInvestmentQuotes(investment, holdingWindows);
+      if (result.hasHistory) withHistory += 1;
+    } catch (error) {
+      failed += 1;
+      logger.warn('Historical quote backfill failed for investment', {
+        investmentId: invId,
+        error: error?.message,
+      });
+    }
+  }
+
+  // Cleanup stale quotes outside holding windows
+  try {
+    await cleanupStaleQuotes(investmentWindows);
+  } catch (error) {
+    logger.warn('Stale quote cleanup failed', { error: error?.message });
+  }
+
+  logger.info('Historical asset quote backfill complete', {
+    processed: investmentWindows.size,
+    withHistory,
+    failed,
+  });
+
+  return {
+    processed: investmentWindows.size,
+    withHistory,
+    failed,
+  };
+}
+
+/**
+ * Lightweight refresh for currently-open holding windows only.
+ * Fetches recent quotes (last N days) to keep data fresh.
+ * Designed to run on an hourly interval.
+ *
+ * @returns {Promise<{ refreshed: number, failed: number }>}
+ */
+export async function refreshActiveHoldingQuotes() {
+  const investmentWindows = await getInvestmentsWithHoldingWindows();
+  let refreshed = 0;
+  let failed = 0;
+
+  for (const [invId, { investment, holdingWindows }] of investmentWindows) {
+    // Only refresh open windows (toDate === null)
+    const openWindows = holdingWindows.filter((w) => w.toDate === null);
+    if (openWindows.length === 0) continue;
+
+    try {
+      const lookbackMs = Date.now() - HOURLY_LOOKBACK_DAYS * HISTORY_DAY_MS;
+      for (const window of openWindows) {
+        const fromMs = Math.max(
+          Date.parse(`${window.fromDate}T00:00:00.000Z`),
+          lookbackMs
+        );
+
+        const rawPoints = await fetchHistoricalPrices(investment, {
+          fromMs,
+          toMs: Date.now(),
+        });
+
+        if (rawPoints.length > 0) {
+          const cleanPoints = sanitizeIsolatedSpikes(rawPoints);
+          const provider = investment.price_provider || 'provider';
+          await saveHistoricalPointsToDatabase(investment.id, cleanPoints, provider);
+        }
+      }
+      refreshed += 1;
+    } catch (error) {
+      failed += 1;
+      logger.warn('Periodic quote refresh failed for investment', {
+        investmentId: invId,
+        error: error?.message,
+      });
+    }
+  }
+
+  logger.info('Periodic active quote refresh complete', { refreshed, failed });
+  return { refreshed, failed };
+}
+
+/**
+ * Refresh quotes for a single investment after a transaction change.
+ * Fire-and-forget — does not block the calling route.
+ *
+ * @param {number} investmentId
+ * @returns {Promise<void>}
+ */
+export async function refreshQuotesForInvestment(investmentId) {
+  const data = await getInvestmentWithHoldingWindows(investmentId);
+
+  if (!data) {
+    // No holding windows — clean up any existing quotes for this investment
+    await query(
+      'DELETE FROM asset_price_history WHERE investment_id = $1',
+      [Number(investmentId)]
+    );
+    return;
+  }
+
+  const { investment, holdingWindows } = data;
+
+  try {
+    await backfillInvestmentQuotes(investment, holdingWindows);
+  } catch (error) {
+    logger.warn('Transaction-triggered quote refresh failed', {
+      investmentId,
+      error: error?.message,
+    });
+  }
+
+  // Cleanup quotes outside the (possibly updated) holding windows
+  try {
+    const singleMap = new Map([[investmentId, { investment, holdingWindows }]]);
+    await cleanupStaleQuotes(singleMap);
+  } catch (error) {
+    logger.warn('Post-transaction stale quote cleanup failed', {
+      investmentId,
+      error: error?.message,
+    });
+  }
+}
+
+// ─── Stale Quote Cleanup ────────────────────────────────────────────────────
+
+/**
+ * Delete asset_price_history rows that fall outside any holding window
+ * for the given investments.
+ *
+ * @param {Map<number, { investment: object, holdingWindows: Array }>} investmentWindows
+ * @returns {Promise<number>} Total rows deleted
+ */
+export async function cleanupStaleQuotes(investmentWindows) {
+  let totalDeleted = 0;
+
+  for (const [invId, { holdingWindows }] of investmentWindows) {
+    if (holdingWindows.length === 0) continue;
+
+    const fromDates = holdingWindows.map((w) => w.fromDate);
+    const toDates = holdingWindows.map((w) =>
+      w.toDate !== null ? w.toDate : new Date().toISOString().slice(0, 10)
+    );
+
+    try {
+      const result = await query(
+        `DELETE FROM asset_price_history
+         WHERE investment_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM unnest($2::date[], $3::date[]) AS w(from_date, to_date)
+             WHERE price_date >= w.from_date AND price_date <= w.to_date
+           )`,
+        [invId, fromDates, toDates]
+      );
+      totalDeleted += result.rowCount || 0;
+    } catch (error) {
+      logger.warn('Failed to cleanup stale quotes for investment', {
+        investmentId: invId,
+        error: error?.message,
+      });
+    }
+  }
+
+  if (totalDeleted > 0) {
+    logger.info('Stale quote cleanup complete', { deletedRows: totalDeleted });
+  }
+
+  return totalDeleted;
+}
+
+// ─── Private Helpers ────────────────────────────────────────────────────────
+
+function _isPositive(value) {
+  return Number.isFinite(value) && value > 0;
+}
+
+function _median(values) {
+  if (!Array.isArray(values) || values.length === 0) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+}

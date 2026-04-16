@@ -25,11 +25,14 @@ import {
 import investmentRepository from './repositories/investmentRepository.js';
 import {
   fetchLivePricesDetailed,
-  backfillHistoricalAssetQuotes,
   sanitizePersistedKinesisHistory,
 } from './services/priceProviderService.js';
 import { getKinesisAssetConfig } from './config/kinesisConfig.js';
 import { computeAndStoreSnapshots } from './services/portfolioPerformanceSnapshotService.js';
+import {
+  backfillHistoricalAssetQuotes,
+  refreshActiveHoldingQuotes,
+} from './services/quoteBackfillService.js';
 import { warmInfoCaches } from './routes/info.js';
 
 function hasLivePriceRefreshConfig(investment) {
@@ -395,6 +398,13 @@ async function start() {
           logger.error('Scheduled Belgian inflation refresh failed', { error: err.message });
         });
       }, 12 * 60 * 60 * 1000); // every 12 hours
+
+      // Schedule hourly quote refresh for currently-held investments
+      setInterval(() => {
+        refreshActiveHoldingQuotes().catch((err) => {
+          logger.error('Periodic quote refresh failed', { error: err.message });
+        });
+      }, 60 * 60 * 1000); // every hour
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });

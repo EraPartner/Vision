@@ -2,9 +2,9 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-04-02
+date: 2026-04-16
 tags: [backend, services, reference, business-logic]
-description: Complete reference for all 16 backend services — exported functions, dependencies, algorithms, and usage patterns
+description: Complete reference for all 17 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for snapshot-backed net worth computation and quoteBackfillService refactor.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -324,7 +324,7 @@ Repository Layer (SQL queries)
 ## 10. portfolioPerformanceSnapshotService.js
 
 **File:** [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]  
-**Purpose:** Computes and stores daily portfolio performance snapshots with per-class breakdowns.
+**Purpose:** Computes and stores daily portfolio performance snapshots with per-class breakdowns, including fixed-income investments.
 
 ### Exported Functions
 
@@ -337,15 +337,19 @@ Repository Layer (SQL queries)
 ### Snapshot Fields
 
 - `snapshot_date` — Date of the snapshot
-- `invested_stocks_etfs`, `invested_crypto`, `invested_metals` — Per-class invested capital
-- `value_stocks_etfs`, `value_crypto`, `value_metals` — Per-class market value
-- `total_invested`, `total_value` — Aggregate totals
+- `invested_stocks_etfs`, `invested_crypto`, `invested_metals` — Per-class invested capital (unit-based only)
+- `stocks_etfs_value`, `crypto_value`, `metals_value` — Per-class market value (unit-based only)
+- `value` — Total portfolio value (unit-based + fixed-income)
+- `cash_value` — Fixed-income portion (real_estate, savings, bond) of total value
+- `invested` — Cumulative capital deployed (unit-based transactions only)
 - `inflation_adjusted_value` — Value adjusted for Belgian inflation
-- `gain_loss`, `gain_loss_pct` — Performance metrics
+- `gain_loss`, `return_pct` — Performance metrics
 
 ### Key Algorithms
 
 - **Daily Forward-Fill Simulation:** Iterates every day from first data date to today, applying transactions and market prices cumulatively
+- **Unit-Based Assets:** Stocks, ETFs, crypto, metals — computed from portfolio transactions and historical price history
+- **Fixed-Income Assets:** Real estate, savings, bonds — value stored in `current_price`, applied from `created_at` date onward to daily snapshots
 - **Price Resolution Cascade:** Historical price > last known price > last transaction price > current price
 - **Spike Sanitization:** `sanitizeIsolatedDailySpikes` detects "needle" anomalies using log-return analysis (18% jump + revert) and replaces with geometric mean of neighbors
 - **Cumulative Inflation Adjustment:** Compounds monthly Belgian inflation rates, divides portfolio value by cumulative factor
@@ -370,9 +374,11 @@ Repository Layer (SQL queries)
 | `fetchLivePricesDetailed` | `(investments, options?) => Promise<{ id: { price, source } }>` | Price + source info |
 | `fetchHistoricalPrices` | `(investment, options?) => Promise<PricePoint[]>` | Historical price points |
 | `getHistoricalPriceAt` | `(points, timestampMs) => number` | Price at specific timestamp |
-| `backfillHistoricalAssetQuotes` | `() => Promise<void>` | Backfills all held investments |
+| `saveHistoricalPointsToDatabase` | `(points, investment, source) => Promise<void>` | Persists sanitized points to DB |
 | `sanitizePersistedKinesisHistory` | `() => Promise<void>` | Re-sanitizes stored Kinesis history |
 | `__resetPriceCache` | `() => void` | Test-only: clears in-process cache |
+
+> **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.js|quoteBackfillService.js]] (2026-04-16)
 
 ### Providers
 
@@ -399,7 +405,63 @@ Repository Layer (SQL queries)
 
 ---
 
-## 12. rawTransactionImportService.js
+## 12. quoteBackfillService.js
+
+**File:** [[apps/node-backend/src/services/quoteBackfillService.js]]  
+**Purpose:** Orchestrates historical quote backfill and maintenance for investments with holding window awareness.
+
+### Exported Functions
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `computeHoldingWindows` | `(transactions) => Window[]` | Time periods where units > 0 |
+| `sanitizeIsolatedSpikes` | `(points) => PricePoint[]` | Sanitized points (provider-agnostic spike detection) |
+| `getInvestmentsWithHoldingWindows` | `() => Promise<Investment[]>` | All unit-based investments with computed holding windows |
+| `backfillHistoricalAssetQuotes` | `() => Promise<{ processed, updated, skipped, failed }>` | Full startup backfill |
+| `refreshActiveHoldingQuotes` | `() => Promise<{ processed, updated, skipped }>` | Lightweight hourly refresh |
+| `refreshQuotesForInvestment` | `(investmentId) => Promise<void>` | Single-investment refresh (transaction-triggered) |
+| `cleanupStaleQuotes` | `(investmentWindows) => Promise<{ deleted }>` | Remove quotes outside holding windows |
+
+### Holding Windows
+
+Quotes are persisted **only for periods when units > 0**, not based on `is_active` flag:
+- Computed from transaction history (buy/sell/gift/etc.)
+- Handles multiple buy/sell cycles per investment
+- Preserved across inactive investments (users can still view historical charts)
+
+### Spike Detection
+
+Uses **MAD-based statistical detection** (Median Absolute Deviation):
+1. Compute log-returns between consecutive points
+2. Calculate MAD of returns
+3. Identify outliers: return > 3σ (σ = 1.4826 × MAD)
+4. Confirm isolation (outlier reverts in next period) + local ratio check (> 1.8x) + minimum jump (>= 18%)
+5. Replace isolated spikes with geometric mean of neighbors
+
+**Why MAD over Z-score:** Robust to extreme outliers; no normal distribution assumption; works well for provider trendline artifacts
+
+### Three Refresh Modes
+
+| Mode | Trigger | Scope | Speed |
+|------|---------|-------|-------|
+| Startup Backfill | Application start | All investments + full history | Slow, comprehensive |
+| Hourly Refresh | `setInterval` (1h) | Open holding windows + 7-day lookback | Fast, lightweight |
+| Transaction Trigger | POST/DELETE/PATCH investment transactions | Single investment | Immediate, fire-and-forget |
+
+### Key Algorithms
+
+- **Holding Window Computation:** Scans transactions chronologically, tracks cumulative units, marks windows where units transition 0↔positive
+- **Batch Persistence:** Upserts to `asset_price_history` with ON CONFLICT DO UPDATE (idempotent)
+- **Stale Cleanup:** Deletes quotes outside computed holding windows after backfill
+
+### Dependencies
+- `priceProviderService.js` — Delegates `fetchHistoricalPrices()` and `fetchLivePricesDetailed()`
+- `investmentRepository.js` — Reads investment + transaction history
+- `connection.js`, `logger.js`
+
+---
+
+## 13. rawTransactionImportService.js
 
 **File:** [[apps/node-backend/src/services/rawTransactionImportService.js]]  
 **Purpose:** Imports CSV transactions while preserving raw data in bank-specific tables for audit trail.
@@ -433,7 +495,7 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
-## 13. recurrenceService.js
+## 14. recurrenceService.js
 
 **File:** [[apps/node-backend/src/services/recurrenceService.js]]  
 **Purpose:** Calculates next occurrence dates for recurring patterns.
@@ -451,7 +513,7 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
-## 14. recurringDetectionService.js
+## 15. recurringDetectionService.js
 
 **File:** [[apps/node-backend/src/services/recurringDetectionService.js]]  
 **Purpose:** Analyzes transaction history to automatically detect recurring payment patterns.
@@ -482,7 +544,7 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
-## 15. streamingImportService.js
+## 16. streamingImportService.js
 
 **File:** [[apps/node-backend/src/services/streamingImportService.js]]  
 **Purpose:** Imports CSV transactions with real-time progress reporting via callbacks.
@@ -516,7 +578,7 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
-## 16. textNormalization.js
+## 17. textNormalization.js
 
 **File:** [[apps/node-backend/src/services/textNormalization.js]]  
 **Purpose:** Normalizes and cleans text data for consistent matching across the application.
@@ -553,13 +615,13 @@ CSV → Parse → Raw Data (bank-specific table)
 └────┬────────┬────────┬────────┬────────┬────────┬───────┘
      │        │        │        │        │        │
      ▼        ▼        ▼        ▼        ▼        ▼
-┌────────────────┐ ┌───────────────────┐ ┌──────────────┐
-│ belgianInflation│ │ currencyConversion│ │ priceProvider│
-│   Service       │ │   Service         │ │   Service    │
-└────────────────┘ └───────────────────┘ └──────────────┘
-                          │
-     ┌────────────────────┼────────────────────┐
-     ▼                    ▼                    ▼
+┌────────────────┐ ┌───────────────────┐ ┌──────────────────┐ ┌────────────────┐
+│ belgianInflation│ │ currencyConversion│ │ priceProvider    │ │ quoteBackfill  │
+│   Service       │ │   Service         │ │ Service          │ │ Service        │
+└────────────────┘ └───────────────────┘ └──────────────────┘ └────────────────┘
+                          │                        │
+     ┌────────────────────┼────────────────────┐   │
+     ▼                    ▼                    ▼   ▼
 ┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
 │ portfolio   │ │ rawTransaction     │ │ streamingImport │
 │ Performance │ │ Import             │ │ Service         │
@@ -591,15 +653,28 @@ CSV → Parse → Raw Data (bank-specific table)
 |----------|----------|
 | **Pure Computation** | `loanRepaymentService`, `recurrenceService`, `iban`, `textNormalization` |
 | **External Data** | `belgianInflationService`, `currencyConversionService`, `priceProviderService` |
+| **Quote Management** | `quoteBackfillService` |
 | **Import Pipeline** | `bankAdapters`, `importService`, `streamingImportService`, `rawTransactionImportService`, `dataImportService` |
 | **Data Quality** | `deduplication`, `recurringDetectionService` |
 | **Performance** | `materializedViewService`, `portfolioPerformanceSnapshotService` |
+
+## Info Repository Refactor (Net Worth)
+
+**Note (2026-04-16):** The `infoRepository.js` underwent a major refactor for net worth computation:
+
+- **Removed:** Old `getNetWorth()` function (~580 lines, involved network calls to price providers for real-time portfolio valuation)
+- **Added:** New `getNetWorthFromSnapshots()` function (350 lines, reads pre-computed investment values from `portfolio_performance_snapshots`)
+
+**Impact:** Net worth endpoint (`GET /api/info/net-worth`) no longer makes requests to price providers at query time. All investment values are pre-computed daily by the snapshot service and read directly from the database. This eliminates latency/network dependency at request time, making the endpoint consistently fast regardless of portfolio size or number of price providers.
+
+See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapshot-backed architecture.
 
 ## Related Documentation
 
 - [[docs/adr/006-three-layer-architecture|ADR-006: Three-Layer Architecture]]
 - [[docs/reference/code-patterns|Code Patterns]]
 - [[docs/features/import|Import Feature]]
+- [[docs/features/net-worth|Net Worth Feature]]
 - [[docs/integrations/price-providers|Price Providers]]
 - [[docs/integrations/currency-conversion|Currency Conversion]]
 - [[docs/integrations/bank-adapters|Bank Adapters]]

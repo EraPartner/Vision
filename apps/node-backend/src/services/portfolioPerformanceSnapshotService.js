@@ -116,7 +116,26 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
     ORDER BY pt.date::date, pt.id
   `, [firstDataDateYmd]);
 
-  // 3. Get price history from asset_price_history
+  // 3. Get fixed-income investments (real_estate, savings, bond) — value stored as current_price
+  const fixedIncomeResult = await query(`
+    SELECT
+      i.id,
+      COALESCE(i.currency, 'EUR') AS currency,
+      COALESCE(i.current_price, 0) AS current_price,
+      COALESCE(i.created_at::date, $1::date)::text AS active_from
+    FROM investments i
+    WHERE i.is_active = true
+      AND i.asset_class IN ('real_estate', 'savings', 'bond')
+  `, [firstDataDateYmd]);
+
+  const fixedIncomeInvestments = fixedIncomeResult.rows.map(row => ({
+    id: Number(row.id),
+    currency: row.currency,
+    currentPrice: Number(row.current_price) || 0,
+    activeFrom: String(row.active_from).split('T')[0],
+  }));
+
+  // 4. Get price history from asset_price_history
   const priceHistoryResult = await query(`
     SELECT
       investment_id,
@@ -311,6 +330,15 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
       }
     }
 
+    // Add fixed-income value (current_price applied from active_from date onward)
+    let fixedIncomeValue = 0;
+    for (const inv of fixedIncomeInvestments) {
+      if (day < inv.activeFrom) continue;
+      if (inv.currentPrice <= 0) continue;
+      fixedIncomeValue += convertAmount(inv.currentPrice, inv.currency);
+    }
+    totalValue += fixedIncomeValue;
+
     // Apply monthly inflation
     const monthKey = day.slice(0, 7);
     if (monthKey !== lastInflationMonth) {
@@ -328,6 +356,7 @@ async function computeDailySnapshots(targetCurrency = 'EUR') {
       stocks_etfs_value: stocksEtfsValue || 0,
       crypto_value: cryptoValue || 0,
       metals_value: metalsValue || 0,
+      cash_value: fixedIncomeValue || 0,
       stocks_etfs_invested: stocksEtfsInvested || 0,
       crypto_invested: cryptoInvested || 0,
       metals_invested: metalsInvested || 0,
@@ -378,7 +407,7 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
         snap.stocks_etfs_value,
         snap.crypto_value,
         snap.metals_value,
-        0, // cash_value (deprecated)
+        snap.cash_value,
         snap.gain_loss,
         snap.return_pct,
         targetCurrency,

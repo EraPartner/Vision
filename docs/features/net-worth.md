@@ -2,22 +2,23 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-04-09
-tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance]
-description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables
+date: 2026-04-16
+tags: [feature, net-worth, portfolio, chart, zoom, frontend, performance, snapshots, fixed-income]
+description: Daily net worth tracking with zoomable/scrollable charts, series toggling, LTTB downsampling, and daily breakdown tables. Powered by pre-computed snapshots including unit-based and fixed-income investments.
 aliases: [net worth, networth, wealth tracking, financial health]
 related_code:
   - apps/frontend/src/pages/portfolio/NetWorthPage.tsx
   - apps/frontend/src/utils/downsample.ts
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
+  - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
 ---
 
 # Net Worth Feature
 
 ## Overview
 
-The Net Worth page (`/portfolio/net-worth`) tracks daily net worth by combining liquid assets (bank balances) and investment values. It features a highly optimized, zoomable/scrollable area chart with series toggling, LTTB downsampling for performance, and a daily breakdown table.
+The Net Worth page (`/portfolio/net-worth`) tracks daily net worth by combining liquid assets (bank balances) and investment values (including fixed-income: real estate, savings, bonds). It features a highly optimized, zoomable/scrollable area chart with series toggling, LTTB downsampling for performance, and a daily breakdown table.
 
 ## Data Model
 
@@ -27,7 +28,7 @@ The Net Worth page (`/portfolio/net-worth`) tracks daily net worth by combining 
 interface NetWorthResponse {
   current: {
     liquid: number;      // Current bank balances
-    investments: number; // Current portfolio value
+    investments: number; // Current portfolio value (all asset classes)
     netWorth: number;    // liquid + investments
   };
   monthlyChange: number;
@@ -43,29 +44,29 @@ interface NetWorthResponse {
 
 ### Backend Computation
 
-The net worth is computed by `infoRepository.getNetWorth(currency)` in the backend, which combines:
-- **Liquid**: Latest bank balances from the `bank_balances_mv` materialized view
-- **Investments**: Latest portfolio value from `portfolio_performance_snapshots`
+The net worth is computed by `infoRepository.getNetWorthFromSnapshots(currency)` in the backend, which combines:
+- **Investments**: Pre-computed daily portfolio values from `portfolio_performance_snapshots` (includes unit-based assets: stocks, ETFs, crypto, metals, AND fixed-income: real estate, savings, bonds)
+- **Liquid**: Daily bank account balances derived from the transactions table (latest balance per account per day via lateral join, with fallback to cumulative transaction flow)
+
+Key architectural change: **No network calls at request time.** All investment values come from `portfolio_performance_snapshots`, which is populated offline by the snapshot service. Fixed-income investments (real_estate, savings, bond) are included in daily snapshots via their `current_price` applied from their `created_at` date onward.
 
 The endpoint uses a sophisticated caching strategy with **inflight request coalescing** to prevent duplicate computations:
 
 ```javascript
-// 60-second TTL cache with inflight deduplication
-const cachedData = getCachedNetWorth(cacheKey);
-if (cachedData) return res.json(cachedData);
-
-// If another request is in flight, await it instead of starting a new one
-if (cachedEntry?.inflight) {
-  const data = await cachedEntry.inflight;
-  return res.json(data);
-}
+// 5-minute TTL cache with inflight deduplication
+const data = await resolveCacheWithInflight(netWorthResponseCache, cacheKey, {
+  ttlMs: NET_WORTH_CACHE_TTL_MS,
+  requireData: true,
+  keepPreviousData: true,
+  loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
+});
 ```
 
 Implementation notes:
 - Route-level cache behavior in `info` routes is now centralized through shared helpers (`getFreshCachedData`, `setCachedData`, `setInflightCache`, `resolveCacheWithInflight`) and reused by both `GET /api/info/net-worth` and `GET /api/info/portfolio-performance`, preserving TTL and concurrent-request deduplication behavior while reducing duplicate logic ([[apps/node-backend/src/routes/info.js]]).
 - `GET /api/info/category-breakdown` now uses a dedicated repository path (`getCategoryBreakdown`) instead of full `getStatistics`, and hot-path info route imports (exchange-rates + portfolio-performance snapshot service) are module-scoped to remove repeated dynamic import overhead without changing API responses ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
 - Info-route response caches now opportunistically prune expired entries and enforce a bounded maximum entry count to prevent long-lived unbounded memory growth while keeping inflight dedupe semantics intact ([[apps/node-backend/src/routes/info.js]]).
-- Net-worth historical unit-price backfill now fetches per-investment historical quotes with bounded concurrency (`NET_WORTH_HISTORICAL_FETCH_CONCURRENCY`) instead of unbounded fan-out, preserving daily valuation logic while improving stability on large portfolios ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- **Snapshot-backed computation:** Investment values no longer fetched from price providers at request time. Daily snapshots include fixed-income value in the `cash_value` column, computed from fixed-income investments' `current_price` applied from `created_at` onward ([[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]).
 
 ## Chart Architecture
 
@@ -164,9 +165,11 @@ Three KPI cards at the top:
 ### Statistics Row
 
 Three additional cards below the chart:
-- **Peak**: Highest net worth recorded
-- **Lowest**: Lowest net worth recorded
+- **Peak**: Highest net worth recorded (seeded with current net worth to prevent invalid display when snapshots are empty)
+- **Lowest**: Lowest net worth recorded (seeded with current net worth to prevent invalid display when snapshots are empty)
 - **Days Tracked**: Total number of daily snapshots
+
+Implementation note: When a brand-new user has no historical snapshots (or all data is filtered out), the peak and trough calculations are seeded with `current.netWorth` instead of `±Infinity` to avoid displaying "€-∞" and "€∞" in the cards.
 
 ### Daily Breakdown Table
 

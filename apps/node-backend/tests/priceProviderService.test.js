@@ -30,7 +30,6 @@ import {
   fetchLivePrices,
   fetchLivePricesDetailed,
   fetchHistoricalPrices,
-  backfillHistoricalAssetQuotes,
   sanitizePersistedKinesisHistory,
   getHistoricalPriceAt,
   SUPPORTED_PROVIDERS,
@@ -705,88 +704,6 @@ describe('Price Provider Service', () => {
       expect(points).toEqual([
         { timestampMs: Date.UTC(2026, 0, 4, 12, 0, 0, 0), price: 88 },
       ]);
-    });
-  });
-
-  describe('backfillHistoricalAssetQuotes', () => {
-    it('returns zero summary when there are no held assets', async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-
-      const result = await backfillHistoricalAssetQuotes();
-
-      expect(result).toEqual({ processed: 0, withHistory: 0, failed: 0 });
-    });
-
-    it('counts investment as backfilled when persisted history exists', async () => {
-      query
-        .mockResolvedValueOnce({
-          rows: [
-            {
-              id: 33,
-              asset_class: 'stock',
-              currency: 'USD',
-              price_provider: 'manual',
-              price_provider_id: null,
-              symbol: 'AAPL',
-              price_provider_url: null,
-              price_provider_latest_url: null,
-              price_provider_latest_path: null,
-              price_provider_history_url: null,
-              price_provider_history_path: null,
-              price_provider_history_ts_path: null,
-              price_provider_history_price_path: null,
-              first_tx_date: '2025-01-01',
-              held_units: '2',
-            },
-          ],
-        })
-        .mockResolvedValueOnce({
-          rows: [{ price_date: '2025-01-01', close_price: '99.5' }],
-        });
-
-      const result = await backfillHistoricalAssetQuotes();
-
-      expect(result).toEqual({ processed: 1, withHistory: 1, failed: 0 });
-    });
-
-    it('increments failed count when historical fetch throws', async () => {
-      query.mockResolvedValueOnce({
-        rows: [
-          {
-            id: 55,
-            asset_class: 'stock',
-            currency: 'USD',
-            price_provider: 'yahoo',
-            price_provider_id: 'AAPL',
-            symbol: 'AAPL',
-            price_provider_url: null,
-            price_provider_latest_url: null,
-            price_provider_latest_path: null,
-            price_provider_history_url: null,
-            price_provider_history_path: null,
-            price_provider_history_ts_path: null,
-            price_provider_history_price_path: null,
-            first_tx_date: '2025-01-01',
-            held_units: '2',
-          },
-        ],
-      });
-
-      query.mockImplementationOnce(async () => ({ rows: [{
-        id: 55,
-        asset_class: 'stock',
-        currency: 'USD',
-        price_provider: 'yahoo',
-        price_provider_id: 'AAPL',
-        symbol: 'AAPL',
-        first_tx_date: '2025-01-01',
-      }] }));
-
-      // next call inside fetchHistoricalPrices should throw
-      query.mockRejectedValueOnce(new Error('db load failed'));
-
-      const result = await backfillHistoricalAssetQuotes();
-      expect(result).toEqual({ processed: 1, withHistory: 0, failed: 1 });
     });
   });
 
