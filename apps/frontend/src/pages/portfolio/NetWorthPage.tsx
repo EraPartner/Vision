@@ -481,9 +481,9 @@ export default function NetWorthPage() {
     );
   }
 
-  // Min/max for chart (avoid spread on large arrays)
-  let peak = -Infinity;
-  let trough = Infinity;
+  // Min/max for chart (avoid spread on large arrays); seed with current so empty snapshots stays valid
+  let peak = current.netWorth;
+  let trough = current.netWorth;
   for (const s of snapshots) {
     if (s.netWorth > peak) peak = s.netWorth;
     if (s.netWorth < trough) trough = s.netWorth;
