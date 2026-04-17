@@ -249,6 +249,9 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 
 ---
 
+> [!info] Locked contracts (Phase 8)
+> Currency round-trip correctness is pinned by [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]]. Bounded random amount + rate pairs must satisfy `convert(convert(x, A→B), B→A) ≈ x` within cent tolerance, and cross-rate composition `A→B→C` must equal the direct `A→C` conversion within the same tolerance. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY|Calculation Inventory]].
+
 ## See Also
 
 - [[docs/reference/data-model#ExchangeRateCache]] - Database schema

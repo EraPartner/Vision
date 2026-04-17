@@ -227,6 +227,9 @@ Generates amortization schedules for loan-type planned transactions. Pure calcul
 
 **Testing:** Covered by golden-fixture test suites in [[apps/node-backend/tests/services/loanSchedule.golden.test.js]] and [[apps/node-backend/tests/services/recurrence.golden.test.js]]. See [[docs/reference/code-patterns#golden-fixture-pattern|Code Patterns: Golden-Fixture Pattern]] for workflow.
 
+> [!info] Locked contracts (Phase 8)
+> Amortization and recurrence invariants are pinned by property tests in [[apps/node-backend/tests/property/loanSchedule.property.test.js]] and [[apps/node-backend/tests/property/recurrence.property.test.js]]. Locked invariants include: sum of principal rows = original principal (amortizing), remaining principal monotonically decreases, recurrence `calculateNextDate` is strictly forward-moving and cadence-consistent. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY|Calculation Inventory]].
+
 ### `recurringDetectionService.js`
 **File:** [[apps/node-backend/src/services/recurringDetectionService.js]]
 

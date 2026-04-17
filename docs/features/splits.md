@@ -117,6 +117,9 @@ Overpayment protection operates at three layers:
 2. **Database level** — `fn_split_payment_overpayment_guard()` trigger raises SQLSTATE 23514 if invariant violated
 3. **Audit level** — Every accepted write is recorded in `split_audit` for forensic reconstruction
 
+> [!info] Locked contracts (Phase 8)
+> The split allocation and payment-cap invariants are pinned by property tests in [[apps/node-backend/tests/property/splits.property.test.js]] — bounded random split sets must always satisfy `sum(splits) ≤ transactionTotal + CENT_TOLERANCE` and `sum(payments) ≤ split.amount + CENT_TOLERANCE`. Any change to the calc surface must keep these invariants green. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/golden/INVENTORY|Calculation Inventory]].
+
 ---
 
 ## API Endpoints

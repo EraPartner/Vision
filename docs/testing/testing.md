@@ -232,6 +232,69 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 
 Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.js]]
 
+### Property Test Pattern (Phase 8)
+
+Property tests complement golden fixtures by locking **invariants** rather than examples. Where a golden fixture asserts a specific input maps to a specific output, a property test asserts a universal law holds for every randomly generated input in a bounded domain.
+
+**Conventions:**
+
+- **Location:** `apps/node-backend/tests/property/<module>.property.test.js`
+- **PRNG:** inline [`mulberry32`](https://en.wikipedia.org/wiki/Xorshift) seeded per-suite — deterministic across runs so CI failures reproduce locally
+- **Iterations:** 50–500 cases per invariant (bounded — property tests run on every `bun vitest run`)
+- **Shape:** Arrange random case → Act on module-under-test → Assert invariant holds (not a specific numeric value)
+- **No external I/O:** DB and `fetch` are mocked so the suite is hermetic (see `currencyRoundTrip` for the fallback-rates stubbing pattern)
+
+**Example skeleton:**
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.js';
+
+const CENT = 0.01;
+
+function seeded(seed) {
+  let t = seed >>> 0;
+  return function next() {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe('loanSchedule principal invariant', () => {
+  it('sum(principal) ≈ principal within 1¢ across all loan_types', () => {
+    const rng = seeded(0xC0FFEE);
+    for (let i = 0; i < 200; i++) {
+      const input = randomCase(rng);          // bounded random generator
+      const schedule = generateLoanRepaymentSchedule(input);
+      const paid = schedule.reduce((s, r) => s + r.principal_amount, 0);
+      expect(Math.abs(paid - input.principal)).toBeLessThanOrEqual(CENT);
+    }
+  });
+});
+```
+
+**Invariants locked in Phase 8:**
+
+| Module | Invariant | Test |
+|---|---|---|
+| `loanSchedule.js` | `sum(principal_amount) ≈ principal ±1¢`; 0% APR; final remaining == 0 | [[apps/node-backend/tests/property/loanSchedule.property.test.js]] |
+| `recurrence.js` | Strict monotonic advance + `iterate(n) == iterate(n-1) + step`; Jan-31 clamp | [[apps/node-backend/tests/property/recurrence.property.test.js]] |
+| `splits.js` | `split.amount == sum(payments) + remaining`; overpayment blocked; zero-balance filtered | [[apps/node-backend/tests/property/splits.property.test.js]] |
+| `aggregation/monthly.js` | `sum(monthly income/expense/net) == yearly ±1¢`; net identity | [[apps/node-backend/tests/property/monthlyYearly.property.test.js]] |
+| `aggregation/category.js` | `sum(by_category) + excluded_total == grand_total ±1¢` | [[apps/node-backend/tests/property/categoryTotal.property.test.js]] |
+| `calculations/currency.js` | `convert(convert(x, A, B), B, A) ≈ x`; EUR→EUR identity; triangulation | [[apps/node-backend/tests/property/currencyRoundTrip.property.test.js]] |
+
+**When to add a property test vs. a golden fixture:**
+
+- Reach for a **golden** when the output shape is a fixed structure a human should be able to eyeball (amortization schedule, recurrence date, dedup hash).
+- Reach for a **property** when the law spans a family of inputs too large to enumerate (every loan config, every FX pair, every split/payment combination).
+- Most calc modules deserve both — goldens pin representative shapes, properties catch drift golden tables would miss.
+
+Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern|Golden-Fixture Pattern]], [[apps/node-backend/tests/golden/INVENTORY.md|Calc Inventory Lock]], [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]].
+
 ## Test Coverage Areas
 
 ### Recent provider propagation coverage

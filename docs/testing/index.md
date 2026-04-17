@@ -2,12 +2,13 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-04-11
+date: 2026-04-17
 tags:
   - testing
   - index
   - quality
   - vitest
+  - phase-8
 description: Testing strategies, patterns, and best practices for the Vision project
 aliases:
   - testing
@@ -34,7 +35,9 @@ SORT title ASC
 | Topic | Description |
 |-------|-------------|
 | [[docs/testing/testing\|Testing Guide]] | Comprehensive testing guide with patterns and best practices |
+| [[docs/testing/testing#property-test-pattern-phase-8\|Property Test Pattern]] | Deterministic seeded-PRNG invariant testing (Phase 8) |
 | [[docs/testing/test-inventory\|Test Inventory]] | Current test coverage status and gaps |
+| [[apps/node-backend/tests/golden/INVENTORY\|Calculation Inventory]] | G/P/S coverage matrix — merge-gate source-of-truth |
 
 ## Test Types
 
@@ -43,6 +46,8 @@ SORT title ASC
 | **Unit Tests** | Individual functions/services | Vitest |
 | **Integration Tests** | API endpoints | Vitest + Supertest |
 | **Component Tests** | Frontend UI | React Testing Library |
+| **Property Tests** | Pure-calc invariants (Phase 8) | Vitest + mulberry32 seeded PRNG |
+| **Golden Fixtures** | Pure-calc regression lock | Vitest + JSON snapshots (`UPDATE_GOLDENS=1`) |
 
 ## Test Coverage Areas
 
@@ -116,6 +121,13 @@ bun vitest run src/path/to/test.test.js
 - Related source: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Validation + coverage snapshot: `bun vitest run tests/routes/info.test.js`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
+
+### 2026-04-17 Phase 8 — Property tests + Calculation Inventory lock
+
+- Six property-test suites under `apps/node-backend/tests/property/*.property.test.js` lock invariants for loan-schedule amortization, recurrence cadence, split allocation, monthly aggregation, category totals, and currency round-trip. All use deterministic `mulberry32` seeded PRNG and bounded 50–500 iterations.
+- `apps/node-backend/tests/golden/INVENTORY.md` becomes the merge-gate source-of-truth — every pure-calc function carries a G (golden) / P (property) / S (smoke) marker. New calc code must update the inventory before landing.
+- Aggregation shadow-mode middleware (see [[docs/adr/016-aggregation-shadow-mode|ADR-016]]) is exercised by dedicated unit tests covering `diffPayloads`, envelope unwrap, Postgres NUMERIC coercion, threshold edges, and legacy-failure isolation.
+- See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] for the convention.
 
 ### Coverage update addendum (2026-04-11, portfolio transaction repository)
 

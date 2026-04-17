@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-16
+date: 2026-04-17
 tags: [knowledge-base, index, project, overview]
 description: Main entry point to the Vision project documentation - financial transaction management application
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -155,6 +155,15 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-17 Phase 8 Correctness Hardening
+
+- **ADR-016**: Aggregation shadow-mode middleware (`createAggregationShadow`) cross-checks new `/api/aggregations/*` against legacy `/api/info/*` in production. Default 1¢ threshold, `queueMicrotask` fire-and-forget, envelope-aware diff. Removal gated on Phase 9 criteria.
+- **Property-test pattern** established: deterministic `mulberry32` seeded PRNG, 50–500 bounded iterations, invariants over examples. Six suites under `apps/node-backend/tests/property/` covering loan-schedule amortization, recurrence cadence, split allocation, monthly aggregation, category totals, and currency round-trip.
+- **Calculation Inventory lock**: `apps/node-backend/tests/golden/INVENTORY.md` is now the merge-gate source-of-truth — every calc function carries a G (golden) / P (property) / S (smoke) marker. New calc code must update the inventory before landing.
+- **Feature-doc contracts**: splits, planned/recurrence, and currency feature docs reference the property-test invariants as locked contracts.
+
+See [[docs/adr/016-aggregation-shadow-mode|ADR-016]], [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]], [[docs/reference/code-patterns#calculation-inventory-lock-phase-8|Calculation Inventory Lock]]
 
 ### 2026-04-16 Phase 1 Aggregation-Layer Infrastructure
 

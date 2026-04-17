@@ -620,6 +620,18 @@ This workflow is ideal for business-logic regressions where the visual shape of 
 4. Review the generated `.expected.json` to ensure it's correct
 5. Commit both fixtures to git
 
+### Calculation Inventory Lock (Phase 8)
+
+The authoritative coverage matrix for every non-trivial calc lives in [[apps/node-backend/tests/golden/INVENTORY.md|tests/golden/INVENTORY.md]]. It enumerates each function in `services/calculations/` with three coverage markers:
+
+- **G** — golden-fixture count (input/expected pairs under `tests/golden/__fixtures__/<module>/`)
+- **P** — covered by a property test under `tests/property/*.property.test.js`
+- **S** — covered by the aggregation shadow middleware
+
+**Rule:** any new calc (or new aggregation) **must append a row to INVENTORY.md before merge**. A new calc must land with at least one golden input/expected pair; a new aggregation must land registered with the shadow middleware. Fixture drift is intentional only and must be paired with an ADR in the same PR.
+
+See [[docs/testing/testing#Property Test Pattern (Phase 8)|Property Test Pattern]] for invariant-style coverage and [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for the shadow-middleware rollout gate.
+
 ---
 
 ## Aggregation Envelope Pattern (Phase 2)

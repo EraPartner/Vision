@@ -2,8 +2,8 @@
 title: Architecture Decision Records Index
 type: adr-index
 status: active
-date: 2026-04-16
-tags: [adr, index, architecture, decisions, phase-3]
+date: 2026-04-17
+tags: [adr, index, architecture, decisions, phase-8]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -42,6 +42,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-17: Aggregation Shadow Mode
+
+[[docs/adr/016-aggregation-shadow-mode|ADR-016]] — Observational Express middleware (`createAggregationShadow`) shadows new `/api/aggregations/*` responses against legacy `/api/info/*` during Phase 2 → Phase 9 migration window. Default threshold 1¢, `queueMicrotask` fire-and-forget, swallows legacy failures, envelope-aware diff with Postgres NUMERIC string coercion. Removal gated on zero divergence logs across a full release cycle. References [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] and [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]].
 
 ### 2026-04-16: Recipient, Bank Account, and Category Uniqueness Constraints
 
