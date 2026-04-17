@@ -71,11 +71,14 @@
 - **Property test expansion** — property suite currently covers the 6 headline invariants from the plan. Add coverage for: dedup hash idempotency (`hash(normalize(t)) == hash(normalize(normalize(t)))`), filterBuilder parameter stability, LTTB downsample preserves endpoints.
 - **Cross-check sweep script** — one-shot CLI that hits every `/api/aggregations/*` + paired `/api/info/*` over a configurable date window and emits a CSV of divergences. Drives the "30 days" end-to-end verification from the plan without waiting on shadow-mode to accumulate traffic.
 
-## Refactor follow-ups (Phase 9 cleanup — scheduled)
+## Refactor follow-ups (Phase 9 cleanup — blocked on prereqs)
 
-- Remove deprecated `/api/info/*` routes after one full release cycle of zero `aggregation-shadow: divergence detected` warnings.
-- Delete `services/importService.js` (superseded by `services/importPipeline/`).
-- Delete `apps/frontend/src/hooks/statisticsProcessing.ts` (superseded by aggregation endpoints).
-- Delete back-compat shims at `services/loanRepaymentService.js`, `services/recurrenceService.js`, `services/currencyConversionService.js` once imports migrate to `services/calculations/*`.
-- Remove `aggregationShadow` middleware + associated wiring once deprecation is final.
-- Refresh docs: `docs/features/{dashboard,statistics,planned-transactions,splits,imports}.md` + `docs/reference/api-endpoint-matrix.md` + `docs/reference/code-patterns.md` (aggregation endpoint + golden fixture patterns) + ADRs for timezone, aggregation strategy, import pipeline, soft-delete policy.
+Phase 9 audit (2026-04-17): **every code-removal item is blocked**. Each target is still imported by live code paths; upstream migration work from phases 2/3/7 plus real shadow-mode parity data is required before any `rm` lands. Phase 9 completed only the documentation side (honest status + kb-updater pass). Each item lists its unblocker.
+
+- **`/api/info/*` routes** — blocked on `aggregationShadow` wiring + one full release cycle of zero `aggregation-shadow: divergence detected` warnings. Middleware (`src/middleware/aggregationShadow.js`) is locked but never wired; see the "wire aggregationShadow" follow-up under Phase 8.
+- **`services/importService.js`** — still called by `services/rawTransactionImportService.js`; that caller runs whenever `IMPORT_PIPELINE_V2` is off (default). Unblock: flip `IMPORT_PIPELINE_V2` default on, migrate `rawTransactionImportService` off `importCSV`, run one release cycle without divergence, then delete.
+- **`apps/frontend/src/hooks/statisticsProcessing.ts`** — still imported by `hooks/useStatistics.ts`. Unblock: rewrite `useStatistics` to consume `/api/aggregations/*` envelopes (blocked on the Phase 1 MV extension for full-history `allYears` / `yearlyComparison` / `categoryPivot`, listed under "Refactor follow-ups (Phase 2 dashboard perf)").
+- **`services/loanRepaymentService.js` + `services/recurrenceService.js` shims** — still imported by `routes/plannedTransactions.js` (`generateLoanRepaymentSchedule`, `calculateNextDate`). Unblock: migrate the route + tests to `services/calculations/{loanSchedule,recurrence}.js`, then remove the shims.
+- **`services/currencyConversionService.js`** — plan called this a back-compat shim; audit shows it's the *live* implementation that `services/calculations/currency.js` re-exports from. Nothing to delete; strike from the cleanup list once the ADR is refreshed.
+- **`aggregationShadow` middleware** — cannot be removed until it has been wired, collected a full release cycle of parity data, and driven the `/api/info/*` removal. Retain as a parked Phase 8 tool.
+- **Docs refresh** — partial pass landed via `vision-kb-updater` after Phase 8; the remaining targets (`docs/features/{dashboard,statistics,planned-transactions,splits,imports}.md`, `docs/reference/api-endpoint-matrix.md`, `docs/reference/code-patterns.md`, ADRs for timezone/aggregation strategy/import pipeline/soft-delete) stay open until the corresponding code removals actually happen — otherwise the docs would lie.
