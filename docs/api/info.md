@@ -2,7 +2,7 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-16
+date: 2026-04-17
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -12,6 +12,9 @@ related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/re
 # Info & Analytics API
 
 Comprehensive analytics and statistics endpoints for dashboards and financial insights.
+
+> [!warning] Deprecation Status (Phase 9)
+> These endpoints are live and currently the production API surface. Phase 2-8 migrated new logic to `/api/aggregations/*` endpoints (see [[docs/adr/010-phase1-aggregation-strategy]], [[docs/adr/011-phase2-aggregation-envelope-standard]]). Removal of `/api/info/*` is **blocked on shadow-mode parity**: the [[docs/adr/016-aggregation-shadow-mode|aggregation shadow middleware]] (Phase 8) must be wired into production, verified for zero divergence over one full release cycle, and collect proof that `/api/aggregations/*` has full production traffic coverage. See TODO.md Phase 9 section for unblocking steps.
 
 ## Base URL
 

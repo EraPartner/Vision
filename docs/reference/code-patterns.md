@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-16
+date: 2026-04-17
 tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, and streaming CSV exports
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services]
@@ -547,7 +547,7 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 | `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
 | `services/calculations/recurrence.js` | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
 
-**Back-compat:** Old paths (`services/loanRepaymentService.js`, `services/recurrenceService.js`) remain as re-export shims pointing to canonical modules. New code should use the canonical paths.
+**Migration Status (Phase 9):** Old paths (`services/loanRepaymentService.js`, `services/recurrenceService.js`) are still the live implementation and are directly imported by `routes/plannedTransactions.js`. Migration to the canonical `services/calculations/` paths is blocked on Phase 3 completion. Once routes migrate, the old shims can be removed in Phase 9.
 
 ---
 

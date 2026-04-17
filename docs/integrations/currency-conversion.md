@@ -2,7 +2,7 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-04-16
+date: 2026-04-17
 tags: [integration, currency, exchange-rates, phase-0]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion. Phase 0 consolidation under way.
 related_code: ["apps/node-backend/src/services/calculations/currency.js", "apps/node-backend/src/services/currencyConversionService.js"]
@@ -169,9 +169,9 @@ import {
 } from './services/calculations/currency.js';
 ```
 
-This is a re-export façade that consolidates the public API. The actual implementation lives in `services/currencyConversionService.js` until the merge completes (Phase 0 step 4).
+This is a re-export façade from the live implementation at `services/currencyConversionService.js`. The service is not deprecated; it's the **active implementation** for all currency conversion operations.
 
-**Legacy import (still supported):**
+**Direct import (also supported):**
 ```javascript
 import { convertToEur } from './services/currencyConversionService.js';
 ```
@@ -183,7 +183,7 @@ import { convertToEur } from './services/currencyConversionService.js';
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 ```
 
-**Phase 0 Note:** In-memory cache and 90-day ECB historical cache will migrate to the `exchange_rate_cache` table during Phase 0 consolidation.
+**Implementation Note:** In-memory cache (24h TTL) is the current caching strategy. Postgres-backed `exchange_rate_cache` table was planned for Phase 0 consolidation but is not yet implemented; in-memory rates remain standard.
 
 ### Batch Conversion
 

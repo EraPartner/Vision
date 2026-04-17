@@ -2,7 +2,7 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-04-16
+date: 2026-04-17
 tags: [backend, services, reference, business-logic]
 description: Complete reference for all 17 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for snapshot-backed net worth computation and quoteBackfillService refactor.
 aliases: [services, service layer, business logic, backend services]
@@ -113,6 +113,8 @@ Repository Layer (SQL queries)
 
 **File:** [[apps/node-backend/src/services/currencyConversionService.js]]  
 **Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary), database, and hardcoded fallbacks.
+
+**Status:** Live implementation (NOT deprecated). Exported as the canonical import from `services/calculations/currency.js`.
 
 ### Exported Functions
 
