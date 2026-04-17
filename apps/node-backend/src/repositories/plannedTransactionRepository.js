@@ -393,6 +393,74 @@ export const plannedTransactionRepository = {
     );
   },
 
+  /**
+   * Atomically record an execution and advance the parent planned_transactions row.
+   *
+   * Phase 3 replacement for sequential `addExecution` + `update` calls. Runs
+   * both writes inside a single BEGIN/COMMIT so a mid-flight failure cannot
+   * leave an execution row without its matching state advance.
+   *
+   * Idempotent via the UNIQUE(planned_transaction_id, executed_transaction_id)
+   * index (alembic 0027 / schemaInit). A retried request raises Postgres error
+   * 23505, which this method treats as success and returns `{ duplicate: true }`
+   * so the caller can respond without creating a new execution.
+   *
+   * @param {number} plannedTransactionId
+   * @param {number} executedTransactionId
+   * @param {string} executionDate - YYYY-MM-DD
+   * @param {object} updateFields - sanitized fields for planned_transactions update
+   * @returns {Promise<{ duplicate: boolean }>}
+   */
+  async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}) {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      try {
+        await client.query(
+          `INSERT INTO planned_transaction_executions
+             (planned_transaction_id, executed_transaction_id, execution_date)
+           VALUES ($1, $2, $3)`,
+          [plannedTransactionId, executedTransactionId, executionDate]
+        );
+      } catch (err) {
+        // 23505 = unique_violation → idempotent retry of the same execute call.
+        if (err && err.code === '23505') {
+          await client.query('ROLLBACK');
+          return { duplicate: true };
+        }
+        throw err;
+      }
+
+      const sanitized = sanitizeUpdateFields('planned_transactions', updateFields);
+      const setClauses = [];
+      const params = [];
+      let paramIdx = 1;
+      for (const [key, value] of Object.entries(sanitized)) {
+        if (value === undefined) continue;
+        setClauses.push(`"${key}" = $${paramIdx++}`);
+        params.push(value);
+      }
+
+      if (setClauses.length > 0) {
+        setClauses.push('updated_at = NOW()');
+        params.push(plannedTransactionId);
+        await client.query(
+          `UPDATE planned_transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`,
+          params
+        );
+      }
+
+      await client.query('COMMIT');
+      return { duplicate: false };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
   async replaceLoanSchedule(plannedTransactionId, scheduleEntries = []) {
     const client = await getClient();
     try {

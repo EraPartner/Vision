@@ -32,15 +32,20 @@ vi.mock('../../src/repositories/recipientRepository.js', () => ({
   },
 }));
 
+vi.mock('../../src/services/recipientMergeService.js', () => ({
+  mergeRecipients: vi.fn(),
+}));
+
 vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 import recipientRepository from '../../src/repositories/recipientRepository.js';
+import { mergeRecipients as mergeRecipientsAtomic } from '../../src/services/recipientMergeService.js';
 await import('../../src/routes/recipients.js');
 
 describe('Recipient Routes', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => vi.resetAllMocks());
 
   describe('GET /', () => {
     it('should return empty list', async () => {
@@ -201,7 +206,10 @@ describe('Recipient Routes', () => {
       recipientRepository.getById
         .mockResolvedValueOnce({ id: 1, name: 'PRIMARY', primary_recipient_id: null })
         .mockResolvedValueOnce({ id: 1, name: 'PRIMARY', primary_recipient_id: null });
-      recipientRepository.mergeRecipients.mockResolvedValue([3, 4]);
+      mergeRecipientsAtomic.mockResolvedValue({
+        mergedAliasIds: [3, 4],
+        reassigned: { transactions: 7, splits: 0, planned: 0, bankAccounts: 1 },
+      });
       recipientRepository.getAliases.mockResolvedValue([
         { id: 3, name: 'ALIAS A' },
         { id: 4, name: 'ALIAS B' },
@@ -211,10 +219,11 @@ describe('Recipient Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/:id/merge'](req, res);
 
-      expect(recipientRepository.mergeRecipients).toHaveBeenCalledWith(1, [3, 4]);
+      expect(mergeRecipientsAtomic).toHaveBeenCalledWith(1, [3, 4]);
       expect(res.json).toHaveBeenCalledWith({
         primary: { id: 1, name: 'PRIMARY', primary_recipient_id: null, links: [] },
         merged_ids: [3, 4],
+        reassigned: { transactions: 7, splits: 0, planned: 0, bankAccounts: 1 },
         aliases: [
           { id: 3, name: 'ALIAS A' },
           { id: 4, name: 'ALIAS B' },

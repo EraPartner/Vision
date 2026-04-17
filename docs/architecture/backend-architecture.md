@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: Node.js backend architecture and diagrams
-date: 2026-04-10
-tags: [architecture, backend, uml, plantuml]
+date: 2026-04-16
+tags: [architecture, backend, uml, plantuml, phase-6]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -334,6 +334,14 @@ package "Supporting Services" {
     +normalizeForMatching(text)
   }
 
+  class RecipientMergeService {
+    +mergeRecipients(primaryId, aliasIds)
+  }
+
+  class RecipientNormalizationService {
+    +findBestRecipientMatches(names, opts)
+  }
+
   class IBANService {
     +validate(iban)
   }
@@ -348,6 +356,54 @@ ImportService --> DeduplicationService
 
 @enduml
 ```
+
+## Aggregation Calculation Layer (Phase 2)
+
+Pure computation modules for transaction aggregations, organized under `services/calculations/aggregation/`.
+
+**Envelope Standard:**
+
+All aggregation endpoints return:
+
+```json
+{
+  "data": { /* calculation-specific result */ },
+  "meta": {
+    "source": "mv" | "live",
+    "computedAt": "ISO 8601 timestamp"
+  }
+}
+```
+
+**Source Heuristic:**
+- `'mv'` — Unfiltered request served from materialized view (fast, stale)
+- `'live'` — Exclusions force dynamic transaction scan (slower, current)
+
+**Modules:**
+
+| Module | Function | Endpoint |
+|--------|----------|----------|
+| `_envelope.js` | `buildEnvelope(data, { source, computedAt })` | All endpoints |
+| `monthly.js` | `computeMonthlySummary({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/monthly-summary` |
+| `category.js` | `computeCategoryBreakdown({ targetCurrency })` | `/category-breakdown` |
+| `recipient.js` | `computeRecipientInsights({ targetCurrency })` | `/recipient-insights` |
+| `cashflow.js` | `computeCashflowComparison({ targetCurrency, excludedCategoryIds, excludedRecipientIds })` | `/cashflow-comparison` |
+| `averageVsCurrent.js` | `computeAverageVsCurrent({ targetCurrency })` | `/average-vs-current` (always live) |
+| `bankBalances.js` | `computeBankBalances({ targetCurrency })` | `/bank-balances` |
+
+**Repository Integration:**
+
+- `getMonthlyFinancialSummary()` now accepts 3rd positional parameter `excludedRecipientIds` (defaults `[]`)
+- `getCashflowComparison()` already carries both exclusion lists
+- Other reads use existing repository interfaces; no breaking changes
+
+**Contract Tests:**
+
+- `apps/node-backend/tests/services/aggregationCalcs.test.js` — 13 tests covering envelope shape, argument forwarding, and source heuristic
+
+Source code: [[apps/node-backend/src/services/calculations/aggregation]]
+
+---
 
 ## API Layer
 
@@ -376,6 +432,7 @@ package "Routes" {
   class SavedChartsRouter
   class SplitsRouter
   class MarketLookupRouter
+  class AggregationsRouter
   class InfoRouter
   class AdminRouter
 }
@@ -395,6 +452,7 @@ Main --> PlannedTransactionsRouter
 Main --> InvestmentsRouter
 Main --> ImportRouter
 Main --> SettingsRouter
+Main --> AggregationsRouter
 
 TransactionsRouter --> TR
 CategoriesRouter --> CR

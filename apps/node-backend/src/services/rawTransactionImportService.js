@@ -25,7 +25,10 @@ import {
 } from '../repositories/rawTransactionRepository.js';
 import { importCSV } from './importService.js';
 import { isDuplicateByFields } from './deduplication.js';
-import { normalizeForMatching } from './textNormalization.js';
+import {
+  normalizeForMatching,
+  findBestRecipientMatch,
+} from './calculations/normalization.js';
 
 const RAW_IMPORT_BATCH_SIZE = 20;
 
@@ -383,20 +386,24 @@ async function processRawImportRow(txData, bankType) {
 }
 
 /**
- * Get or create a recipient by name (reused from importService).
+ * Get or create a recipient by name.
+ *
+ * Phase 6: matching now goes through `findBestRecipientMatch` which uses
+ * the pg_trgm GIN index (migration 0026) — exact normalized hit preferred,
+ * fuzzy fallback at DEFAULT_MATCH_THRESHOLD. Creation uses
+ * `INSERT ... ON CONFLICT (normalized_name) DO NOTHING` against the
+ * UNIQUE constraint added in migration 0029, so concurrent imports that
+ * race on the same normalized name converge on a single recipient row.
  */
 async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (!name) name = 'UNKNOWN';
   const upperName = name.toUpperCase().trim();
   const normalizedName = normalizeForMatching(name);
 
-  const existing = await query(
-    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-    [normalizedName]
-  );
-
-  if (existing.rows.length > 0) {
-    const recipientId = existing.rows[0].id;
+  // 1. Try exact + fuzzy match via pg_trgm-backed batch matcher.
+  const match = await findBestRecipientMatch(name);
+  if (match) {
+    const recipientId = match.recipientId;
     if (accountNumber) {
       const bankAcctExists = await query(
         `SELECT id FROM recipient_bank_accounts WHERE recipient_id = $1 AND account_number = $2 LIMIT 1`,
@@ -413,11 +420,29 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
     return recipientId;
   }
 
-  const result = await query(
-    `INSERT INTO recipients (name, normalized_name, is_active) VALUES ($1, $2, true) RETURNING id`,
+  // 2. No match — upsert against UNIQUE(normalized_name). On conflict
+  // another concurrent caller won the race; SELECT to retrieve their row.
+  const upsert = await query(
+    `INSERT INTO recipients (name, normalized_name, is_active)
+     VALUES ($1, $2, true)
+     ON CONFLICT (normalized_name) DO NOTHING
+     RETURNING id`,
     [upperName, normalizedName]
   );
-  const newId = result.rows[0].id;
+
+  let newId;
+  if (upsert.rows.length > 0) {
+    newId = upsert.rows[0].id;
+  } else {
+    const existing = await query(
+      `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
+      [normalizedName]
+    );
+    if (!existing.rows.length) {
+      throw new Error(`Recipient upsert produced no row for ${normalizedName}`);
+    }
+    newId = existing.rows[0].id;
+  }
 
   if (accountNumber) {
     await query(

@@ -2,8 +2,8 @@
 title: Features Documentation Index
 type: features-index
 status: active
-date: 2026-04-02
-tags: [features, index, documentation]
+date: 2026-04-16
+tags: [features, index, documentation, phase-6]
 description: Feature documentation for all major capabilities of the Vision application
 aliases: [features, capabilities]
 ---
@@ -30,8 +30,10 @@ SORT title ASC
 - [[docs/features/import\|Imports]] - CSV import with deduplication
 
 ### Organization
-- [[docs/api/categories\|Categories]] - Category management ("GENERAL:DETAIL" format)
-- [[docs/api/recipients\|Recipients]] - Payee/payer management with merge support
+- [[docs/features/categories\|Categories]] - Transaction categorization with GENERAL:DETAIL format and atomic assignment (Phase 6)
+- [[docs/features/recipients\|Recipients]] - Payee/payer management with atomic merge and fuzzy matching (Phase 6)
+- [[docs/api/categories\|Categories API]] - REST endpoint contract
+- [[docs/api/recipients\|Recipients API]] - REST endpoint contract
 
 ### Planning & Scheduling
 - [[docs/features/plannedTransactions\|Planned Payments]] - Scheduled and recurring transactions, including loan support

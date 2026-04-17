@@ -28,6 +28,14 @@ import type {
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 import logger from '@/lib/logger';
 
+export interface AggregationEnvelope<T> {
+    data: T;
+    meta: {
+        computedAt: string;
+        source: 'mv' | 'live';
+    };
+}
+
 export interface ImportProgress {
     phase: string;
     current: number;
@@ -998,6 +1006,104 @@ class ApiClient {
 
     async deleteSplit(splitId: number): Promise<any> {
         return this.request(`/api/splits/${splitId}`, { method: 'DELETE' });
+    }
+
+    // ==================== Aggregations (Phase 2) ====================
+
+    /**
+     * Standard envelope returned by every /api/aggregations/* endpoint.
+     * `source` distinguishes materialized-view reads from live compute so
+     * the UI can surface freshness and shadow-mode can correlate divergence.
+     */
+
+    async getAggregationMonthlySummary(params?: {
+        excluded_category_ids?: number[];
+        excluded_recipient_ids?: number[];
+        currency?: string;
+    }): Promise<AggregationEnvelope<{
+        months: Array<{
+            month: number;
+            year: number;
+            period_start: string;
+            period_end: string;
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+        }>;
+        summary: {
+            total_spending: number;
+            total_income: number;
+            net_amount: number;
+            transaction_count: number;
+            period_start: string;
+            period_end: string;
+        };
+    }>> {
+        const q = this.buildExclusionQuery(params);
+        return this.request(`/api/aggregations/monthly-summary${q ? `?${q}` : ''}`);
+    }
+
+    async getAggregationCategoryBreakdown(params?: { currency?: string }): Promise<AggregationEnvelope<{
+        categories: Array<{ id: number | null; name: string; count: number; total: number }>;
+    }>> {
+        return this.requestWithQuery('/api/aggregations/category-breakdown', params);
+    }
+
+    async getAggregationRecipientInsights(params?: { currency?: string }): Promise<AggregationEnvelope<{
+        topMerchants: Array<{
+            recipientId: number;
+            name: string;
+            totalSpend: number;
+            transactionCount: number;
+            avgAmount: number;
+            firstSeen: string;
+            lastSeen: string;
+        }>;
+        monthOverMonth: Array<{
+            recipientId: number;
+            name: string;
+            currentSpend: number;
+            previousSpend: number;
+            changePercent: number;
+        }>;
+    }>> {
+        return this.requestWithQuery('/api/aggregations/recipient-insights', params);
+    }
+
+    async getAggregationCashflowComparison(params?: {
+        excluded_category_ids?: number[];
+        excluded_recipient_ids?: number[];
+        currency?: string;
+    }): Promise<AggregationEnvelope<{
+        days_in_month: number;
+        current_day: number;
+        month: number;
+        year: number;
+        without_planned: Array<{ day: number; average: number; current: number | null }>;
+        with_planned: Array<{ day: number; average: number; current: number | null }>;
+    }>> {
+        const q = this.buildExclusionQuery(params);
+        return this.request(`/api/aggregations/cashflow-comparison${q ? `?${q}` : ''}`);
+    }
+
+    async getAggregationAverageVsCurrent(params?: { currency?: string }): Promise<AggregationEnvelope<unknown>> {
+        return this.requestWithQuery('/api/aggregations/average-vs-current', params);
+    }
+
+    async getAggregationBankBalances(params?: { currency?: string }): Promise<AggregationEnvelope<{
+        accounts: Array<{
+            bank_account: string;
+            balance: number;
+            transaction_count: number;
+            first_transaction: string;
+            last_transaction: string;
+        }>;
+        total_net_position: number;
+        history: Record<string, Array<{ month: string; balance: number }>>;
+        total_history: Array<{ month: string; balance: number }>;
+    }>> {
+        return this.requestWithQuery('/api/aggregations/bank-balances', params);
     }
 
     // ==================== Admin / Maintenance ====================

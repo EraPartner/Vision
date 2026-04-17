@@ -38,6 +38,11 @@ build/
 *.log
 coverage/
 
+# Playwright (baseline *-snapshots/ dirs ARE tracked intentionally)
+test-results/
+playwright-report/
+/playwright/.cache/
+
 # Data
 postgres_data/
 Backups/

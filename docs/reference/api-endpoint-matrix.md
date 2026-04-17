@@ -3,6 +3,7 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-16
+updated: 2026-04-16
 tags: [reference, api, endpoints, matrix, overview]
 description: Complete matrix of all 108 API endpoints organized by resource for quick lookup
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
@@ -18,7 +19,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | GET | `/api/transactions` | List with filtering/pagination | — | [[docs/api/transactions\|Transactions]] |
-| GET | `/api/transactions/export/csv` | Export as CSV | 30 req/min | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
 | POST | `/api/transactions` | Create | — | [[docs/api/transactions\|Transactions]] |
 | PATCH | `/api/transactions/:id` | Update | 30 req/min | [[docs/api/transactions\|Transactions]] |
@@ -57,7 +58,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/planned-transactions` | Create (supports loans) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET | `/api/planned-transactions/:id` | Get single | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | PATCH | `/api/planned-transactions/:id` | Update | 30 req/min | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| POST | `/api/planned-transactions/:id/execute` | Execute | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| POST | `/api/planned-transactions/:id/execute` | Execute (atomic, idempotent — Phase 3) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | DELETE | `/api/planned-transactions/:id` | Hard delete | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
 ## Investments (14 endpoints)
@@ -166,7 +167,22 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/admin/update/apply-and-restart` | Apply and restart | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes | — | [[docs/api/admin\|Admin]] |
 
-## Info/Statistics (18 endpoints)
+## Aggregations (6 endpoints) — Phase 2
+
+Server-computed aggregations with materialized-view/live distinction. Behind `AGGREGATIONS_V2_ENABLED` feature flag.
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/aggregations/monthly-summary` | Monthly income/spending totals | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/category-breakdown` | Spending by category | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/recipient-insights` | Top merchants and month-over-month | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/cashflow-comparison` | Current vs. historical daily flow | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/average-vs-current` | Average vs. current period metrics | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/bank-balances` | Account balances and history | — | [[docs/api/aggregations\|Aggregations]] |
+
+## Info/Statistics (20 endpoints)
+
+Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in Phase 9.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -208,8 +224,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | Recipient Bank Accounts | 5 | 0 |
 | Splits | 11 | 0 |
 | Admin | 7 | 0 |
+| Aggregations (Phase 2) | 6 | 0 |
 | Info/Statistics | 20 | 5 |
-| **Total** | **108** | **7** |
+| **Total** | **114** | **7** |
 
 ## Related
 

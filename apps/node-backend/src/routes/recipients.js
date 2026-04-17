@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import recipientRepository from '../repositories/recipientRepository.js';
+import { mergeRecipients as mergeRecipientsAtomic } from '../services/recipientMergeService.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam, sanitizeString } from '../middleware/validation.js';
 
@@ -133,13 +134,17 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
       return res.status(400).json({ detail: 'Cannot merge into a recipient that is itself an alias. Use its primary instead.' });
     }
 
-    const mergedIds = await recipientRepository.mergeRecipients(primaryId, alias_ids.map(Number));
+    const { mergedAliasIds, reassigned } = await mergeRecipientsAtomic(
+      primaryId,
+      alias_ids.map(Number),
+    );
     const updatedPrimary = await recipientRepository.getById(primaryId);
     const aliases = await recipientRepository.getAliases(primaryId);
 
     res.json({
       primary: { ...updatedPrimary, links: [] },
-      merged_ids: mergedIds,
+      merged_ids: mergedAliasIds,
+      reassigned,
       aliases: aliases.map(a => ({ id: a.id, name: a.name })),
     });
   } catch (err) {

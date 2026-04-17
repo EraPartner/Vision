@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-04-11
+date: 2026-04-16
 tags: [api, transactions, finance]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -41,12 +41,14 @@ Retrieve a list of transactions with filtering and pagination.
 | search | string | null | Search in memo/comment |
 | normalize_to_eur | boolean | false | Convert amounts to EUR |
 | target_currency | string | null | Target currency used when normalize_to_eur=true (defaults to EUR) |
+| include_balance | boolean | false | Compute running balance via SQL window function |
 | sort_by | string | null | Sort field |
 | sort_dir | string | null | Sort direction (asc/desc) |
 
 Notes:
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- `include_balance=true` computes a `balance` field via SQL window function `SUM(amount) OVER (ORDER BY date ASC)` instead of JavaScript post-processing ([[apps/node-backend/src/routes/transactions.js]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
 - Non-`uncategorised` list requests now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips; filters, totals, and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
 - `uncategorised=true` list requests now use a dedicated single-round-trip repository path (`getUncategorisedWithCount`) instead of route-level dual queries; uncategorised row filtering and historical total-count semantics are preserved ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -85,21 +87,34 @@ Notes:
 
 ### GET /api/transactions/export/csv
 
-Export transactions to CSV format.
+Export transactions to CSV format using chunked streaming.
 
-**Query Parameters:** Same as GET /api/transactions
+**Query Parameters:**
+- `start_date`, `end_date`, `bank_account`, `category_id`: Filter exported rows
+- `include_balance` (boolean, default false): Add a "Running Balance" column computed via JavaScript accumulator across chunks
 
-**Response:** CSV file download with headers:
+**Response:** CSV file download with headers (default):
 ```
 Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment
 ```
 
+With `include_balance=true`:
+```
+Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance
+```
+
+**Streaming Behavior (Phase 5):**
+- CSV is streamed in chunks of 1000 rows via `res.write()` to support large exports without memory overhead.
+- Stable `ORDER BY (date ASC, id ASC)` ensures no gaps/duplicates across chunk boundaries.
+- Running balance accumulates in JavaScript so it remains consistent with the sort order when `include_balance=true`.
+- 404 probe query runs before streaming starts; error responses return JSON if no rows match filters.
+
 **Rate Limited:** 30 requests per minute
 
 Implementation note:
-- CSV export row escaping/assembly and filename creation are now handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
-- CSV export now neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
-- Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics ([[apps/node-backend/src/routes/transactions.js]]).
+- CSV export row escaping/assembly and filename creation are handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
+- CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
+- Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id
 
@@ -277,11 +292,17 @@ await apiClient.deleteTransaction(123);
 - [[docs/api/recipients|Recipients API]]
 - [[docs/api/imports|Imports API]]
 
-## Testing Coverage Note (2026-04-11)
+## Testing Coverage Note (2026-04-16 Phase 5)
 
 Recent coverage in [[apps/node-backend/tests/routes/transactions.test.js]] verifies:
-- `normalize_to_eur` conversion path behavior,
-- duplicate detection returning `409`,
-- unresolved `recipient_name`/`category_name` validation branches in patch flow.
+- CSV streaming chunked export via `res.write()` calls and accumulated running balance
+- Formula-neutralization of dangerous prefixes (`=`, `+`, `-`, `@`)
+- 404 probe behavior before streaming starts
+- `include_balance` query param control of running-balance column
+- `normalize_to_eur` conversion path behavior
+- duplicate detection returning `409`
+- unresolved `recipient_name`/`category_name` validation branches in patch flow
 
-Related service: [[apps/node-backend/src/services/currencyConversionService.js]]
+Related services: 
+- [[apps/node-backend/src/services/currencyConversionService.js]]
+- [[apps/node-backend/src/services/filterBuilder.js]] (shared filter construction)

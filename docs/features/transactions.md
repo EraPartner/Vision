@@ -2,11 +2,11 @@
 title: Transactions
 type: feature
 status: active
-date: 2026-04-10
+date: 2026-04-16
 tags: [feature, transactions, finance]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities
-related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/frontend/src/components/shared/VirtualDataTable.tsx", "apps/frontend/src/components/shared/DataTable.tsx", "apps/frontend/src/components/shared/ColumnFilter.tsx", "apps/frontend/src/pages/TransactionsPage.tsx"]
+related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
 # Transactions
@@ -115,6 +115,20 @@ Implementation note:
 
 Code links: [[apps/frontend/src/components/shared/VirtualDataTable.tsx]], [[apps/frontend/src/components/shared/DataTable.tsx]], [[apps/frontend/src/components/shared/ColumnFilter.tsx]], [[apps/frontend/src/pages/TransactionsPage.tsx]], [[apps/frontend/src/pages/RecipientsPage.tsx]]
 
+#### Frontend Page Decomposition (Phase 5)
+
+TransactionsPage has been decomposed into feature-scoped modules under [[apps/frontend/src/features/transactions/]] to improve maintainability and code organization:
+
+- `types.ts` — Shared types: `TableTransaction`, `RawApiTransaction`, `InfoEditableField`
+- `hooks/useTransactionListData.ts` — React Query hook for infinite-scroll list data management; owns `allItems`, sort/search/filter state, `loadMore`, and editing guards
+- `components/FilterBanner.tsx` — Displays active filter pills and clear-all action
+- `components/TableActions.tsx` — Toolbar actions: CSV export button and "show inactive" toggle
+- `components/TransactionsTable.tsx` — `VirtualDataTable` wrapper with column renderers (category/recipient comboboxes, inline date/amount edit, row toggle/delete, info/split dialogs)
+- `components/TransactionInfoDialog.tsx` — Per-row info display and inline field editor
+- `pages/TransactionsPage.tsx` — Slim composer (~280 LOC) that wires the hook to components and owns mutation handlers (`applyTransactionLocalPatch`, `applyInfoFieldLocally`) and `useConfirmDialog`
+
+This structure keeps related code together, makes each module focused and testable, and makes the page composition logic clear at a glance.
+
 ---
 
 ### Extra Information Dialog Inline Editing
@@ -132,13 +146,20 @@ Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 Export transactions to CSV for external analysis:
 
 ```
-GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18
+GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18&include_balance=true
 ```
 
+**Streaming CSV Response (Phase 5):**
+- Response uses chunked `res.write()` streaming instead of `res.send()` to support large exports without memory overhead.
+- Pagination happens internally via `CSV_EXPORT_CHUNK_SIZE` (1000 rows per chunk).
+- Running balance is computed in JavaScript across chunks using an accumulator so balance stays correct when sorted by date.
+- Optional `include_balance=true` query param adds a "Running Balance" column; defaults to false for backward compatibility.
+- 404 probe query runs before streaming starts, so error responses still return JSON.
+
 Implementation note:
-- CSV escaping, row construction, and filename generation now use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
-- CSV export now neutralizes spreadsheet-formula-leading values (`=`, `+`, `-`, `@`) before writing cells to reduce formula-injection risk in spreadsheet tools.
-- Export and PATCH error responses now avoid leaking internal exception details and return sanitized generic `detail` payloads.
+- CSV escaping, row construction, and filename generation use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
+- CSV export neutralizes spreadsheet-formula-leading values (`=`, `+`, `-`, `@`) before writing cells to reduce formula-injection risk in spreadsheet tools.
+- Export and PATCH error responses avoid leaking internal exception details and return sanitized generic `detail` payloads.
 
 ---
 

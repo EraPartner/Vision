@@ -25,6 +25,16 @@ vi.mock('../src/services/deduplication.js', () => ({
   isDuplicateByFields: vi.fn(),
 }));
 
+vi.mock('../src/services/calculations/normalization.js', () => ({
+  findBestRecipientMatch: vi.fn(),
+  findBestRecipientMatches: vi.fn(async () => new Map()),
+  normalizeForMatching: (s) => (s || '').toUpperCase().trim(),
+  cleanRecipientName: (s) => s,
+  cleanKbcRecipientName: (s) => s,
+  normalizeToUppercase: (s) => (s || '').toUpperCase(),
+  DEFAULT_MATCH_THRESHOLD: 0.7,
+}));
+
 vi.mock('../src/repositories/rawTransactionRepository.js', () => ({
   computeHash: vi.fn(() => 'abc123hash'),
   belfiusRawRepo: {
@@ -56,6 +66,7 @@ import { createAdapter } from '../src/services/bankAdapters.js';
 import { importCSV } from '../src/services/importService.js';
 import { isDuplicateByFields } from '../src/services/deduplication.js';
 import { query } from '../src/database/connection.js';
+import { findBestRecipientMatch } from '../src/services/calculations/normalization.js';
 import {
   belfiusRawRepo,
   revolutRawRepo,
@@ -249,11 +260,14 @@ describe('Raw Transaction Import Service', () => {
     isRawDuplicate.mockResolvedValue(false);
     belfiusRawRepo.create.mockResolvedValue({ id: 1 });
     rawReferenceRepo.create.mockResolvedValue({});
+    findBestRecipientMatch.mockResolvedValue({
+      recipientId: 42,
+      normalizedName: 'KNOWN RECIPIENT',
+      similarity: 1,
+      exact: true,
+    });
 
     query.mockImplementation(async (sql) => {
-      if (sql.includes('SELECT id FROM recipients WHERE normalized_name = $1')) {
-        return { rows: [{ id: 42 }] };
-      }
       if (sql.includes('SELECT id FROM recipient_bank_accounts')) {
         return { rows: [] };
       }
@@ -291,6 +305,7 @@ describe('Raw Transaction Import Service', () => {
     isRawDuplicate.mockResolvedValue(false);
     belfiusRawRepo.create.mockResolvedValue({ id: 3 });
     rawReferenceRepo.create.mockResolvedValue({});
+    findBestRecipientMatch.mockResolvedValue(null);
 
     query.mockImplementation(async (sql) => {
       if (sql.includes('SELECT id FROM recipients WHERE normalized_name = $1')) {

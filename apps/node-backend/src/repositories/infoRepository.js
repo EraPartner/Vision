@@ -379,12 +379,13 @@ export const infoRepository = {
     };
   },
 
-  async getMonthlyFinancialSummary(excludedCategoryIds = [], targetCurrency = 'EUR') {
+  async getMonthlyFinancialSummary(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
-    logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds });
+    const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
 
-    // ── Fast path: read from mv_monthly_summary ──
-    if (validIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
+    // ── Fast path: read from mv_monthly_summary (only when no exclusions) ──
+    if (validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
       const mvResult = await query(`
         SELECT month_start, month, year, currency,
                SUM(transaction_count) AS transaction_count,
@@ -449,8 +450,12 @@ export const infoRepository = {
     }
 
     // ── Fallback: live query with exclusions ──
-    const excludeClause = validIds.length > 0
-      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((_, i) => `$${i + 1}`).join(',')})`
+    const params = [];
+    const categoryExcludeClause = validIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validIds.map((id) => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+    const recipientExcludeClause = validRecipientIds.length > 0
+      ? `AND t.recipient_id NOT IN (${validRecipientIds.map((id) => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
     const sql = `
@@ -471,7 +476,8 @@ export const infoRepository = {
         FROM transactions t
         LEFT JOIN recipients r ON t.recipient_id = r.id
         WHERE t.is_active = true
-        ${excludeClause}
+        ${categoryExcludeClause}
+        ${recipientExcludeClause}
       )
       SELECT
         EXTRACT(MONTH FROM m.month_start)::int AS month,
@@ -484,8 +490,12 @@ export const infoRepository = {
         AND t.date < m.month_start + interval '1 month'
       ORDER BY m.month_start, t.date
     `;
-    logger.debug('Monthly summary SQL executing', { excludeClause: excludeClause || '(none)', paramCount: validIds.length });
-    const result = await query(sql, validIds);
+    logger.debug('Monthly summary SQL executing', {
+      categoryExcludeClause: categoryExcludeClause || '(none)',
+      recipientExcludeClause: recipientExcludeClause || '(none)',
+      paramCount: params.length,
+    });
+    const result = await query(sql, params);
     logger.debug('Monthly summary query returned', { rowCount: result.rows.length });
 
     // Group by month and convert amounts — batch all in one rates fetch

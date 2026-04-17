@@ -2,11 +2,11 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-04-09
-tags: [feature, planned, recurring, bills, loans]
+date: 2026-04-16
+tags: [feature, planned, recurring, bills, loans, phase-3, calculations]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/loanRepaymentService.js", "apps/node-backend/src/services/recurrenceService.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
 # Planned Transactions
@@ -154,6 +154,16 @@ Useful for:
 
 ---
 
+## Execution Atomicity and Idempotency (Phase 3)
+
+The execute endpoint is now **atomic and idempotent**:
+
+- **Database:** Migration `0027_planned_execution_idempotency` adds a UNIQUE INDEX on `planned_transaction_executions (planned_transaction_id, executed_transaction_id)`. Any attempt to re-execute the same (planned_id, executed_id) pair will trigger a unique violation.
+- **Endpoint:** `POST /api/planned-transactions/:id/execute` wraps the insert-execution-row + update-parent pair in a single `BEGIN/COMMIT` transaction. If a unique violation occurs (Postgres error 23505), the transaction rolls back and returns a 200 OK with the current planned state + `Idempotent-Replay: true` header instead of error.
+- **Result:** Double-clicks, retries, and network replays return the same result without creating duplicate execution rows.
+
+See [[docs/adr/012-planned-execution-idempotency|ADR-012]] for design rationale.
+
 ## Supporting Services
 
 ## Backend Route Implementation Notes
@@ -180,10 +190,14 @@ These changes preserve API payloads/status semantics while reducing hot-path ove
 
 This refactor reduced handler duplication and improved maintainability without changing API contracts, response payload shapes, or status-code behavior.
 
-### `recurrenceService.js`
-**File:** [[apps/node-backend/src/services/recurrenceService.js]]
+### Calculation Services (Phase 3 — Canonical Paths)
 
-Calculates next occurrence dates for recurring planned transactions.
+**Note:** Calculation services have been relocated to `apps/node-backend/src/services/calculations/` as part of Phase 3 of the non-portfolio refactor. Back-compat re-export shims are maintained at the old paths (`loanRepaymentService.js`, `recurrenceService.js`) but new code should use the canonical paths below.
+
+### `services/calculations/recurrence.js`
+**File:** [[apps/node-backend/src/services/calculations/recurrence.js]]
+
+Calculates next occurrence dates for recurring planned transactions. Pure calculation function with no I/O side effects.
 
 **Supported Patterns:** `daily`, `weekly`, `biweekly`, `monthly`, `quarterly`, `yearly`, and custom `every N days`.
 
@@ -193,10 +207,10 @@ Calculates next occurrence dates for recurring planned transactions.
 | `isValidPattern(pattern)` | Validates pattern string |
 | `getSupportedPatterns()` | Returns array of supported pattern names |
 
-### `loanRepaymentService.js`
-**File:** [[apps/node-backend/src/services/loanRepaymentService.js]]
+### `services/calculations/loanSchedule.js`
+**File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]
 
-Generates amortization schedules for loan-type planned transactions.
+Generates amortization schedules for loan-type planned transactions. Pure calculation function with no I/O side effects.
 
 **Supported Loan Types:**
 - `amortizing` — Fixed monthly payment (principal + interest), calculated using standard annuity formula
@@ -207,9 +221,11 @@ Generates amortization schedules for loan-type planned transactions.
 | Function | Purpose |
 |----------|---------|
 | `validateLoanConfig(config)` | Validates loan parameters (principal, rate, term, payment day, start date). Max term: 600 months (50 years) |
-| `generateLoanRepaymentSchedule(config)` | Generates full amortization schedule with per-installment breakdown (principal, interest, remaining) |
+| `generateLoanSchedule(config)` | Generates full amortization schedule with per-installment breakdown (principal, interest, remaining) |
 
 **Schedule Output:** Each installment includes `installment_number`, `due_date`, `payment_amount`, `principal_amount`, `interest_amount`, `remaining_principal`.
+
+**Testing:** Covered by golden-fixture test suites in [[apps/node-backend/tests/services/loanSchedule.golden.test.js]] and [[apps/node-backend/tests/services/recurrence.golden.test.js]]. See [[docs/reference/code-patterns#golden-fixture-pattern|Code Patterns: Golden-Fixture Pattern]] for workflow.
 
 ### `recurringDetectionService.js`
 **File:** [[apps/node-backend/src/services/recurringDetectionService.js]]

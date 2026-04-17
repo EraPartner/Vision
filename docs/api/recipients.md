@@ -3,12 +3,12 @@ title: API - Recipients
 type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
-description: Recipient (payee/payer) management
-date: 2026-04-02
-tags: [api, recipients, payees]
+description: Recipient (payee/payer) management with atomic merge and normalization-based matching
+date: 2026-04-16
+tags: [api, recipients, payees, merge, atomic, phase-6]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
-related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]]
+related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]], [[apps/node-backend/src/services/recipientMergeService.js]]
 ---
 
 # Recipients API
@@ -127,7 +127,7 @@ Soft delete a recipient (sets is_active = false).
 
 ### POST /api/recipients/:id/merge
 
-Merge multiple recipients into one (the recipient identified by `:id` becomes the primary).
+Merge multiple recipients into one (the recipient identified by `:id` becomes the primary). **Phase 6: Atomic merge with transactional guarantees.**
 
 **Request Body:**
 ```json
@@ -136,7 +136,13 @@ Merge multiple recipients into one (the recipient identified by `:id` becomes th
 }
 ```
 
-Merges all transactions from alias recipients to the primary recipient. Sets `primary_recipient_id` on aliases.
+Merges all transactions, splits, planned transactions, and bank accounts from alias recipients to the primary recipient. Sets `primary_recipient_id` on aliases.
+
+**Atomic Guarantees (Phase 6):**
+- All FK reassignments execute within a single database transaction.
+- If any step fails, the entire merge rolls back (no partial state).
+- Concurrent merges into the same primary are serialized via row-level locking (FOR UPDATE).
+- Bank account deduplication is race-safe (INSERT ... ON CONFLICT).
 
 **Response:**
 ```json

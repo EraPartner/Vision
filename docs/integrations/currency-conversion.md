@@ -2,10 +2,10 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-03-25
-tags: [integration, currency, exchange-rates]
-description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion
-related_code: ["apps/node-backend/src/services/currencyConversionService.js"]
+date: 2026-04-16
+tags: [integration, currency, exchange-rates, phase-0]
+description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion. Phase 0 consolidation under way.
+related_code: ["apps/node-backend/src/services/calculations/currency.js", "apps/node-backend/src/services/currencyConversionService.js"]
 ---
 
 # Currency Conversion
@@ -153,6 +153,29 @@ POST /api/info/exchange-rates/refresh
 
 ## Implementation Details
 
+### Canonical Import Path (Phase 0+)
+
+**New code should import from here:**
+
+```javascript
+import {
+  convertToEur,
+  convertRowsToEur,
+  convertToCurrency,
+  warmCache,
+  clearMemoryCache,
+  backfillPortfolioHistoricalRates,
+  FALLBACK_RATES,
+} from './services/calculations/currency.js';
+```
+
+This is a re-export façade that consolidates the public API. The actual implementation lives in `services/currencyConversionService.js` until the merge completes (Phase 0 step 4).
+
+**Legacy import (still supported):**
+```javascript
+import { convertToEur } from './services/currencyConversionService.js';
+```
+
 ### Cache Management
 
 ```javascript
@@ -160,12 +183,14 @@ POST /api/info/exchange-rates/refresh
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 ```
 
+**Phase 0 Note:** In-memory cache and 90-day ECB historical cache will migrate to the `exchange_rate_cache` table during Phase 0 consolidation.
+
 ### Batch Conversion
 
 Convert multiple rows at once:
 
 ```javascript
-import { convertRowsToEur } from './services/currencyConversionService.js';
+import { convertRowsToEur } from './services/calculations/currency.js';
 
 const converted = await convertRowsToEur(transactions, 'USD');
 ```
@@ -188,7 +213,7 @@ const converted = await convertRowsToEur(rows, 'USD', {
 Generic amount conversion:
 
 ```javascript
-import { convertToCurrency } from './services/currencyConversionService.js';
+import { convertToCurrency } from './services/calculations/currency.js';
 
 const amountInSar = await convertToCurrency(125, 'USD', 'SAR');
 ```
@@ -226,8 +251,10 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 
 ## See Also
 
+- [[docs/reference/data-model#ExchangeRateCache]] - Database schema
 - [[docs/performance/caching-strategies]] - Caching implementation
 - [[docs/api/settings]] - Settings API
 - [[docs/integrations/index]] - Integrations Index
+- [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/calculations/currency.js|Canonical import (Phase 0+)]], [[apps/node-backend/src/services/currencyConversionService.js|Legacy implementation]], [[apps/node-backend/src/main.js]]

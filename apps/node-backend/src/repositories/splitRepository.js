@@ -1,8 +1,13 @@
 /**
  * Split Repository - data access for transaction_splits and split_payments tables.
+ *
+ * Owed-summary reads from agg_split_outstanding (trigger-maintained by
+ * migration 0026) instead of a live aggregate join. Audit events are
+ * written via writeAudit; route/service layer owns when to emit them.
  */
 
 import { getClient, query } from '../database/connection.js';
+import { computeOwedSummary } from '../services/calculations/splits.js';
 
 export const splitRepository = {
   /**
@@ -78,33 +83,32 @@ export const splitRepository = {
 
   /**
    * Get all unsettled splits grouped by recipient (who owes what).
+   *
+   * Reads from agg_split_outstanding (trigger-maintained by migration
+   * 0026) joined to recipients. Projection + filter + sort live in
+   * services/calculations/splits.js::computeOwedSummary so the shape is
+   * golden-fixture covered.
+   *
+   * Settled splits are excluded at the source: is_settled=true splits
+   * are kept in agg_split_outstanding (for historical totals) but joined
+   * back via transaction_splits.is_settled here so fully-settled rows
+   * drop out of the owed view.
    */
   async getOwedSummary() {
     const sql = `
-      SELECT ts.recipient_id,
+      SELECT a.recipient_id,
              r.name AS recipient_name,
-             SUM(ts.amount) AS total_owed,
-             COALESCE(SUM(sp_agg.paid), 0) AS total_paid,
-             COUNT(DISTINCT ts.id) AS split_count
-      FROM transaction_splits ts
-      JOIN recipients r ON ts.recipient_id = r.id
-      LEFT JOIN (
-        SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
-      ) sp_agg ON sp_agg.split_id = ts.id
+             SUM(a.original_amount) AS total_owed,
+             SUM(a.paid_amount) AS total_paid,
+             COUNT(a.split_id) AS split_count
+      FROM agg_split_outstanding a
+      JOIN recipients r ON r.id = a.recipient_id
+      JOIN transaction_splits ts ON ts.id = a.split_id
       WHERE ts.is_settled = false
-       GROUP BY ts.recipient_id, r.name
-       HAVING SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) > 0
-       ORDER BY SUM(ts.amount) - COALESCE(SUM(sp_agg.paid), 0) DESC
+      GROUP BY a.recipient_id, r.name
     `;
     const result = await query(sql, []);
-    return result.rows.map(row => ({
-      recipient_id: row.recipient_id,
-      recipient_name: row.recipient_name,
-      total_owed: parseFloat(row.total_owed),
-      total_paid: parseFloat(row.total_paid),
-      remaining: parseFloat(row.total_owed) - parseFloat(row.total_paid),
-      split_count: parseInt(row.split_count, 10),
-    }));
+    return computeOwedSummary(result.rows);
   },
 
   /**
@@ -192,8 +196,21 @@ export const splitRepository = {
 
   /**
    * Record a payment against a split.
+   *
+   * Wraps the INSERT, auto-settle UPDATE, and split_audit rows in a
+   * single transaction. DB-level trigger
+   * (fn_split_payment_overpayment_guard) rejects overpayment even if
+   * the route layer forgot to call validatePaymentAmount first.
+   *
+   * @param {{
+   *   split_id: number,
+   *   amount: number,
+   *   note?: string | null,
+   *   paid_at?: string | null,
+   *   actor?: string | null,
+   * }} input
    */
-  async addPayment({ split_id, amount, note, paid_at }) {
+  async addPayment({ split_id, amount, note, paid_at, actor = null }) {
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -210,7 +227,7 @@ export const splitRepository = {
         paid_at || new Date().toISOString().split('T')[0],
       ]);
 
-      await client.query(
+      const settledResult = await client.query(
         `UPDATE transaction_splits ts
          SET is_settled = true
          WHERE ts.id = $1
@@ -219,8 +236,26 @@ export const splitRepository = {
              SELECT COALESCE(SUM(sp.amount), 0)
              FROM split_payments sp
              WHERE sp.split_id = ts.id
-           ) >= ts.amount`,
+           ) >= ts.amount
+         RETURNING id`,
         [split_id]
+      );
+
+      await client.query(
+        `INSERT INTO split_audit (split_id, action, actor, payload)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          split_id,
+          'payment',
+          actor,
+          JSON.stringify({
+            payment_id: result.rows[0].id,
+            amount: Number(amount),
+            paid_at: result.rows[0].paid_at,
+            note: note || null,
+            auto_settled: settledResult.rowCount > 0,
+          }),
+        ]
       );
 
       await client.query('COMMIT');
@@ -270,6 +305,55 @@ export const splitRepository = {
   async deleteSplit(splitId) {
     const result = await query('DELETE FROM transaction_splits WHERE id = $1', [splitId]);
     return result.rowCount > 0;
+  },
+
+  /**
+   * Fetch a single split row (no join). Used by route-layer validation
+   * before writes so we can pass split.amount into validatePaymentAmount.
+   */
+  async getSplitById(splitId) {
+    const sql = `SELECT * FROM transaction_splits WHERE id = $1`;
+    const result = await query(sql, [splitId]);
+    return result.rows[0] ? formatSplit(result.rows[0]) : null;
+  },
+
+  /**
+   * Sum of existing payments against a split. Used by route-layer
+   * overpayment validation before INSERT. DB-level trigger
+   * (fn_split_payment_overpayment_guard) is the second line of defense.
+   */
+  async getAlreadyPaid(splitId) {
+    const sql = `
+      SELECT COALESCE(SUM(amount), 0) AS paid
+      FROM split_payments
+      WHERE split_id = $1
+    `;
+    const result = await query(sql, [splitId]);
+    return parseFloat(result.rows[0].paid) || 0;
+  },
+
+  /**
+   * Append a split_audit row. Accepts an optional pg client so the caller
+   * can write the audit inside the same transaction as the mutation.
+   *
+   * @param {{
+   *   split_id: number | null,
+   *   action: string,
+   *   actor?: string | null,
+   *   payload?: object | null,
+   *   client?: import('pg').PoolClient,
+   * }} input
+   */
+  async writeAudit({ split_id, action, actor = null, payload = null, client = null }) {
+    const sql = `
+      INSERT INTO split_audit (split_id, action, actor, payload)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+    `;
+    const params = [split_id, action, actor, payload ? JSON.stringify(payload) : null];
+    const runner = client || { query };
+    const result = await runner.query(sql, params);
+    return result.rows[0];
   },
 };
 

@@ -396,6 +396,12 @@ async function createPlannedTransactionExecutions() {
   await safeIndex('idx_pte_planned_id', 'planned_transaction_executions', 'planned_transaction_id');
   // Support reverse lookup: find the planned execution(s) for a given executed transaction
   await safeIndex('idx_pte_executed_tx_id', 'planned_transaction_executions', 'executed_transaction_id');
+  // Idempotency guard (Phase 3): double-submitted execute requests raise 23505
+  // instead of producing duplicate execution rows. Mirrored in alembic 0027.
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uniq_pte_planned_executed
+      ON planned_transaction_executions (planned_transaction_id, executed_transaction_id);
+  `);
 }
 
 async function createPlannedTransactionLoanSchedule() {

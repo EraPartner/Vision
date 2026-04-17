@@ -12,6 +12,7 @@
 
 import { query } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
+import { buildTransactionWhere } from '../services/filterBuilder.js';
 
 // Shared JOIN fragment used by every multi-join query
 const TRANSACTION_JOINS = `
@@ -21,63 +22,6 @@ const TRANSACTION_JOINS = `
   LEFT JOIN categories rc ON r.default_category_id = rc.id
   LEFT JOIN categories pc ON pr.default_category_id = pc.id
 `;
-
-/**
- * Build the WHERE clause and parameter list from common filter options.
- * Returns { where, params, nextParam } so callers can append further params.
- */
-function buildWhereClause({
-  transactionId = null,
-  startDate = null,
-  endDate = null,
-  bankAccount = null,
-  categoryId = null,
-  recipientId = null,
-  recipientName = null,
-  search = null,
-  active = true,
-} = {}) {
-  const clauses = ['1=1'];
-  const params = [];
-  let p = 1;
-
-  if (active) clauses.push('t.is_active = true');
-  if (transactionId != null) { clauses.push(`t.id = $${p++}`); params.push(transactionId); }
-  if (startDate) { clauses.push(`t.date >= $${p++}`); params.push(startDate); }
-  if (endDate) { clauses.push(`t.date <= $${p++}`); params.push(endDate); }
-  if (bankAccount) { clauses.push(`t.bank_account ILIKE $${p++}`); params.push(`%${bankAccount}%`); }
-  if (categoryId != null) {
-    clauses.push(`COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${p++}`);
-    params.push(categoryId);
-  }
-  if (recipientId != null) {
-    clauses.push(`(t.recipient_id = $${p} OR r.primary_recipient_id = $${p})`);
-    p++;
-    params.push(recipientId);
-  }
-  if (recipientName) { clauses.push(`r.name ILIKE $${p++}`); params.push(`%${recipientName}%`); }
-  if (search) {
-    clauses.push(`(
-      t.memo ILIKE $${p} OR
-      t.comment ILIKE $${p} OR
-      t.bank_account ILIKE $${p} OR
-      t.currency ILIKE $${p} OR
-      CAST(t.amount AS TEXT) ILIKE $${p} OR
-      r.name ILIKE $${p} OR
-      pr.name ILIKE $${p} OR
-      c.general ILIKE $${p} OR
-      c.detail ILIKE $${p} OR
-      rc.general ILIKE $${p} OR
-      rc.detail ILIKE $${p} OR
-      pc.general ILIKE $${p} OR
-      pc.detail ILIKE $${p}
-    )`);
-    p++;
-    params.push(`%${search}%`);
-  }
-
-  return { where: clauses.join(' AND '), params, nextParam: p };
-}
 
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
 const TRANSACTION_SORT_COLUMNS = {
@@ -113,8 +57,9 @@ export const transactionRepository = {
     active = true,
     sortBy = null,
     sortDir = null,
+    includeBalance = false,
   } = {}) {
-    const { where, params, nextParam: p } = buildWhereClause({
+    const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
       transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
@@ -126,6 +71,10 @@ export const transactionRepository = {
       ? `${sortCol} ${sortDirection}, t.date DESC`
       : `t.date DESC`;
 
+    const runningBalanceCol = includeBalance
+      ? `, SUM(t.amount) OVER (ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      : '';
+
     const sql = `
       SELECT t.*,
              COALESCE(pr.name, r.name) AS recipient_name,
@@ -135,7 +84,7 @@ export const transactionRepository = {
                WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                ELSE NULL
-             END AS category_name
+             END AS category_name${runningBalanceCol}
       FROM transactions t
       ${TRANSACTION_JOINS}
       WHERE ${where}
@@ -161,7 +110,7 @@ export const transactionRepository = {
     search = null,
     active = true,
   } = {}) {
-    const { where, params } = buildWhereClause({
+    const { sql: where, params } = buildTransactionWhere({
       transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
@@ -227,10 +176,10 @@ export const transactionRepository = {
     active = true,
   } = {}) {
     const {
-      where: totalWhere,
+      sql: totalWhere,
       params: totalParams,
-      nextParam: totalNextParam,
-    } = buildWhereClause({
+      nextParamIdx: totalNextParam,
+    } = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -391,8 +340,9 @@ export const transactionRepository = {
     active = true,
     sortBy = null,
     sortDir = null,
+    includeBalance = false,
   } = {}) {
-    const { where, params, nextParam: p } = buildWhereClause({
+    const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
       transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
     });
 
@@ -401,6 +351,10 @@ export const transactionRepository = {
     const orderBy = sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
       ? `${sortCol} ${sortDirection}, t.date DESC`
       : `t.date DESC`;
+
+    const runningBalanceCol = includeBalance
+      ? `, SUM(t.amount) OVER (ORDER BY t.date ASC, t.id ASC) AS running_balance`
+      : '';
 
     const sql = `
       SELECT t.*,
@@ -412,7 +366,7 @@ export const transactionRepository = {
                WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
                ELSE NULL
              END AS category_name,
-             COUNT(*) OVER () AS total_count
+             COUNT(*) OVER () AS total_count${runningBalanceCol}
       FROM transactions t
       ${TRANSACTION_JOINS}
       WHERE ${where}

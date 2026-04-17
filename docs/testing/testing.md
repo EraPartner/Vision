@@ -2,11 +2,12 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-11T10:19:03.000Z
+date: 2026-04-16
 tags:
   - testing
   - vitest
   - quality
+  - phase-0
 aliases:
   - testing
   - unit tests
@@ -155,6 +156,81 @@ vi.mock('yahoo-finance2', () => ({
 ```
 
 Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
+
+### Golden-Fixture Pattern (Phase 0+)
+
+Regression testing for non-trivial calculations (loan amortization, recurrence expansion, timezone boundary conversions, etc.). Store input + expected output as JSON fixtures.
+
+**Fixture layout:**
+```
+tests/golden/__fixtures__/
+├── loanSchedule/amortizing-standard.input.json
+├── loanSchedule/amortizing-standard.expected.json
+├── recurrence/addMonthsAtDay.input.json
+└── recurrence/addMonthsAtDay.expected.json
+```
+
+**Usage in vitest:**
+```javascript
+import { describe, it } from 'vitest';
+import { runGolden } from '../golden/runGolden.js';
+import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.js';
+
+describe('loanSchedule golden', () => {
+  it('amortizing-standard', async () => {
+    await runGolden('loanSchedule/amortizing-standard', (input) =>
+      generateLoanSchedule(input),
+    );
+  });
+});
+```
+
+**Updating fixtures:**
+```bash
+UPDATE_GOLDENS=1 bun vitest run loanSchedule.test.js
+```
+
+This pattern isolates test expectations from implementation details, making it easier to verify business logic regressions without brittle assertions.
+
+Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern]], [[apps/node-backend/tests/golden/runGolden.js]]
+
+### Database Fixture Helper (Phase 0+)
+
+Opt-in shared Postgres pool for tests that need a real database. Resolved via `TEST_DATABASE_URL` environment variable.
+
+**Setup:**
+```javascript
+import { describe, it, beforeAll, afterAll } from 'vitest';
+import { getTestPool, closeTestPool, hasTestDatabase } from '../setup/db.js';
+
+describe('transactionRepository', () => {
+  let pool;
+
+  beforeAll(() => {
+    pool = getTestPool();
+  });
+
+  afterAll(async () => {
+    await closeTestPool();
+  });
+
+  it.skipIf(!pool)('should insert and fetch transaction', async () => {
+    const result = await pool.query('SELECT 1');
+    expect(result.rows).toHaveLength(1);
+  });
+});
+```
+
+**Self-skipping pattern (recommended):**
+```javascript
+it.skipIf(!hasTestDatabase())('database-dependent test', async () => {
+  // test code
+});
+```
+
+The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip gracefully in CI/local environments without the test database.
+
+Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.js]]
 
 ## Test Coverage Areas
 

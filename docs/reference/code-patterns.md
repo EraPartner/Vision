@@ -2,10 +2,10 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-03-31
-tags: [reference, patterns, conventions, code-style, backend, frontend]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, and Express setup
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern]
+date: 2026-04-16
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, and streaming CSV exports
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services]
 ---
 
 # Code Patterns Reference
@@ -404,21 +404,53 @@ process.on('SIGTERM', async () => { await closePool(); process.exit(0); });
 
 ## Error Handling Pattern
 
-### Backend Error Responses
+**Source:** [[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]
 
-All errors follow this format:
+Centralized error-handling middleware with typed error classes. Routes throw typed errors; middleware maps to HTTP responses.
 
-```json
-{ "detail": "Human-readable error message" }
+### Typed Error Classes
+
+```js
+import {
+  AppError,
+  ValidationError,
+  UnauthorizedError,
+  ForbiddenError,
+  NotFoundError,
+  ConflictError,
+} from '../lib/errors.js';
+
+// Usage in routes:
+if (!requiredField) {
+  throw new ValidationError('Missing required field');
+}
+
+const entity = await repository.getById(id);
+if (!entity) {
+  throw new NotFoundError(`Entity ${id} not found`);
+}
+
+if (isDuplicate) {
+  throw new ConflictError('Duplicate entry');
+}
 ```
 
-| Status Code | When to Use | Example |
-|-------------|-------------|---------|
-| 400 | Validation error, missing fields | `{ detail: 'Missing required fields' }` |
-| 404 | Resource not found | `{ detail: 'Entity 42 not found' }` |
-| 409 | Conflict (duplicate) | `{ detail: 'Duplicate entry' }` |
-| 429 | Rate limited | `{ detail: 'Too many requests' }` |
-| 500 | Internal server error | `{ detail: 'Failed to retrieve entities' }` |
+### Response Format (Back-Compat)
+
+All errors return this envelope:
+
+```json
+{ "detail": "Human-readable error message", "error_code": "ERROR_TYPE" }
+```
+
+| Status Code | Class | Error Code | When to Use |
+|-------------|-------|-----------|-------------|
+| 400 | ValidationError | VALIDATION_ERROR | Validation error, missing fields |
+| 401 | UnauthorizedError | UNAUTHORIZED | Authentication required |
+| 403 | ForbiddenError | FORBIDDEN | Access denied |
+| 404 | NotFoundError | NOT_FOUND | Resource not found |
+| 409 | ConflictError | CONFLICT | Duplicate entry |
+| 500 | AppError | APP_ERROR | Internal server error |
 
 ### Frontend Error Handling
 
@@ -431,10 +463,658 @@ try {
 }
 ```
 
+### Base AppError Constructor
+
+```js
+class AppError extends Error {
+  constructor(message, {
+    status = 500,
+    code = 'APP_ERROR',
+    cause,        // native Error for logging
+    details = {}  // non-sensitive debug context
+  } = {})
+}
+```
+
+---
+
+## Filter Builder Pattern
+
+**Source:** [[apps/node-backend/src/services/filterBuilder.js|filterBuilder.js]]
+
+Centralized SQL WHERE clause builder for transaction-like queries. Consolidates previously duplicated filter logic across repositories.
+
+### Usage
+
+```js
+import { buildTransactionWhere, validateInt4Ids } from '../services/filterBuilder.js';
+
+const opts = {
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+  categoryId: 5,
+  excludedCategoryIds: [10, 11, 12],
+  excludedRecipientIds: [20, 21],
+  bankAccount: 'CH93%',  // ILIKE substring
+  active: true,
+  startParamIdx: 1,
+};
+
+const { sql, params, nextParamIdx } = buildTransactionWhere(opts);
+
+const query = `
+  SELECT t.*, r.name, c.general, c.detail
+  FROM transactions t
+  LEFT JOIN recipients r ON t.recipient_id = r.id
+  LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+  LEFT JOIN categories c ON t.category_id = c.id
+  LEFT JOIN categories rc ON r.default_category_id = rc.id
+  LEFT JOIN categories pc ON pr.default_category_id = pc.id
+  WHERE ${sql}
+  ORDER BY t.date DESC
+  LIMIT 50;
+`;
+
+const result = await db.query(query, params);
+```
+
+### Contract
+
+Every builder returns `{ sql, params, nextParamIdx }`:
+- `sql` — Composable fragment with no leading/trailing whitespace guarantees
+- `params` — Flattened array of bind parameters (in order with `sql`)
+- `nextParamIdx` — First unused `$`-index for further predicates
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `validateInt4Ids(ids)` | Validate array of PostgreSQL INT4 IDs; returns filtered array |
+| `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters |
+
+---
+
+## Pure Calculation Services (Phase 3)
+
+**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]]
+
+As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. These are hosted in `services/calculations/` and are suitable for golden-fixture testing and migration to shared utility libraries.
+
+**Modules:**
+
+| Module | Purpose |
+|--------|---------|
+| `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
+| `services/calculations/recurrence.js` | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
+
+**Back-compat:** Old paths (`services/loanRepaymentService.js`, `services/recurrenceService.js`) remain as re-export shims pointing to canonical modules. New code should use the canonical paths.
+
+---
+
+## Golden-Fixture Pattern
+
+**Source:** [[apps/node-backend/tests/golden/runGolden.js|runGolden.js]]
+
+Regression testing for non-trivial calculations (loan amortization, recurrence expansion, etc.). Input + expected output stored as JSON fixtures. Paired with pure calculation services in `services/calculations/`.
+
+### Fixture Layout
+
+```
+tests/golden/__fixtures__/
+├── loanSchedule/
+│   ├── amortizing-standard.input.json
+│   ├── amortizing-standard.expected.json
+│   ├── fixed-principal-basic.input.json
+│   ├── fixed-principal-basic.expected.json
+│   └── ...
+├── recurrence/
+│   ├── monthly-basic.input.json
+│   ├── monthly-basic.expected.json
+│   ├── jan-31-leap-year.input.json
+│   └── ...
+```
+
+### Coverage (Phase 3)
+
+**loanSchedule.golden.test.js:**
+- Amortizing: standard, zero-APR, month-end clamp, single-month, 360-month
+- Fixed principal: standard, edge cases
+- Interest-only: standard, edge cases
+
+**recurrence.golden.test.js:**
+- Built-in patterns: daily, weekly, biweekly, monthly, quarterly, yearly
+- Edge cases: Jan 31 clamping (non-leap + leap), Feb 29 yearly rollover, custom "every N days" regex
+- Invalid patterns return null
+
+### Usage in Vitest
+
+```js
+import { describe, it } from 'vitest';
+import { runGolden } from '../golden/runGolden.js';
+import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.js';
+
+describe('loanSchedule golden', () => {
+  it('amortizing-standard', async () => {
+    await runGolden('loanSchedule/amortizing-standard', (input) =>
+      generateLoanSchedule(input),
+    );
+  });
+});
+```
+
+### Updating Fixtures
+
+Run tests with `UPDATE_GOLDENS=1` to rewrite expected outputs:
+
+```bash
+UPDATE_GOLDENS=1 bun vitest run loanSchedule.golden.test.js
+```
+
+This workflow is ideal for business-logic regressions where the visual shape of a result matters more than exact implementation.
+
+### Workflow: Adding a New Test Case
+
+1. Create a new fixture pair: `tests/golden/__fixtures__/module/case-name.input.json` + `...expected.json`
+2. In `.expected.json`, set `output` to a placeholder (e.g., `null`) or the value you expect
+3. Run with `UPDATE_GOLDENS=1` — test framework will compute the actual output and rewrite `.expected.json`
+4. Review the generated `.expected.json` to ensure it's correct
+5. Commit both fixtures to git
+
+---
+
+## Aggregation Envelope Pattern (Phase 2)
+
+**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.js|aggregations.js]]
+
+All `/api/aggregations/*` endpoints return a standard envelope with metadata about data freshness and source.
+
+### Envelope Structure
+
+```js
+import { buildEnvelope } from '../services/calculations/aggregation/_envelope.js';
+
+const data = { /* calculation result */ };
+const envelope = buildEnvelope(data, {
+  source: 'mv',           // 'mv' | 'live'
+  computedAt: new Date().toISOString()  // optional; defaults to now
+});
+
+// Returns:
+// {
+//   data: { /* calculation result */ },
+//   meta: {
+//     source: "mv" | "live",
+//     computedAt: "2026-04-16T12:34:56.789Z"
+//   }
+// }
+```
+
+### Source Heuristic
+
+The `meta.source` field indicates whether the response was served from a materialized view or computed live.
+
+**Rules:**
+
+1. **Unfiltered request** → `'mv'`
+   - No `excluded_category_ids[]`, no `excluded_recipient_ids[]`
+   - Fast, from materialized view (stale by ~15 min)
+   - Safe for dashboard-level aggregations
+
+2. **Filtered request** → `'live'`
+   - At least one `excluded_category_ids[]` OR `excluded_recipient_ids[]` present
+   - Slower, dynamically scans transactions
+   - Respects user exclusion preferences
+
+3. **Special cases** → Always `'live'`
+   - `/average-vs-current` (Phase 2 always computes current-period live)
+   - Any endpoint computing "now" relative to historical averages
+
+### Implementation in Routes
+
+```js
+// Route: GET /api/aggregations/monthly-summary
+router.get('/monthly-summary', async (req, res) => {
+  try {
+    const envelope = await computeMonthlySummary({
+      targetCurrency: getTargetCurrency(req),
+      excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+      excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    });
+    res.json(envelope);  // Already wrapped by computeMonthlySummary
+  } catch (err) {
+    respondError(res, 'monthly-summary', err);
+  }
+});
+```
+
+### Implementation in Calculation Services
+
+```js
+// Service: computeMonthlySummary
+import { buildEnvelope } from './_envelope.js';
+import { getMonthlyFinancialSummary } from '../../repositories/infoRepository.js';
+
+export async function computeMonthlySummary({
+  targetCurrency,
+  excludedCategoryIds,
+  excludedRecipientIds,
+}) {
+  const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
+  const source = hasExclusions ? 'live' : 'mv';
+
+  const data = await getMonthlyFinancialSummary(
+    excludedCategoryIds,
+    targetCurrency,
+    excludedRecipientIds  // 3rd positional param (Phase 2 addition)
+  );
+
+  return buildEnvelope(data, { source });
+}
+```
+
+### Frontend Consumption
+
+The UI can inspect `meta.source` to surface data freshness:
+
+```tsx
+function DashboardStatCards() {
+  const { data: envelope, isLoading } = useQuery({
+    queryFn: () => apiClient.getAggregationMonthlySummary({ currency: 'EUR' }),
+  });
+
+  if (!envelope) return null;
+
+  const isMV = envelope.meta.source === 'mv';
+  const freshness = isMV ? '~15 min old' : 'current';
+
+  return (
+    <>
+      <StatCard title="Monthly Income" value={envelope.data.summary.total_income} />
+      <small>{freshness} ({envelope.meta.source})</small>
+    </>
+  );
+}
+```
+
+---
+
+## Aggregation Refresh Orchestrator (Phase 1)
+
+**Source:** [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]]
+
+Single entrypoint for refreshing PostgreSQL aggregations (materialized views + trigger-maintained tables).
+
+### Full Refresh (After Bulk Operations)
+
+After bulk imports or mass updates:
+
+```js
+import { refreshAggregations } from '../services/aggregationRefresh.js';
+
+// In import service:
+await bulkInsertTransactions(transactions);
+await refreshAggregations();  // Refreshes all MVs in parallel
+logger.info('Aggregations refreshed');
+```
+
+**What it does:**
+- Refreshes legacy MVs via `materializedViewService.refreshMaterializedViews()`
+- Refreshes Phase-1 MVs (`mv_recipient_monthly`) in parallel
+- No-op for trigger-maintained tables (automatic updates)
+
+### Debounced Refresh (Single-Row Mutations)
+
+After editing or deleting a transaction:
+
+```js
+import { scheduleAggregationRefresh } from '../services/aggregationRefresh.js';
+
+// In transaction route:
+app.patch('/api/transactions/:id', async (req, res) => {
+  const updated = await transactionService.update(req.params.id, req.body);
+  
+  // Fire-and-forget debounced refresh
+  scheduleAggregationRefresh().catch(err =>
+    logger.error('Scheduled refresh failed', { error: err?.message })
+  );
+  
+  res.json(updated);
+});
+```
+
+**Behavior:**
+- Coalesces rapid changes into one refresh (1s debounce)
+- Fire-and-forget (doesn't block response)
+- Triggers maintain `agg_recipient_totals` and `agg_split_outstanding` automatically
+
+### Exported Surface
+
+```js
+import aggregationService, {
+  TRIGGER_MAINTAINED_TABLES,  // ['agg_recipient_totals', 'agg_split_outstanding']
+} from './aggregationRefresh.js';
+
+await aggregationService.refreshAggregations();
+await aggregationService.scheduleAggregationRefresh();
+```
+
+---
+
+## Trigger-Maintained Aggregation Tables
+
+**Source:** [[alembic/versions/0026_finance_aggregations.py|Migration 0026]]
+
+Two tables kept in sync via row-level PostgreSQL triggers. Never require refresh from application code.
+
+### agg_recipient_totals
+
+Running all-time totals per recipient per currency.
+
+**PK:** `(recipient_id, currency)`
+
+**Automatic Updates:** Via `fn_agg_recipient_totals_sync()` trigger on `transactions` (AFTER INSERT/UPDATE/DELETE)
+
+**Important:** Do NOT query inside transaction handlers before triggers fire. If you need fresh totals within the same request, refetch after the transaction commits or read from the MV instead.
+
+```js
+// ❌ WRONG: Trigger hasn't fired yet
+const txn = await query('INSERT INTO transactions (...) RETURNING *');
+const totals = await query('SELECT * FROM agg_recipient_totals WHERE recipient_id = $1', [txn.recipient_id]);
+// totals is stale
+
+// ✓ CORRECT: Read after transaction commits or fetch in separate query
+const txn = await query('INSERT INTO transactions (...) RETURNING *');
+// Now (after transaction commit) the trigger has fired
+const totals = await query('SELECT * FROM agg_recipient_totals WHERE recipient_id = $1', [txn.recipient_id]);
+```
+
+### agg_split_outstanding
+
+Outstanding balance per split (original minus paid).
+
+**PK:** `split_id`
+
+**Automatic Updates:** Via two triggers:
+- `fn_trg_split_sync()` on `transaction_splits`
+- `fn_trg_split_payment_sync()` on `split_payments`
+
+**Same caveat:** Triggers fire at transaction commit. If you need immediately-fresh outstanding balances within the request, compute manually instead of reading the aggregate.
+
+```js
+// After split_payments insert:
+const payment = await query('INSERT INTO split_payments (split_id, amount) VALUES (...) RETURNING *');
+
+// The trigger has now fired. Safe to read:
+const outstanding = await query(
+  'SELECT outstanding_amount FROM agg_split_outstanding WHERE split_id = $1',
+  [payment.split_id]
+);
+```
+
+### Best Practices
+
+1. **Document trigger-maintained aggregates** — Add a comment in code that reads them:
+   ```js
+   // Reads agg_recipient_totals; maintained by fn_agg_recipient_totals_sync trigger
+   const result = await query('SELECT * FROM agg_recipient_totals WHERE ...');
+   ```
+
+2. **Never manually INSERT/UPDATE trigger tables** — Writes bypass triggers and create inconsistency. The triggers are the source of truth.
+
+3. **Verify triggers are enabled** — If aggregates look stale:
+   ```sql
+   SELECT tgname, tgenabled FROM pg_trigger
+   WHERE tgrelid = 'transactions'::regclass
+   AND NOT tgisinternal;
+   ```
+
+4. **Test trigger firing in DB-backed tests** — Use the `hasTestDatabase()` gate:
+   ```js
+   import { hasTestDatabase, getTestPool } from './setup/db.js';
+   
+   describe.skipIf(!hasTestDatabase())('trigger-maintained tables', () => {
+     it('syncs agg_recipient_totals on insert', async () => {
+       const pool = getTestPool();
+       // Insert transaction, verify agg_recipient_totals updated
+     });
+   });
+   ```
+
+---
+
+## Streaming CSV Export Pattern (Phase 5)
+
+**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]] `GET /api/transactions/export/csv`
+
+For large exports, stream CSV in fixed-size chunks to keep memory bounded. Use a stable `ORDER BY` and accumulator-based running balance to ensure consistency across chunks.
+
+### Implementation
+
+```js
+const CSV_EXPORT_CHUNK_SIZE = 1000;
+
+function escapeCsvValue(value) {
+  if (value == null) return '';
+  // Neutralize formula prefixes
+  const string = value.toString();
+  if (/^[=+\-@]/.test(string.trimStart())) {
+    return `"'${string.replace(/"/g, '""')}"`;
+  }
+  return string.includes(',') || string.includes('"') || string.includes('\n')
+    ? `"${string.replace(/"/g, '""')}"`
+    : string;
+}
+
+function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
+  const cols = [row.date, row.bank_account, row.recipient_name, row.memo,
+                row.amount, row.currency, row.balance, row.category_name, row.comment];
+  if (includeBalance) cols.push(row.running_balance);
+  return cols.map(escapeCsvValue).join(',');
+}
+
+router.get('/export/csv', rateLimiter(...), async (req, res) => {
+  try {
+    const { include_balance } = req.query;
+    const includeBalance = include_balance === 'true';
+
+    // Build filter clauses (dynamic WHERE)
+    const filterClauses = ['t.is_active = true'];
+    const params = [];
+    let paramIdx = 1;
+    // ... add date, category, bank_account filters ...
+
+    // Probe for existence before streaming
+    const probe = await dbQuery(
+      `SELECT 1 FROM transactions t WHERE ${filterClauses.join(' AND ')} LIMIT 1`,
+      params
+    );
+    if (probe.rows.length === 0) {
+      return res.status(404).json({ detail: 'No transactions found' });
+    }
+
+    // Set response headers
+    const filename = `transactions_export_${new Date().toISOString().slice(0, 19)}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    // Write CSV header
+    const header = includeBalance
+      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance'
+      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
+    res.write(header + '\n');
+
+    // Chunked streaming with running balance
+    const chunkSql = `
+      SELECT t.id, t.date, t.bank_account, 
+             COALESCE(pr.name, r.name) AS recipient_name,
+             t.memo, t.amount, t.currency, t.balance,
+             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE '' END AS category_name,
+             t.comment
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE ${filterClauses.join(' AND ')}
+      ORDER BY t.date ASC, t.id ASC
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+    `;
+
+    let offset = 0;
+    let runningBalance = 0;
+    while (true) {
+      const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
+      if (chunk.rows.length === 0) break;
+
+      const lines = chunk.rows.map((row) => {
+        if (includeBalance) {
+          runningBalance += parseFloat(row.amount) || 0;
+          return buildTransactionCsvRow({ ...row, running_balance: runningBalance }, { includeBalance });
+        }
+        return buildTransactionCsvRow(row);
+      });
+
+      res.write(lines.join('\n') + '\n');
+      if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
+      offset += CSV_EXPORT_CHUNK_SIZE;
+    }
+
+    res.end();
+  } catch (err) {
+    logger.error('Error exporting', { error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ detail: 'Error exporting' });
+    } else {
+      res.end();
+    }
+  }
+});
+```
+
+### Key Points
+
+| Pattern | Rule |
+|---------|------|
+| Chunk size | 1000–5000 rows per chunk depending on row width |
+| Stable sort | `ORDER BY date ASC, id ASC` ensures no gaps/dupes |
+| Running balance | Accumulated in JavaScript with JS number precision |
+| Formula safety | Prefix cells with `'` if they start with `=`, `+`, `-`, `@` |
+| Probe first | Check for empty results before streaming to return 404 with JSON |
+| Error recovery | If headers sent, close gracefully; otherwise return JSON error |
+| Rate limiting | Apply per-route limiter to protect DB from concurrent bulk exports |
+
+---
+
+## Atomic Transaction Pattern (Multi-Step Operations)
+
+**Source:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]]
+
+For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
+
+### Pattern
+
+```js
+import { getClient } from '../database/connection.js';
+
+export async function complexMultiStepOperation(primaryId, aliasIds) {
+  // Validate inputs
+  if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {
+    throw new Error('Invalid inputs');
+  }
+
+  // Get a dedicated client for transaction control
+  const client = await getClient();
+  try {
+    // Begin transaction
+    await client.query('BEGIN');
+
+    // Lock the primary row to serialize concurrent operations
+    const primaryCheck = await client.query(
+      `SELECT id FROM primary_table WHERE id = $1 FOR UPDATE`,
+      [primaryId],
+    );
+    if (!primaryCheck.rows.length) {
+      throw new Error('Primary not found');
+    }
+
+    // Step 1: Update first dependent table
+    const step1 = await client.query(
+      `UPDATE table1 SET primary_id = $1 WHERE primary_id = ANY($2)`,
+      [primaryId, aliasIds],
+    );
+
+    // Step 2: Update second dependent table
+    const step2 = await client.query(
+      `UPDATE table2 SET primary_id = $1 WHERE primary_id = ANY($2)`,
+      [primaryId, aliasIds],
+    );
+
+    // Step 3: Deduplicate via INSERT ... ON CONFLICT (race-safe)
+    await client.query(
+      `INSERT INTO dedup_table (primary_id, unique_field, data)
+       SELECT $1, unique_field, data FROM source_table WHERE id = ANY($2)
+       ON CONFLICT (primary_id, unique_field) DO NOTHING`,
+      [primaryId, aliasIds],
+    );
+
+    // Step 4: Mark aliases as merged
+    await client.query(
+      `UPDATE primary_table SET primary_reference_id = $1 WHERE id = ANY($2)`,
+      [primaryId, aliasIds],
+    );
+
+    // Commit all steps atomically
+    await client.query('COMMIT');
+
+    return { 
+      primaryId, 
+      mergedAliasIds: aliasIds,
+      reassigned: {
+        table1: step1.rowCount,
+        table2: step2.rowCount,
+      }
+    };
+  } catch (error) {
+    // Rollback on any error — all partial changes discarded
+    await client.query('ROLLBACK');
+    throw error;
+  }
+}
+```
+
+### Key Conventions
+
+| Pattern | Rule |
+|---------|------|
+| Explicit tx | Use `BEGIN` / `COMMIT` / `ROLLBACK` for control |
+| Row locking | Lock primary row with `FOR UPDATE` before updates to serialize concurrent access |
+| Dependency order | Update tables in FK dependency order (parents before children or children before parents, as FK constraints dictate) |
+| Conflict dedup | Use `INSERT ... ON CONFLICT (uk_fields) DO NOTHING` for race-safe deduplication |
+| Error handling | `ROLLBACK` on any error; caller receives clear error message |
+| Fallback reads | After `ON CONFLICT DO NOTHING`, use `RETURNING id` or follow-up query to get the inserted-or-existing row ID |
+| Validation first | Validate all inputs before `BEGIN` to fail fast |
+| No nested txs | PostgreSQL does not support nested transactions (except savepoints); keep transaction boundaries explicit |
+
+### When to Use
+
+- Multi-step operations that must all succeed or all fail
+- Operations with race conditions (e.g., deduplication during merge)
+- Operations that need to serialize concurrent access (e.g., merging into the same primary)
+- Operations that need to roll back partial work on error
+
+### When NOT to Use
+
+- Simple single-statement operations (repositories handle implicit tx)
+- Pure calculation services (no DB access)
+- Streaming or large-batch operations (explicit chunking may be more efficient)
+
 ---
 
 ## Related
 
+- [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]
+- [[docs/adr/014-atomic-merge-transactional-safety|ADR-014: Atomic Merge Transactional Safety]]
+- [[docs/performance/materialized-views|Materialized Views & Aggregation]]
+- [[docs/reference/data-model|Data Model Reference]]
 - [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]]
 - [[docs/guides/how-to-add-react-component|How to Add a React Component]]
 - [[docs/guides/how-to-add-new-page|How to Add a New Page]]

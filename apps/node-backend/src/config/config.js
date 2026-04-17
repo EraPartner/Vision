@@ -77,6 +77,10 @@ const settings = deepFreeze({
     authToken: (process.env.ADMIN_AUTH_TOKEN || '').trim(),
   },
 
+  features: {
+    aggregationsV2Enabled: (process.env.AGGREGATIONS_V2_ENABLED || 'true').toLowerCase() === 'true',
+  },
+
   isProduction() {
     return this.server.environment.toLowerCase() === 'production';
   },

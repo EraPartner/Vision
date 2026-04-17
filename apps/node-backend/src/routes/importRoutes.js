@@ -8,17 +8,40 @@ import multer from 'multer';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { importCSV } from '../services/importService.js';
 import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
 import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
+import { runImportPipeline } from '../services/importPipeline/index.js';
 
 const router = Router();
 
 const GENERIC_IMPORT_FAILED_DETAIL = 'Import failed';
+
+const PIPELINE_V2_ENABLED = process.env.IMPORT_PIPELINE_V2 === '1'
+  || process.env.IMPORT_PIPELINE_V2 === 'true';
+
+/**
+ * Convert a V2 pipeline progress event to the legacy SSE shape used by the
+ * frontend: { phase, current, total, imported, duplicates, errors, percent }.
+ *
+ * V2 phases advance: staging (0-40) → validating (40-55) → matching (55-70)
+ * → committing (70-100). Mapping is monotonic so the progress bar never
+ * regresses.
+ */
+function v2ProgressToLegacy(ev) {
+  const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
+  const frac = total > 0 ? current / total : 0;
+  let percent = 0;
+  if (phase === 'staging') percent = Math.round(frac * 40);
+  else if (phase === 'validating') percent = 40 + Math.round(frac * 15);
+  else if (phase === 'matching') percent = 55 + Math.round(frac * 15);
+  else if (phase === 'committing') percent = 70 + Math.round(frac * 30);
+  else if (phase === 'complete') percent = 100;
+  return { phase, current, total, imported, duplicates, errors, percent };
+}
 
 function isLikelyCsvFile(file) {
   const originalName = file?.originalname?.toLowerCase() || '';
@@ -58,17 +81,37 @@ router.post('/csv', upload.single('file'), async (req, res) => {
   }
 
   try {
-    // Use raw transaction storage (falls back to legacy for unsupported banks)
-    const result = await importCSVWithRawStorage(req.file.path, bankName);
+    let result;
+    if (PIPELINE_V2_ENABLED) {
+      const pipelineResult = await runImportPipeline({
+        filePath: req.file.path,
+        adapterName: bankName,
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+      });
+      result = {
+        total: pipelineResult.total,
+        imported: pipelineResult.imported,
+        duplicates: pipelineResult.duplicates,
+        errors: pipelineResult.errors,
+        batch_id: pipelineResult.batchId,
+      };
+    } else {
+      // Use raw transaction storage (falls back to legacy for unsupported banks)
+      result = await importCSVWithRawStorage(req.file.path, bankName);
+    }
     cleanup(req.file.path);
 
     logger.info('CSV import completed', {
       bankName,
       fileName: req.file.originalname,
+      pipeline: PIPELINE_V2_ENABLED ? 'v2' : 'legacy',
       ...result,
     });
 
-    scheduleRefresh();
+    if (!PIPELINE_V2_ENABLED) {
+      scheduleRefresh();
+    }
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
@@ -125,10 +168,30 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   };
 
   try {
-    const result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
+    let result;
+    if (PIPELINE_V2_ENABLED) {
+      const pipelineResult = await runImportPipeline({
+        filePath: req.file.path,
+        adapterName: bank_name,
+        customConfig,
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+      });
+      result = {
+        total: pipelineResult.total,
+        imported: pipelineResult.imported,
+        duplicates: pipelineResult.duplicates,
+        errors: pipelineResult.errors,
+        batch_id: pipelineResult.batchId,
+      };
+    } else {
+      result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
+    }
     cleanup(req.file.path);
 
-    scheduleRefresh();
+    if (!PIPELINE_V2_ENABLED) {
+      scheduleRefresh();
+    }
     res.status(201).json({
       ...result,
       status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
@@ -171,24 +234,49 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
   req.on('close', () => { aborted = true; });
 
   try {
-    const result = await importCSVStreaming(
-      req.file.path,
-      bankName,
-      null,
-      (progress) => {
-        if (!aborted) {
-          sendEvent('progress', progress);
+    let result;
+    if (PIPELINE_V2_ENABLED) {
+      const pipelineResult = await runImportPipeline({
+        filePath: req.file.path,
+        adapterName: bankName,
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+        onProgress: (ev) => {
+          if (!aborted) {
+            sendEvent('progress', v2ProgressToLegacy(ev));
+          }
+        },
+      });
+      result = {
+        total: pipelineResult.total,
+        imported: pipelineResult.imported,
+        duplicates: pipelineResult.duplicates,
+        errors: pipelineResult.errors,
+        batch_id: pipelineResult.batchId,
+      };
+    } else {
+      result = await importCSVStreaming(
+        req.file.path,
+        bankName,
+        null,
+        (progress) => {
+          if (!aborted) {
+            sendEvent('progress', progress);
+          }
         }
-      }
-    );
+      );
+    }
 
     cleanup(req.file.path);
 
     if (!aborted) {
-      scheduleRefresh();
+      if (!PIPELINE_V2_ENABLED) {
+        scheduleRefresh();
+      }
       sendEvent('complete', {
         ...result,
         status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
+        percent: 100,
       });
       res.end();
     }

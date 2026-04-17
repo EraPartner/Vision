@@ -45,6 +45,7 @@ SORT path ASC
 | Recipient Bank Accounts | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |
 | Splits | `/api/splits` | GET, POST, PATCH, DELETE | [[docs/api/splits\|Splits API]] |
 | Admin | `/api/admin` | GET, POST | [[docs/api/admin\|Admin API]] |
+| Aggregations (Phase 2) | `/api/aggregations` | GET | [[docs/api/aggregations\|Aggregations API]] |
 | Info & Analytics | `/api/info` | GET | [[docs/api/info\|Info & Analytics API]] |
 
 ## Core Concepts

@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-04-02
-tags: [reference, data-model, entities, database, schema]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, and supporting entities
+date: 2026-04-16
+tags: [reference, data-model, entities, database, schema, phase-0, phase-1]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0) and aggregation tables (Phase 1).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -244,7 +244,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 
 ### ExchangeRate
 
-**Purpose:** Historical and latest exchange rates for currency conversion.
+**Purpose:** Historical and latest exchange rates for currency conversion (EUR-only legacy table).
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
@@ -255,6 +255,31 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `is_latest` | BOOLEAN | DEFAULT false | Latest rate flag |
 
 **Related:** [[docs/integrations/currency-conversion|Currency Conversion]], [[docs/api/info|Info API]]
+
+> [!note] Phase 0 Note
+> See `exchange_rate_cache` below. The new table supports arbitrary currency pair caching; the legacy `exchange_rates` table is preserved for backward compatibility during Phase 0.
+
+---
+
+### ExchangeRateCache
+
+**Purpose:** Cached exchange rates for any currency pair at any date. Complements `exchange_rates` (EUR-only) for full FX flexibility.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `from_ccy` | CHAR(3) | NOT NULL | Source currency code (ISO 4217) |
+| `to_ccy` | CHAR(3) | NOT NULL | Target currency code (ISO 4217) |
+| `rate_date` | DATE | NOT NULL | Date the rate applies |
+| `rate` | NUMERIC(20,10) | NOT NULL | Exchange rate (from → to) |
+| `fetched_at` | TIMESTAMPTZ | DEFAULT NOW() | When this rate was fetched |
+
+**Constraints:**
+- `UNIQUE(from_ccy, to_ccy, rate_date)` — No duplicate rate pairs on the same date
+- `CHECK (rate > 0)` — All rates must be positive
+- Indices: `idx_exchange_rate_cache_date` (for date range queries), `idx_exchange_rate_cache_from_to` (for pair lookups)
+
+**Related:** [[docs/integrations/currency-conversion|Currency Conversion]], migration [[alembic/versions/0025_exchange_rate_cache.py|0025]]
 
 ---
 
@@ -269,6 +294,103 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `source` | VARCHAR(50) | Statbel or Eurostat |
 
 **Related:** [[docs/integrations/belgian-inflation|Belgian Inflation]]
+
+---
+
+## Aggregation Entities (Phase 1)
+
+> [!info] Aggregation Layer
+> These entities are introduced in Alembic migration 0026 as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
+> - **Materialized Views** (computed on demand, refreshed after mutations)
+> - **Trigger-maintained Tables** (updated automatically via row-level triggers)
+>
+> See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
+
+### mv_recipient_monthly (Materialized View)
+
+**Purpose:** Pre-computed monthly aggregates per recipient per currency, with rollup to primary recipient.
+
+**Scope:** Last 24 months for freshness (older totals read from `agg_recipient_totals`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `month_start` | DATE | First day of the month |
+| `year` | INTEGER | Year (denormalized for querying) |
+| `month` | INTEGER | Month 1–12 (denormalized for querying) |
+| `recipient_id` | INTEGER | FK → recipients (rolled up via `COALESCE(r.primary_recipient_id, t.recipient_id)`) |
+| `currency` | CHAR(3) | ISO currency code |
+| `transaction_count` | INTEGER | Count of transactions |
+| `total_income` | NUMERIC(18,2) | Sum of positive amounts |
+| `total_spending` | NUMERIC(18,2) | Sum of negative amounts |
+| `net_amount` | NUMERIC(18,2) | Total (income + spending) |
+
+**Indexes:**
+- Unique: `(month_start, recipient_id, currency)` — enables concurrent refresh
+
+**Maintenance:** On-demand via `refreshAggregations()`, debounced after mutations
+
+**Related:** [[docs/performance/materialized-views|Materialized Views]], [[docs/adr/010-phase1-aggregation-strategy|ADR-010]]
+
+---
+
+### agg_recipient_totals (Trigger-Maintained Table)
+
+**Purpose:** Running all-time totals per recipient per currency. Maintained automatically via row-level triggers on `transactions`.
+
+**PK:** `(recipient_id, currency)`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `recipient_id` | INTEGER | FK → recipients (ON DELETE CASCADE) |
+| `currency` | CHAR(3) | ISO currency code |
+| `total_amount` | NUMERIC(18,2) | Running sum of amounts |
+| `transaction_count` | INTEGER | Count of active transactions |
+| `last_transaction_date` | DATE | Most recent transaction date |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp |
+
+**Indexes:**
+- Primary: `(recipient_id, currency)`
+- Secondary: `idx_agg_recipient_totals_currency`
+
+**Maintenance:** Real-time via triggers:
+- `fn_agg_recipient_totals_sync()` on `transactions` (AFTER INSERT/UPDATE/DELETE)
+- Respects `is_active` flag (inactive transactions excluded from totals)
+- Uses UPSERT semantics for idempotency
+
+**Call-site pattern:** No application code calls refresh; triggers keep this in sync.
+
+**Related:** [[docs/adr/010-phase1-aggregation-strategy|ADR-010]]
+
+---
+
+### agg_split_outstanding (Trigger-Maintained Table)
+
+**Purpose:** Outstanding balance per split, maintained automatically via triggers. Powers the owed-balance endpoints.
+
+**PK:** `split_id`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `split_id` | INTEGER | FK → transaction_splits (ON DELETE CASCADE) |
+| `recipient_id` | INTEGER | FK → recipients (ON DELETE CASCADE) |
+| `original_amount` | NUMERIC(15,2) | Original split amount |
+| `paid_amount` | NUMERIC(15,2) | Total paid via `split_payments` |
+| `outstanding_amount` | NUMERIC(15,2) | `original - paid` |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp |
+
+**Indexes:**
+- Primary: `split_id`
+- Secondary: `idx_agg_split_outstanding_recipient`
+- Partial (open only): `idx_agg_split_outstanding_open` on `outstanding_amount <> 0`
+
+**Maintenance:** Real-time via triggers:
+- `fn_trg_split_sync()` on `transaction_splits` (AFTER INSERT/UPDATE/DELETE)
+- `fn_trg_split_payment_sync()` on `split_payments` (AFTER INSERT/UPDATE/DELETE)
+- Syncs via `fn_agg_split_outstanding_sync(split_id)` helper (idempotent)
+
+**Call-site pattern:** No application code calls refresh; triggers keep this in sync.
+
+**Related:** [[docs/adr/010-phase1-aggregation-strategy|ADR-010]]
 
 ---
 
@@ -396,6 +518,8 @@ GROUP BY i.asset_class;
 ## Related
 
 - [[docs/adr/002-database-schema|Database Schema ADR]]
+- [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]
 - [[docs/reference/database-query-patterns|Database Query Patterns]]
 - [[docs/reference/database-triggers|Database Triggers]]
+- [[docs/performance/materialized-views|Materialized Views]]
 - [[docs/architecture/backend-architecture|Backend Architecture]]

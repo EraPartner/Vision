@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-04-11
-tags: [api, planned, recurring, schedule]
+date: 2026-04-16
+tags: [api, planned, recurring, schedule, phase-3, idempotency]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
 related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
@@ -165,7 +165,7 @@ Implementation notes:
 
 ### POST /api/planned-transactions/:id/execute
 
-Mark a planned transaction as executed.
+Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 
 **Request Body:**
 ```json
@@ -176,12 +176,34 @@ Mark a planned transaction as executed.
 ```
 
 **Behavior:**
-- For recurring: Calculates next occurrence and resets is_executed
-- For one-time: Sets is_executed = true
-- Records execution in planned_transaction_executions table
+- For recurring: Calculates next occurrence and resets `is_executed = false` to re-arm for next cycle
+- For one-time: Sets `is_executed = true`
+- Records execution in `planned_transaction_executions` table
+- **Idempotency:** Database UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)` prevents duplicate execution rows. A duplicate execution request (same planned ID + transaction ID) returns 200 OK with the current planned state + `Idempotent-Replay: true` header instead of creating a duplicate row or error.
 
-Implementation note:
-- Internal route refactor now uses shared `getCurrentDateString()` fallback helper for `execution_date` defaulting; response/side-effect behavior remains unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+**Response Headers (Phase 3):**
+| Header | Value | Meaning |
+|--------|-------|---------|
+| `Idempotent-Replay` | `true` | This response is a replay of an already-executed execution (unique violation caught). Safe to ignore; row already exists. |
+
+**Response Status Codes:**
+| Code | Condition |
+|------|-----------|
+| 200 | Execution recorded or replayed (idempotent) |
+| 400 | Missing `executed_transaction_id` |
+| 404 | Planned transaction not found |
+| 500 | Database or calculation error |
+
+**Idempotency Guarantee:**
+The endpoint is safe to retry without risk of creating duplicate rows. Multiple requests with the same `(planned_id, executed_transaction_id)` pair always return the same result.
+
+Implementation note (Phase 3 — verified Phase 5):
+- Repository method `executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {})` wraps the insert-execution + update-parent pair in a single `BEGIN/COMMIT` transaction.
+- Signature supports optional `updateFields` for planned transaction updates (e.g., advancing recurring next-date) in the same atomic call.
+- On unique violation (Postgres 23505), transaction rolls back and returns `{ duplicate: true }` to the route.
+- Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.
+- Internal route refactor also uses shared `getCurrentDateString()` fallback helper for `execution_date` defaulting; response/side-effect behavior remains unchanged ([[apps/node-backend/src/routes/plannedTransactions.js]]).
+- Test suite ([[apps/node-backend/tests/routes/plannedTransactions.test.js]]) verifies atomic execution via mocked `getById` chained calls (pre-exec + post-exec for response envelope) and `is_executed` advancement assertions from `executeAndAdvance.mock.calls` inspection.
 
 ### DELETE /api/planned-transactions/:id
 
@@ -211,9 +233,16 @@ When creating/updating a loan, the system generates an amortization schedule:
 - [[docs/api/transactions|Transactions API]]
 - [[docs/api/recipients|Recipients API]]
 
-## Testing Coverage Note (2026-04-11)
+## Testing Coverage Note (2026-04-16 Phase 5)
 
 Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]] verifies:
-- loan term bounds validation,
-- patch `recipient_name`/`category_name` name-to-id resolution,
-- loan toggle-off behavior clearing schedule and loan-specific fields.
+- execute endpoint atomic idempotent behavior via `executeAndAdvance()` with duplicate detection (UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)`)
+- loan term bounds validation
+- patch `recipient_name`/`category_name` name-to-id resolution
+- loan toggle-off behavior clearing schedule and loan-specific fields
+- `Idempotent-Replay` header on duplicate execution replays
+- response envelope construction from `getById` calls before and after execution
+
+Golden-fixture test suites added in Phase 3:
+- [[apps/node-backend/tests/services/loanSchedule.golden.test.js]] — Loan amortization schedule generation (amortizing, fixed_principal, interest_only types with edge cases)
+- [[apps/node-backend/tests/services/recurrence.golden.test.js]] — Recurring payment date calculation (all built-in patterns + edge cases like Jan 31 clamping, Feb 29 leap-year rollover)

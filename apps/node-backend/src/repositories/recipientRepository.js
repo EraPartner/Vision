@@ -34,7 +34,16 @@ function buildWhereClause({ name, defaultCategoryId, search, active, uncategoriz
   if (active) sql += ` AND r.is_active = true`;
   if (name) { sql += ` AND r.name ILIKE $${p++}`; params.push(`%${name}%`); }
   if (uncategorized) {
-    sql += ` AND r.default_category_id IS NULL`;
+    // Phase 6: only surface recipients that both lack a default category
+    // *and* have recorded activity in `agg_recipient_totals`. The
+    // aggregation table is trigger-maintained, so this stays O(1) per
+    // recipient vs the old HAVING + full-table scan.
+    sql += ` AND r.default_category_id IS NULL
+             AND EXISTS (
+               SELECT 1 FROM agg_recipient_totals art
+               WHERE art.recipient_id = r.id
+                 AND art.transaction_count > 0
+             )`;
   } else if (defaultCategoryId != null) {
     sql += ` AND r.default_category_id = $${p++}`;
     params.push(defaultCategoryId);

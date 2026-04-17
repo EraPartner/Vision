@@ -6,6 +6,11 @@ import { Router } from 'express';
 import splitRepository from '../repositories/splitRepository.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
+import {
+  validateSplitAllocation,
+  validateBatchSplitAllocation,
+  validatePaymentAmount,
+} from '../services/calculations/splits.js';
 
 const router = Router();
 
@@ -56,29 +61,18 @@ async function getTransactionSplitTotalsOr404(transactionId, res) {
   return totals;
 }
 
-function hasPositiveSplitAmount(amount) {
-  const splitAmount = Number(amount);
-  return !Number.isNaN(splitAmount) && splitAmount > 0;
-}
-
-function computeBatchSplitAmounts(splits) {
-  return splits
-    .map((split) => Number(split?.amount))
-    .filter((amount) => !Number.isNaN(amount));
-}
-
 function normalizeBatchSplitInputs(splits) {
   return splits
     .filter((split) => split?.recipient_id && split?.amount != null)
     .map((split) => ({
       recipient_id: split.recipient_id,
-      amount: split.amount,
+      amount: Number(split.amount),
       note: split.note,
     }));
 }
 
-function exceedsTransactionTotal(totals, newSplitTotal) {
-  return totals.current_split_total + newSplitTotal > totals.transaction_total;
+function resolveActor(req) {
+  return req.get('x-actor') || req.user?.id || null;
 }
 
 // GET /api/splits/owed - Summary of who owes what
@@ -143,19 +137,26 @@ router.post('/', async (req, res) => {
     if (!transaction_id || !recipient_id || amount == null) {
       return res.status(400).json({ detail: 'Missing required fields: transaction_id, recipient_id, amount' });
     }
-    if (!hasPositiveSplitAmount(amount)) {
-      return res.status(400).json({ detail: 'Split amount must be a positive number' });
-    }
-    const splitAmount = Number(amount);
 
     const totals = await getTransactionSplitTotalsOr404(transaction_id, res);
     if (!totals) return;
 
-    if (exceedsTransactionTotal(totals, splitAmount)) {
-      return res.status(400).json({ detail: 'Split amount exceeds transaction total' });
+    const allocationCheck = validateSplitAllocation({
+      newSplitAmount: Number(amount),
+      transactionTotal: totals.transaction_total,
+      currentSplitTotal: totals.current_split_total,
+    });
+    if (!allocationCheck.ok) {
+      return res.status(400).json({ detail: allocationCheck.error });
     }
 
     const split = await splitRepository.createSplit({ transaction_id, recipient_id, amount, note });
+    await splitRepository.writeAudit({
+      split_id: split.id,
+      action: 'create',
+      actor: resolveActor(req),
+      payload: { transaction_id, recipient_id, amount: Number(amount), note: note || null },
+    });
     res.status(201).json(split);
   } catch (err) {
     logger.error('Error creating split', { error: err.message });
@@ -171,24 +172,38 @@ router.post('/batch', async (req, res) => {
       return res.status(400).json({ detail: 'Missing required fields: transaction_id, splits[]' });
     }
 
-    const splitAmounts = computeBatchSplitAmounts(splits);
-    if (splitAmounts.some((splitAmount) => splitAmount <= 0)) {
-      return res.status(400).json({ detail: 'Split amount must be a positive number' });
-    }
-
-    const newSplitTotal = splitAmounts.reduce((sum, splitAmount) => sum + splitAmount, 0);
     const totals = await getTransactionSplitTotalsOr404(transaction_id, res);
     if (!totals) return;
 
-    if (exceedsTransactionTotal(totals, newSplitTotal)) {
-      return res.status(400).json({ detail: 'Split amount exceeds transaction total' });
+    const preparedSplits = normalizeBatchSplitInputs(splits);
+    const batchCheck = validateBatchSplitAllocation({
+      splits: preparedSplits,
+      transactionTotal: totals.transaction_total,
+      currentSplitTotal: totals.current_split_total,
+    });
+    if (!batchCheck.ok) {
+      return res.status(400).json({ detail: batchCheck.error });
     }
 
-    const preparedSplits = normalizeBatchSplitInputs(splits);
     const created = await splitRepository.createSplitsBatch({
       transaction_id,
       splits: preparedSplits,
     });
+    const actor = resolveActor(req);
+    for (const split of created) {
+      await splitRepository.writeAudit({
+        split_id: split.id,
+        action: 'create',
+        actor,
+        payload: {
+          transaction_id,
+          recipient_id: split.recipient_id,
+          amount: Number(split.amount),
+          note: split.note || null,
+          batch: true,
+        },
+      });
+    }
     res.status(201).json({ items: created });
   } catch (err) {
     logger.error('Error creating batch splits', { error: err.message });
@@ -201,10 +216,28 @@ router.post('/:id/pay', validateIdParam, async (req, res) => {
   try {
     const splitId = parseRouteId(req);
     const { amount, note, paid_at } = req.body;
-    if (amount == null || amount <= 0) {
-      return res.status(400).json({ detail: 'Amount must be a positive number' });
+
+    const split = await splitRepository.getSplitById(splitId);
+    if (!split) {
+      return res.status(404).json({ detail: 'Split not found' });
     }
-    const payment = await splitRepository.addPayment({ split_id: splitId, amount, note, paid_at });
+    const alreadyPaid = await splitRepository.getAlreadyPaid(splitId);
+    const paymentCheck = validatePaymentAmount({
+      paymentAmount: Number(amount),
+      splitAmount: split.amount,
+      alreadyPaid,
+    });
+    if (!paymentCheck.ok) {
+      return res.status(400).json({ detail: paymentCheck.error });
+    }
+
+    const payment = await splitRepository.addPayment({
+      split_id: splitId,
+      amount,
+      note,
+      paid_at,
+      actor: resolveActor(req),
+    });
     res.status(201).json(payment);
   } catch (err) {
     logger.error('Error recording payment', { error: err.message });
@@ -226,10 +259,17 @@ router.get('/:id/payments', validateIdParam, async (req, res) => {
 // POST /api/splits/:id/settle - Mark a split as settled
 router.post('/:id/settle', validateIdParam, async (req, res) => {
   try {
-    const split = await splitRepository.settleSplit(parseRouteId(req));
+    const splitId = parseRouteId(req);
+    const split = await splitRepository.settleSplit(splitId);
     if (!split) {
       return res.status(404).json({ detail: 'Split not found' });
     }
+    await splitRepository.writeAudit({
+      split_id: splitId,
+      action: 'settle',
+      actor: resolveActor(req),
+      payload: { manual: true },
+    });
     res.json(split);
   } catch (err) {
     logger.error('Error settling split', { error: err.message });
@@ -240,7 +280,16 @@ router.post('/:id/settle', validateIdParam, async (req, res) => {
 // POST /api/splits/owed/:id/settle-all - Mark all unsettled splits for a recipient as settled
 router.post('/owed/:id/settle-all', validateIdParam, async (req, res) => {
   try {
-    const result = await splitRepository.settleAllByRecipient(parseRouteId(req));
+    const recipientId = parseRouteId(req);
+    const result = await splitRepository.settleAllByRecipient(recipientId);
+    if (result.settled_count > 0) {
+      await splitRepository.writeAudit({
+        split_id: null,
+        action: 'settle_all',
+        actor: resolveActor(req),
+        payload: { recipient_id: recipientId, settled_count: result.settled_count },
+      });
+    }
     res.json(result);
   } catch (err) {
     logger.error('Error settling all splits for recipient', { error: err.message });
@@ -251,10 +300,26 @@ router.post('/owed/:id/settle-all', validateIdParam, async (req, res) => {
 // DELETE /api/splits/:id - Delete a split
 router.delete('/:id', validateIdParam, async (req, res) => {
   try {
-    const deleted = await splitRepository.deleteSplit(parseRouteId(req));
+    const splitId = parseRouteId(req);
+    const splitBefore = await splitRepository.getSplitById(splitId);
+    if (!splitBefore) {
+      return res.status(404).json({ detail: 'Split not found' });
+    }
+    const deleted = await splitRepository.deleteSplit(splitId);
     if (!deleted) {
       return res.status(404).json({ detail: 'Split not found' });
     }
+    await splitRepository.writeAudit({
+      split_id: null,
+      action: 'delete',
+      actor: resolveActor(req),
+      payload: {
+        split_id: splitId,
+        transaction_id: splitBefore.transaction_id,
+        recipient_id: splitBefore.recipient_id,
+        amount: splitBefore.amount,
+      },
+    });
     res.json({ message: 'Split deleted' });
   } catch (err) {
     logger.error('Error deleting split', { error: err.message });

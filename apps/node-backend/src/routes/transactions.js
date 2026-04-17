@@ -29,6 +29,7 @@ function parseTransactionListQuery(query) {
     category_id, recipient_id, recipient_name,
     active = 'true', search,
     sort_by, sort_dir,
+    include_balance,
   } = query;
 
   return {
@@ -45,6 +46,7 @@ function parseTransactionListQuery(query) {
     active: active !== 'false',
     sortBy: sort_by || null,
     sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
+    includeBalance: include_balance === 'true',
   };
 }
 
@@ -67,12 +69,16 @@ function escapeCsvValue(value) {
     : stringValue;
 }
 
-function buildTransactionCsvRow(row) {
-  return [
+function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
+  const cols = [
     row.date, row.bank_account, row.recipient_name, row.memo,
     row.amount, row.currency, row.balance, row.category_name, row.comment,
-  ].map(escapeCsvValue).join(',');
+  ];
+  if (includeBalance) cols.push(row.running_balance);
+  return cols.map(escapeCsvValue).join(',');
 }
+
+const CSV_EXPORT_CHUNK_SIZE = 1000;
 
 function buildTransactionExportFilename() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -172,15 +178,50 @@ router.get('/', async (req, res) => {
 
 // GET /api/transactions/export/csv
 // Apply a modest per-route rate limiter to protect the DB-heavy export operation.
+// Streams CSV in fixed-size chunks so memory stays bounded regardless of row count.
 router.get(
   '/export/csv',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-csv' }),
   async (req, res) => {
   try {
-    const { start_date, end_date, bank_account, category_id } = req.query;
+    const { start_date, end_date, bank_account, category_id, include_balance } = req.query;
+    const includeBalance = include_balance === 'true';
 
-    let sql = `
-      SELECT t.date, t.bank_account, COALESCE(pr.name, r.name) AS recipient_name, t.memo,
+    const filterClauses = [`t.is_active = true`];
+    const params = [];
+    let paramIdx = 1;
+
+    if (start_date) { filterClauses.push(`t.date >= $${paramIdx++}`); params.push(start_date); }
+    if (end_date) { filterClauses.push(`t.date <= $${paramIdx++}`); params.push(end_date); }
+    if (bank_account) { filterClauses.push(`t.bank_account ILIKE $${paramIdx++}`); params.push(`%${bank_account}%`); }
+    if (category_id) { filterClauses.push(`t.category_id = $${paramIdx++}`); params.push(parseInt(category_id, 10)); }
+
+    const whereSql = filterClauses.join(' AND ');
+
+    // Probe for existence before opening the stream so 404 still works cleanly.
+    const probeSql = `SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`;
+    const probe = await dbQuery(probeSql, params);
+    if (probe.rows.length === 0) {
+      return res.status(404).json({ detail: 'No transactions found matching filters' });
+    }
+
+    const filename = buildTransactionExportFilename();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    const header = includeBalance
+      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance'
+      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
+    res.write(header);
+    res.write('\n');
+
+    // Chunked keyset-free pagination. Stable ORDER BY (date ASC, id ASC) guarantees
+    // no gaps/dupes across pages, and the running_balance window runs per chunk so
+    // it stays consistent with the ORDER BY.
+    const limitParamIdx = paramIdx;
+    const offsetParamIdx = paramIdx + 1;
+    const chunkSql = `
+      SELECT t.id, t.date, t.bank_account, COALESCE(pr.name, r.name) AS recipient_name, t.memo,
              t.amount, t.currency, t.balance,
              CASE
                WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
@@ -195,37 +236,39 @@ router.get(
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON r.default_category_id = rc.id
       LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      WHERE t.is_active = true
+      WHERE ${whereSql}
+      ORDER BY t.date ASC, t.id ASC
+      LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
     `;
-    const params = [];
-    let paramIdx = 1;
 
-    if (start_date) { sql += ` AND t.date >= $${paramIdx++}`; params.push(start_date); }
-    if (end_date) { sql += ` AND t.date <= $${paramIdx++}`; params.push(end_date); }
-    if (bank_account) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bank_account}%`); }
-    if (category_id) { sql += ` AND t.category_id = $${paramIdx++}`; params.push(parseInt(category_id, 10)); }
-
-    sql += ` ORDER BY t.date ASC`;
-
-    const result = await dbQuery(sql, params);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ detail: 'No transactions found matching filters' });
+    // Running balance accumulated in JS so it stays correct across chunks.
+    let offset = 0;
+    let runningBalance = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
+      if (chunk.rows.length === 0) break;
+      const lines = chunk.rows.map((row) => {
+        if (includeBalance) {
+          runningBalance += row.amount != null ? parseFloat(row.amount) : 0;
+          return buildTransactionCsvRow({ ...row, running_balance: runningBalance }, { includeBalance });
+        }
+        return buildTransactionCsvRow(row);
+      });
+      res.write(lines.join('\n'));
+      res.write('\n');
+      if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
+      offset += CSV_EXPORT_CHUNK_SIZE;
     }
 
-    // Build CSV
-    const header = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
-    const csvRows = result.rows.map(buildTransactionCsvRow);
-
-    const csv = [header, ...csvRows].join('\n');
-    const filename = buildTransactionExportFilename();
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-    res.send(csv);
+    res.end();
   } catch (err) {
     logger.error('Error exporting transactions', { error: err.message });
-    res.status(500).json({ detail: 'Error exporting transactions' });
+    if (!res.headersSent) {
+      res.status(500).json({ detail: 'Error exporting transactions' });
+    } else {
+      res.end();
+    }
   }
 });
 

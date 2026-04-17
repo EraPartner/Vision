@@ -23,9 +23,14 @@ related_code:
 
 The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 4 tabbed sections.
 
+## Current Status (Phase 2, April 2026)
+
+> [!warning] Dashboard Stat Cards vs. Statistics Page
+> **Phase 2 (April 2026) updated only the Dashboard stat cards** to use `/api/aggregations/monthly-summary`. The full **Statistics page remains on client-side computation** (blocked on MV history extension). See [[docs/api/aggregations|Aggregations API]] for dashboard details.
+
 ## Architecture
 
-### Data Flow
+### Data Flow (Statistics Page)
 
 ```
 StatisticsPage → useStatistics() → processTransactions() → StatisticsData
@@ -35,7 +40,7 @@ StatisticsPage → useStatistics() → processTransactions() → StatisticsData
                     Computes stats client-side via useMemo
 ```
 
-Unlike other features that rely on backend aggregations, statistics are **computed entirely on the frontend**. The `useStatistics` hook fetches all transactions (with currency normalization) and categories, then `processTransactions()` performs client-side aggregation.
+The Statistics page **is still computed entirely on the frontend**. The `useStatistics` hook fetches all transactions (with currency normalization) and categories, then `processTransactions()` performs client-side aggregation.
 
 ### Key Design Decisions
 

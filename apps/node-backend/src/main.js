@@ -34,6 +34,7 @@ import {
   refreshActiveHoldingQuotes,
 } from './services/quoteBackfillService.js';
 import { warmInfoCaches } from './routes/info.js';
+import { createErrorHandler } from './middleware/errorHandler.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -155,6 +156,7 @@ import categoriesRouter from './routes/categories.js';
 import recipientsRouter from './routes/recipients.js';
 import plannedTransactionsRouter from './routes/plannedTransactions.js';
 import infoRouter from './routes/info.js';
+import aggregationsRouter from './routes/aggregations.js';
 import adminRouter from './routes/admin.js';
 import importRouter from './routes/importRoutes.js';
 import investmentsRouter from './routes/investments.js';
@@ -244,6 +246,10 @@ app.use('/api/recipients', recipientsRouter);
 app.use('/api/recipients', recipientBankAccountsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
+if (settings.features?.aggregationsV2Enabled) {
+  app.use('/api/aggregations', aggregationsRouter);
+  logger.info('Aggregations V2 routes enabled (/api/aggregations)');
+}
 app.use('/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
@@ -278,24 +284,9 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler
-app.use((err, req, res, _next) => {
-  logger.error('Unhandled exception', {
-    error: err.message,
-    path: req.path,
-    method: req.method,
-  });
-
-  // Don't leak error details in production
-  const detail = settings.isProduction()
-    ? 'An internal server error occurred. Please try again later.'
-    : err.message;
-
-  res.status(500).json({
-    detail,
-    error_code: 'INTERNAL_SERVER_ERROR',
-  });
-});
+// Global error handler — typed errors (AppError, ValidationError, NotFoundError, …)
+// map to their declared status; untyped errors fall through to 500.
+app.use(createErrorHandler(() => settings.isProduction()));
 
 // ==================== Server Startup ====================
 

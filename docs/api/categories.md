@@ -3,9 +3,9 @@ title: API - Categories
 type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
-description: Category management for organizing transactions
-date: 2026-04-02
-tags: [api, categories, organization]
+description: Category management for organizing transactions with UNIQUE constraint and atomic assignment
+date: 2026-04-16
+tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
 related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.js]]

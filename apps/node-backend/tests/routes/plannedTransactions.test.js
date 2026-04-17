@@ -27,6 +27,7 @@ vi.mock('../../src/repositories/plannedTransactionRepository.js', () => ({
     hardDelete: vi.fn(),
     addExecution: vi.fn(),
     replaceLoanSchedule: vi.fn(),
+    executeAndAdvance: vi.fn(async () => ({ duplicate: false })),
   },
 }));
 
@@ -320,13 +321,10 @@ describe('Planned Transaction Routes', () => {
 
   describe('POST /:id/execute', () => {
     it('should execute one-time transaction', async () => {
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1, is_recurring: false, is_executed: false,
-      });
-      plannedTransactionRepository.addExecution.mockResolvedValue({});
-      plannedTransactionRepository.update.mockResolvedValue({
-        id: 1, is_executed: true, last_executed_date: '2026-03-15',
-      });
+      plannedTransactionRepository.getById
+        .mockResolvedValueOnce({ id: 1, is_recurring: false, is_executed: false })
+        .mockResolvedValueOnce({ id: 1, is_executed: true, last_executed_date: '2026-03-15' });
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
       const req = {
         params: { id: '1' },
@@ -339,21 +337,20 @@ describe('Planned Transaction Routes', () => {
     });
 
     it('should execute recurring and advance date', async () => {
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1, is_recurring: true, recurrence_pattern: 'monthly',
-        planned_date: '2026-03-15', is_executed: false,
-      });
-      plannedTransactionRepository.addExecution.mockResolvedValue({});
-      plannedTransactionRepository.update.mockResolvedValue({
-        id: 1, is_executed: false, planned_date: '2026-04-15',
-      });
+      plannedTransactionRepository.getById
+        .mockResolvedValueOnce({
+          id: 1, is_recurring: true, recurrence_pattern: 'monthly',
+          planned_date: '2026-03-15', is_executed: false,
+        })
+        .mockResolvedValueOnce({ id: 1, is_executed: false, planned_date: '2026-04-15' });
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({ duplicate: false });
 
       const req = { params: { id: '1' }, body: { executed_transaction_id: 10 } };
       const res = mockResponse();
       await routeHandlers['post:/:id/execute'](req, res);
 
-      const updateCall = plannedTransactionRepository.update.mock.calls[0];
-      expect(updateCall[1].is_executed).toBe(false);
+      const call = plannedTransactionRepository.executeAndAdvance.mock.calls[0];
+      expect(call[3].is_executed).toBe(false);
     });
 
     it('should return 400 without executed_transaction_id', async () => {

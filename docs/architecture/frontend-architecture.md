@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: React frontend architecture and diagrams
-date: 2026-04-10
-tags: [architecture, frontend, uml, plantuml, react]
+date: 2026-04-16
+tags: [architecture, frontend, uml, plantuml, react, phase-6]
 aliases: [frontend architecture, react architecture, frontend design]
 ---
 
@@ -13,6 +13,15 @@ aliases: [frontend architecture, react architecture, frontend design]
 This document contains UML diagrams for the React frontend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
+
+## Feature Folder Organization (Phase 6)
+
+Dialog and form components are organized by feature in the `apps/frontend/src/features/` folder:
+
+- **`features/recipients/`** — Recipient management dialogs (AddRecipientDialog, MergeRecipientsDialog)
+- **`features/categories/`** — Category management dialogs (AddCategoryDialog)
+
+This organization improves feature discoverability and reduces cross-cutting concerns in the shared `components/` folder. Page components import from these feature folders instead of centralized form/dialog directories.
 
 ## Technology Stack
 

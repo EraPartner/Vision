@@ -191,8 +191,9 @@ describe('Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/export/csv'](req, res);
 
-      expect(res.send).toHaveBeenCalledTimes(1);
-      const csv = res.send.mock.calls[0][0];
+      expect(res.write).toHaveBeenCalled();
+      expect(res.end).toHaveBeenCalledTimes(1);
+      const csv = res.write.mock.calls.map(([chunk]) => chunk).join('');
       expect(csv).toContain(`'=HYPERLINK(""http://evil"")`);
       expect(csv).toContain("'+cmd");
       expect(csv).toContain("'-100.00");
@@ -366,7 +367,15 @@ describe('Transaction Routes', () => {
 });
 
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), setHeader: vi.fn() };
+  const res = {
+    json: vi.fn(),
+    status: vi.fn(),
+    send: vi.fn(),
+    setHeader: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+    headersSent: false,
+  };
   res.status.mockReturnValue(res);
   return res;
 }

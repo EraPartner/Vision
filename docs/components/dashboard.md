@@ -337,15 +337,23 @@ function Dashboard() {
 
 ---
 
-## Data Flow
+## Data Flow — Phase 2 (April 2026)
 
 ```
-API (/api/info/*) → Hook (useFilteredDashboardStats) → Component → Dashboard
+API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) → Component → Dashboard
+                        ↓
+         (with category/recipient exclusions applied server-side)
 ```
+
+**Phase 2 Update:** Dashboard stat cards now fetch from `/api/aggregations/monthly-summary`, a server-computed aggregation endpoint with materialized-view/live source distinction. Category and recipient exclusions are applied server-side; no client-side re-filtering. The hook resolves hidden category IDs (if enabled) and passes `excluded_category_ids[]` and `excluded_recipient_ids[]` as query parameters.
+
+**Source Heuristic:**
+- `meta.source === 'mv'` when no exclusions (fast, from materialized view)
+- `meta.source === 'live'` when exclusions are applied (dynamic scan, current data)
 
 ### Related Hooks
 
-- `useFilteredDashboardStats()` - Fetches filtered dashboard data
+- `useFilteredDashboardStats()` - Fetches `/api/aggregations/monthly-summary` with server-side exclusions (Phase 2)
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
 
@@ -353,7 +361,8 @@ API (/api/info/*) → Hook (useFilteredDashboardStats) → Component → Dashboa
 
 ## Related Documentation
 
+- [[docs/api/aggregations]] - Aggregations API (Phase 2)
 - [[docs/components/index]] - Components Index
 - [[docs/features/views]] - Dashboard view
-- [[docs/api/info]] - Analytics API
+- [[docs/api/info]] - Legacy Info API (coexists through Phase 8)
 - [[docs/performance/materialized-views]] - Dashboard optimization

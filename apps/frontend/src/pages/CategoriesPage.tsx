@@ -8,7 +8,7 @@ import {Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, ChevronRight, ChevronDown,
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import {useCategories, useUpdateCategory, useDeleteCategory} from "@/hooks/useCategories";
-import {AddCategoryDialog} from "@/components/forms/AddCategoryDialog";
+import {AddCategoryDialog} from "@/features/categories/AddCategoryDialog";
 import {cn} from "@/lib/utils";
 import {useConfirmDialog} from "@/hooks/useConfirmDialog";
 

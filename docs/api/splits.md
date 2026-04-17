@@ -2,7 +2,7 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-04-11
+date: 2026-04-16
 tags:
   - api
   - splits
@@ -33,9 +33,31 @@ Endpoints for transaction splitting and debt tracking. Allows splitting expenses
 
 ## Validation Rules
 
+### Split Allocation
+
 - Split amounts must be **positive numbers**.
 - The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
+- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Floating-point tolerance: amounts are rounded to cents (CENT_TOLERANCE = 0.005) to guard against JSON round-tripping artifacts.
 - If a transaction does not exist, split creation returns `404`.
+
+### Payment Validation
+
+- Payment amounts must be **positive numbers**.
+- Sum of payments on a split cannot exceed the split's amount.
+- Validation uses `validatePaymentAmount` from the pure calc module.
+- Defense-in-depth: route returns 400 before DB write, plus DB trigger `fn_split_payment_overpayment_guard()` raises SQLSTATE 23514 if invariant violated.
+
+### Audit Trail
+
+All split lifecycle events are recorded in `split_audit` table via `splitRepository.writeAudit()`:
+- **create**: triggered by POST `/api/splits` or POST `/api/splits/batch`
+- **pay**: triggered by POST `/api/splits/:id/pay`
+- **settle**: triggered by POST `/api/splits/:id/settle`
+- **settle_all**: triggered by POST `/api/splits/owed/:id/settle-all` (only written if settled_count > 0)
+- **delete**: triggered by DELETE `/api/splits/:id`, captures pre-delete snapshot
+
+Actor is resolved via: `x-actor` header → `req.user?.id` → `null`.
 
 ## Endpoints
 
@@ -168,13 +190,15 @@ Get all splits for a specific transaction.
 
 Create a new split for a transaction.
 
+The endpoint validates split allocation via `validateSplitAllocation` before write and records a `create` audit trail entry.
+
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `transaction_id` | number | Yes | ID of the transaction to split |
 | `recipient_id` | number | Yes | ID of the recipient who owes |
-| `amount` | number | Yes | Amount owed |
+| `amount` | number | Yes | Amount owed (positive number) |
 | `note` | string | No | Optional note |
 
 **Response:** `201 Created`
@@ -205,8 +229,17 @@ Create a new split for a transaction.
 }
 ```
 
+**Error Response:** `404 Not Found`
+
+```json
+{
+  "detail": "Transaction not found"
+}
+```
+
 Implementation notes:
-- Route now reuses shared split-validation helpers (`getTransactionSplitTotalsOr404`, `hasPositiveSplitAmount`, `exceedsTransactionTotal`) without changing validation responses or status codes ([[apps/node-backend/src/routes/splits.js]]).
+- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Audit trail written via `splitRepository.writeAudit()` with action='create' and request actor resolved from headers ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -214,19 +247,21 @@ Implementation notes:
 
 Create multiple splits for a transaction at once.
 
+The endpoint validates total batch allocation via `validateBatchSplitAllocation` before writes and records a `create` audit trail entry per split (with `batch: true` in payload).
+
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `transaction_id` | number | Yes | ID of the transaction to split |
-| `splits` | array | Yes | Array of split objects |
+| `splits` | array | Yes | Array of split objects (non-empty) |
 
 **Split Object:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `recipient_id` | number | Yes | ID of the recipient |
-| `amount` | number | Yes | Amount owed |
+| `amount` | number | Yes | Amount owed (positive number) |
 | `note` | string | No | Optional note |
 
 **Response:** `201 Created`
@@ -244,19 +279,37 @@ Create multiple splits for a transaction at once.
 
 ```json
 {
+  "detail": "Missing required fields: transaction_id, splits[]"
+}
+```
+
+```json
+{
   "detail": "Split amount exceeds transaction total"
 }
 ```
 
+**Error Response:** `404 Not Found`
+
+```json
+{
+  "detail": "Transaction not found"
+}
+```
+
 Implementation notes:
-- Internal refactor extracted `computeBatchSplitAmounts` and reused shared transaction-total validation helpers to reduce repetition while preserving batch-create behavior ([[apps/node-backend/src/routes/splits.js]]).
-- Batch insert optimization now persists valid split rows through repository bulk insert (`createSplitsBatch`) instead of serial inserts, preserving validation rules and response shape while reducing DB round-trips ([[apps/node-backend/src/routes/splits.js]], [[apps/node-backend/src/repositories/splitRepository.js]]).
+- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
+- Persists all splits via bulk insert `createSplitsBatch()` after validation ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Audit trail: one row per split with action='create' and `batch: true` in payload ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
 ### POST /api/splits/:id/pay
 
 Record a payment towards a split.
+
+The endpoint validates payment amount via `validatePaymentAmount` before write. Split must exist; payment validates against split's remaining balance. The split is automatically settled if payment covers the full remaining amount.
 
 **Parameters:**
 
@@ -272,9 +325,6 @@ Record a payment towards a split.
 | `note` | string | No | Optional note |
 | `paid_at` | string | No | Payment date (ISO 8601) |
 
-Implementation note:
-- Payment recording now runs in a single DB transaction and performs conditional auto-settlement atomically after insert in `addPayment`, preserving API behavior while reducing concurrent race windows ([[apps/node-backend/src/repositories/splitRepository.js]]).
-
 **Response:** `201 Created`
 
 ```json
@@ -287,13 +337,34 @@ Implementation note:
 }
 ```
 
+**Error Response:** `404 Not Found`
+
+```json
+{
+  "detail": "Split not found"
+}
+```
+
 **Error Response:** `400 Bad Request`
 
 ```json
 {
-  "detail": "Amount must be a positive number"
+  "detail": "Payment would exceed split outstanding balance"
 }
 ```
+
+```json
+{
+  "detail": "Payment amount must be a positive number"
+}
+```
+
+Implementation notes:
+- Fetches split via `getSplitById(splitId)` and returns 404 if missing ([[apps/node-backend/src/routes/splits.js]]).
+- Gets already-paid amount via `getAlreadyPaid(splitId)` ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Validates payment amount via `validatePaymentAmount({ paymentAmount, splitAmount, alreadyPaid })` ([[apps/node-backend/src/services/calculations/splits.js]]).
+- Inserts payment + conditionally auto-settles split in single DB transaction via `addPayment()` ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Actor propagated to payment record and audit trail via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
 
@@ -329,6 +400,8 @@ Get all payments for a specific split.
 
 Mark a split as fully settled.
 
+This is a manual settlement operation (not triggered by payment reaching the full amount). Records a `settle` audit trail entry with `manual: true`.
+
 **Parameters:**
 
 | Field | Type | Description |
@@ -355,13 +428,17 @@ Mark a split as fully settled.
 }
 ```
 
+Implementation notes:
+- Settles split via `settleSplit(splitId)` and returns 404 if missing ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Records audit trail via `writeAudit()` with action='settle' and payload `{ manual: true }` ([[apps/node-backend/src/routes/splits.js]]).
+
 ---
 
 ### POST /api/splits/owed/:id/settle-all
 
 Mark all **unsettled** splits for a specific recipient as settled.
 
-This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records.
+This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records. Records a `settle_all` audit trail entry only if settled_count > 0.
 
 **Parameters:**
 
@@ -385,11 +462,17 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 }
 ```
 
+Implementation notes:
+- Settles all unsettled splits for recipient via `settleAllByRecipient(recipientId)` ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Audit trail written only if `settled_count > 0`, with action='settle_all' and payload containing recipient_id and settled_count ([[apps/node-backend/src/routes/splits.js]]).
+
 ---
 
 ### DELETE /api/splits/:id
 
-Delete a split.
+Hard-delete a split.
+
+Splits are physically deleted (not soft-deleted). The deletion is permanent and irreversible. A `delete` audit trail entry is written with the pre-delete snapshot (split_id, transaction_id, recipient_id, amount), so the split can be reconstructed for auditing purposes but not recovered.
 
 **Parameters:**
 
@@ -412,6 +495,12 @@ Delete a split.
   "detail": "Split not found"
 }
 ```
+
+Implementation notes:
+- Fetches split via `getSplitById(splitId)` for pre-delete snapshot; returns 404 if missing ([[apps/node-backend/src/routes/splits.js]]).
+- Hard-deletes via `deleteSplit(splitId)`, which cascades to split_payments via ON DELETE CASCADE ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Audit trail written via `writeAudit()` with action='delete', split_id=null (since split is deleted), and payload containing the snapshot ([[apps/node-backend/src/routes/splits.js]]).
+- Split audit rows survive deletion via `ON DELETE SET NULL` on split_id FK, enabling forensic reconstruction ([[docs/adr/013-split-hard-delete-with-audit-trail]]).
 
 ## TypeScript Types
 
@@ -477,8 +566,12 @@ interface SplitCreateInput {
 - [[docs/api/index]] - API Index
 - [[docs/api/transactions]] - Transactions API
 - [[docs/api/recipients]] - Recipients API
+- [[docs/features/splits]] - Feature specification
+- [[docs/adr/013-split-hard-delete-with-audit-trail]] - Audit trail design and hard-delete semantics
+- [[apps/node-backend/src/services/calculations/splits.js]] - Pure validation module
 - [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
 
 ## Migrations
 
 - `0009_transaction_splits.py` — Added `transaction_splits` and `split_payments` tables for expense splitting
+- `0028_split_audit_overpayment_guard.py` — Added `split_audit` table (append-only lifecycle log) and `fn_split_payment_overpayment_guard()` trigger for defense-in-depth payment validation

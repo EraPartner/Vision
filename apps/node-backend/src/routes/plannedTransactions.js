@@ -287,10 +287,7 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
       return res.status(404).json({ detail: `Planned transaction ${id} not found` });
     }
 
-    // Add execution record
-    await plannedTransactionRepository.addExecution(id, executed_transaction_id, execution_date);
-
-    // Update is_executed and last_executed_date
+    // Compute state advance for the parent planned_transactions row.
     const execDate = execution_date || getCurrentDateString();
     const updateFields = {
       is_executed: !existing.is_recurring, // For recurring, keep false
@@ -307,9 +304,21 @@ router.post('/:id/execute', validateIdParam, async (req, res) => {
       }
     }
 
-    const updated = await plannedTransactionRepository.update(id, updateFields);
+    // Atomic insert-execution + update-parent. Idempotent via UNIQUE index:
+    // a duplicate request returns `{ duplicate: true }` and we reply with the
+    // already-advanced state instead of re-executing.
+    const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
+      id,
+      executed_transaction_id,
+      execDate,
+      updateFields
+    );
 
-    res.json(formatPlannedTransaction(updated));
+    const current = await plannedTransactionRepository.getById(id);
+    if (duplicate) {
+      res.set('Idempotent-Replay', 'true');
+    }
+    res.json(formatPlannedTransaction(current));
   } catch (err) {
     logger.error('Error executing planned transaction', { error: err.message });
     res.status(500).json({ detail: `Failed to execute planned transaction: ${err.message}` });

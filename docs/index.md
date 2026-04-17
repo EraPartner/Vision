@@ -156,6 +156,28 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-16 Phase 1 Aggregation-Layer Infrastructure
+
+- **ADR-010**: Postgres-backed aggregations strategy (MVs + trigger-maintained tables) replaces Redis/in-process caches
+- **Migration 0026**: Adds `mv_recipient_monthly`, `agg_recipient_totals`, `agg_split_outstanding` with full trigger maintenance and concurrent refresh support
+- **Orchestrator**: `aggregationRefresh.js` service with `refreshAggregations()` (bulk) and `scheduleAggregationRefresh()` (debounced single-row) entry points
+- **Data Model**: Phase 1 aggregation entities documented (3 new entities, 5 supporting functions, 4 triggers)
+- **Testing**: Module surface + migration artifact smoke tests, golden-fixture harness for Phase 2+ calc modules
+- **Fixture Scaffold**: 9-variant test matrix (empty, currencies, exclusions, boundaries, leap-day, DST) documented per aggregate
+
+See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]], [[docs/performance/materialized-views|Materialized Views]], [[docs/reference/data-model|Data Model]], [[docs/reference/code-patterns|Code Patterns]]
+
+### 2026-04-16 Phase 0 Foundations Complete
+
+- **ADR-009**: Timezone policy established for deterministic business math across zones
+- **Patterns**: Golden-fixture regression testing, centralized SQL filter builder, typed error hierarchy
+- **Infrastructure**: Database fixture helper (TEST_DATABASE_URL), exchange_rate_cache table for arbitrary FX pairs
+- **Consolidation**: Currency conversion facade (`services/calculations/currency.js`) ready for Phase 0 step 4 merge
+- **Testing**: New patterns documented for golden fixtures and database-dependent tests
+- **Migration**: 0025_exchange_rate_cache.py adds schema support for arbitrary FX pair caching
+
+See [[docs/adr/009-timezone-policy|ADR-009]], [[docs/reference/code-patterns|Code Patterns]], [[docs/testing/testing|Testing Documentation]], [[docs/integrations/currency-conversion|Currency Conversion]]
+
 ### 2026-04-16 Performance Page Rewrite
 
 - **API Enhancement**: `/api/info/portfolio-performance` now returns pre-computed metrics, heatmap, and per-investment breakdown with new `period` query param (1m/3m/6m/1y/3y/all)
