@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Plus } from 'lucide-react';
+import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { getTxnTypeLabel } from '@/types/portfolio';
@@ -47,15 +48,15 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     yearly: t('addPortTxn.recurrence.yearly'),
   };
 
-  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
-  const isRealEstate = investment.assetClass === 'real_estate';
-  const isFixedIncome = ['savings', 'bond'].includes(investment.assetClass);
+  const unitBased = isUnitBased(investment.assetClass);
+  const realEstate = isRealEstate(investment.assetClass);
+  const fixedIncome = isFixedIncome(investment.assetClass);
 
   // Filter relevant transaction types per asset class
   const allowedTypes: PortfolioTxnType[] = (() => {
-    if (isUnitBased) return ['buy', 'sell', 'gift', 'dividend', 'fee', 'tax'];
-    if (isRealEstate) return ['buy', 'sell', 'rent_income', 'appreciation', 'fee', 'tax'];
-    if (isFixedIncome) return ['buy', 'sell', 'interest', 'fee', 'tax'];
+    if (unitBased) return ['buy', 'sell', 'gift', 'dividend', 'fee', 'tax'];
+    if (realEstate) return ['buy', 'sell', 'rent_income', 'appreciation', 'fee', 'tax'];
+    if (fixedIncome) return ['buy', 'sell', 'interest', 'fee', 'tax'];
     return ['buy', 'sell', 'fee', 'tax'];
   })();
 
@@ -157,7 +158,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
     }
   };
 
-  const showUnits = isUnitBased && ['buy', 'sell', 'gift'].includes(form.type);
+  const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(form.type);
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(form.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(form.type);
 

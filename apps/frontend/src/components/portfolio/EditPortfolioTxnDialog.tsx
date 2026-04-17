@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { usePortfolio } from '@/hooks/usePortfolio';
+import { isUnitBased } from '@/utils/assetClass';
 import { toast } from 'sonner';
 import type { InvestmentSummary, PortfolioTxnType, RecurrenceInterval } from '@/types/portfolio';
 import type { PortfolioTransaction } from '@/types/api';
@@ -61,7 +62,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
   const { updateTransaction } = usePortfolio();
   const [open, setOpen] = useState(false);
 
-  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
+  const unitBased = isUnitBased(investment.assetClass);
 
   const [form, setForm] = useState({
     date: normalizeYmdInput(transaction.date),
@@ -130,7 +131,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
       && effectivePrice !== undefined
       && Math.abs(roundTo(effectiveUnits * effectivePrice, 4) - roundTo(effectiveAmount, 4)) <= 0.0001);
 
-  const showUnits = isUnitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
+  const showUnits = unitBased && ['buy', 'sell', 'gift'].includes(transaction.type);
   const showFeesTaxes = ['buy', 'sell', 'dividend'].includes(transaction.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transaction.type);
 

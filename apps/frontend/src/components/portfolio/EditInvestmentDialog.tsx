@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { toast } from 'sonner';
 import type { InvestmentSummary } from '@/types/portfolio';
+import { isUnitBased } from '@/utils/assetClass';
 import type { PriceProvider } from '@/types/api';
 
 interface Props {
@@ -40,7 +41,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     priceProviderHistoryPricePath: investment.price_provider_history_price_path || 'price',
   });
 
-  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
+  const unitBased = unitBased(investment.assetClass);
 
   const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
     { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
@@ -76,7 +77,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     e.preventDefault();
 
     if (!form.name.trim()) return;
-    if (isUnitBased && !form.symbol.trim()) {
+    if (unitBased && !form.symbol.trim()) {
       toast.error(t('invEdit.symbolRequired'));
       return;
     }
@@ -84,7 +85,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     try {
       await updateInvestment(investment.id, {
         name: form.name.trim(),
-        symbol: isUnitBased ? form.symbol.trim().toUpperCase() : undefined,
+        symbol: unitBased ? form.symbol.trim().toUpperCase() : undefined,
         currency: form.currency,
         current_price: form.priceProvider === 'manual' && form.currentPrice
           ? parseFloat(form.currentPrice)
@@ -137,7 +138,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {isUnitBased && (
+            {unitBased && (
               <div className="space-y-2">
                 <Label htmlFor="edit-inv-symbol">{t('addInv.label.ticker')}</Label>
                 <Input
@@ -197,7 +198,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
               </div>
             )}
 
-            {isUnitBased && form.priceProvider === 'manual' && (
+            {unitBased && form.priceProvider === 'manual' && (
               <div className="space-y-2">
                 <Label htmlFor="edit-inv-price" className="text-xs">{t('addInv.label.currentPrice')}</Label>
                 <Input

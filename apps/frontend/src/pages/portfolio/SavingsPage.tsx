@@ -13,8 +13,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -35,29 +34,7 @@ export default function SavingsPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const accounts = byAssetClass(['savings', 'bond']);
 
-  const { data: exchangeData } = useQuery({
-    queryKey: ['exchange-rates', targetCurrency],
-    queryFn: () => apiClient.request('/api/info/exchange-rates'),
-    staleTime: 60_000,
-  });
-
-  const ratesToEur: Record<string, number> = {
-    EUR: 1,
-    ...Object.fromEntries(
-      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
-    ),
-    ...(exchangeData?.fallback_rates || {}),
-  };
-
-  function convertToTarget(amount: number, fromCurrency?: string) {
-    const from = (fromCurrency || 'EUR').toUpperCase();
-    const to = targetCurrency.toUpperCase();
-    if (from === to) return amount;
-    const rateFrom = ratesToEur[from];
-    const rateTo = ratesToEur[to];
-    if (!rateFrom || !rateTo) return amount;
-    return (amount * rateFrom) / rateTo;
-  }
+  const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   function fmt(
     val: number,

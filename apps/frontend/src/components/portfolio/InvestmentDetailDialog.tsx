@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
+import {
   TrendingUp, TrendingDown, Eye, Trash2, Calendar,
   DollarSign, Percent, ArrowUpRight, ArrowDownRight, Clock, Pencil,
 } from 'lucide-react';
+import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import { AddPortfolioTxnDialog } from './AddPortfolioTxnDialog';
 import { EditInvestmentDialog } from './EditInvestmentDialog';
@@ -22,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useNavigate } from 'react-router-dom';
 
+type TxnRow = InvestmentSummary['transactions'][number];
+
 interface Props {
   investment: InvestmentSummary;
   fxAwarePnl?: {
@@ -31,6 +34,12 @@ interface Props {
   };
   fxAwareCurrency?: string;
   trigger?: React.ReactNode;
+  /** When provided, replaces the embedded AddPortfolioTxnDialog with a callback */
+  onAddTransaction?: (investment: InvestmentSummary) => void;
+  /** When provided, replaces the embedded EditInvestmentDialog with a callback */
+  onEditInvestment?: (investment: InvestmentSummary) => void;
+  /** When provided, replaces the embedded EditPortfolioTxnDialog with a callback */
+  onEditTransaction?: (txn: TxnRow, investment: InvestmentSummary) => void;
 }
 
 const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
@@ -44,7 +53,10 @@ const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
   appreciation: 'bg-accent/10 text-accent border-accent/20',
 };
 
-export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency, trigger }: Props) {
+export function InvestmentDetailDialog({
+  investment, fxAwarePnl, fxAwareCurrency, trigger,
+  onAddTransaction, onEditInvestment, onEditTransaction,
+}: Props) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { deleteTransaction } = usePortfolio();
@@ -73,9 +85,9 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
     }).format(val);
   }
 
-  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(investment.assetClass);
-  const isFixedIncome = ['savings', 'bond'].includes(investment.assetClass);
-  const isRealEstate = investment.assetClass === 'real_estate';
+  const unitBased = isUnitBased(investment.assetClass);
+  const fixedIncome = isFixedIncome(investment.assetClass);
+  const realEstate = isRealEstate(investment.assetClass);
 
   const handleDeleteTxn = async (txnId: number, txnType: string) => {
     const ok = await confirm({
@@ -120,14 +132,20 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
               </DialogTitle>
               <Badge variant="secondary">{getAssetClassLabel(t, investment.assetClass)}</Badge>
               <div className="ml-auto">
-                <EditInvestmentDialog
-                  investment={investment}
-                  trigger={
-                    <Button size="sm" variant="outline" className="gap-1.5">
-                      <Pencil className="h-4 w-4" /> {t('common.edit')}
-                    </Button>
-                  }
-                />
+                {onEditInvestment ? (
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onEditInvestment(investment)}>
+                    <Pencil className="h-4 w-4" /> {t('common.edit')}
+                  </Button>
+                ) : (
+                  <EditInvestmentDialog
+                    investment={investment}
+                    trigger={
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <Pencil className="h-4 w-4" /> {t('common.edit')}
+                      </Button>
+                    }
+                  />
+                )}
               </div>
             </div>
           </DialogHeader>
@@ -194,7 +212,7 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                         <span className="font-medium tabular-nums">{fmt(investment.totalBuyCost, investment.currency)}</span>
                       </div>
                       
-                      {isUnitBased && (
+                      {unitBased && (
                         <>
                           <div className="flex justify-between py-1.5 border-b border-border/50">
                             <span className="text-muted-foreground">{t('invDetail.unitsHeld')}</span>
@@ -213,28 +231,28 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                         </>
                       )}
                       
-                      {isFixedIncome && investment.interestRate && (
+                      {fixedIncome && investment.interestRate && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                            <span className="text-muted-foreground">{t('invDetail.interestRate')}</span>
                           <span className="font-medium tabular-nums">{fmtNum(investment.interestRate)}%</span>
                         </div>
                       )}
 
-                      {isRealEstate && investment.municipality && (
+                      {realEstate && investment.municipality && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                           <span className="text-muted-foreground">{t('invDetail.municipality')}</span>
                           <span className="font-medium tabular-nums">{investment.municipality}</span>
                         </div>
                       )}
 
-                      {isRealEstate && (investment.cadastral_income || investment.cadastral_income === 0) && (
+                      {realEstate && (investment.cadastral_income || investment.cadastral_income === 0) && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                           <span className="text-muted-foreground">{t('invDetail.cadastralIncome')}</span>
                           <span className="font-medium tabular-nums">{fmt(investment.cadastral_income || 0, investment.currency)}</span>
                         </div>
                       )}
 
-                      {isRealEstate && (investment.municipality_tax_rate || investment.municipality_tax_rate === 0) && (
+                      {realEstate && (investment.municipality_tax_rate || investment.municipality_tax_rate === 0) && (
                         <div className="flex justify-between py-1.5 border-b border-border/50">
                           <span className="text-muted-foreground">{t('invDetail.municipalityTaxRate')}</span>
                           <span className="font-medium tabular-nums">{fmtNum(investment.municipality_tax_rate || 0)}%</span>
@@ -314,7 +332,7 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
               </Card>
 
               {/* Fixed Income Projections */}
-              {isFixedIncome && investment.projectedAnnualInterest > 0 && (
+              {fixedIncome && investment.projectedAnnualInterest > 0 && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">
@@ -341,7 +359,7 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
               )}
 
               {/* Real Estate Appreciation */}
-              {isRealEstate && investment.totalAppreciation !== 0 && (
+              {realEstate && investment.totalAppreciation !== 0 && (
                 <Card className="border-accent/20 bg-accent/5">
                   <CardContent className="pt-4 flex items-center justify-between">
                     <div>
@@ -366,7 +384,13 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
               )}
               
               <div className="flex justify-end">
-                <AddPortfolioTxnDialog investment={investment} />
+                {onAddTransaction ? (
+                  <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
+                    {t('portfolio.addTransaction')}
+                  </Button>
+                ) : (
+                  <AddPortfolioTxnDialog investment={investment} />
+                )}
               </div>
             </TabsContent>
 
@@ -375,7 +399,13 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                 <div className="text-center py-8 text-muted-foreground">
                    <p>{t('invDetail.noTransactions')}</p>
                   <div className="mt-4">
-                    <AddPortfolioTxnDialog investment={investment} />
+                    {onAddTransaction ? (
+                      <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
+                        {t('portfolio.addTransaction')}
+                      </Button>
+                    ) : (
+                      <AddPortfolioTxnDialog investment={investment} />
+                    )}
                   </div>
                 </div>
               ) : (
@@ -431,19 +461,30 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
                       </div>
                       
                       <div className="flex items-center gap-1">
-                        <EditPortfolioTxnDialog
-                          investment={investment}
-                          transaction={txn}
-                          trigger={
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
+                        {onEditTransaction ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => onEditTransaction(txn, investment)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <EditPortfolioTxnDialog
+                            investment={investment}
+                            transaction={txn}
+                            trigger={
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        )}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -460,7 +501,13 @@ export function InvestmentDetailDialog({ investment, fxAwarePnl, fxAwareCurrency
               
               {investment.transactions.length > 0 && (
                 <div className="flex justify-end mt-4 pt-4 border-t border-border">
-                  <AddPortfolioTxnDialog investment={investment} />
+                  {onAddTransaction ? (
+                    <Button size="sm" className="gap-1.5" onClick={() => onAddTransaction(investment)}>
+                      {t('portfolio.addTransaction')}
+                    </Button>
+                  ) : (
+                    <AddPortfolioTxnDialog investment={investment} />
+                  )}
                 </div>
               )}
             </TabsContent>

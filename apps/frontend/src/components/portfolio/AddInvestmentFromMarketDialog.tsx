@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Plus, TrendingUp } from 'lucide-react';
+import { isUnitBased } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';
 import type { PortfolioTxnType, RecurrenceInterval, InvestmentSummary } from '@/types/portfolio';
 import { TXN_TYPE_LABELS } from '@/types/portfolio';
@@ -52,7 +53,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   };
 
   const assetClass = getAssetClass(quote.type);
-  const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(assetClass);
+  const unitBased = isUnitBased(assetClass);
 
   const [newInvestmentForm, setNewInvestmentForm] = useState({
     name: quote.name,
@@ -161,11 +162,11 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     }
   };
 
-  const allowedTypes: PortfolioTxnType[] = isUnitBased 
-    ? ['buy', 'sell', 'dividend', 'fee', 'tax'] 
+  const allowedTypes: PortfolioTxnType[] = unitBased
+    ? ['buy', 'sell', 'dividend', 'fee', 'tax']
     : ['buy', 'sell', 'fee', 'tax'];
 
-  const showUnits = isUnitBased && ['buy', 'sell'].includes(transactionForm.type);
+  const showUnits = unitBased && ['buy', 'sell'].includes(transactionForm.type);
   const showFeesTaxes = ['buy', 'sell'].includes(transactionForm.type);
   const showRecurring = ['buy', 'sell', 'dividend', 'interest', 'rent_income'].includes(transactionForm.type);
 

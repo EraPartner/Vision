@@ -16,7 +16,7 @@ import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { ScrollToTop } from "@/components/shared/ScrollToTop";
 import TaxOverviewPage from "@/pages/TaxOverviewPage.tsx";
-import PortfolioTaxPage from "@/pages/portfolio/PortfolioTaxPage.tsx";
+import PortfolioTaxPage from "@/pages/portfolio/tax/PortfolioTaxPage";
 
 // Lazy-loaded pages for code splitting
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -35,7 +35,7 @@ const MetalsPage = lazy(() => import("./pages/portfolio/MetalsPage"));
 const RealEstatePage = lazy(() => import("./pages/portfolio/RealEstatePage"));
 const SavingsPage = lazy(() => import("./pages/portfolio/SavingsPage"));
 const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
-const NetWorthPage = lazy(() => import("./pages/portfolio/NetWorthPage"));
+const NetWorthPage = lazy(() => import("./pages/portfolio/net-worth/NetWorthPage"));
 const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
 const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));

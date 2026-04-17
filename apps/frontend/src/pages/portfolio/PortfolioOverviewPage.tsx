@@ -12,11 +12,11 @@ import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDia
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
+import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -50,30 +50,7 @@ export default function PortfolioOverviewPage() {
   const PORTFOLIO_WIDGETS = useMemo(() => getPortfolioWidgets(t), [t]);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
 
-  const { data: exchangeData } = useQuery({
-    queryKey: ['exchange-rates', targetCurrency],
-    queryFn: () => apiClient.request('/api/info/exchange-rates'),
-    staleTime: 60_000,
-  });
-
-  const ratesToEur: Record<string, number> = useMemo(() => ({
-    EUR: 1,
-    ...Object.fromEntries(
-      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
-    ),
-    ...(exchangeData?.fallback_rates || {}),
-  }), [exchangeData]);
-
-  const convertToTarget = useCallback((amount: number, fromCurrency?: string) => {
-    const from = (fromCurrency || 'EUR').toUpperCase();
-    const to = targetCurrency.toUpperCase();
-    if (from === to) return amount;
-
-    const rateFrom = ratesToEur[from];
-    const rateTo = ratesToEur[to];
-    if (!rateFrom || !rateTo) return amount;
-    return (amount * rateFrom) / rateTo;
-  }, [ratesToEur, targetCurrency]);
+  const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   const formatterCache = useMemo(() => new Map<string, Intl.NumberFormat>(), []);
 
@@ -317,7 +294,7 @@ export default function PortfolioOverviewPage() {
                   <CardContent className="min-h-0">
                     <div className="space-y-2">
                       {summaries.map((inv) => {
-                        const isUnitBased = ['stock', 'etf', 'crypto', 'metals'].includes(inv.assetClass);
+                        const unitBased = isUnitBased(inv.assetClass);
                         return (
                           <div key={inv.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
                             <div className="flex-1 min-w-0">
@@ -328,7 +305,7 @@ export default function PortfolioOverviewPage() {
                               </div>
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                                  <span>{t('portfolio.costLabel')} {fmt(convertToTarget(inv.totalBuyCost, inv.currency))}</span>
-                                {isUnitBased && inv.totalUnits > 0 && (
+                                {unitBased && inv.totalUnits > 0 && (
                                   <span>{t('portfolio.units.label', { units: inv.totalUnits.toFixed(4), price: fmt(convertToTarget(inv.avgCostBasis, inv.currency)) })}</span>
                                 )}
                                 {inv.totalIncome > 0 && <span className="text-accent">{t('portfolio.income.label', { amount: fmt(convertToTarget(inv.totalIncome, inv.currency)) })}</span>}

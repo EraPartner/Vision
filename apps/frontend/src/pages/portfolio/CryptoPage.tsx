@@ -3,8 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Trash2, Bitcoin, Eye, DollarSign, ArrowUpRight } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -31,29 +30,7 @@ export default function CryptoPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
-  const { data: exchangeData } = useQuery({
-    queryKey: ['exchange-rates', targetCurrency],
-    queryFn: () => apiClient.request('/api/info/exchange-rates'),
-    staleTime: 60_000,
-  });
-
-  const ratesToEur: Record<string, number> = {
-    EUR: 1,
-    ...Object.fromEntries(
-      (exchangeData?.rates || []).map((r: { currency: string; rate_to_eur: number }) => [r.currency, Number(r.rate_to_eur)])
-    ),
-    ...(exchangeData?.fallback_rates || {}),
-  };
-
-  function convertToTarget(amount: number, fromCurrency?: string) {
-    const from = (fromCurrency || 'EUR').toUpperCase();
-    const to = targetCurrency.toUpperCase();
-    if (from === to) return amount;
-    const rateFrom = ratesToEur[from];
-    const rateTo = ratesToEur[to];
-    if (!rateFrom || !rateTo) return amount;
-    return (amount * rateFrom) / rateTo;
-  }
+  const { convertToTarget } = useCurrencyConverter(targetCurrency);
 
   function fmt(
     val: number,
