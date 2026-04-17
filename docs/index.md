@@ -156,6 +156,13 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-17 Phase 3.5 & 3.6 - Metals DRY Refactor & Watchlist API Integration
+
+- **Phase 3.5 — MetalsPage DRY**: `MetalsPage.tsx` refactored as a thin wrapper around `StocksPage` with configurable props (`assetClasses=["metals"]`, `titleKey="metals.title"`, etc.). Eliminates code duplication; StocksPage now handles all asset-class logic generically.
+- **Phase 3.6 — Watchlist API Encapsulation**: `WatchlistPage.tsx` replaced 3 raw `fetch()` calls with typed `apiClient` methods: `getWatchlist()`, `getMarketQuotes(symbols)`, `deleteWatchlistItem(id)`. New watchlist methods added to `apiClient` (`createWatchlistItem`, `updateWatchlistItem`, `getMarketQuotes`). Enables shared error handling, retry logic, and React Query integration.
+
+See [[docs/features/portfolio|Portfolio Feature]] (Metals routing + Phase 3.5), [[docs/features/watchlist|Watchlist Feature]] (Phase 3.6), [[docs/reference/api-client-methods|API Client Methods]] (Watchlist section)
+
 ### 2026-04-17 Phase 8 Correctness Hardening
 
 - **ADR-016**: Aggregation shadow-mode middleware (`createAggregationShadow`) cross-checks new `/api/aggregations/*` against legacy `/api/info/*` in production. Default 1¢ threshold, `queueMicrotask` fire-and-forget, envelope-aware diff. Removal gated on Phase 9 criteria.

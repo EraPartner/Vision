@@ -2,11 +2,11 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-04-02
-tags: [components, portfolio, investments]
+date: 2026-04-17
+tags: [components, portfolio, investments, phase-3.6]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
-related_code: ["apps/frontend/src/components/portfolio"]
+related_code: ["apps/frontend/src/components/portfolio", "apps/frontend/src/pages/portfolio/WatchlistPage.tsx"]
 ---
 
 # Portfolio Components
@@ -368,6 +368,21 @@ interface WatchlistListResponse {
 - [[docs/api/watchlist]] - Watchlist API
 - [[docs/features/portfolio]] - Portfolio Features
 
+## WatchlistPage Integration (Phase 3.6)
+
+The `WatchlistPage.tsx` was refactored to use encapsulated `apiClient` watchlist methods instead of raw `fetch()` calls:
+
+**Before (Phase 3.5):** Three separate raw fetch calls for watchlist, market quotes, and deletion.
+**After (Phase 3.6):** Centralized via `apiClient.getWatchlist()`, `apiClient.getMarketQuotes(symbols)`, and `apiClient.deleteWatchlistItem(id)`.
+
+Benefits:
+- Shared retry logic and timeout handling
+- Built-in error formatting and user feedback
+- React Query integration for caching and invalidation
+- Typed method signatures for better IDE support
+
+Code link: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+
 ## Additional Page Links
 
 - [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]] - Savings maturity date display uses app date format
@@ -375,8 +390,9 @@ interface WatchlistListResponse {
 - [[apps/frontend/src/pages/MarketLookupPage.tsx]] - Chart tooltip timestamps and analyst/news dates use app date-time/date format
 - [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]] - Month labels use app-language locale (`en-US`/`nl-NL`), while chart/table values use app settings; page includes Total/Investments/Liquid series toggle, daily-only timeline with per-day hover values, horizontal scroll/zoom controls, and a virtualized daily breakdown table
 - [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]] - Absolute and relative charts run on day-level timeline points (`YYYY-MM-DD`) for more realistic fluctuation shape; relative contribution adjustment uses day-keyed net flows (not month-bucket chart alignment); chart x-axis keys by day internally while rendering locale-formatted month-year ticks for readability; relative performance keeps chained index baseline `1` with display conversion `(index - 1) * 100`; monthly heatmap remains month-based and keeps Modified Dietz-style monthly return denominator `prevValue + netFlow / 2` (fallback `prevValue` when denominator <= 0); first heatmap month is rendered as no data (`null`) rather than forced `0%`; inflation adjustment compounds backend Belgian monthly rates (`/api/info/inflation-rates`) keyed by `YYYY-MM`; when DB-only historical quote cache is empty for an investment, the page now performs a non-DB fallback fetch once to hydrate and use provider history instead of flattening that asset line.
+- [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]] - Phase 3.6 refactored to use `apiClient` watchlist methods (`getWatchlist()`, `getMarketQuotes()`, `deleteWatchlistItem()`) instead of raw fetch calls; 60s auto-refresh interval on market quotes via React Query
 
-- [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`.
+- [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`; Phase 3.6 adds watchlist methods (`getWatchlist()`, `createWatchlistItem()`, `updateWatchlistItem()`, `deleteWatchlistItem()`) and market quotes method (`getMarketQuotes(symbols)`).
 - [[apps/node-backend/src/services/belgianInflationService.js]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.
 - [[apps/node-backend/src/routes/info.js]] - Exposes `GET /api/info/inflation-rates` and admin-limited `POST /api/info/inflation-rates/refresh`.
 - [[apps/node-backend/src/database/schemaInit.js]] - Creates `belgian_inflation_rates` table and indexes/triggers during schema init.

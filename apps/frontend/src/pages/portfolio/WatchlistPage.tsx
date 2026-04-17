@@ -17,7 +17,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { toast } from "sonner";
 
-import { API_BASE_URL } from "@/lib/api";
+import { apiClient } from "@/lib/api";
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
   stock: "bg-blue-500/10 text-blue-500 border-blue-500/20",
@@ -36,23 +36,14 @@ export default function WatchlistPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["watchlist"],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/watchlist`);
-      if (!res.ok) throw new Error("Failed to fetch watchlist");
-      return res.json() as Promise<{ items: WatchlistItem[]; total: number }>;
-    },
+    queryFn: () => apiClient.getWatchlist(),
   });
 
   // Fetch current prices for all symbols
   const symbols = data?.items?.map((i) => i.symbol).filter(Boolean).join(",") || "";
   const { data: quotesData } = useQuery({
     queryKey: ["watchlist-quotes", symbols],
-    queryFn: async () => {
-      if (!symbols) return { quotes: [] };
-      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${symbols}`);
-      if (!res.ok) return { quotes: [] };
-      return res.json() as Promise<{ quotes: Array<{ symbol: string; price: number; change: number; changePercent: number }> }>;
-    },
+    queryFn: () => symbols ? apiClient.getMarketQuotes(symbols) : Promise.resolve({ quotes: [] }),
     enabled: !!symbols,
     refetchInterval: 60_000, // Refresh every minute
   });
@@ -60,10 +51,7 @@ export default function WatchlistPage() {
   const priceMap = new Map(quotesData?.quotes?.map((q) => [q.symbol, q]) || []);
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE_URL}/api/watchlist/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-    },
+    mutationFn: (id: number) => apiClient.deleteWatchlistItem(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       toast.success(t('watchlist.removedSuccess'));

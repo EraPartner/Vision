@@ -8,7 +8,6 @@ export default function MetalsPage() {
       emptyTitleKey="metals.noMetals"
       emptyDescriptionKey="metals.noMetalsDesc"
       allowedAddAssetClasses={["metals"]}
-      enableFxAwarePnl={false}
     />
   );
 }

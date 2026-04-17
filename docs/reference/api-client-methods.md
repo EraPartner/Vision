@@ -2,8 +2,8 @@
 title: API Client Methods Reference
 type: reference
 status: active
-date: 2026-04-09
-tags: [reference, api-client, frontend, typescript, http]
+date: 2026-04-17
+tags: [reference, api-client, frontend, typescript, http, phase-3.6]
 description: Complete reference of all frontend API client methods in api.ts
 aliases: [api client, HTTP client, fetch methods, apiClient]
 related_code:
@@ -100,6 +100,18 @@ The `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines) is th
 | `createPortfolioTransaction(id, data)` | POST /api/investments/:id/transactions | `PortfolioTransaction` |
 | `updatePortfolioTransaction(txnId, data)` | PATCH /api/investments/transactions/:txnId | `PortfolioTransaction` |
 | `deletePortfolioTransaction(txnId)` | DELETE /api/investments/transactions/:txnId | `void` |
+
+### Watchlist (Phase 3.6)
+
+| Method | Endpoint | Return Type |
+|--------|----------|-------------|
+| `getWatchlist(params?)` | GET /api/watchlist | `WatchlistListResponse` |
+| `createWatchlistItem(data)` | POST /api/watchlist | `WatchlistItem` |
+| `updateWatchlistItem(id, data)` | PATCH /api/watchlist/:id | `WatchlistItem` |
+| `deleteWatchlistItem(id)` | DELETE /api/watchlist/:id | `void` |
+| `getMarketQuotes(symbols)` | GET /api/market/quotes | `{ quotes: Array<{symbol, price, change, changePercent}> }` |
+
+**Phase 3.6 Enhancement**: WatchlistPage refactored to use typed `apiClient` watchlist methods instead of scattered raw `fetch()` calls. Enables shared retry logic, timeout handling, and React Query integration. `getMarketQuotes()` fetches live quotes for multiple symbols via comma-separated list.
 
 ### Import
 

@@ -2,11 +2,11 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-16
-tags: [feature, portfolio, investments, stocks, crypto, metals]
+date: 2026-04-17
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-3.5, phase-3.6]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -208,11 +208,14 @@ Watchlist asset-class selection includes metals.
 
 ## Portfolio Routing and Reuse
 
+### Metals Page DRY Refactor (Phase 3.5)
+
 - Added a dedicated Metals page at `/portfolio/metals`.
 - Sidebar navigation includes a Metals entry.
 - Stocks listing page was refactored to accept configurable asset classes/title/empty state so Metals can reuse the same listing UX with metals-only filters.
 - Default Stocks & ETFs page scope is now strictly `stock` + `etf` (metals excluded), while the Metals page remains metals-only via explicit props.
 - Add Investment actions are context-restricted: Stocks & ETFs page allows only stock/etf classes, and Crypto page allows only crypto class.
+- **Phase 3.5 Enhancement**: `MetalsPage.tsx` is now a thin DRY wrapper that passes configurable props to `StocksPage`: `assetClasses={["metals"]}`, `titleKey="metals.title"`, `emptyTitleKey="metals.noMetals"`, `emptyDescriptionKey="metals.noMetalsDesc"`, `allowedAddAssetClasses={["metals"]}`. FX-aware P&L is enabled by default. StocksPage handles all asset-class logic without code duplication.
 
 Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
 

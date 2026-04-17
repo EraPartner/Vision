@@ -24,6 +24,7 @@ import type {
     PortfolioTransactionCreate,
     PortfolioTransactionsListResponse,
 } from '@/types/api';
+import type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 import logger from '@/lib/logger';
@@ -1110,6 +1111,29 @@ class ApiClient {
 
     async refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
         return this.request('/api/info/refresh-views', { method: 'POST' });
+    }
+
+    // ==================== Watchlist ====================
+
+    async getWatchlist(params?: { limit?: number; offset?: number }): Promise<WatchlistListResponse> {
+        const query = params ? `?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString()}` : '';
+        return this.request(`/api/watchlist${query}`);
+    }
+
+    async createWatchlistItem(data: WatchlistCreate): Promise<WatchlistItem> {
+        return this.request('/api/watchlist', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    async updateWatchlistItem(id: number, data: WatchlistUpdate): Promise<WatchlistItem> {
+        return this.request(`/api/watchlist/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    }
+
+    async deleteWatchlistItem(id: number): Promise<void> {
+        return this.request(`/api/watchlist/${id}`, { method: 'DELETE' });
+    }
+
+    async getMarketQuotes(symbols: string): Promise<{ quotes: Array<{ symbol: string; price: number; change: number; changePercent: number }> }> {
+        return this.request(`/api/market/quote?symbols=${encodeURIComponent(symbols)}`);
     }
 
     // ==================== Private Helpers ====================

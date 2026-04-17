@@ -2,14 +2,15 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-04-02
-tags: [feature, watchlist, investments, tracking, alerts]
+date: 2026-04-17
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
 aliases: [watch list, price alerts, investment tracking]
 related_code:
   - apps/frontend/src/pages/portfolio/WatchlistPage.tsx
   - apps/frontend/src/hooks/usePortfolio.ts
   - apps/frontend/src/types/watchlist.ts
+  - apps/frontend/src/lib/api.ts
   - apps/node-backend/src/routes/watchlist.js
   - apps/node-backend/src/repositories/watchlistRepository.js
 ---
@@ -81,11 +82,29 @@ The watchlist page uses a smart display strategy:
 
 This provides actionable information: either "it's cheap enough" (price shown) or "it's gone up X%" (percentage shown).
 
+## API Integration (Phase 3.6)
+
+### ApiClient Watchlist Methods
+
+**Phase 3.6 Enhancement**: WatchlistPage now uses encapsulated `apiClient` methods instead of raw `fetch()` calls, improving code maintainability and enabling shared error handling.
+
+Available methods:
+- `getWatchlist(params?)` — `GET /api/watchlist` with optional `limit`/`offset` pagination
+- `createWatchlistItem(data)` — `POST /api/watchlist` to add item
+- `updateWatchlistItem(id, data)` — `PATCH /api/watchlist/:id` to update (e.g., set target price)
+- `deleteWatchlistItem(id)` — `DELETE /api/watchlist/:id` to remove item
+- `getMarketQuotes(symbols)` — `GET /api/market/quotes?symbols=...` to fetch current prices for multiple symbols
+
+All methods are typed and integrate with React Query for caching and invalidation.
+
+Code links: [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]]
+
 ## Price Updates
 
 Watchlist prices are updated when:
 1. The user manually refreshes investment prices via `POST /api/investments/refresh-prices`
 2. The price provider service fetches live prices for all tracked symbols
+3. **Phase 3.6**: WatchlistPage uses `useQuery({ queryKey: ["watchlist-quotes", symbols], queryFn: () => apiClient.getMarketQuotes(symbols) })` with 60s refetch interval for automatic market quote updates
 
 ## Adding from Watchlist
 
