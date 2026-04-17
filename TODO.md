@@ -54,3 +54,28 @@
 - **Integration tests for atomic `mergeRecipients`** — BEGIN/COMMIT boundary, `FOR UPDATE` primary lock, and `INSERT ... ON CONFLICT DO NOTHING RETURNING id` RBA dedupe are only covered by manual smoke. Add tx-aware integration test once test-DB scaffolding lands.
 - **Delete dead `recipientRepository.mergeRecipients`** if still present after `services/recipientMergeService.js` fully supersedes it — audit import graph and remove stale export.
 - **Pre-existing lint errors in `RecipientsPage.tsx`** (4× `@typescript-eslint/no-explicit-any` at lines 47, 91, 92, 163) and `CategoriesPage.tsx` (1× `react-hooks/exhaustive-deps` warning at line 60) — not introduced by Phase 6; tackle alongside a dedicated typing pass on the pages surface.
+
+## Refactor follow-ups (Phase 7 imports)
+
+- **Delete `services/importService.js` + its test** once the `IMPORT_PIPELINE_V2` feature flag defaults to on and `services/importPipeline/*` has run at least one full release cycle without divergence. Plan Phase 9 scope.
+- **Split `ImportPage.tsx` (1062 LOC)** into `features/imports/{BankSelect,FileUpload,ColumnMapping,Preview,Progress}.tsx` with a shared Zustand store for multi-step state. Frontend work deferred from Phase 7 backend pipeline PR.
+- **Adapter telemetry** — `services/importPipeline/adapters/index.js` auto-registration emits no observability. Add a `detect()` fan-out log (bank + confidence) so misdetected CSVs are triageable without repro.
+- **Staging-row retention policy** — `import_batches` + `import_staging_rows` grow unbounded. Add a rolling prune (>30d committed/failed) once pipeline is GA.
+- **Chunked commit tuning** — current `commit()` batches 1000 rows per tx. Profile on 100k-row Belfius imports; adjust batch size or switch to COPY if p95 commit time exceeds 500ms per batch.
+
+## Refactor follow-ups (Phase 8 calc correctness)
+
+- **Wire `aggregationShadow` middleware** onto `/api/aggregations/*` routes with a real `fetchLegacy` client against `/api/info/*`. Middleware + diff logic is now locked; wiring deferred to avoid double-roundtripping during Phase 8 property-test merge.
+- **Shadow divergence dashboard** — surface `aggregation-shadow: divergence detected` warn entries into a time-series panel so the release-cycle parity claim can be demonstrated with data before Phase 9 removal.
+- **Dev-mode invariant assertions** — optional cheap `assertRoundTripIdentity(x, A, B)` / `assertCategoryConservation(agg)` hooks re-run the Phase 8 invariants in non-prod and log mismatch. Wire once a request of the invariant is worth the overhead.
+- **Property test expansion** — property suite currently covers the 6 headline invariants from the plan. Add coverage for: dedup hash idempotency (`hash(normalize(t)) == hash(normalize(normalize(t)))`), filterBuilder parameter stability, LTTB downsample preserves endpoints.
+- **Cross-check sweep script** — one-shot CLI that hits every `/api/aggregations/*` + paired `/api/info/*` over a configurable date window and emits a CSV of divergences. Drives the "30 days" end-to-end verification from the plan without waiting on shadow-mode to accumulate traffic.
+
+## Refactor follow-ups (Phase 9 cleanup — scheduled)
+
+- Remove deprecated `/api/info/*` routes after one full release cycle of zero `aggregation-shadow: divergence detected` warnings.
+- Delete `services/importService.js` (superseded by `services/importPipeline/`).
+- Delete `apps/frontend/src/hooks/statisticsProcessing.ts` (superseded by aggregation endpoints).
+- Delete back-compat shims at `services/loanRepaymentService.js`, `services/recurrenceService.js`, `services/currencyConversionService.js` once imports migrate to `services/calculations/*`.
+- Remove `aggregationShadow` middleware + associated wiring once deprecation is final.
+- Refresh docs: `docs/features/{dashboard,statistics,planned-transactions,splits,imports}.md` + `docs/reference/api-endpoint-matrix.md` + `docs/reference/code-patterns.md` (aggregation endpoint + golden fixture patterns) + ADRs for timezone, aggregation strategy, import pipeline, soft-delete policy.
