@@ -30,6 +30,37 @@ export function fmtDay(date: string, appDateFormat: string): string {
   return formatDateWithAppSettings(parseLocalDateFromYmd(date), appDateFormat);
 }
 
+/**
+ * Decimate a tick array so that labels fit within chartWidth without overlap.
+ *
+ * Pure function: given a chart width and desired minimum pixel budget per label,
+ * keep every Nth tick. The first and last tick are always preserved so the
+ * chart's domain boundaries remain labelled.
+ *
+ * @param ticks Candidate tick values (already in desired order).
+ * @param chartWidth Available horizontal pixel budget for axis labels.
+ * @param minLabelPx Minimum pixels allocated per rendered label.
+ * @returns A subset of the input ticks.
+ */
+export function decimateTicks<T>(ticks: readonly T[], chartWidth: number, minLabelPx = 60): T[] {
+  if (ticks.length <= 2) return [...ticks];
+  const safeWidth = Math.max(1, chartWidth);
+  const safeMinLabelPx = Math.max(1, minLabelPx);
+  const maxLabels = Math.max(1, Math.floor(safeWidth / safeMinLabelPx));
+  if (ticks.length <= maxLabels) return [...ticks];
+
+  const stride = Math.max(1, Math.ceil(ticks.length / maxLabels));
+  const result: T[] = [];
+  for (let i = 0; i < ticks.length; i += stride) {
+    result.push(ticks[i]);
+  }
+  const lastTick = ticks[ticks.length - 1];
+  if (result[result.length - 1] !== lastTick) {
+    result.push(lastTick);
+  }
+  return result;
+}
+
 export function formatMonthTickLabel(dateYmd: string, formatter: Intl.DateTimeFormat): string {
   const normalized = normalizeYmd(dateYmd);
   const parsed = parseLocalDateFromYmd(normalized);
