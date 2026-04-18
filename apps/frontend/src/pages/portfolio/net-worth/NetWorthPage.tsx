@@ -25,6 +25,7 @@ import {
 import { useNetWorthChartScroll } from "./useNetWorthChartScroll";
 import { NetWorthChart } from "./NetWorthChart";
 import { SnapshotDataTable } from "./SnapshotDataTable";
+import { useNetWorthTableData } from "./useNetWorthTableData";
 
 const MONTH_LABEL_MIN_PX = 60;
 
@@ -38,6 +39,17 @@ export default function NetWorthPage() {
     queryKey: ["net-worth", targetCurrency],
     queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
     staleTime: 120_000,
+  });
+
+  const {
+    allItems: tableSnapshots,
+    totalItems: tableTotal,
+    isFetchingMore: tableIsFetchingMore,
+    hasMore: tableHasMore,
+    loadMore: tableLoadMore,
+  } = useNetWorthTableData({
+    currency: targetCurrency,
+    pageSize: appSettings.defaultPageSize,
   });
 
   const [zoomStep, setZoomStep] = useState(0);
@@ -266,10 +278,14 @@ export default function NetWorthPage() {
       </div>
 
       <SnapshotDataTable
-        snapshots={snapshots}
+        snapshots={tableSnapshots}
         fmt={fmt}
         dateFormat={appSettings.dateFormat}
         t={t}
+        totalItems={tableTotal}
+        isFetchingMore={tableIsFetchingMore}
+        hasMore={tableHasMore}
+        onLoadMore={tableLoadMore}
       />
     </div>
   );

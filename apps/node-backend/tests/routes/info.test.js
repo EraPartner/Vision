@@ -470,6 +470,76 @@ describe('Info Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
+
+    it('should paginate snapshots newest-first when limit/offset supplied', async () => {
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
+        current: { liquid: 10000, investments: 5000, netWorth: 15000 },
+        monthlyChange: 0,
+        monthlyChangePercent: 0,
+        snapshots: [
+          { date: '2026-03-01', liquid: 1, investments: 1, netWorth: 2 },
+          { date: '2026-03-02', liquid: 2, investments: 2, netWorth: 4 },
+          { date: '2026-03-03', liquid: 3, investments: 3, netWorth: 6 },
+          { date: '2026-03-04', liquid: 4, investments: 4, netWorth: 8 },
+          { date: '2026-03-05', liquid: 5, investments: 5, netWorth: 10 },
+        ],
+      });
+
+      const req = { query: { currency: 'AUD', limit: '2', offset: '0' } };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.snapshots).toHaveLength(2);
+      expect(result.snapshots[0].date).toBe('2026-03-05');
+      expect(result.snapshots[1].date).toBe('2026-03-04');
+      expect(result.snapshotsTotal).toBe(5);
+    });
+
+    it('should honor offset for pagination', async () => {
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
+        current: { liquid: 0, investments: 0, netWorth: 0 },
+        monthlyChange: 0,
+        monthlyChangePercent: 0,
+        snapshots: [
+          { date: '2026-03-01', liquid: 1, investments: 1, netWorth: 2 },
+          { date: '2026-03-02', liquid: 2, investments: 2, netWorth: 4 },
+          { date: '2026-03-03', liquid: 3, investments: 3, netWorth: 6 },
+          { date: '2026-03-04', liquid: 4, investments: 4, netWorth: 8 },
+        ],
+      });
+
+      const req = { query: { currency: 'CAD', limit: '2', offset: '2' } };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.snapshots).toHaveLength(2);
+      expect(result.snapshots[0].date).toBe('2026-03-02');
+      expect(result.snapshots[1].date).toBe('2026-03-01');
+      expect(result.snapshotsTotal).toBe(4);
+    });
+
+    it('should return full unpaginated history when no limit/offset params', async () => {
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
+        current: { liquid: 0, investments: 0, netWorth: 0 },
+        monthlyChange: 0,
+        monthlyChangePercent: 0,
+        snapshots: [
+          { date: '2026-03-01', liquid: 1, investments: 1, netWorth: 2 },
+          { date: '2026-03-02', liquid: 2, investments: 2, netWorth: 4 },
+        ],
+      });
+
+      const req = { query: { currency: 'CHF' } };
+      const res = mockResponse();
+      await routeHandlers['get:/net-worth'](req, res);
+
+      const result = res.json.mock.calls[0][0];
+      expect(result.snapshots).toHaveLength(2);
+      expect(result.snapshots[0].date).toBe('2026-03-01');
+      expect(result.snapshotsTotal).toBeUndefined();
+    });
   });
 
   describe('GET /recipient-insights', () => {

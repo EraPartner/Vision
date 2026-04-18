@@ -198,7 +198,7 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | GET | `/api/info/category-breakdown` | Category breakdown | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/bank-balances` | Bank balances | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/recurring-patterns` | Recurring detection | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/net-worth` | Net worth | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/net-worth` | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history) | 30 req/min | [[docs/api/info\|Info]] |
 | GET | `/api/info/recipient-insights` | Recipient insights | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/exchange-rates` | Exchange rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/exchange-rates/refresh` | Refresh exchange rates | admin | [[docs/api/info\|Info]] |
