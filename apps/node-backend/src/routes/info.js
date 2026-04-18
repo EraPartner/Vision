@@ -389,6 +389,11 @@ router.get('/recurring-patterns', async (req, res) => {
 });
 
 // GET /api/info/net-worth - Net worth combining bank balances + portfolio
+// Pagination:
+//   - When neither `limit` nor `offset` is supplied, returns the full snapshot
+//     array (legacy/chart path).
+//   - When either is supplied, returns the same envelope but with a snapshot
+//     slice (newest-first) and `snapshotsTotal` for table pagination.
 router.get(
   '/net-worth',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth' }),
@@ -403,7 +408,30 @@ router.get(
       keepPreviousData: true,
       loader: () => infoRepository.getNetWorthFromSnapshots(targetCurrency),
     });
-    res.json(data);
+
+    const hasLimit = Object.prototype.hasOwnProperty.call(req.query, 'limit');
+    const hasOffset = Object.prototype.hasOwnProperty.call(req.query, 'offset');
+
+    if (!hasLimit && !hasOffset) {
+      res.json(data);
+      return;
+    }
+
+    const limitRaw = parseInt(req.query.limit, 10);
+    const offsetRaw = parseInt(req.query.offset, 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 5000) : 50;
+    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+
+    const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
+    // Newest-first: table displays most recent date at top
+    const reversed = allSnapshots.slice().reverse();
+    const page = reversed.slice(offset, offset + limit);
+
+    res.json({
+      ...data,
+      snapshots: page,
+      snapshotsTotal: allSnapshots.length,
+    });
   } catch (err) {
     logger.error('Error retrieving net worth', { error: err.message });
     res.status(500).json({ detail: 'Error retrieving net worth' });

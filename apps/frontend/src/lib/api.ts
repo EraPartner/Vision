@@ -871,7 +871,7 @@ class ApiClient {
 
     // ==================== Net Worth ====================
 
-    async getNetWorth(params?: { currency?: string }): Promise<NetWorthResponse> {
+    async getNetWorth(params?: { currency?: string; limit?: number; offset?: number }): Promise<NetWorthResponse> {
         return this.requestWithQuery('/api/info/net-worth', params);
     }
 
@@ -1442,6 +1442,8 @@ export interface NetWorthResponse {
     monthlyChange: number;
     monthlyChangePercent: number;
     snapshots: NetWorthSnapshot[];
+    /** Total number of snapshots server-side (only set when pagination params sent). */
+    snapshotsTotal?: number;
 }
 
 export const apiClient = new ApiClient();

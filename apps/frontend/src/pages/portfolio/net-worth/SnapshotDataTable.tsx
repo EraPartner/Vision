@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { cn } from "@/lib/utils";
 import { NetWorthSnapshot, fmtDay } from "./netWorthChartUtils";
@@ -8,6 +8,10 @@ interface SnapshotDataTableProps {
   fmt: (val: number) => string;
   dateFormat: string;
   t: (key: string) => string;
+  totalItems?: number;
+  isFetchingMore?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 type BreakdownRow = {
@@ -18,18 +22,29 @@ type BreakdownRow = {
   change: number | undefined;
 };
 
-export function SnapshotDataTable({ snapshots, fmt, dateFormat, t }: SnapshotDataTableProps) {
+export function SnapshotDataTable({
+  snapshots,
+  fmt,
+  dateFormat,
+  t,
+  totalItems,
+  isFetchingMore,
+  hasMore,
+  onLoadMore,
+}: SnapshotDataTableProps) {
+  // Snapshots arrive newest-first from the paginated endpoint. Row N's "change"
+  // compares to the snapshot immediately older (next in the array).
   const rows = useMemo<BreakdownRow[]>(() => {
     const result: BreakdownRow[] = [];
-    for (let idx = snapshots.length - 1; idx >= 0; idx -= 1) {
+    for (let idx = 0; idx < snapshots.length; idx += 1) {
       const s = snapshots[idx];
-      const prev = idx > 0 ? snapshots[idx - 1] : undefined;
+      const older = idx < snapshots.length - 1 ? snapshots[idx + 1] : undefined;
       result.push({
         date: s.date,
         liquid: s.liquid,
         investments: s.investments,
         netWorth: s.netWorth,
-        change: prev ? s.netWorth - prev.netWorth : undefined,
+        change: older ? s.netWorth - older.netWorth : undefined,
       });
     }
     return result;
@@ -84,6 +99,10 @@ export function SnapshotDataTable({ snapshots, fmt, dateFormat, t }: SnapshotDat
       columns={columns}
       data={rows}
       maxHeight={520}
+      totalItems={totalItems}
+      isFetchingMore={isFetchingMore}
+      hasMore={hasMore}
+      onLoadMore={onLoadMore}
     />
   );
 }
