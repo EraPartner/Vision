@@ -19,6 +19,7 @@ import {
   Calculator,
   CircleHelp,
   BadgePercent,
+  Loader2,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useStatistics } from "@/hooks/useStatistics";
@@ -45,7 +46,7 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const { profile, calculation } = useBelgianTaxProfile();
+  const { profile, calculation, isLoading: isProfileLoading } = useBelgianTaxProfile();
   const stats = useStatistics();
   const { summaries } = usePortfolio();
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -218,7 +219,7 @@ export default function TaxOverviewPage() {
 
   const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
-  const isEmpty = !hasProfile && !hasStatsData;
+  const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
 
   return (
     <TooltipProvider>
@@ -264,7 +265,14 @@ export default function TaxOverviewPage() {
               </CardContent>
             </Card>
 
-        {isEmpty ? (
+        {isProfileLoading ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Loader2 className="h-8 w-8 text-muted-foreground/60 animate-spin mb-3" />
+              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            </CardContent>
+          </Card>
+        ) : isEmpty ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Landmark className="h-12 w-12 text-muted-foreground/40 mb-4" />
