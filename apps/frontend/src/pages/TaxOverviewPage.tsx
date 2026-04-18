@@ -45,7 +45,7 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
 export default function TaxOverviewPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const { profile, calculation } = useBelgianTaxProfile();
+  const { profile, calculation, isLoading: isProfileLoading } = useBelgianTaxProfile();
   const stats = useStatistics();
   const { summaries } = usePortfolio();
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -216,9 +216,17 @@ export default function TaxOverviewPage() {
     },
   ];
 
-  const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
+  const hasProfile =
+    profile.profileConfigured ||
+    profile.grossAnnualIncome > 0 ||
+    profile.otherTaxableIncome > 0 ||
+    profile.cadastralIncome > 0 ||
+    profile.dependentChildren > 0 ||
+    profile.dependentOtherPersons > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
-  const isEmpty = !hasProfile && !hasStatsData;
+  // Do not render the empty state while the profile is still hydrating from the backend —
+  // otherwise a configured profile briefly flashes as "not set up" on every reload.
+  const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
 
   return (
     <TooltipProvider>
