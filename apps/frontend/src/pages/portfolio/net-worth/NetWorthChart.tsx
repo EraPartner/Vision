@@ -60,24 +60,24 @@ export function NetWorthChart({
   const seriesConfig = useMemo(() => ({
     netWorth: {
       label: t('networth.title'),
-      stroke: 'hsl(var(--primary))',
-      strokeWidth: 2.5,
+      stroke: 'url(#strokeNetWorth)',
+      strokeWidth: 2.25,
       fill: 'url(#gradNetWorth)',
       dash: undefined as string | undefined,
     },
     liquid: {
       label: t('networth.liquid'),
-      stroke: 'hsl(var(--accent))',
+      stroke: 'hsl(var(--chart-2))',
       strokeWidth: 2,
       fill: 'url(#gradLiquid)',
-      dash: '4 2' as string | undefined,
+      dash: undefined as string | undefined,
     },
     investments: {
       label: t('networth.investments'),
-      stroke: 'hsl(217, 91%, 60%)',
+      stroke: 'hsl(var(--chart-4))',
       strokeWidth: 2,
       fill: 'url(#gradInvest)',
-      dash: '4 2' as string | undefined,
+      dash: undefined as string | undefined,
     },
   }), [t]);
 
@@ -151,20 +151,29 @@ export function NetWorthChart({
             <ResponsiveContainer width="100%" height={420}>
               <AreaChart data={displaySnapshots} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                 <defs>
+                  <linearGradient id="strokeNetWorth" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" />
+                    <stop offset="100%" stopColor="hsl(var(--chart-4))" />
+                  </linearGradient>
                   <linearGradient id="gradNetWorth" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradLiquid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                    <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
+                    <stop offset="0%" stopColor="hsl(var(--chart-4))" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-4))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid
+                  strokeDasharray="2 6"
+                  stroke="hsl(var(--border))"
+                  strokeOpacity={0.4}
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="date"
                   ticks={monthlyTicks}
@@ -196,11 +205,13 @@ export function NetWorthChart({
                   formatter={tooltipValueFormatter}
                 />
                 <Area
-                  type="monotone"
+                  type="natural"
                   dataKey={selectedSeries}
                   name={config.label}
                   stroke={config.stroke}
                   strokeWidth={config.strokeWidth}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   fill={config.fill}
                   strokeDasharray={config.dash}
                   isAnimationActive={false}
