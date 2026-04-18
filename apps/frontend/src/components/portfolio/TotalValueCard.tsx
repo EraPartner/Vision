@@ -9,7 +9,7 @@
  * All data is supplied by the parent; no hooks, no side effects.
  */
 
-import { Area, AreaChart, ResponsiveContainer } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -170,6 +170,12 @@ function Sparkline({ points, label }: { points: SparklinePoint[]; label: string 
     delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
   const Trend = delta >= 0 ? TrendingUp : TrendingDown;
   const pct = first > 0 ? (delta / first) * 100 : 0;
+  const values = points.map((p) => p.v);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV;
+  const pad = range > 0 ? range * 0.15 : Math.max(Math.abs(maxV) * 0.01, 1);
+  const yDomain: [number, number] = [minV - pad, maxV + pad];
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -193,6 +199,7 @@ function Sparkline({ points, label }: { points: SparklinePoint[]; label: string 
                 <stop offset="100%" stopColor={color} stopOpacity={0} />
               </linearGradient>
             </defs>
+            <YAxis domain={yDomain} hide />
             <Area
               type="monotone"
               dataKey="v"
