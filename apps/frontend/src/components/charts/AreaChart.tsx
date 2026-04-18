@@ -266,10 +266,11 @@ function AreaChartInner<Datum>({
                                         <motion.path
                                             key={`stack-${stack.key}`}
                                             d={path(stack) || ""}
-                                            fill={`url(#${gradId}-${s.key})`}
+                                            fill={color}
+                                            fillOpacity={0.55}
                                             stroke={color}
-                                            strokeOpacity={0.7}
-                                            strokeWidth={1.25}
+                                            strokeOpacity={0.95}
+                                            strokeWidth={1.5}
                                             initial={
                                                 reduce ? { opacity: 1 } : { opacity: 0, y: 12 }
                                             }
