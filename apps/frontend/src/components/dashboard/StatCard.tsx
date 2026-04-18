@@ -45,7 +45,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
 
     return (
         <Card
-            className={`liquid-glass-hero surface-elevated premium-frame micro-lift group relative overflow-hidden bg-gradient-to-br ${trendGradient}`}>
+            className={`liquid-glass-hero surface-elevated premium-frame micro-lift group relative overflow-hidden bg-gradient-to-br ${trendGradient} h-full`}>
             <div
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">

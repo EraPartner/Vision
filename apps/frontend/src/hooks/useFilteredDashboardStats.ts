@@ -3,12 +3,21 @@ import { apiClient } from '@/lib/api';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 
+export interface NetHistoryPoint {
+  year: number;
+  month: number;
+  net: number;
+}
+
 interface FilteredDashboardStats {
   totalTransactions: number;
   monthlyIncome: number;
   monthlySpending: number;
   netBalance: number;
+  netHistory: NetHistoryPoint[];
 }
+
+const NET_HISTORY_MONTHS = 12;
 
 /**
  * Hook that applies dashboard settings to statistics calculations.
@@ -75,12 +84,21 @@ export function useFilteredDashboardStats() {
 
       const latest = monthsWithData[monthsWithData.length - 1];
 
+      const netHistory: NetHistoryPoint[] = monthsWithData
+        .slice(-NET_HISTORY_MONTHS)
+        .map((m) => ({
+          year: m.year,
+          month: m.month,
+          net: m.total_income - Math.abs(m.total_spending),
+        }));
+
       if (!latest) {
         return {
           totalTransactions: countData.total_transactions,
           monthlyIncome: 0,
           monthlySpending: 0,
           netBalance: 0,
+          netHistory,
         };
       }
 
@@ -94,6 +112,7 @@ export function useFilteredDashboardStats() {
         monthlyIncome,
         monthlySpending,
         netBalance,
+        netHistory,
       };
     },
     staleTime: 30000, // Consider data fresh for 30 seconds

@@ -1,0 +1,141 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
+import { ArrowUpRight, DollarSign, TrendingDown } from "lucide-react";
+import { useCountUp } from "@/hooks/useCountUp";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { numberFormatToLocale } from "@/utils/currency";
+import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { chartTooltipLabelStyle, chartTooltipStyle } from "@/components/shared/chartStyles";
+import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
+
+interface NetSummaryCardProps {
+  netBalance: number;
+  income: number;
+  spending: number;
+  history: NetHistoryPoint[];
+  formatCurrency: (n: number) => string;
+}
+
+export function NetSummaryCard({ netBalance, income, spending, history, formatCurrency }: NetSummaryCardProps) {
+  const { t } = useLanguage();
+  const { appSettings } = useAppSettings();
+  const locale = numberFormatToLocale(appSettings.numberFormat);
+
+  const animatedNet = useCountUp(netBalance, 800);
+  const isPositive = netBalance >= 0;
+
+  const savingsRate = income > 0 ? ((income - spending) / income) * 100 : null;
+  const incomeTotal = Math.max(income, 0);
+  const spendingTotal = Math.max(spending, 0);
+  const splitTotal = incomeTotal + spendingTotal;
+  const incomePct = splitTotal > 0 ? (incomeTotal / splitTotal) * 100 : 50;
+  const spendingPct = splitTotal > 0 ? (spendingTotal / splitTotal) * 100 : 50;
+
+  const chartData = history.map((p) => ({
+    label: formatMonthYearWithAppSettings(new Date(p.year, p.month - 1, 1), appSettings.dateFormat, locale),
+    net: p.net,
+  }));
+
+  const trendGradient = isPositive ? "from-accent/10 to-accent/5" : "from-destructive/10 to-destructive/5";
+  const netColor = isPositive ? "text-accent" : "text-destructive";
+  const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
+
+  return (
+    <Card
+      className={`liquid-glass-hero surface-elevated premium-frame micro-lift group relative overflow-hidden bg-gradient-to-br ${trendGradient} flex flex-col h-full`}>
+      <div
+        className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-24 -mt-24 transition-transform duration-500 group-hover:scale-110" />
+
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div>
+          <CardTitle className="text-sm font-semibold text-muted-foreground">
+            {t('dashboard.stat.lastMonthNet')}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {isPositive ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')}
+          </p>
+        </div>
+        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105 bg-gradient-to-br ${isPositive ? 'from-accent/20 to-accent/10 text-accent' : 'from-destructive/20 to-destructive/10 text-destructive'}`}>
+          <DollarSign className="h-5 w-5" />
+        </div>
+      </CardHeader>
+
+      <CardContent className="flex flex-1 flex-col gap-4">
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className={`text-4xl md:text-5xl font-bold tabular-nums ${netColor}`}>
+            {formatCurrency(animatedNet)}
+          </div>
+          {savingsRate !== null && (
+            <Badge variant="outline" className="font-semibold text-xs">
+              {t('dashboard.stat.savingsRate')}: {savingsRate.toFixed(1)}%
+            </Badge>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{t('dashboard.stat.incomeVsSpending')}</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/50 flex">
+            <div
+              className="h-full bg-accent transition-[width] duration-700"
+              style={{ width: `${incomePct}%` }}
+              aria-label={t('dashboard.stat.income')}
+            />
+            <div
+              className="h-full bg-destructive transition-[width] duration-700"
+              style={{ width: `${spendingPct}%` }}
+              aria-label={t('dashboard.stat.spending')}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <ArrowUpRight className="h-3.5 w-3.5 text-accent" />
+              <span className="tabular-nums text-foreground">{formatCurrency(incomeTotal)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span className="tabular-nums text-foreground">{formatCurrency(spendingTotal)}</span>
+              <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+            </span>
+          </div>
+        </div>
+
+        {chartData.length > 1 && (
+          <div className="mt-auto">
+            <p className="text-xs text-muted-foreground mb-1">
+              {t('dashboard.stat.netTrend', { n: chartData.length })}
+            </p>
+            <div className="h-20 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="netSparkFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={areaStroke} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={areaStroke} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <YAxis hide domain={["dataMin", "dataMax"]} />
+                  <Tooltip
+                    contentStyle={chartTooltipStyle}
+                    labelStyle={chartTooltipLabelStyle}
+                    formatter={(value: number) => [formatCurrency(value), t('dashboard.stat.lastMonthNet')]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="net"
+                    stroke={areaStroke}
+                    strokeWidth={2}
+                    fill="url(#netSparkFill)"
+                    isAnimationActive
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
