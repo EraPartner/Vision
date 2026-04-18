@@ -20,10 +20,13 @@ import {
   fmtDay,
   computeNiceYDomain,
   computeYDomain,
+  decimateTicks,
 } from "./netWorthChartUtils";
 import { useNetWorthChartScroll } from "./useNetWorthChartScroll";
 import { NetWorthChart } from "./NetWorthChart";
 import { SnapshotDataTable } from "./SnapshotDataTable";
+
+const MONTH_LABEL_MIN_PX = 60;
 
 export default function NetWorthPage() {
   const { t, language } = useLanguage();
@@ -89,10 +92,11 @@ export default function NetWorthPage() {
   );
 
   const monthlyTicks = useMemo(() => {
-    return displaySnapshots
+    const allMonthFirsts = displaySnapshots
       .filter((s, idx) => idx === 0 || s.date.slice(0, 7) !== displaySnapshots[idx - 1].date.slice(0, 7))
       .map((s) => s.date);
-  }, [displaySnapshots]);
+    return decimateTicks(allMonthFirsts, chartWidth, MONTH_LABEL_MIN_PX);
+  }, [displaySnapshots, chartWidth]);
 
   const { chartScrollRef, yDomain, isAtLatest, scrollToLatest, captureZoomAnchor } = useNetWorthChartScroll({
     chartWidth,
