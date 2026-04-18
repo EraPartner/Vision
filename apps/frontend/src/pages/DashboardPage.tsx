@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { parseISO } from "date-fns";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { NetSummaryCard } from "@/components/dashboard/NetSummaryCard";
 import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
 import { CashFlowComparisonChart } from "@/components/dashboard/CashFlowComparisonChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
@@ -238,6 +239,7 @@ export default function DashboardPage() {
     const totalSpending = statsData?.monthlySpending ?? 0;
     const totalIncome = statsData?.monthlyIncome ?? 0;
     const netBalance = statsData?.netBalance ?? 0;
+    const netHistory = statsData?.netHistory ?? [];
 
     // Get chart data based on per-graph toggle state
     const getMonthlyData = () => {
@@ -457,15 +459,25 @@ export default function DashboardPage() {
 
             {/* Stats */}
             {isVisible('statCards') && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-stagger">
-                <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} numericValue={totalTransactions} formatValue={(n) => integerLocaleFormatter.format(Math.round(n))} icon={Receipt} />
-                <StatCard title={t('dashboard.stat.lastMonthSpending')} value={currencyFormatter(totalSpending)} numericValue={totalSpending} formatValue={currencyFormatter} icon={TrendingDown} trend="expense"
-                    subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthIncome')} value={currencyFormatter(totalIncome)} numericValue={totalIncome} formatValue={currencyFormatter} icon={ArrowUpRight} trend="income"
-                    subtitle={t('dashboard.stat.mostRecentMonth')} />
-                <StatCard title={t('dashboard.stat.lastMonthNet')} value={currencyFormatter(netBalance)} numericValue={netBalance} formatValue={currencyFormatter} icon={DollarSign}
-                    trend={netBalance >= 0 ? "income" : "expense"}
-                    subtitle={netBalance >= 0 ? t('dashboard.stat.positiveCashFlow') : t('dashboard.stat.negativeCashFlow')} />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2 animate-stagger">
+                <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
+                    <NetSummaryCard
+                        netBalance={netBalance}
+                        income={totalIncome}
+                        spending={totalSpending}
+                        history={netHistory}
+                        formatCurrency={currencyFormatter}
+                    />
+                </div>
+                <div className="lg:col-span-3 lg:row-span-1">
+                    <StatCard title={t('dashboard.stat.lastMonthIncome')} value={currencyFormatter(totalIncome)} numericValue={totalIncome} formatValue={currencyFormatter} icon={ArrowUpRight} trend="income"
+                        subtitle={t('dashboard.stat.mostRecentMonth')} />
+                </div>
+                <div className="lg:col-span-3 lg:row-span-1 grid gap-4 sm:grid-cols-2">
+                    <StatCard title={t('dashboard.stat.lastMonthSpending')} value={currencyFormatter(totalSpending)} numericValue={totalSpending} formatValue={currencyFormatter} icon={TrendingDown} trend="expense"
+                        subtitle={t('dashboard.stat.mostRecentMonth')} />
+                    <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} numericValue={totalTransactions} formatValue={(n) => integerLocaleFormatter.format(Math.round(n))} icon={Receipt} />
+                </div>
             </div>
             )}
 
