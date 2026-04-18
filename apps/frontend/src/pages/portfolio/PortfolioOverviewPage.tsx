@@ -300,7 +300,7 @@ export default function PortfolioOverviewPage() {
                   formatCurrency={fmt}
                 />
               </div>
-              <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 grid-rows-3 gap-4">
                 {cards.map((c) => (
                   <Card key={c.title} className="liquid-glass micro-lift border">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">

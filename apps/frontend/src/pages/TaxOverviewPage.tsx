@@ -217,7 +217,13 @@ export default function TaxOverviewPage() {
     },
   ];
 
-  const hasProfile = profile.profileConfigured || profile.grossAnnualIncome > 0;
+  const hasProfile =
+    profile.profileConfigured ||
+    profile.grossAnnualIncome > 0 ||
+    profile.otherTaxableIncome > 0 ||
+    profile.cadastralIncome > 0 ||
+    profile.dependentChildren > 0 ||
+    profile.dependentOtherPersons > 0;
   const hasStatsData = totalIncome > 0 || (monthlyData ?? []).some((m) => m.income > 0);
   const isEmpty = !isProfileLoading && !hasProfile && !hasStatsData;
 

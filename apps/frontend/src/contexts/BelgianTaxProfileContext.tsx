@@ -529,7 +529,21 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
     useEffect(() => {
         if (preloadLoading) return;
         if (preloaded) {
-            setProfile({ ...defaultProfile, ...preloaded });
+            // Merge defaults + stored. If the stored profile has any user-entered data
+            // (gross income, cadastral income, region/year customisation, dependents, etc.),
+            // treat it as a configured profile even if `profileConfigured` was never persisted
+            // or was written as `false` by an older client version. This ensures the budget
+            // Tax Overview hydrates the profile as configured on reload.
+            const merged: BelgianTaxProfile = { ...defaultProfile, ...preloaded };
+            const hasMeaningfulData =
+                merged.profileConfigured === true ||
+                (merged.grossAnnualIncome ?? 0) > 0 ||
+                (merged.otherTaxableIncome ?? 0) > 0 ||
+                (merged.cadastralIncome ?? 0) > 0 ||
+                (merged.dependentChildren ?? 0) > 0 ||
+                (merged.dependentOtherPersons ?? 0) > 0 ||
+                (merged.actualProfessionalExpenses ?? 0) > 0;
+            setProfile({ ...merged, profileConfigured: hasMeaningfulData });
         }
         setIsLoading(false);
     }, [preloaded, preloadLoading]);
