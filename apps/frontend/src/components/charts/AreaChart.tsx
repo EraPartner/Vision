@@ -224,8 +224,8 @@ function AreaChartInner<Datum>({
                                 id={`${gradId}-${s.key}`}
                                 from={color}
                                 to={color}
-                                fromOpacity={0.35}
-                                toOpacity={0.02}
+                                fromOpacity={0.22}
+                                toOpacity={0}
                             />
                         );
                     })}
@@ -249,6 +249,7 @@ function AreaChartInner<Datum>({
                         <AreaStack<Datum>
                             keys={series.map((s) => s.key)}
                             data={data as Datum[]}
+                            curve={curveMonotoneX}
                             value={(d, key) => {
                                 const s = series.find((x) => x.key === key);
                                 return s ? (s.accessor(d) ?? 0) : 0;
@@ -267,7 +268,8 @@ function AreaChartInner<Datum>({
                                             d={path(stack) || ""}
                                             fill={`url(#${gradId}-${s.key})`}
                                             stroke={color}
-                                            strokeWidth={1.5}
+                                            strokeOpacity={0.7}
+                                            strokeWidth={1.25}
                                             initial={
                                                 reduce ? { opacity: 1 } : { opacity: 0, y: 12 }
                                             }
