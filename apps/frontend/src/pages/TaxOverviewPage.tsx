@@ -21,7 +21,7 @@ import {
   BadgePercent,
   Loader2,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, type BarSeries } from "@/components/charts";
 import { useStatistics } from "@/hooks/useStatistics";
 import { CustomCategoryChart } from "@/components/statistics/CustomCategoryChart";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -293,7 +293,7 @@ export default function TaxOverviewPage() {
             {isVisible("summaryCards") && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cards.map((c) => (
-                  <Card key={c.title} className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                  <Card key={c.title} className="surface-elevated premium-frame">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
                       <c.icon className={`h-4 w-4 ${c.cls}`} />
@@ -399,29 +399,17 @@ export default function TaxOverviewPage() {
                     <CardDescription>{t('tax.incomeBreakdown.description')}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={monthlyIncomeTax}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="period" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                        <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "var(--radius)",
-                            color: "hsl(var(--card-foreground))",
-                          }}
-                          formatter={(v: number) => fmt(v)}
-                        />
-                        <Bar dataKey="income" name={t('tax.chart.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-                        <Bar
-                          dataKey="estimatedTax"
-                          name={t('tax.chart.pitReserve')}
-                          fill="hsl(340, 82%, 52%)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <BarChart
+                      data={monthlyIncomeTax}
+                      categoryAccessor={(d) => d.period}
+                      height={280}
+                      valueTickFormat={(v) => fmt(v)}
+                      tooltipValueFormat={(v) => fmt(v)}
+                      series={[
+                        { key: "income", label: t('tax.chart.income'), accessor: (d) => d.income, color: "hsl(var(--primary))" },
+                        { key: "estimatedTax", label: t('tax.chart.pitReserve'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
+                      ] as BarSeries<typeof monthlyIncomeTax[number]>[]}
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -509,36 +497,17 @@ export default function TaxOverviewPage() {
                    <CardDescription>{t('tax.yearly.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={yearlyIncome}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="year" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "var(--radius)",
-                          color: "hsl(var(--card-foreground))",
-                        }}
-                        formatter={(v: number) => fmt(v)}
-                      />
-                       <Bar
-                         dataKey="netAfterTax"
-                         name={t('tax.chart.netAfterTax')}
-                         stackId="a"
-                         fill="hsl(142, 76%, 36%)"
-                         radius={[0, 0, 0, 0]}
-                       />
-                       <Bar
-                         dataKey="estimatedTax"
-                         name={t('tax.chart.pit')}
-                         stackId="a"
-                         fill="hsl(340, 82%, 52%)"
-                         radius={[4, 4, 0, 0]}
-                       />
-                      </BarChart>
-                  </ResponsiveContainer>
+                  <BarChart
+                    data={yearlyIncome}
+                    categoryAccessor={(d) => d.year}
+                    height={300}
+                    valueTickFormat={(v) => fmt(v)}
+                    tooltipValueFormat={(v) => fmt(v)}
+                    series={[
+                      { key: "netAfterTax", label: t('tax.chart.netAfterTax'), accessor: (d) => d.netAfterTax, color: "hsl(var(--primary))" },
+                      { key: "estimatedTax", label: t('tax.chart.pit'), accessor: (d) => d.estimatedTax, color: "hsl(var(--chart-5))" },
+                    ] as BarSeries<typeof yearlyIncome[number]>[]}
+                  />
                 </CardContent>
               </Card>
             )}

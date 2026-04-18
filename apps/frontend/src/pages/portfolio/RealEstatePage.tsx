@@ -65,7 +65,7 @@ export default function RealEstatePage() {
           icon={Building2}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'real_estate' ]} />}
         />
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
           <CardContent className="pt-0">
             <EmptyState
               icon={Building2}
@@ -90,32 +90,46 @@ export default function RealEstatePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> {t('portfolio.totalValue')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
+                <DollarSign className="h-3 w-3" />
+              </span>
+              {t('portfolio.totalValue')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalValue)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Home className="h-3 w-3" /> {t('portfolio.totalCost')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/5 text-muted-foreground ring-1 ring-muted-foreground/15">
+                <Home className="h-3 w-3" />
+              </span>
+              {t('portfolio.totalCost')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-muted-foreground tabular-nums">{fmt(totalCost)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> {t('portfolio.appreciation')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className={cn(
+                "inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br ring-1",
+                totalAppreciation >= 0
+                  ? "from-accent/20 to-accent/5 text-accent ring-accent/15"
+                  : "from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+              )}>
+                <TrendingUp className="h-3 w-3" />
+              </span>
+              {t('portfolio.appreciation')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -124,8 +138,8 @@ export default function RealEstatePage() {
             </p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.rentalIncome')}</CardTitle>
           </CardHeader>
@@ -134,11 +148,14 @@ export default function RealEstatePage() {
             <p className="text-xs text-muted-foreground mt-0.5">~{fmt(estimatedMonthlyRent)}{t('realestate.perMonth')}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Percent className="h-3 w-3" /> {t('portfolio.yield')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-foreground/15 to-foreground/5 text-foreground ring-1 ring-foreground/10">
+                <Percent className="h-3 w-3" />
+              </span>
+              {t('portfolio.yield')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -146,8 +163,8 @@ export default function RealEstatePage() {
             <p className="text-xs text-muted-foreground mt-0.5">{t('portfolio.annual')}</p>
           </CardContent>
         </Card>
-        
-        <Card className={cn("liquid-glass micro-lift border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
+
+        <Card className={cn("group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4", totalReturn >= 0 ? "border-l-accent" : "border-l-destructive")}>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.totalReturn')}</CardTitle>
           </CardHeader>

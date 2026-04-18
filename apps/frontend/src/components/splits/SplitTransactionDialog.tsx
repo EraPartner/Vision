@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,9 +102,9 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                         <Split className="h-5 w-5" />
                         {t('splitDialog.buttonTitle')}
                     </DialogTitle>
-                    <p className="text-sm text-muted-foreground">
+                    <DialogDescription>
                         {t('splitDialog.total', { amount: formatCurrency(absAmount, transactionCurrency) })}
-                    </p>
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">

@@ -2,27 +2,36 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-04-10
-tags: [components, dashboard, charts, widgets]
-description: Dashboard-specific components for financial overview and visualization
+date: 2026-04-17
+tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, visx]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
 
 # Dashboard Components
 
-Components for the main Dashboard page (`/`), providing financial overview and visualization widgets.
+Components for the main Dashboard page (`/`), providing financial overview and visualization widgets. As of Phase 9, all dashboard components use the liquid-glass aesthetic, glass surfaces, and visx + d3 charts.
+
+## Visual Design
+
+Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]] with:
+
+- **StatCard**: `glass-regular` surface with semi-transparent gradient icon tile background
+- **Chart containers**: `premium-frame` + `micro-lift` for elevated depth
+- **Spacing**: Responsive via clamp-based token system
+- **Motion**: Hover states use micro-lift; chart entry uses Framer Motion stagger (if not reduced-motion)
 
 ## Component List
 
 | Component | Description | File |
 |-----------|-------------|------|
-| StatCard | Summary stat card with trend | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
-| MonthlyTrendsChart | Monthly income vs expenses bar chart | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
-| CategoryPieChart | Spending by category pie chart | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
-| CashFlowComparisonChart | Current vs previous period comparison | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
+| StatCard | Summary stat card with trend and gradient icon tile | [[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]] |
+| MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
+| CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
+| CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
 | BankBalancesWidget | Bank account balance display | [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
-| MonthlySpendingChart | Monthly spending line chart | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
+| MonthlySpendingChart | Monthly spending line chart (visx) | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
 
 ---
 

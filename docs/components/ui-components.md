@@ -2,77 +2,110 @@
 title: UI Components
 type: component
 status: active
-date: 2026-04-10
-tags: [components, ui, radix, shadcn]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS
+date: 2026-04-17
+tags: [components, ui, radix, shadcn, design-system, phase-9, performance, glass-downgrade]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
 
 # UI Components
 
-Vision uses a comprehensive set of UI components built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS, and using [class-variance-authority](https://cva.style) for variant management.
+Vision uses a comprehensive set of UI components (48 total) built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS and design tokens, and using [class-variance-authority](https://cva.style) for variant management.
 
 ## Overview
 
-All UI components are located in `apps/frontend/src/components/ui/` and are based on [shadcn/ui](https://ui.shadcn.com) design patterns.
+All UI components are located in `apps/frontend/src/components/ui/` and are based on [shadcn/ui](https://ui.shadcn.com) design patterns. As of Phase 9 + performance optimization (2026-04-17), all components have been tuned to use the emerald + champagne-gold palette, centralized design tokens, and selective glass surfaces optimized for Electron M1 performance.
 
-## Surface Styling (Liquid Glass)
+## Surface Styling (Performance-Optimized Glass)
 
-The UI primitives use a shared liquid-glass surface system defined in [[apps/frontend/src/index.css\|index.css]]:
+The UI primitives use a shared surface system defined in [[apps/frontend/src/index.css\|index.css]], with glass blur selectively applied to high-priority overlays only:
 
-- `.liquid-glass` — stronger frosted surface for overlays and selected surfaces
-- `.liquid-glass-soft` — softer frosted surface for subtle controls/shell areas
-- `.liquid-glass-hero` — enhanced high-emphasis glass surface for spotlight widgets
-- `.liquid-glass-trend-up` / `.liquid-glass-trend-down` — trend-tinted glass variants used for performance semantics
+**Glass-based surfaces** (retained blur, 6-12px):
 
-The utilities include a graceful fallback for environments without `backdrop-filter` and automatically adapt in dark mode via `--glass-*` tokens.
+- `.glass-thin` (6px) — subtle interactive elements
+- `.glass-regular` (8px) — standard overlay (default)
+- `.glass-thick` (12px) — modal dialogs (Dialog, AlertDialog)
+- `.glass-chrome` (8px) — navigation chrome (Sidebar, AppLayout)
 
-Current recipe aligns more closely with Glass UI-style glassmorphism:
+Applied to modals only:
+- `Dialog`, `AlertDialog`, `Sheet` (modal overlays) use `.glass-thick` with `bg-card/95` fallback
+- `Sidebar`/`AppLayout` navigation chrome uses `.glass-chrome`
+- Popovers + Tooltips use `.glass-regular` (lowest-impact overlays)
 
-- vivid layered gradient canvas behind translucent surfaces (`.liquid-canvas`)
-- semitransparent glass panels with brighter top highlight and soft edge border
-- moderate blur + saturation for readability-first depth (`blur(10px) saturate(170%)`)
+**Solid-surface pattern** (removed blur, 95% opacity):
 
-Applied defaults:
+Dense components now use `bg-card/95` + single subtle border + ≤8px shadow:
+- `Card` root (standard app surface)
+- `Button` variants (removed `.liquid-glass-soft`)
+- Input, Textarea, Checkbox, RadioGroup, Switch, Slider, Label
+- Tabs, Select, DropdownMenu, ContextMenu, MenuBar
+- Accordion, Collapsible, Toggle, ToggleGroup, Resizable
+- Alert, HoverCard, Carousel
+- Sonner toast notifications
 
-- `Card` root uses standard app surface (`bg-card`) and does not force glass globally ([[apps/frontend/src/components/ui/card.tsx\|card.tsx]])
-- `Button` `outline` and `secondary` variants use `.liquid-glass-soft` ([[apps/frontend/src/components/ui/button.tsx\|button.tsx]])
-- Overlay content surfaces (`Dialog`, `Sheet`, `Popover`, `DropdownMenu`) use `.liquid-glass`
-  ([[apps/frontend/src/components/ui/dialog.tsx\|dialog.tsx]], [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]], [[apps/frontend/src/components/ui/popover.tsx\|popover.tsx]], [[apps/frontend/src/components/ui/dropdown-menu.tsx\|dropdown-menu.tsx]])
+**Rationale**: Electron M1 GPU regression from blur + saturation filtering on frequently-occluded surfaces. Solid opacity-based layering (95% color + transparency) achieves visual depth with zero GPU blur cost. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details.
 
-Overlay positioning safety:
+**Removed components**:
+- `.liquid-canvas` animated background mesh (see AppLayout, below)
+- `liquid-drift` / `liquid-canvas-drift` keyframes (static grain overlay retained)
+- `saturate()` filters (drop color saturation amplification; rely on opacity for readability)
 
-- shared glass utilities no longer force `position: relative`, preventing conflicts with Radix overlays that require `fixed` positioning
-- `Dialog` and `Sheet` content explicitly use `!fixed` to guarantee modal visibility with backdrop
+Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/card.tsx]], [[apps/frontend/src/components/ui/dialog.tsx]], [[apps/frontend/src/components/ui/input.tsx]], [[apps/frontend/src/components/ui/button.tsx]]
 
-Hero usage:
+**Minimal motion and premium polish utilities**:
 
-- Dashboard stat cards use `.liquid-glass-hero` for stronger foreground hierarchy
-  ([[apps/frontend/src/components/dashboard/StatCard.tsx\|StatCard.tsx]])
+- `.micro-lift` — very small hover elevation (transform only, GPU-safe; `will-change: transform` on `:hover` only)
+- `.press-feedback` — subtle click/tap compression feedback
+- `.premium-icon-action` — premium icon-button hover/focus polish in chrome controls
+- `.premium-frame` — elevated depth without glass blur (shadows + opacity)
+- `.icon-touch-target` — consistent touch-safe icon action hit areas (2.5rem square)
+- `.surface-default` / `.surface-elevated` / `.surface-glass` — sanctioned surface recipes
 
-Selective summary-card usage:
+Shared table shells (`DataTable`, `VirtualDataTable`) use `premium-frame` + `micro-lift` (non-glass) for cleaner density and readability.
 
-- summary cards in Statistics, Planned Payments, Portfolio Overview, Net Worth, and investment pages (Stocks/Crypto/Real Estate/Savings, including Metals via Stocks reuse) now use `.liquid-glass` with subtle `micro-lift`
-- Performance metric cards use `.liquid-glass` plus trend tints (`.liquid-glass-trend-up` / `.liquid-glass-trend-down`) to preserve green/red semantics
-
-Code links: [[apps/frontend/src/pages/StatisticsPage.tsx]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]]
-
-Minimal motion and premium polish utilities:
-
-- `.micro-lift` for very small hover elevation
-- `.press-feedback` for subtle click/tap compression
-- `.premium-icon-action` for premium icon-button hover/focus polish in chrome controls
-- `.premium-frame` for non-glass cards that still need elevated premium depth
-- `.icon-touch-target` for consistent touch-safe icon action hit areas (`2.5rem` square)
-- `.surface-default` / `.surface-elevated` / `.surface-glass` for sanctioned surface recipes used across cards/tables/page sections
-- `liquid-canvas` uses a low-amplitude ambient drift animation with `prefers-reduced-motion` fallback
-
-Shared table shells (`DataTable`, `VirtualDataTable`) now favor `premium-frame` + `micro-lift` (non-glass) for cleaner density and readability.
-
-Reduced-motion behavior also explicitly disables transitions/animations for premium utility classes (including surface aliases and icon touch target) when `prefers-reduced-motion: reduce` is active.
+Reduced-motion behavior explicitly disables transitions/animations when `prefers-reduced-motion: reduce` is active.
 
 Code links: [[apps/frontend/src/index.css]], [[apps/frontend/src/components/ui/button.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx]]
+
+---
+
+## AppLayout & Shell Components
+
+**AppLayout.tsx** — Main app container:
+- Removed: `.liquid-canvas` animated gradient mesh + `liquid-drift` keyframe animation
+- Retained: Static grain overlay (CSS rule, no animation)
+- Sidebar + chrome use `.glass-chrome` (8px blur retained)
+- Page transitions: Direct route outlet render (PageTransition wrapper removed)
+
+**AppSidebar.tsx** — Navigation chrome:
+- `.glass-chrome` with emerald accent rail on active route
+- `micro-lift` on hover
+
+**PageTransition.tsx** — Removed entirely (confirmed unused):
+- Previous: Spring-based route choreography (enter: 300ms spring, exit: 200ms fade)
+- Now: Direct React Router outlet (instant transitions)
+- Rationale: Spring physics on route changes added GPU complexity for marginal UX benefit
+
+Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/components/layout/AppSidebar.tsx]]
+
+---
+
+## Fonts & Typography
+
+**Typography stack** (after font optimization, 2026-04-17):
+
+- **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
+- **Body**: Inter (static weights: 400/500/600, latin subset) — copy, labels, form inputs
+- **Self-hosted**: Font files loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files, no preload needed)
+
+Previous: Variable font ranges (`@fontsource-variable/*`) superseded by static weight selection (5kb savings, faster download).
+
+CSS cleanup:
+- Removed: `-webkit-font-smoothing: antialiased` (redundant in modern webkit)
+- Removed: `text-rendering: optimizeLegibility` (can cause layout jank on dynamic text)
+
+Code links: [[apps/frontend/package.json]], [[apps/frontend/src/index.css]]
 
 ## Shared Page Composition Components
 

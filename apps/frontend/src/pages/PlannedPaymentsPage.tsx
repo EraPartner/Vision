@@ -620,7 +620,7 @@ export default function PlannedPaymentsPage() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="liquid-glass micro-lift border">
+          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
               <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{t('plannedPage.pending')}</CardTitle>
             </CardHeader>
@@ -628,30 +628,39 @@ export default function PlannedPaymentsPage() {
               <p className="text-2xl font-bold">{pending}</p>
             </CardContent>
           </Card>
-          <Card className="liquid-glass micro-lift border">
+          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
               <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" /> {t('plannedPage.executed')}
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </span>
+                {t('plannedPage.executed')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-accent">{executed}</p>
             </CardContent>
           </Card>
-          <Card className="liquid-glass micro-lift border">
+          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
               <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <Repeat className="h-4 w-4" /> {t('plannedPage.estMonthly')}
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
+                  <Repeat className="h-3.5 w-3.5" />
+                </span>
+                {t('plannedPage.estMonthly')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold tabular-nums">{formatDisplayCurrency(totalMonthly)}</p>
             </CardContent>
           </Card>
-          <Card className="liquid-glass micro-lift border">
+          <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
               <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <CalendarClock className="h-4 w-4" /> {t('plannedPage.dueThisWeek')}
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                </span>
+                {t('plannedPage.dueThisWeek')}
               </CardTitle>
             </CardHeader>
             <CardContent>

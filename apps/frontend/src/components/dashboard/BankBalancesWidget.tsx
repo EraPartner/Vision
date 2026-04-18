@@ -4,20 +4,28 @@ import { apiClient } from "@/lib/api";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { format, parseISO } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { chartTooltipStyle } from "@/components/shared/chartStyles";
 
 const ACCOUNT_COLORS = [
-    "hsl(var(--primary))",
-    "hsl(var(--accent))",
-    "hsl(210, 70%, 55%)",
-    "hsl(280, 60%, 55%)",
-    "hsl(30, 80%, 55%)",
-    "hsl(170, 60%, 45%)",
+    "hsl(var(--chart-1))",
+    "hsl(var(--chart-2))",
+    "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))",
+    "hsl(var(--chart-5))",
+    "hsl(var(--chart-6))",
+    "hsl(var(--chart-7))",
+    "hsl(var(--chart-8))",
 ];
+
+interface BankChartDatum {
+    month: string;
+    date: Date;
+    values: Record<string, number>;
+    total: number;
+}
 
 function shortAccountName(account: string): string {
     // If it's a long IBAN-style account, show last 8 chars
@@ -81,19 +89,33 @@ export function BankBalancesWidget() {
     const visibleAccounts = accounts.filter((acct) => Math.abs(acct.balance) > 0.000001);
 
     // Build chart data from total_history
-    const chartData = total_history.map((entry) => {
-        const point: Record<string, any> = {
-            month: format(parseISO(entry.month + "-01"), "MMM yy"),
-        };
-        // Add per-account data
+    const chartData: BankChartDatum[] = total_history.map((entry) => {
+        const values: Record<string, number> = {};
         for (const acct of visibleAccounts) {
             const acctHistory = history[acct.bank_account] || [];
             const match = acctHistory.find((h) => h.month === entry.month);
-            point[acct.bank_account] = match?.balance ?? 0;
+            values[acct.bank_account] = match?.balance ?? 0;
         }
-        point.total = entry.balance;
-        return point;
+        return {
+            month: entry.month,
+            date: parseISO(entry.month + "-01"),
+            values,
+            total: entry.balance,
+        };
     });
+
+    const accountSeries: AreaSeries<BankChartDatum>[] = visibleAccounts.map((acct, idx) => ({
+        key: acct.bank_account,
+        label: shortAccountName(acct.bank_account),
+        accessor: (d) => d.values[acct.bank_account] ?? 0,
+        color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length],
+        strokeWidth: 2,
+    }));
+
+    const legendItems: ChartLegendItem[] = accountSeries.map((s) => ({
+        label: s.label ?? s.key,
+        color: s.color ?? "hsl(var(--chart-1))",
+    }));
 
     const isPositive = total_net_position >= 0;
 
@@ -128,7 +150,7 @@ export function BankBalancesWidget() {
                         const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                         const acctPositive = acct.balance >= 0;
                         return (
-                            <Card key={acct.bank_account} className="premium-frame group border shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                            <Card key={acct.bank_account} className="premium-frame group">
                                 <CardContent className="pt-4 pb-4 px-4">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
@@ -165,51 +187,19 @@ export function BankBalancesWidget() {
                         </CardTitle>
                         <CardDescription>{t('bankWidget.balanceHistoryDesc')}</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    {visibleAccounts.map((acct, idx) => (
-                                        <linearGradient key={acct.bank_account} id={`gradient-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} stopOpacity={0} />
-                                        </linearGradient>
-                                    ))}
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis dataKey="month" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
-                                <YAxis
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
-                                />
-                                <Tooltip
-                                    contentStyle={chartTooltipStyle}
-                                    formatter={(value: number, name: string) => [
-                                        formatCurrency(value, defaultCurrency, locale),
-                                        name.length > 12 ? shortAccountName(name) : name,
-                                    ]}
-                                />
-                                <Legend
-                                    formatter={(value: string) => (
-                                        <span className="text-xs text-muted-foreground">
-                                            {value.length > 12 ? shortAccountName(value) : value}
-                                        </span>
-                                    )}
-                                />
-                                {visibleAccounts.map((acct, idx) => (
-                                    <Area
-                                        key={acct.bank_account}
-                                        type="monotone"
-                                        dataKey={acct.bank_account}
-                                        stackId="1"
-                                        stroke={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]}
-                                        fill={`url(#gradient-${idx})`}
-                                        strokeWidth={2}
-                                    />
-                                ))}
-                            </AreaChart>
-                        </ResponsiveContainer>
+                    <CardContent className="space-y-3">
+                        <AreaChart<BankChartDatum>
+                            data={chartData}
+                            xAccessor={(d) => d.date}
+                            series={accountSeries}
+                            stacked
+                            height={320}
+                            xTickFormat={(v) => format(v as Date, "MMM yy")}
+                            yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            tooltipTitle={(d) => format(d.date, "MMM yy")}
+                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                        />
+                        <ChartLegend items={legendItems} align="center" />
                     </CardContent>
                 </Card>
             )}

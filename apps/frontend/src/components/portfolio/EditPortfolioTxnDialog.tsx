@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -199,6 +199,7 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('txnEdit.title')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('txnEdit.title')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -357,10 +358,10 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
             />
           </div>
 
-          <div className="flex justify-end gap-2">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
             <Button type="submit">{t('common.save')}</Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

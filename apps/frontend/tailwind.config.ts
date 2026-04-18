@@ -20,6 +20,33 @@ export default {
             },
         },
         extend: {
+            fontFamily: {
+                display: [
+                    "Fraunces Variable",
+                    "Fraunces",
+                    "Iowan Old Style",
+                    "Palatino",
+                    "Georgia",
+                    "serif",
+                ],
+                sans: [
+                    "Inter Variable",
+                    "Inter",
+                    "-apple-system",
+                    "BlinkMacSystemFont",
+                    "SF Pro Text",
+                    "Segoe UI",
+                    "system-ui",
+                    "sans-serif",
+                ],
+                mono: [
+                    "SF Mono",
+                    "JetBrains Mono",
+                    "Menlo",
+                    "Consolas",
+                    "monospace",
+                ],
+            },
             colors: {
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",
@@ -38,6 +65,9 @@ export default {
                     DEFAULT: "hsl(var(--destructive))",
                     foreground: "hsl(var(--destructive-foreground))",
                 },
+                success: "hsl(var(--success))",
+                warning: "hsl(var(--warning))",
+                expense: "hsl(var(--expense))",
                 muted: {
                     DEFAULT: "hsl(var(--muted))",
                     foreground: "hsl(var(--muted-foreground))",
@@ -70,12 +100,33 @@ export default {
                     "3": "hsl(var(--chart-3))",
                     "4": "hsl(var(--chart-4))",
                     "5": "hsl(var(--chart-5))",
+                    "6": "hsl(var(--chart-6))",
+                    "7": "hsl(var(--chart-7))",
+                    "8": "hsl(var(--chart-8))",
                 },
             },
             borderRadius: {
                 lg: "var(--radius)",
                 md: "calc(var(--radius) - 2px)",
                 sm: "calc(var(--radius) - 4px)",
+                xl: "calc(var(--radius) + 4px)",
+                "2xl": "calc(var(--radius) + 10px)",
+            },
+            boxShadow: {
+                "glass-soft":
+                    "0 1px 0 0 hsl(var(--glass-highlight) / 0.35) inset, 0 10px 30px -12px hsl(var(--glass-shadow) / 0.35)",
+                "glass-elevated":
+                    "0 1px 0 0 hsl(var(--glass-highlight) / 0.5) inset, 0 22px 48px -18px hsl(var(--glass-shadow) / 0.55)",
+            },
+            transitionTimingFunction: {
+                "out-expo": "var(--ease-out-expo)",
+                "out-quint": "var(--ease-out-quint)",
+                "in-out-quart": "var(--ease-in-out-quart)",
+            },
+            transitionDuration: {
+                fast: "150ms",
+                normal: "260ms",
+                slow: "420ms",
             },
             keyframes: {
                 "accordion-down": {
@@ -86,10 +137,30 @@ export default {
                     from: { height: "var(--radix-accordion-content-height)" },
                     to: { height: "0" },
                 },
+                "fade-up": {
+                    from: { opacity: "0", transform: "translateY(12px)" },
+                    to: { opacity: "1", transform: "translateY(0)" },
+                },
+                "fade-in": {
+                    from: { opacity: "0" },
+                    to: { opacity: "1" },
+                },
+                "scale-in": {
+                    from: { opacity: "0", transform: "scale(0.96)" },
+                    to: { opacity: "1", transform: "scale(1)" },
+                },
+                shimmer: {
+                    "0%": { backgroundPosition: "-200% 0" },
+                    "100%": { backgroundPosition: "200% 0" },
+                },
             },
             animation: {
                 "accordion-down": "accordion-down 0.2s ease-out",
                 "accordion-up": "accordion-up 0.2s ease-out",
+                "fade-up": "fade-up 420ms var(--ease-out-expo) both",
+                "fade-in": "fade-in 260ms var(--ease-out-expo) both",
+                "scale-in": "scale-in 260ms var(--ease-out-expo) both",
+                shimmer: "shimmer 2.4s linear infinite",
             },
         },
     },

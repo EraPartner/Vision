@@ -1,0 +1,189 @@
+/* ------------------------------------------------------------------
+ * Vision Design Tokens
+ *
+ * Dark-first wealth-management aesthetic.
+ * Palette: emerald primary + champagne-gold accent + warm neutral base.
+ * All colors are HSL components (no hsl()) so tailwind can wrap them.
+ * ------------------------------------------------------------------ */
+
+@layer base {
+    :root {
+        /* -------- Surface & text (light polished) -------- */
+        --background: 42 30% 97%;
+        /* warm ivory */
+        --foreground: 200 18% 10%;
+        /* deep ink */
+
+        --card: 0 0% 100%;
+        --card-foreground: 200 18% 10%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 200 18% 10%;
+
+        --muted: 42 18% 93%;
+        --muted-foreground: 200 10% 36%;
+
+        --secondary: 42 18% 93%;
+        --secondary-foreground: 200 18% 10%;
+
+        --border: 42 15% 87%;
+        --input: 42 15% 87%;
+
+        /* -------- Brand -------- */
+        --primary: 158 62% 32%;
+        /* emerald */
+        --primary-foreground: 42 30% 97%;
+
+        --accent: 38 58% 52%;
+        /* champagne gold */
+        --accent-foreground: 200 18% 10%;
+
+        --ring: 158 62% 32%;
+
+        /* -------- Semantic -------- */
+        --destructive: 358 74% 48%;
+        --destructive-foreground: 0 0% 100%;
+        --success: 152 58% 38%;
+        --warning: 38 80% 50%;
+        --expense: 358 74% 44%;
+
+        --radius: 0.875rem;
+
+        /* -------- Charts (glass-tuned palette) -------- */
+        --chart-1: 158 62% 38%;
+        /* emerald */
+        --chart-2: 38 62% 54%;
+        /* gold */
+        --chart-3: 204 68% 48%;
+        /* steel blue */
+        --chart-4: 268 52% 58%;
+        /* plum */
+        --chart-5: 14 76% 54%;
+        /* terracotta */
+        --chart-6: 182 48% 40%;
+        /* teal */
+        --chart-7: 340 58% 54%;
+        /* rose */
+        --chart-8: 48 72% 48%;
+        /* mustard */
+
+        /* -------- Sidebar -------- */
+        --sidebar-background: 42 24% 96%;
+        --sidebar-foreground: 200 14% 22%;
+        --sidebar-primary: 158 62% 32%;
+        --sidebar-primary-foreground: 42 30% 97%;
+        --sidebar-accent: 42 18% 90%;
+        --sidebar-accent-foreground: 200 18% 10%;
+        --sidebar-border: 42 15% 85%;
+        --sidebar-ring: 158 62% 32%;
+
+        /* -------- Glass materials (Apple hierarchy) -------- */
+        --glass-surface: 42 30% 99%;
+        --glass-surface-soft: 42 26% 98%;
+        --glass-surface-deep: 0 0% 100%;
+        --glass-border: 200 18% 22%;
+        --glass-highlight: 42 60% 98%;
+        --glass-shadow: 200 40% 10%;
+        --glass-tint: 158 40% 40%;
+
+        /* Blur + saturation per material */
+        --glass-thin-blur: 6px;
+        --glass-regular-blur: 8px;
+        --glass-thick-blur: 10px;
+        --glass-chrome-blur: 8px;
+        --glass-elevated-blur: 12px;
+        --glass-saturate: 110%;
+
+        /* -------- Motion -------- */
+        --duration-fast: 150ms;
+        --duration-normal: 260ms;
+        --duration-slow: 420ms;
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+
+        /* -------- Typography -------- */
+        --font-display: "Fraunces Variable", "Fraunces", "Iowan Old Style",
+            "Palatino", "Georgia", serif;
+        --font-body: "Inter Variable", "Inter", -apple-system,
+            BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+        --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+    }
+
+    .dark {
+        /* -------- Surface & text (dark first) -------- */
+        --background: 200 20% 7%;
+        /* deep warm obsidian */
+        --foreground: 42 25% 96%;
+
+        --card: 200 18% 11%;
+        --card-foreground: 42 25% 96%;
+
+        --popover: 200 20% 9%;
+        --popover-foreground: 42 25% 96%;
+
+        --muted: 200 14% 14%;
+        --muted-foreground: 42 12% 68%;
+
+        --secondary: 200 14% 14%;
+        --secondary-foreground: 42 25% 96%;
+
+        --border: 200 14% 20%;
+        --input: 200 14% 18%;
+
+        /* -------- Brand -------- */
+        --primary: 158 64% 52%;
+        /* luminous emerald */
+        --primary-foreground: 200 20% 6%;
+
+        --accent: 42 72% 66%;
+        /* luminous gold */
+        --accent-foreground: 200 20% 6%;
+
+        --ring: 158 64% 52%;
+
+        /* -------- Semantic -------- */
+        --destructive: 358 82% 62%;
+        --destructive-foreground: 200 20% 6%;
+        --success: 152 62% 54%;
+        --warning: 38 88% 62%;
+        --expense: 358 92% 68%;
+
+        /* -------- Charts -------- */
+        --chart-1: 158 64% 58%;
+        /* emerald */
+        --chart-2: 42 78% 68%;
+        /* gold */
+        --chart-3: 204 78% 62%;
+        /* steel blue */
+        --chart-4: 268 68% 72%;
+        /* plum */
+        --chart-5: 14 82% 64%;
+        /* terracotta */
+        --chart-6: 182 58% 54%;
+        /* teal */
+        --chart-7: 340 68% 66%;
+        /* rose */
+        --chart-8: 48 82% 60%;
+        /* mustard */
+
+        /* -------- Sidebar -------- */
+        --sidebar-background: 200 22% 6%;
+        --sidebar-foreground: 42 18% 82%;
+        --sidebar-primary: 158 64% 52%;
+        --sidebar-primary-foreground: 200 20% 6%;
+        --sidebar-accent: 200 18% 12%;
+        --sidebar-accent-foreground: 42 25% 96%;
+        --sidebar-border: 200 14% 16%;
+        --sidebar-ring: 158 64% 52%;
+
+        /* -------- Glass (dark materials) -------- */
+        --glass-surface: 200 22% 12%;
+        --glass-surface-soft: 200 20% 14%;
+        --glass-surface-deep: 200 24% 9%;
+        --glass-border: 42 30% 88%;
+        --glass-highlight: 42 40% 94%;
+        --glass-shadow: 0 0% 0%;
+        --glass-tint: 158 50% 45%;
+    }
+}

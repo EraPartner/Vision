@@ -2,28 +2,29 @@
 title: Components Documentation Index
 type: components-index
 status: active
-date: 2026-04-02
-tags: [components, index, frontend, react]
-description: Documentation for all frontend React components, hooks, and utilities
-aliases: [components, UI, frontend components]
+date: 2026-04-17
+tags: [components, index, frontend, react, design-system, phase-9, performance]
+description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens
+aliases: [components, UI, frontend components, chart components, visx charts]
 ---
 
 # Components Documentation
 
 > [!abstract] Overview
-> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation.
+> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation. Updated 2026-04-17 with performance optimizations for Electron M1.
 
 ## Component Categories
 
 | Category | Description | Documentation |
 |----------|-------------|---------------|
-| [[docs/components/ui-components\|UI Components]] | Base UI components (Radix-based) | Button, Card, Dialog, Table, etc. |
-| [[docs/components/dashboard\|Dashboard]] | Dashboard widgets and charts | StatCard, Charts, BankBalances |
-| [[docs/components/form-dialogs\|Form Dialogs]] | Add/edit data dialogs | Transaction, Category, Recipient |
-| [[docs/components/layout\|Layout]] | App shell and navigation | AppLayout, AppSidebar |
-| [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist |
-| [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio |
-| [[docs/components/shared-components\|Shared Components]] | Cross-cutting utilities | VirtualDataTable, dateUtils, ErrorBoundary |
+| [[docs/components/ui-components\|UI Components]] | Base UI components (Radix-based) with performance-optimized design tokens | Button, Card, Dialog, Table, etc. |
+| [[docs/components/charts\|Chart Primitives]] | visx + d3 charts with design-token styling | AreaChart, BarChart, PieChart, LineChart, Sparkline |
+| [[docs/components/dashboard\|Dashboard]] | Dashboard widgets and stat cards | StatCard, MonthlyTrends, CategoryPie, BankBalances |
+| [[docs/components/form-dialogs\|Form Dialogs]] | Add/edit data dialogs with optimized glass surfaces | Transaction, Category, Recipient, Investment |
+| [[docs/components/layout\|Layout]] | App shell and navigation (M1-optimized) | AppLayout, AppSidebar |
+| [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist, PerformanceChart |
+| [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio, useReducedMotion |
+| [[docs/components/shared-components\|Shared Components]] | Cross-cutting utilities | VirtualDataTable, PageHeader, EmptyState, ErrorBoundary |
 
 ## State Management
 

@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Check, ChevronsUpDown, Plus, Settings2, X, Bookmark, Pencil, Trash2, CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-} from "recharts";
+  LineChart, type LineSeries,
+  BarChart, type BarSeries,
+  AreaChart, type AreaSeries,
+  ChartLegend, type ChartLegendItem,
+} from "@/components/charts";
 import { format, parseISO } from "date-fns";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
@@ -24,27 +26,16 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
 
-const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(142, 76%, 36%)",
-  "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)",
-  "hsl(340, 82%, 52%)",
-  "hsl(190, 80%, 45%)",
-  "hsl(30, 90%, 55%)",
-  "hsl(260, 70%, 55%)",
-  "hsl(170, 65%, 40%)",
-  "hsl(350, 75%, 60%)",
-];
-
-const RECHARTS_TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-  color: "hsl(var(--card-foreground))",
-};
+const CHART_COLORS = Array.from({ length: 8 }, (_, i) => `hsl(var(--chart-${i + 1}))`);
 
 type ChartType = "line" | "bar" | "area";
+
+interface CustomChartDatum {
+  period: string;
+  periodLabel: string;
+  date: Date;
+  values: Record<number, number>;
+}
 
 function formatPeriodShort(period: string) {
   try {
@@ -189,16 +180,28 @@ export function CustomCategoryChart({
     return data.categoryPivot.filter(c => selectedCategoryIds.includes(c.categoryId));
   }, [data.categoryPivot, selectedCategoryIds]);
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<CustomChartDatum[]>(() => {
     if (selectedCategories.length === 0) return [];
-    return data.allPeriods.map(period => {
-      const point: Record<string, any> = { period: formatPeriodShort(period) };
+    return data.allPeriods.map((period) => {
+      const values: Record<number, number> = {};
       for (const cat of selectedCategories) {
-        point[cat.categoryName] = Math.round(cat.months[period] || 0);
+        values[cat.categoryId] = Math.round(cat.months[period] || 0);
       }
-      return point;
+      return {
+        period,
+        periodLabel: formatPeriodShort(period),
+        date: parseISO(`${period}-01`),
+        values,
+      };
     });
   }, [data.allPeriods, selectedCategories]);
+
+  const legendItems: ChartLegendItem[] = selectedCategories.map((cat, i) => ({
+    label: cat.categoryName,
+    color: CHART_COLORS[i % CHART_COLORS.length],
+  }));
+
+  const yTick = (v: number) => `${currencySymbol}${(v / 1000).toFixed(0)}k`;
 
   const toggleCategory = (catId: number) => {
     setSelectedCategoryIds(prev =>
@@ -430,46 +433,64 @@ export function CustomCategoryChart({
                 <p className="text-sm">{t('customChart.selectPrompt')}</p>
               </div>
             </div>
+          ) : chartType === "bar" ? (
+            <div className="space-y-3">
+              <BarChart<CustomChartDatum>
+                data={chartData}
+                categoryAccessor={(d) => d.periodLabel}
+                series={selectedCategories.map<BarSeries<CustomChartDatum>>((cat, i) => ({
+                  key: String(cat.categoryId),
+                  label: cat.categoryName,
+                  accessor: (d) => d.values[cat.categoryId] ?? 0,
+                  color: CHART_COLORS[i % CHART_COLORS.length],
+                }))}
+                height={350}
+                valueTickFormat={yTick}
+                tooltipTitle={(d) => d.periodLabel}
+                tooltipValueFormat={(v) => formatCurrency(v)}
+              />
+              <ChartLegend items={legendItems} align="center" />
+            </div>
+          ) : chartType === "area" ? (
+            <div className="space-y-3">
+              <AreaChart<CustomChartDatum>
+                data={chartData}
+                xAccessor={(d) => d.date}
+                series={selectedCategories.map<AreaSeries<CustomChartDatum>>((cat, i) => ({
+                  key: String(cat.categoryId),
+                  label: cat.categoryName,
+                  accessor: (d) => d.values[cat.categoryId] ?? 0,
+                  color: CHART_COLORS[i % CHART_COLORS.length],
+                  strokeWidth: 2,
+                }))}
+                height={350}
+                xTickFormat={(v) => format(v as Date, "MMM yy")}
+                yTickFormat={yTick}
+                tooltipTitle={(d) => d.periodLabel}
+                tooltipValueFormat={(v) => formatCurrency(v)}
+              />
+              <ChartLegend items={legendItems} align="center" />
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={350}>
-              {chartType === "bar" ? (
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-                  <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                  {selectedCategories.map((cat, i) => (
-                    <Bar key={cat.categoryId} dataKey={cat.categoryName} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} />
-                  ))}
-                </BarChart>
-              ) : chartType === "area" ? (
-                <AreaChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-                  <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                  {selectedCategories.map((cat, i) => (
-                    <Area key={cat.categoryId} type="monotone" dataKey={cat.categoryName}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]} fill={CHART_COLORS[i % CHART_COLORS.length]}
-                      fillOpacity={0.15} strokeWidth={2} />
-                  ))}
-                </AreaChart>
-              ) : (
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-                  <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                  {selectedCategories.map((cat, i) => (
-                    <Line key={cat.categoryId} type="monotone" dataKey={cat.categoryName}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} />
-                  ))}
-                </LineChart>
-              )}
-            </ResponsiveContainer>
+            <div className="space-y-3">
+              <LineChart<CustomChartDatum>
+                data={chartData}
+                xAccessor={(d) => d.date}
+                series={selectedCategories.map<LineSeries<CustomChartDatum>>((cat, i) => ({
+                  key: String(cat.categoryId),
+                  label: cat.categoryName,
+                  accessor: (d) => d.values[cat.categoryId] ?? 0,
+                  color: CHART_COLORS[i % CHART_COLORS.length],
+                  strokeWidth: 2,
+                }))}
+                height={350}
+                xTickFormat={(v) => format(v as Date, "MMM yy")}
+                yTickFormat={yTick}
+                tooltipTitle={(d) => d.periodLabel}
+                tooltipValueFormat={(v) => formatCurrency(v)}
+              />
+              <ChartLegend items={legendItems} align="center" />
+            </div>
           )}
         </CardContent>
       </Card>

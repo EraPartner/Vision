@@ -102,6 +102,23 @@ To add a new diagram:
 2. Add the PlantUML code to the appropriate documentation file
 3. Update this index
 
+## Frontend Design System (Phase 9)
+
+The frontend implements a premium liquid-glass aesthetic with:
+
+- **Color Palette**: Emerald + champagne-gold with deep charcoal base
+- **Typography**: Fraunces (display, serif) + Inter Tight (body, geometric sans-serif)
+- **Material System**: Five-tier glass hierarchy + premium surface utilities
+- **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
+- **Charts**: visx + d3 primitives replacing Recharts
+
+Documentation:
+- [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
+- [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Migration]]
+- [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
+- [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
+- [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
 ## Technology Stack
 
 - **UML Tool**: PlantUML

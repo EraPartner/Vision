@@ -8,12 +8,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-  Area, AreaChart,
-} from "recharts";
+  AreaChart,
+  BarChart,
+  DonutChart,
+  LineChart,
+  type AreaSeries,
+  type BarSeries,
+  type LineSeries,
+  type PieDatum,
+} from "@/components/charts";
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Import } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
@@ -38,26 +44,6 @@ const STATISTICS_WIDGETS: Array<WidgetDefinition & { labelKey?: string }> = [
   { id: "yearlyComparison",  labelKey: 'statsPage.widget.yearlyComparison',  defaultVisible: true },
   { id: "yearlySummary",     labelKey: 'statsPage.widget.yearlySummary',     defaultVisible: true },
 ];
-
-const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(142, 76%, 36%)",
-  "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)",
-  "hsl(340, 82%, 52%)",
-  "hsl(190, 80%, 45%)",
-  "hsl(30, 90%, 55%)",
-  "hsl(260, 70%, 55%)",
-  "hsl(170, 65%, 40%)",
-  "hsl(350, 75%, 60%)",
-];
-
-const RECHARTS_TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-  color: "hsl(var(--card-foreground))",
-};
 
 function formatPeriodLabel(period: string) {
   try {
@@ -122,10 +108,12 @@ function SummaryCards({ data }: { data: StatisticsData }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger">
       {cards.map((card) => (
-        <Card key={card.title} className="liquid-glass micro-lift border">
+        <Card key={card.title} className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-            <card.icon className={`h-4 w-4 ${card.className}`} />
+            <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-md ring-1", card.className.includes("accent") ? "bg-gradient-to-br from-accent/20 to-accent/5 ring-accent/15" : card.className.includes("destructive") ? "bg-gradient-to-br from-destructive/20 to-destructive/5 ring-destructive/15" : "bg-gradient-to-br from-primary/20 to-primary/5 ring-primary/15")}>
+              <card.icon className={`h-4 w-4 ${card.className}`} />
+            </span>
           </CardHeader>
           <CardContent>
             <p className={`text-2xl font-bold ${card.className}`}>{card.value}</p>
@@ -138,6 +126,12 @@ function SummaryCards({ data }: { data: StatisticsData }) {
 }
 
 // ─── Monthly Income/Expense Chart ─────────────────────────
+interface IncomeSpendingDatum {
+  period: string;
+  income: number;
+  spending: number;
+}
+
 function MonthlyChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -149,28 +143,36 @@ function MonthlyChart({ data }: { data: StatisticsData }) {
     minimumFractionDigits: appSettings.showDecimalPlaces,
     maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
-  const chartData = data.monthlyData.map((m) => ({
+  const chartData: IncomeSpendingDatum[] = data.monthlyData.map((m) => ({
     period: formatPeriodShort(m.period),
-    [t('statsPage.income')]: Math.round(m.income),
-    [t('statsPage.spending')]: Math.round(m.spending),
+    income: Math.round(m.income),
+    spending: Math.round(m.spending),
   }));
 
+  const series: BarSeries<IncomeSpendingDatum>[] = [
+    { key: "income", label: t('statsPage.income'), accessor: (d) => d.income, color: "hsl(var(--primary))" },
+    { key: "spending", label: t('statsPage.spending'), accessor: (d) => d.spending, color: "hsl(var(--destructive))" },
+  ];
+
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="period" className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} />
-        <YAxis className="text-xs fill-muted-foreground" tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-        <Legend />
-        <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey={t('statsPage.spending')} fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <BarChart<IncomeSpendingDatum>
+      data={chartData}
+      categoryAccessor={(d) => d.period}
+      series={series}
+      height={350}
+      valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      tooltipValueFormat={(v) => formatCurrency(v)}
+    />
   );
 }
 
 // ─── Net Balance Trend ────────────────────────────────────
+interface NetDatum {
+  period: string;
+  date: Date;
+  net: number;
+}
+
 function NetTrendChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -182,31 +184,37 @@ function NetTrendChart({ data }: { data: StatisticsData }) {
     minimumFractionDigits: appSettings.showDecimalPlaces,
     maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
-  const chartData = data.monthlyData.map((m) => ({
-    period: formatPeriodShort(m.period),
-    [t('statsPage.net')]: Math.round(m.net),
+  const chartData: NetDatum[] = data.monthlyData.map((m) => ({
+    period: m.period,
+    date: parseISO(`${m.period}-01`),
+    net: Math.round(m.net),
   }));
 
+  const series: AreaSeries<NetDatum>[] = [
+    { key: "net", label: t('statsPage.net'), accessor: (d) => d.net, color: "hsl(var(--primary))" },
+  ];
+
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-        <defs>
-          <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area type="monotone" dataKey={t('statsPage.net')} stroke="hsl(217, 91%, 60%)" fill="url(#netGradient)" strokeWidth={2} />
-      </AreaChart>
-    </ResponsiveContainer>
+    <AreaChart<NetDatum>
+      data={chartData}
+      xAccessor={(d) => d.date}
+      series={series}
+      height={300}
+      xTickFormat={(v) => format(v as Date, "MMM yy")}
+      yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      tooltipTitle={(d) => formatPeriodShort(d.period)}
+      tooltipValueFormat={(v) => formatCurrency(v)}
+    />
   );
 }
 
 // ─── Year-over-Year Comparison ────────────────────────────
+interface YearlyDatum {
+  year: string;
+  income: number;
+  spending: number;
+}
+
 function YearlyComparisonChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -218,28 +226,37 @@ function YearlyComparisonChart({ data }: { data: StatisticsData }) {
     minimumFractionDigits: appSettings.showDecimalPlaces,
     maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
-  const chartData = data.yearlyComparison.map((y) => ({
+  const chartData: YearlyDatum[] = data.yearlyComparison.map((y) => ({
     year: y.year.toString(),
-    [t('statsPage.income')]: Math.round(y.totalIncome),
-    [t('statsPage.spending')]: Math.round(y.totalSpending),
+    income: Math.round(y.totalIncome),
+    spending: Math.round(y.totalSpending),
   }));
 
+  const series: BarSeries<YearlyDatum>[] = [
+    { key: "income", label: t('statsPage.income'), accessor: (d) => d.income, color: "hsl(var(--primary))" },
+    { key: "spending", label: t('statsPage.spending'), accessor: (d) => d.spending, color: "hsl(var(--destructive))" },
+  ];
+
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="year" tick={{ fontSize: 12 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-        <Legend />
-        <Bar dataKey={t('statsPage.income')} fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey={t('statsPage.spending')} fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <BarChart<YearlyDatum>
+      data={chartData}
+      categoryAccessor={(d) => d.year}
+      series={series}
+      height={300}
+      valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      tooltipValueFormat={(v) => formatCurrency(v)}
+    />
   );
 }
 
 // ─── Top Recipients ───────────────────────────────────────
+interface RecipientDatum {
+  name: string;
+  fullName: string;
+  amount: number;
+  count: number;
+}
+
 function TopRecipientsChart({ data }: { data: StatisticsData }) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
@@ -256,12 +273,16 @@ function TopRecipientsChart({ data }: { data: StatisticsData }) {
     ? data.topRecipients
     : (data.topRecipientsByYear[yearFilter] || []);
 
-  const chartData = filteredRecipients.slice(0, 10).map((r) => ({
+  const chartData: RecipientDatum[] = filteredRecipients.slice(0, 10).map((r) => ({
     name: r.name.length > 20 ? r.name.substring(0, 20) + "…" : r.name,
     fullName: r.name,
     amount: Math.round(r.total),
     count: r.count,
   }));
+
+  const series: BarSeries<RecipientDatum>[] = [
+    { key: "amount", label: t('statsPage.spending'), accessor: (d) => d.amount },
+  ];
 
   return (
     <div className="space-y-3">
@@ -278,23 +299,18 @@ function TopRecipientsChart({ data }: { data: StatisticsData }) {
           </SelectContent>
         </Select>
       </div>
-      <ResponsiveContainer width="100%" height={350}>
-        <BarChart data={chartData} layout="vertical">
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-          <XAxis type="number" tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-          <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-          <RechartsTooltip
-            contentStyle={RECHARTS_TOOLTIP_STYLE}
-            formatter={(value: number) => formatCurrency(value)}
-            labelFormatter={(label: string, payload?: Array<{ payload?: { fullName?: string } }>) => payload?.[0]?.payload?.fullName || label}
-          />
-          <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-            {chartData.map((_entry, index) => (
-              <Cell key={`recipient-bar-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <BarChart<RecipientDatum>
+        data={chartData}
+        categoryAccessor={(d) => d.name}
+        series={series}
+        layout="horizontal"
+        height={350}
+        margin={{ top: 16, right: 32, bottom: 28, left: 160 }}
+        valueTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+        tooltipTitle={(d) => d.fullName}
+        tooltipValueFormat={(v) => formatCurrency(v)}
+        colorForIndex={(i) => `hsl(var(--chart-${(i % 8) + 1}))`}
+      />
     </div>
   );
 }
@@ -316,7 +332,7 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
     return data.allPeriods.filter((period) => period.startsWith(yearFilter));
   }, [yearFilter, data.allPeriods]);
 
-  const pieData = useMemo(() => {
+  const pieData: PieDatum[] = useMemo(() => {
     const totals = data.categoryPivot
       .map((category) => {
         const totalForPeriods = filteredPeriods.reduce((sum, period) => sum + (category.months[period] || 0), 0);
@@ -331,7 +347,7 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
 
     return totals.map((item, index) => ({
       ...item,
-      color: CHART_COLORS[index % CHART_COLORS.length],
+      color: `hsl(var(--chart-${(index % 8) + 1}))`,
     }));
   }, [data.categoryPivot, filteredPeriods]);
 
@@ -351,29 +367,12 @@ function CategoryPieChart({ data }: { data: StatisticsData }) {
         </Select>
       </div>
 
-      <ResponsiveContainer width="100%" height={350}>
-        <PieChart>
-          <Pie
-            data={pieData}
-            cx="50%"
-            cy="50%"
-            outerRadius={120}
-            innerRadius={60}
-            dataKey="value"
-            label={({ name, percent }) => {
-              const parts = name.split(":");
-              const general = parts[0]?.trim() || name;
-              return `${general} ${(percent * 100).toFixed(0)}%`;
-            }}
-            labelLine={{ strokeWidth: 1 }}
-          >
-            {pieData.map((entry, index) => (
-              <Cell key={index} fill={entry.color} />
-            ))}
-          </Pie>
-          <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-        </PieChart>
-      </ResponsiveContainer>
+      <DonutChart
+        data={pieData}
+        height={350}
+        innerRadiusRatio={0.55}
+        tooltipValueFormat={(v) => formatCurrency(v)}
+      />
     </div>
   );
 }
@@ -598,6 +597,12 @@ function CategoryPivotTable({
 }
 
 // ─── Spending Trend by Category ───────────────────────────
+interface CategoryTrendDatum {
+  period: string;
+  date: Date;
+  values: Record<string, number>;
+}
+
 function CategoryTrendChart({ data }: { data: StatisticsData }) {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -609,34 +614,33 @@ function CategoryTrendChart({ data }: { data: StatisticsData }) {
     maximumFractionDigits: appSettings.showDecimalPlaces,
   }).format(val);
   const topCategories = data.categoryPivot.slice(0, 5);
-  const chartData = data.allPeriods.map((period) => {
-    const point: Record<string, number | string> = { period: formatPeriodShort(period) };
+  const chartData: CategoryTrendDatum[] = data.allPeriods.map((period) => {
+    const values: Record<string, number> = {};
     for (const cat of topCategories) {
-      point[cat.categoryName] = Math.round(cat.months[period] || 0);
+      values[cat.categoryId] = Math.round(cat.months[period] || 0);
     }
-    return point;
+    return { period, date: parseISO(`${period}-01`), values };
   });
 
+  const series: LineSeries<CategoryTrendDatum>[] = topCategories.map((cat, i) => ({
+    key: cat.categoryId,
+    label: cat.categoryName,
+    accessor: (d) => d.values[cat.categoryId] ?? 0,
+    color: `hsl(var(--chart-${(i % 8) + 1}))`,
+    strokeWidth: 2,
+  }));
+
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-        <XAxis dataKey="period" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-        <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
-        <RechartsTooltip contentStyle={RECHARTS_TOOLTIP_STYLE} formatter={(value: number) => formatCurrency(value)} />
-        <Legend />
-        {topCategories.map((cat, i) => (
-          <Line
-            key={cat.categoryId}
-            type="monotone"
-            dataKey={cat.categoryName}
-            stroke={CHART_COLORS[i % CHART_COLORS.length]}
-            strokeWidth={2}
-            dot={false}
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
+    <LineChart<CategoryTrendDatum>
+      data={chartData}
+      xAccessor={(d) => d.date}
+      series={series}
+      height={350}
+      xTickFormat={(v) => format(v as Date, "MMM yy")}
+      yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
+      tooltipTitle={(d) => formatPeriodShort(d.period)}
+      tooltipValueFormat={(v) => formatCurrency(v)}
+    />
   );
 }
 

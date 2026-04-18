@@ -11,6 +11,7 @@ import { TrendingUp, TrendingDown, Wallet, Landmark, PiggyBank } from "lucide-re
 import { cn } from "@/lib/utils";
 import { downsampleLTTB } from "@/utils/downsample";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StatCard } from "@/components/dashboard/StatCard";
 import {
   EMPTY_SNAPSHOTS,
   DAY_WIDTH_OPTIONS,
@@ -169,33 +170,8 @@ export default function NetWorthPage() {
   const monthlyChange = data.monthlyChange ?? 0;
   const monthlyChangePercent = data.monthlyChangePercent ?? 0;
 
-  const summaryCards = [
-    {
-      title: t('networth.title'),
-      value: fmt(current.netWorth),
-      icon: Wallet,
-      desc: (
-        <span className={cn("text-xs font-medium", monthlyChange >= 0 ? "text-accent" : "text-destructive")}>
-          {monthlyChange >= 0 ? "+" : ""}{fmt(monthlyChange)} ({monthlyChangePercent >= 0 ? "+" : ""}{monthlyChangePercent.toFixed(1)}%) {t('networth.thisMonth')}
-        </span>
-      ),
-      cls: "text-primary",
-    },
-    {
-      title: t('networth.liquid'),
-      value: fmt(current.liquid),
-      icon: Landmark,
-      desc: `${current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : 0} ${t('networth.ofNetWorth')}`,
-      cls: "text-foreground",
-    },
-    {
-      title: t('networth.investments'),
-      value: fmt(current.investments),
-      icon: PiggyBank,
-      desc: `${current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : 0} ${t('networth.ofNetWorth')}`,
-      cls: "text-foreground",
-    },
-  ];
+  const liquidPct = current.netWorth > 0 ? ((current.liquid / current.netWorth) * 100).toFixed(0) : '0';
+  const investmentsPct = current.netWorth > 0 ? ((current.investments / current.netWorth) * 100).toFixed(0) : '0';
 
   return (
     <div className="space-y-6">
@@ -213,19 +189,41 @@ export default function NetWorthPage() {
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {summaryCards.map((c) => (
-          <Card key={c.title} className="liquid-glass micro-lift border">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-              <c.icon className={`h-4 w-4 ${c.cls}`} />
-            </CardHeader>
-            <CardContent>
-              <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Summary — bento: featured Net Worth + liquid/investments split */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 animate-stagger">
+        <div className="lg:col-span-3 lg:row-span-2 [&>*]:h-full">
+          <StatCard
+            title={t('networth.title')}
+            value={fmt(current.netWorth)}
+            numericValue={current.netWorth}
+            formatValue={fmt}
+            icon={Wallet}
+            trend={monthlyChange >= 0 ? "income" : "expense"}
+            subtitle={`${monthlyChange >= 0 ? "+" : ""}${fmt(monthlyChange)} (${monthlyChangePercent >= 0 ? "+" : ""}${monthlyChangePercent.toFixed(1)}%) ${t('networth.thisMonth')}`}
+          />
+        </div>
+        <div className="lg:col-span-3">
+          <StatCard
+            title={t('networth.liquid')}
+            value={fmt(current.liquid)}
+            numericValue={current.liquid}
+            formatValue={fmt}
+            icon={Landmark}
+            trend="neutral"
+            subtitle={`${liquidPct}% ${t('networth.ofNetWorth')}`}
+          />
+        </div>
+        <div className="lg:col-span-3">
+          <StatCard
+            title={t('networth.investments')}
+            value={fmt(current.investments)}
+            numericValue={current.investments}
+            formatValue={fmt}
+            icon={PiggyBank}
+            trend="neutral"
+            subtitle={`${investmentsPct}% ${t('networth.ofNetWorth')}`}
+          />
+        </div>
       </div>
 
       <NetWorthChart
@@ -250,29 +248,33 @@ export default function NetWorthPage() {
         t={t}
       />
 
+      {/* Historical extremes */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="liquid-glass micro-lift border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.peak')}</CardTitle>
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.peak')}</CardTitle>
+            <TrendingUp className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold text-foreground">{fmt(peak)}</p>
+            <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(peak)}</p>
           </CardContent>
         </Card>
-        <Card className="liquid-glass micro-lift border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.lowest')}</CardTitle>
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.lowest')}</CardTitle>
+            <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold text-foreground">{fmt(trough)}</p>
+            <p className="text-2xl font-bold text-foreground tabular-nums">{fmt(trough)}</p>
           </CardContent>
         </Card>
-        <Card className="liquid-glass micro-lift border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('networth.daysTracked')}</CardTitle>
+            <Wallet className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <p className="text-xl font-bold text-foreground">{snapshots.length}</p>
+            <p className="text-2xl font-bold text-foreground tabular-nums">{snapshots.length}</p>
           </CardContent>
         </Card>
       </div>

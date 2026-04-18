@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowRight } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
@@ -165,8 +165,10 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
               ? t('addInv.chooseType')
               : t('addInv.assetTitle', { assetClass: form.assetClass ? getAssetClassLabel(t, form.assetClass as AssetClass) : t('addInv.title') })}
           </DialogTitle>
-          {step === 'type' && (
+          {step === 'type' ? (
             <DialogDescription>{t('addInv.chooseTypeDesc')}</DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">{t('addInv.title')}</DialogDescription>
           )}
         </DialogHeader>
 
@@ -193,12 +195,12 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
               selectedProvider={selectedProvider}
               t={t}
             />
-            <div className="flex justify-between pt-2">
+            <DialogFooter className="pt-2 sm:justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('type')}>{t('addInv.back')}</Button>
               <Button type="submit" className="gap-1.5">
                 {t('addInv.create')} <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LucideIcon } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
+import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
     title: string;
@@ -37,10 +37,9 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
         neutral: "bg-gradient-to-br from-primary/20 to-primary/10 text-primary",
     }[normalisedTrend] ?? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary";
 
-    // Animated number
-    const animatedNum = useCountUp(numericValue ?? 0, 800);
+    const animatedNumber = useCountUp(numericValue ?? 0);
     const displayValue = numericValue !== undefined && formatValue
-        ? formatValue(animatedNum)
+        ? formatValue(animatedNumber)
         : value;
 
     return (
@@ -50,7 +49,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
                 className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-background/40 to-transparent rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-110" />
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm transition-transform duration-300 group-hover:scale-105`}>
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
                     <Icon className="h-5 w-5" />
                 </div>
             </CardHeader>

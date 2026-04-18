@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
@@ -42,6 +42,7 @@ export function AddRecipientDialog() {
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{t('form.addRecipient.title')}</DialogTitle>
+                    <DialogDescription className="sr-only">{t('form.addRecipient.title')}</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
@@ -52,13 +53,13 @@ export function AddRecipientDialog() {
                         <Label htmlFor="notes">{t('addRec.notesOptional')}</Label>
                         <Textarea id="notes" placeholder={t('addRec.notesPlaceholder')} maxLength={1000} value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} />
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <DialogFooter className="pt-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {t('common.create')}
                         </Button>
-                    </div>
+                    </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>

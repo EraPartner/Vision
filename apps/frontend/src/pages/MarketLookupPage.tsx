@@ -17,9 +17,7 @@ import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
   Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus, Users,
 } from "lucide-react";
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar,
-} from "recharts";
+import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -363,72 +361,46 @@ export default function MarketLookupPage() {
                 <Skeleton className="h-[320px] w-full rounded-lg" />
               ) : chartData?.points && chartData.points.length > 0 ? (
                 <div className="space-y-4">
-                  <ResponsiveContainer width="100%" height={320}>
-                    <AreaChart data={chartData.points}>
-                      <defs>
-                        <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={isPositive ? "hsl(var(--accent))" : "hsl(var(--destructive))"} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={isPositive ? "hsl(var(--accent))" : "hsl(var(--destructive))"} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis
-                        dataKey="time"
-                        tickFormatter={(ts) => fmtDate(ts, selectedRange.range, appSettings.dateFormat, locale)}
-                        tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                        axisLine={false}
-                        tickLine={false}
-                        minTickGap={40}
-                      />
-                      <YAxis
-                        domain={["auto", "auto"]}
-                        tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => fmtNum(v, { maximumFractionDigits: 2 })}
-                        width={70}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "var(--radius)",
-                          color: "hsl(var(--card-foreground))",
-                          fontSize: 12,
-                        }}
-                        labelFormatter={(ts) => formatDateTimeWithAppSettings(new Date(ts), appSettings.dateFormat, locale)}
-                        formatter={(value: number) => [fmtPrice(value, chartData.currency || "USD"), t('market.priceChart')]}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="close"
-                        stroke={isPositive ? "hsl(var(--accent))" : "hsl(var(--destructive))"}
-                        strokeWidth={2}
-                        fill="url(#priceGrad)"
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <AreaChart
+                    data={chartData.points}
+                    xAccessor={(d) => new Date(d.time)}
+                    xIsDate
+                    height={320}
+                    xTickFormat={(v) => fmtDate((v as Date).getTime(), selectedRange.range, appSettings.dateFormat, locale)}
+                    yTickFormat={(v) => fmtNum(v, { maximumFractionDigits: 2 })}
+                    tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
+                    tooltipValueFormat={(v) => fmtPrice(v, chartData.currency || "USD")}
+                    series={[
+                      {
+                        key: "close",
+                        label: t('market.priceChart'),
+                        accessor: (d) => d.close,
+                        color: isPositive ? "hsl(var(--accent))" : "hsl(var(--destructive))",
+                        strokeWidth: 2,
+                      },
+                    ] as AreaSeries<typeof chartData.points[number]>[]}
+                  />
 
                   {/* Volume bars */}
-                  <ResponsiveContainer width="100%" height={60}>
-                    <BarChart data={chartData.points}>
-                      <Bar dataKey="volume" fill="hsl(var(--muted-foreground))" opacity={0.3} radius={[2, 2, 0, 0]} />
-                      <XAxis dataKey="time" hide />
-                      <YAxis hide />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "var(--radius)",
-                          color: "hsl(var(--card-foreground))",
-                          fontSize: 12,
-                        }}
-                        labelFormatter={(ts) => formatDateTimeWithAppSettings(new Date(ts), appSettings.dateFormat, locale)}
-                        formatter={(value: number) => [fmtLargeNum(value), t('market.volume')]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <BarChart
+                    data={chartData.points}
+                    categoryAccessor={(d) => String(d.time)}
+                    height={60}
+                    barRadius={2}
+                    margin={{ top: 4, right: 0, bottom: 0, left: 0 }}
+                    categoryTickFormat={() => ""}
+                    valueTickFormat={() => ""}
+                    tooltipTitle={(d) => formatDateTimeWithAppSettings(new Date(d.time), appSettings.dateFormat, locale)}
+                    tooltipValueFormat={(v) => fmtLargeNum(v)}
+                    series={[
+                      {
+                        key: "volume",
+                        label: t('market.volume'),
+                        accessor: (d) => d.volume,
+                        color: "hsl(var(--muted-foreground))",
+                      },
+                    ] as BarSeries<typeof chartData.points[number]>[]}
+                  />
                 </div>
               ) : (
                 <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">

@@ -457,7 +457,7 @@ export default function DashboardPage() {
                 }
             />
 
-            {/* Stats */}
+            {/* Stats — bento: featured net-balance tile + secondary metrics */}
             {isVisible('statCards') && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2 animate-stagger">
                 <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
@@ -484,10 +484,10 @@ export default function DashboardPage() {
             {/* Bank Account Balances */}
             {isVisible('bankBalances') && <BankBalancesWidget />}
 
-            {/* Charts */}
-            <div className="grid gap-6 lg:grid-cols-2">
+            {/* Charts — asymmetric bento: trends span 3 of 5 cols, category pie spans 2 */}
+            <div className="grid gap-6 lg:grid-cols-5">
                 {isVisible('monthlyTrends') && monthlyData.length > 0 && (
-                    <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+                    <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-3">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary transition-transform duration-300 group-hover:scale-105">
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                     </Card>
                 )}
                 {isVisible('categoryPie') && (
-                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-2">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-chart-4/20 to-chart-4/5 flex items-center justify-center shadow-sm text-chart-4 transition-transform duration-300 group-hover:scale-105">

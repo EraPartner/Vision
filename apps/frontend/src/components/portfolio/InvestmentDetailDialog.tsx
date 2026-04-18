@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -148,6 +148,7 @@ export function InvestmentDetailDialog({
                 )}
               </div>
             </div>
+            <DialogDescription className="sr-only">{investment.name}</DialogDescription>
           </DialogHeader>
 
           <Tabs defaultValue="overview" className="mt-4">

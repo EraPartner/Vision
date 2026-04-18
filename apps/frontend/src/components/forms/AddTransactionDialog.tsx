@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {toast} from "sonner";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
@@ -69,6 +69,7 @@ export function AddTransactionDialog() {
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{t('form.addTransaction.title')}</DialogTitle>
+                    <DialogDescription className="sr-only">{t('form.addTransaction.title')}</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -131,13 +132,13 @@ export function AddTransactionDialog() {
                         <Textarea id="tx_comment" placeholder={t('addTxn.commentPlaceholder')} maxLength={1000} value={form.comment} onChange={(e) => setForm(f => ({...f, comment: e.target.value}))} />
                     </div>
 
-                    <div className="flex justify-end gap-2">
+                    <DialogFooter className="pt-2">
                         <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={createMutation.isPending}>
                             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                             {t('common.create')}
                         </Button>
-                    </div>
+                    </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>

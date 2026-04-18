@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -181,10 +181,11 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {step === 'choose' ? t('addInvFromMarket.title.add', { symbol: quote.symbol }) : 
-             step === 'new' ? t('addInvFromMarket.title.create') : 
+            {step === 'choose' ? t('addInvFromMarket.title.add', { symbol: quote.symbol }) :
+             step === 'new' ? t('addInvFromMarket.title.create') :
              t('addInvFromMarket.title.transaction')}
           </DialogTitle>
+          <DialogDescription className="sr-only">{t('addInvFromMarket.title.add', { symbol: quote.symbol })}</DialogDescription>
         </DialogHeader>
 
         {step === 'choose' && (
@@ -285,12 +286,12 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
                 />
               </div>
             </div>
-            <div className="flex justify-between">
+            <DialogFooter className="sm:justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
                 {t('addInv.back')}
               </Button>
               <Button type="submit">{t('addInv.create')}</Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
 
@@ -407,12 +408,12 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
               />
             </div>
 
-            <div className="flex justify-between">
+            <DialogFooter className="sm:justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('choose')}>
                 {t('addInv.back')}
               </Button>
               <Button type="submit">{t('addPortTxn.record')}</Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
       </DialogContent>

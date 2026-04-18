@@ -165,8 +165,11 @@ const CarouselItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLD
 );
 CarouselItem.displayName = "CarouselItem";
 
+const carouselNavClass =
+    "absolute h-9 w-9 rounded-full border border-border/50 bg-background/95 text-foreground/80 shadow-md transition-[transform,background-color,box-shadow] duration-[var(--duration-fast)] hover:scale-[1.04] hover:bg-background hover:text-foreground hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-40 disabled:shadow-none";
+
 const CarouselPrevious = React.forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
-    ({className, variant = "outline", size = "icon", ...props}, ref) => {
+    ({className, variant = "ghost", size = "icon", ...props}, ref) => {
         const {orientation, scrollPrev, canScrollPrev} = useCarousel();
 
         return (
@@ -175,7 +178,7 @@ const CarouselPrevious = React.forwardRef<HTMLButtonElement, React.ComponentProp
                 variant={variant}
                 size={size}
                 className={cn(
-                    "absolute h-8 w-8 rounded-full",
+                    carouselNavClass,
                     orientation === "horizontal"
                         ? "-left-12 top-1/2 -translate-y-1/2"
                         : "-top-12 left-1/2 -translate-x-1/2 rotate-90",
@@ -194,7 +197,7 @@ const CarouselPrevious = React.forwardRef<HTMLButtonElement, React.ComponentProp
 CarouselPrevious.displayName = "CarouselPrevious";
 
 const CarouselNext = React.forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
-    ({className, variant = "outline", size = "icon", ...props}, ref) => {
+    ({className, variant = "ghost", size = "icon", ...props}, ref) => {
         const {orientation, scrollNext, canScrollNext} = useCarousel();
 
         return (
@@ -203,7 +206,7 @@ const CarouselNext = React.forwardRef<HTMLButtonElement, React.ComponentProps<ty
                 variant={variant}
                 size={size}
                 className={cn(
-                    "absolute h-8 w-8 rounded-full",
+                    carouselNavClass,
                     orientation === "horizontal"
                         ? "-right-12 top-1/2 -translate-y-1/2"
                         : "-bottom-12 left-1/2 -translate-x-1/2 rotate-90",

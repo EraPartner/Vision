@@ -2,16 +2,19 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-04-09
-tags: [components, layout, navigation]
-description: Core layout components including sidebar, header, and app structure
+date: 2026-04-17
+tags: [components, layout, navigation, design-system, phase-9, performance]
+description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic, optimized for Electron M1 performance
 aliases: [layout, app layout, sidebar, navigation]
 related_code: ["apps/frontend/src/components/layout"]
 ---
 
 # Layout Components
 
-Core layout components that structure the application shell.
+Core layout components that structure the application shell, optimized for performance on Electron M1.
+
+> [!note] Performance Optimization (2026-04-17)
+> Layout components were updated to remove liquid-canvas animated background and PageTransition wrapper in response to Electron M1 GPU regression. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details.
 
 ## Component List
 
@@ -53,11 +56,12 @@ function App() {
 
 ### Features
 
-- Responsive sidebar integration
-- Workspace context provider
-- Notification system integration
-- Dark/light theme support
-- Subtle ambient gradient backdrop accents with a premium non-glass top header surface
+- **Responsive sidebar integration**: Full collapsible sidebar with workspace switching
+- **Workspace context provider**: Workspace detection via route path
+- **Notification system integration**: Sonner toast notifications
+- **Dark/light theme support**: Full theme switching
+- **Optimized background**: Static grain texture overlay (animated liquid-canvas removed for M1 GPU optimization)
+- **Glass chrome sidebar**: `glass-chrome` (8px blur) navigation with emerald accent rail on active route
 
 ### Props
 
@@ -267,17 +271,34 @@ function WorkspaceSwitcher() {
 
 ---
 
+## PageTransition (Removed)
+
+**Status**: Deleted in 2026-04-17 performance optimization
+
+The `PageTransition` wrapper component was removed to improve Electron M1 GPU performance. Previously, it applied spring-based route-change animations (spring entrance + fade exit). Route transitions now use instant/CSS-based transitions instead.
+
+**Rationale**: Spring physics on route transitions added GPU complexity for marginal UX benefit. Framer Motion retained for modal/dialog entry animations and chart effects, which have higher UX impact with lower GPU cost.
+
+See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] for details.
+
+---
+
 ## Related Documentation
 
 - [[docs/components/index]] - Components Index
 - [[docs/features/views]] - All views
 - [[docs/i18n/index]] - Internationalization
 - [[docs/components/state-management|State Management]] - Context providers
+- [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
+- [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]]
+- [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
+- [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
 
 ## Visual Surface Notes
 
-`AppLayout` uses a dedicated `liquid-canvas` layered gradient backdrop for Glass UI-style depth while keeping the top header intentionally non-glass via `app-topbar` for a cleaner premium chrome.
+`AppLayout` uses a static grain texture overlay for visual richness without animation overhead. Sidebar navigation uses `.glass-chrome` (8px blur, GPU-safe) with emerald accent rail on active route.
 
-The canvas includes a very subtle ambient drift animation and respects reduced-motion preferences.
+Previous animated `liquid-canvas` gradient backdrop removed in 2026-04-17 optimization to eliminate Electron M1 GPU regression from sustained background animation.
 
 Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/frontend/src/index.css]]

@@ -4,10 +4,7 @@ import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
-import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, Legend,
-} from "recharts";
+import { AreaChart, type AreaSeries } from "@/components/charts";
 import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     DollarSign, Activity,
@@ -16,6 +13,7 @@ import { format, parseISO } from "date-fns";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
+import { StatCard } from "@/components/dashboard/StatCard";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
@@ -121,15 +119,15 @@ export default function PerformancePage() {
             />
 
             {/* Period selector */}
-            <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+            <div className="inline-flex gap-1 p-1 liquid-glass premium-frame rounded-xl w-fit">
                 {PERIOD_KEYS.map((p) => (
                     <button
                         key={p}
                         onClick={() => setSelectedPeriod(p)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${
                             selectedPeriod === p
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
+                                ? "bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                                : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
                         }`}
                     >
                         {PERIOD_LABELS[p]}
@@ -137,249 +135,124 @@ export default function PerformancePage() {
                 ))}
             </div>
 
-            {/* Key metrics cards */}
+            {/* Key metrics — bento */}
             {overallMetrics && (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <MetricCard
-                        title={t('portfolio.portfolioValue')}
-                        value={formatCurrency(overallMetrics.currentValue, defaultCurrency, locale)}
-                        subtitle={t('portfolio.invested', { amount: formatCurrency(overallMetrics.totalInvested, defaultCurrency, locale) })}
-                        icon={DollarSign}
-                        trend={overallMetrics.totalGainLoss >= 0}
-                    />
-                    <MetricCard
-                        title={t('portfolio.totalReturn')}
-                        value={`${overallMetrics.totalReturnPct >= 0 ? "+" : ""}${overallMetrics.totalReturnPct.toFixed(2)}%`}
-                        subtitle={formatCurrency(overallMetrics.totalGainLoss, defaultCurrency, locale)}
-                        icon={overallMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
-                        trend={overallMetrics.totalReturnPct >= 0}
-                    />
-                    <MetricCard
-                        title={t('portfolio.annualizedReturn')}
-                        value={`${overallMetrics.annualizedReturn >= 0 ? "+" : ""}${overallMetrics.annualizedReturn.toFixed(2)}%`}
-                        subtitle={t('performance.projectedYearly')}
-                        icon={Activity}
-                        trend={overallMetrics.annualizedReturn >= 0}
-                    />
-                    <MetricCard
-                        title={t('portfolio.realReturn')}
-                        value={`${overallMetrics.realReturnPct >= 0 ? "+" : ""}${overallMetrics.realReturnPct.toFixed(2)}%`}
-                        subtitle={t('performance.cumulativeInflation', { n: overallMetrics.cumulativeInflation.toFixed(1) })}
-                        icon={Percent}
-                        trend={overallMetrics.realReturnPct >= 0}
-                    />
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 animate-stagger">
+                    <div className="lg:col-span-3 lg:row-span-2 [&>*]:h-full">
+                        <StatCard
+                            title={t('portfolio.portfolioValue')}
+                            value={formatCurrency(overallMetrics.currentValue, defaultCurrency, locale)}
+                            numericValue={overallMetrics.currentValue}
+                            formatValue={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            icon={DollarSign}
+                            trend={overallMetrics.totalGainLoss >= 0 ? "income" : "expense"}
+                            subtitle={t('portfolio.invested', { amount: formatCurrency(overallMetrics.totalInvested, defaultCurrency, locale) })}
+                        />
+                    </div>
+                    <div className="lg:col-span-3">
+                        <StatCard
+                            title={t('portfolio.totalReturn')}
+                            value={`${overallMetrics.totalReturnPct >= 0 ? "+" : ""}${overallMetrics.totalReturnPct.toFixed(2)}%`}
+                            icon={overallMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
+                            trend={overallMetrics.totalReturnPct >= 0 ? "income" : "expense"}
+                            subtitle={formatCurrency(overallMetrics.totalGainLoss, defaultCurrency, locale)}
+                        />
+                    </div>
+                    <div className="lg:col-span-2">
+                        <StatCard
+                            title={t('portfolio.annualizedReturn')}
+                            value={`${overallMetrics.annualizedReturn >= 0 ? "+" : ""}${overallMetrics.annualizedReturn.toFixed(2)}%`}
+                            icon={Activity}
+                            trend={overallMetrics.annualizedReturn >= 0 ? "income" : "expense"}
+                            subtitle={t('performance.projectedYearly')}
+                        />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <StatCard
+                            title={t('portfolio.realReturn')}
+                            value={`${overallMetrics.realReturnPct >= 0 ? "+" : ""}${overallMetrics.realReturnPct.toFixed(2)}%`}
+                            icon={Percent}
+                            trend={overallMetrics.realReturnPct >= 0 ? "income" : "expense"}
+                            subtitle={t('performance.cumulativeInflation', { n: overallMetrics.cumulativeInflation.toFixed(1) })}
+                        />
+                    </div>
                 </div>
             )}
 
             {/* Portfolio Value Over Time chart */}
             {chartData.length > 1 && (
-                <Card>
+                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-primary" />
-                            {t('performance.valueOverTime')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
+                        <div className="flex items-center gap-3">
+                            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-sm text-primary transition-transform duration-300 group-hover:scale-105">
+                                <BarChart3 className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle>{t('performance.valueOverTime')}</CardTitle>
+                                <CardDescription>
+                                    {t('performance.chartDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                                </CardDescription>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={360}>
-                            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gradInvested" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.15} />
-                                        <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gradInflAdj" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(30, 80%, 55%)" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="hsl(30, 80%, 55%)" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis
-                                    dataKey="day"
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    interval="preserveStartEnd"
-                                    minTickGap={20}
-                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
-                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
-                                    formatter={(value: number) => [formatCurrency(value, defaultCurrency, locale)]}
-                                />
-                                <Legend />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.invested}
-                                    name={t('portfolio.totalInvested')}
-                                    stroke="hsl(var(--muted-foreground))"
-                                    fill="url(#gradInvested)"
-                                    strokeWidth={1.5}
-                                    strokeDasharray="4 4"
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.inflationAdjusted}
-                                    name={t('performance.inflationAdjusted')}
-                                    stroke="hsl(30, 80%, 55%)"
-                                    fill="url(#gradInflAdj)"
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.stocksEtfs}
-                                    name={t('performance.relativeStocksEtfs') || t('nav.stocksEtfs')}
-                                    stroke="hsl(0, 72%, 51%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.crypto}
-                                    name={t('performance.crypto')}
-                                    stroke="hsl(142, 76%, 36%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.metals}
-                                    name={t('performance.metals')}
-                                    stroke="hsl(45, 93%, 47%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.value}
-                                    name={t('portfolio.portfolioValue')}
-                                    stroke="hsl(var(--primary))"
-                                    fill="url(#gradValue)"
-                                    strokeWidth={2.5}
-                                    isAnimationActive={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <AreaChart
+                            data={chartData}
+                            xAccessor={(d) => parseISO(String(d.day))}
+                            xIsDate
+                            height={360}
+                            xTickFormat={(v) => monthTickFormatter.format(v as Date)}
+                            yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            tooltipTitle={(d) => format(parseISO(String(d.day)), "dd MMM yyyy")}
+                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            series={[
+                                { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d[CHART_KEYS.value], color: "hsl(var(--primary))", strokeWidth: 2.5 },
+                                { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d[CHART_KEYS.inflationAdjusted], color: "hsl(var(--chart-3))" },
+                                { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs') || t('nav.stocksEtfs'), accessor: (d) => d[CHART_KEYS.stocksEtfs], color: "hsl(var(--chart-5))" },
+                                { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d[CHART_KEYS.crypto], color: "hsl(var(--chart-2))" },
+                                { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d[CHART_KEYS.metals], color: "hsl(var(--chart-4))" },
+                                { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d[CHART_KEYS.invested], color: "hsl(var(--muted-foreground))", dashed: true, strokeWidth: 1.5 },
+                            ] as AreaSeries<(typeof chartData)[number]>[]}
+                        />
                     </CardContent>
                 </Card>
             )}
 
             {/* Relative Performance chart */}
             {relativePerformanceData.length > 1 && (
-                <Card>
+                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Activity className="h-5 w-5 text-primary" />
-                            {t('performance.relativeTitle')}
-                        </CardTitle>
-                        <CardDescription>
-                            {t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
-                        </CardDescription>
+                        <div className="flex items-center gap-3">
+                            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center shadow-sm text-accent-foreground transition-transform duration-300 group-hover:scale-105">
+                                <Activity className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle>{t('performance.relativeTitle')}</CardTitle>
+                                <CardDescription>
+                                    {t('performance.relativeDesc', { period: PERIOD_LABELS[selectedPeriod] })}
+                                </CardDescription>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={relativePerformanceData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gradRelPortfolio" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis
-                                    dataKey="day"
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    interval="preserveStartEnd"
-                                    minTickGap={20}
-                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    tickFormatter={(v) => `${v > 0 ? '+' : ''}${Number(v).toFixed(0)}%`}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
-                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
-                                    formatter={(value: number) => [`${value > 0 ? '+' : ''}${value.toFixed(2)}%`]}
-                                />
-                                <Legend />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativePortfolio}
-                                    name={t('performance.relativePortfolio')}
-                                    stroke="hsl(var(--primary))"
-                                    fill="url(#gradRelPortfolio)"
-                                    strokeWidth={2.5}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeStocksEtfs}
-                                    name={t('performance.relativeStocksEtfs')}
-                                    stroke="hsl(0, 72%, 51%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeCrypto}
-                                    name={t('performance.crypto')}
-                                    stroke="hsl(142, 76%, 36%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeMetals}
-                                    name={t('performance.metals')}
-                                    stroke="hsl(45, 93%, 47%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeInflationAdjusted}
-                                    name={t('performance.inflationAdjusted')}
-                                    stroke="hsl(30, 80%, 55%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    strokeDasharray="4 4"
-                                    isAnimationActive={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <AreaChart
+                            data={relativePerformanceData}
+                            xAccessor={(d) => parseISO(String(d.day))}
+                            xIsDate
+                            height={320}
+                            xTickFormat={(v) => monthTickFormatter.format(v as Date)}
+                            yTickFormat={(v) => `${v > 0 ? '+' : ''}${Number(v).toFixed(0)}%`}
+                            tooltipTitle={(d) => format(parseISO(String(d.day)), "dd MMM yyyy")}
+                            tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
+                            referenceLines={[{ y: 0, color: "hsl(var(--border))" }]}
+                            series={[
+                                { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d[CHART_KEYS.relativePortfolio], color: "hsl(var(--primary))", strokeWidth: 2.5 },
+                                { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d[CHART_KEYS.relativeStocksEtfs], color: "hsl(var(--chart-5))" },
+                                { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d[CHART_KEYS.relativeCrypto], color: "hsl(var(--chart-2))" },
+                                { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d[CHART_KEYS.relativeMetals], color: "hsl(var(--chart-4))" },
+                                { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d[CHART_KEYS.relativeInflationAdjusted], color: "hsl(var(--chart-3))", dashed: true },
+                            ] as AreaSeries<(typeof relativePerformanceData)[number]>[]}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -389,30 +262,3 @@ export default function PerformancePage() {
     );
 }
 
-function MetricCard({
-    title, value, subtitle, icon: Icon, trend,
-}: {
-    title: string; value: string; subtitle: string;
-    icon: React.ComponentType<{ className?: string }>; trend: boolean;
-}) {
-    const iconBg = trend
-        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
-        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
-    const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
-
-    return (
-        <Card className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-lg`}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
-                <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
-                    <Icon className="h-4 w-4" />
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-foreground">{value}</div>
-                <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-            </CardContent>
-        </Card>
-    );
-}

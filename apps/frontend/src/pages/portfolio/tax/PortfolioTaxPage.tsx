@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Landmark, Receipt, TrendingDown, AlertTriangle, Info, SlidersHorizontal, Calculator } from "lucide-react";
-import { ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, type BarSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
@@ -29,13 +29,6 @@ type TxnLite = {
   taxes?: number;
   fees?: number;
   currency?: string;
-};
-
-const TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-  color: "hsl(var(--card-foreground))",
 };
 
 const BELGIAN_DIVIDEND_EXEMPT = 859;
@@ -482,16 +475,17 @@ export default function PortfolioTaxPage() {
                 <CardDescription>{t("tax.yearlyTaxFeeTrendDesc")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={yearlyCostTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="period" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => fmt(v)} />
-                    <Bar dataKey="taxes" name={t("tax.taxes")} stackId="a" fill="hsl(340, 82%, 52%)" radius={[0, 0, 0, 0]} isAnimationActive={false} />
-                    <Bar dataKey="fees" name={t("tax.fees")} stackId="a" fill="hsl(45, 93%, 47%)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <BarChart
+                  data={yearlyCostTrend}
+                  categoryAccessor={(d) => d.period}
+                  series={[
+                    { key: "taxes", label: t("tax.taxes"), accessor: (d) => d.taxes, color: "hsl(var(--chart-5))" },
+                    { key: "fees", label: t("tax.fees"), accessor: (d) => d.fees, color: "hsl(var(--chart-4))" },
+                  ] as BarSeries<{ period: string; taxes: number; fees: number }>[]}
+                  height={280}
+                  valueTickFormat={(v) => fmt(v)}
+                  tooltipValueFormat={(v) => fmt(v)}
+                />
               </CardContent>
             </Card>
           )}

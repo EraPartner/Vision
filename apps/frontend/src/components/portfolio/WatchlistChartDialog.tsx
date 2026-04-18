@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -11,15 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
+import { AreaChart, type AreaSeries, type AreaReferenceLine } from "@/components/charts";
 import { Target, TrendingUp, TrendingDown, Check } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -144,6 +137,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
               </Badge>
             )}
           </div>
+          <DialogDescription className="sr-only">{item.name}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -230,67 +224,31 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
             {isChartLoading ? (
               <Skeleton className="h-full w-full" />
             ) : formattedData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return formatDateWithAppSettings(date, appSettings.dateFormat);
-                    }}
-                    minTickGap={50}
-                  />
-                  <YAxis
-                    domain={[minPrice, maxPrice]}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickFormatter={(value) => formatDisplayCurrency(value, item.currency)}
-                    width={60}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [
-                      formatDisplayCurrency(value, item.currency),
-                      t('watchlistChart.priceLabel'),
-                    ]}
-                  />
-                  <ReferenceLine
-                    y={targetPrice}
-                    stroke="hsl(var(--primary))"
-                    strokeDasharray="5 5"
-                    strokeWidth={2}
-                    label={{
-                      value: t('watchlistChart.targetLabel', { currency: item.currency, price: formatDisplayCurrency(targetPrice, item.currency) }),
-                      position: "insideTopRight",
-                      fill: "hsl(var(--primary))",
-                      fontSize: 12,
-                      fontWeight: "bold",
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="price"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fill="url(#colorPrice)"
-                    dot={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <AreaChart
+                data={formattedData}
+                height={320}
+                xAccessor={(d) => d.time}
+                xIsDate
+                series={[{
+                  key: "price",
+                  label: t('watchlistChart.priceLabel'),
+                  accessor: (d) => d.price,
+                  color: "hsl(var(--primary))",
+                  strokeWidth: 2,
+                }] as AreaSeries<typeof formattedData[number]>[]}
+                yDomain={[minPrice, maxPrice]}
+                xTickFormat={(v) => formatDateWithAppSettings(v instanceof Date ? v : new Date(v), appSettings.dateFormat)}
+                yTickFormat={(v) => formatDisplayCurrency(v, item.currency)}
+                tooltipTitle={(d) => d.date}
+                tooltipValueFormat={(v) => formatDisplayCurrency(v, item.currency)}
+                referenceLines={[{
+                  y: targetPrice,
+                  label: t('watchlistChart.targetLabel', { currency: item.currency, price: formatDisplayCurrency(targetPrice, item.currency) }),
+                  color: "hsl(var(--primary))",
+                  dashed: true,
+                }] as AreaReferenceLine[]}
+                margin={{ top: 10, right: 16, bottom: 28, left: 64 }}
+              />
             ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                 {t('watchlistChart.noData')}

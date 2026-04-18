@@ -128,18 +128,20 @@ export function AppSidebar() {
   const groups = workspace === "budgeting" ? budgetingGroups : portfolioGroups;
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
+    <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
+      <SidebarHeader className="border-b border-sidebar-border/50 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/90 to-accent/60 flex items-center justify-center shadow-lg shadow-primary/25 transition-transform duration-300 hover:scale-105">
+          <div className="h-10 w-10 shrink-0 rounded-2xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04]">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <h1 className="text-base font-bold text-sidebar-foreground tracking-tight truncate">
+              <h1 className="font-display text-lg font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
                 Vision
               </h1>
-              <p className="text-[11px] text-muted-foreground truncate">{t('nav.financeManager')}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground truncate">
+                {t('nav.financeManager')}
+              </p>
             </div>
           )}
         </div>
@@ -149,7 +151,7 @@ export function AppSidebar() {
         {/* Workspace switcher */}
         {!collapsed && (
           <div className="px-3 pt-3">
-            <div className="flex rounded-lg bg-muted p-1 gap-1">
+            <div className="flex rounded-xl bg-sidebar-accent/60 ring-1 ring-sidebar-border/50 p-1 gap-1 backdrop-blur-sm">
               <WorkspaceTab
                 active={workspace === "budgeting"}
                 onClick={() => setWorkspace("budgeting")}
@@ -197,10 +199,10 @@ export function AppSidebar() {
                         <NavLink
                           to={item.url}
                           onMouseEnter={() => handleNavHover(item.url)}
-                          className={isActive ? "relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary" : ""}
+                          className={isActive ? "accent-rail" : ""}
                         >
-                          <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? "text-primary" : ""}`} />
-                          <span className={isActive ? "font-semibold" : ""}>{item.title}</span>
+                          <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
+                          <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -212,11 +214,11 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
+      <SidebarFooter className="border-t border-sidebar-border/50 p-3">
         {!collapsed && (
           <div className="flex items-center justify-center gap-2">
-            <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-            <p className="text-[11px] text-muted-foreground/60 text-center font-medium tracking-wide uppercase">
+            <div className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_hsl(var(--accent)/0.7)] motion-safe:animate-pulse" />
+            <p className="text-[10px] text-muted-foreground/70 text-center font-medium tracking-[0.18em] uppercase">
               Vision v1.0
             </p>
           </div>
@@ -240,9 +242,9 @@ function WorkspaceTab({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-300 ${active
-          ? "bg-background text-foreground shadow-md ring-1 ring-primary/20 scale-[1.02]"
-          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium tracking-tight transition-all duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] ${active
+          ? "bg-background/90 text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.35)] ring-1 ring-primary/25 scale-[1.02]"
+          : "text-muted-foreground hover:text-foreground hover:bg-background/40"
         }`}
     >
       <span className={`transition-colors duration-200 ${active ? "text-primary" : ""}`}>{icon}</span>

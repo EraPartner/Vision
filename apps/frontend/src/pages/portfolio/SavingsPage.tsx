@@ -60,7 +60,7 @@ export default function SavingsPage() {
           icon={PiggyBank}
           actions={<AddInvestmentDialog allowedAssetClasses={[ 'savings', 'bond' ]} />}
         />
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
           <CardContent className="pt-0">
             <EmptyState
               icon={PiggyBank}
@@ -85,40 +85,49 @@ export default function SavingsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> {t('portfolio.totalBalance')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
+                <DollarSign className="h-3 w-3" />
+              </span>
+              {t('portfolio.totalBalance')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalBalance)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Percent className="h-3 w-3" /> {t('portfolio.avgInterestRate')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
+                <Percent className="h-3 w-3" />
+              </span>
+              {t('portfolio.avgInterestRate')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-accent tabular-nums">{weightedRate.toFixed(2)}%</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> {t('portfolio.interestEarned')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-1 ring-accent/15">
+                <TrendingUp className="h-3 w-3" />
+              </span>
+              {t('portfolio.interestEarned')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalInterestEarned)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border-l-4 border-l-primary">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4 border-l-primary">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.projectedAnnual')}</CardTitle>
           </CardHeader>

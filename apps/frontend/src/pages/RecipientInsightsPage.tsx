@@ -3,9 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from "recharts";
+import { BarChart, type BarSeries } from "@/components/charts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, ArrowRight, Store, Hash, DollarSign, Filter } from "lucide-react";
 import { parseISO } from "date-fns";
@@ -16,19 +14,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
-
-const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(142, 76%, 36%)",
-  "hsl(45, 93%, 47%)",
-  "hsl(280, 87%, 65%)",
-  "hsl(340, 82%, 52%)",
-  "hsl(190, 80%, 45%)",
-  "hsl(30, 90%, 55%)",
-  "hsl(260, 70%, 55%)",
-  "hsl(170, 65%, 40%)",
-  "hsl(350, 75%, 60%)",
-];
 
 type RecipientDetailRow = {
   recipientId: number;
@@ -195,7 +180,7 @@ export default function RecipientInsightsPage() {
 
       {/* KPI cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.topRecipient')}</CardTitle>
             <Store className="h-4 w-4 text-muted-foreground" />
@@ -207,7 +192,7 @@ export default function RecipientInsightsPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.top10Total')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -217,7 +202,7 @@ export default function RecipientInsightsPage() {
             <p className="text-xs text-muted-foreground">{t('insights.txCount', { n: totalTopTx })}</p>
           </CardContent>
         </Card>
-        <Card className="surface-elevated premium-frame micro-lift hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+        <Card className="surface-elevated premium-frame">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('insights.avgTxn')}</CardTitle>
             <Hash className="h-4 w-4 text-muted-foreground" />
@@ -236,24 +221,20 @@ export default function RecipientInsightsPage() {
           <CardDescription>{t('insights.topBySpendDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} className="text-xs" />
-              <YAxis type="category" dataKey="name" width={140} className="text-xs" />
-              <Tooltip
-                formatter={(value: number) => [formatCurrency(value), t('insights.col.totalSpend')]}
-                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
-                contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-              />
-              <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
-                {chartData.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <BarChart
+            data={chartData}
+            categoryAccessor={(d) => d.name}
+            layout="horizontal"
+            height={400}
+            margin={{ top: 12, right: 20, bottom: 40, left: 140 }}
+            valueTickFormat={(v) => formatCurrency(v)}
+            tooltipTitle={(d) => d.fullName}
+            tooltipValueFormat={(v) => formatCurrency(v)}
+            colorForIndex={(i) => `hsl(var(--chart-${(i % 8) + 1}))`}
+            series={[
+              { key: "spend", label: t('insights.col.totalSpend'), accessor: (d) => d.spend },
+            ] as BarSeries<typeof chartData[number]>[]}
+          />
         </CardContent>
       </Card>
 

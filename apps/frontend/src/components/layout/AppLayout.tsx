@@ -41,16 +41,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     return (
         <SidebarProvider>
-            <div className="liquid-canvas relative min-h-screen flex w-full overflow-hidden">
-                <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-                    <div className="absolute -left-24 top-[-8rem] h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-                    <div className="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-                    <div className="absolute bottom-[-10rem] left-1/4 h-72 w-72 rounded-full bg-primary/8 blur-3xl" />
-                </div>
+            <div className="relative min-h-screen flex w-full overflow-hidden">
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
-                        className="app-topbar h-14 border-b border-border/60 flex items-center px-4 sticky top-0 z-30">
+                        className="app-topbar glass-thin h-14 border-b border-border/50 flex items-center px-4 sticky top-0 z-30">
                         <SidebarTrigger className="mr-4" />
                         <div className="flex-1" />
                         <UpdateNotification />

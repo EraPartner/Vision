@@ -156,6 +156,33 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-17 Phase 9 — UI Revamp: Liquid Glass Aesthetic, visx Charts, Framer Motion
+
+**Frontend Complete Redesign:**
+
+- **ADR-017 — Liquid Glass Aesthetic**: Apple-inspired design system with emerald + champagne-gold palette, five-tier glass material hierarchy, self-hosted Fraunces (display) + Inter Tight (body) fonts, centralized token system (`styles/tokens.css`), premium surface utilities (`surface-elevated`, `premium-frame`, `micro-lift`, `liquid-canvas`). All 48 shadcn components retuned to token-based styling; glass defaults for overlays/modals.
+
+- **ADR-018 — visx/d3 Chart Migration**: Migrated from Recharts to visx + d3 low-level primitives. New chart library in `components/charts/` (AreaChart, BarChart, PieChart, LineChart, Sparkline, Candlestick, TreemapChart, etc.). Design-token-aware styling; saves ~35kb gzipped (Recharts ~50kb → visx ~15kb). All consumer pages (Dashboard, Statistics, Performance, Portfolio, Watchlist) rewritten.
+
+- **ADR-019 — Framer Motion Adoption**: Unified motion system via `lib/motion.ts` with centralized durations, easings, spring configs. All 18+ form dialogs + PageTransition wrapper use spring entry/exit. Full `prefers-reduced-motion` compliance via `useReducedMotion()` hook on all motion consumers.
+
+- **Shell Components**: AppLayout v2 with `liquid-canvas` animated gradient mesh + grain overlay + motion-aware atmosphere blobs. AppSidebar v2 with `glass-chrome` nav + emerald accent rail. PageTransition wrapper animates route changes.
+
+- **Verification**: `bunx tsc --noEmit` clean; `bun run build` 5.52s; `bun run lint` 49 errors/72 warnings (baseline); `bun run validate-locales` pre-existing drift (not from revamp).
+
+See [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017]], [[docs/adr/018-visx-d3-chart-migration|ADR-018]], [[docs/adr/019-framer-motion-adoption|ADR-019]], [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]], [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
+
+### 2026-04-17 Performance Optimization — Glass System Downgrade & Liquid Canvas Removal
+
+**Electron M1 GPU Regression Fix:**
+
+- **ADR-020 — Glass System Downgrade & Liquid Canvas Removal**: Reduced glass-system blur (6-12px max, modal-only usage) and removed liquid-canvas animated background + PageTransition wrapper to eliminate Electron M1 GPU regression. Replaced with solid `bg-card/95` opacity layering + static grain overlay. Font subset optimization (static weights vs. variable). Improves GPU utilization and battery life.
+- **Glass hierarchy collapse**: Blur retained only on modal overlays (Dialog, AlertDialog, Sheet) + sidebar chrome; dense surfaces (Card, Input, Textarea, Tabs, Select, etc.) downgraded to opaque backgrounds.
+- **Motion consolidation**: PageTransition removed; Framer Motion retained for modal/dialog entry + chart animations (higher UX impact, lower GPU cost).
+- **Font optimization**: Swapped `@fontsource-variable/*` → `@fontsource/*` static weights (400/500/600 latin), reducing font file size.
+
+See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]]
+
 ### 2026-04-17 Phase 3.5 & 3.6 - Metals DRY Refactor & Watchlist API Integration
 
 - **Phase 3.5 — MetalsPage DRY**: `MetalsPage.tsx` refactored as a thin wrapper around `StocksPage` with configurable props (`assetClasses=["metals"]`, `titleKey="metals.title"`, etc.). Eliminates code duplication; StocksPage now handles all asset-class logic generically.

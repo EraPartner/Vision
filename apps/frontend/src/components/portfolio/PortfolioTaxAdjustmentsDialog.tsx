@@ -5,7 +5,7 @@ import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { numberFormatToLocale } from '@/utils/currency';
 import { usePortfolioTaxAdjustments } from '@/hooks/usePortfolioTaxAdjustments';
 import { getAssetClassLabel, type InvestmentSummary } from '@/types/portfolio';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -160,10 +160,10 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
           ))}
         </div>
 
-        <div className="flex justify-end gap-2">
+        <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleSave}>{t('common.save')}</Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -189,7 +189,7 @@ export default function StocksPage({
           icon={TrendingUp}
           actions={<AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
         />
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
           <CardContent className="pt-0">
             <EmptyState
               icon={TrendingUp}
@@ -214,21 +214,32 @@ export default function StocksPage({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card className="liquid-glass micro-lift border">
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> {t('portfolio.portfolioValue')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/15">
+                <DollarSign className="h-3 w-3" />
+              </span>
+              {t('portfolio.portfolioValue')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
             <p className="text-xl font-bold text-primary tabular-nums">{fmt(totalValue)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <ArrowUpRight className="h-3 w-3" /> {t('portfolio.realizedPnl')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <span className={cn(
+                "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
+                totalRealizedGain >= 0
+                  ? "bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-accent/15"
+                  : "bg-gradient-to-br from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+              )}>
+                <ArrowUpRight className="h-3 w-3" />
+              </span>
+              {t('portfolio.realizedPnl')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -237,11 +248,19 @@ export default function StocksPage({
             </p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> {t('portfolio.unrealizedPnl')}
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <span className={cn(
+                "inline-flex h-6 w-6 items-center justify-center rounded-md ring-1",
+                totalUnrealizedGain >= 0
+                  ? "bg-gradient-to-br from-accent/20 to-accent/5 text-accent ring-accent/15"
+                  : "bg-gradient-to-br from-destructive/20 to-destructive/5 text-destructive ring-destructive/15"
+              )}>
+                <TrendingUp className="h-3 w-3" />
+              </span>
+              {t('portfolio.unrealizedPnl')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pb-3 px-4">
@@ -250,8 +269,8 @@ export default function StocksPage({
             </p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.dividends')}</CardTitle>
           </CardHeader>
@@ -259,8 +278,8 @@ export default function StocksPage({
             <p className="text-xl font-bold text-accent tabular-nums">+{fmt(totalDividends)}</p>
           </CardContent>
         </Card>
-        
-        <Card className="liquid-glass micro-lift border">
+
+        <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.feesAndTaxes')}</CardTitle>
           </CardHeader>
@@ -268,8 +287,11 @@ export default function StocksPage({
             <p className="text-xl font-bold text-destructive tabular-nums">-{fmt(totalFees + totalTaxes)}</p>
           </CardContent>
         </Card>
-        
-        <Card className={cn("liquid-glass micro-lift border-l-4", netGain >= 0 ? "border-l-accent" : "border-l-destructive")}>
+
+        <Card className={cn(
+          "group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm border-l-4",
+          netGain >= 0 ? "border-l-accent" : "border-l-destructive"
+        )}>
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-medium text-muted-foreground">{t('portfolio.netReturn')}</CardTitle>
           </CardHeader>

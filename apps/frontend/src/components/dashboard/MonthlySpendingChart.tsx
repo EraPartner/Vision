@@ -1,11 +1,17 @@
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 
+interface MonthlySpendingRow {
+    readonly month: string;
+    readonly spending: number;
+    readonly income: number;
+}
+
 interface MonthlySpendingChartProps {
-    data: Array<{ month: string; spending: number; income: number }>;
+    readonly data: Array<MonthlySpendingRow>;
 }
 
 export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
@@ -14,83 +20,83 @@ export function MonthlySpendingChart({ data }: MonthlySpendingChartProps) {
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
-    const formatCompactCurrency = (value: number) => new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: defaultCurrency,
-        notation: "compact",
-        maximumFractionDigits: 1,
-    }).format(value);
+    const formatCompactCurrency = (value: number) =>
+        new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency: defaultCurrency,
+            notation: "compact",
+            maximumFractionDigits: 1,
+        }).format(value);
 
     if (!data || data.length === 0) {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-lg font-semibold">{t('monthlySpending.title')}</CardTitle>
-                    <p className="text-sm text-muted-foreground">{t('monthlySpending.desc')}</p>
+                    <CardTitle className="text-lg font-semibold">
+                        {t("monthlySpending.title")}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                        {t("monthlySpending.desc")}
+                    </p>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-72 flex items-center justify-center text-muted-foreground">
-                        {t('monthlySpending.noData')}
+                    <div className="flex h-72 items-center justify-center text-muted-foreground">
+                        {t("monthlySpending.noData")}
                     </div>
                 </CardContent>
             </Card>
         );
     }
 
+    const spendingColor = "hsl(var(--destructive))";
+    const incomeColor = "hsl(var(--accent))";
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-lg font-semibold">{t('monthlySpending.title')}</CardTitle>
-                <p className="text-sm text-muted-foreground">{t('monthlySpending.desc')}</p>
+                <CardTitle className="text-lg font-semibold">
+                    {t("monthlySpending.title")}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    {t("monthlySpending.desc")}
+                </p>
             </CardHeader>
             <CardContent>
-                <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} barGap={4}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-border"/>
-                            <XAxis
-                                dataKey="month"
-                                tick={{fontSize: 12}}
-                                className="fill-muted-foreground"
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <YAxis
-                                tick={{fontSize: 12}}
-                                className="fill-muted-foreground"
-                                axisLine={false}
-                                tickLine={false}
-                                tickFormatter={(v) => formatCompactCurrency(v)}
-                            />
-                            <Tooltip
-                                contentStyle={{
-                                    borderRadius: "var(--radius)",
-                                    border: "1px solid hsl(var(--border))",
-                                    background: "hsl(var(--card))",
-                                    color: "hsl(var(--card-foreground))",
-                                }}
-                                formatter={(value: number, name: string) => [
-                                    formatCurrency(value, defaultCurrency, locale),
-                                    name === "spending" ? t('monthlySpending.spending') : t('monthlySpending.income'),
-                                ]}
-                            />
-                            <Legend
-                                formatter={(value) => (value === "spending" ? t('monthlySpending.spending') : t('monthlySpending.income'))}
-                            />
-                            <Bar
-                                dataKey="spending"
-                                fill="hsl(var(--destructive))"
-                                radius={[4, 4, 0, 0]}
-                                maxBarSize={40}
-                            />
-                            <Bar
-                                dataKey="income"
-                                fill="hsl(var(--accent))"
-                                radius={[4, 4, 0, 0]}
-                                maxBarSize={40}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
+                <div className="flex h-72 flex-col gap-2">
+                    <BarChart<MonthlySpendingRow>
+                        data={data}
+                        categoryAccessor={(d) => d.month}
+                        series={[
+                            {
+                                key: "spending",
+                                label: t("monthlySpending.spending"),
+                                accessor: (d) => d.spending,
+                                color: spendingColor,
+                            },
+                            {
+                                key: "income",
+                                label: t("monthlySpending.income"),
+                                accessor: (d) => d.income,
+                                color: incomeColor,
+                            },
+                        ]}
+                        height={232}
+                        maxBarSize={40}
+                        valueTickFormat={formatCompactCurrency}
+                        tooltipValueFormat={(v) =>
+                            formatCurrency(v, defaultCurrency, locale)
+                        }
+                    />
+                    <ChartLegend
+                        items={[
+                            {
+                                label: t("monthlySpending.spending"),
+                                color: spendingColor,
+                            },
+                            { label: t("monthlySpending.income"), color: incomeColor },
+                        ]}
+                        align="center"
+                    />
                 </div>
             </CardContent>
         </Card>

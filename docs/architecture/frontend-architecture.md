@@ -2,10 +2,10 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture and diagrams
-date: 2026-04-16
-tags: [architecture, frontend, uml, plantuml, react, phase-6]
-aliases: [frontend architecture, react architecture, frontend design]
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, and Framer Motion
+date: 2026-04-17
+tags: [architecture, frontend, uml, plantuml, react, phase-6, phase-9, liquid-glass, visx, framer-motion]
+aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
 # Frontend Architecture
@@ -27,7 +27,11 @@ This organization improves feature discoverability and reduces cross-cutting con
 
 - **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite
-- **Styling**: Tailwind CSS + Radix UI
+- **Styling**: Tailwind CSS + Radix UI + design tokens
+- **Design System**: Liquid-glass aesthetic (emerald + champagne-gold palette)
+- **Typography**: Fraunces (display) + Inter Tight (body) via `@fontsource-variable`
+- **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
+- **Charts**: visx + d3 (replacing Recharts)
 - **State Management**: React Query (server state) + React Context (client state)
 - **Routing**: React Router v7
 - **HTTP Client**: Axios (custom ApiClient)
@@ -302,6 +306,84 @@ PortfolioOverviewPage --> PortfolioTaxPage
 @enduml
 ```
 
+## Design System: Emerald + Gold Aesthetic (Phase 9 + Performance Optimization)
+
+The frontend implements a premium emerald + champagne-gold aesthetic with performance-optimized surface patterns:
+
+### Color Palette
+
+- **Primary**: Emerald (`oklch(54% 0.15 161)`)
+- **Accent**: Champagne gold (`oklch(74% 0.09 73)`)
+- **Background**: Deep charcoal (`oklch(14% 0 0)`)
+- **Neutral**: Supporting grays for hierarchy
+
+All colors defined in `apps/frontend/src/styles/tokens.css` and consumed via Tailwind theme extension.
+
+### Material Hierarchy (Performance-Optimized)
+
+Selective glass system with reduced blur (Electron M1 GPU optimization):
+
+| Class | Purpose | Blur | Usage |
+|-------|---------|------|-------|
+| `glass-thin` | Subtle interactive elements | 6px | Rarely used |
+| `glass-regular` | Standard overlays (default) | 8px | Popover, Tooltip |
+| `glass-thick` | Modal dialogs | 12px | Dialog, AlertDialog, Sheet |
+| `glass-chrome` | Navigation chrome | 8px | Sidebar, AppLayout |
+| `bg-card/95` | Dense surfaces (default) | none | Card, Input, Button, Tabs, etc. |
+
+**Rationale**: Glass blur filtered removed from frequently-occluded surfaces (Card, Input, Textarea, Tabs, Select, DropdownMenu, etc.) to eliminate Electron M1 GPU regression. Blur retained only on modal overlays + navigation chrome.
+
+Additional utilities:
+
+- `surface-elevated` — non-glass elevated cards with premium depth (shadow only)
+- `premium-frame` — elevated depth without blur (multi-layer shadows)
+- `micro-lift` — subtle hover elevation (transform: translateY, GPU-safe)
+- **Removed**: `liquid-canvas` animated background (static grain overlay retained)
+
+See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for performance optimization details.
+
+### Typography
+
+- **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
+- **Body**: Inter (static weights: 400/500/600, latin subset) — copy, labels, form inputs
+- **Self-hosted**: Fonts loaded via `@fontsource/fraunces` + `@fontsource/inter` (smaller files)
+
+Previous variable fonts superseded by static weight selection for performance.
+
+### Motion System
+
+Centralized in `apps/frontend/src/lib/motion.ts`:
+
+- **Durations**: fast (150ms), normal (300ms), slow (500ms)
+- **Easings**: cubic-bezier variants (out-expo, out-cubic, in-quad)
+- **Spring configs**: SPRING_BOUNCE, SPRING_SMOOTH, SPRING_SNAPPY
+- **Reduced-motion**: `useReducedMotion()` hook ensures `prefers-reduced-motion: reduce` compliance
+- **Page transitions**: Removed (`PageTransition.tsx` deleted; instant route transitions)
+- **Dialog/Popover entry**: Retained spring + fade animations (low GPU impact on modals)
+- **Chart animations**: Stagger + fade entry (gated by `useReducedMotion()`)
+
+### Charts
+
+Migrated from Recharts to visx + d3 primitives in `apps/frontend/src/components/charts/`:
+
+- `AreaChart.tsx` — time-series area stacks
+- `BarChart.tsx`, `StackedBarChart.tsx` — category/recipient breakdown
+- `PieChart.tsx`, `DonutChart.tsx` — distributions
+- `LineChart.tsx` — multi-line trends
+- `Sparkline.tsx` — mini inline charts for cards
+- `Candlestick.tsx` — OHLC price action
+- `TreemapChart.tsx` — hierarchical spending
+
+All charts consume design tokens directly and respect reduced-motion via Framer Motion integration.
+
+### Related Documentation
+
+- [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
+- [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
+- [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] (Performance optimization)
+- [[docs/components/ui-components|UI Components]]
+
 ## Component Hierarchy
 
 ```
@@ -539,6 +621,59 @@ end note
 @enduml
 ```
 
+## Chart Library Architecture (Phase 9)
+
+The frontend implements a low-level chart library using **visx + d3** primitives, replacing Recharts.
+
+### Chart Components
+
+Located in `apps/frontend/src/components/charts/`:
+
+**Primitive Chart Components:**
+- `AreaChart.tsx` — Stacked time-series areas (DashboardPage, StatisticsPage)
+- `BarChart.tsx` — Grouped or stacked bars (StatisticsPage, DashboardPage)
+- `StackedBarChart.tsx` — Multi-series bar stacks (PerformancePage)
+- `PieChart.tsx` — Basic pie distribution (StatisticsPage)
+- `DonutChart.tsx` — Donut/ring distribution (StatisticsPage)
+- `LineChart.tsx` — Multi-line trends (PerformancePage, WatchlistPage)
+- `Sparkline.tsx` — Mini inline sparklines (StatCard, tables)
+- `Candlestick.tsx` — OHLC price action (StocksPage, CryptoPage)
+- `TreemapChart.tsx` — Hierarchical spending breakdown (StatisticsPage)
+
+**Shared Chart Components:**
+- `ChartTooltip.tsx` — Shared tooltip renderer (design-token colors)
+- `ChartLegend.tsx` — Shared legend component (keyboard accessible)
+- `ChartAxis.tsx` — Shared axis renderer (x, y with token-based styling)
+
+### Design Token Integration
+
+All charts consume `apps/frontend/src/styles/tokens.css`:
+
+- **Colors**: Emerald + gold + supporting palette (semantic, not hardcoded)
+- **Typography**: Fraunces (display), Inter Tight (body)
+- **Spacing**: Clamp-based responsive margins from token system
+- **Motion**: Framer Motion animations check `useReducedMotion()` and disable if needed
+
+### Accessibility
+
+- SVG `role="img"` + `aria-label` for chart purpose
+- Tooltips & legends keyboard-accessible (tab, arrow keys)
+- Color-blind palette support (deuteranopia, protanopia)
+- Reduced-motion fully honored: no animation if `prefers-reduced-motion: reduce`
+
+### Performance
+
+For large datasets (>1000 points), the backend provides pre-downsampled data via LTTB algorithm (see [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]]).
+
+### Migration Impact
+
+- **Bundle savings**: ~35kb gzipped (Recharts ~50kb → visx ~15kb)
+- **Visual cohesion**: Charts inherit liquid-glass aesthetic tokens
+- **Implementation effort**: All chart consumers rewritten to use new primitives
+- **No data model changes**: API contracts unchanged; chart data format preserved
+
+See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] and [[docs/components/charts|Chart Primitives]] for details.
+
 ## Diagram Source Files
 
 The raw PlantUML source files are stored in `docs/diagrams/`:
@@ -581,7 +716,15 @@ To regenerate these diagrams after code changes:
 ---
 
 **Related Documentation**
+- [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
+- [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
+- [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
+- [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]]
 - [[docs/architecture/backend-architecture|Backend Architecture]] - Backend diagrams
 - [[docs/api/index|API Documentation]] - API endpoint details
 - [[docs/components/index|Components]] - Component documentation
+- [[docs/components/charts|Chart Primitives]] - Chart library documentation
+- [[docs/components/layout|Layout Components]] - AppLayout, AppSidebar
 - [[docs/components/hooks|Hooks]] - Custom hooks reference
+- [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
+- [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]

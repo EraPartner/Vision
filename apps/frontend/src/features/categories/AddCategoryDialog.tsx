@@ -1,5 +1,5 @@
 import {useState, useEffect} from "react";
-import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
@@ -80,6 +80,9 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                 <DialogTitle>
                     {isEditMode ? t('form.addCategory.editTitle') : t('form.addCategory.title')}
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                    {isEditMode ? t('form.addCategory.editTitle') : t('form.addCategory.title')}
+                </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -114,7 +117,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                         onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                     />
                 </div>
-                <div className="flex justify-end gap-2">
+                <DialogFooter className="pt-2">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         {t('common.cancel')}
                     </Button>
@@ -122,7 +125,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                         {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                         {isEditMode ? t('common.save') : t('common.create')}
                     </Button>
-                </div>
+                </DialogFooter>
             </form>
         </DialogContent>
     );

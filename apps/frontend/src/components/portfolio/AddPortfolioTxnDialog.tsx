@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -174,6 +174,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogTitle>
+          <DialogDescription className="sr-only">{t('addPortTxn.title', { symbol: investment.symbol || investment.name })}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -302,10 +303,10 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
             <Textarea id="txn-note" placeholder={t('addPortTxn.note')} rows={2} value={form.note} onChange={(e) => setForm(f => ({ ...f, note: e.target.value }))} maxLength={300} />
           </div>
 
-          <div className="flex justify-end gap-2">
+          <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t('addPortTxn.cancel')}</Button>
             <Button type="submit">{t('addPortTxn.record')}</Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

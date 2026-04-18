@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -129,6 +130,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('addWatchlist.title')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('addWatchlist.title')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

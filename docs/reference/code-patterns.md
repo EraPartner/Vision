@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-17
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, and streaming CSV exports
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services]
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6, phase-9, motion, liquid-glass, design-system]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, motion consumers, surface shells, and gradient icon tiles
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, motion pattern, surface shell pattern, gradient icon pattern]
 ---
 
 # Code Patterns Reference
@@ -1121,10 +1121,146 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 
 ---
 
+## Motion Consumer Pattern (Phase 9)
+
+**Source:** [[apps/frontend/src/lib/motion.ts|motion.ts]]
+
+All Framer Motion-enabled components must check `useReducedMotion()` and conditionally apply animations to respect OS accessibility settings.
+
+> [!note] PageTransition Removed (2026-04-17)
+> The `PageTransition` component was removed as part of Electron M1 performance optimization. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details. Motion consumers remain relevant for modal/dialog entry animations and chart effects.
+
+### Pattern
+
+```tsx
+import { motion } from 'framer-motion';
+import { DURATION_NORMAL, SPRING_SMOOTH, useReducedMotion } from '@/lib/motion';
+
+export function MyAnimatedComponent() {
+  const prefersReduced = useReducedMotion();
+  
+  return (
+    <motion.div
+      initial={prefersReduced ? {} : { opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={prefersReduced ? {} : { opacity: 0, scale: 0.90 }}
+      transition={prefersReduced ? {} : { duration: DURATION_NORMAL / 1000, ...SPRING_SMOOTH }}
+    >
+      {/* Content */}
+    </motion.div>
+  );
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Always check `useReducedMotion()` | Mandatory accessibility compliance for non-essential motion |
+| Empty initial/exit when reduced | Simplest way to skip animations entirely (no jank from animation state) |
+| Instant transition when reduced | Zero delay, zero animation time |
+| Use token-based timing | Never hardcode durations; import from `motion.ts` |
+| Only animate transforms/opacity | GPU-accelerated, no layout thrashing |
+| Centralize motion configs | New patterns go into `motion.ts`, not scattered in components |
+
+### Use Cases
+
+| Pattern | Duration | Timing | When |
+|---------|----------|--------|------|
+| Dialog enter | 300ms | SPRING_SMOOTH | Modal overlay, form dialog |
+| Dialog exit | 200ms | ease-out-cubic | Dismissal or cancel |
+| Page transition | 300ms enter, 200ms exit | SPRING_BOUNCE | Route change |
+| Hover elevation | 150ms | ease-out-cubic | Card, button hover state |
+| Micro-interaction | 150ms | ease-out-expo | Icon action, toggle state |
+| Loading pulse | 1.5s | ease-in-out | Skeleton screens (opacity only) |
+| Fade in | 200-300ms | ease-out-cubic | Content appearance |
+
+---
+
+## Surface Shell Pattern (Phase 9)
+
+**Source:** [[apps/frontend/src/components/ui/card.tsx|card.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]], [[apps/frontend/src/components/layout/AppLayout.tsx|AppLayout.tsx]]
+
+Standard card and surface shell for consistent material hierarchy and visual cohesion.
+
+### Pattern
+
+```tsx
+// Standard elevated card (most common)
+<div className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
+  {/* Content */}
+</div>
+
+// Glass surface (dialogs, overlays)
+<div className="relative overflow-hidden glass-thick rounded-lg border border-white/10">
+  {/* Content */}
+</div>
+
+// Premium stat card (hero emphasis)
+<div className="group relative overflow-hidden glass-regular rounded-lg border border-white/10 micro-lift">
+  <div className="absolute inset-0 opacity-40 bg-gradient-to-br from-primary/20 to-transparent" />
+  {/* Content */}
+</div>
+
+// Navigation chrome
+<div className="glass-chrome border-r border-white/10">
+  {/* Sidebar content */}
+</div>
+```
+
+### Utilities Breakdown
+
+| Utility | Purpose |
+|---------|---------|
+| `surface-elevated` | Elevated non-glass card background (default for most cards) |
+| `premium-frame` | Elevated depth + subtle shadow (works with or without glass) |
+| `micro-lift` | Hover transform: very small `translateY(-2px)` + shadow increase |
+| `glass-*` | Glass variants (thin, regular, thick, chrome, elevated) |
+| `group` | Parent selector for hover states affecting children |
+| `overflow-hidden` | Clip rounded corners (important for glass + grain texture) |
+| `backdrop-blur-sm` | Subtle blur fallback for browsers without full glass support |
+| `border border-white/10` | Subtle highlight rim at 10% white opacity |
+
+### Gradient Icon Tile Pattern (Phase 9)
+
+**Source:** [[apps/frontend/src/pages/DashboardPage.tsx|DashboardPage.tsx]], [[apps/frontend/src/components/dashboard/StatCard.tsx|StatCard.tsx]]
+
+Summary cards and stat tiles use a semi-transparent gradient background with an icon inside for visual interest:
+
+```tsx
+<div className="surface-elevated premium-frame micro-lift rounded-lg p-4">
+  <div className="flex items-center gap-3">
+    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-400/30 via-transparent to-primary/20 flex items-center justify-center">
+      <TrendingUpIcon className="h-6 w-6 text-emerald-400" />
+    </div>
+    <div>
+      <p className="text-sm text-muted-foreground">Monthly Income</p>
+      <p className="text-2xl font-semibold">€4,250</p>
+    </div>
+  </div>
+</div>
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Always use `overflow-hidden` with rounded corners | Prevents gradient overflow; clips grain texture properly |
+| Pair `surface-elevated` with `premium-frame` | Consistent depth signal across all cards |
+| Use `micro-lift` on interactive containers | Hover feedback without changing layout |
+| Gradient icons 12×12–16×16 max | Avoid visual clutter; icon should be supplementary |
+| Mute gradient opacity (20-40%) | Ensure text contrast and readability |
+| Apply in card shell, not direct wrapping | Compose surfaces from these utilities, don't mix |
+
+---
+
 ## Related
 
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]
 - [[docs/adr/014-atomic-merge-transactional-safety|ADR-014: Atomic Merge Transactional Safety]]
+- [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
+- [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
+- [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
 - [[docs/performance/materialized-views|Materialized Views & Aggregation]]
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]]
