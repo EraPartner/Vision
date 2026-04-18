@@ -82,6 +82,23 @@ export default function PerformancePage() {
         [CHART_KEYS.metals]: Math.round(s.metals_value * 100) / 100,
     })), [snapshots]);
 
+    const latestAssetSplit = useMemo(() => {
+        if (snapshots.length === 0) return null;
+        const last = snapshots[snapshots.length - 1];
+        const total = last.stocks_etfs_value + last.crypto_value + last.metals_value;
+        if (total <= 0) return null;
+        return {
+            stocksEtfs: { value: last.stocks_etfs_value, pct: (last.stocks_etfs_value / total) * 100 },
+            crypto: { value: last.crypto_value, pct: (last.crypto_value / total) * 100 },
+            metals: { value: last.metals_value, pct: (last.metals_value / total) * 100 },
+        };
+    }, [snapshots]);
+
+    const sparklineData = useMemo(
+        () => snapshots.slice(-30).map((s) => ({ day: s.date, value: s.value })),
+        [snapshots],
+    );
+
     // Relative performance (percentage-based) from already-downsampled snapshots
     const relativePerformanceData = useMemo(() => {
         if (snapshots.length < 2) return [];
@@ -139,29 +156,42 @@ export default function PerformancePage() {
 
             {/* Key metrics cards */}
             {overallMetrics && (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <MetricCard
-                        title={t('portfolio.portfolioValue')}
-                        value={formatCurrency(overallMetrics.currentValue, defaultCurrency, locale)}
-                        subtitle={t('portfolio.invested', { amount: formatCurrency(overallMetrics.totalInvested, defaultCurrency, locale) })}
-                        icon={DollarSign}
-                        trend={overallMetrics.totalGainLoss >= 0}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-3">
+                    <TotalValueCard
+                        currentValue={overallMetrics.currentValue}
+                        totalInvested={overallMetrics.totalInvested}
+                        totalGainLoss={overallMetrics.totalGainLoss}
+                        totalReturnPct={overallMetrics.totalReturnPct}
+                        currency={defaultCurrency}
+                        locale={locale}
+                        assetSplit={latestAssetSplit}
+                        sparklineData={sparklineData}
+                        labels={{
+                            title: t('portfolio.portfolioValue'),
+                            invested: t('portfolio.totalInvested'),
+                            netPL: t('performance.netGainLoss'),
+                            allocation: t('performance.allocation'),
+                            last30Days: t('performance.last30Days'),
+                            stocksEtfs: t('performance.relativeStocksEtfs'),
+                            crypto: t('performance.crypto'),
+                            metals: t('performance.metals'),
+                        }}
                     />
-                    <MetricCard
+                    <CompactReturnCard
                         title={t('portfolio.totalReturn')}
                         value={`${overallMetrics.totalReturnPct >= 0 ? "+" : ""}${overallMetrics.totalReturnPct.toFixed(2)}%`}
                         subtitle={formatCurrency(overallMetrics.totalGainLoss, defaultCurrency, locale)}
                         icon={overallMetrics.totalReturnPct >= 0 ? TrendingUp : TrendingDown}
                         trend={overallMetrics.totalReturnPct >= 0}
                     />
-                    <MetricCard
+                    <CompactReturnCard
                         title={t('portfolio.annualizedReturn')}
                         value={`${overallMetrics.annualizedReturn >= 0 ? "+" : ""}${overallMetrics.annualizedReturn.toFixed(2)}%`}
                         subtitle={t('performance.projectedYearly')}
                         icon={Activity}
                         trend={overallMetrics.annualizedReturn >= 0}
                     />
-                    <MetricCard
+                    <CompactReturnCard
                         title={t('portfolio.realReturn')}
                         value={`${overallMetrics.realReturnPct >= 0 ? "+" : ""}${overallMetrics.realReturnPct.toFixed(2)}%`}
                         subtitle={t('performance.cumulativeInflation', { n: overallMetrics.cumulativeInflation.toFixed(1) })}
@@ -389,11 +419,12 @@ export default function PerformancePage() {
     );
 }
 
-function MetricCard({
+type IconType = React.ComponentType<{ className?: string }>;
+
+function CompactReturnCard({
     title, value, subtitle, icon: Icon, trend,
 }: {
-    title: string; value: string; subtitle: string;
-    icon: React.ComponentType<{ className?: string }>; trend: boolean;
+    title: string; value: string; subtitle: string; icon: IconType; trend: boolean;
 }) {
     const iconBg = trend
         ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
@@ -401,18 +432,180 @@ function MetricCard({
     const trendGlassClass = trend ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
 
     return (
-        <Card className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-lg`}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-16 -mt-16" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">{title}</CardTitle>
-                <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+        <Card
+            className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-md lg:col-span-2 lg:row-span-1`}
+        >
+            <CardContent className="flex items-center justify-between gap-3 py-3 px-4">
+                <div className="min-w-0">
+                    <p className="text-xs font-medium text-muted-foreground truncate">{title}</p>
+                    <div className="text-xl font-bold text-foreground leading-tight">{value}</div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>
+                </div>
+                <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
                     <Icon className="h-4 w-4" />
                 </div>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold text-foreground">{value}</div>
-                <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
             </CardContent>
         </Card>
+    );
+}
+
+type AssetSplit = {
+    stocksEtfs: { value: number; pct: number };
+    crypto: { value: number; pct: number };
+    metals: { value: number; pct: number };
+} | null;
+
+interface TotalValueCardProps {
+    currentValue: number;
+    totalInvested: number;
+    totalGainLoss: number;
+    totalReturnPct: number;
+    currency: string;
+    locale: string;
+    assetSplit: AssetSplit;
+    sparklineData: Array<{ day: string; value: number }>;
+    labels: {
+        title: string;
+        invested: string;
+        netPL: string;
+        allocation: string;
+        last30Days: string;
+        stocksEtfs: string;
+        crypto: string;
+        metals: string;
+    };
+}
+
+function TotalValueCard({
+    currentValue, totalInvested, totalGainLoss, totalReturnPct,
+    currency, locale, assetSplit, sparklineData, labels,
+}: TotalValueCardProps) {
+    const isGain = totalGainLoss >= 0;
+    const trendGlassClass = isGain ? "liquid-glass-trend-up" : "liquid-glass-trend-down";
+    const iconBg = isGain
+        ? "bg-gradient-to-br from-emerald-500/20 to-green-500/20 text-emerald-600 dark:text-emerald-400"
+        : "bg-gradient-to-br from-rose-500/20 to-red-500/20 text-rose-600 dark:text-rose-300";
+    const gainToneClass = isGain ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+
+    return (
+        <Card
+            className={`liquid-glass micro-lift ${trendGlassClass} relative overflow-hidden border shadow-lg lg:col-span-2 lg:row-span-3`}
+        >
+            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-white/50 to-transparent dark:from-white/10 rounded-full -mr-20 -mt-20 pointer-events-none" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">{labels.title}</CardTitle>
+                <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${iconBg} shadow-sm`}>
+                    <DollarSign className="h-4 w-4" />
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div>
+                    <div className="text-3xl font-bold text-foreground leading-tight">
+                        {formatCurrency(currentValue, currency, locale)}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
+                        <span className="text-muted-foreground">
+                            {labels.invested}: <span className="font-medium text-foreground">{formatCurrency(totalInvested, currency, locale)}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                            {labels.netPL}:{" "}
+                            <span className={`font-semibold ${gainToneClass}`}>
+                                {isGain ? "+" : ""}{formatCurrency(totalGainLoss, currency, locale)}
+                            </span>{" "}
+                            <span className={`font-medium ${gainToneClass}`}>
+                                ({isGain ? "+" : ""}{totalReturnPct.toFixed(2)}%)
+                            </span>
+                        </span>
+                    </div>
+                </div>
+
+                {sparklineData.length > 1 && (
+                    <div>
+                        <p className="text-[11px] font-medium text-muted-foreground mb-1">{labels.last30Days}</p>
+                        <div className="h-16 -mx-1">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={sparklineData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                                    <defs>
+                                        <linearGradient id="gradSparkValue" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                                            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <Area
+                                        type="monotone"
+                                        dataKey="value"
+                                        stroke="hsl(var(--primary))"
+                                        strokeWidth={2}
+                                        fill="url(#gradSparkValue)"
+                                        isAnimationActive={false}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                )}
+
+                {assetSplit && (
+                    <AssetAllocationBar
+                        split={assetSplit}
+                        currency={currency}
+                        locale={locale}
+                        labels={{
+                            allocation: labels.allocation,
+                            stocksEtfs: labels.stocksEtfs,
+                            crypto: labels.crypto,
+                            metals: labels.metals,
+                        }}
+                    />
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+interface AssetAllocationBarProps {
+    split: NonNullable<AssetSplit>;
+    currency: string;
+    locale: string;
+    labels: { allocation: string; stocksEtfs: string; crypto: string; metals: string };
+}
+
+function AssetAllocationBar({ split, currency, locale, labels }: AssetAllocationBarProps) {
+    const rows = [
+        { key: "stocksEtfs", label: labels.stocksEtfs, pct: split.stocksEtfs.pct, value: split.stocksEtfs.value, color: "bg-rose-500" },
+        { key: "crypto", label: labels.crypto, pct: split.crypto.pct, value: split.crypto.value, color: "bg-emerald-500" },
+        { key: "metals", label: labels.metals, pct: split.metals.pct, value: split.metals.value, color: "bg-amber-500" },
+    ].filter((r) => r.pct > 0);
+
+    if (rows.length === 0) return null;
+
+    return (
+        <div>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1.5">{labels.allocation}</p>
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+                {rows.map((r) => (
+                    <div
+                        key={r.key}
+                        className={r.color}
+                        style={{ width: `${r.pct}%` }}
+                        aria-label={`${r.label} ${r.pct.toFixed(1)}%`}
+                    />
+                ))}
+            </div>
+            <ul className="mt-2 space-y-0.5">
+                {rows.map((r) => (
+                    <li key={r.key} className="flex items-center justify-between text-[11px]">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className={`inline-block h-2 w-2 rounded-full ${r.color}`} />
+                            {r.label}
+                        </span>
+                        <span className="text-foreground font-medium tabular-nums">
+                            {formatCurrency(r.value, currency, locale)}{" "}
+                            <span className="text-muted-foreground font-normal">({r.pct.toFixed(1)}%)</span>
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
