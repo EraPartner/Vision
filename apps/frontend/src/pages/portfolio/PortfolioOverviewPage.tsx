@@ -4,13 +4,14 @@ import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
+import { TotalValueCard, type SparklinePoint } from "@/components/portfolio/TotalValueCard";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,7 @@ export default function PortfolioOverviewPage() {
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
-    summaries, totalGainLoss,
+    summaries, totalGainLoss, transactions,
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -155,14 +156,68 @@ export default function PortfolioOverviewPage() {
 
   const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
 
+  const performers = useMemo(() => {
+    const eligible = summaries
+      .filter((s) => s.totalBuyCost > 0)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        symbol: s.symbol || undefined,
+        gainLossPercent: s.gainLossPercent,
+        gainLossInTarget: convertToTarget(s.totalGain, s.currency),
+      }));
+    if (eligible.length === 0) return { best: undefined, worst: undefined };
+    const sorted = [...eligible].sort((a, b) => b.gainLossPercent - a.gainLossPercent);
+    const best = sorted[0];
+    const worst = sorted[sorted.length - 1];
+    return {
+      best,
+      worst: sorted.length > 1 ? worst : undefined,
+    };
+  }, [summaries, convertToTarget]);
+
+  const sparkline: SparklinePoint[] = useMemo(() => {
+    if (transactions.length === 0) return [];
+    const DAYS = 30;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startMs = today.getTime() - (DAYS - 1) * 86_400_000;
+
+    const investmentCurrency = new Map<number, string>();
+    summaries.forEach((s) => investmentCurrency.set(s.id, s.currency));
+
+    // Day-indexed net cost basis delta (buys + gifts - sells).
+    const dailyDelta = new Map<number, number>();
+    let baseline = 0;
+    for (const txn of transactions) {
+      if (txn.type !== 'buy' && txn.type !== 'sell' && txn.type !== 'gift') continue;
+      const amount = Number(txn.amount) || 0;
+      const signed = txn.type === 'sell' ? -amount : amount;
+      const ccy = investmentCurrency.get(txn.investment_id) || targetCurrency;
+      const inTarget = convertToTarget(signed, ccy);
+      const txnDate = new Date(txn.date);
+      txnDate.setHours(0, 0, 0, 0);
+      const ms = txnDate.getTime();
+      if (ms < startMs) {
+        baseline += inTarget;
+      } else if (ms <= today.getTime()) {
+        const dayIdx = Math.floor((ms - startMs) / 86_400_000);
+        dailyDelta.set(dayIdx, (dailyDelta.get(dayIdx) || 0) + inTarget);
+      }
+    }
+
+    const points: SparklinePoint[] = [];
+    let running = baseline;
+    for (let i = 0; i < DAYS; i++) {
+      running += dailyDelta.get(i) || 0;
+      points.push({ t: startMs + i * 86_400_000, v: running });
+    }
+    // Hide a flat-zero series (no recent activity).
+    const allEqual = points.every((p) => p.v === points[0].v);
+    return allEqual ? [] : points;
+  }, [transactions, summaries, convertToTarget, targetCurrency]);
+
   const cards = [
-    {
-      title: t('portfolio.totalValue'),
-      value: fmt(totalPortfolioValueInTarget),
-      icon: DollarSign,
-      desc: t('portfolio.investments', { count: String(summaries.length) }),
-      cls: "text-primary"
-    },
     {
       title: t('portfolio.totalGainLoss'),
       value: `${totalGainLossInTarget >= 0 ? '+' : ''}${fmt(totalGainLossInTarget)}`,
@@ -225,19 +280,40 @@ export default function PortfolioOverviewPage() {
       ) : (
         <>
           {isVisible('summaryCards') && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cards.map((c) => (
-                <Card key={c.title} className="liquid-glass micro-lift border">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
-                    <c.icon className={`h-4 w-4 ${c.cls}`} />
-                  </CardHeader>
-                  <CardContent>
-                    <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+              <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
+                <TotalValueCard
+                  formattedTotal={fmt(totalPortfolioValueInTarget)}
+                  totalValue={totalPortfolioValueInTarget}
+                  labels={{
+                    title: t('portfolio.totalValue'),
+                    investments: t('portfolio.investments', { count: String(summaries.length) }),
+                    assetSplit: t('portfolio.allocationByClass'),
+                    bestPerformer: t('portfolio.bestPerformer'),
+                    worstPerformer: t('portfolio.worstPerformer'),
+                    sparkline: t('portfolio.last30Days'),
+                  }}
+                  allocation={allocationData}
+                  bestPerformer={performers.best}
+                  worstPerformer={performers.worst}
+                  sparkline={sparkline}
+                  formatCurrency={fmt}
+                />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {cards.map((c) => (
+                  <Card key={c.title} className="liquid-glass micro-lift border">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">{c.title}</CardTitle>
+                      <c.icon className={`h-4 w-4 ${c.cls}`} />
+                    </CardHeader>
+                    <CardContent>
+                      <p className={`text-2xl font-bold ${c.cls}`}>{c.value}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{c.desc}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 
