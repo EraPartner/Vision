@@ -129,10 +129,10 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
-      <SidebarHeader className="border-b border-sidebar-border/50 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 shrink-0 rounded-2xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04]">
-            <Wallet className="h-5 w-5 text-primary-foreground" />
+      <SidebarHeader className={`border-b border-sidebar-border/50 py-4 ${collapsed ? "px-0" : "px-4"}`}>
+        <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
+          <div className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04]">
+            <Wallet className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
@@ -168,20 +168,13 @@ export function AppSidebar() {
           </div>
         )}
         {collapsed && (
-          <div className="flex flex-col items-center gap-1 pt-3 px-1">
+          <div className="flex justify-center pt-3 px-1.5">
             <button
-              onClick={() => setWorkspace("budgeting")}
-              className={`p-2 rounded-md transition-colors ${workspace === "budgeting" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title={t('nav.budgeting')}
+              onClick={() => setWorkspace(workspace === "budgeting" ? "portfolio" : "budgeting")}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              title={workspace === "budgeting" ? t('nav.budgeting') : t('nav.portfolio')}
             >
-              <Receipt className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setWorkspace("portfolio")}
-              className={`p-2 rounded-md transition-colors ${workspace === "portfolio" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-              title={t('nav.portfolio')}
-            >
-              <Briefcase className="h-4 w-4" />
+              {workspace === "budgeting" ? <Receipt className="h-4 w-4" /> : <Briefcase className="h-4 w-4" />}
             </button>
           </div>
         )}

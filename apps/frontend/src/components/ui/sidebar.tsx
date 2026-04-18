@@ -336,7 +336,7 @@ const SidebarGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"
         <div
             ref={ref}
             data-sidebar="group"
-            className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+            className={cn("relative flex w-full min-w-0 flex-col p-2 group-data-[collapsible=icon]:px-1.5", className)}
             {...props}
         />
     );
@@ -392,7 +392,7 @@ const SidebarGroupContent = React.forwardRef<HTMLDivElement, React.ComponentProp
 SidebarGroupContent.displayName = "SidebarGroupContent";
 
 const SidebarMenu = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(({className, ...props}, ref) => (
-    <ul ref={ref} data-sidebar="menu" className={cn("flex w-full min-w-0 flex-col gap-0.5", className)} {...props} />
+    <ul ref={ref} data-sidebar="menu" className={cn("flex w-full min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:items-center", className)} {...props} />
 ));
 SidebarMenu.displayName = "SidebarMenu";
 
@@ -402,7 +402,7 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
 const sidebarMenuButtonVariants = cva(
-    "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 text-left text-sm tracking-tight text-foreground/80 outline-none ring-ring transition-[background-color,color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground data-[active=true]:shadow-[inset_2px_0_0_0_hsl(var(--primary))] data-[state=open]:hover:bg-foreground/[0.06] data-[state=open]:hover:text-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground/80 data-[active=true]:[&>svg]:text-primary",
+    "peer/menu-button flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 text-left text-sm tracking-tight text-foreground/80 outline-none ring-ring transition-[background-color,color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-primary/10 data-[active=true]:font-medium data-[active=true]:text-foreground data-[active=true]:shadow-[inset_2px_0_0_0_hsl(var(--primary))] data-[state=open]:hover:bg-foreground/[0.06] data-[state=open]:hover:text-foreground group-data-[collapsible=icon]:!size-9 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span:last-child]:hidden [&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground/80 data-[active=true]:[&>svg]:text-primary",
     {
         variants: {
             variant: {
