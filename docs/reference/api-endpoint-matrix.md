@@ -3,16 +3,16 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-16
-updated: 2026-04-16
+updated: 2026-04-19
 tags: [reference, api, endpoints, matrix, overview]
-description: Complete matrix of all 108 API endpoints organized by resource for quick lookup
+description: Complete matrix of all 110 API endpoints organized by resource for quick lookup
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 108 API endpoints across 14 route files. Use this as a quick reference to find any endpoint.
+> All 110 API endpoints across 15 route files. Use this as a quick reference to find any endpoint.
 
 ## Transactions (6 endpoints)
 
@@ -155,6 +155,13 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/splits/owed/:id/settle-all` | Settle all for recipient | — | [[docs/api/splits\|Splits]] |
 | DELETE | `/api/splits/:id` | Delete split | — | [[docs/api/splits\|Splits]] |
 
+## Health (2 endpoints)
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
+| GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
+
 ## Admin (7 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
@@ -223,10 +230,11 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
 | Splits | 11 | 0 |
+| Health | 2 | 0 |
 | Admin | 7 | 0 |
 | Aggregations (Phase 2) | 6 | 0 |
 | Info/Statistics | 20 | 5 |
-| **Total** | **114** | **7** |
+| **Total** | **110** | **7** |
 
 ## Related
 

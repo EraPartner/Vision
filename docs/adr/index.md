@@ -43,6 +43,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-19: Update Installer Checksum Verification
+
+[[docs/adr/023-update-installer-checksum-verification|ADR-023]] — Verify SHA256 of downloaded Electron update installers against sibling `.sha256` artifacts on GitHub releases before extraction. Detects supply-chain tampering, corrupted downloads, and MITM attacks. Best-effort: missing `.sha256` files log warning but don't block. Requires release workflow to generate and upload checksum alongside installer binary.
+
+### 2026-04-19: Electron Sandbox Hardening and Recovery
+
+[[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022]] — Enable renderer sandbox (`sandbox: true`) for defense-in-depth isolation. Add single-instance lock to prevent multiple app instances. Implement backend health-polling at startup (200 attempts, 60s timeout) and 10-second watchdog after startup; 3 consecutive failures emit `backend:lost` IPC event. Error page shows on startup timeout; recovery buttons trigger `recovery:retry` IPC or open logs. Corrupt `settings.json` is quarantined with timestamp suffix instead of silently failing. Env vars: `VISION_HEALTH_POLL_ATTEMPTS`, `VISION_HEALTH_POLL_INTERVAL_MS`. New i18n keys: `app.errorPageTitle`, `app.errorPageMessage`, `app.errorPageRetry`, `app.errorPageOpenLogs`, `app.backendLost`.
+
 ### 2026-04-19: Decimal Arithmetic for Monetary Values
 
 [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Adopt Decimal.js for all monetary calculations to eliminate floating-point drift. IEEE 754 floating-point cannot exactly represent decimal values (0.1 + 0.2 ≠ 0.3 in JavaScript). New `money.js` module exports `toDecimal`, `addAll`, `subtract`, `roundToCents`, `toNumber` functions. Banker's rounding (HALF_EVEN, 2 DP) matches PostgreSQL NUMERIC semantics. Scoped to split/aggregation hotspots in Phase 9; exportable to frontend in Phase 10+.

@@ -213,12 +213,30 @@ app.use((req, res, next) => {
 
 // ==================== Health Check ====================
 
+const warmupStatus = {
+  exchangeRates: false,
+  inflation: false,
+  portfolioSnapshots: false,
+  infoCaches: false,
+};
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'financial-transaction-manager-node',
     version: settings.api.version,
     timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/health/detailed', (req, res) => {
+  const ready = Object.values(warmupStatus).every(Boolean);
+  res.json({
+    status: ready ? 'ready' : 'warming',
+    service: 'financial-transaction-manager-node',
+    version: settings.api.version,
+    timestamp: new Date().toISOString(),
+    caches: { ...warmupStatus },
   });
 });
 
@@ -343,13 +361,19 @@ async function start() {
 
       // Warm exchange rate cache AFTER server is accepting connections.
       // This avoids blocking startup while waiting for external API calls.
-      warmExchangeRateCache().catch((err) => {
-        logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
-      });
+      warmExchangeRateCache()
+        .then(() => { warmupStatus.exchangeRates = true; })
+        .catch((err) => {
+          warmupStatus.exchangeRates = true;
+          logger.error('Failed to warm exchange rate cache on startup', { error: err.message });
+        });
 
-      warmInflationCache().catch((err) => {
-        logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
-      });
+      warmInflationCache()
+        .then(() => { warmupStatus.inflation = true; })
+        .catch((err) => {
+          warmupStatus.inflation = true;
+          logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
+        });
 
       backfillPortfolioHistoricalRates().catch((err) => {
         logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
@@ -363,13 +387,21 @@ async function start() {
         logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
       });
 
-      computeAndStoreSnapshots().then(() => {
-        warmInfoCaches().catch((err) => {
-          logger.error('Failed to warm info caches on startup', { error: err.message });
+      computeAndStoreSnapshots()
+        .then(() => {
+          warmupStatus.portfolioSnapshots = true;
+          return warmInfoCaches()
+            .then(() => { warmupStatus.infoCaches = true; })
+            .catch((err) => {
+              warmupStatus.infoCaches = true;
+              logger.error('Failed to warm info caches on startup', { error: err.message });
+            });
+        })
+        .catch((err) => {
+          warmupStatus.portfolioSnapshots = true;
+          warmupStatus.infoCaches = true;
+          logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
         });
-      }).catch((err) => {
-        logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
-      });
 
       refreshInvestmentPricesOnStartup().catch((err) => {
         logger.error('Failed to refresh investment prices on startup', { error: err.message });

@@ -161,6 +161,28 @@ Settings changes propagate throughout the application:
 3. **Default application**: Defaults are applied at the context level, not per-component
 4. **Bulk updates**: Multiple settings can be saved in a single API call
 
+## Corrupt Settings Recovery (Electron)
+
+In Electron desktop builds, the application persists settings to a local `settings.json` file. If this file becomes corrupted (e.g., due to a crash during write):
+
+**Recovery behavior:**
+- App detects JSON parse error on startup
+- Quarantines the corrupted file as `settings.json.corrupt-<ISO-timestamp>`
+- Returns application defaults
+- App continues startup normally
+
+**User experience:**
+- Settings are reset to defaults (one-time)
+- Corrupted file is preserved for forensics
+- User can manually restore from backup if needed
+
+**Example quarantine:**
+```
+settings.json.corrupt-2026-04-19T14-30-45-123Z
+```
+
+This automatic recovery prevents startup failure while preserving the corrupted file for debugging.
+
 ## Related Features
 
 - [[docs/features/statistics|Statistics]] — Uses exclusions and currency settings

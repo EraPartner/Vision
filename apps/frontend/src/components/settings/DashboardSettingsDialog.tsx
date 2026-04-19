@@ -1145,8 +1145,8 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
 
                                                 {/* Inline reminder banner (dismissible) */}
                                                 {(encryptionStatus && (encryptionStatus.hasEnvPassphrase || encryptionStatus.hasStoredPassphrase) && !reminderDismissed) && (
-                                                    <div className="mt-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm bg-amber-50 border-amber-200">
-                                                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700" />
+                                                    <div className="mt-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800">
+                                                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
                                                         <div className="flex-1">
                                                             <div className="font-medium text-foreground">{t('settings.backup.passphrase.reminderTitle')}</div>
                                                             <div className="text-xs text-muted-foreground mt-1">{t('settings.backup.passphrase.reminderDesc')}</div>

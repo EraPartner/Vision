@@ -110,12 +110,18 @@ def fix_alembic_version_column():
 fix_alembic_version_column()
 " 2>/dev/null || true
 
-    # Run Alembic upgrade
-    echo "[entrypoint] Running: $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head"
-    $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
-        echo "[entrypoint] Warning: Alembic migration failed (may be non-fatal if already applied)"
-        # Don't exit - let the app start anyway, schemaInit.js will handle it
-    }
+    # Skip Alembic upgrade when already at head — saves ~1-3s on warm boots.
+    CURRENT_REV=$($VENV_PYTHON -m alembic -c config/alembic.ini current 2>/dev/null | awk 'NR==1 {print $1}')
+    HEAD_REV=$($VENV_PYTHON -m alembic -c config/alembic.ini heads 2>/dev/null | awk 'NR==1 {print $1}')
+    if [ -n "$CURRENT_REV" ] && [ -n "$HEAD_REV" ] && [ "$CURRENT_REV" = "$HEAD_REV" ]; then
+        echo "[entrypoint] Alembic already at head ($CURRENT_REV); skipping upgrade."
+    else
+        echo "[entrypoint] Running: $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head"
+        $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
+            echo "[entrypoint] Warning: Alembic migration failed (may be non-fatal if already applied)"
+            # Don't exit - let the app start anyway, schemaInit.js will handle it
+        }
+    fi
 else
     echo "[entrypoint] alembic_version not found; skipping Alembic on fresh DB (schemaInit.js will bootstrap schema)."
 fi

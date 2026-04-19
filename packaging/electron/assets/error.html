@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'none'" />
+    <title>Vision</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --surface: #171a21;
+        --border: #2a2f3a;
+        --text: #e6e8ee;
+        --text-muted: #9aa3b2;
+        --accent: #5b8cff;
+        --accent-hover: #779eff;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f7f8fa;
+          --surface: #ffffff;
+          --border: #e2e6ee;
+          --text: #1a1d24;
+          --text-muted: #5c6777;
+          --accent: #2c5cff;
+          --accent-hover: #1e4ae0;
+        }
+      }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        display: grid;
+        place-items: center;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 480px;
+        padding: 2.5rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 0.75rem;
+        letter-spacing: -0.01em;
+      }
+      p {
+        color: var(--text-muted);
+        line-height: 1.55;
+        margin: 0 0 1.5rem;
+      }
+      .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+      button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        padding: 0.6rem 1.1rem;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease;
+      }
+      button:hover { background: var(--border); }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+      button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main role="alert">
+      <h1 id="title"></h1>
+      <p id="msg"></p>
+      <div class="actions">
+        <button class="primary" id="retry"></button>
+        <button id="logs"></button>
+      </div>
+    </main>
+    <script>
+      // Strings + action hooks injected by the main process via query params.
+      const params = new URLSearchParams(location.search);
+      document.getElementById('title').textContent = params.get('title') || 'Vision failed to start';
+      document.getElementById('msg').textContent = params.get('msg') || 'Please retry.';
+      const retryBtn = document.getElementById('retry');
+      const logsBtn = document.getElementById('logs');
+      retryBtn.textContent = params.get('retry') || 'Retry';
+      logsBtn.textContent = params.get('logs') || 'Open logs folder';
+      retryBtn.addEventListener('click', () => {
+        if (window.electronRecovery) window.electronRecovery.retry();
+      });
+      logsBtn.addEventListener('click', () => {
+        if (window.electronRecovery) window.electronRecovery.openLogs();
+      });
+    </script>
+  </body>
+</html>

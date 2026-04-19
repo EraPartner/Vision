@@ -57,8 +57,10 @@ function t(key, vars) {
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
-const HEALTH_POLL_ATTEMPTS = 120;  // 120 × 300ms = 36s max
-const HEALTH_POLL_INTERVAL_MS = 300;
+const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 200;  // 200 × 300ms = 60s max
+const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
+const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
+const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
 const MANUAL_UPDATE_CHECK_DELAY_MS = 30_000;
 const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
 const BACKUP_ENC_IV_BYTES = 16;
@@ -94,8 +96,24 @@ function findFreePort(preferred) {
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
 function loadSettings() {
-  try { return JSON.parse(fs.readFileSync(settingsPath, 'utf8')); }
-  catch { return {}; }
+  let raw;
+  try {
+    raw = fs.readFileSync(settingsPath, 'utf8');
+  } catch {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    try {
+      const corruptPath = `${settingsPath}.corrupt-${Date.now()}`;
+      fs.renameSync(settingsPath, corruptPath);
+      console.warn(`[settings] Corrupt settings.json renamed to ${corruptPath}: ${err && err.message ? err.message : err}`);
+    } catch (renameErr) {
+      console.warn('[settings] Failed to quarantine corrupt settings.json:', renameErr && renameErr.message ? renameErr.message : renameErr);
+    }
+    return {};
+  }
 }
 
 function saveSettings(data) {
@@ -442,25 +460,103 @@ async function decryptBackupFileToTemp(encryptedFilePath) {
   return tempSqlPath;
 }
 
+// Single /health request — resolves true when 2xx/3xx, false otherwise.
+function pingHealth(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const req = http.get(HEALTH_URL, (res) => {
+      const ok = res.statusCode >= 200 && res.statusCode < 400;
+      res.resume();
+      resolve(ok);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(false); });
+  });
+}
+
 // Poll /health until success or timeout
 function pollHealth() {
   return new Promise((resolve, reject) => {
     let tries = 0;
-    const attempt = () => {
-      const req = http.get(HEALTH_URL, (res) => {
-        if (res.statusCode >= 200 && res.statusCode < 400) return resolve();
-        res.resume();
-        retry();
-      });
-      req.on('error', retry);
-      req.setTimeout(1500, () => { req.destroy(); retry(); });
-    };
-    const retry = () => {
+    const attempt = async () => {
+      if (await pingHealth()) return resolve();
       if (++tries >= HEALTH_POLL_ATTEMPTS) return reject(new Error('timeout'));
       setTimeout(attempt, HEALTH_POLL_INTERVAL_MS);
     };
     attempt();
   });
+}
+
+// Load the error.html shell with localized strings + returns URL the window
+// should present.
+function loadErrorPage() {
+  if (!mainWindow) return;
+  const params = new URLSearchParams({
+    title: t('app.errorPageTitle'),
+    msg: t('app.errorPageMessage'),
+    retry: t('app.errorPageRetry'),
+    logs: t('app.errorPageOpenLogs'),
+  });
+  const pageUrl = `file://${path.join(__dirname, 'assets', 'error.html')}?${params.toString()}`;
+  mainWindow.loadURL(pageUrl);
+}
+
+// Drive health polling → app load with watchdog once healthy. Safe to call
+// more than once (e.g. from the retry button).
+let healthWatchdogTimer = null;
+let watchdogFailureCount = 0;
+let backendReportedLost = false;
+
+function stopHealthWatchdog() {
+  if (healthWatchdogTimer) {
+    clearInterval(healthWatchdogTimer);
+    healthWatchdogTimer = null;
+  }
+  watchdogFailureCount = 0;
+  backendReportedLost = false;
+}
+
+function startHealthWatchdog() {
+  stopHealthWatchdog();
+  healthWatchdogTimer = setInterval(async () => {
+    const healthy = await pingHealth(3000);
+    if (healthy) {
+      if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend:restored');
+      }
+      watchdogFailureCount = 0;
+      backendReportedLost = false;
+      return;
+    }
+    watchdogFailureCount += 1;
+    if (
+      !backendReportedLost &&
+      watchdogFailureCount >= HEALTH_WATCHDOG_FAILURE_THRESHOLD &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      backendReportedLost = true;
+      mainWindow.webContents.send('backend:lost', { message: t('app.backendLost') });
+    }
+  }, HEALTH_WATCHDOG_INTERVAL_MS);
+}
+
+function pollAndLoad() {
+  pollHealth()
+    .then(() => {
+      if (mainWindow) mainWindow.loadURL(APP_URL);
+      notify(t('app.running'));
+      startHealthWatchdog();
+    })
+    .catch(() => {
+      loadErrorPage();
+      dialog.showMessageBox({
+        type: 'warning',
+        buttons: [t('common.ok')],
+        title: APP_NAME,
+        message: t('app.startSlow'),
+        detail: t('app.startSlowDetail', { url: APP_URL }),
+      });
+    });
 }
 
 // ── Docker checks ─────────────────────────────────────────────────────────────
@@ -535,6 +631,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       // Preload exposes a minimal update API to the renderer
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -672,6 +769,51 @@ function pickSourceLauncherZip(release) {
   return assets.find((a) => /vision-source-launcher-.*-arm64\.zip$/i.test(a?.name || '')) || null;
 }
 
+function pickChecksumAsset(release, zipName) {
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  const wanted = `${zipName}.sha256`.toLowerCase();
+  return assets.find((a) => (a?.name || '').toLowerCase() === wanted) || null;
+}
+
+function fetchUrlBody(url) {
+  return new Promise((resolve, reject) => {
+    const opts = { headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` } };
+    const handle = (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchUrlBody(res.headers.location).then(resolve, reject);
+        res.resume();
+        return;
+      }
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        res.resume();
+        return;
+      }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => resolve(body));
+      res.on('error', reject);
+    };
+    https.get(url, opts, handle).on('error', reject);
+  });
+}
+
+function computeFileSha256(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
+
+function parseSha256Body(body) {
+  const match = String(body || '').trim().match(/\b([a-fA-F0-9]{64})\b/);
+  return match ? match[1].toLowerCase() : null;
+}
+
 async function prepareShellUpdateInstaller() {
   const release = await readGitHubRelease();
   const latestVersion = normalizeVersionTag(release?.tag_name);
@@ -724,6 +866,24 @@ async function prepareShellUpdateInstaller() {
       reject(err);
     });
   });
+
+  const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
+  if (checksumAsset?.browser_download_url) {
+    let expected = null;
+    try {
+      const body = await fetchUrlBody(checksumAsset.browser_download_url);
+      expected = parseSha256Body(body);
+    } catch (err) {
+      console.warn('[update] Failed to fetch checksum:', err && err.message ? err.message : err);
+    }
+    if (expected) {
+      const actual = await computeFileSha256(zipPath);
+      if (actual.toLowerCase() !== expected.toLowerCase()) {
+        try { fs.unlinkSync(zipPath); } catch (_) {}
+        throw new Error('Checksum mismatch');
+      }
+    }
+  }
 
   await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: process.env });
 
@@ -789,6 +949,8 @@ async function installPreparedShellUpdate() {
         return { success: false, error: 'No newer shell update is currently available.' };
       }
       pendingShellUpdate = prepared;
+    } catch (err) {
+      return { success: false, error: err && err.message ? err.message : String(err) };
     } finally {
       shellUpdateCheckInFlight = false;
     }
@@ -1231,6 +1393,24 @@ ipcMain.handle('backup:load-settings', async () => {
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
+// ── Recovery (error page) ────────────────────────────────────────────────────
+ipcMain.handle('recovery:retry', () => {
+  pollAndLoad();
+  return { success: true };
+});
+
+ipcMain.handle('recovery:open-logs', async () => {
+  try {
+    const logsDir = app.getPath('logs');
+    fs.mkdirSync(logsDir, { recursive: true });
+    const err = await shell.openPath(logsDir);
+    if (err) return { success: false, error: err };
+    return { success: true, path: logsDir };
+  } catch (err) {
+    return { success: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 // ── Compose override (dev modes) ─────────────────────────────────────────────
 // Set VISION_COMPOSE_OVERRIDE to a filename (relative to workDir) to layer an
 // additional compose file on top of the base — e.g. docker-compose.dev.yml.
@@ -1370,22 +1550,7 @@ async function launch() {
   }
 
   // 8. Backend is being polled — poll /health in the background; navigate once ready.
-  pollHealth()
-    .then(() => {
-      if (mainWindow) mainWindow.loadURL(APP_URL);
-      notify(t('app.running'));
-    })
-    .catch(() => {
-      // Timed out — navigate anyway and let the user see the error in the UI.
-      if (mainWindow) mainWindow.loadURL(APP_URL);
-      dialog.showMessageBox({
-        type: 'warning',
-        buttons: [t('common.ok')],
-        title: APP_NAME,
-        message: t('app.startSlow'),
-        detail: t('app.startSlowDetail', { url: APP_URL }),
-      });
-    });
+  pollAndLoad();
 
   // 10. Set up manual shell updater (non-blocking — runs in background)
   setupManualShellUpdater();
@@ -1497,14 +1662,26 @@ app.on('will-quit', (e) => {
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
-app.whenReady().then(launch);
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-    mainWindow.loadURL(APP_URL);
-  }
-});
+  app.whenReady().then(launch);
+
+  app.on('activate', () => {
+    if (mainWindow === null) {
+      createWindow();
+      mainWindow.loadURL(APP_URL);
+    }
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

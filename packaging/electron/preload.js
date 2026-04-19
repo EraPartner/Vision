@@ -82,3 +82,22 @@ contextBridge.exposeInMainWorld('electronBackup', {
    */
   setPassphrase: (passphrase) => ipcRenderer.invoke('backup:set-passphrase', passphrase),
 });
+
+/**
+ * Expose startup-recovery controls used by error.html when backend health
+ * polling fails. Renderer is sandboxed, so only the narrow ipc surface is available.
+ */
+contextBridge.exposeInMainWorld('electronRecovery', {
+  retry: () => ipcRenderer.invoke('recovery:retry'),
+  openLogs: () => ipcRenderer.invoke('recovery:open-logs'),
+  onBackendLost: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on('backend:lost', listener);
+    return () => ipcRenderer.removeListener('backend:lost', listener);
+  },
+  onBackendRestored: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('backend:restored', listener);
+    return () => ipcRenderer.removeListener('backend:restored', listener);
+  },
+});

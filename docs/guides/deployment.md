@@ -115,7 +115,11 @@ server {
 Startup logic runs automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
 1. Waits for the PostgreSQL database to be ready
 2. Checks whether `alembic_version` exists
-3. If it exists, fixes `alembic_version.version_num` size if needed (supports long revision IDs) and runs Alembic migrations
+3. If it exists:
+   - Fixes `alembic_version.version_num` size if needed (supports long revision IDs)
+   - Compares current revision against head via `alembic current` and `alembic heads`
+   - **Skips upgrade if already at head** (saves ~1-3s on warm boots with no migrations pending)
+   - Otherwise runs `alembic upgrade head`
 4. If it does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
 5. Starts the backend application
 

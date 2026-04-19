@@ -3,6 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-04-11
+updated: 2026-04-19
 tags: [reference, environment, configuration, deployment]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -11,7 +12,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 # Environment Variables Reference
 
 > [!abstract] Overview
-> Complete reference of all environment variables used by the Vision application. Organized by component (backend, frontend, Docker).
+> Complete reference of all environment variables used by the Vision application. Organized by component (backend, frontend, Electron, Docker).
 
 > [!tip] Quick Start
 > Copy `.env` to `.env.local` and override only the values you need to change. The application has sensible defaults for local development.
@@ -53,6 +54,13 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `VITE_API_URL` | `http://localhost:3002` | No | Backend API URL | [[apps/frontend/src/lib/api.ts\|api.ts]] |
 | `VITE_LOG_LEVEL` | `debug` (dev), `warn` (prod) | No | Frontend log level | [[apps/frontend/src/lib/logger.ts\|logger.ts]] |
 | `VITE_ENABLE_LOGGING` | `true` | No | Enable frontend logging | [[apps/frontend/src/lib/logger.ts\|logger.ts]] |
+
+## Electron Variables
+
+| Variable | Default | Required | Description | Code |
+|----------|---------|----------|-------------|------|
+| `VISION_HEALTH_POLL_ATTEMPTS` | `200` | No | Max startup health poll attempts; 200 × 300ms = 60s timeout | [[packaging/electron/main.js\|main.js]] |
+| `VISION_HEALTH_POLL_INTERVAL_MS` | `300` | No | Interval (ms) between health poll retries at startup | [[packaging/electron/main.js\|main.js]] |
 
 ## Docker/Deployment Variables
 
