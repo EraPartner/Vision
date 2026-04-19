@@ -326,7 +326,7 @@ export default function RealEstatePage() {
       {/* Info Card */}
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('realestate.howItWorks') }} />
+          <p className="text-sm text-muted-foreground">{t('realestate.howItWorks')}</p>
         </CardContent>
       </Card>
     </div>

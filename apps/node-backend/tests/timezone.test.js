@@ -51,6 +51,28 @@ describe('timezone helpers', () => {
     expect(utc.toISOString()).toBe('2026-02-28T23:00:00.000Z');
   });
 
+  it('toAppTz normalizes hour=24 by rolling to next day', () => {
+    // Midnight UTC on 2026-01-31 = 00:00 Brussels (winter UTC+1) reported as
+    // hour=24 by some Intl impls on the prior day. Either way, output must be
+    // a valid hour 0..23 with day correctly advanced.
+    const utc = new Date('2026-01-31T23:00:00Z'); // 00:00 Brussels Feb 1
+    const zoned = toAppTz(utc, 'Europe/Brussels');
+    expect(zoned.hour).toBeLessThan(24);
+    expect(zoned.hour).toBe(0);
+    expect(zoned.year).toBe(2026);
+    expect(zoned.month).toBe(2);
+    expect(zoned.day).toBe(1);
+  });
+
+  it('toAppTz handles year boundary at Dec 31 -> Jan 1 rollover', () => {
+    const utc = new Date('2026-12-31T23:00:00Z'); // 00:00 Brussels Jan 1 2027
+    const zoned = toAppTz(utc, 'Europe/Brussels');
+    expect(zoned.hour).toBe(0);
+    expect(zoned.day).toBe(1);
+    expect(zoned.month).toBe(1);
+    expect(zoned.year).toBe(2027);
+  });
+
   it('round-trip: UTC -> zoned components -> UTC is identity', () => {
     const input = new Date('2026-07-15T08:45:30Z');
     const zoned = toAppTz(input, 'America/New_York');

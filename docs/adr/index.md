@@ -43,6 +43,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-19: Decimal Arithmetic for Monetary Values
+
+[[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] — Adopt Decimal.js for all monetary calculations to eliminate floating-point drift. IEEE 754 floating-point cannot exactly represent decimal values (0.1 + 0.2 ≠ 0.3 in JavaScript). New `money.js` module exports `toDecimal`, `addAll`, `subtract`, `roundToCents`, `toNumber` functions. Banker's rounding (HALF_EVEN, 2 DP) matches PostgreSQL NUMERIC semantics. Scoped to split/aggregation hotspots in Phase 9; exportable to frontend in Phase 10+.
+
 ### 2026-04-17: Glass System Downgrade & Liquid Canvas Removal
 
 [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] — Performance optimization reducing glass-system blur tiers (6-12px max, selective modal-only usage) and removing liquid-canvas animated background + page transitions. Driver: Electron M1 GPU regression from sustained blur animations and ambient drift animation. Replaced with solid `bg-card/95` opacity layering + static grain overlay. Font subset optimization (`@fontsource` static weights vs. variable). Improves GPU utilization and battery life.

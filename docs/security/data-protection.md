@@ -2,10 +2,10 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-04-02
-tags: [security, csp, data-protection, privacy, content-security-policy]
+date: 2026-04-19
+tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML]
 description: Content Security Policy, data protection, and privacy considerations for Vision
-aliases: [CSP, data protection, privacy, content security policy, security headers]
+aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts"]
 ---
 
@@ -94,6 +94,21 @@ Request validation middleware validates:
 - Required fields
 
 **Location:** [[apps/node-backend/src/middleware/validation.js]]
+
+---
+
+## XSS Prevention
+
+### dangerouslySetInnerHTML Removal (Phase 9)
+
+All use of React's `dangerouslySetInnerHTML` has been removed from the frontend. Portfolio info cards (Crypto, Savings, Real Estate, Stocks) previously used `dangerouslySetInnerHTML={{ __html: t(...) }}` to render plain-text translation strings. This was unnecessarily risky.
+
+**Resolution:** All portfolio cards now render translations as plain text: `{t(...)}` instead of `dangerouslySetInnerHTML`. Since translation strings are plain text (no embedded HTML), this eliminates XSS surface while maintaining identical output.
+
+**Rule:** Never use `dangerouslySetInnerHTML` unless:
+1. Content is explicitly sanitized via DOMPurify or similar
+2. Content source is fully trusted and controlled
+3. No reasonable alternative exists
 
 ---
 

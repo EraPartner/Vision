@@ -2,8 +2,8 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-04
-tags: [i18n, translations, localization, internationalization]
+date: 2026-04-19
+tags: [i18n, translations, localization, internationalization, phase-9]
 description: Internationalization system including supported languages, translation workflow, and usage patterns
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
@@ -154,8 +154,12 @@ Run the build to generate TypeScript files:
 bun run build
 ```
 
-### Recent keys added in this task
+### Recent keys added
 
+**Phase 9 (2026-04-19):**
+- `onboarding.persist.failed` — Error toast shown when onboarding state fails to persist
+
+**Earlier phases:**
 - `addInv.desc.metals`
 - `addWatchlist.metals`
 - `metals.title`
@@ -167,9 +171,9 @@ bun run build
 - `addInv.provider.hint.kinesis`
 - `plannedPage.link.pickDate`
 
-These keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts` (including provider-hint updates for `binance`/`kinesis` and the planned-page date-picker label).
+All keys were added in `i18n/source/en.json` and `i18n/source/nl.json`, then regenerated into `apps/frontend/src/locales/en.ts` and `apps/frontend/src/locales/nl.ts`.
 
-Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/components/onboarding/OnboardingWizard.tsx]]
 
 ### Step 3: Use in Component
 

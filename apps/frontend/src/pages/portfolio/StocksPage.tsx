@@ -392,7 +392,7 @@ export default function StocksPage({
       {/* Info Card */}
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('stocks.howItWorks') }} />
+          <p className="text-sm text-muted-foreground">{t('stocks.howItWorks')}</p>
         </CardContent>
       </Card>
     </div>

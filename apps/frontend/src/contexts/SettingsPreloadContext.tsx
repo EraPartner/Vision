@@ -13,6 +13,7 @@
 
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
+import logger from '@/lib/logger';
 
 interface SettingsPreload {
     /** Raw settings map from the backend, keyed by settings key. */
@@ -38,8 +39,16 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     // Backend returns an array of { key, value } rows — convert to map
                     const map: Record<string, unknown> = {};
                     if (Array.isArray(all)) {
-                        for (const row of all as Array<{ key: string; value: unknown }>) {
-                            if (row?.key !== undefined) map[row.key] = row.value;
+                        for (const row of all) {
+                            if (
+                                row !== null &&
+                                typeof row === 'object' &&
+                                'key' in row &&
+                                typeof (row as { key: unknown }).key === 'string'
+                            ) {
+                                const typed = row as { key: string; value: unknown };
+                                map[typed.key] = typed.value;
+                            }
                         }
                     } else if (all && typeof all === 'object') {
                         // Already a key-value map (depending on backend version)
@@ -48,8 +57,9 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                     setRawSettings(map);
                 }
             })
-            .catch(() => {
+            .catch((err) => {
                 // Backend unreachable on startup — contexts will use their own defaults
+                logger.warn('Settings preload failed; using defaults', err);
                 if (!cancelled) setRawSettings({});
             })
             .finally(() => { if (!cancelled) setIsLoading(false); });

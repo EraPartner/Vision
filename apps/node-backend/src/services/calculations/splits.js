@@ -11,6 +11,8 @@
  * All functions are pure: no I/O, no mutation of inputs.
  */
 
+import { addAll, toNumber } from '../../lib/money.js';
+
 // Currency amounts in this app are stored as NUMERIC(15, 2). Use 1 cent as
 // the tolerance for float-rounding artifacts after JSON round-tripping.
 const CENT_TOLERANCE = 0.005;
@@ -76,14 +78,15 @@ export function validateBatchSplitAllocation({
   if (!Array.isArray(splits) || splits.length === 0) {
     return { ok: false, error: 'Splits must be a non-empty array' };
   }
-  let sum = 0;
+  const amounts = [];
   for (const split of splits) {
     const amount = Number(split?.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       return { ok: false, error: 'Split amount must be a positive number' };
     }
-    sum += amount;
+    amounts.push(amount);
   }
+  const sum = toNumber(addAll(amounts));
   return validateSplitAllocation({
     newSplitAmount: sum,
     transactionTotal,

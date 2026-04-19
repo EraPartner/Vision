@@ -898,6 +898,7 @@ const nl: Record<string, string> = {
   'onboarding.overview.desc': 'Vision dekt alles van dagelijks budgetteren tot langetermijn beleggingsbeheer -- alles op één plek.',
   'onboarding.overview.portfolio.label': 'Beleggingen & Markten',
   'onboarding.overview.title': 'Wat Vision kan doen',
+  'onboarding.persist.failed': 'Kon onboardingvoortgang niet opslaan. Probeer het opnieuw.',
   'onboarding.restore.button': 'Herstellen vanuit back-up',
   'onboarding.restore.confirm.action': 'Ja, herstellen',
   'onboarding.restore.confirm.desc': 'Hiermee vervangt u uw huidige database door de inhoud van het back-upbestand. Dit kan niet ongedaan worden gemaakt.',

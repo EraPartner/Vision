@@ -30,9 +30,25 @@ function parseGeneratedTs(filePath) {
   let match;
   while ((match = re.exec(content)) !== null) {
     const key = match[1];
-    const val = match[2]
-      .replace(/\\'/g, "'")
-      .replace(/\\\\/g, '\\');
+    const raw = match[2];
+    let val = '';
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch !== '\\' || i === raw.length - 1) {
+        val += ch;
+        continue;
+      }
+      const next = raw[++i];
+      switch (next) {
+        case 'n': val += '\n'; break;
+        case 'r': val += '\r'; break;
+        case 't': val += '\t'; break;
+        case "'": val += "'"; break;
+        case '"': val += '"'; break;
+        case '\\': val += '\\'; break;
+        default: val += next;
+      }
+    }
     out[key] = val;
   }
   return out;

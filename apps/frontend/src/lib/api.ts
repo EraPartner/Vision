@@ -331,7 +331,10 @@ class ApiClient {
                 });
 
                 if (!response.ok) {
-                    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                    const error = await response.json().catch((err) => {
+                        logger.warn('Failed to parse error response', err);
+                        return { detail: 'Request failed' };
+                    });
                     throw new Error(error.detail || error.message || 'Request failed');
                 }
 
@@ -1189,7 +1192,10 @@ class ApiClient {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            const error = await response.json().catch((err) => {
+                logger.warn('Failed to parse error response', err);
+                return { detail: 'Request failed' };
+            });
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
@@ -1206,7 +1212,10 @@ class ApiClient {
         const response = await this.rawFetch(url, { method: 'POST', body: formData });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+            const error = await response.json().catch((err) => {
+                logger.warn('Failed to parse error response', err);
+                return { detail: 'Request failed' };
+            });
             throw new Error(error.detail || error.message || 'Request failed');
         }
 
@@ -1362,7 +1371,10 @@ class ApiClient {
                 }
 
                 if (!response.ok) {
-                    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                    const error = await response.json().catch((err) => {
+                        logger.warn('Failed to parse error response', err);
+                        return { detail: 'Request failed' };
+                    });
 
                     if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
                         const validationErrors = error.detail.map((err: any) => {

@@ -2,16 +2,70 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-17
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6, phase-9, motion, liquid-glass, design-system]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, motion consumers, surface shells, and gradient icon tiles
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, motion pattern, surface shell pattern, gradient icon pattern]
+date: 2026-04-19
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6, phase-9, motion, liquid-glass, design-system, decimal, money, timezone]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, motion consumers, surface shells, gradient icon tiles, money utilities, and timezone boundary handling
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern]
 ---
 
 # Code Patterns Reference
 
 > [!abstract] Purpose
 > This document captures the standard code patterns used throughout the Vision project. AI agents should follow these patterns when writing new code. Developers can use this as a quick reference.
+
+## Money Utility Pattern (Phase 9)
+
+**Source:** [[apps/node-backend/src/lib/money.js|money.js]]
+
+All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision uses banker's rounding (HALF_EVEN) to match PostgreSQL NUMERIC semantics.
+
+### Pattern
+
+```js
+import { toDecimal, addAll, subtract, roundToCents, toNumber } from '../lib/money.js';
+
+// Convert any input (number, string, Decimal, null) to Decimal
+const amount = toDecimal(100.5);
+
+// Sum an array without drift
+const total = toNumber(addAll([0.1, 0.2, 0.3])); // 0.6 exactly
+
+// Safe subtraction (e.g., outstanding balance)
+const outstanding = toNumber(subtract('100.00', '66.67')); // 33.33 exactly
+
+// Round to cents with banker's rounding (HALF_EVEN)
+const rounded = toNumber(roundToCents('10.125')); // 10.12 (rounds to even)
+
+// Database NUMERIC strings
+const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision loss
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| All monetary input | Wrap in `toDecimal()` immediately |
+| All accumulations | Use `addAll([...])` instead of `.reduce((a, b) => a + b)` |
+| Rounding strategy | Always explicit `roundToCents()` before persistence |
+| Final output | Use `toNumber()` or `.toString()` for JSON/display |
+| Null/undefined | Treated as 0 by `toDecimal()` |
+| Database NUMERIC | Convert string to `toDecimal(string)` for safe math |
+| Banker's rounding | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02 |
+
+### When to Use
+
+- **Split calculations** — outstanding balance, payment allocation
+- **Aggregations** — running totals, monthly sums, portfolio valuations
+- **Currency conversion** — avoid rounding errors across exchanges
+- **Any accumulation loop** — use `addAll()` instead of `for` loop with native arithmetic
+
+### When NOT to Necessary
+
+- Display-only values from database (already NUMERIC, safe to 2 DP)
+- Frontend UI (server sends precise JSON; frontend displays only)
+- Non-monetary calculations (use native number for counts, ratios, etc.)
+
+---
 
 ## Backend Repository Pattern
 
@@ -93,6 +147,53 @@ export default entityRepository;
 | Delete success | `result.rowCount > 0` |
 | Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined` |
 | SQL injection | Use parameterized queries only, never string concatenation |
+
+---
+
+## Timezone Boundary Handling (Phase 9)
+
+**Source:** [[apps/node-backend/src/lib/timezone.js|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
+
+Certain JavaScript environments (some older Intl implementations, edge cases in Safari) report `hour=24` at midnight when converting from UTC to zoned wall-clock time. This is technically valid per ECMAScript (hour is in range [0,24]) but breaks logic expecting [0,23]. The fix normalizes hour=24 to day+1, hour=0 and re-normalizes via `Date.UTC()` to handle month/year overflow.
+
+### Pattern
+
+```js
+import { toAppTz } from '../lib/timezone.js';
+
+// Before (buggy):
+const zoned = new Intl.DateTimeFormat('en-GB', {
+  timeZone: zone,
+  // ... parts ...
+}).formatToParts(utcDate);
+const hour = get('hour');  // Might be 24!
+if (hour > 23) /* error or silent bug */
+
+// After (normalized):
+const zoned = toAppTz(utcDate, zone);
+// zoned.hour is always [0,23]
+// zoned.day, month, year are correctly rolled if hour was 24
+```
+
+### Implementation
+
+When `hour === 24`:
+1. Set `hour = 0`
+2. Increment `day` (via `Date.UTC(year, month-1, day+1)`)
+3. Extract year, month, day from rolled Date to handle month/year overflow automatically
+
+### Key Cases
+
+| Scenario | Input | Output |
+|----------|-------|--------|
+| Jan 31 23:00 UTC (Feb 1 00:00 Brussels) | `hour=24, day=31, month=1` | `hour=0, day=1, month=2, year=2026` |
+| Dec 31 23:00 UTC (Jan 1 00:00 Brussels) | `hour=24, day=31, month=12` | `hour=0, day=1, month=1, year=2027` |
+
+### Tests
+
+Two new test cases in `timezone.test.js`:
+- `toAppTz handles year boundary at Dec 31 -> Jan 1 rollover`
+- (Existing case already covered Jan 31 → Feb 1)
 
 ---
 

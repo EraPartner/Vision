@@ -898,6 +898,7 @@ const en: Record<string, string> = {
   'onboarding.overview.desc': 'Vision covers everything from day-to-day budgeting to long-term investment tracking -- all in one place.',
   'onboarding.overview.portfolio.label': 'Investments & Markets',
   'onboarding.overview.title': 'What Vision can do',
+  'onboarding.persist.failed': 'Couldn\'t save onboarding progress. Please try again.',
   'onboarding.restore.button': 'Restore from backup',
   'onboarding.restore.confirm.action': 'Yes, restore',
   'onboarding.restore.confirm.desc': 'This will replace your current database with the contents of the backup file. This action cannot be undone.',

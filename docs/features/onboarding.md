@@ -2,8 +2,8 @@
 title: Feature - Onboarding
 type: feature
 status: active
-date: 2026-04-02
-tags: [feature, onboarding, wizard, first-run]
+date: 2026-04-19
+tags: [feature, onboarding, wizard, first-run, phase-9]
 description: First-run onboarding wizard for new Vision users
 aliases: [onboarding, setup wizard, first-run, welcome]
 related_code: ["apps/frontend/src/components/onboarding/OnboardingWizard.tsx", "apps/frontend/src/App.tsx"]
@@ -71,8 +71,15 @@ Settings configured during onboarding are stored in:
 
 ---
 
+## Error Handling (Phase 9)
+
+When the wizard fails to persist settings to the backend, users see a toast error with the message from translation key `onboarding.persist.failed`. The `useOnboarding()` hook catches errors during `complete()` and `reset()` operations, logs them to the error logger, and presents the user-facing toast.
+
+---
+
 ## Related
 
 - [[docs/api/settings]] — Settings API
 - [[docs/features/views#settings]] — Settings in views
+- [[docs/i18n/translations#recent-keys-added]] — New i18n key `onboarding.persist.failed`
 - [[apps/frontend/src/contexts/AppSettingsContext.tsx]] — App settings context

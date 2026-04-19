@@ -333,7 +333,7 @@ export default function DashboardPage() {
 
     const recentTransactions = recentTransactionsSource.slice(0, 5).map((txn) => ({
         id: txn.id,
-        date: (txn as any).date || txn.transaction_date || '',
+        date: (txn as any).date || txn.transaction_date || null,
         description: txn.memo || t('txPage.field.description'),
         amount: txn.amount,
         currency: txn.currency || appSettings.defaultCurrency,
@@ -347,6 +347,7 @@ export default function DashboardPage() {
             key: "date",
             header: t('txPage.col.date'),
             render: (row: (typeof recentTransactions)[0]) => {
+                if (!row.date) return <span>—</span>;
                 try {
                     const dateObj = parseISO(row.date);
                     return <span>{formatDateWithAppSettings(dateObj, appSettings.dateFormat)}</span>;

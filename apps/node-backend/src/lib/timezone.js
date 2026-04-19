@@ -42,11 +42,24 @@ export function toAppTz(utcDate, zone = APP_TIMEZONE) {
   }).formatToParts(utcDate);
 
   const get = (type) => Number(parts.find((p) => p.type === type)?.value);
+  let year = get('year');
+  let month = get('month');
+  let day = get('day');
+  let hour = get('hour');
+  // Some Intl implementations report hour=24 at midnight. Roll into next day
+  // and re-normalize via Date.UTC to handle month/year overflow correctly.
+  if (hour === 24) {
+    hour = 0;
+    const rolled = new Date(Date.UTC(year, month - 1, day + 1));
+    year = rolled.getUTCFullYear();
+    month = rolled.getUTCMonth() + 1;
+    day = rolled.getUTCDate();
+  }
   return {
-    year: get('year'),
-    month: get('month'),
-    day: get('day'),
-    hour: get('hour') === 24 ? 0 : get('hour'),
+    year,
+    month,
+    day,
+    hour,
     minute: get('minute'),
     second: get('second'),
   };

@@ -20,10 +20,12 @@ import {
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import logger from "@/lib/logger";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
 export function useOnboarding() {
+    const { t } = useLanguage();
     const [isComplete, setIsComplete] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -44,13 +46,19 @@ export function useOnboarding() {
 
     const complete = useCallback(() => {
         setIsComplete(true);
-        apiClient.saveSetting(ONBOARDING_KEY, true).catch(() => { });
-    }, []);
+        apiClient.saveSetting(ONBOARDING_KEY, true).catch((err) => {
+            logger.error('Failed to persist onboarding completion', err);
+            toast.error(t('onboarding.persist.failed'));
+        });
+    }, [t]);
 
     const reset = useCallback(() => {
         setIsComplete(false);
-        apiClient.saveSetting(ONBOARDING_KEY, false).catch(() => { });
-    }, []);
+        apiClient.saveSetting(ONBOARDING_KEY, false).catch((err) => {
+            logger.error('Failed to persist onboarding reset', err);
+            toast.error(t('onboarding.persist.failed'));
+        });
+    }, [t]);
 
     return { isComplete, isLoading, complete, reset };
 }

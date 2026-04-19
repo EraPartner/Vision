@@ -276,7 +276,7 @@ export default function SavingsPage() {
       {/* Info Card */}
       <Card className="bg-muted/30 border-dashed">
         <CardContent className="py-4">
-          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: t('savings.howItWorks') }} />
+          <p className="text-sm text-muted-foreground">{t('savings.howItWorks')}</p>
         </CardContent>
       </Card>
     </div>

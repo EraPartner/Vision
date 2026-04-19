@@ -1,0 +1,36 @@
+import { describe, it, expect } from 'vitest';
+import { toDecimal, addAll, subtract, roundToCents, toNumber } from '../src/lib/money.js';
+
+describe('money util', () => {
+  it('handles 0.1 + 0.2 exactly', () => {
+    expect(toNumber(addAll([0.1, 0.2]))).toBe(0.3);
+  });
+
+  it('rounds half-even at .005', () => {
+    expect(toNumber(roundToCents('0.005'))).toBe(0);
+    expect(toNumber(roundToCents('0.015'))).toBe(0.02);
+    expect(toNumber(roundToCents('0.025'))).toBe(0.02);
+    expect(toNumber(roundToCents('0.035'))).toBe(0.04);
+  });
+
+  it('reduces a long list without drift', () => {
+    const values = Array.from({ length: 1000 }, () => 0.01);
+    expect(toNumber(addAll(values))).toBe(10);
+  });
+
+  it('accepts pg NUMERIC string inputs', () => {
+    expect(toNumber(subtract('100.00', '33.33'))).toBe(66.67);
+  });
+
+  it('is associative regardless of order', () => {
+    const a = toNumber(addAll([0.1, 0.2, 0.3]));
+    const b = toNumber(addAll([0.3, 0.2, 0.1]));
+    expect(a).toBe(b);
+  });
+
+  it('handles null/undefined/empty as zero', () => {
+    expect(toNumber(toDecimal(null))).toBe(0);
+    expect(toNumber(toDecimal(undefined))).toBe(0);
+    expect(toNumber(toDecimal(''))).toBe(0);
+  });
+});

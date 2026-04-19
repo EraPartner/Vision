@@ -8,6 +8,7 @@
 
 import { getClient, query } from '../database/connection.js';
 import { computeOwedSummary } from '../services/calculations/splits.js';
+import { toDecimal, subtract, toNumber } from '../lib/money.js';
 
 export const splitRepository = {
   /**
@@ -25,8 +26,8 @@ export const splitRepository = {
     const result = await query(sql, [transactionId]);
     if (result.rows.length === 0) return null;
     return {
-      transaction_total: parseFloat(result.rows[0].transaction_total),
-      current_split_total: parseFloat(result.rows[0].current_split_total),
+      transaction_total: toNumber(toDecimal(result.rows[0].transaction_total)),
+      current_split_total: toNumber(toDecimal(result.rows[0].current_split_total)),
     };
   },
 
@@ -139,12 +140,12 @@ export const splitRepository = {
       ...formatSplit(row),
       transaction_date: row.transaction_date,
       transaction_memo: row.transaction_memo,
-      transaction_amount: parseFloat(row.transaction_amount),
+      transaction_amount: toNumber(toDecimal(row.transaction_amount)),
       transaction_currency: row.transaction_currency,
       bank_account: row.bank_account,
       transaction_recipient_name: row.transaction_recipient_name,
-      amount_paid: parseFloat(row.amount_paid),
-      remaining: parseFloat(row.amount) - parseFloat(row.amount_paid),
+      amount_paid: toNumber(toDecimal(row.amount_paid)),
+      remaining: toNumber(subtract(row.amount, row.amount_paid)),
     }));
   },
 

@@ -51,11 +51,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     const parsed = JSON.parse(stored);
                     setSettings({ ...defaultSettings, ...parsed });
                     // Migrate to database
-                    apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch(() => { });
+                    apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch((err) => {
+                        logger.error('Failed to migrate settings to database', err);
+                    });
                     localStorage.removeItem('vision_dashboardSettings');
                 }
-            } catch {
-                // ignore
+            } catch (err) {
+                logger.warn('Failed to read legacy settings from localStorage', err);
             }
         }
         setIsLoading(false);
