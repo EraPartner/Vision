@@ -45,6 +45,13 @@ aliases: [routes, pages, navigation, url paths, frontend routes]
 | `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
 | `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
 
+## Global Routes
+
+| Route | Component | Layout | Description | Code |
+|-------|-----------|--------|-------------|------|
+| `/ai-chat` | `AIChatPage` | AppLayout | Local AI chat for natural-language queries | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]] |
+| `/settings` | `SettingsPage` | AppLayout | Application settings | [[apps/frontend/src/pages/SettingsPage.tsx\|SettingsPage.tsx]] |
+
 ## Special Routes
 
 | Route | Component | Layout | Description | Code |

@@ -43,6 +43,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-20: Theme Variant System
+
+[[docs/adr/025-theme-variant-system|ADR-025]] — Per-user theme variant selection with five curated color palettes (default, dracula, solarized, nord, high-contrast), each with light and dark sub-palettes. HSL token architecture enables runtime palette swaps via `document.documentElement.style.setProperty`. FOUC prevention via pre-React flash script reading from localStorage. Backend validation enforces variant ∈ {default,dracula,solarized,nord,high-contrast}, mode ∈ {light,dark,system,schedule}, and schedule times (if applicable) match HH:MM. Stored in `theme_settings` JSONB key with defaults applied at read time. Frontend live-preview with 500ms debounced persistence.
+
 ### 2026-04-19: Update Installer Checksum Verification
 
 [[docs/adr/023-update-installer-checksum-verification|ADR-023]] — Verify SHA256 of downloaded Electron update installers against sibling `.sha256` artifacts on GitHub releases before extraction. Detects supply-chain tampering, corrupted downloads, and MITM attacks. Best-effort: missing `.sha256` files log warning but don't block. Requires release workflow to generate and upload checksum alongside installer binary.

@@ -166,6 +166,7 @@ import marketLookupRouter from './routes/marketLookup.js';
 import watchlistRouter from './routes/watchlist.js';
 import splitsRouter from './routes/splits.js';
 import savedChartsRouter from './routes/savedCharts.js';
+import aiRouter from './routes/ai.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
 
 const settings = getSettings();
@@ -275,7 +276,22 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/market', marketLookupRouter);
 app.use('/api/watchlist', watchlistRouter);
 app.use('/api/splits', splitsRouter);
-  app.use('/api/saved-charts', savedChartsRouter);
+app.use('/api/saved-charts', savedChartsRouter);
+
+// AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
+// other /api/ai/* endpoints fall back to the global limiter.
+if (settings.aiChat?.enabled) {
+  const aiChatLimiter = rateLimiter({
+    windowMs: 60_000,
+    maxRequests: settings.aiChat.rateLimit,
+    keyPrefix: 'ai-chat',
+  });
+  app.use('/api/ai/chat', aiChatLimiter);
+  app.use('/api/ai', aiRouter);
+  logger.info(`AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`);
+} else {
+  logger.info('AI chat routes disabled (settings.aiChat.enabled = false)');
+}
 
 logger.info('All route modules registered successfully');
 

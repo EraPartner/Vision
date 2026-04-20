@@ -38,6 +38,7 @@ const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NetWorthPage = lazy(() => import("./pages/portfolio/net-worth/NetWorthPage"));
 const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
 const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
+const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -132,6 +133,8 @@ const App = () => {
                                                     <Route path="/portfolio/exchange-rates" element={<ExchangeRatesPage />} />
                                                     <Route path="/portfolio/watchlist" element={<WatchlistPage />} />
                                                     <Route path="/portfolio/tax" element={<PortfolioTaxPage />} />
+                                                    {/* AI Chat (workspace-agnostic) */}
+                                                    <Route path="/ai-chat" element={<AIChatPage />} />
                                                     <Route path="*" element={<NotFound />} />
                                                     </Routes>
                                                 </Suspense>

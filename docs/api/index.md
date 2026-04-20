@@ -47,6 +47,7 @@ SORT path ASC
 | Admin | `/api/admin` | GET, POST | [[docs/api/admin\|Admin API]] |
 | Aggregations (Phase 2) | `/api/aggregations` | GET | [[docs/api/aggregations\|Aggregations API]] |
 | Info & Analytics | `/api/info` | GET | [[docs/api/info\|Info & Analytics API]] |
+| AI Chat | `/api/ai` | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]] |
 
 ## Core Concepts
 

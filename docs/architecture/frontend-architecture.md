@@ -120,9 +120,10 @@ package "Context Providers" {
   }
   
   class ThemeContext {
-    +theme: light|dark
+    +variant: default|dracula|solarized|nord|high-contrast
     +mode: light|dark|system|schedule
     +schedule: {lightFrom,darkFrom}
+    +setVariant(variant)
     +setMode(mode)
     +setSchedule(schedule)
   }
@@ -715,11 +716,48 @@ To regenerate these diagrams after code changes:
 
 ---
 
+## Design System & Theming
+
+The frontend uses a token-based theming system with runtime color palette swapping via CSS variables.
+
+### Tokens & Palette System
+
+**Location**: `apps/frontend/src/styles/` with `themes.ts` as the source of truth for color values.
+
+- **tokens.css**: HSL-component CSS variables (`--primary-h`, `--primary-s`, `--primary-l`, etc.)
+- **themes.ts**: Five variant definitions with light/dark sub-palettes
+  - `default` (emerald + gold) — Apple liquid glass
+  - `dracula` (purple + pink) — Dark-optimized moody
+  - `solarized` (yellow-green + blue) — High contrast, reading-friendly
+  - `nord` (frost blue + aurora) — Arctic-inspired calm
+  - `high-contrast` (navy + neon green) — WCAG AAA accessibility
+
+### Runtime Palette Application
+
+`applyThemePalette(variant, mode, root)` in `themes.ts` updates all CSS variables on the document root, enabling instant theme switching without CSS rebuilding.
+
+### FOUC Prevention
+
+`theme-flash.ts` runs before React mounts, reading user preferences from `localStorage` and applying the correct palette synchronously. This eliminates the flash of default theme on page load or refresh.
+
+### Settings Integration
+
+`ThemeContext` in `contexts/ThemeContext.tsx` tracks current variant and mode, applies palette to DOM on change, and persists user preference to backend `theme_settings` via 500ms debounced API calls.
+
+**Related Diagrams & Code**:
+- [[apps/frontend/src/styles/themes.ts|Theme Variants Source]]
+- [[apps/frontend/src/contexts/ThemeContext.tsx|ThemeContext Implementation]]
+- [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]]
+- [[docs/features/appearance|Appearance Feature]]
+
+---
+
 **Related Documentation**
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]]
+- [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]]
 - [[docs/architecture/backend-architecture|Backend Architecture]] - Backend diagrams
 - [[docs/api/index|API Documentation]] - API endpoint details
 - [[docs/components/index|Components]] - Component documentation

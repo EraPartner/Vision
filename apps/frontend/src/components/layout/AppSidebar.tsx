@@ -27,6 +27,7 @@ import {
   LineChart,
   PiggyBank,
   Receipt,
+  Sparkles,
   Tags,
   Target,
   TrendingUp,
@@ -148,6 +149,31 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* AI Chat — workspace-agnostic, shown above workspace switcher */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActiveRoute("/ai-chat", location.pathname)}
+                  tooltip={t('nav.aiChat')}
+                >
+                  <NavLink
+                    to="/ai-chat"
+                    className={isActiveRoute("/ai-chat", location.pathname) ? "accent-rail" : ""}
+                  >
+                    <Sparkles className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActiveRoute("/ai-chat", location.pathname) ? "text-primary" : ""}`} />
+                    <span className={isActiveRoute("/ai-chat", location.pathname) ? "font-semibold tracking-tight" : "tracking-tight"}>
+                      {t('nav.aiChat')}
+                    </span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Workspace switcher */}
         {!collapsed && (
           <div className="px-3 pt-3">

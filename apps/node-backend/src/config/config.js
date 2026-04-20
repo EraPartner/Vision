@@ -48,6 +48,32 @@ if (existsSync(envLocalPath)) {
   logger.debug(`[config] No .env.local found at ${envLocalPath}`);
 }
 
+/**
+ * Detect whether the Node process is running inside a Linux container
+ * (Docker, containerd, Podman). Inside a container, `localhost` resolves to
+ * the container itself — Ollama runs on the host and is reachable via
+ * `host.docker.internal` (Docker Desktop macOS/Windows auto-maps this; on
+ * Linux the compose file adds an `extra_hosts` entry mapped to host-gateway).
+ */
+function isRunningInContainer() {
+  try {
+    if (existsSync('/.dockerenv')) return true;
+    if (existsSync('/run/.containerenv')) return true;
+    const cgroup = readFileSync('/proc/1/cgroup', 'utf-8');
+    return /docker|containerd|kubepods|podman/.test(cgroup);
+  } catch {
+    return false;
+  }
+}
+
+function defaultOllamaUrl() {
+  // 127.0.0.1 over `localhost` — Node's DNS resolves `localhost` to IPv6 `::1`
+  // first, but Ollama binds only to IPv4 127.0.0.1 by default.
+  return isRunningInContainer()
+    ? 'http://host.docker.internal:11434'
+    : 'http://127.0.0.1:11434';
+}
+
 /** @type {import('./types').Settings} */
 const settings = deepFreeze({
   debug: (process.env.DEBUG || 'true').toLowerCase() === 'true',
@@ -79,6 +105,20 @@ const settings = deepFreeze({
 
   features: {
     aggregationsV2Enabled: (process.env.AGGREGATIONS_V2_ENABLED || 'true').toLowerCase() === 'true',
+  },
+
+  ollama: {
+    url: (process.env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
+    defaultModel: process.env.OLLAMA_DEFAULT_MODEL || 'llama3.1:8b',
+    requestTimeoutMs: parseInt(process.env.OLLAMA_REQUEST_TIMEOUT_MS || '60000', 10),
+    healthTimeoutMs: parseInt(process.env.OLLAMA_HEALTH_TIMEOUT_MS || '3000', 10),
+  },
+
+  aiChat: {
+    enabled: (process.env.AI_CHAT_ENABLED || 'true').toLowerCase() === 'true',
+    rateLimit: parseInt(process.env.AI_CHAT_RATE_LIMIT || '30', 10),
+    maxHistoryMessages: parseInt(process.env.AI_CHAT_MAX_HISTORY || '30', 10),
+    maxToolRows: parseInt(process.env.AI_CHAT_MAX_TOOL_ROWS || '500', 10),
   },
 
   isProduction() {

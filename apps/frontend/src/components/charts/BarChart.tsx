@@ -38,7 +38,7 @@ export interface BarChartProps<Datum> {
     readonly yDomain?: readonly [number, number];
 }
 
-const DEFAULT_MARGIN_V = { top: 16, right: 16, bottom: 36, left: 48 };
+const DEFAULT_MARGIN_V = { top: 16, right: 16, bottom: 36, left: 90 };
 const DEFAULT_MARGIN_H = { top: 16, right: 32, bottom: 28, left: 140 };
 
 export function BarChart<Datum>(props: BarChartProps<Datum>) {

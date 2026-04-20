@@ -40,6 +40,9 @@ SORT title ASC
 - [[docs/integrations/kinesis-price-provider\|Kinesis Price Provider]] - Metals and commodity price feeds
 - [[docs/integrations/loan-repayment-service\|Loan Repayment Service]] - Amortization calculations for planned loans
 
+### AI & LLM
+- [[docs/integrations/ollama\|Ollama Integration]] - Local LLM for natural-language queries with tool-calling
+
 ## Related Documentation
 
 - [[docs/features/import\|Import Feature]] - How bank adapters are used

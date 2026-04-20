@@ -89,6 +89,7 @@ Validation behavior:
 - Body must be a JSON object (`400` for arrays/non-objects)
 - Any key longer than 100 chars returns `400` and includes the offending key in the detail text
 - `dashboard_settings` is normalized/validated during bulk upsert (`excludedCategoryIds` / `excludedRecipientIds` positive-int arrays)
+- `theme_settings` is validated for variant ∈ {default, dracula, solarized, nord, high-contrast}, mode ∈ {light, dark, system, schedule}, and schedule times (if mode is 'schedule') match `HH:MM`
 
 **Request Body:**
 ```json
@@ -98,8 +99,8 @@ Validation behavior:
     "language": "en"
   },
   "theme_settings": {
-    "theme": "system",
-    "accentColor": "default"
+    "variant": "default",
+    "mode": "system"
   }
 }
 ```
@@ -117,7 +118,7 @@ Response semantics:
 |-----|------|-------------|
 | app_settings | object | User-facing app preferences (currency, date format, language, etc.) |
 | dashboard_settings | object | Dashboard/stats exclusions and exclusion scope |
-| theme_settings | object | Theme mode and accent preferences |
+| theme_settings | object | Theme variant, mode, and optional schedule settings |
 | backup_settings | object | Desktop backup directory and backup-on-quit behavior |
 | widget_visibility | object | Per-page widget visibility state |
 | onboarding_complete | boolean | First-run onboarding completion state |
@@ -141,6 +142,72 @@ Typical fields persisted in `app_settings`:
 
 Code links: [[apps/frontend/src/contexts/AppSettingsContext.tsx]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
 
+### `theme_settings` shape (appearance)
+
+Per-user theme variant, color palette mode, and optional schedule for mode transitions:
+
+```json
+{
+  "variant": "default|dracula|solarized|nord|high-contrast",
+  "mode": "light|dark|system|schedule",
+  "schedule": {
+    "lightFrom": "HH:MM",
+    "darkFrom": "HH:MM"
+  }
+}
+```
+
+**Fields:**
+
+- **`variant`** (string, required): One of five curated color palettes. Defaults to `'default'` (Apple liquid glass with emerald + gold).
+- **`mode`** (string, required): Theme display mode.
+  - `'light'`: Always light palette
+  - `'dark'`: Always dark palette
+  - `'system'`: Follow OS dark-mode preference
+  - `'schedule'`: Switch based on time; requires `schedule` object
+- **`schedule`** (object, optional): Only required if `mode` is `'schedule'`.
+  - `lightFrom` (string): Time in `HH:MM` (24-hour) when light theme starts
+  - `darkFrom` (string): Time in `HH:MM` (24-hour) when dark theme starts
+
+**Validation:**
+
+- `variant` must be one of the five allowed values; invalid value returns `400`
+- `mode` must be `'light'`, `'dark'`, `'system'`, or `'schedule'`; invalid value returns `400`
+- If `mode` is `'schedule'`, `schedule.lightFrom` and `schedule.darkFrom` must match regex `/^\d{2}:\d{2}$/` and represent valid 24-hour times
+- Missing `schedule` when `mode` is `'schedule'` returns `400`
+
+**Example requests:**
+
+Light theme only:
+```json
+{
+  "variant": "solarized",
+  "mode": "light"
+}
+```
+
+System mode (follow OS):
+```json
+{
+  "variant": "nord",
+  "mode": "system"
+}
+```
+
+Scheduled mode (light 6 AM – 8 PM, dark 8 PM – 6 AM):
+```json
+{
+  "variant": "dracula",
+  "mode": "schedule",
+  "schedule": {
+    "lightFrom": "06:00",
+    "darkFrom": "20:00"
+  }
+}
+```
+
+Code links: [[apps/frontend/src/styles/themes.ts]], [[apps/frontend/src/contexts/ThemeContext.tsx]], [[apps/frontend/src/components/settings/AppearanceTab.tsx]], [[docs/features/appearance|Appearance Feature]]
+
 ### Current Frontend Coverage Notes
 
 - `defaultCurrency` is actively consumed by planned payments, portfolio add-investment defaults/resets, and currency formatting surfaces
@@ -159,9 +226,13 @@ Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/fronten
 ## Related
 
 - [[docs/adr/002-database-schema|Database Schema]] - `user_settings` table definition
+- [[docs/adr/025-theme-variant-system|ADR-025: Theme Variant System]] - Theme variant architecture and implementation
+- [[docs/features/settings|Settings Feature]] - Overview of settings system
+- [[docs/features/appearance|Appearance Feature]] - Theme variant and mode selection UI
 - [[docs/features/views|Views & Pages]] - How settings affect page rendering
 - [[docs/components/form-dialogs|Form Dialogs]] - Settings propagation to forms
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
 - [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
 - Coverage code links: [[apps/node-backend/tests/routes/settings.test.js]], [[apps/node-backend/tests/validation.test.js]]
 - Coverage follow-up (2026-04-11): settings route tests now also cover GET all/key behavior, known-default fallback, unknown-key `404`, and success/error branches for single PUT, bulk PUT, and DELETE.
+- Coverage follow-up (2026-04-20): settings route tests now also cover `theme_settings` variant/mode/schedule validation and persistence.

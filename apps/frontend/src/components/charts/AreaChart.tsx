@@ -60,7 +60,7 @@ export interface AreaChartProps<Datum> {
     readonly width?: number;
 }
 
-const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 48 };
+const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };
 
 export function AreaChart<Datum>(props: AreaChartProps<Datum>) {
     const { height = 280, width } = props;

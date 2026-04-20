@@ -60,6 +60,10 @@ SORT title ASC
 ### User Experience
 - [[docs/features/onboarding\|Onboarding]] - First-run setup wizard
 - [[docs/features/settings\|Settings]] - Application preferences with JSONB storage and preload optimization
+- [[docs/features/appearance\|Appearance]] - Theme variant selection with five color palettes, light/dark mode, and schedule-based transitions
+
+### AI & Natural Language
+- [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)
 
 ## Related Documentation
 

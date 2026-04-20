@@ -1,0 +1,330 @@
+/**
+ * Tax-domain AI-chat tools.
+ *
+ * Vision has no dedicated tax schema (no tax table, no `is_tax_deductible`
+ * column). These tools compose pragmatic approximations from
+ * transactionRepository + portfolioTransactionRepository. Every result
+ * carries a `disclaimer` in meta so the LLM is forced to communicate the
+ * approximation honestly.
+ */
+
+import { transactionRepository } from '../../../repositories/transactionRepository.js';
+import { portfolioTransactionRepository } from '../../../repositories/portfolioTransactionRepository.js';
+import { investmentRepository } from '../../../repositories/investmentRepository.js';
+import settings from '../../../config/config.js';
+import { toDecimal, roundToCents } from '../../../lib/money.js';
+import { parsePositiveInt } from './_validate.js';
+
+const MIN_YEAR = 1970;
+const MAX_YEAR = 3000;
+
+const DEDUCTIBLE_KEYWORDS = Object.freeze([
+  'tax',
+  'donation',
+  'charity',
+  'pension',
+  'insurance',
+  'mortgage',
+  'childcare',
+  'tuition',
+  'medical',
+]);
+
+const DISCLAIMER_APPROX =
+  'Approximation only. Vision does not apply Belgian tax rules, withholdings, exemptions, or lot-level cost basis. Figures are derived heuristically from ledger data — verify with your accountant.';
+
+function yearRange(year) {
+  return {
+    from: `${year}-01-01`,
+    to: `${year}-12-31`,
+    fromMs: Date.UTC(year, 0, 1),
+    toMs: Date.UTC(year, 11, 31, 23, 59, 59, 999),
+  };
+}
+
+function parseYear(value) {
+  return parsePositiveInt(value, 'year', { min: MIN_YEAR, max: MAX_YEAR });
+}
+
+function inYear(dateValue, fromMs, toMs) {
+  const d = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  const ms = d.getTime();
+  return ms >= fromMs && ms <= toMs;
+}
+
+/**
+ * Gross taxable-income summary: transaction inflows + portfolio
+ * income streams (dividend, interest, rent_income, appreciation).
+ */
+export const getTaxableIncomeSummary = {
+  name: 'getTaxableIncomeSummary',
+  description: 'Approximate gross taxable income for a given year, split by source (transactions, dividends, interest, rent, appreciation). Use for "how much did I earn in 2025". Does NOT compute actual tax owed.',
+  parameters: {
+    type: 'object',
+    properties: {
+      year: {
+        type: 'integer',
+        description: `Calendar year (${MIN_YEAR}-${MAX_YEAR}).`,
+        minimum: MIN_YEAR,
+        maximum: MAX_YEAR,
+      },
+    },
+    required: ['year'],
+  },
+  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+    const year = parseYear(args.year);
+    const { from, to, fromMs, toMs } = yearRange(year);
+
+    const txns = await transactionRepository.getAll({
+      startDate: from,
+      endDate: to,
+      limit: 100_000,
+      offset: 0,
+      active: true,
+    });
+
+    let transactionIncome = toDecimal(0);
+    for (const row of txns) {
+      const amount = toDecimal(row.amount ?? 0);
+      if (amount.gt(0)) transactionIncome = transactionIncome.plus(amount);
+    }
+
+    const investments = await investmentRepository.getAll({
+      limit: 10_000,
+      offset: 0,
+      active: true,
+    });
+
+    const ids = investments.map((inv) => inv.id);
+    const portfolioTxns = ids.length > 0
+      ? await portfolioTransactionRepository.getAllByInvestmentIds({
+        investmentIds: ids,
+        perInvestmentLimit: 5000,
+      })
+      : [];
+
+    const buckets = {
+      dividend: toDecimal(0),
+      interest: toDecimal(0),
+      rent_income: toDecimal(0),
+      appreciation: toDecimal(0),
+    };
+
+    for (const t of portfolioTxns) {
+      if (!inYear(t.date, fromMs, toMs)) continue;
+      if (!(t.type in buckets)) continue;
+      buckets[t.type] = buckets[t.type].plus(toDecimal(t.amount ?? 0).abs());
+    }
+
+    const rows = [
+      { source: 'Transaction income (gross)', amount: roundToCents(transactionIncome).toNumber() },
+      { source: 'Dividends', amount: roundToCents(buckets.dividend).toNumber() },
+      { source: 'Interest', amount: roundToCents(buckets.interest).toNumber() },
+      { source: 'Rent income', amount: roundToCents(buckets.rent_income).toNumber() },
+      { source: 'Appreciation (realized)', amount: roundToCents(buckets.appreciation).toNumber() },
+    ];
+
+    const grossTotal = rows.reduce((acc, r) => acc + r.amount, 0);
+
+    return {
+      ok: true,
+      data: rows.slice(0, maxRows),
+      meta: {
+        year,
+        from,
+        to,
+        grossTotal: Math.round(grossTotal * 100) / 100,
+        currency: 'EUR',
+        disclaimer: DISCLAIMER_APPROX,
+        renderAs: 'bar',
+        xField: 'source',
+        yField: 'amount',
+      },
+    };
+  },
+};
+
+/**
+ * Realized capital activity from `sell` portfolio transactions in a year.
+ *
+ * We do NOT track lots, so this reports gross proceeds and taxes paid,
+ * not true realized gains. The LLM must present this as "proceeds", not
+ * "capital gains" — the disclaimer enforces that.
+ */
+export const getCapitalGainsForYear = {
+  name: 'getCapitalGainsForYear',
+  description: 'Sell transactions from the portfolio in a given year, with gross proceeds and taxes paid per investment. Use for "what did I sell in 2025". Does NOT compute actual capital gains — no lot-level cost basis.',
+  parameters: {
+    type: 'object',
+    properties: {
+      year: {
+        type: 'integer',
+        description: `Calendar year (${MIN_YEAR}-${MAX_YEAR}).`,
+        minimum: MIN_YEAR,
+        maximum: MAX_YEAR,
+      },
+    },
+    required: ['year'],
+  },
+  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+    const year = parseYear(args.year);
+    const { fromMs, toMs, from, to } = yearRange(year);
+
+    const investments = await investmentRepository.getAll({
+      limit: 10_000,
+      offset: 0,
+      active: true,
+    });
+
+    const ids = investments.map((inv) => inv.id);
+    const sells = ids.length > 0
+      ? await portfolioTransactionRepository.getAllByInvestmentIds({
+        investmentIds: ids,
+        type: 'sell',
+        perInvestmentLimit: 5000,
+      })
+      : [];
+
+    const byInvestment = new Map();
+    let totalProceeds = toDecimal(0);
+    let totalTaxesPaid = toDecimal(0);
+
+    for (const t of sells) {
+      if (!inYear(t.date, fromMs, toMs)) continue;
+      const proceeds = toDecimal(t.amount ?? 0).abs();
+      const taxes = toDecimal(t.taxes ?? 0).abs();
+      const fees = toDecimal(t.fees ?? 0).abs();
+
+      const entry = byInvestment.get(t.investment_id) || {
+        investmentId: t.investment_id,
+        proceeds: toDecimal(0),
+        taxes: toDecimal(0),
+        fees: toDecimal(0),
+        count: 0,
+      };
+      entry.proceeds = entry.proceeds.plus(proceeds);
+      entry.taxes = entry.taxes.plus(taxes);
+      entry.fees = entry.fees.plus(fees);
+      entry.count += 1;
+      byInvestment.set(t.investment_id, entry);
+
+      totalProceeds = totalProceeds.plus(proceeds);
+      totalTaxesPaid = totalTaxesPaid.plus(taxes);
+    }
+
+    const invById = new Map(investments.map((inv) => [inv.id, inv]));
+    const rows = [];
+    for (const entry of byInvestment.values()) {
+      const inv = invById.get(entry.investmentId);
+      rows.push({
+        investmentId: entry.investmentId,
+        name: inv?.name || `#${entry.investmentId}`,
+        symbol: inv?.symbol || null,
+        assetClass: inv?.asset_class || null,
+        currency: inv?.currency || 'EUR',
+        proceeds: roundToCents(entry.proceeds).toNumber(),
+        taxesPaid: roundToCents(entry.taxes).toNumber(),
+        feesPaid: roundToCents(entry.fees).toNumber(),
+        sellCount: entry.count,
+      });
+    }
+
+    rows.sort((a, b) => b.proceeds - a.proceeds);
+
+    return {
+      ok: true,
+      data: rows.slice(0, maxRows),
+      meta: {
+        year,
+        from,
+        to,
+        totalProceeds: roundToCents(totalProceeds).toNumber(),
+        totalTaxesPaid: roundToCents(totalTaxesPaid).toNumber(),
+        positionsSold: rows.length,
+        currency: 'EUR',
+        disclaimer: `${DISCLAIMER_APPROX} In particular: "proceeds" is the gross sell amount, not a realized gain, because Vision does not track purchase lots.`,
+        renderAs: 'bar',
+        xField: 'name',
+        yField: 'proceeds',
+      },
+    };
+  },
+};
+
+/**
+ * Potentially tax-deductible outflows, identified by keyword match on
+ * category_name (format "general:detail") in a year.
+ */
+export const getDeductibles = {
+  name: 'getDeductibles',
+  description: 'Potentially tax-deductible outflows grouped by category in a given year. Identified by keyword match on category name (tax, donation, charity, pension, insurance, mortgage, childcare, tuition, medical). Use for "what can I deduct".',
+  parameters: {
+    type: 'object',
+    properties: {
+      year: {
+        type: 'integer',
+        description: `Calendar year (${MIN_YEAR}-${MAX_YEAR}).`,
+        minimum: MIN_YEAR,
+        maximum: MAX_YEAR,
+      },
+    },
+    required: ['year'],
+  },
+  async run(args, { maxRows = settings.aiChat.maxToolRows } = {}) {
+    const year = parseYear(args.year);
+    const { from, to } = yearRange(year);
+
+    const rows = await transactionRepository.getAll({
+      startDate: from,
+      endDate: to,
+      limit: 100_000,
+      offset: 0,
+      active: true,
+    });
+
+    const byCategory = new Map();
+    let grandTotal = toDecimal(0);
+
+    for (const row of rows) {
+      const amount = toDecimal(row.amount ?? 0);
+      if (amount.gte(0)) continue; // outflows only
+
+      const label = (row.category_name || '').toLowerCase();
+      if (!label) continue;
+      if (!DEDUCTIBLE_KEYWORDS.some((kw) => label.includes(kw))) continue;
+
+      const key = row.category_name;
+      const entry = byCategory.get(key) || { category: key, total: toDecimal(0), count: 0 };
+      entry.total = entry.total.plus(amount.abs());
+      entry.count += 1;
+      byCategory.set(key, entry);
+      grandTotal = grandTotal.plus(amount.abs());
+    }
+
+    const data = Array.from(byCategory.values())
+      .map((e) => ({
+        category: e.category,
+        total: roundToCents(e.total).toNumber(),
+        count: e.count,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      ok: true,
+      data: data.slice(0, maxRows),
+      meta: {
+        year,
+        from,
+        to,
+        grandTotal: roundToCents(grandTotal).toNumber(),
+        categoryCount: data.length,
+        matchedKeywords: DEDUCTIBLE_KEYWORDS,
+        currency: 'EUR',
+        disclaimer: `${DISCLAIMER_APPROX} Matching is a keyword heuristic on category name — not every hit is actually deductible under Belgian tax law, and genuine deductibles without a matching keyword will be missed.`,
+        renderAs: 'bar',
+        xField: 'category',
+        yField: 'total',
+      },
+    };
+  },
+};

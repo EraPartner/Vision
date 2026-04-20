@@ -144,7 +144,7 @@ LIMIT 20
 | [[docs/reference/agent-navigation-map|🗺️ Agent Navigation Map]] | File navigation by feature, layer, task |
 | [[docs/reference/api-client-methods|🔌 API Client Methods]] | Complete frontend API client reference |
 | [[docs/reference/schema-initialization|🗃️ Schema Initialization]] | Database startup schema initialization |
-| [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 108 API endpoints |
+| [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 128 API endpoints |
 
 ## Recent Updates
 

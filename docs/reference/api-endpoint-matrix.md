@@ -3,16 +3,16 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-16
-updated: 2026-04-19
+updated: 2026-04-20
 tags: [reference, api, endpoints, matrix, overview]
-description: Complete matrix of all 110 API endpoints organized by resource for quick lookup
+description: Complete matrix of all 128 API endpoints organized by resource for quick lookup (AI Chat with 30 tools)
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 110 API endpoints across 15 route files. Use this as a quick reference to find any endpoint.
+> All 128 API endpoints across 17 route files. Use this as a quick reference to find any endpoint.
 
 ## Transactions (6 endpoints)
 
@@ -123,10 +123,10 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/settings` | Get all | — | [[docs/api/settings\|Settings]] |
+| GET | `/api/settings` | Get all (includes app, dashboard, theme, backup, widget visibility) | — | [[docs/api/settings\|Settings]] |
 | GET | `/api/settings/:key` | Get single (with defaults) | — | [[docs/api/settings\|Settings]] |
-| PUT | `/api/settings/:key` | Upsert single | — | [[docs/api/settings\|Settings]] |
-| PUT | `/api/settings` | Bulk upsert | — | [[docs/api/settings\|Settings]] |
+| PUT | `/api/settings/:key` | Upsert single (theme_settings validated for variant/mode/schedule) | — | [[docs/api/settings\|Settings]] |
+| PUT | `/api/settings` | Bulk upsert (theme_settings validated) | — | [[docs/api/settings\|Settings]] |
 | DELETE | `/api/settings/:key` | Delete | — | [[docs/api/settings\|Settings]] |
 
 ## Recipient Bank Accounts (5 endpoints)
@@ -214,6 +214,22 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | POST | `/api/info/refresh-views` | Refresh materialized views | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap | 30 req/min | [[docs/api/info\|Info]] |
 
+## AI Chat (9 endpoints + 30 tool-calling tools)
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/ai/status` | Ollama reachability + default model | — | [[docs/api/ai\|AI Chat]] |
+| GET | `/api/ai/models` | Installed Ollama models (pass-through) | — | [[docs/api/ai\|AI Chat]] |
+| GET | `/api/ai/conversations` | List conversations (newest first) | — | [[docs/api/ai\|AI Chat]] |
+| POST | `/api/ai/conversations` | Create empty conversation | — | [[docs/api/ai\|AI Chat]] |
+| GET | `/api/ai/conversations/:id` | Conversation with messages | — | [[docs/api/ai\|AI Chat]] |
+| PATCH | `/api/ai/conversations/:id` | Rename | — | [[docs/api/ai\|AI Chat]] |
+| DELETE | `/api/ai/conversations/:id` | Delete (cascades messages) | — | [[docs/api/ai\|AI Chat]] |
+| POST | `/api/ai/chat` | Chat turn (JSON); invokes 30 read-only tools | 30 req/min | [[docs/api/ai\|AI Chat]] |
+| POST | `/api/ai/chat/stream` | Chat turn (SSE stream); invokes 30 read-only tools | 30 req/min | [[docs/api/ai\|AI Chat]] |
+
+**Tool Categories (30 total):** Expenses (11), Portfolio (6), Planned (4), Belgian Tax (3), Insights (6). See [[docs/features/ai-chat#tool-registry-30-tools-across-6-domains\|AI Chat Feature]] for full reference.
+
 ## Summary
 
 | Resource | Endpoints | Rate-Limited |
@@ -234,7 +250,8 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Admin | 7 | 0 |
 | Aggregations (Phase 2) | 6 | 0 |
 | Info/Statistics | 20 | 5 |
-| **Total** | **110** | **7** |
+| AI Chat | 9 | 2 |
+| **Total** | **128** | **9** |
 
 ## Related
 

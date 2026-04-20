@@ -122,7 +122,7 @@ Examples:
 | `table.*` | Table headers | `table.actions` |
 | `dialog.*` | Dialog text | `dialog.confirm` |
 | `toast.*` | Toast messages | `toast.success` |
-| `settings.*` | Settings labels | `settings.language` |
+| `settings.*` | Settings labels, tabs, and sections | `settings.language`, `settings.tab.appearance`, `settings.appearance.variant` |
 
 ## Adding New Translations
 
@@ -155,6 +155,29 @@ bun run build
 ```
 
 ### Recent keys added
+
+**Phase 9 (2026-04-20):**
+- `settings.tab.appearance` — Appearance settings tab label
+- `settings.appearance.variant` — Theme variant label
+- `settings.appearance.variantHint` — Theme variant selector hint text
+- `settings.appearance.variants.default` — "Default (Emerald)" variant name
+- `settings.appearance.variants.dracula` — "Dracula" variant name
+- `settings.appearance.variants.solarized` — "Solarized" variant name
+- `settings.appearance.variants.nord` — "Nord" variant name
+- `settings.appearance.variants.highContrast` — "High Contrast" variant name
+- `settings.appearance.variantsDesc.default` — Description: "Apple-inspired liquid glass with emerald and gold"
+- `settings.appearance.variantsDesc.dracula` — Description: "Dark-optimized moody palette"
+- `settings.appearance.variantsDesc.solarized` — Description: "High contrast, reading-friendly"
+- `settings.appearance.variantsDesc.nord` — Description: "Arctic-inspired calm colors"
+- `settings.appearance.variantsDesc.highContrast` — Description: "WCAG AAA accessibility-focused"
+- `settings.appearance.mode` — Theme mode label
+- `settings.appearance.modeHint` — Theme mode selector hint text
+- `settings.appearance.modes.light` — "Always Light" mode label
+- `settings.appearance.modes.dark` — "Always Dark" mode label
+- `settings.appearance.modes.system` — "Follow System" mode label
+- `settings.appearance.modes.schedule` — "Schedule (Custom Times)" mode label
+- `settings.appearance.lightFrom` — "Light theme from" time input label
+- `settings.appearance.darkFrom` — "Dark theme from" time input label
 
 **Phase 9 (2026-04-19):**
 - `onboarding.persist.failed` — Error toast shown when onboarding state fails to persist

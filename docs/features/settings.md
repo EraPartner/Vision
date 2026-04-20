@@ -48,6 +48,7 @@ SettingsPreloadContext → SettingsContext → AppSettingsContext
 | `excludedRecipientIds` | number[] | `[]` | Recipients to exclude from stats |
 | `excludeHiddenCategories` | boolean | `false` | Exclude inactive categories |
 | `exclusionScope` | string | `'nowhere'` | Where exclusions apply |
+| `theme_settings` | object | `{variant: 'default', mode: 'system'}` | Theme variant and mode preferences |
 | `widget_visibility` | object | `{}` | Per-page widget visibility |
 | `portfolio_tax_adjustments_v1` | object | `{}` | Manual tax adjustments |
 | `backup_settings` | object | `{}` | Backup configuration |
@@ -185,6 +186,7 @@ This automatic recovery prevents startup failure while preserving the corrupted 
 
 ## Related Features
 
+- [[docs/features/appearance|Appearance]] — Theme variant, color palette mode, and schedule settings
 - [[docs/features/statistics|Statistics]] — Uses exclusions and currency settings
 - [[docs/features/portfolio-tax|Portfolio Tax]] — Uses tax adjustments stored as settings
 - [[docs/features/views|Dashboard]] — Uses widget visibility settings

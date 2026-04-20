@@ -240,6 +240,7 @@ export default function PerformancePage() {
                                     tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
                                 />
                                 <YAxis
+                                    width={110}
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
                                     tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}

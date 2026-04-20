@@ -39,7 +39,7 @@ import { createMaterializedViews, ensureMaterializedViewIndexes, refreshMaterial
  * Increment this whenever schema changes require DDL to be re-applied on existing DBs.
  * Format: YYYYMMDD_N (N = change number on that date, starting at 1).
  */
-const CURRENT_SCHEMA_VERSION = '20260327_2';
+const CURRENT_SCHEMA_VERSION = '20260419_1';
 
 /**
  * Check the stored schema version.  Returns null if the table doesn't exist yet.
@@ -104,6 +104,8 @@ export async function initializeSchema() {
       ensureEnums(),
       // pg_trgm enables GIN trigram indexes for fast ILIKE / full-text search
       query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`),
+      // pgcrypto provides gen_random_uuid() for ai_* tables
+      query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`),
       query(`
         CREATE OR REPLACE FUNCTION update_updated_at_column()
         RETURNS TRIGGER AS $$
@@ -164,6 +166,7 @@ export async function initializeSchema() {
       createWatchlist(),
       createUserSettings(),
       createSavedCharts(),
+      createAiChatTables(),
     ]);
 
     // Level 9: depends on investments (FK investment_id)
@@ -893,6 +896,56 @@ async function createSavedCharts() {
   `);
 
   await safeTrigger('update_saved_charts_updated_at', 'saved_charts');
+}
+
+async function createAiChatTables() {
+  // ai_conversations — one row per chat thread
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title TEXT NOT NULL,
+      model TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await safeIndex('idx_ai_conversations_updated_at', 'ai_conversations', 'updated_at DESC');
+
+  // ai_messages — ordered messages bound to a conversation
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      conversation_id UUID NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system')),
+      content TEXT,
+      tool_name TEXT,
+      tool_args JSONB,
+      tool_result JSONB,
+      status TEXT NOT NULL DEFAULT 'complete' CHECK (status IN ('complete','streaming','aborted','error')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await safeIndex('idx_ai_messages_conv_created', 'ai_messages', 'conversation_id, created_at');
+
+  // Trigger: bump parent conversation.updated_at on message insert
+  await query(`
+    CREATE OR REPLACE FUNCTION touch_ai_conversation_updated_at()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      UPDATE ai_conversations SET updated_at = NOW() WHERE id = NEW.conversation_id;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+  `);
+  await query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_ai_messages_touch_conversation') THEN
+        CREATE TRIGGER trg_ai_messages_touch_conversation
+          AFTER INSERT ON ai_messages
+          FOR EACH ROW EXECUTE FUNCTION touch_ai_conversation_updated_at();
+      END IF;
+    END $$;
+  `);
 }
 
 // ─────────────────────────────────────────────

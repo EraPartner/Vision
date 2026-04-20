@@ -161,6 +161,71 @@ describe('Settings Routes', () => {
       expect(res.json).toHaveBeenCalledWith({ key: 'theme_settings', value: { theme: 'dark' } });
     });
 
+    it('returns 400 for theme_settings with unknown variant', async () => {
+      const req = {
+        params: { key: 'theme_settings' },
+        body: { value: { variant: 'matrix-green' } },
+      };
+      const res = mockResponse();
+
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        detail: 'Invalid theme variant. Allowed: default, dracula, solarized, nord, high-contrast',
+      });
+    });
+
+    it('returns 400 for theme_settings with unknown mode', async () => {
+      const req = {
+        params: { key: 'theme_settings' },
+        body: { value: { mode: 'sepia' } },
+      };
+      const res = mockResponse();
+
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        detail: 'Invalid theme mode. Allowed: light, dark, system, schedule',
+      });
+    });
+
+    it('returns 400 for theme_settings with malformed schedule time', async () => {
+      const req = {
+        params: { key: 'theme_settings' },
+        body: { value: { schedule: { lightFrom: '25:00', darkFrom: '20:00' } } },
+      };
+      const res = mockResponse();
+
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ detail: 'schedule.lightFrom must be HH:MM' });
+    });
+
+    it('accepts theme_settings with known variant, mode, and schedule', async () => {
+      settingsRepository.set.mockResolvedValue({
+        key: 'theme_settings',
+        value: { mode: 'schedule', schedule: { lightFrom: '07:00', darkFrom: '20:00' }, variant: 'dracula' },
+      });
+
+      const req = {
+        params: { key: 'theme_settings' },
+        body: {
+          value: { mode: 'schedule', schedule: { lightFrom: '07:00', darkFrom: '20:00' }, variant: 'dracula' },
+        },
+      };
+      const res = mockResponse();
+      await routeHandlers['put:/:key'](req, res);
+
+      expect(settingsRepository.set).toHaveBeenCalledWith('theme_settings', {
+        mode: 'schedule',
+        schedule: { lightFrom: '07:00', darkFrom: '20:00' },
+        variant: 'dracula',
+      });
+    });
+
     it('returns 500 when single setting save fails', async () => {
       settingsRepository.set.mockRejectedValue(new Error('boom'));
 

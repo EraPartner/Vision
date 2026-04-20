@@ -35,11 +35,13 @@ import {
 import {
     Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs';
-import { AlertCircle, CheckCircle2, Database, Download, ExternalLink, FolderOpen, Loader2, RefreshCw, RotateCcw, Sparkles, UploadCloud } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle2, Database, Download, ExternalLink, FolderOpen, Loader2, RefreshCw, RotateCcw, Sparkles, UploadCloud } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { formatDateStringWithAppSettings } from '@/components/shared/dateUtils';
+import { useOllamaStatus, useOllamaModels } from '@/hooks/useOllamaStatus';
+import { AppearanceTab } from './AppearanceTab';
 
 interface DashboardSettingsDialogProps {
     open: boolean;
@@ -436,8 +438,9 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                 </DialogHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className="grid w-full grid-cols-5">
                         <TabsTrigger value="general">{t('settings.tab.general')}</TabsTrigger>
+                        <TabsTrigger value="appearance">{t('settings.tab.appearance')}</TabsTrigger>
                         <TabsTrigger value="dashboard">{t('settings.tab.dashboard')}</TabsTrigger>
                         <TabsTrigger value="app">{t('settings.tab.app')}</TabsTrigger>
                         <TabsTrigger value="backup">{t('settings.tab.backup')}</TabsTrigger>
@@ -594,6 +597,13 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                                     </p>
                                 </div>
                             </div>
+                        </ScrollArea>
+                    </TabsContent>
+
+                    {/* ── Appearance Tab ── */}
+                    <TabsContent value="appearance" className="flex-1 min-h-0">
+                        <ScrollArea className="h-full pr-4">
+                            <AppearanceTab />
                         </ScrollArea>
                     </TabsContent>
 
@@ -993,6 +1003,14 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
 
                                 <Separator />
 
+                                {/* AI Chat */}
+                                <AIChatSettingsSection
+                                    value={localAppSettings.aiDefaultModel}
+                                    onChange={(v) => setLocalAppSettings({ ...localAppSettings, aiDefaultModel: v })}
+                                />
+
+                                <Separator />
+
                                 {/* Reset All Settings */}
                                 <div className="space-y-3">
                                     <h3 className="text-sm font-semibold text-foreground">{t('settings.app.reset')}</h3>
@@ -1292,5 +1310,99 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+interface AIChatSettingsSectionProps {
+    value: string | undefined;
+    onChange: (model: string) => void;
+}
+
+function AIChatSettingsSection({ value, onChange }: AIChatSettingsSectionProps) {
+    const { t } = useLanguage();
+    const { data: status, isLoading: statusLoading } = useOllamaStatus();
+    const { data: models, isLoading: modelsLoading } = useOllamaModels(Boolean(status?.ok));
+
+    const statusDotClass = statusLoading
+        ? 'bg-muted-foreground/50'
+        : status?.ok
+            ? 'bg-emerald-500'
+            : 'bg-destructive';
+
+    const statusLabel = statusLoading
+        ? t('settings.aiChat.statusChecking')
+        : status?.ok
+            ? t('settings.aiChat.statusReady')
+            : t('settings.aiChat.statusUnreachable');
+
+    const modelOptions = models ?? [];
+    const hasModels = modelOptions.length > 0;
+    const selectValue = value ?? status?.defaultModel ?? '';
+
+    return (
+        <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Bot className="h-4 w-4 text-primary" />
+                {t('settings.aiChat.section')}
+            </h3>
+
+            <div className="rounded-lg border p-4 space-y-4">
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                        {t('settings.aiChat.status')}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                        <span className={`inline-block h-2 w-2 rounded-full ${statusDotClass}`} />
+                        <span className="text-sm text-foreground">{statusLabel}</span>
+                    </div>
+                    {(status?.displayUrl || status?.baseUrl) && (
+                        <p className="text-xs font-mono text-muted-foreground break-all">
+                            {status.displayUrl || status.baseUrl}
+                        </p>
+                    )}
+                    {!status?.ok && !statusLoading && status?.error && (
+                        <p className="text-xs text-destructive">{status.error}</p>
+                    )}
+                    {!status?.ok && !statusLoading && status?.hint && (
+                        <p className="text-xs text-muted-foreground">{status.hint}</p>
+                    )}
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                        {t('settings.aiChat.defaultModel')}
+                    </Label>
+                    <Select
+                        value={selectValue || undefined}
+                        onValueChange={onChange}
+                        disabled={!status?.ok || modelsLoading || !hasModels}
+                    >
+                        <SelectTrigger>
+                            <SelectValue
+                                placeholder={
+                                    !status?.ok
+                                        ? t('settings.aiChat.statusUnreachable')
+                                        : modelsLoading
+                                            ? t('settings.aiChat.loadingModels')
+                                            : hasModels
+                                                ? t('settings.aiChat.selectModel')
+                                                : t('settings.aiChat.noModels')
+                                }
+                            />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {modelOptions.map((m) => (
+                                <SelectItem key={m.name} value={m.name}>
+                                    {m.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                        {t('settings.aiChat.defaultModelHint')}
+                    </p>
+                </div>
+            </div>
+        </div>
     );
 }

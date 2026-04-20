@@ -28,6 +28,35 @@ function validateSettingKeyLength(key, includeKeyInMessage = false) {
   return null;
 }
 
+const ALLOWED_THEME_VARIANTS = ['default', 'dracula', 'solarized', 'nord', 'high-contrast'];
+const ALLOWED_THEME_MODES = ['light', 'dark', 'system', 'schedule'];
+
+function validateThemeSettingsValue(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ok: false, error: 'theme_settings must be an object' };
+  }
+  if (value.variant !== undefined && !ALLOWED_THEME_VARIANTS.includes(value.variant)) {
+    return { ok: false, error: `Invalid theme variant. Allowed: ${ALLOWED_THEME_VARIANTS.join(', ')}` };
+  }
+  if (value.mode !== undefined && !ALLOWED_THEME_MODES.includes(value.mode)) {
+    return { ok: false, error: `Invalid theme mode. Allowed: ${ALLOWED_THEME_MODES.join(', ')}` };
+  }
+  if (value.schedule !== undefined) {
+    const s = value.schedule;
+    if (typeof s !== 'object' || s === null || Array.isArray(s)) {
+      return { ok: false, error: 'theme_settings.schedule must be an object' };
+    }
+    const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (s.lightFrom !== undefined && (typeof s.lightFrom !== 'string' || !hhmm.test(s.lightFrom))) {
+      return { ok: false, error: 'schedule.lightFrom must be HH:MM' };
+    }
+    if (s.darkFrom !== undefined && (typeof s.darkFrom !== 'string' || !hhmm.test(s.darkFrom))) {
+      return { ok: false, error: 'schedule.darkFrom must be HH:MM' };
+    }
+  }
+  return { ok: true };
+}
+
 function normalizeDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
   if (typeof value !== 'object' || Array.isArray(value)) {
     return { ok: false, error: 'dashboard_settings must be an object' };
@@ -89,8 +118,9 @@ const SETTING_DEFAULTS = {
     excludeHiddenCategories: true,
   },
   theme_settings: {
-    theme: 'system',
-    accentColor: 'default',
+    mode: 'system',
+    schedule: { lightFrom: '07:00', darkFrom: '20:00' },
+    variant: 'default',
   },
   backup_settings: {
     backupDir: '',
@@ -142,6 +172,13 @@ router.put('/:key', async (req, res) => {
       }
     }
 
+    if (key === 'theme_settings') {
+      const validatedTheme = validateThemeSettingsValue(value);
+      if (!validatedTheme.ok) {
+        return res.status(400).json({ detail: validatedTheme.error });
+      }
+    }
+
     const result = await settingsRepository.set(key, value);
     res.json(result);
   } catch (err) {
@@ -172,6 +209,12 @@ router.put('/', async (req, res) => {
         const validatedDashboardSettings = normalizeDashboardSettingsValue(value);
         if (!validatedDashboardSettings.ok) {
           return res.status(400).json({ detail: validatedDashboardSettings.error });
+        }
+      }
+      if (key === 'theme_settings') {
+        const validatedTheme = validateThemeSettingsValue(value);
+        if (!validatedTheme.ok) {
+          return res.status(400).json({ detail: validatedTheme.error });
         }
       }
     }

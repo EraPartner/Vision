@@ -4,7 +4,7 @@ type: reference
 status: active
 date: 2026-04-17
 tags: [backend, services, reference, business-logic]
-description: Complete reference for all 17 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for snapshot-backed net worth computation and quoteBackfillService refactor.
+description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for snapshot-backed net worth computation, quoteBackfillService refactor, and AI Chat service.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -607,6 +607,59 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
+## 18. aiChatService.js
+
+**File:** [[apps/node-backend/src/services/aiChatService.js]]  
+**Purpose:** Orchestrates natural-language financial queries using a local Ollama LLM with tool-calling. Implements the agentic loop: user message → LLM → tool dispatch → result → assistant narrative.
+
+### Exported Functions
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `chat` | `({ conversationId, message, model, signal }) => Promise<ChatTurn>` | Full turn object (user + tool messages + assistant response) |
+| `chatStream` | `({ conversationId, message, model, onEvent, signal }) => Promise<ChatTurn>` | Streams events + returns final turn |
+
+### Architecture
+
+1. **History Load** — fetch prior messages, trim to `aiChat.maxHistoryMessages` (default 20)
+2. **Prompt Build** — assemble system prompt + tool schema + history + user message
+3. **Tool Loop** — invoke Ollama `/api/chat`, parse response, dispatch matching tools up to `MAX_TOOL_ITERATIONS` (default 3)
+4. **Persistence** — save user message, tool calls, tool results, and assistant response to `ai_messages` table
+5. **Streaming** — if `onEvent` provided, emit `user_message`, `token`, `tool_call`, `tool_result`, `done` events
+
+### Key Algorithms
+
+- **Agentic Loop:** Tool-calling pattern — LLM receives tool registry as JSON Schema, selects by name + args, backend validates + executes, result fed back as `role: "tool"` message
+- **Tool Dispatch:** `aiChat/tools/index.js` dispatcher validates args against Zod schema, rejects unknown tool names with structured error
+- **Context Trimming:** Message history trimmed from oldest to newest; tool-result payloads pruned to summaries only
+- **Abort Handling:** `AbortSignal` passed through Ollama client; on abort, in-flight assistant message marked aborted
+
+### Dependencies
+- `ollamaClient` (HTTP wrapper for Ollama)
+- `aiChatRepository` (conversation + message CRUD)
+- `aiChat/tools/*` (expense, portfolio, planned, tax tools)
+- `logger.js`
+
+### Configuration
+
+| Env | Default | Purpose |
+|-----|---------|---------|
+| `AI_CHAT_ENABLED` | `true` | Feature flag |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama base URL |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback model |
+| `AI_CHAT_RATE_LIMIT` | `30/min` | Rate limit for `/api/ai/chat` |
+| `AI_CHAT_MAX_HISTORY` | `20` | Max prior messages loaded per turn |
+
+### Error Handling
+
+Maps Ollama errors to `AiChatServiceError` with HTTP status:
+- `OLLAMA_UNREACHABLE` → 502
+- `OLLAMA_TIMEOUT` → 504
+- `VALIDATION_ERROR` (tool args) → 400
+- `CONVERSATION_NOT_FOUND` → 404
+
+---
+
 ## Dependency Graph
 
 ```
@@ -659,6 +712,7 @@ CSV → Parse → Raw Data (bank-specific table)
 | **Import Pipeline** | `bankAdapters`, `importService`, `streamingImportService`, `rawTransactionImportService`, `dataImportService` |
 | **Data Quality** | `deduplication`, `recurringDetectionService` |
 | **Performance** | `materializedViewService`, `portfolioPerformanceSnapshotService` |
+| **AI & Natural Language** | `aiChatService` |
 
 ## Info Repository Refactor (Net Worth)
 
@@ -677,6 +731,8 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 - [[docs/reference/code-patterns|Code Patterns]]
 - [[docs/features/import|Import Feature]]
 - [[docs/features/net-worth|Net Worth Feature]]
+- [[docs/features/ai-chat|AI Chat Feature]]
 - [[docs/integrations/price-providers|Price Providers]]
 - [[docs/integrations/currency-conversion|Currency Conversion]]
 - [[docs/integrations/bank-adapters|Bank Adapters]]
+- [[docs/integrations/ollama|Ollama Integration]]

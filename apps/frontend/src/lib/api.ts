@@ -25,6 +25,18 @@ import type {
     PortfolioTransactionsListResponse,
 } from '@/types/api';
 import type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
+import type {
+    ChatStreamEvent,
+    ChatTurnResponse,
+    Conversation,
+    ConversationDetail,
+    ConversationSummary,
+    CreateConversationBody,
+    OllamaModel,
+    OllamaModelsResponse,
+    OllamaStatus,
+    SendChatBody,
+} from '@/types/aiChat';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 import logger from '@/lib/logger';
@@ -1412,6 +1424,181 @@ class ApiClient {
 
         throw lastError || new Error('Request failed');
     }
+
+    // ==================== AI Chat Methods ====================
+
+    async getOllamaStatus(): Promise<OllamaStatus> {
+        return this.request('/api/ai/status');
+    }
+
+    async getOllamaModels(): Promise<OllamaModel[]> {
+        const response = await this.request<OllamaModelsResponse>('/api/ai/models');
+        return response.models ?? [];
+    }
+
+    async getConversations(): Promise<ConversationSummary[]> {
+        return this.request('/api/ai/conversations');
+    }
+
+    async getConversation(id: string): Promise<ConversationDetail> {
+        return this.request(`/api/ai/conversations/${encodeURIComponent(id)}`);
+    }
+
+    async createConversation(body: CreateConversationBody = {}): Promise<ConversationDetail> {
+        return this.request('/api/ai/conversations', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
+    async renameConversation(id: string, title: string): Promise<Conversation> {
+        return this.request(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ title }),
+        });
+    }
+
+    async deleteConversation(id: string): Promise<void> {
+        await this.request(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async sendChatMessage(body: SendChatBody): Promise<ChatTurnResponse> {
+        return this.request('/api/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
+    /**
+     * Stream an AI chat turn over Server-Sent Events.
+     * Returns an abort function and a promise resolving to the terminal `done` payload.
+     */
+    streamChat(
+        body: SendChatBody,
+        onEvent: (event: ChatStreamEvent) => void,
+    ): { abort: () => void; result: Promise<ChatStreamEvent & { type: 'done' }> } {
+        const controller = new AbortController();
+        const url = `${API_BASE_URL}/api/ai/chat/stream`;
+
+        const parseSseBlock = (block: string): { eventName: string; dataRaw: string } | undefined => {
+            let eventName = 'message';
+            const dataLines: string[] = [];
+            for (const rawLine of block.split(/\r?\n/)) {
+                if (!rawLine || rawLine.startsWith(':')) continue;
+                if (rawLine.startsWith('event:')) {
+                    eventName = rawLine.slice('event:'.length).trim() || 'message';
+                    continue;
+                }
+                if (rawLine.startsWith('data:')) {
+                    dataLines.push(rawLine.slice('data:'.length).trimStart());
+                }
+            }
+            if (dataLines.length === 0) return undefined;
+            return { eventName, dataRaw: dataLines.join('\n') };
+        };
+
+        const decodeEvent = (eventName: string, dataRaw: string): ChatStreamEvent | undefined => {
+            if (eventName === 'token') {
+                let delta: string;
+                try {
+                    delta = JSON.parse(dataRaw);
+                } catch {
+                    delta = dataRaw;
+                }
+                return { type: 'token', delta: typeof delta === 'string' ? delta : String(delta) };
+            }
+            let payload: any;
+            try {
+                payload = JSON.parse(dataRaw);
+            } catch {
+                return undefined;
+            }
+            switch (eventName) {
+                case 'user_message':
+                    return { type: 'user_message', message: payload.message };
+                case 'tool_call':
+                    return { type: 'tool_call', name: payload.name, args: payload.args ?? {} };
+                case 'tool_result':
+                    return { type: 'tool_result', message: payload.message };
+                case 'done':
+                    return { type: 'done', payload };
+                case 'error':
+                    return { type: 'error', detail: payload.detail ?? 'AI chat error', code: payload.code };
+                default:
+                    return undefined;
+            }
+        };
+
+        const result = (async (): Promise<ChatStreamEvent & { type: 'done' }> => {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                    throw new Error((error && error.detail) || `Request failed with status ${response.status}`);
+                }
+
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error('No response body');
+
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let terminal: (ChatStreamEvent & { type: 'done' }) | null = null;
+                let terminalError: { detail: string; code?: string } | null = null;
+
+                const processEventBlock = (block: string) => {
+                    const parsed = parseSseBlock(block);
+                    if (!parsed) return;
+                    const event = decodeEvent(parsed.eventName, parsed.dataRaw);
+                    if (!event) return;
+                    onEvent(event);
+                    if (event.type === 'done') terminal = event;
+                    if (event.type === 'error') terminalError = { detail: event.detail, code: event.code };
+                };
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let match = buffer.match(/\r?\n\r?\n/);
+                    while (match) {
+                        const index = match.index ?? -1;
+                        if (index < 0) break;
+                        const block = buffer.slice(0, index);
+                        buffer = buffer.slice(index + match[0].length);
+                        processEventBlock(block);
+                        match = buffer.match(/\r?\n\r?\n/);
+                    }
+                }
+
+                const trailing = decoder.decode();
+                if (trailing) buffer += trailing;
+                if (buffer.trim()) processEventBlock(buffer.trimEnd());
+
+                if (terminalError) {
+                    const err = new Error(terminalError.detail);
+                    (err as any).code = terminalError.code;
+                    throw err;
+                }
+                if (!terminal) throw new Error('Stream ended without terminal event');
+                return terminal;
+            } catch (err) {
+                if ((err as Error).name === 'AbortError') {
+                    throw new Error('Chat cancelled');
+                }
+                throw err;
+            }
+        })();
+
+        return { abort: () => controller.abort(), result };
+    }
 }
 
 export interface SavedChart {
@@ -1460,3 +1647,20 @@ export interface NetWorthResponse {
 
 export const apiClient = new ApiClient();
 export type { Transaction, Category, Recipient, PlannedTransaction, Investment, PortfolioTransaction };
+export type {
+    ChatMessage,
+    ChatRole,
+    ChatStreamEvent,
+    ChatTurnResponse,
+    Conversation,
+    ConversationDetail,
+    ConversationSummary,
+    CreateConversationBody,
+    OllamaModel,
+    OllamaModelsResponse,
+    OllamaStatus,
+    SendChatBody,
+    TokenUsage,
+    ToolRenderAs,
+    ToolResultPayload,
+} from '@/types/aiChat';

@@ -297,6 +297,45 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 
 ---
 
+## AI Chat Entities (Phase 10)
+
+### AIConversation
+
+**Purpose:** Persisted conversation with a local LLM. Stores metadata for chat thread management.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | UUID | PK | Unique conversation identifier |
+| `title` | TEXT | NOT NULL, ≤200 chars | User-provided title |
+| `model` | TEXT | NOT NULL | Ollama model name (e.g., `llama3.2:3b`) |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Conversation creation time |
+| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | Last message time |
+
+**Related:** [[docs/features/ai-chat|AI Chat Feature]]
+
+---
+
+### AIMessage
+
+**Purpose:** Individual messages in a conversation — user queries, LLM responses, and tool invocations.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | UUID | PK | Unique message identifier |
+| `conversation_id` | UUID | FK → ai_conversations | Parent conversation |
+| `role` | TEXT | CHECK IN ('user', 'assistant', 'tool', 'system') | Message sender type |
+| `content` | TEXT | NULLABLE | Message text (user/assistant/system) |
+| `tool_name` | TEXT | NULLABLE | Tool invoked (only when role='tool') |
+| `tool_args` | JSONB | NULLABLE | Tool arguments (only when role='tool') |
+| `tool_result` | JSONB | NULLABLE | Tool result (only when role='tool') |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Message creation time |
+
+**Indices:** `ai_messages(conversation_id, created_at)` — ordered retrieval
+
+**Related:** [[docs/security/ai-data-access|AI Data Access Policy]], [[docs/integrations/ollama|Ollama Integration]]
+
+---
+
 ## Aggregation Entities (Phase 1)
 
 > [!info] Aggregation Layer

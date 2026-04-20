@@ -24,6 +24,11 @@ services:
     env_file: .env
     ports:
       - "${PORT:-3002}:3002"
+    # Map host.docker.internal to the host gateway so the backend can reach
+    # Ollama running on the host machine. Docker Desktop (macOS/Windows)
+    # provides this automatically; on Linux the mapping must be explicit.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # DATABASE_URL is built in .env so the password is never hard-coded here
       SERVER_HOST: "0.0.0.0"

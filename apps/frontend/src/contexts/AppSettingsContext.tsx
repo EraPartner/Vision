@@ -12,6 +12,7 @@ export interface AppSettings {
     startOfWeek: 'monday' | 'sunday';
     showDecimalPlaces: number;
     language: Language;
+    aiDefaultModel?: string;
 }
 
 interface AppSettingsContextType {
