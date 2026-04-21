@@ -50,6 +50,7 @@ import {
     parseEnvelopeError,
     unwrapEnvelope,
 } from '@/lib/api/client';
+import { readSseStream } from '@/lib/api/sse';
 import type { AggregationEnvelope, ImportProgress, ImportResult } from '@/lib/api/types';
 
 // Re-export shared primitives so existing `import { ... } from '@/lib/api'`
@@ -283,26 +284,6 @@ class ApiClient {
 
         const url = `${API_BASE_URL}/api/import/csv/stream?${queryParams.toString()}`;
 
-        const parseSseBlock = (block: string): { eventName: string; dataRaw: string } | undefined => {
-            let eventName = 'message';
-            const dataLines: string[] = [];
-
-            for (const rawLine of block.split(/\r?\n/)) {
-                if (!rawLine || rawLine.startsWith(':')) continue;
-                if (rawLine.startsWith('event:')) {
-                    const parsedName = rawLine.slice('event:'.length).trim();
-                    eventName = parsedName || 'message';
-                    continue;
-                }
-                if (rawLine.startsWith('data:')) {
-                    dataLines.push(rawLine.slice('data:'.length).trimStart());
-                }
-            }
-
-            if (dataLines.length === 0) return undefined;
-            return { eventName, dataRaw: dataLines.join('\n') };
-        };
-
         const extractErrorDetail = (payload: unknown): string => {
             if (payload && typeof payload === 'object' && 'detail' in payload) {
                 const detail = (payload as { detail?: unknown }).detail;
@@ -324,68 +305,25 @@ class ApiClient {
                     throw await parseEnvelopeError(response, 'Import failed');
                 }
 
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error('No response body');
-
-                const decoder = new TextDecoder();
-                let buffer = '';
                 let finalResult: ImportResult | null = null;
 
-                const processEventBlock = (block: string) => {
-                    const parsedEvent = parseSseBlock(block);
-                    if (!parsedEvent) return;
-
-                    let payload: unknown;
-                    try {
-                        payload = JSON.parse(parsedEvent.dataRaw);
-                    } catch {
-                        throw new Error('Invalid import stream payload');
+                for await (const { event, data } of readSseStream<unknown>(response)) {
+                    if (event === 'progress') {
+                        onProgress(data as ImportProgress);
+                        continue;
                     }
-
-                    if (parsedEvent.eventName === 'progress') {
-                        onProgress(payload as ImportProgress);
-                        return;
-                    }
-
-                    if (parsedEvent.eventName === 'complete') {
-                        finalResult = payload as ImportResult;
+                    if (event === 'complete') {
+                        finalResult = data as ImportResult;
                         onProgress({
-                            ...(payload as Partial<ImportProgress>),
+                            ...(data as Partial<ImportProgress>),
                             phase: 'complete',
                             percent: 100,
                         } as ImportProgress);
-                        return;
+                        continue;
                     }
-
-                    if (parsedEvent.eventName === 'error') {
-                        throw new Error(extractErrorDetail(payload));
+                    if (event === 'error') {
+                        throw new Error(extractErrorDetail(data));
                     }
-                };
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-
-                    let separatorMatch = buffer.match(/\r?\n\r?\n/);
-                    while (separatorMatch) {
-                        const separatorIndex = separatorMatch.index ?? -1;
-                        if (separatorIndex < 0) break;
-
-                        const block = buffer.slice(0, separatorIndex);
-                        buffer = buffer.slice(separatorIndex + separatorMatch[0].length);
-                        processEventBlock(block);
-                        separatorMatch = buffer.match(/\r?\n\r?\n/);
-                    }
-                }
-
-                const trailing = decoder.decode();
-                if (trailing) {
-                    buffer += trailing;
-                }
-                if (buffer.trim()) {
-                    processEventBlock(buffer.trimEnd());
                 }
 
                 return finalResult || {
