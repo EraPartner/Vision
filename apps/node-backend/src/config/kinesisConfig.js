@@ -10,9 +10,11 @@
  *   - KINESIS_DEFAULT_FROM_DATE: Default start date ISO8601 (default: 2019-01-01T08:47:55.843Z)
  */
 
-const KINESIS_BASE_URL = process.env.KINESIS_BASE_URL || 'https://api.kinesis.money/api/market-data/trendlines';
-const KINESIS_DEFAULT_TIMEFRAME = parseInt(process.env.KINESIS_DEFAULT_TIMEFRAME || '60', 10);
-const KINESIS_DEFAULT_FROM_DATE = process.env.KINESIS_DEFAULT_FROM_DATE || '2019-01-01T08:47:55.843Z';
+import { env } from './env.js';
+
+const KINESIS_BASE_URL = env.KINESIS_BASE_URL;
+const KINESIS_DEFAULT_TIMEFRAME = env.KINESIS_DEFAULT_TIMEFRAME;
+const KINESIS_DEFAULT_FROM_DATE = env.KINESIS_DEFAULT_FROM_DATE;
 
 /**
  * Kinesis asset configuration

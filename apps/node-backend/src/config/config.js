@@ -1,16 +1,13 @@
 /**
- * Configuration management for the Financial Transaction Manager
+ * Configuration management for the Financial Transaction Manager.
  *
- * Mirrors: apps/backend/config/config.py
- * Handles environment-based settings and configuration validation.
+ * Derives from the validated `env` module (ADR-030 / Phase 1). This module
+ * composes higher-level values (container-aware Ollama URL, precedence chains)
+ * and exposes the frozen `settings` object consumed across the backend.
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { logger } from './logger.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { env } from './env.js';
 
 function deepFreeze(object) {
   Object.freeze(object);
@@ -25,27 +22,6 @@ function deepFreeze(object) {
     }
   }
   return object;
-}
-
-// Load .env.local if present
-const envLocalPath = join(__dirname, '..', '..', '.env.local');
-if (existsSync(envLocalPath)) {
-  logger.debug(`[config] Loading .env.local from ${envLocalPath}`);
-  const content = readFileSync(envLocalPath, 'utf-8');
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-  logger.debug(`[config] LOG_LEVEL=${process.env.LOG_LEVEL}, ENABLE_LOGGING=${process.env.ENABLE_LOGGING}`);
-} else {
-  logger.debug(`[config] No .env.local found at ${envLocalPath}`);
 }
 
 /**
@@ -76,49 +52,49 @@ function defaultOllamaUrl() {
 
 /** @type {import('./types').Settings} */
 const settings = deepFreeze({
-  debug: (process.env.DEBUG || 'true').toLowerCase() === 'true',
+  debug: env.DEBUG,
 
   server: {
-    host: process.env.SERVER_HOST || process.env.HOSTNAME || 'localhost',
-    port: parseInt(process.env.PORT || '3002', 10),
-    environment: process.env.ENVIRONMENT || process.env.NODE_ENV || 'development',
+    host: env.SERVER_HOST || env.HOSTNAME || 'localhost',
+    port: env.PORT,
+    environment: env.ENVIRONMENT || env.NODE_ENV || 'development',
   },
 
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://ftm_user:ftm_password@localhost:5432/financial_transactions',
-    echo: (process.env.DB_ECHO || 'false').toLowerCase() === 'true',
-    poolSize: parseInt(process.env.DB_POOL_SIZE || '5', 10),
-    maxOverflow: parseInt(process.env.DB_MAX_OVERFLOW || '10', 10),
+    url: env.DATABASE_URL,
+    echo: env.DB_ECHO,
+    poolSize: env.DB_POOL_SIZE,
+    maxOverflow: env.DB_MAX_OVERFLOW,
   },
 
   api: {
     title: 'Financial Transaction Manager',
     version: '1.0.0',
     description: 'Import and manage financial transactions from various banks',
-    corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5174,http://localhost:8080').split(',').map(s => s.trim()),
+    corsOrigins: env.CORS_ORIGINS,
   },
 
   admin: {
-    enableResetDb: (process.env.ENABLE_RESET_DB || 'false').toLowerCase() === 'true',
-    authToken: (process.env.ADMIN_AUTH_TOKEN || '').trim(),
+    enableResetDb: env.ENABLE_RESET_DB,
+    authToken: env.ADMIN_AUTH_TOKEN,
   },
 
   features: {
-    aggregationsV2Enabled: (process.env.AGGREGATIONS_V2_ENABLED || 'true').toLowerCase() === 'true',
+    aggregationsV2Enabled: env.AGGREGATIONS_V2_ENABLED,
   },
 
   ollama: {
-    url: (process.env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
-    defaultModel: process.env.OLLAMA_DEFAULT_MODEL || 'llama3.1:8b',
-    requestTimeoutMs: parseInt(process.env.OLLAMA_REQUEST_TIMEOUT_MS || '60000', 10),
-    healthTimeoutMs: parseInt(process.env.OLLAMA_HEALTH_TIMEOUT_MS || '3000', 10),
+    url: (env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
+    defaultModel: env.OLLAMA_DEFAULT_MODEL,
+    requestTimeoutMs: env.OLLAMA_REQUEST_TIMEOUT_MS,
+    healthTimeoutMs: env.OLLAMA_HEALTH_TIMEOUT_MS,
   },
 
   aiChat: {
-    enabled: (process.env.AI_CHAT_ENABLED || 'true').toLowerCase() === 'true',
-    rateLimit: parseInt(process.env.AI_CHAT_RATE_LIMIT || '30', 10),
-    maxHistoryMessages: parseInt(process.env.AI_CHAT_MAX_HISTORY || '30', 10),
-    maxToolRows: parseInt(process.env.AI_CHAT_MAX_TOOL_ROWS || '500', 10),
+    enabled: env.AI_CHAT_ENABLED,
+    rateLimit: env.AI_CHAT_RATE_LIMIT,
+    maxHistoryMessages: env.AI_CHAT_MAX_HISTORY,
+    maxToolRows: env.AI_CHAT_MAX_TOOL_ROWS,
   },
 
   isProduction() {

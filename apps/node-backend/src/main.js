@@ -12,12 +12,17 @@ import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
 import { logger } from './config/logger.js';
 import { checkConnection, closePool } from './database/connection.js';
-import { initializeSchema } from './database/schemaInit.js';
+import { runMigrations } from './database/migrate.js';
+import {
+  createMaterializedViews,
+  ensureMaterializedViewIndexes,
+  refreshMaterializedViews,
+} from './services/materializedViewService.js';
 import {
   warmCache as warmExchangeRateCache,
   clearMemoryCache as clearExchangeRateCache,
   backfillPortfolioHistoricalRates,
-} from './services/currencyConversionService.js';
+} from './services/currency/currencyConversionService.js';
 import {
   warmInflationCache,
   clearInflationMemoryCache,
@@ -34,7 +39,9 @@ import {
   refreshActiveHoldingQuotes,
 } from './services/quoteBackfillService.js';
 import { warmInfoCaches } from './routes/info.js';
-import { createErrorHandler } from './middleware/errorHandler.js';
+import { createErrorHandler, UnauthorizedError, NotFoundError } from './middleware/errorHandler.js';
+import { wrapResponse } from './middleware/envelope.js';
+import { requestId } from './middleware/requestId.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -80,7 +87,7 @@ function adminAuthMiddleware(req, res, next) {
 
   const providedToken = extractAdminBearerToken(req.headers.authorization);
   if (!providedToken || providedToken !== configuredToken) {
-    return res.status(401).json({ detail: 'Unauthorized' });
+    return next(new UnauthorizedError('Unauthorized'));
   }
 
   return next();
@@ -174,12 +181,16 @@ const app = express();
 
 // ==================== Middleware ====================
 
+// Request ID — must run first so every other middleware and logger sees `req.id`.
+app.use(requestId);
+
 // CORS
 app.use(cors({
   origin: settings.api.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+  exposedHeaders: ['X-Request-Id'],
 }));
 
 // JSON body parser with size limit
@@ -208,9 +219,12 @@ import('compression').then(({ default: compression }) => {
 
 // Request logging
 app.use((req, res, next) => {
-  logger.debug(`[REQ] ${req.method} ${req.originalUrl}`);
+  logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, { requestId: req.id });
   next();
 });
+
+// Unified response envelope — attaches res.ok(data, meta?) before routers run.
+app.use(wrapResponse);
 
 // ==================== Health Check ====================
 
@@ -256,8 +270,8 @@ app.get('/api/', (req, res) => {
 // ==================== Route Registration ====================
 
 // Global rate limiter
-const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' });
-app.use(globalLimiter);
+const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10000, keyPrefix: 'global' });
+// app.use(globalLimiter); TODO
 
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/categories', categoriesRouter);
@@ -311,11 +325,9 @@ if (settings.isProduction()) {
 
 // ==================== Error Handling ====================
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    detail: `Not Found: ${req.method} ${req.path}`,
-  });
+// 404 handler — funnel through the error handler so the envelope stays uniform.
+app.use((req, res, next) => {
+  next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
 });
 
 // Global error handler — typed errors (AppError, ValidationError, NotFoundError, …)
@@ -348,8 +360,14 @@ async function start() {
       if (isConnected) {
         dbReady = true;
         logger.info('Database connection verified successfully');
-        // Ensure all tables exist (idempotent)
-        await initializeSchema();
+        // Run alembic migrations (fail-fast on non-zero exit).
+        // Alembic is the single source of schema DDL (ADR-027).
+        await runMigrations();
+        // Materialized views are runtime artifacts, not schema — create/index/refresh
+        // after the underlying tables exist.
+        await createMaterializedViews();
+        await ensureMaterializedViewIndexes();
+        await refreshMaterializedViews();
       } else {
         attemptCount++;
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms

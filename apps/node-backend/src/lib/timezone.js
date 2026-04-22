@@ -7,12 +7,13 @@
  * toAppTz / toUtc. No raw `new Date()` + offset arithmetic in calc modules.
  */
 
+import { env } from '../config/env.js';
+
 const DEFAULT_ZONE = 'Europe/Brussels';
 
 function resolveZone() {
-  const raw = process.env.APP_TIMEZONE;
-  if (!raw || !raw.trim()) return DEFAULT_ZONE;
-  const zone = raw.trim();
+  const zone = env.APP_TIMEZONE;
+  if (!zone) return DEFAULT_ZONE;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: zone });
   } catch {
