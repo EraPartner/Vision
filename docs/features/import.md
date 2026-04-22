@@ -2,8 +2,8 @@
 title: Feature - CSV Import & Deduplication
 type: feature
 status: active
-date: 2026-04-10
-tags: [feature, import, csv, deduplication]
+date: 2026-04-21
+tags: [feature, import, csv, deduplication, phase-1]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
 related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
@@ -153,7 +153,7 @@ Duplicate detection checks:
 ### 5. Transaction Creation
 - Creates transactions in main table
 - Links to raw source for audit trail
-- Updates materialized views
+- **Phase 0+**: Triggers fire-and-forget materialized view refresh (post-commit) to keep aggregations warm
 
 ## Deduplication Strategies
 

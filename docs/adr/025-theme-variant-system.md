@@ -2,8 +2,8 @@
 title: ADR-025 Theme Variant System
 type: adr
 status: Accepted
-date: 2026-04-20
-tags: [adr, design, frontend, theming, tokens, appearance, phase-9]
+date: 2026-04-21
+tags: [adr, design, frontend, theming, tokens, appearance, phase-1, phase-9]
 description: Per-user theme variant selection with five palettes, light/dark mode matrix, HSL token architecture, and FOUC prevention
 aliases: [adr-025, theme variants, appearance settings, color palettes]
 ---

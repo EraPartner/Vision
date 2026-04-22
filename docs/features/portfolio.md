@@ -2,8 +2,8 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-19
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-3.5, phase-3.6, phase-9]
+date: 2026-04-21
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/lib/api.ts"]
@@ -156,7 +156,7 @@ Rules:
 - Unit-based buy/sell edit math keeps the same 2-of-3 pricing normalization rules as create.
 - Unit-based `sell` validation enforces holdings sufficiency on both create and update (oversell transactions are rejected).
 - `updated_at` captures edit timestamps.
-- Migration/startup compatibility: when `portfolio_transactions` is a compatibility view in inherited schemas, migration and startup schema init now guard `ALTER TABLE` by relation kind (`r`/`p` only), while preserving the view recreation path for `relkind='v'` ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[docs/guides/deployment|Deployment Guide]]).
+- Migration compatibility: when `portfolio_transactions` is a compatibility view in inherited schemas, migration `0016_add_fx_rate_to_portfolio_transactions` guards `ALTER TABLE` by relation kind (`r`/`p` only), while preserving the view recreation path for `relkind='v'` ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/guides/deployment|Deployment Guide]]).
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
@@ -178,7 +178,7 @@ Oversell safety behavior:
 - Investment detail modal can display both base portfolio metrics and FX-aware realized/unrealized values when provided by stocks/ETF listing flows.
 - Metals listing explicitly uses base (non-FX-aware) realized/unrealized calculations.
 
-Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]]
+Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]
 
 ## Belgian Tax Features
 
@@ -228,7 +228,7 @@ Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/fronten
 - Yahoo provider docs/description explicitly include metals tickers such as `GC=F`.
 - Migration `0017_investment_custom_provider_history` ensures `metals_investments` exists and updates the `investments` compatibility view/trigger to include metals rows in mixed-schema deployments.
 
-Code links: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 ## Net Worth Tracking
 
@@ -347,7 +347,7 @@ Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[a
 - Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
-Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
 
 ## Historical Asset Quote Persistence
 
@@ -355,7 +355,7 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[app
 - Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
 - Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
 
 ## Info Card Security Hardening (Phase 9)
 

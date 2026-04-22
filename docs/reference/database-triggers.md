@@ -2,8 +2,8 @@
 title: Database Triggers Reference
 type: reference
 status: active
-date: 2026-03-31
-tags: [reference, database, triggers, postgresql]
+date: 2026-04-21
+tags: [reference, database, triggers, postgresql, phase-1]
 description: Complete reference of all PostgreSQL triggers in the Vision database
 aliases: [triggers, database triggers, trigger functions, updated_at triggers]
 ---
@@ -38,13 +38,11 @@ These triggers enable write operations on PostgreSQL views that would otherwise 
 > [!info] How INSTEAD OF Triggers Work
 > The `investments` view is a compatibility layer that unions all child tables (`stocks_etfs_investments`, `crypto_investments`, `metals_investments`, `real_estate_investments`, `savings_investments`, `bonds_investments`). The INSTEAD OF trigger intercepts UPDATE operations and routes them to the correct underlying table based on the `asset_class` column.
 
-## Schema-Init Triggers
+## Migration-Managed Triggers
 
-Triggers created by `schemaInit.js` during application startup (not Alembic migrations):
+All triggers are now managed by Alembic migrations (as of Phase 1, 2026-04-21). The legacy `schemaInit.js` was deleted and replaced with Alembic-based schema management ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-| Trigger | Table | Purpose | Code |
-|---------|-------|---------|------|
-| `fx_rate_to_eur` column addition | `portfolio_transactions_base` | Adds FX rate column for cross-currency transactions | [[apps/node-backend/src/database/schemaInit.js\|schemaInit.js]] |
+Special note: `fx_rate_to_eur` column changes are handled by migration `0016_add_fx_rate_to_portfolio_transactions`, which guards the `ALTER TABLE` to only run when `portfolio_transactions` is a base table (not a compatibility view).
 
 ## Trigger Function
 
@@ -64,13 +62,13 @@ $$ language 'plpgsql';
 
 | Migration | Trigger Changes |
 |-----------|----------------|
-| `0001_initial_database_schema` | Creates initial triggers on categories, recipients, transactions |
+| `0001_initial_database_schema` | Creates all initial triggers on base tables |
 | `0013_investment_inheritance` | Creates `update_investments_updated_at` on `investments_base` |
 | `0014_investments_view_update_trigger` | Creates `update_investments_view_instead` INSTEAD OF trigger |
-| `0016_add_fx_rate_to_portfolio_transactions` | Adds `fx_rate_to_eur` column via schemaInit.js |
+| `0016_add_fx_rate_to_portfolio_transactions` | Adds `fx_rate_to_eur` column with migration-safe guards |
 
 ## Related
 
 - [[docs/adr/002-database-schema\|Database Schema ADR]] - Table definitions
+- [[docs/adr/027-alembic-single-source-of-schema\|ADR-027: Alembic as Single Source of Schema Truth]] - Migration strategy
 - [[docs/guides/migrations\|Migration Guide]] - How schema changes are managed
-- [[apps/node-backend/src/database/schemaInit.js\|schemaInit.js]] - Startup trigger creation

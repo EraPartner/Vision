@@ -1,11 +1,11 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-03-31
-tags: [guide, backend, configuration, logging, database, infrastructure]
+date: 2026-04-21
+tags: [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
 description: Backend configuration management, logging, and database startup behavior
-related_code: ["apps/node-backend/src/config/config.js", "apps/node-backend/src/config/logger.js", "apps/node-backend/src/main.js", "apps/node-backend/src/database/schemaInit.js"]
+related_code: ["apps/node-backend/src/config/config.js", "apps/node-backend/src/config/logger.js", "apps/node-backend/src/main.js", "apps/node-backend/src/database/migrate.js"]
 ---
 
 # Backend Configuration & Infrastructure
@@ -111,21 +111,23 @@ logger.error('Database connection failed', { error: err.message });
 
 ## Database Startup Behavior
 
-**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/schemaInit.js]]
+**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.js]]
 
 The backend no longer manages a local PostgreSQL process. It always connects to `DATABASE_URL` and waits for database readiness during startup.
 
 ### Startup Sequence
 
 1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
-2. Runs `initializeSchema()` once a DB connection is available
-3. Starts the HTTP server only after DB readiness is confirmed
+2. Runs `runMigrations()` once a DB connection is available — shells out to `alembic upgrade head`
+3. Refreshes materialized views (runtime artifacts)
+4. Starts the HTTP server only after DB readiness and schema initialization are confirmed
 
 ### Operational Model
 
 - Database lifecycle is managed by Docker Compose (`db` service)
 - Backend process lifecycle is managed by Node/Bun and container restart policy
-- Alembic migrations remain available via `bun run db:*` commands
+- **Schema is managed exclusively by Alembic** ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
+- Alembic migrations are available via `bun run db:*` commands
 
 ---
 

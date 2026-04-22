@@ -2,13 +2,14 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-04-11T10:19:03.000Z
+date: 2026-04-21
 tags:
   - testing
   - inventory
   - coverage
   - vitest
   - react-testing-library
+  - phase-1
 description: Inventory of existing tests and coverage areas across frontend and backend
 aliases:
   - test coverage
@@ -151,13 +152,15 @@ Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [
 
 | File | Area | Coverage Added |
 |------|------|----------------|
-| [[apps/node-backend/tests/schemaInit.test.js]] | Schema initialization | Warm-start skip path when schema version is current; fallback full initialization + schema version stamp when lookup fails |
 | [[apps/node-backend/tests/categoryRepository.test.js]] | Category repository | `createOrGet` normalization, insert success (`created: true`), conflict fallback returning existing enriched category (`created: false`) |
 | [[apps/node-backend/tests/plannedTransactionRepository.test.js]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries |
 
-Validation runs (passed): `bun vitest run tests/schemaInit.test.js tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
+> [!note] Schema initialization test archived
+> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-Related code: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
+
+Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
 
 
 ### Incremental backend coverage addendum (2026-04-11)

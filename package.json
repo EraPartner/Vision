@@ -6,7 +6,8 @@
   "license": "AGPL-3.0-only",
   "workspaces": [
     "apps/frontend",
-    "apps/node-backend"
+    "apps/node-backend",
+    "packages/*"
   ],
   "scripts": {
     "install:all": "bun install",
@@ -51,7 +52,7 @@
     "rollup": ">=4.59.0",
     "vite": "8.0.8",
     "picomatch": "4.0.4",
-    "path-to-regexp": "0.1.13",
+    "path-to-regexp": "^8.2.0",
     "brace-expansion": "1.1.13",
     "flatted": "3.4.2",
     "lodash": "4.18.1"
@@ -60,7 +61,7 @@
     "rollup": "4.59.0",
     "vite": "8.0.8",
     "picomatch": "4.0.4",
-    "path-to-regexp": "0.1.13",
+    "path-to-regexp": "^8.2.0",
     "brace-expansion": "1.1.13",
     "flatted": "3.4.2",
     "lodash": "4.18.1"

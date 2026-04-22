@@ -2,8 +2,8 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-04-20
-tags: [feature, appearance, theming, personalization, frontend, settings]
+date: 2026-04-21
+tags: [feature, appearance, theming, personalization, frontend, settings, phase-1]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode]
 related_code:

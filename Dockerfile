@@ -7,9 +7,11 @@ WORKDIR /app
 
 # Copy workspace manifests so bun can resolve the workspace graph.
 # bun.lock* matches both text (bun.lock) and binary (bun.lockb) lockfile formats.
+# packages/ must be copied before install so workspace:* deps (@vision/types) resolve.
 COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
+COPY packages ./packages
 COPY i18n/source ./i18n/source
 COPY scripts/generate-locales.js ./scripts/generate-locales.js
 RUN bun install --frozen-lockfile
@@ -36,9 +38,13 @@ RUN apk add --no-cache python3 py3-pip && \
 COPY docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Install backend production dependencies only
-COPY apps/node-backend/package.json apps/node-backend/bun.lockb* ./apps/node-backend/
-RUN cd apps/node-backend && bun install --frozen-lockfile --production
+# Install backend production dependencies. Backend depends on @vision/types
+# (workspace:*), so install from the monorepo root with the full workspace graph.
+COPY package.json bun.lock* ./
+COPY apps/frontend/package.json ./apps/frontend/
+COPY apps/node-backend/package.json ./apps/node-backend/
+COPY packages ./packages
+RUN bun install --frozen-lockfile --production
 
 # Copy backend source and built frontend
 COPY apps/node-backend/src/ ./apps/node-backend/src/
@@ -50,6 +56,9 @@ COPY alembic/ ./alembic/
 
 ENV NODE_ENV=production
 ENV ENVIRONMENT=production
+# Alembic installed in /venv by the Python layer above; backend's in-process
+# runMigrations() shells out via this path instead of relying on $PATH.
+ENV ALEMBIC_BIN=/venv/bin/alembic
 
 EXPOSE 3002
 

@@ -3,7 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-04-11
-updated: 2026-04-19
+updated: 2026-04-21
 tags: [reference, environment, configuration, deployment]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -38,6 +38,8 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `APP_VERSION` | `unknown` | No | Application version string | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `APP_IMAGE_TAG` | _(fallback for APP_VERSION)_ | No | Docker image tag as version | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`; when unset, admin routes remain open for backward compatibility | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
+| `ALEMBIC_BIN` | `alembic` | No | Path to alembic binary; override in containers where alembic is installed to a venv (e.g. `/venv/bin/alembic`). Used by `runMigrations()` on startup | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
+| `ALEMBIC_CONFIG` | `config/alembic.ini` | No | Path to alembic config file relative to repo root, passed to alembic via `-c` flag | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 
 ## Kinesis Price Provider
 
@@ -49,11 +51,14 @@ aliases: [env vars, environment variables, .env, configuration, env]
 
 ## Frontend Variables
 
-| Variable | Default | Required | Description | Code |
-|----------|---------|----------|-------------|------|
-| `VITE_API_URL` | `http://localhost:3002` | No | Backend API URL | [[apps/frontend/src/lib/api.ts\|api.ts]] |
-| `VITE_LOG_LEVEL` | `debug` (dev), `warn` (prod) | No | Frontend log level | [[apps/frontend/src/lib/logger.ts\|logger.ts]] |
-| `VITE_ENABLE_LOGGING` | `true` | No | Enable frontend logging | [[apps/frontend/src/lib/logger.ts\|logger.ts]] |
+| Variable | Default | Required | Validation | Description | Code |
+|----------|---------|----------|-----------|-------------|------|
+| `VITE_API_URL` | `http://localhost:3002` | No | Valid URL string or empty; validated by Zod on boot | Backend API URL | [[apps/frontend/src/lib/env.ts\|env.ts]] |
+| `VITE_LOG_LEVEL` | `debug` (dev), `warn` (prod) | No | One of `debug`, `info`, `warn`, `error`, `silent` or empty; validated by Zod on boot | Frontend log level | [[apps/frontend/src/lib/env.ts\|env.ts]] |
+| `VITE_ENABLE_LOGGING` | `true` | No | String coerced to boolean (`'true'` → true, empty → default); validated by Zod on boot | Enable frontend logging | [[apps/frontend/src/lib/env.ts\|env.ts]] |
+
+> [!info] Frontend Env Validation (ADR-030)
+> All three `VITE_*` variables are validated at boot time by Zod schema in `apps/frontend/src/lib/env.ts`. Misconfiguration fails immediately on app startup with an aggregated error message. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for details.
 
 ## Electron Variables
 

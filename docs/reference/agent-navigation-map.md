@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-04-02
-tags: [ai-agent, navigation, codebase-map, developer-tool]
+date: 2026-04-21
+tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1]
 description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task
 aliases: [agent navigation, codebase map, file map, navigation guide]
 ---
@@ -269,7 +269,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 |------|---------|
 | [[apps/node-backend/src/database/connection.js]] | Database connection setup |
 | [[apps/node-backend/src/main.js]] | DB readiness retry loop + server startup |
-| [[apps/node-backend/src/database/schemaInit.js]] | Schema initialization (indexes, triggers) |
+| [[apps/node-backend/src/database/migrate.js]] | Alembic migrations (schema initialization) |
 
 ### Migrations
 

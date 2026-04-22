@@ -2,8 +2,8 @@
 title: ADR 002 - Database Schema
 type: adr
 status: Accepted
-date: 2026-03-31
-tags: [architecture, database, schema, postgresql]
+date: 2026-04-21
+tags: [architecture, database, schema, postgresql, phase-1]
 description: Complete database schema design with all tables, columns, enums, indexes, and PostgreSQL table inheritance for investments
 aliases: [database schema, ERD, tables, postgresql schema, migrations]
 ---
@@ -117,6 +117,7 @@ Core financial transactions (income/expense records).
 - `idx_transactions_recipient_date` on (recipient_id, date DESC)
 - `idx_transactions_category_date` on (category_id, date DESC)
 - `idx_transactions_bank_date` on (bank_account, date DESC)
+- `idx_transactions_category_recipient_active` **covering partial** on (category_id, recipient_id) WHERE is_active = true — Phase 0 hot-path optimization
 - `idx_transactions_memo_trgm` GIN trigram on memo
 - `idx_transactions_comment_trgm` GIN trigram on comment
 

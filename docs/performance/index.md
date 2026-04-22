@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-04-16
+date: 2026-04-21
 tags: [performance, index, optimization]
 description: Performance optimization strategies including caching, materialized views, and chart downsampling
 aliases: [performance, optimization, speed]
@@ -23,6 +23,8 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-04-20: Phase 0 Quick-Wins** — Frontend context memoization (AppSettings, Language), disabled React Query window-focus refetch, added explicit image dimensions for CLS prevention, database covering index on hot path (transactions), prepared-statement plan cache for frequent queries (`getBanks`, `getTransactionCount`, key transactionRepository methods), post-import materialized-view refresh, and async file I/O on Electron startup.
 
 **2026-04-16: Performance Page Rewrite** — Moved all computations (metrics, heatmap, breakdown) from client to backend. Page now makes single API request instead of 4 sequential calls. Payload reduced 30-40x for filtered periods. See [[docs/adr/008-performance-page-server-computed-response|ADR-008]].
 

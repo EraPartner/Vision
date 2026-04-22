@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-04-17
-tags: [components, portfolio, investments, phase-3.6]
+date: 2026-04-21
+tags: [components, portfolio, investments, phase-1, phase-3.6]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
 related_code: ["apps/frontend/src/components/portfolio", "apps/frontend/src/pages/portfolio/WatchlistPage.tsx"]
@@ -395,5 +395,5 @@ Code link: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/front
 - [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`; Phase 3.6 adds watchlist methods (`getWatchlist()`, `createWatchlistItem()`, `updateWatchlistItem()`, `deleteWatchlistItem()`) and market quotes method (`getMarketQuotes(symbols)`).
 - [[apps/node-backend/src/services/belgianInflationService.js]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.
 - [[apps/node-backend/src/routes/info.js]] - Exposes `GET /api/info/inflation-rates` and admin-limited `POST /api/info/inflation-rates/refresh`.
-- [[apps/node-backend/src/database/schemaInit.js]] - Creates `belgian_inflation_rates` table and indexes/triggers during schema init.
+- [[alembic/versions/0001_initial_database_schema.py]] - Creates `belgian_inflation_rates` table and indexes via Alembic baseline migration.
 - [[apps/node-backend/src/main.js]] - Warms and schedules Belgian inflation cache refresh during backend startup lifecycle.

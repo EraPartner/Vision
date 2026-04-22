@@ -2,8 +2,8 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-04-02
-tags: [guide, setup, development, local]
+date: 2026-04-21
+tags: [guide, setup, development, local, phase-1]
 description: Complete setup instructions for local development
 aliases: [setup-guide, installation, getting-started, local-dev]
 related_code: [[package.json]]
@@ -57,13 +57,11 @@ bun run docker:dev
 
 Startup flow runs automatically via `docker-entrypoint.sh`:
 1. Waits for PostgreSQL to be ready
-2. If `alembic_version` exists, runs Alembic migrations (plus compatibility check for long revision IDs)
-3. If `alembic_version` does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
-4. Starts the backend
+2. Runs `alembic upgrade head` to bootstrap or migrate the schema
+3. Starts the backend application
+4. After backend start, non-blocking startup tasks run in background (cache warming, price provider refresh, Kinesis history sanitization)
 
-After backend start, non-blocking startup tasks run in background (cache warming/backfills/refresh). This now includes persisted Kinesis history sanitization (`sanitizePersistedKinesisHistory()`), with errors caught and logged without blocking startup ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/services/priceProviderService.js]]).
-
-Bootstrap compatibility note: schema init version `20260324_2` includes startup idempotency guards so index/trigger creation only targets base tables in `public`, avoiding startup failures when compatibility relations (for example `investments`) are views in inheritance-based schemas ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+**Note:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been deleted. Fresh databases are bootstrapped by running `alembic/versions/0001_initial_database_schema.py`, which creates all 27 tables, enums, indexes, and triggers in a single baseline migration.
 
 If you are testing clean-slate startup repeatedly, prefer:
 

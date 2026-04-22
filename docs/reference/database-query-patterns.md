@@ -2,8 +2,8 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-04-02
-tags: [database, postgresql, queries, optimization, performance, indexes]
+date: 2026-04-21
+tags: [database, postgresql, queries, optimization, performance, indexes, phase-1]
 description: PostgreSQL query patterns, index strategies, and optimization techniques used throughout Vision
 aliases: [db optimization, query patterns, postgresql performance, indexing strategy]
 related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/database/", "alembic/versions/"]
@@ -30,8 +30,8 @@ related_code: ["apps/node-backend/src/repositories/", "apps/node-backend/src/dat
                ▼
 ┌─────────────────────────────────────────────┐
 │         Schema Initialization                │
-│  apps/node-backend/src/database/schemaInit.js│
-│  - Indexes, triggers, materialized views     │
+│  alembic/versions/0001_initial_database...  │
+│  - Indexes, triggers, DDL via migrations     │
 │  - Idempotent (safe to run multiple times)   │
 └─────────────────────────────────────────────┘
 ```

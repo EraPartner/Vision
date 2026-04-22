@@ -1075,7 +1075,7 @@ async function runBackup(destDir) {
   let dbUser = 'ftm_user';
   try {
     const envFile = path.join(workDir, '.env');
-    const envContents = fs.readFileSync(envFile, 'utf8');
+    const envContents = await fs.promises.readFile(envFile, 'utf8');
     const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::[^@]*)?@[^/]+\/(\S+)/);
     if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
   } catch { /* use defaults */ }
@@ -1173,7 +1173,7 @@ ipcMain.handle('update:install-shell', async () => {
 //   2. Terminate remaining DB connections, drop & recreate the database
 //   3. Restore via `docker run --rm -v <dir>:/restore <pg-image> psql -f /restore/<file>`
 //      — a temporary throwaway container that has direct access to the host file
-//   4. Restart the app container (backend reconnects + schemaInit runs)
+//   4. Restart the app container (backend reconnects + alembic upgrade head runs)
 async function runRestore(sqlFilePath) {
   if (!sqlFilePath) throw new Error('No backup file specified');
   if (!fs.existsSync(sqlFilePath)) throw new Error(`File not found: ${sqlFilePath}`);
@@ -1190,7 +1190,7 @@ async function runRestore(sqlFilePath) {
   let dbPass = '';
   try {
     const envFile = path.join(workDir, '.env');
-    const envContents = fs.readFileSync(envFile, 'utf8');
+    const envContents = await fs.promises.readFile(envFile, 'utf8');
     const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/(\S+)/);
     if (urlMatch) { dbUser = urlMatch[1]; dbPass = urlMatch[2] || ''; dbName = urlMatch[3]; }
   } catch { /* use defaults */ }

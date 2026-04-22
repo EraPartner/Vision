@@ -2,8 +2,8 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-04-20
-tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-10]
+date: 2026-04-21
+tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
 description: Local AI chat page for natural-language queries over financial data, powered by Ollama with tool-calling (30 tools across 6 domains)
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
 related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/frontend/src/pages/AIChatPage.tsx", "apps/frontend/src/features/ai-chat/", "apps/frontend/src/hooks/useAIChat.ts"]

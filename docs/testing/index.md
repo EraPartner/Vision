@@ -2,13 +2,13 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-04-17
+date: 2026-04-21
 tags:
   - testing
   - index
   - quality
   - vitest
-  - phase-8
+  - phase-1
 description: Testing strategies, patterns, and best practices for the Vision project
 aliases:
   - testing
@@ -101,9 +101,12 @@ bun vitest run src/path/to/test.test.js
 
 ### Coverage update addendum (2026-04-11)
 
-- Additional backend coverage was added for schema bootstrap behavior and repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
-- Tests: [[apps/node-backend/tests/schemaInit.test.js]], [[apps/node-backend/tests/categoryRepository.test.js]], [[apps/node-backend/tests/plannedTransactionRepository.test.js]]
-- Related code: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+- Additional backend coverage was added for repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
+- Tests: [[apps/node-backend/tests/categoryRepository.test.js]], [[apps/node-backend/tests/plannedTransactionRepository.test.js]]
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+
+> [!note] Schema initialization test archived
+> Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
 
 ### Coverage update addendum (2026-04-11, adapters/raw import)

@@ -2,8 +2,8 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-04-03
-tags: [reference, index, code-patterns, types, algorithms]
+date: 2026-04-21
+tags: [reference, index, code-patterns, types, algorithms, phase-1]
 description: Index of all reference documentation — code patterns, types, algorithms, environment variables, and more
 aliases: [reference docs, reference index, code reference]
 ---
@@ -35,8 +35,8 @@ SORT title ASC
 | [[docs/reference/react-query-keys\|React Query Keys]] | All frontend query keys for cache invalidation |
 | [[docs/reference/typescript-types\|TypeScript Types]] | All frontend type definitions |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]] | File navigation map organized by feature, layer, and task |
-| [[docs/reference/api-client-methods\|API Client Methods]] | Complete reference of all 1243-line api.ts client methods |
-| [[docs/reference/schema-initialization\|Schema Initialization]] | Database schema initialization at application startup |
+| [[docs/reference/frontend-api-client\|Frontend API Client Architecture]] | Transport, types, and facade layers of the HTTP client (Phase 1 refactor) |
+| [[docs/reference/schema-initialization\|Schema Initialization (Archived)]] | Legacy schema initialization reference — replaced by Alembic |
 
 ## Algorithms & Computer Science
 

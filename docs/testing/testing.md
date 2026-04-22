@@ -2,12 +2,13 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-16
+date: 2026-04-21
 tags:
   - testing
   - vitest
   - quality
   - phase-0
+  - phase-1
 aliases:
   - testing
   - unit tests
@@ -356,8 +357,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/nod
 - Validation snapshot: locale/language undefined-name sweep after patch reports no `Cannot find name 'locale'` or `Cannot find name 'language'`, and frontend build passes.
 - Validation status for this implementation batch: targeted frontend tests passed, frontend build passed, and root build passed.
 - Dependency remediation validation snapshot (2026-04): `bun audit` reports no vulnerabilities, backend tests pass on Vitest 4, frontend build passes on Vite 8, and frontend lint still reports pre-existing unrelated issues.
-- Schema-init compatibility validation: startup bootstrap now safely skips index/trigger creation on non-base relations (including `investments` view in inheritance setups), preventing `cannot create index on relation "investments"` during idempotent startup re-runs ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
-- Validation code links: [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/node-backend/src/database/schemaInit.js]]
+- Validation code links: [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]]
 - News image blank-box regression fix: backend CSP `img-src` now includes `https:` in [[apps/node-backend/src/main.js]], and news-card usage passes `fallbackClassName="hidden"` via [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]] and [[apps/frontend/src/pages/MarketLookupPage.tsx]] with support added in [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]].
 - Historical FX conversion coverage expanded: [[apps/node-backend/tests/currencyConversionService.test.js]] now validates sparse historical backfill behavior (missing `(currency,date)` pairs only), date-aware row conversion options (`useHistoricalRatesByDate`, `dateField`), and nearest-date fallback logic.
 - `getBankBalances(targetCurrency)` FX-history coverage expanded: [[apps/node-backend/tests/infoRepository.test.js]] now verifies `convertRowsToEur(..., targetCurrency, { useHistoricalRatesByDate: true, dateField: 'date' })` is used for both current balances and monthly history rows.
@@ -529,13 +529,15 @@ Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [
 
 ### Additional backend repository/schema coverage (2026-04-11)
 
-- [[apps/node-backend/tests/schemaInit.test.js]] adds schema bootstrap coverage for warm-start short-circuit behavior (skip DDL/materialized-view helpers when current schema version is present) and fallback initialization/stamping when `schema_version` lookup fails.
 - [[apps/node-backend/tests/categoryRepository.test.js]] adds repository coverage for `createOrGet` normalization (`general/detail` trim+uppercase), insert success (`created: true`), and conflict fallback returning the existing enriched category (`created: false`).
 - [[apps/node-backend/tests/plannedTransactionRepository.test.js]] adds pagination and query-efficiency coverage for `getAll`: fallback count query on empty pages and no execution/loan-schedule follow-up queries when no planned rows exist.
 
-Related code: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+> [!note] Schema initialization test archived
+> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
-Validation run (passed): `bun vitest run tests/schemaInit.test.js tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
+Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+
+Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
 
 ### Incremental coverage addendum (2026-04-11)

@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-04-02
-tags: [guide, database, migrations, alembic, postgresql]
+date: 2026-04-21
+tags: [guide, database, migrations, alembic, postgresql, phase-1]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
 related_code: ["alembic/", "alembic/env.py", "config/alembic.ini", "docker-entrypoint.sh"]
@@ -93,10 +93,10 @@ alembic upgrade head
 Migrations run automatically on container startup via `docker-entrypoint.sh`:
 
 1. Waits for PostgreSQL to be ready
-2. Checks if `alembic_version` table exists
-3. If exists: fixes column size if needed, then runs `alembic upgrade head`
-4. If not exists (fresh DB): skips Alembic, lets `schemaInit.js` bootstrap schema
-5. Starts the backend application
+2. Runs `alembic upgrade head` unconditionally (bootstraps fresh DB via baseline migration 0001, or applies pending migrations to existing DB)
+3. Starts the backend application
+
+**Note:** As of Phase 1 (2026-04-21), `schemaInit.js` has been removed. Alembic is now the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
 
 To run manually in production:
 

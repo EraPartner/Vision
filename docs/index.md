@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-17
+date: 2026-04-21
 tags: [knowledge-base, index, project, overview]
 description: Main entry point to the Vision project documentation - financial transaction management application
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -142,8 +142,8 @@ LIMIT 20
 | [[docs/reference/service-layer|🗂️ Service Layer]] | All 16 backend services reference |
 | [[docs/reference/database-query-patterns|🗄️ Database Query Patterns]] | PostgreSQL patterns, indexes, optimization |
 | [[docs/reference/agent-navigation-map|🗺️ Agent Navigation Map]] | File navigation by feature, layer, task |
-| [[docs/reference/api-client-methods|🔌 API Client Methods]] | Complete frontend API client reference |
-| [[docs/reference/schema-initialization|🗃️ Schema Initialization]] | Database startup schema initialization |
+| [[docs/reference/frontend-api-client|🔌 Frontend API Client]] | Transport, types, and facade layers of the HTTP client (Phase 1) |
+| [[docs/reference/schema-initialization|🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization |
 | [[docs/reference/api-endpoint-matrix|📊 API Endpoint Matrix]] | Complete matrix of all 128 API endpoints |
 
 ## Recent Updates
@@ -188,7 +188,7 @@ See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]]
 - **Phase 3.5 — MetalsPage DRY**: `MetalsPage.tsx` refactored as a thin wrapper around `StocksPage` with configurable props (`assetClasses=["metals"]`, `titleKey="metals.title"`, etc.). Eliminates code duplication; StocksPage now handles all asset-class logic generically.
 - **Phase 3.6 — Watchlist API Encapsulation**: `WatchlistPage.tsx` replaced 3 raw `fetch()` calls with typed `apiClient` methods: `getWatchlist()`, `getMarketQuotes(symbols)`, `deleteWatchlistItem(id)`. New watchlist methods added to `apiClient` (`createWatchlistItem`, `updateWatchlistItem`, `getMarketQuotes`). Enables shared error handling, retry logic, and React Query integration.
 
-See [[docs/features/portfolio|Portfolio Feature]] (Metals routing + Phase 3.5), [[docs/features/watchlist|Watchlist Feature]] (Phase 3.6), [[docs/reference/api-client-methods|API Client Methods]] (Watchlist section)
+See [[docs/features/portfolio|Portfolio Feature]] (Metals routing + Phase 3.5), [[docs/features/watchlist|Watchlist Feature]] (Phase 3.6), [[docs/reference/frontend-api-client|Frontend API Client]] (Phase 1 refactor)
 
 ### 2026-04-17 Phase 8 Correctness Hardening
 
@@ -210,12 +210,20 @@ See [[docs/adr/016-aggregation-shadow-mode|ADR-016]], [[docs/testing/testing#pro
 
 See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]], [[docs/performance/materialized-views|Materialized Views]], [[docs/reference/data-model|Data Model]], [[docs/reference/code-patterns|Code Patterns]]
 
+### 2026-04-20 Phase 0 Quick-Wins Shipped
+
+- **Frontend**: Context memoization (AppSettings, Language), disabled React Query window-focus refetch, explicit image dimensions (CLS prevention)
+- **Database**: Covering partial index on `transactions (category_id, recipient_id) WHERE is_active = true` for hot-path queries
+- **Query Optimization**: Prepared-statement plan cache (`queryPrepared`) adopted on hot paths: `getBanks`, `getTransactionCount`, key transaction/info repository methods
+- **Import Performance**: Post-commit fire-and-forget materialized-view refresh to keep aggregations warm
+- **Electron**: Async file I/O for startup (`loadSettings`, `saveSettings` deferred due to module-load coupling)
+- **Code Consolidation**: Deleted deprecated `services/calculations/currency.js` facade; canonical path is now `services/currency/currencyConversionService.js`
+
 ### 2026-04-16 Phase 0 Foundations Complete
 
 - **ADR-009**: Timezone policy established for deterministic business math across zones
 - **Patterns**: Golden-fixture regression testing, centralized SQL filter builder, typed error hierarchy
 - **Infrastructure**: Database fixture helper (TEST_DATABASE_URL), exchange_rate_cache table for arbitrary FX pairs
-- **Consolidation**: Currency conversion facade (`services/calculations/currency.js`) ready for Phase 0 step 4 merge
 - **Testing**: New patterns documented for golden fixtures and database-dependent tests
 - **Migration**: 0025_exchange_rate_cache.py adds schema support for arbitrary FX pair caching
 

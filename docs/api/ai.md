@@ -2,8 +2,8 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-04-20
-tags: [api, ai, chat, ollama, sse, streaming, llm]
+date: 2026-04-21
+tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with 30 tool-calling tools
 aliases: [ai api, chat api, ollama api, ai endpoints]
 ---

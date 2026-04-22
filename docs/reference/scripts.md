@@ -2,8 +2,8 @@
 title: Package.json Scripts Reference
 type: reference
 status: active
-date: 2026-04-10
-tags: [reference, scripts, npm, bun, build, commands]
+date: 2026-04-21
+tags: [reference, scripts, npm, bun, build, commands, phase-1]
 description: Complete reference of all npm/bun scripts available in the Vision project
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -57,6 +57,10 @@ For transitive vulnerability remediation patterns, see [[docs/security/dependenc
 
 ## Database
 
+Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The node-backend shells out to `alembic upgrade head` on startup via `src/database/migrate.js`; there is no longer a `schemaInit.js` idempotent bootstrap.
+
+### Root-scoped (repo root `package.json`)
+
 | Script | Command | Description | When to Use |
 |--------|---------|-------------|-------------|
 | `db:upgrade` | `venv/bin/alembic -c config/alembic.ini upgrade head` | Run all pending migrations | After pulling new migrations |
@@ -65,6 +69,17 @@ For transitive vulnerability remediation patterns, see [[docs/security/dependenc
 | `db:history` | `venv/bin/alembic -c config/alembic.ini history` | Show migration history | Inspect revision chain |
 | `db:stamp` | `venv/bin/alembic -c config/alembic.ini stamp head` | Mark DB at a revision without running migrations | Recovery/bootstrap workflows |
 | `db:revision` | `venv/bin/alembic -c config/alembic.ini revision --autogenerate -m` | Create new migration | After schema changes |
+
+### Backend-scoped (`apps/node-backend/package.json`)
+
+Shorthand wrappers that resolve the repo root and invoke alembic directly. Run from `apps/node-backend/` or via `bun --cwd apps/node-backend run <script>`.
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| `db:migrate` | `alembic upgrade head` | Apply all pending migrations |
+| `db:migrate:down` | `alembic downgrade -1` | Revert the latest migration |
+| `db:new-migration` | `alembic revision -m <slug>` | Create a new empty revision |
+| `db:reset` | `alembic downgrade base && alembic upgrade head` | Wipe and reapply the full chain |
 
 ## Docker
 

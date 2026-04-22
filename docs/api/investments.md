@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-04-10
+date: 2026-04-21
 tags: [api, investments, portfolio, stocks, crypto, metals]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -151,7 +151,7 @@ Compatibility safeguard:
 - Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
 - Migration `0021_price_provider_binance` replaces `coingecko`/`kraken` enum values with `binance` by altering `investments_base.price_provider` directly (not the `investments` compatibility view), dropping the default before enum conversion, then restoring `DEFAULT 'manual'` after conversion. The migration also handles PostgreSQL relation dependencies by backing up and dropping all dependent `public` views that reference `investments_base` (table-level or `price_provider` column-level dependencies), then recreating them from captured definitions; when the `investments` view is restored and `investments_view_update_instead()` exists, it recreates trigger `update_investments_view_instead` ([[alembic/versions/0021_update_price_provider_enum.py]]).
 - Migration `0022_add_kinesis_price_provider_enum` extends enum `price_provider` with value `kinesis`. Downgrade remaps `kinesis` rows to `manual`, rebuilds the enum without `kinesis`, and applies the same dependent-view/trigger handling pattern used by the prior enum migration to keep compatibility views functional ([[alembic/versions/0022_add_kinesis_price_provider_enum.py]]).
-- Startup schema bootstrap compatibility (schema version `20260324_2`) now guards `safeIndex`, `safeGinIndex`, and `safeTrigger` to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[apps/node-backend/src/database/schemaInit.js]]).
+- Alembic baseline migration `0001_initial_database_schema` guards indexes and triggers to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[alembic/versions/0001_initial_database_schema.py]]).
 
 **Response:**
 ```json
@@ -368,7 +368,7 @@ Create-path compatibility:
 - Before inherited child-table insert, `create()` proactively resyncs the `portfolio_transactions_base` sequence to reduce sequence drift failures; if insert still hits duplicate id (`23505`), it self-heals by resyncing again and retries once ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - Metals transactions now route to dedicated `metals_transactions` inheritance table (no longer shared through `stock_transactions`) while preserving `portfolio_transactions` view compatibility ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
 - Request validation and transaction payload normalization are enforced in route handlers and reflected in client form behavior ([[apps/node-backend/src/routes/investments.js]], [[apps/frontend/src/components/portfolio/AddPortfolioTxnDialog.tsx]]).
-- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[apps/frontend/src/types/api.ts]]).
+- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions (inheritance base/child + compatibility view path), enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/routes/investments.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
 - `POST /api/investments/:id/transactions` now forwards preloaded investment `asset_class` from route lookup into repository create (`preloaded_asset_class`) so repository can skip a duplicate investment metadata query; validation and response behavior remain unchanged ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.js]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
@@ -390,7 +390,7 @@ Update endpoint notes:
 
 Update-path compatibility:
 - For repository-level transaction update paths (PATCH), if `UPDATE portfolio_transactions ...` fails because `portfolio_transactions` is a non-updatable compatibility view, the repository falls back to updating `portfolio_transactions_base` plus the asset-specific child transaction table ([[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
-- Startup schema-init safety: bootstrap `fx_rate_to_eur` column changes now run only when `portfolio_transactions` is a table/partitioned table (`relkind in ('r','p')`), so app startup no longer attempts `ALTER TABLE` on a compatibility view ([[apps/node-backend/src/database/schemaInit.js]]).
+- Migration safety: alembic migration `0016_add_fx_rate_to_portfolio_transactions` runs `ALTER TABLE` only when `portfolio_transactions` is a table/partitioned table (`relkind in ('r','p')`), so startup no longer attempts `ALTER TABLE` on a compatibility view ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
 
 ### DELETE /api/investments/transactions/:txnId
 
@@ -517,6 +517,6 @@ For real estate investments:
 - [[docs/api/watchlist|Watchlist API]]
 - [[docs/adr/002-database-schema|Database Schema]]
 
-Metals implementation code links: [[apps/node-backend/src/database/schemaInit.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
-Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/schemaInit.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

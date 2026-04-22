@@ -2,8 +2,8 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
-date: 2026-04-16
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill]
+date: 2026-04-21
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js]]
@@ -146,4 +146,4 @@ If price fetch fails:
 - [[docs/features/portfolio|Feature: Portfolio]]
 - [[docs/performance/chart-downsampling|Chart Data Downsampling]]
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/node-backend/src/database/schemaInit.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

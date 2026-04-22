@@ -1,20 +1,23 @@
 ---
-title: API Client Methods Reference
+title: API Client Methods Reference (ARCHIVED)
 type: reference
-status: active
-date: 2026-04-17
-tags: [reference, api-client, frontend, typescript, http, phase-3.6]
-description: Complete reference of all frontend API client methods in api.ts
+status: archived
+date: 2026-04-21
+tags: [reference, api-client, frontend, typescript, http, archived, phase-1]
+description: Legacy reference of monolithic api.ts — replaced by modular architecture in Phase 1
 aliases: [api client, HTTP client, fetch methods, apiClient]
 related_code:
   - apps/frontend/src/lib/api.ts
 ---
 
-# API Client Methods Reference
+# API Client Methods Reference (ARCHIVED)
 
-## Overview
+> [!warning] Archived — See Frontend API Client Architecture
+> This document describes the legacy monolithic api.ts (1243 lines). As of Phase 1 (2026-04-21), the frontend HTTP client has been refactored into modular layers. See [[docs/reference/frontend-api-client|Frontend API Client Architecture]] for the current approach.
 
-The `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines) is the sole HTTP client for all frontend-to-backend communication. It provides typed methods for every API endpoint with built-in retry, timeout, and abort support.
+## Legacy Overview (Do Not Use)
+
+The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines, pre-Phase 1) was the sole HTTP client for all frontend-to-backend communication.
 
 ## Core Features
 

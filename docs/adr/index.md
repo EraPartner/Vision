@@ -2,8 +2,9 @@
 title: Architecture Decision Records Index
 type: adr-index
 status: active
-date: 2026-04-17
-tags: [adr, index, architecture, decisions, phase-8]
+date: 2026-04-21
+updated: 2026-04-21
+tags: [adr, index, architecture, decisions, phase-1]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -42,6 +43,18 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-21: Express 5 Compatibility: path-to-regexp Override
+
+[[docs/adr/028-express5-path-to-regexp-override|ADR-028]] — Override `path-to-regexp` to `^8.2.0` in `package.json` `overrides` and `resolutions` blocks. Legacy v0.1.13 (from Express 4) lacks `.match()` method required by Express 5's router (@2.2.0), causing `TypeError` at first route registration. Explicit override ensures all transitive dependencies resolve to v8.2.0+ with `.match()` support. Unblocks Express 5 router initialization; no code changes required.
+
+### 2026-04-21: Alembic as Single Source of Schema Truth
+
+[[docs/adr/027-alembic-single-source-of-schema|ADR-027]] — Delete `apps/node-backend/src/database/schemaInit.js` (1021 LOC, idempotent CREATE-IF-NOT-EXISTS) and make Alembic the sole owner of schema DDL. Node-backend boot shells out to `alembic upgrade head` via `child_process.execFile`; fails fast on non-zero exit. `schema_version` table removed — Alembic's `alembic_version` replaces it. `stampBaselineIfLegacy()` pre-upgrade hook rewrites pre-ADR-027 DBs (stamped at legacy revisions 0002–0032 in `alembic/legacy_versions/`) to `0001_initial` baseline without running DDL. Diff schemaInit output vs alembic head → back-fill missing objects as new revisions (expected 3–6). Enables real `downgrade()` support for Phase 5+ feature migrations. Electron packaging gains runtime dependency on bundled Python + alembic.
+
+### 2026-04-20: Unified API Response Envelope
+
+[[docs/adr/026-unified-api-response-envelope|ADR-026]] — All 108 HTTP endpoints return a discriminated union envelope keyed on `ok`: `{ ok: true, data, meta? }` on 2xx / `{ ok: false, error: { code, message, details? } }` on 4xx/5xx. Extends ADR-011's aggregation envelope to every route. New `wrapResponse` middleware exposes `res.ok(data, meta?)`; `createErrorHandler` rewritten to emit the failure shape. Frontend `api.ts` unwraps once and throws typed `ApiClientError`. Stable `ApiErrorCode` enum enables UI branching and i18n message keys. Request IDs propagate via `meta.requestId` for cross-log correlation. Breaking change rolled in one phase with no coexistence window; reversible entirely in code.
 
 ### 2026-04-20: Theme Variant System
 

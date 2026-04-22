@@ -2,8 +2,8 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-03-31
-tags: [troubleshooting, faq, reference, debugging]
+date: 2026-04-21
+tags: [troubleshooting, faq, reference, debugging, phase-1]
 description: Common issues, error messages, and their solutions for the Vision project
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
@@ -62,7 +62,7 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 **Solutions:**
 1. Run `alembic upgrade head` to apply all pending migrations
 2. Check `alembic_version` table for current schema version
-3. If `schemaInit.js` and migrations diverge, the migration path is authoritative
+3. Alembic is the authoritative source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — `schemaInit.js` was deleted in Phase 1
 
 ### Sequence drift on portfolio transactions
 
@@ -150,9 +150,9 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 **Symptom:** App starts but tables are missing.
 
 **Solutions:**
-1. The `docker-entrypoint.sh` runs `alembic upgrade head` on startup
+1. The `docker-entrypoint.sh` runs `alembic upgrade head` on startup (both fresh DB and migration cases)
 2. Check entrypoint logs for migration errors
-3. If fresh install, `schemaInit.js` bootstraps the schema when `alembic_version` table doesn't exist
+3. On a fresh DB, the baseline migration `0001_initial_database_schema.py` creates all 27 tables, enums, indexes, and triggers ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]])
 
 ## Common Error Messages
 

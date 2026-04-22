@@ -2,8 +2,8 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-04-11
-tags: [guide, deployment, production, docker, electron]
+date: 2026-04-21
+tags: [guide, deployment, production, docker, electron, phase-1]
 description: Production deployment instructions
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
@@ -114,16 +114,12 @@ server {
 
 Startup logic runs automatically when the container starts via the `docker-entrypoint.sh` script. The entrypoint script:
 1. Waits for the PostgreSQL database to be ready
-2. Checks whether `alembic_version` exists
-3. If it exists:
-   - Fixes `alembic_version.version_num` size if needed (supports long revision IDs)
-   - Compares current revision against head via `alembic current` and `alembic heads`
-   - **Skips upgrade if already at head** (saves ~1-3s on warm boots with no migrations pending)
-   - Otherwise runs `alembic upgrade head`
-4. If it does not exist (fresh DB), skips Alembic and lets backend `schemaInit.js` bootstrap schema
-5. Starts the backend application
+2. Runs `alembic upgrade head` to bootstrap or migrate the schema
+   - On a fresh DB: baseline migration `0001_initial_database_schema` creates all 27 tables, enums, indexes, and triggers
+   - On an existing DB: pending migrations are applied in sequence
+3. Starts the backend application
 
-Startup compatibility note: schema init version `20260324_2` adds base-table guards to startup index/trigger helpers so bootstrap remains idempotent when compatibility relations like `investments` are views in inheritance-schema deployments ([[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+**Note:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been removed.
 
 If you need to run migrations manually (e.g., for troubleshooting):
 
@@ -134,7 +130,7 @@ docker compose exec app /app/venv/bin/python3 -m alembic -c /app/config/alembic.
 
 Note: migration `0002_add_url_to_planned_transactions` is idempotent and safely skips `url` creation when the column already exists.
 
-Migration caveat: `0016_add_fx_rate_to_portfolio_transactions` is now safe on inherited-schema deployments where `portfolio_transactions` is a compatibility view. It only runs `ALTER TABLE` when relation kind is table/partitioned table (`relkind in ('r','p')`) and keeps the view recreation path when relation kind is view (`relkind='v'`). During view recreation, `fx_rate_to_eur` stays at the end of the `SELECT` list to preserve existing column order and avoid PostgreSQL `CREATE OR REPLACE VIEW` column-rename errors ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/node-backend/src/database/schemaInit.js]], [[docs/api/investments|API: Investments]]).
+Migration caveat: `0016_add_fx_rate_to_portfolio_transactions` is now safe on inherited-schema deployments where `portfolio_transactions` is a compatibility view. It only runs `ALTER TABLE` when relation kind is table/partitioned table (`relkind in ('r','p')`) and keeps the view recreation path when relation kind is view (`relkind='v'`). During view recreation, `fx_rate_to_eur` stays at the end of the `SELECT` list to preserve existing column order and avoid PostgreSQL `CREATE OR REPLACE VIEW` column-rename errors ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/api/investments|API: Investments]]).
 
 Migration caveat: `0021_update_price_provider_enum` updates enum type `price_provider` by swapping provider values (`coingecko`/`kraken` -> `binance`) on `investments_base.price_provider`. For PostgreSQL dependency safety during enum type conversion, it temporarily drops the column default, dynamically captures and drops all dependent `public` views that reference `investments_base` (including `price_provider` dependencies), performs the type swap and value mapping, restores `DEFAULT 'manual'`, then recreates the captured views. If `investments` is among recreated views and function `investments_view_update_instead()` exists, trigger `update_investments_view_instead` is recreated as well ([[alembic/versions/0021_update_price_provider_enum.py]], [[docs/api/investments|API: Investments]]).
 

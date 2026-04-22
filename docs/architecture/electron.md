@@ -2,9 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-04-02
-updated: 2026-04-19
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring]
+date: 2026-04-21
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, phase-0, phase-1]
 description: Electron desktop application architecture, IPC communication, sandbox hardening, and health monitoring
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog]
 related_code: ["packaging/electron/", "apps/frontend/src/", "apps/node-backend/src/main.js"]
@@ -91,6 +90,7 @@ Electron configuration is in `packaging/electron/`.
    - If lock unavailable (another instance running), quit immediately
    - Otherwise, register `second-instance` handler to focus existing window
 2. **Backend server** is spawned as a child process
+   - **Phase 0+**: Converted easy call-site `readFileSync`/`writeFileSync` to async `fs/promises`. `loadI18n`, `loadSettings`, `saveSettings` deferred due to module-load initialization coupling (logged in TODO.md)
 3. **Health Poll** — `pollHealth()` loops:
    - Polls `GET /health` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`)
    - Max 200 attempts (`VISION_HEALTH_POLL_ATTEMPTS`)

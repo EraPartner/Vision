@@ -2,8 +2,8 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-04-03
-tags: [backend, repositories, reference, data-access, postgresql]
+date: 2026-04-21
+tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions
 related_code: ["apps/node-backend/src/repositories/"]
@@ -32,9 +32,11 @@ Service Layer (business logic)
 
 **Design principles:**
 - Repositories are function modules — no classes
-- All SQL uses parameterized queries via `connection.js`
+- All SQL uses parameterized queries via `connection.js` or prepared statements (Phase 0+)
 - Repositories return plain JavaScript objects, not domain models
 - Error handling is delegated to the calling service/route
+
+**Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.js` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
 
 ---
 

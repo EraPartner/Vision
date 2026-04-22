@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-04-20
-tags: [security, ai, llm, ollama, privacy, tool-calling, rate-limiting, audit]
+date: 2026-04-21
+tags: [security, ai, llm, ollama, privacy, tool-calling, rate-limiting, audit, phase-1]
 description: Security posture for the local AI chat feature — 30 read-only tools across 6 domains, rate limits, no-external-calls guarantee, audit logging
 aliases: [ai data access, ai security, llm security, ollama security, ai chat security]
 related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/services/aiChat/tools/index.js", "apps/node-backend/src/integrations/ollama/client.js"]

@@ -1,36 +1,39 @@
 ---
 title: Schema Initialization Reference
 type: reference
-status: active
-date: 2026-04-02
-tags: [reference, database, schema, initialization, postgresql, startup]
-description: Reference for the database schema initialization process at application startup
+status: archived
+date: 2026-04-21
+tags: [reference, database, schema, initialization, postgresql, startup, archived, phase-1]
+description: Legacy schema initialization reference — ARCHIVED. Schema is now initialized by Alembic migrations (ADR-027).
 aliases: [schema init, database initialization, table creation, startup schema]
 related_code:
-  - apps/node-backend/src/database/schemaInit.js
-  - apps/node-backend/src/database/connection.js
+  - alembic/versions/0001_initial_database_schema.py
+  - apps/node-backend/src/database/migrate.js
   - apps/node-backend/src/main.js
 ---
 
-# Schema Initialization Reference
+# Schema Initialization Reference (ARCHIVED)
 
-## Overview
+> [!warning] Archived — See ADR-027
+> This document describes the legacy `schemaInit.js` system. As of Phase 1 (2026-04-21), schema initialization is managed entirely by Alembic. See [[docs/adr/027-alembic-single-source-of-schema|ADR-027]] for the current approach.
 
-The `schemaInit.js` module handles idempotent database schema initialization at application startup. It ensures all tables, indexes, triggers, and compatibility views exist before the API begins serving requests.
+## Overview (Legacy)
 
-## Architecture
+Previously, `schemaInit.js` handled idempotent database schema initialization at application startup. **This module was deleted in Phase 1.** It ensured all tables, indexes, triggers, and compatibility views existed before the API began serving requests. This responsibility now belongs to Alembic migrations.
 
-### Initialization Flow
+## Current Architecture (Since Phase 1)
+
+Application startup now flows through Alembic:
 
 ```
-Application Start → checkConnection() retry loop → schemaInit.js
-                                                    ↓
-                                          1. Core tables (CREATE TABLE IF NOT EXISTS)
-                                          2. Indexes (CREATE INDEX IF NOT EXISTS)
-                                          3. Triggers (CREATE OR REPLACE)
-                                          4. Compatibility views
-                                          5. Materialized views (via service)
+Application Start → checkConnection() → runMigrations()
+                                         ↓
+                                    alembic upgrade head
+                                         ↓
+                                    refreshMaterializedViews()
 ```
+
+All schema objects (tables, indexes, triggers, views) are defined in `alembic/versions/0001_initial_database_schema.py` (baseline) plus subsequent versioned migrations.
 
 ### Key Design Principles
 
@@ -90,27 +93,9 @@ Indexes are created for frequently queried columns:
 - **Search columns**: `normalized_name` for recipient matching
 - **Unique constraints**: `currency_code + rate_date` for exchange rates
 
-## Relationship to Alembic Migrations
-
-| Aspect | Schema Init | Alembic Migrations |
-|--------|------------|-------------------|
-| **Purpose** | Ensure tables exist at startup | Evolve schema over time |
-| **When run** | Every application start | Manually via `bun run db:upgrade` |
-| **Operations** | CREATE IF NOT EXISTS only | ALTER, DROP, ADD COLUMN, etc. |
-| **Idempotent** | Yes | No (forward-only) |
-| **Rollback** | N/A (always safe) | Via `bun run db:downgrade` |
-
-**Important**: Schema init does NOT replace migrations. Migrations handle schema evolution (adding columns, changing types, creating indexes). Schema init ensures the baseline tables exist for fresh installations.
-
-## Error Handling
-
-- Missing tables are created silently
-- Existing tables are skipped
-- Trigger replacements are idempotent
-- Failures are logged but do not crash the application (graceful degradation)
-
 ## Related Documentation
 
-- [[docs/adr/002-database-schema|Database Schema ADR]] — Schema design decisions
-- [[docs/reference/migration-dependencies|Migration Dependencies]] — Migration chain and groups
-- [[docs/reference/database-query-patterns|Database Query Patterns]] — PostgreSQL query patterns and optimization
+- [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — current migration strategy
+- [[docs/adr/002-database-schema|ADR-002: Database Schema]] — schema design decisions
+- [[docs/guides/migrations|Database Migration Guide]] — how to create and run migrations
+
