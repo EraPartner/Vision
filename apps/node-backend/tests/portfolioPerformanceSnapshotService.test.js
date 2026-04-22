@@ -8,7 +8,7 @@ vi.mock('../src/config/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../src/services/currencyConversionService.js', () => ({
+vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(async (rows) => rows),
 }));
 

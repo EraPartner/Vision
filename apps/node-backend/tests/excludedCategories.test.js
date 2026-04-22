@@ -11,7 +11,7 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
-vi.mock('../src/services/currencyConversionService.js', () => ({
+vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertToEur: vi.fn((amount) => Promise.resolve(amount)),
 }));
 

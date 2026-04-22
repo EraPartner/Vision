@@ -49,7 +49,8 @@ echo "[entrypoint] Running Alembic migrations..."
 cd /app
 
 # Check whether alembic_version exists.
-# If missing, we are on a fresh DB where schemaInit.js should bootstrap schema.
+# If missing, we are on a fresh DB — alembic upgrade head will bootstrap schema
+# from the 0001 baseline (ADR-027: Alembic is the single source of schema DDL).
 ALEMBIC_VERSION_EXISTS=$($VENV_PYTHON -c "
 import os
 import psycopg2
@@ -110,6 +111,55 @@ def fix_alembic_version_column():
 fix_alembic_version_column()
 " 2>/dev/null || true
 
+    # Legacy-rev reconciliation (ADR-027 port).
+    # Pre-port DBs are stamped with revisions now moved to alembic/legacy_versions/
+    # (e.g. 0031_ai_chat_tables). The legacy chain and the new 0001_initial
+    # baseline describe the same schema, so stamp forward without running DDL.
+    CURRENT_REV_DB=$($VENV_PYTHON -c "
+import os, psycopg2
+conn = psycopg2.connect(
+    host=os.environ.get('DB_HOST','db'),
+    port=os.environ.get('DB_PORT','5432'),
+    user=os.environ.get('DB_USER','ftm_user'),
+    password=os.environ.get('DB_PASSWORD', os.environ.get('POSTGRES_PASSWORD','')),
+    database=os.environ.get('DB_NAME','financial_transactions')
+)
+cur = conn.cursor()
+cur.execute('SELECT version_num FROM alembic_version LIMIT 1')
+row = cur.fetchone()
+print(row[0] if row else '')
+cur.close()
+conn.close()
+" 2>/dev/null)
+
+    if [ -n "$CURRENT_REV_DB" ] && [ "$CURRENT_REV_DB" != "0001_initial" ]; then
+        if [ -f "alembic/legacy_versions/${CURRENT_REV_DB}.py" ]; then
+            echo "[entrypoint] Legacy alembic rev '$CURRENT_REV_DB' detected; rewriting alembic_version to 0001_initial (ADR-027)."
+            # `alembic stamp` validates the current rev against versions/, which
+            # fails for legacy ids. Rewrite the row directly — schema is already
+            # equivalent to the 0001_initial baseline.
+            $VENV_PYTHON -c "
+import os, psycopg2
+conn = psycopg2.connect(
+    host=os.environ.get('DB_HOST','db'),
+    port=os.environ.get('DB_PORT','5432'),
+    user=os.environ.get('DB_USER','ftm_user'),
+    password=os.environ.get('DB_PASSWORD', os.environ.get('POSTGRES_PASSWORD','')),
+    database=os.environ.get('DB_NAME','financial_transactions')
+)
+cur = conn.cursor()
+cur.execute(\"UPDATE alembic_version SET version_num = '0001_initial'\")
+conn.commit()
+cur.close()
+conn.close()
+print('[entrypoint] alembic_version rewritten to 0001_initial')
+" || {
+                echo "[entrypoint] ERROR: failed to rewrite alembic_version"
+                exit 1
+            }
+        fi
+    fi
+
     # Skip Alembic upgrade when already at head — saves ~1-3s on warm boots.
     CURRENT_REV=$($VENV_PYTHON -m alembic -c config/alembic.ini current 2>/dev/null | awk 'NR==1 {print $1}')
     HEAD_REV=$($VENV_PYTHON -m alembic -c config/alembic.ini heads 2>/dev/null | awk 'NR==1 {print $1}')
@@ -118,12 +168,16 @@ fix_alembic_version_column()
     else
         echo "[entrypoint] Running: $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head"
         $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
-            echo "[entrypoint] Warning: Alembic migration failed (may be non-fatal if already applied)"
-            # Don't exit - let the app start anyway, schemaInit.js will handle it
+            echo "[entrypoint] ERROR: Alembic migration failed"
+            exit 1
         }
     fi
 else
-    echo "[entrypoint] alembic_version not found; skipping Alembic on fresh DB (schemaInit.js will bootstrap schema)."
+    echo "[entrypoint] alembic_version not found; running alembic upgrade head on fresh DB."
+    $VENV_PYTHON -m alembic -c config/alembic.ini upgrade head || {
+        echo "[entrypoint] ERROR: Alembic bootstrap failed on fresh DB"
+        exit 1
+    }
 fi
 
 echo "[entrypoint] Starting backend application..."

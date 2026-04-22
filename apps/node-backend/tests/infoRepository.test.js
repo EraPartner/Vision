@@ -6,14 +6,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
+  queryPrepared: vi.fn(),
 }));
 
-vi.mock('../src/services/currencyConversionService.js', () => ({
+vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(async (rows) => rows.map(r => ({ ...r, amount_eur: Number(r.amount || 0) }))),
 }));
 
-import { query } from '../src/database/connection.js';
-import { convertRowsToEur } from '../src/services/currencyConversionService.js';
+import { query, queryPrepared } from '../src/database/connection.js';
+import { convertRowsToEur } from '../src/services/currency/currencyConversionService.js';
 import infoRepository from '../src/repositories/infoRepository.js';
 import { clearMvCache } from '../src/repositories/infoRepository.js';
 
@@ -525,7 +526,7 @@ describe('InfoRepository', () => {
     });
 
     it('should return bank names and transaction count helpers', async () => {
-      query
+      queryPrepared
         .mockResolvedValueOnce({ rows: [{ bank_account: 'A' }, { bank_account: 'B' }] })
         .mockResolvedValueOnce({ rows: [{ count: '42' }] });
 

@@ -8,7 +8,7 @@
  */
 
 import { query } from '../../database/connection.js';
-import { convertToCurrency } from '../currencyConversionService.js';
+import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes } from '../../utils/portfolioMath.js';
 

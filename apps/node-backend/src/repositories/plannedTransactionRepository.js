@@ -401,7 +401,7 @@ export const plannedTransactionRepository = {
    * leave an execution row without its matching state advance.
    *
    * Idempotent via the UNIQUE(planned_transaction_id, executed_transaction_id)
-   * index (alembic 0027 / schemaInit). A retried request raises Postgres error
+   * index (alembic 0001 baseline). A retried request raises Postgres error
    * 23505, which this method treats as success and returns `{ duplicate: true }`
    * so the caller can respond without creating a new execution.
    *

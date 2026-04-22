@@ -6,7 +6,7 @@
  */
 
 import { query } from '../database/connection.js';
-import { convertToCurrency } from '../services/currencyConversionService.js';
+import { convertToCurrency } from './currency/currencyConversionService.js';
 import { calculateCostBasis, calculateAccruedInterest, computeMetrics, computeHeatmap } from '../utils/portfolioMath.js';
 import { computeAndStoreSnapshots as _computeAndStoreSnapshots } from './portfolio/snapshotBuilder.js';
 

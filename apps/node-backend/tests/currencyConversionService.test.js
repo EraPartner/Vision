@@ -20,7 +20,7 @@ import {
   convertToCurrency,
   warmCache,
   backfillPortfolioHistoricalRates,
-} from '../src/services/currencyConversionService.js';
+} from '../src/services/currency/currencyConversionService.js';
 import { query } from '../src/database/connection.js';
 import { logger } from '../src/config/logger.js';
 

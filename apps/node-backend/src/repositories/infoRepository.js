@@ -8,8 +8,8 @@
  * conversion service, matching the Python backend behaviour.
  */
 
-import { query } from '../database/connection.js';
-import { convertRowsToEur } from '../services/currencyConversionService.js';
+import { query, queryPrepared } from '../database/connection.js';
+import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import { logger } from '../config/logger.js';
 
 /**
@@ -324,14 +324,16 @@ export const infoRepository = {
   },
 
   async getBanks() {
-    const result = await query(
-      `SELECT DISTINCT bank_account FROM transactions WHERE is_active = true AND bank_account IS NOT NULL ORDER BY bank_account`
+    const result = await queryPrepared(
+      'info_get_banks',
+      `SELECT DISTINCT bank_account FROM transactions WHERE is_active = true AND bank_account IS NOT NULL ORDER BY bank_account`,
+      []
     );
     return result.rows.map(r => r.bank_account);
   },
 
   async getTransactionCount() {
-    const result = await query('SELECT count(*) FROM transactions WHERE is_active = true');
+    const result = await queryPrepared('info_tx_count', 'SELECT count(*) FROM transactions WHERE is_active = true', []);
     return parseInt(result.rows[0].count, 10);
   },
 

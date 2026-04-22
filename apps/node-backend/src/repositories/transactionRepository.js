@@ -10,7 +10,7 @@
  *   get rows and total count in one DB call instead of two.
  */
 
-import { query } from '../database/connection.js';
+import { query, queryPrepared } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 import { buildTransactionWhere } from '../services/filterBuilder.js';
 
@@ -276,7 +276,7 @@ export const transactionRepository = {
       LEFT JOIN categories rc ON r.default_category_id = rc.id
       WHERE t.id = $1
     `;
-    const result = await query(sql, [id]);
+    const result = await queryPrepared('tx_get_by_id', sql, [id]);
     return result.rows[0] || null;
   },
 
@@ -316,7 +316,7 @@ export const transactionRepository = {
       category_id,
       comment,
     ];
-    const result = await query(sql, params);
+    const result = await queryPrepared('tx_create', sql, params);
     return result.rows[0] || null;
   },
 
@@ -432,7 +432,7 @@ export const transactionRepository = {
    * Hard delete a transaction.
    */
   async hardDelete(id) {
-    const result = await query('DELETE FROM transactions WHERE id = $1', [id]);
+    const result = await queryPrepared('tx_hard_delete', 'DELETE FROM transactions WHERE id = $1', [id]);
     return result.rowCount > 0;
   },
 };

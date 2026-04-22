@@ -3,6 +3,8 @@
  * For production, consider redis-based rate limiting.
  */
 
+import { RateLimitedError } from './errorHandler.js';
+
 const requestCounts = new Map();
 
 // Clean up old entries every 60 seconds
@@ -42,10 +44,11 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
     res.setHeader('X-RateLimit-Reset', Math.ceil((entry.windowStart + windowMs) / 1000));
 
     if (entry.count > maxRequests) {
-      return res.status(429).json({
-        detail: 'Too many requests. Please try again later.',
-        retry_after: Math.ceil((entry.windowStart + windowMs - now) / 1000),
-      });
+      const retryAfter = Math.ceil((entry.windowStart + windowMs - now) / 1000);
+      res.setHeader('Retry-After', retryAfter);
+      return next(new RateLimitedError('Too many requests. Please try again later.', {
+        details: { retryAfter },
+      }));
     }
 
     next();

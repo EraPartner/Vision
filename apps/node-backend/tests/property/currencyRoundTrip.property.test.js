@@ -22,7 +22,7 @@ const {
   convertToCurrency,
   clearMemoryCache,
   FALLBACK_RATES,
-} = await import('../../src/services/currencyConversionService.js');
+} = await import('../../src/services/currency/currencyConversionService.js');
 
 const originalFetch = global.fetch;
 const EPSILON_RATIO = 1e-9; // 1 part per billion

@@ -12,6 +12,7 @@
 
 import { query, getClient } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { refreshAggregations } from '../aggregationRefresh.js';
 
 const COMMIT_CHUNK = 1000;
 
@@ -125,5 +126,15 @@ export async function commitBatch({ batchId, onProgress }) {
   );
 
   logger.info('[pipeline:commit] done', { batchId, total, imported, duplicates, errors });
+
+  if (imported > 0) {
+    refreshAggregations().catch((err) => {
+      logger.warn('[pipeline:commit] post-import aggregation refresh failed', {
+        batchId,
+        error: err?.message,
+      });
+    });
+  }
+
   return { imported, duplicates, errors };
 }

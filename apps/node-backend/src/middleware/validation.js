@@ -3,6 +3,8 @@
  * Prevents SQL injection, XSS, and malformed input.
  */
 
+import { ValidationError } from './errorHandler.js';
+
 // Whitelist of allowed DB columns per resource type
 const ALLOWED_COLUMNS = {
   transactions: new Set([
@@ -122,7 +124,7 @@ export function validateIdParam(req, res, next) {
   if (req.params.id) {
     const result = validateId(req.params.id);
     if (!result.valid) {
-      return res.status(400).json({ detail: result.error });
+      return next(new ValidationError(result.error));
     }
     req.params.id = result.value;
   }
