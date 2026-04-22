@@ -11,95 +11,82 @@
 import { Router } from 'express';
 import settingsRepository from '../repositories/settingsRepository.js';
 import { validateIntArray } from '../middleware/validation.js';
-import { logger } from '../config/logger.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
-function getSettingKeyTooLongError(key, includeKeyInMessage) {
-  return includeKeyInMessage
-    ? `Setting key '${key}' too long (max 100 chars)`
-    : 'Setting key too long (max 100 chars)';
-}
-
-function validateSettingKeyLength(key, includeKeyInMessage = false) {
-  if (key.length > 100) {
-    return getSettingKeyTooLongError(key, includeKeyInMessage);
-  }
-  return null;
-}
-
 const ALLOWED_THEME_VARIANTS = ['default', 'dracula', 'solarized', 'nord', 'high-contrast'];
 const ALLOWED_THEME_MODES = ['light', 'dark', 'system', 'schedule'];
+const ALLOWED_EXCLUSION_SCOPES = ['everywhere', 'dashboard', 'statistics'];
 
-function validateThemeSettingsValue(value) {
+function assertSettingKeyLength(key, includeKeyInMessage = false) {
+  if (key.length > 100) {
+    const msg = includeKeyInMessage
+      ? `Setting key '${key}' too long (max 100 chars)`
+      : 'Setting key too long (max 100 chars)';
+    throw new ValidationError(msg);
+  }
+}
+
+function assertThemeSettingsValue(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { ok: false, error: 'theme_settings must be an object' };
+    throw new ValidationError('theme_settings must be an object');
   }
   if (value.variant !== undefined && !ALLOWED_THEME_VARIANTS.includes(value.variant)) {
-    return { ok: false, error: `Invalid theme variant. Allowed: ${ALLOWED_THEME_VARIANTS.join(', ')}` };
+    throw new ValidationError(`Invalid theme variant. Allowed: ${ALLOWED_THEME_VARIANTS.join(', ')}`);
   }
   if (value.mode !== undefined && !ALLOWED_THEME_MODES.includes(value.mode)) {
-    return { ok: false, error: `Invalid theme mode. Allowed: ${ALLOWED_THEME_MODES.join(', ')}` };
+    throw new ValidationError(`Invalid theme mode. Allowed: ${ALLOWED_THEME_MODES.join(', ')}`);
   }
   if (value.schedule !== undefined) {
     const s = value.schedule;
     if (typeof s !== 'object' || s === null || Array.isArray(s)) {
-      return { ok: false, error: 'theme_settings.schedule must be an object' };
+      throw new ValidationError('theme_settings.schedule must be an object');
     }
     const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
     if (s.lightFrom !== undefined && (typeof s.lightFrom !== 'string' || !hhmm.test(s.lightFrom))) {
-      return { ok: false, error: 'schedule.lightFrom must be HH:MM' };
+      throw new ValidationError('schedule.lightFrom must be HH:MM');
     }
     if (s.darkFrom !== undefined && (typeof s.darkFrom !== 'string' || !hhmm.test(s.darkFrom))) {
-      return { ok: false, error: 'schedule.darkFrom must be HH:MM' };
+      throw new ValidationError('schedule.darkFrom must be HH:MM');
     }
   }
-  return { ok: true };
 }
 
-function normalizeDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
+function assertDashboardSettingsValue(value, { validateExcludeHiddenCategories = false, validateExclusionScope = false } = {}) {
   if (typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, error: 'dashboard_settings must be an object' };
+    throw new ValidationError('dashboard_settings must be an object');
   }
 
   if (value.excludedCategoryIds !== undefined) {
     const cat = validateIntArray(value.excludedCategoryIds, 'excludedCategoryIds');
-    if (!cat.valid) return { ok: false, error: cat.error };
+    if (!cat.valid) throw new ValidationError(cat.error);
     value.excludedCategoryIds = cat.value;
   }
 
   if (value.excludedRecipientIds !== undefined) {
     const rec = validateIntArray(value.excludedRecipientIds, 'excludedRecipientIds');
-    if (!rec.valid) return { ok: false, error: rec.error };
+    if (!rec.valid) throw new ValidationError(rec.error);
     value.excludedRecipientIds = rec.value;
   }
 
   if (validateExcludeHiddenCategories
     && value.excludeHiddenCategories !== undefined
     && typeof value.excludeHiddenCategories !== 'boolean') {
-    return { ok: false, error: 'excludeHiddenCategories must be boolean' };
+    throw new ValidationError('excludeHiddenCategories must be boolean');
   }
 
-  if (validateExclusionScope && value.exclusionScope !== undefined) {
-    const allowed = ['everywhere', 'dashboard', 'statistics'];
-    if (!allowed.includes(value.exclusionScope)) return { ok: false, error: 'Invalid exclusionScope' };
+  if (validateExclusionScope && value.exclusionScope !== undefined
+    && !ALLOWED_EXCLUSION_SCOPES.includes(value.exclusionScope)) {
+    throw new ValidationError('Invalid exclusionScope');
   }
-
-  return { ok: true };
 }
 
-// GET /api/settings — all settings
 router.get('/', async (req, res) => {
-  try {
-    const settings = await settingsRepository.getAll();
-    res.json(settings);
-  } catch (err) {
-    logger.error('Failed to fetch settings', { error: err.message });
-    res.status(500).json({ detail: 'Failed to fetch settings' });
-  }
+  const settings = await settingsRepository.getAll();
+  res.ok(settings);
 });
 
-// Default values for known settings keys
 const SETTING_DEFAULTS = {
   onboarding_complete: false,
   dismissed_recurring_patterns: [],
@@ -129,117 +116,60 @@ const SETTING_DEFAULTS = {
   widget_visibility: {},
 };
 
-// GET /api/settings/:key — single setting (returns default if not found)
 router.get('/:key', async (req, res) => {
-  try {
-    const { key } = req.params;
-    const value = await settingsRepository.get(key);
-    if (value === null) {
-      if (key in SETTING_DEFAULTS) {
-        return res.json({ key, value: SETTING_DEFAULTS[key] });
-      }
-      return res.status(404).json({ detail: `Setting '${key}' not found` });
+  const { key } = req.params;
+  const value = await settingsRepository.get(key);
+  if (value === null) {
+    if (key in SETTING_DEFAULTS) {
+      res.ok({ key, value: SETTING_DEFAULTS[key] });
+      return;
     }
-    res.json({ key, value });
-  } catch (err) {
-    logger.error('Failed to fetch setting', { error: err.message });
-    res.status(500).json({ detail: 'Failed to fetch setting' });
+    throw new NotFoundError(`Setting '${key}' not found`);
   }
+  res.ok({ key, value });
 });
 
-// PUT /api/settings/:key — upsert single setting
 router.put('/:key', async (req, res) => {
-  try {
   const { key } = req.params;
   const { value } = req.body;
 
-    const keyLengthError = validateSettingKeyLength(key);
-    if (keyLengthError) {
-      return res.status(400).json({ detail: keyLengthError });
-    }
-    if (value === undefined) {
-      return res.status(400).json({ detail: 'Missing "value" in request body' });
-    }
+  assertSettingKeyLength(key);
+  if (value === undefined) throw new ValidationError('Missing "value" in request body');
 
-    // Special-case validation for dashboard_settings key
-    if (key === 'dashboard_settings') {
-      const validatedDashboardSettings = normalizeDashboardSettingsValue(value, {
-        validateExcludeHiddenCategories: true,
-        validateExclusionScope: true,
-      });
-      if (!validatedDashboardSettings.ok) {
-        return res.status(400).json({ detail: validatedDashboardSettings.error });
-      }
-    }
-
-    if (key === 'theme_settings') {
-      const validatedTheme = validateThemeSettingsValue(value);
-      if (!validatedTheme.ok) {
-        return res.status(400).json({ detail: validatedTheme.error });
-      }
-    }
-
-    const result = await settingsRepository.set(key, value);
-    res.json(result);
-  } catch (err) {
-    logger.error('Failed to save setting', { error: err.message });
-    res.status(500).json({ detail: 'Failed to save setting' });
+  if (key === 'dashboard_settings') {
+    assertDashboardSettingsValue(value, {
+      validateExcludeHiddenCategories: true,
+      validateExclusionScope: true,
+    });
   }
+  if (key === 'theme_settings') assertThemeSettingsValue(value);
+
+  const result = await settingsRepository.set(key, value);
+  res.ok(result);
 });
 
-// PUT /api/settings — bulk upsert
 router.put('/', async (req, res) => {
-  try {
-    const settings = req.body;
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-      return res.status(400).json({ detail: 'Body must be a JSON object of key→value pairs' });
-    }
-
-    // Validate keys
-    for (const key of Object.keys(settings)) {
-      const keyLengthError = validateSettingKeyLength(key, true);
-      if (keyLengthError) {
-        return res.status(400).json({ detail: keyLengthError });
-      }
-    }
-
-    // Validate known structured keys
-    for (const [key, value] of Object.entries(settings)) {
-      if (key === 'dashboard_settings') {
-        const validatedDashboardSettings = normalizeDashboardSettingsValue(value);
-        if (!validatedDashboardSettings.ok) {
-          return res.status(400).json({ detail: validatedDashboardSettings.error });
-        }
-      }
-      if (key === 'theme_settings') {
-        const validatedTheme = validateThemeSettingsValue(value);
-        if (!validatedTheme.ok) {
-          return res.status(400).json({ detail: validatedTheme.error });
-        }
-      }
-    }
-
-    await settingsRepository.setMany(settings);
-    res.json({ saved: Object.keys(settings).length });
-  } catch (err) {
-    logger.error('Failed to bulk save settings', { error: err.message });
-    res.status(500).json({ detail: 'Failed to save settings' });
+  const settings = req.body;
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    throw new ValidationError('Body must be a JSON object of key→value pairs');
   }
+
+  for (const key of Object.keys(settings)) assertSettingKeyLength(key, true);
+
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === 'dashboard_settings') assertDashboardSettingsValue(value);
+    if (key === 'theme_settings') assertThemeSettingsValue(value);
+  }
+
+  await settingsRepository.setMany(settings);
+  res.ok({ saved: Object.keys(settings).length });
 });
 
-// DELETE /api/settings/:key
 router.delete('/:key', async (req, res) => {
-  try {
-    const { key } = req.params;
-    const deleted = await settingsRepository.delete(key);
-    if (!deleted) {
-      return res.status(404).json({ detail: `Setting '${key}' not found` });
-    }
-    res.json({ deleted: true });
-  } catch (err) {
-    logger.error('Failed to delete setting', { error: err.message });
-    res.status(500).json({ detail: 'Failed to delete setting' });
-  }
+  const { key } = req.params;
+  const deleted = await settingsRepository.delete(key);
+  if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
+  res.ok({ deleted: true });
 });
 
 export default router;

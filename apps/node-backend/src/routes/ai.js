@@ -21,7 +21,9 @@
  *   - done               {assistantMessage, usage, iterations, conversation}
  *   - error              {detail, code?}
  *
- * All JSON error responses use `{detail: string}` to match the rest of the API.
+ * JSON responses use the unified envelope (ADR-026). The SSE stream keeps
+ * the raw event protocol — headers are committed before the first handler
+ * error can fire, so errors ride the `error` SSE frame instead.
  */
 
 import { Router } from 'express';
@@ -38,33 +40,52 @@ import {
   renameConversation,
   runChatTurn,
 } from '../services/aiChatService.js';
+import { ApiErrorCode } from '@vision/types/errors';
+import {
+  AppError,
+  NotFoundError,
+  ValidationError,
+} from '../middleware/errorHandler.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_MESSAGE_LENGTH = 8000;
 const MAX_TITLE_LENGTH = 200;
 
-function parseConversationId(req) {
+function requireConversationId(req) {
   const id = req.params.id;
   if (!id || !UUID_RE.test(id)) {
-    return { error: 'Invalid conversation id' };
+    throw new ValidationError('Invalid conversation id');
   }
-  return { id };
+  return id;
 }
 
 function enforceAiChatEnabled(req, res, next) {
   if (!settings.aiChat.enabled) {
-    return res.status(503).json({ detail: 'AI chat is disabled' });
+    return next(new AppError('AI chat is disabled', {
+      status: 503,
+      code: ApiErrorCode.SERVICE_UNAVAILABLE,
+    }));
   }
   return next();
 }
 
-function mapServiceError(err, res, fallbackDetail) {
+/**
+ * Convert a service-layer error into a typed AppError. Preserves the
+ * AiChatServiceError status + code so the envelope surfaces them unchanged.
+ */
+function rethrowAsAppError(err, fallbackMessage) {
   if (err instanceof AiChatServiceError) {
-    logger.warn('[ai] service error', { code: err.code, status: err.status, message: err.message });
-    return res.status(err.status).json({ detail: err.message, code: err.code });
+    throw new AppError(err.message, {
+      status: err.status,
+      code: err.code,
+      cause: err,
+    });
   }
-  logger.error(fallbackDetail, { error: err.message, stack: err.stack });
-  return res.status(500).json({ detail: fallbackDetail });
+  throw new AppError(fallbackMessage, {
+    status: 500,
+    code: ApiErrorCode.INTERNAL_SERVER_ERROR,
+    cause: err,
+  });
 }
 
 const router = Router();
@@ -72,17 +93,14 @@ router.use(enforceAiChatEnabled);
 
 // GET /api/ai/status
 //
-// Response shape is normalized for the frontend:
+// Normalized for the frontend:
 //   - `ok`         : boolean          — reachable flag
-//   - `baseUrl`    : string           — actual URL used by the backend (may be
-//                                       `host.docker.internal` when running in a
-//                                       container; kept for debugging)
-//   - `displayUrl` : string           — user-facing URL, always rewrites
-//                                       `host.docker.internal` → `localhost`
-//                                       so humans see something they can open
-//   - `hint`       : string | null    — actionable guidance when the container
-//                                       can't reach the host-side Ollama (the
-//                                       most common failure mode)
+//   - `baseUrl`    : string           — actual URL used by the backend
+//   - `displayUrl` : string           — rewrites `host.docker.internal` → `localhost`
+//   - `hint`       : string | null    — guidance when the container can't reach host-side Ollama
+//
+// The health probe never throws — it returns `{reachable: false, error, code}`
+// on failure — so this endpoint always emits a success envelope.
 function toDisplayUrl(baseUrl) {
   if (!baseUrl) return baseUrl;
   return baseUrl.replace('host.docker.internal', 'localhost');
@@ -107,130 +125,100 @@ function buildConnectionHint(health) {
 }
 
 router.get('/status', async (req, res) => {
-  try {
-    const client = getOllamaClient();
-    const health = await client.healthCheck();
-    res.json({
-      ok: Boolean(health.reachable),
-      baseUrl: health.baseUrl,
-      displayUrl: toDisplayUrl(health.baseUrl),
-      modelCount: health.modelCount ?? 0,
-      error: health.error ?? null,
-      code: health.code ?? null,
-      hint: buildConnectionHint(health),
-      defaultModel: settings.ollama.defaultModel,
-      enabled: settings.aiChat.enabled,
-    });
-  } catch (err) {
-    logger.error('Failed to query Ollama status', { error: err.message });
-    res.status(500).json({ detail: 'Failed to query Ollama status' });
-  }
+  const client = getOllamaClient();
+  const health = await client.healthCheck();
+  res.ok({
+    ok: Boolean(health.reachable),
+    baseUrl: health.baseUrl,
+    displayUrl: toDisplayUrl(health.baseUrl),
+    modelCount: health.modelCount ?? 0,
+    error: health.error ?? null,
+    code: health.code ?? null,
+    hint: buildConnectionHint(health),
+    defaultModel: settings.ollama.defaultModel,
+    enabled: settings.aiChat.enabled,
+  });
 });
 
 // GET /api/ai/models
 router.get('/models', async (req, res) => {
+  const client = getOllamaClient();
   try {
-    const client = getOllamaClient();
     const models = await client.listModels();
-    res.json({ models });
+    res.ok({ models });
   } catch (err) {
     if (err instanceof OllamaError) {
-      logger.warn('[ai] listModels failed', { code: err.code, message: err.message });
-      return res.status(502).json({ detail: `Ollama not reachable: ${err.message}`, code: err.code });
+      throw new AppError(`Ollama not reachable: ${err.message}`, {
+        status: 502,
+        code: ApiErrorCode.BAD_GATEWAY,
+        details: { ollamaCode: err.code },
+        cause: err,
+      });
     }
-    logger.error('Failed to list Ollama models', { error: err.message });
-    res.status(500).json({ detail: 'Failed to list Ollama models' });
+    throw err;
   }
 });
 
 // GET /api/ai/conversations
 router.get('/conversations', async (req, res) => {
-  try {
-    const rows = await listConversations();
-    res.json(rows);
-  } catch (err) {
-    logger.error('Failed to list AI conversations', { error: err.message });
-    res.status(500).json({ detail: 'Failed to list AI conversations' });
-  }
+  const rows = await listConversations();
+  res.ok(rows);
 });
 
 // POST /api/ai/conversations
 router.post('/conversations', async (req, res) => {
-  try {
-    const { title, model } = req.body || {};
-    if (title !== undefined && (typeof title !== 'string' || title.length > MAX_TITLE_LENGTH)) {
-      return res.status(400).json({ detail: `"title" must be a string up to ${MAX_TITLE_LENGTH} chars` });
-    }
-    if (model !== undefined && (typeof model !== 'string' || !model.trim())) {
-      return res.status(400).json({ detail: '"model" must be a non-empty string' });
-    }
+  const { title, model } = req.body || {};
+  if (title !== undefined && (typeof title !== 'string' || title.length > MAX_TITLE_LENGTH)) {
+    throw new ValidationError(`"title" must be a string up to ${MAX_TITLE_LENGTH} chars`);
+  }
+  if (model !== undefined && (typeof model !== 'string' || !model.trim())) {
+    throw new ValidationError('"model" must be a non-empty string');
+  }
 
+  try {
     const conversation = await createEmptyConversation({ title, model });
-    res.status(201).json(conversation);
+    res.status(201);
+    res.ok(conversation);
   } catch (err) {
-    mapServiceError(err, res, 'Failed to create AI conversation');
+    rethrowAsAppError(err, 'Failed to create AI conversation');
   }
 });
 
 // GET /api/ai/conversations/:id
 router.get('/conversations/:id', async (req, res) => {
-  const parsed = parseConversationId(req);
-  if (parsed.error) return res.status(400).json({ detail: parsed.error });
-
-  try {
-    const convo = await getConversationWithMessages(parsed.id);
-    if (!convo) return res.status(404).json({ detail: 'Conversation not found' });
-    res.json(convo);
-  } catch (err) {
-    logger.error('Failed to load AI conversation', { error: err.message, id: parsed.id });
-    res.status(500).json({ detail: 'Failed to load AI conversation' });
-  }
+  const id = requireConversationId(req);
+  const convo = await getConversationWithMessages(id);
+  if (!convo) throw new NotFoundError('Conversation not found');
+  res.ok(convo);
 });
 
 // PATCH /api/ai/conversations/:id
 router.patch('/conversations/:id', async (req, res) => {
-  const parsed = parseConversationId(req);
-  if (parsed.error) return res.status(400).json({ detail: parsed.error });
-
+  const id = requireConversationId(req);
   const { title } = req.body || {};
   if (typeof title !== 'string' || !title.trim()) {
-    return res.status(400).json({ detail: '"title" is required' });
+    throw new ValidationError('"title" is required');
   }
   if (title.length > MAX_TITLE_LENGTH) {
-    return res.status(400).json({ detail: `"title" must be <= ${MAX_TITLE_LENGTH} chars` });
+    throw new ValidationError(`"title" must be <= ${MAX_TITLE_LENGTH} chars`);
   }
 
-  try {
-    const updated = await renameConversation(parsed.id, title);
-    if (!updated) return res.status(404).json({ detail: 'Conversation not found' });
-    res.json(updated);
-  } catch (err) {
-    logger.error('Failed to rename AI conversation', { error: err.message, id: parsed.id });
-    res.status(500).json({ detail: 'Failed to rename AI conversation' });
-  }
+  const updated = await renameConversation(id, title);
+  if (!updated) throw new NotFoundError('Conversation not found');
+  res.ok(updated);
 });
 
 // DELETE /api/ai/conversations/:id
 router.delete('/conversations/:id', async (req, res) => {
-  const parsed = parseConversationId(req);
-  if (parsed.error) return res.status(400).json({ detail: parsed.error });
-
-  try {
-    const deleted = await deleteConversation(parsed.id);
-    if (!deleted) return res.status(404).json({ detail: 'Conversation not found' });
-    res.status(204).send();
-  } catch (err) {
-    logger.error('Failed to delete AI conversation', { error: err.message, id: parsed.id });
-    res.status(500).json({ detail: 'Failed to delete AI conversation' });
-  }
+  const id = requireConversationId(req);
+  const deleted = await deleteConversation(id);
+  if (!deleted) throw new NotFoundError('Conversation not found');
+  res.status(204).send();
 });
 
 // POST /api/ai/chat
 router.post('/chat', async (req, res) => {
   const parsed = validateChatBody(req.body);
-  if (parsed.error) {
-    return res.status(400).json({ detail: parsed.error });
-  }
 
   const abortController = new AbortController();
   req.on('close', () => {
@@ -244,7 +232,7 @@ router.post('/chat', async (req, res) => {
       model: parsed.model,
       signal: abortController.signal,
     });
-    res.json({
+    res.ok({
       conversation: turn.conversation,
       userMessage: turn.userMessage,
       toolMessages: turn.toolMessages,
@@ -253,7 +241,7 @@ router.post('/chat', async (req, res) => {
       iterations: turn.iterations,
     });
   } catch (err) {
-    mapServiceError(err, res, 'Failed to process AI chat message');
+    rethrowAsAppError(err, 'Failed to process AI chat message');
   }
 });
 
@@ -262,18 +250,18 @@ function validateChatBody(body) {
 
   if (conversationId !== undefined && conversationId !== null) {
     if (typeof conversationId !== 'string' || !UUID_RE.test(conversationId)) {
-      return { error: '"conversationId" must be a UUID' };
+      throw new ValidationError('"conversationId" must be a UUID');
     }
   }
   if (typeof message !== 'string' || !message.trim()) {
-    return { error: '"message" is required' };
+    throw new ValidationError('"message" is required');
   }
   if (message.length > MAX_MESSAGE_LENGTH) {
-    return { error: `"message" must be <= ${MAX_MESSAGE_LENGTH} chars` };
+    throw new ValidationError(`"message" must be <= ${MAX_MESSAGE_LENGTH} chars`);
   }
   if (model !== undefined && model !== null) {
     if (typeof model !== 'string' || !model.trim()) {
-      return { error: '"model" must be a non-empty string' };
+      throw new ValidationError('"model" must be a non-empty string');
     }
   }
   return {
@@ -283,12 +271,13 @@ function validateChatBody(body) {
   };
 }
 
-// POST /api/ai/chat/stream — SSE-streamed chat turn
+// POST /api/ai/chat/stream — SSE-streamed chat turn.
+//
+// Validation throws happen before headers are written, so they travel
+// through the global error handler as envelope responses. After headers
+// commit, errors ride the SSE `error` frame.
 router.post('/chat/stream', async (req, res) => {
   const parsed = validateChatBody(req.body);
-  if (parsed.error) {
-    return res.status(400).json({ detail: parsed.error });
-  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

@@ -16,13 +16,14 @@ import { Router } from 'express';
 import https from 'https';
 import { checkConnection, getTableCount } from '../database/connection.js';
 import { getSettings } from '../config/config.js';
+import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { sanitizePersistedKinesisHistory } from '../services/priceProviderService.js';
+import { AppError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-const GENERIC_ADMIN_ERROR_DETAIL = 'Administrative operation failed';
 
 /**
  * Fetch the latest GitHub Release metadata.
@@ -53,7 +54,7 @@ function hasValidReleaseTag(release) {
 }
 
 function detectCurrentAppVersion() {
-  return process.env.APP_VERSION || process.env.APP_IMAGE_TAG || 'unknown';
+  return env.APP_VERSION || env.APP_IMAGE_TAG || 'unknown';
 }
 
 function buildUpdateCheckPayload(release, currentVersion) {
@@ -85,119 +86,79 @@ function formatAdminStatusPayload(isConnected, tableCount) {
 
 const router = Router();
 
-// GET /api/admin
 router.get('/', async (req, res) => {
-  try {
-    const isConnected = await checkConnection();
-    const tableCount = isConnected ? await getTableCount() : 0;
-
-    res.json(formatAdminStatusPayload(isConnected, tableCount));
-  } catch (err) {
-    logger.error('Admin status retrieval failed', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve administration status' });
-  }
+  const isConnected = await checkConnection();
+  const tableCount = isConnected ? await getTableCount() : 0;
+  res.ok(formatAdminStatusPayload(isConnected, tableCount));
 });
 
-// POST /api/admin/database/init
 router.post('/database/init', async (req, res) => {
-  try {
-    // Tables are managed by Alembic/SQLAlchemy - just verify connection
-    const isConnected = await checkConnection();
-    if (!isConnected) {
-      return res.status(500).json({ detail: 'Cannot connect to database' });
-    }
-    res.status(201).json({
-      message: 'Database connection verified successfully',
-      details: { note: 'Tables are managed by Alembic migrations' },
-      links: [],
-    });
-  } catch (err) {
-    logger.error('Database init check failed', { error: err.message });
-    res.status(500).json({ detail: GENERIC_ADMIN_ERROR_DETAIL });
-  }
+  const isConnected = await checkConnection();
+  if (!isConnected) throw new AppError('Cannot connect to database', { status: 500 });
+
+  res.status(201);
+  res.ok({
+    message: 'Database connection verified successfully',
+    details: { note: 'Tables are managed by Alembic migrations' },
+    links: [],
+  });
 });
 
-// POST /api/admin/database/reset
 router.post('/database/reset', async (req, res) => {
   const settings = getSettings();
   if (!settings.admin.enableResetDb) {
-    return res.status(404).json({ detail: 'Database reset endpoint disabled' });
+    throw new NotFoundError('Database reset endpoint disabled');
   }
 
   const force = req.query.force === 'true';
   if (!force) {
-    return res.status(400).json({
-      message: 'Database reset requires force=true parameter',
-      details: { error: 'Set force=true query parameter to confirm reset (DESTRUCTIVE)' },
-      links: [],
+    throw new ValidationError('Database reset requires force=true parameter', {
+      details: { hint: 'Set force=true query parameter to confirm reset (DESTRUCTIVE)' },
     });
   }
 
-  // Not implementing actual reset in Node backend - delegate to Python/Alembic
-  res.json({
+  res.ok({
     message: 'Database reset should be performed via Alembic migrations (Python backend)',
     details: { warning: 'Use the Python backend for destructive database operations' },
     links: [],
   });
 });
 
-// GET /api/admin/update/check
-// Queries the GitHub Releases API for the latest published release tag.
-// Used for backend/container update visibility.
 router.get('/update/check', async (req, res) => {
-  try {
-    const release = await fetchLatestRelease();
+  const release = await fetchLatestRelease();
 
-    if (!hasValidReleaseTag(release)) {
-      return res.json({ up_to_date: true, error: 'No published releases found', latest_version: null });
-    }
-
-    // e.g. "v1.2.3"
-    // The running image is tagged with the same semver at build time via CI.
-    // Fall back to APP_IMAGE_TAG env var (set in docker-compose.yml) or "unknown".
-    const currentVersion = detectCurrentAppVersion();
-    const { payload, latestVersion, upToDate } = buildUpdateCheckPayload(release, currentVersion);
-
-    logger.info('Update check via GitHub Releases', { currentVersion, latestVersion, upToDate });
-    return res.json(payload);
-  } catch (err) {
-    logger.error('Update check failed', { error: err.message });
-    res.status(500).json({ detail: GENERIC_ADMIN_ERROR_DETAIL });
+  if (!hasValidReleaseTag(release)) {
+    res.ok({ up_to_date: true, error: 'No published releases found', latest_version: null });
+    return;
   }
+
+  const currentVersion = detectCurrentAppVersion();
+  const { payload, latestVersion, upToDate } = buildUpdateCheckPayload(release, currentVersion);
+
+  logger.info('Update check via GitHub Releases', { currentVersion, latestVersion, upToDate });
+  res.ok(payload);
 });
 
-// POST /api/admin/update/apply
-// In the packaged desktop app, the actual update is orchestrated by Electron
-// (docker compose pull → docker compose up → alembic migrations via entrypoint).
-// This endpoint exists so the frontend can trigger a soft "update acknowledgement"
-// and surface a user-facing message directing them to the Electron shell update.
 router.post('/update/apply', async (req, res) => {
-  res.json({
+  res.ok({
     success: true,
     note: 'Updates are applied automatically by the desktop app. If an update is available, use the notification in the Vision app window to download and install it.',
   });
 });
 
-// POST /api/admin/update/apply-and-restart (kept for backwards-compatibility)
 router.post('/update/apply-and-restart', async (req, res) => {
-  res.json({
+  res.ok({
     success: true,
     note: 'Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required.',
   });
 });
 
-// POST /api/admin/investments/kinesis/sanitize-history
 router.post('/investments/kinesis/sanitize-history', async (req, res) => {
-  try {
-    const result = await sanitizePersistedKinesisHistory();
-    return res.json({
-      message: 'Kinesis historical spikes sanitization completed',
-      ...result,
-    });
-  } catch (err) {
-    logger.error('Kinesis history sanitization failed', { error: err.message });
-    return res.status(500).json({ detail: 'Failed to sanitize Kinesis history' });
-  }
+  const result = await sanitizePersistedKinesisHistory();
+  res.ok({
+    message: 'Kinesis historical spikes sanitization completed',
+    ...result,
+  });
 });
 
 export default router;

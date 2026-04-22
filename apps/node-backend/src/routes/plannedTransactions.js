@@ -7,11 +7,11 @@
 import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
-import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/loanRepaymentService.js';
 import { calculateNextDate } from '../services/recurrenceService.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -66,6 +66,14 @@ async function resolveCategoryIdFromName(fields) {
   delete fields.category_name;
 }
 
+function generateLoanScheduleOrThrow(input) {
+  try {
+    return generateLoanRepaymentSchedule(input);
+  } catch (err) {
+    throw new ValidationError(`Invalid loan parameters: ${err.message}`);
+  }
+}
+
 function applyLoanPatchDefaults(fields, existing) {
   let generatedLoanSchedule;
 
@@ -76,7 +84,7 @@ function applyLoanPatchDefaults(fields, existing) {
   const resultingIsLoan = fields.is_loan !== undefined ? !!fields.is_loan : !!existing.is_loan;
 
   if (resultingIsLoan && (loanFieldsChanged || fields.is_loan === true)) {
-    generatedLoanSchedule = generateLoanRepaymentSchedule({
+    generatedLoanSchedule = generateLoanScheduleOrThrow({
       loan_type: fields.loan_type ?? existing.loan_type,
       loan_principal: fields.loan_principal ?? existing.loan_principal,
       loan_annual_interest_rate: fields.loan_annual_interest_rate ?? existing.loan_annual_interest_rate,
@@ -117,12 +125,6 @@ function getCurrentDateString() {
   return new Date().toISOString().split('T')[0];
 }
 
-function handlePlannedTransactionWriteError(res, err, action) {
-  const statusCode = Number(err.statusCode) || 500;
-  logger.error(`Error ${action} planned transaction`, { error: err.message, statusCode });
-  res.status(statusCode).json({ detail: `Failed to ${action} planned transaction: ${err.message}` });
-}
-
 async function updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, existing) {
   if (generatedLoanSchedule) {
     await plannedTransactionRepository.replaceLoanSchedule(id, generatedLoanSchedule.schedule);
@@ -135,118 +137,83 @@ async function updateLoanScheduleForPatch(id, generatedLoanSchedule, fields, exi
   return false;
 }
 
-// GET /api/planned-transactions
 router.get('/', async (req, res) => {
-  try {
-    const {
-      limit = 50, offset = 0,
-      start_date, end_date, bank_account,
-      category_id, recipient_id,
-      is_recurring, is_executed, active = 'true', search,
-    } = req.query;
+  const {
+    limit = 50, offset = 0,
+    start_date, end_date, bank_account,
+    category_id, recipient_id,
+    is_recurring, is_executed, active = 'true', search,
+  } = req.query;
 
-    const opts = {
-      limit: Math.min(parseInt(limit, 10) || 50, 5000),
-      offset: parseInt(offset, 10) || 0,
-      startDate: start_date || null,
-      endDate: end_date || null,
-      bankAccount: bank_account || null,
-      categoryId: category_id ? parseInt(category_id, 10) : null,
-      recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
-      isRecurring: is_recurring != null ? is_recurring === 'true' : null,
-      isExecuted: is_executed != null ? is_executed === 'true' : null,
-      search: search ? String(search).slice(0, 200) : null,
-      active: active !== 'false',
-    };
+  const opts = {
+    limit: Math.min(parseInt(limit, 10) || 50, 5000),
+    offset: parseInt(offset, 10) || 0,
+    startDate: start_date || null,
+    endDate: end_date || null,
+    bankAccount: bank_account || null,
+    categoryId: category_id ? parseInt(category_id, 10) : null,
+    recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
+    isRecurring: is_recurring != null ? is_recurring === 'true' : null,
+    isExecuted: is_executed != null ? is_executed === 'true' : null,
+    search: search ? String(search).slice(0, 200) : null,
+    active: active !== 'false',
+  };
 
-    const { items, total } = await plannedTransactionRepository.getAll(opts);
-
-    res.json({
-      items: items.map(formatPlannedTransaction),
-      total,
-      limit: opts.limit,
-      offset: opts.offset,
-      links: [],
-    });
-  } catch (err) {
-    logger.error('Error retrieving planned transactions', { error: err.message });
-    res.status(500).json({ detail: `Failed to retrieve planned transactions: ${err.message}` });
-  }
+  const { items, total } = await plannedTransactionRepository.getAll(opts);
+  res.ok(
+    items.map(formatPlannedTransaction),
+    { pagination: { total, limit: opts.limit, offset: opts.offset } },
+  );
 });
 
-// POST /api/planned-transactions
 router.post('/', async (req, res) => {
-  try {
-    const data = { ...req.body };
-    if (!data.bank_account) {
-      return res.status(400).json({ detail: 'Missing required field: bank_account' });
-    }
+  const data = { ...req.body };
+  if (!data.bank_account) throw new ValidationError('Missing required field: bank_account');
 
-    if (!data.is_loan && (!data.planned_date || data.amount == null)) {
-      return res.status(400).json({ detail: 'Missing required fields: planned_date, amount' });
-    }
-
-    if (data.is_loan) {
-      // Ensure loan_term_months is reasonable
-      if (data.loan_term_months && (data.loan_term_months < 1 || data.loan_term_months > 600)) {
-        return res.status(400).json({ detail: 'loan_term_months must be between 1 and 600 months' });
-      }
-
-      const generated = generateLoanRepaymentSchedule(data);
-      data.loan_regular_payment_amount = generated.regular_payment_amount;
-      data.loan_first_payment_date = generated.first_due_date;
-      data.loan_schedule = generated.schedule;
-      data.amount = -Math.abs(generated.regular_payment_amount);
-      data.planned_date = generated.first_due_date;
-
-      // Ensure loans are treated as recurring internally but do not accept recurrence pattern data
-      data.is_recurring = true;
-      // Clear recurrence pattern to prevent conflicting/nonsense recurrence data
-      if (data.recurrence_pattern) delete data.recurrence_pattern;
-      if (data.frequency) delete data.frequency;
-      if (data.custom_interval_days) delete data.custom_interval_days;
-      if (data.end_date) delete data.end_date;
-      if (data.max_occurrences) delete data.max_occurrences;
-    }
-
-    const created = await plannedTransactionRepository.create(data);
-    res.status(201).json(formatPlannedTransaction(created));
-  } catch (err) {
-    handlePlannedTransactionWriteError(res, err, 'create');
+  if (!data.is_loan && (!data.planned_date || data.amount == null)) {
+    throw new ValidationError('Missing required fields: planned_date, amount');
   }
+
+  if (data.is_loan) {
+    if (data.loan_term_months && (data.loan_term_months < 1 || data.loan_term_months > 600)) {
+      throw new ValidationError('loan_term_months must be between 1 and 600 months');
+    }
+
+    const generated = generateLoanScheduleOrThrow(data);
+    data.loan_regular_payment_amount = generated.regular_payment_amount;
+    data.loan_first_payment_date = generated.first_due_date;
+    data.loan_schedule = generated.schedule;
+    data.amount = -Math.abs(generated.regular_payment_amount);
+    data.planned_date = generated.first_due_date;
+
+    data.is_recurring = true;
+    if (data.recurrence_pattern) delete data.recurrence_pattern;
+    if (data.frequency) delete data.frequency;
+    if (data.custom_interval_days) delete data.custom_interval_days;
+    if (data.end_date) delete data.end_date;
+    if (data.max_occurrences) delete data.max_occurrences;
+  }
+
+  const created = await plannedTransactionRepository.create(data);
+  res.status(201);
+  res.ok(formatPlannedTransaction(created));
 });
 
-// GET /api/planned-transactions/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  try {
-    const id = parseRouteId(req);
-    const pt = await plannedTransactionRepository.getById(id);
-    if (!pt) {
-      return res.status(404).json({ detail: `Planned transaction ${req.params.id} not found` });
-    }
-    res.json(formatPlannedTransaction(pt));
-  } catch (err) {
-    logger.error('Error retrieving planned transaction', { error: err.message });
-    res.status(500).json({ detail: `Failed to retrieve planned transaction: ${err.message}` });
-  }
+  const id = parseRouteId(req);
+  const pt = await plannedTransactionRepository.getById(id);
+  if (!pt) throw new NotFoundError(`Planned transaction ${req.params.id} not found`);
+  res.ok(formatPlannedTransaction(pt));
 });
 
-// PATCH /api/planned-transactions/:id
-// Mirrors Python's planned transaction update with name-to-ID resolution
-// PATCH /api/planned-transactions/:id
-// Apply a per-route rate limiter because this handler performs DB lookups
-// and name-to-id resolution which can be expensive when abused.
 router.patch(
   '/:id',
   validateIdParam,
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'planned-transactions-patch' }),
   async (req, res) => {
-  try {
     const id = parseRouteId(req);
     const existing = await plannedTransactionRepository.getById(id);
-    if (!existing) {
-      return res.status(404).json({ detail: `Planned transaction ${id} not found` });
-    }
+    if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
     const fields = { ...req.body };
     removePatchOnlyReadOnlyFields(fields);
@@ -263,81 +230,57 @@ router.patch(
 
     if (loanScheduleChanged) {
       const withSchedule = await plannedTransactionRepository.getById(id);
-      return res.json(formatPlannedTransaction(withSchedule || updated));
+      res.ok(formatPlannedTransaction(withSchedule || updated));
+      return;
     }
 
-    res.json(formatPlannedTransaction(updated));
-  } catch (err) {
-    handlePlannedTransactionWriteError(res, err, 'update');
-  }
-});
+    res.ok(formatPlannedTransaction(updated));
+  },
+);
 
-// POST /api/planned-transactions/:id/execute
 router.post('/:id/execute', validateIdParam, async (req, res) => {
-  try {
-    const id = parseRouteId(req);
-    const { executed_transaction_id, execution_date } = req.body;
+  const id = parseRouteId(req);
+  const { executed_transaction_id, execution_date } = req.body;
 
-    if (!executed_transaction_id) {
-      return res.status(400).json({ detail: 'Missing required field: executed_transaction_id' });
-    }
-
-    const existing = await plannedTransactionRepository.getById(id);
-    if (!existing) {
-      return res.status(404).json({ detail: `Planned transaction ${id} not found` });
-    }
-
-    // Compute state advance for the parent planned_transactions row.
-    const execDate = execution_date || getCurrentDateString();
-    const updateFields = {
-      is_executed: !existing.is_recurring, // For recurring, keep false
-      last_executed_date: execDate,
-    };
-
-    // For recurring transactions, calculate and set next planned_date
-    if (existing.is_recurring && existing.recurrence_pattern) {
-      const baseDate = new Date(existing.planned_date);
-      const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
-      if (nextDate) {
-        updateFields.planned_date = nextDate.toISOString().split('T')[0];
-        updateFields.is_executed = false; // Reset for next occurrence
-      }
-    }
-
-    // Atomic insert-execution + update-parent. Idempotent via UNIQUE index:
-    // a duplicate request returns `{ duplicate: true }` and we reply with the
-    // already-advanced state instead of re-executing.
-    const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
-      id,
-      executed_transaction_id,
-      execDate,
-      updateFields
-    );
-
-    const current = await plannedTransactionRepository.getById(id);
-    if (duplicate) {
-      res.set('Idempotent-Replay', 'true');
-    }
-    res.json(formatPlannedTransaction(current));
-  } catch (err) {
-    logger.error('Error executing planned transaction', { error: err.message });
-    res.status(500).json({ detail: `Failed to execute planned transaction: ${err.message}` });
+  if (!executed_transaction_id) {
+    throw new ValidationError('Missing required field: executed_transaction_id');
   }
+
+  const existing = await plannedTransactionRepository.getById(id);
+  if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
+
+  const execDate = execution_date || getCurrentDateString();
+  const updateFields = {
+    is_executed: !existing.is_recurring,
+    last_executed_date: execDate,
+  };
+
+  if (existing.is_recurring && existing.recurrence_pattern) {
+    const baseDate = new Date(existing.planned_date);
+    const nextDate = calculateNextDate(baseDate, existing.recurrence_pattern);
+    if (nextDate) {
+      updateFields.planned_date = nextDate.toISOString().split('T')[0];
+      updateFields.is_executed = false;
+    }
+  }
+
+  const { duplicate } = await plannedTransactionRepository.executeAndAdvance(
+    id,
+    executed_transaction_id,
+    execDate,
+    updateFields
+  );
+
+  const current = await plannedTransactionRepository.getById(id);
+  if (duplicate) res.set('Idempotent-Replay', 'true');
+  res.ok(formatPlannedTransaction(current));
 });
 
-// DELETE /api/planned-transactions/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
-  try {
-    const id = parseRouteId(req);
-    const deleted = await plannedTransactionRepository.hardDelete(id);
-    if (!deleted) {
-      return res.status(404).json({ detail: `Planned transaction ${id} not found` });
-    }
-    res.json({ message: `Planned transaction ${id} deleted permanently`, links: [] });
-  } catch (err) {
-    logger.error('Error deleting planned transaction', { error: err.message });
-    res.status(500).json({ detail: `Failed to delete planned transaction: ${err.message}` });
-  }
+  const id = parseRouteId(req);
+  const deleted = await plannedTransactionRepository.hardDelete(id);
+  if (!deleted) throw new NotFoundError(`Planned transaction ${id} not found`);
+  res.ok({ message: `Planned transaction ${id} deleted permanently`, links: [] });
 });
 
 function formatPlannedTransaction(row) {

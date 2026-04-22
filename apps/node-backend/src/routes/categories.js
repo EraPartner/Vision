@@ -1,156 +1,90 @@
 /**
  * Category routes.
- *
- * Mirrors: apps/backend/api/api_routes_categories.py
  */
 
 import { Router } from 'express';
 import categoryRepository from '../repositories/categoryRepository.js';
-import { logger } from '../config/logger.js';
-import { validateIdParam, sanitizeString } from '../middleware/validation.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
 
-// GET /api/categories
 router.get('/', async (req, res) => {
-  try {
-    const { limit = 50, offset = 0, general, detail, active = 'true', search } = req.query;
+  const { limit = 50, offset = 0, general, detail, active = 'true', search } = req.query;
+  const opts = {
+    limit: Math.min(parseInt(limit, 10) || 50, 1000),
+    offset: parseInt(offset, 10) || 0,
+    general: general || null,
+    detail: detail || null,
+    search: search ? String(search).slice(0, 200) : null,
+    active: active !== 'false',
+  };
 
-    const opts = {
-      limit: Math.min(parseInt(limit, 10) || 50, 1000),
-      offset: parseInt(offset, 10) || 0,
-      general: general || null,
-      detail: detail || null,
-      search: search ? String(search).slice(0, 200) : null,
-      active: active !== 'false',
-    };
+  const [items, total] = await Promise.all([
+    categoryRepository.getAll(opts),
+    categoryRepository.getCount(opts),
+  ]);
 
-    const [items, total] = await Promise.all([
-      categoryRepository.getAll(opts),
-      categoryRepository.getCount(opts),
-    ]);
-
-    res.json({
-      items: items.map(c => ({ ...c, links: [] })),
-      total,
-      limit: opts.limit,
-      offset: opts.offset,
-      links: [],
-    });
-  } catch (err) {
-    logger.error('Error retrieving categories', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve categories' });
-  }
+  res.ok(
+    items.map((c) => ({ ...c, links: [] })),
+    { pagination: { total, limit: opts.limit, offset: opts.offset } },
+  );
 });
 
-// POST /api/categories (create or get)
 router.post('/', async (req, res) => {
-  try {
-    const { general, detail, description } = req.body;
-    if (!general || !detail) {
-      return res.status(400).json({ detail: 'Missing required fields: general, detail' });
-    }
+  const { general, detail, description } = req.body;
+  if (!general || !detail) throw new ValidationError('Missing required fields: general, detail');
 
-    const { category, created } = await categoryRepository.createOrGet({ general, detail, description });
-    res.status(created ? 201 : 200).json({ ...category, links: [] });
-  } catch (err) {
-    logger.error('Error creating category', { error: err.message });
-    res.status(500).json({ detail: 'Failed to create category' });
-  }
+  const { category, created } = await categoryRepository.createOrGet({ general, detail, description });
+  res.status(created ? 201 : 200);
+  res.ok({ ...category, links: [] });
 });
 
-// POST /api/categories/assign - Standalone assign by general:detail name
-// Mirrors: Python POST /api/categories/assign with category_general + category_detail + recipient_ids
-// IMPORTANT: Must be before /:id routes to avoid "assign" matching as :id
+// Must precede /:id route so "assign" does not match as id param.
 router.post('/assign', async (req, res) => {
-  try {
-    const { category_general, category_detail, recipient_ids } = req.body;
-    if (!category_general || !category_detail) {
-      return res.status(400).json({ detail: 'Missing required fields: category_general, category_detail' });
-    }
-    if (!recipient_ids) {
-      return res.status(400).json({ detail: 'Missing recipient_ids' });
-    }
-
-    const ids = Array.isArray(recipient_ids) ? recipient_ids : [recipient_ids];
-
-    // Create or get the category by name
-    const { category } = await categoryRepository.createOrGet({
-      general: category_general,
-      detail: category_detail,
-    });
-
-    const updated = await categoryRepository.assignToRecipients(category.id, ids);
-    res.json({
-      updated_recipients: updated,
-      links: [],
-    });
-  } catch (err) {
-    logger.error('Error assigning category by name', { error: err.message });
-    res.status(500).json({ detail: 'Failed to assign category' });
+  const { category_general, category_detail, recipient_ids } = req.body;
+  if (!category_general || !category_detail) {
+    throw new ValidationError('Missing required fields: category_general, category_detail');
   }
+  if (!recipient_ids) throw new ValidationError('Missing recipient_ids');
+
+  const ids = Array.isArray(recipient_ids) ? recipient_ids : [recipient_ids];
+  const { category } = await categoryRepository.createOrGet({
+    general: category_general,
+    detail: category_detail,
+  });
+  const updated = await categoryRepository.assignToRecipients(category.id, ids);
+  res.ok({ updated_recipients: updated, links: [] });
 });
 
-// GET /api/categories/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  try {
-    const category = await categoryRepository.getById(parseInt(req.params.id, 10));
-    if (!category) {
-      return res.status(404).json({ detail: `Category ${req.params.id} not found` });
-    }
-    res.json({ ...category, links: [] });
-  } catch (err) {
-    logger.error('Error retrieving category', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve category' });
-  }
+  const category = await categoryRepository.getById(parseInt(req.params.id, 10));
+  if (!category) throw new NotFoundError(`Category ${req.params.id} not found`);
+  res.ok({ ...category, links: [] });
 });
 
-// PATCH /api/categories/:id
 router.patch('/:id', validateIdParam, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const updated = await categoryRepository.update(id, req.body);
-    if (!updated) {
-      return res.status(404).json({ detail: `Category ${id} not found` });
-    }
-    res.json({ ...updated, links: [] });
-  } catch (err) {
-    logger.error('Error updating category', { error: err.message });
-    res.status(500).json({ detail: 'Failed to update category' });
-  }
+  const id = parseInt(req.params.id, 10);
+  const updated = await categoryRepository.update(id, req.body);
+  if (!updated) throw new NotFoundError(`Category ${id} not found`);
+  res.ok({ ...updated, links: [] });
 });
 
-// DELETE /api/categories/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    const deleted = await categoryRepository.hardDelete(id);
-    if (!deleted) {
-      return res.status(404).json({ detail: `Category ${id} not found` });
-    }
-    res.json({ message: `Category ${id} deleted permanently`, links: [] });
-  } catch (err) {
-    logger.error('Error deleting category', { error: err.message });
-    res.status(500).json({ detail: 'Failed to delete category' });
-  }
+  const id = parseInt(req.params.id, 10);
+  const deleted = await categoryRepository.hardDelete(id);
+  if (!deleted) throw new NotFoundError(`Category ${id} not found`);
+  res.ok({ message: `Category ${id} deleted permanently`, links: [] });
 });
 
-// POST /api/categories/:id/assign
 router.post('/:id/assign', validateIdParam, async (req, res) => {
-  try {
-    const categoryId = parseInt(req.params.id, 10);
-    let { recipient_ids } = req.body;
-    if (!recipient_ids) {
-      return res.status(400).json({ detail: 'Missing recipient_ids' });
-    }
-    if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];
+  const categoryId = parseInt(req.params.id, 10);
+  let { recipient_ids } = req.body;
+  if (!recipient_ids) throw new ValidationError('Missing recipient_ids');
+  if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];
 
-    const updated = await categoryRepository.assignToRecipients(categoryId, recipient_ids);
-    res.json({ updated_recipients: updated, links: [] });
-  } catch (err) {
-    logger.error('Error assigning category', { error: err.message });
-    res.status(500).json({ detail: 'Failed to assign category' });
-  }
+  const updated = await categoryRepository.assignToRecipients(categoryId, recipient_ids);
+  res.ok({ updated_recipients: updated, links: [] });
 });
 
 export default router;

@@ -45,7 +45,7 @@ vi.mock('../../src/services/materializedViewService.js', () => ({
   scheduleRefresh: vi.fn(),
 }));
 
-vi.mock('../../src/services/currencyConversionService.js', () => ({
+vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
   convertRowsToEur: vi.fn(async (rows) => rows),
 }));
 
@@ -56,7 +56,7 @@ vi.mock('../../src/database/connection.js', () => ({
 import transactionRepository from '../../src/repositories/transactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
 import { isManualDuplicate } from '../../src/services/deduplication.js';
-import { convertRowsToEur } from '../../src/services/currencyConversionService.js';
+import { convertRowsToEur } from '../../src/services/currency/currencyConversionService.js';
 await import('../../src/routes/transactions.js');
 
 describe('Transaction Routes', () => {

@@ -15,7 +15,7 @@ import {
   FALLBACK_RATES,
   warmCache,
   clearMemoryCache,
-} from '../services/currencyConversionService.js';
+} from '../services/currency/currencyConversionService.js';
 import { getSnapshots, computeMetrics, computeHeatmap, getBreakdownSummary } from '../services/portfolioPerformanceSnapshotService.js';
 import { downsampleLTTB } from '../utils/downsample.js';
 import {
@@ -232,25 +232,15 @@ async function buildPortfolioPerformancePayload(targetCurrency, startDate, endDa
 
 // GET /api/info
 router.get('/', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const stats = await infoRepository.getStatistics(targetCurrency);
-    res.json(stats);
-  } catch (err) {
-    logger.error('Error retrieving statistics', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving statistics' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const stats = await infoRepository.getStatistics(targetCurrency);
+  res.ok(stats);
 });
 
 // GET /api/info/banks
 router.get('/banks', async (req, res) => {
-  try {
-    const banks = await infoRepository.getBanks();
-    res.json({ banks });
-  } catch (err) {
-    logger.error('Error retrieving banks', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving banks' });
-  }
+  const banks = await infoRepository.getBanks();
+  res.ok({ banks });
 });
 
 // GET /api/info/supported-adapters
@@ -264,127 +254,85 @@ router.get('/supported-adapters', async (req, res) => {
     { key: 'sabb', name: 'SABB', adapter_class: 'SABBAdapter' },
     { key: 'wise', name: 'Wise', adapter_class: 'WiseAdapter' },
   ];
-  res.json({ adapters, total_count: adapters.length });
+  res.ok({ adapters, total_count: adapters.length });
 });
 
 // GET /api/info/transaction-count
 router.get('/transaction-count', async (req, res) => {
-  try {
-    const count = await infoRepository.getTransactionCount();
-    res.json({ total_transactions: count });
-  } catch (err) {
-    logger.error('Error retrieving transaction count', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving transaction count' });
-  }
+  const count = await infoRepository.getTransactionCount();
+  res.ok({ total_transactions: count });
 });
 
 // GET /api/info/transaction-summary
 router.get('/transaction-summary', async (req, res) => {
-  try {
-    const { bank_account, start_date, end_date } = req.query;
-    const targetCurrency = getTargetCurrency(req);
-    const summary = await infoRepository.getTransactionSummary({
-      bankAccount: bank_account || null,
-      startDate: start_date || null,
-      endDate: end_date || null,
-      targetCurrency,
-    });
-    res.json(summary);
-  } catch (err) {
-    logger.error('Error retrieving transaction summary', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving transaction summary' });
-  }
+  const { bank_account, start_date, end_date } = req.query;
+  const targetCurrency = getTargetCurrency(req);
+  const summary = await infoRepository.getTransactionSummary({
+    bankAccount: bank_account || null,
+    startDate: start_date || null,
+    endDate: end_date || null,
+    targetCurrency,
+  });
+  res.ok(summary);
 });
 
 // GET /api/info/monthly-summary
 router.get('/monthly-summary', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
+  const targetCurrency = getTargetCurrency(req);
+  const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
 
-    logger.debug('Monthly summary request', { excludedCategoryIds });
-    const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds, targetCurrency);
-    logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
-    res.json({ ...data, links: [] });
-  } catch (err) {
-    logger.error('Error retrieving monthly summary', { error: err.message, stack: err.stack });
-    res.status(500).json({ detail: 'Error retrieving monthly financial summary' });
-  }
+  logger.debug('Monthly summary request', { excludedCategoryIds });
+  const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds, targetCurrency);
+  logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
+  res.ok({ ...data, links: [] });
 });
 
 // GET /api/info/planned-expenses-next-month
 router.get('/planned-expenses-next-month', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
-    res.json({ ...data, links: [] });
-  } catch (err) {
-    logger.error('Error retrieving planned expenses next month', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving planned expenses next month' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
+  res.ok({ ...data, links: [] });
 });
 
 // GET /api/info/average-vs-current-spending
 router.get('/average-vs-current-spending', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const data = await infoRepository.getAverageVsCurrentSpending(targetCurrency);
-    res.json({ ...data, links: [] });
-  } catch (err) {
-    logger.error('Error retrieving average vs current spending', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving average vs current spending' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const data = await infoRepository.getAverageVsCurrentSpending(targetCurrency);
+  res.ok({ ...data, links: [] });
 });
 
 // GET /api/info/cashflow-comparison
 router.get('/cashflow-comparison', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
-    const excludedRecipientIds = parseNumericArrayQueryParam(req.query.excluded_recipient_ids);
-    const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds, targetCurrency);
-    res.json(data);
-  } catch (err) {
-    logger.error('Error retrieving cashflow comparison', { error: err.message, stack: err.stack });
-    res.status(500).json({ detail: 'Error retrieving cashflow comparison' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
+  const excludedRecipientIds = parseNumericArrayQueryParam(req.query.excluded_recipient_ids);
+  const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds, targetCurrency);
+  res.ok(data);
 });
 
 // GET /api/info/category-breakdown - Detailed category breakdown with amounts
 router.get('/category-breakdown', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
-    res.json({
-      categories,
-      links: [],
-    });
-  } catch (err) {
-    logger.error('Error retrieving category breakdown', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving category breakdown' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
+  res.ok({ categories, links: [] });
 });
 
 // GET /api/info/bank-balances - Current and historical balance per bank account
 router.get('/bank-balances', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const data = await infoRepository.getBankBalances(targetCurrency);
-    res.json(data);
-  } catch (err) {
-    logger.error('Error retrieving bank balances', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving bank balances' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const data = await infoRepository.getBankBalances(targetCurrency);
+  res.ok(data);
 });
 
 // GET /api/info/recurring-patterns - Detect recurring transaction patterns
+// Intentional graceful degradation: on failure emit empty envelope rather than 500.
 router.get('/recurring-patterns', async (req, res) => {
   try {
     const data = await detectRecurringPatterns();
-    res.json(data);
+    res.ok(data);
   } catch (err) {
     logger.error('Error detecting recurring patterns; returning empty result', { error: err.message });
-    res.json({ patterns: [], total: 0 });
+    res.ok({ patterns: [], total: 0 });
   }
 });
 
@@ -393,12 +341,11 @@ router.get('/recurring-patterns', async (req, res) => {
 //   - When neither `limit` nor `offset` is supplied, returns the full snapshot
 //     array (legacy/chart path).
 //   - When either is supplied, returns the same envelope but with a snapshot
-//     slice (newest-first) and `snapshotsTotal` for table pagination.
+//     slice (newest-first) and pagination meta for table pagination.
 router.get(
   '/net-worth',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'net-worth' }),
   async (req, res) => {
-  try {
     const targetCurrency = getTargetCurrency(req);
     const cacheKey = targetCurrency;
 
@@ -413,7 +360,7 @@ router.get(
     const hasOffset = Object.prototype.hasOwnProperty.call(req.query, 'offset');
 
     if (!hasLimit && !hasOffset) {
-      res.json(data);
+      res.ok(data);
       return;
     }
 
@@ -423,42 +370,27 @@ router.get(
     const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
     const allSnapshots = Array.isArray(data?.snapshots) ? data.snapshots : [];
-    // Newest-first: table displays most recent date at top
     const reversed = allSnapshots.slice().reverse();
     const page = reversed.slice(offset, offset + limit);
 
-    res.json({
-      ...data,
-      snapshots: page,
-      snapshotsTotal: allSnapshots.length,
-    });
-  } catch (err) {
-    logger.error('Error retrieving net worth', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving net worth' });
-  }
-});
+    res.ok(
+      { ...data, snapshots: page, snapshotsTotal: allSnapshots.length },
+      { pagination: { total: allSnapshots.length, limit, offset } },
+    );
+  });
 
 // GET /api/info/recipient-insights - Merchant/recipient spending insights
 router.get('/recipient-insights', async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const data = await infoRepository.getRecipientInsights(targetCurrency);
-    res.json(data);
-  } catch (err) {
-    logger.error('Error retrieving recipient insights', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving recipient insights' });
-  }
+  const targetCurrency = getTargetCurrency(req);
+  const data = await infoRepository.getRecipientInsights(targetCurrency);
+  res.ok(data);
 });
 
 // GET /api/info/exchange-rates - View cached exchange rates from database
-// Apply a modest per-route rate limiter in addition to the global limiter so
-// automated scanners or abusive clients can't hammer the database-heavy route.
 router.get(
   '/exchange-rates',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
   async (req, res) => {
-  try {
-    // Fetch the latest stored rates (one row per currency)
     const result = await dbQuery(`
       SELECT currency_code, rate_to_eur, rate_date, fetched_at
       FROM exchange_rates
@@ -473,7 +405,6 @@ router.get(
       fetched_at: row.fetched_at,
     }));
 
-    // If the stored rates are from a previous day, kick off a background refresh
     const today = getCurrentDateString();
     const storedDate = rates.length > 0 ? rates[0].rate_date : null;
     if (!storedDate || storedDate < today) {
@@ -483,30 +414,18 @@ router.get(
       );
     }
 
-    res.json({
+    res.ok({
       total_rates: rates.length,
       rates,
       fallback_rates: FALLBACK_RATES || {},
     });
-  } catch (err) {
-    logger.error('Error retrieving exchange rates', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving exchange rates' });
-  }
-});
+  });
 
 // POST /api/info/exchange-rates/refresh - Fetch fresh rates from ECB and save to database
-// This endpoint triggers an expensive refresh; restrict it with the admin limiter.
 router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
-  try {
-    // Clear memory cache to force fresh fetch from ECB API
-    clearMemoryCache();
-    // Fetch fresh rates from ECB and save to database
-    await warmCache();
-    res.json({ message: 'Exchange rates refreshed from ECB' });
-  } catch (err) {
-    logger.error('Error refreshing exchange rates', { error: err.message });
-    res.status(500).json({ detail: 'Error refreshing exchange rates' });
-  }
+  clearMemoryCache();
+  await warmCache();
+  res.ok({ message: 'Exchange rates refreshed from ECB' });
 });
 
 // GET /api/info/inflation-rates - View cached Belgian monthly inflation rates
@@ -514,74 +433,58 @@ router.get(
   '/inflation-rates',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'inflation-rates' }),
   async (req, res) => {
-    try {
-      const startMonth = getMonthParam(req.query.start_month);
-      const endMonth = getMonthParam(req.query.end_month);
-      const dbOnly = isTruthyQueryParam(req.query.db_only);
-      const result = await getInflationRates({
-        startMonth,
-        endMonth,
-        dbOnly,
-        scheduleBackgroundRefresh: dbOnly,
-      });
+    const startMonth = getMonthParam(req.query.start_month);
+    const endMonth = getMonthParam(req.query.end_month);
+    const dbOnly = isTruthyQueryParam(req.query.db_only);
+    const result = await getInflationRates({
+      startMonth,
+      endMonth,
+      dbOnly,
+      scheduleBackgroundRefresh: dbOnly,
+    });
 
-      res.json({
-        source: result.source,
-        total_rates: result.rates.length,
-        rates: result.rates,
-      });
-    } catch (err) {
-      logger.error('Error retrieving Belgian inflation rates', { error: err.message });
-      res.status(500).json({ detail: 'Error retrieving Belgian inflation rates' });
-    }
+    res.ok({
+      source: result.source,
+      total_rates: result.rates.length,
+      rates: result.rates,
+    });
   }
 );
 
 // POST /api/info/inflation-rates/refresh - Force refresh from Statbel
 router.post('/inflation-rates/refresh', adminRateLimiter, async (req, res) => {
-  try {
-    clearInflationMemoryCache();
-    const result = await getInflationRates({ forceRefresh: true });
-    res.json({ message: 'Belgian inflation rates refreshed from Statbel', source: result.source, total_rates: result.rates.length });
-  } catch (err) {
-    logger.error('Error refreshing Belgian inflation rates', { error: err.message });
-    res.status(500).json({ detail: 'Error refreshing Belgian inflation rates' });
-  }
+  clearInflationMemoryCache();
+  const result = await getInflationRates({ forceRefresh: true });
+  res.ok({
+    message: 'Belgian inflation rates refreshed from Statbel',
+    source: result.source,
+    total_rates: result.rates.length,
+  });
 });
 
 // POST /api/info/refresh-views - Manually refresh materialized views
 router.post('/refresh-views', adminRateLimiter, async (req, res) => {
-  try {
-    const start = Date.now();
-    await refreshMaterializedViews();
-    res.json({ message: 'Materialized views refreshed', duration_ms: Date.now() - start });
-  } catch (err) {
-    logger.error('Error refreshing materialized views', { error: err.message });
-    res.status(500).json({ detail: 'Error refreshing materialized views' });
-  }
+  const start = Date.now();
+  await refreshMaterializedViews();
+  res.ok({ message: 'Materialized views refreshed', duration_ms: Date.now() - start });
 });
 
 // GET /api/info/portfolio-performance - Get pre-computed portfolio performance snapshots
 router.get('/portfolio-performance', rateLimiter({ windowMs: 60_000, maxRequests: 30 }), async (req, res) => {
-  try {
-    const targetCurrency = getTargetCurrency(req);
-    const period = req.query.period || 'all';
-    const startDate = '2000-01-01';
-    const endDate = getCurrentDateString();
-    const cacheKey = `${targetCurrency}:${period}`;
+  const targetCurrency = getTargetCurrency(req);
+  const period = req.query.period || 'all';
+  const startDate = '2000-01-01';
+  const endDate = getCurrentDateString();
+  const cacheKey = `${targetCurrency}:${period}`;
 
-    const data = await resolveCacheWithInflight(perfResponseCache, cacheKey, {
-      ttlMs: PERF_CACHE_TTL_MS,
-      loader: async () => {
-        const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
-        return buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots, period);
-      },
-    });
-    res.json(data);
-  } catch (err) {
-    logger.error('Error retrieving portfolio performance', { error: err.message });
-    res.status(500).json({ detail: 'Error retrieving portfolio performance' });
-  }
+  const data = await resolveCacheWithInflight(perfResponseCache, cacheKey, {
+    ttlMs: PERF_CACHE_TTL_MS,
+    loader: async () => {
+      const snapshots = await getSnapshots(startDate, endDate, targetCurrency);
+      return buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, snapshots, period);
+    },
+  });
+  res.ok(data);
 });
 
 /**

@@ -63,7 +63,7 @@ vi.mock('../../src/services/materializedViewService.js', () => ({
   refreshMaterializedViews: mockRefreshMaterializedViews,
 }));
 
-vi.mock('../../src/services/currencyConversionService.js', () => ({
+vi.mock('../../src/services/currency/currencyConversionService.js', () => ({
   FALLBACK_RATES: { USD: 1.1 },
   warmCache: mockWarmCache,
   clearMemoryCache: mockClearMemoryCache,

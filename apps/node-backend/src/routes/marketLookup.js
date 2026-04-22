@@ -4,7 +4,8 @@
 
 import { Router } from 'express';
 import YahooFinance from 'yahoo-finance2';
-import { logger } from '../config/logger.js';
+import { ApiErrorCode } from '@vision/types/errors';
+import { AppError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -28,6 +29,10 @@ function pickBestThumbnail(thumbnail) {
 }
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
+function upstreamError(message, cause) {
+  return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
+}
+
 /**
  * Convert a range string (e.g. '1mo', '5y') to a Date for period1.
  */
@@ -47,47 +52,41 @@ function rangeToDate(range) {
   }
 }
 
-/**
- * GET /api/market/search?q=apple
- * Search for tickers / companies.
- */
+// GET /api/market/search?q=apple
 router.get('/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 1) return res.ok({ items: [] });
+
+  let results;
   try {
-    const { q } = req.query;
-    if (!q || q.length < 1) return res.json({ items: [] });
-
-    const results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 });
-
-    const items = (results.quotes || [])
-      .filter(r => r.symbol)
-      .map(r => ({
-        symbol: r.symbol,
-        name: r.shortname || r.longname || r.symbol,
-        type: r.quoteType || 'UNKNOWN',
-        exchange: r.exchDisp || r.exchange || '',
-      }));
-
-    res.json({ items });
+    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 });
   } catch (err) {
-    logger.error('Market search failed', { error: err.message });
-    res.status(502).json({ detail: 'Market search unavailable' });
+    throw upstreamError('Market search unavailable', err);
   }
+
+  const items = (results.quotes || [])
+    .filter((r) => r.symbol)
+    .map((r) => ({
+      symbol: r.symbol,
+      name: r.shortname || r.longname || r.symbol,
+      type: r.quoteType || 'UNKNOWN',
+      exchange: r.exchDisp || r.exchange || '',
+    }));
+
+  res.ok({ items });
 });
 
-/**
- * GET /api/market/quote?symbols=AAPL,MSFT
- * Get detailed quotes and fundamentals for one or more symbols.
- */
+// GET /api/market/quote?symbols=AAPL,MSFT
 router.get('/quote', async (req, res) => {
+  const { symbols } = req.query;
+  if (!symbols) throw new ValidationError('symbols parameter required');
+
+  const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
+
+  let quoteResults;
   try {
-    const { symbols } = req.query;
-    if (!symbols) return res.status(400).json({ detail: 'symbols parameter required' });
-
-    const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean);
-
-    const quoteResults = await Promise.allSettled(
+    quoteResults = await Promise.allSettled(
       symbolList.map(async (sym) => {
-        // Fetch basic quote and fundamentals in parallel
         const [quote, summary] = await Promise.allSettled([
           yahooFinance.quote(sym),
           yahooFinance.quoteSummary(sym, {
@@ -102,10 +101,7 @@ router.get('/quote', async (req, res) => {
           }),
         ]);
 
-        if (quote.status === 'rejected') {
-          logger.warn(`Quote fetch failed for ${sym}`, { error: quote.reason?.message });
-          return null;
-        }
+        if (quote.status === 'rejected') return null;
 
         const q = quote.value;
         const s = summary.status === 'fulfilled' ? summary.value : null;
@@ -114,7 +110,6 @@ router.get('/quote', async (req, res) => {
         const ks = s?.defaultKeyStatistics || {};
         const pr = s?.price || {};
 
-        // Prefer quoteSummary values (more complete) over quote fields
         const marketCap = sd.marketCap ?? pr.marketCap ?? q.marketCap;
         const trailingPE = sd.trailingPE ?? ks.trailingPE ?? q.trailingPE;
         const forwardPE = sd.forwardPE ?? ks.forwardPE ?? q.forwardPE;
@@ -123,9 +118,8 @@ router.get('/quote', async (req, res) => {
         const beta = sd.beta ?? ks.beta ?? q.beta;
         const priceToBook = ks.priceToBook ?? q.priceToBook;
 
-        // Analyst consensus — current month bucket (period "0m")
         const trendBuckets = s?.recommendationTrend?.trend || [];
-        const currentTrend = trendBuckets.find(t => t.period === '0m') || trendBuckets[0] || null;
+        const currentTrend = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0] || null;
         const analystConsensus = currentTrend
           ? {
             strongBuy: currentTrend.strongBuy ?? 0,
@@ -136,10 +130,9 @@ router.get('/quote', async (req, res) => {
           }
           : null;
 
-        // Recent analyst upgrades / downgrades (latest 10)
         const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
           .slice(0, 10)
-          .map(h => ({
+          .map((h) => ({
             date: h.epochGradeDate,
             firm: h.firm,
             toGrade: h.toGrade,
@@ -175,75 +168,69 @@ router.get('/quote', async (req, res) => {
           analystConsensus,
           recentAnalystActions,
         };
-      })
+      }),
     );
-
-    const mapped = quoteResults
-      .filter(r => r.status === 'fulfilled' && r.value !== null)
-      .map(r => r.value);
-
-    res.json({ quotes: mapped });
   } catch (err) {
-    logger.error('Market quote failed', { error: err.message });
-    res.status(502).json({ detail: 'Market quote unavailable' });
+    throw upstreamError('Market quote unavailable', err);
   }
+
+  const mapped = quoteResults
+    .filter((r) => r.status === 'fulfilled' && r.value !== null)
+    .map((r) => r.value);
+
+  res.ok({ quotes: mapped });
 });
 
-/**
- * GET /api/market/chart?symbol=AAPL&range=1mo&interval=1d
- * Get historical price chart data.
- */
+// GET /api/market/chart?symbol=AAPL&range=1mo&interval=1d
 router.get('/chart', async (req, res) => {
-  try {
-    const { symbol, range = '1mo', interval = '1d' } = req.query;
-    if (!symbol) return res.status(400).json({ detail: 'symbol parameter required' });
+  const { symbol, range = '1mo', interval = '1d' } = req.query;
+  if (!symbol) throw new ValidationError('symbol parameter required');
 
-    const result = await yahooFinance.chart(symbol, {
+  let result;
+  try {
+    result = await yahooFinance.chart(symbol, {
       period1: rangeToDate(range),
       interval,
       includePrePost: false,
     });
-
-    if (!result) return res.json({ points: [] });
-
-    const points = (result.quotes || [])
-      .filter(p => p.close != null)
-      .map(p => ({
-        time: new Date(p.date).getTime(),
-        close: p.close,
-        high: p.high,
-        low: p.low,
-        volume: p.volume,
-      }));
-
-    res.json({
-      symbol: result.meta?.symbol,
-      currency: result.meta?.currency,
-      points,
-    });
   } catch (err) {
-    logger.error('Market chart failed', { error: err.message });
-    res.status(502).json({ detail: 'Market chart unavailable' });
+    throw upstreamError('Market chart unavailable', err);
   }
+
+  if (!result) return res.ok({ points: [] });
+
+  const points = (result.quotes || [])
+    .filter((p) => p.close != null)
+    .map((p) => ({
+      time: new Date(p.date).getTime(),
+      close: p.close,
+      high: p.high,
+      low: p.low,
+      volume: p.volume,
+    }));
+
+  res.ok({
+    symbol: result.meta?.symbol,
+    currency: result.meta?.currency,
+    points,
+  });
 });
 
-/**
- * GET /api/market/news?symbols=AAPL,MSFT&count=20
- * Get news articles for one or more symbols.
- */
+// GET /api/market/news?symbols=AAPL,MSFT&count=20
 router.get('/news', async (req, res) => {
-  try {
-    const { symbols, count = '20' } = req.query;
-    const querySymbols = symbols || 'SPY,QQQ,DIA';
-    const newsCount = Math.min(parseInt(count, 10) || 20, 50);
+  const { symbols, count = '20' } = req.query;
+  const querySymbols = symbols || 'SPY,QQQ,DIA';
+  const newsCount = Math.min(parseInt(count, 10) || 20, 50);
 
-    const newsResults = await Promise.allSettled(
+  let newsResults;
+  try {
+    newsResults = await Promise.allSettled(
       querySymbols.split(',').slice(0, 10).map(async (sym) => {
         const results = await yahooFinance.search(sym.trim(), {
           quotesCount: 0,
           newsCount,
         });
-        return (results.news || []).map(n => ({
+        return (results.news || []).map((n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,
@@ -251,28 +238,27 @@ router.get('/news', async (req, res) => {
           thumbnail: pickBestThumbnail(n.thumbnail),
           relatedSymbols: [sym.trim()],
         }));
-      })
+      }),
     );
-
-    const allNews = newsResults
-      .filter(r => r.status === 'fulfilled')
-      .flatMap(r => r.value);
-
-    const seen = new Set();
-    const unique = allNews
-      .filter(n => {
-        if (seen.has(n.title)) return false;
-        seen.add(n.title);
-        return true;
-      })
-      .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
-      .slice(0, newsCount);
-
-    res.json({ articles: unique });
   } catch (err) {
-    logger.error('Market news failed', { error: err.message });
-    res.status(502).json({ detail: 'Market news unavailable' });
+    throw upstreamError('Market news unavailable', err);
   }
+
+  const allNews = newsResults
+    .filter((r) => r.status === 'fulfilled')
+    .flatMap((r) => r.value);
+
+  const seen = new Set();
+  const unique = allNews
+    .filter((n) => {
+      if (seen.has(n.title)) return false;
+      seen.add(n.title);
+      return true;
+    })
+    .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+    .slice(0, newsCount);
+
+  res.ok({ articles: unique });
 });
 
 export default router;
