@@ -81,10 +81,9 @@ router.get('/quote', async (req, res) => {
   const { symbols } = req.query;
   if (!symbols) throw new ValidationError('symbols parameter required');
 
-  const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
-
   let quoteResults;
   try {
+    const symbolList = symbols.split(',').map((s) => s.trim()).filter(Boolean);
     quoteResults = await Promise.allSettled(
       symbolList.map(async (sym) => {
         const [quote, summary] = await Promise.allSettled([

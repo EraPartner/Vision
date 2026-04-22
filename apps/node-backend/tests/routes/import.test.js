@@ -94,6 +94,7 @@ import { getSupportedBanks } from '../../src/services/bankAdapters.js';
 import { importCSVStreaming } from '../../src/services/streamingImportService.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../../src/services/dataImportService.js';
 import multer from 'multer';
+import { ValidationError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/importRoutes.js');
 
 describe('Import Routes', () => {
@@ -106,19 +107,15 @@ describe('Import Routes', () => {
     it('should return 400 when no file uploaded', async () => {
       const req = { file: null, query: { bank_name: 'belfius' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/csv'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json.mock.calls[0][0].detail).toContain('No file uploaded');
+      await expect(routeHandlers['post:/csv'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should return 400 when bank_name missing', async () => {
       const req = { file: { path: '/tmp/test.csv', originalname: 'test.csv' }, query: {}, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/csv'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json.mock.calls[0][0].detail).toContain('bank_name');
+      await expect(routeHandlers['post:/csv'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should return 201 on successful import', async () => {
@@ -135,12 +132,12 @@ describe('Import Routes', () => {
       await routeHandlers['post:/csv'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      const data = res.json.mock.calls[0][0];
-      expect(data.total_processed).toBe(5);
-      expect(data.imported).toBe(4);
-      expect(data.duplicates).toBe(1);
-      expect(data.errors).toBe(0);
-      expect(data.status).toBe('completed');
+      const body = res.json.mock.calls[0][0];
+      expect(body.data.total_processed).toBe(5);
+      expect(body.data.imported).toBe(4);
+      expect(body.data.duplicates).toBe(1);
+      expect(body.data.errors).toBe(0);
+      expect(body.data.status).toBe('completed');
     });
 
     it('should return completed_with_errors status', async () => {
@@ -157,8 +154,8 @@ describe('Import Routes', () => {
       await routeHandlers['post:/csv'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      const data = res.json.mock.calls[0][0];
-      expect(data.status).toBe('completed_with_errors');
+      const body = res.json.mock.calls[0][0];
+      expect(body.data.status).toBe('completed_with_errors');
     });
 
     it('should return 400 for invalid bank config', async () => {
@@ -170,9 +167,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/csv'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should return 500 on general import failure', async () => {
@@ -184,10 +180,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json.mock.calls[0][0].detail).toBe('Import failed');
+      await expect(routeHandlers['post:/csv'](req, res)).rejects.toThrow('Parse error');
     });
 
     it('should not leak internal error details on import failure', async () => {
@@ -203,10 +197,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+      await expect(routeHandlers['post:/csv'](req, res)).rejects.toThrow();
     });
   });
 
@@ -217,9 +209,8 @@ describe('Import Routes', () => {
     it('should return 400 when no file uploaded', async () => {
       const req = { file: null, query: {}, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/csv/custom'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should return 400 for missing required params', async () => {
@@ -229,10 +220,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv/custom'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json.mock.calls[0][0].detail).toContain('Missing required parameters');
+      await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toThrow('Missing required parameters');
     });
 
     it('should return 400 for invalid separator', async () => {
@@ -246,10 +235,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv/custom'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json.mock.calls[0][0].detail).toContain('separator');
+      await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toThrow('separator');
     });
 
     it('should return 201 on success', async () => {
@@ -283,10 +270,8 @@ describe('Import Routes', () => {
         body: {},
       };
       const res = mockResponse();
-      await routeHandlers['post:/csv/custom'](req, res);
 
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+      await expect(routeHandlers['post:/csv/custom'](req, res)).rejects.toThrow('Import failed');
     });
   });
 
@@ -320,7 +305,7 @@ describe('Import Routes', () => {
       expect(res.end).toHaveBeenCalledTimes(1);
     });
 
-    it('should return 400 when bank_name missing', async () => {
+    it('should throw ValidationError when bank_name missing', async () => {
       const req = {
         file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
         query: {},
@@ -329,10 +314,7 @@ describe('Import Routes', () => {
       };
       const res = mockResponse();
 
-      await routeHandlers['post:/csv/stream'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing required parameter: bank_name' });
+      await expect(routeHandlers['post:/csv/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should emit SSE error event and end response on failure', async () => {
@@ -398,7 +380,10 @@ describe('Import Routes', () => {
       await routeHandlers['post:/recipients'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({ status: 'completed' }),
+      }));
     });
 
     it('should return 201 with completed_with_errors status when errors > 0', async () => {
@@ -414,10 +399,13 @@ describe('Import Routes', () => {
       await routeHandlers['post:/recipients'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed_with_errors' }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({ status: 'completed_with_errors' }),
+      }));
     });
 
-    it('should return 400 for invalid separator', async () => {
+    it('should throw ValidationError for invalid separator', async () => {
       const req = {
         file: { path: '/tmp/recipients.csv', originalname: 'recipients.csv' },
         query: { separator: ';;' },
@@ -425,13 +413,10 @@ describe('Import Routes', () => {
       };
       const res = mockResponse();
 
-      await routeHandlers['post:/recipients'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'separator must be a single character' });
+      await expect(routeHandlers['post:/recipients'](req, res)).rejects.toThrow('separator must be a single character');
     });
 
-    it('should return 500 on service error', async () => {
+    it('should propagate service error', async () => {
       importRecipientsCSV.mockRejectedValue(new Error('boom'));
 
       const req = {
@@ -441,10 +426,7 @@ describe('Import Routes', () => {
       };
       const res = mockResponse();
 
-      await routeHandlers['post:/recipients'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+      await expect(routeHandlers['post:/recipients'](req, res)).rejects.toThrow('boom');
     });
   });
 
@@ -465,7 +447,10 @@ describe('Import Routes', () => {
       await routeHandlers['post:/categories'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({ status: 'completed' }),
+      }));
     });
 
     it('should return 201 with completed_with_errors status when errors > 0', async () => {
@@ -481,10 +466,13 @@ describe('Import Routes', () => {
       await routeHandlers['post:/categories'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed_with_errors' }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({ status: 'completed_with_errors' }),
+      }));
     });
 
-    it('should return 400 for invalid separator', async () => {
+    it('should throw ValidationError for invalid separator', async () => {
       const req = {
         file: { path: '/tmp/categories.csv', originalname: 'categories.csv' },
         query: { separator: ';;' },
@@ -492,13 +480,10 @@ describe('Import Routes', () => {
       };
       const res = mockResponse();
 
-      await routeHandlers['post:/categories'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'separator must be a single character' });
+      await expect(routeHandlers['post:/categories'](req, res)).rejects.toThrow('separator must be a single character');
     });
 
-    it('should return 500 on service error', async () => {
+    it('should propagate service error', async () => {
       importCategoriesCSV.mockRejectedValue(new Error('boom'));
 
       const req = {
@@ -508,15 +493,12 @@ describe('Import Routes', () => {
       };
       const res = mockResponse();
 
-      await routeHandlers['post:/categories'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Import failed' });
+      await expect(routeHandlers['post:/categories'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('multer error middleware', () => {
-    it('should return 400 for LIMIT_FILE_SIZE', () => {
+    it('should forward LIMIT_FILE_SIZE as ValidationError', () => {
       const errorHandler = routeHandlers.use.at(-1);
       const err = new multer.MulterError('LIMIT_FILE_SIZE');
       const req = {};
@@ -525,12 +507,11 @@ describe('Import Routes', () => {
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'File size exceeds maximum of 50MB' });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.any(ValidationError));
+      expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should return 400 for generic multer errors', () => {
+    it('should forward generic multer errors as ValidationError', () => {
       const errorHandler = routeHandlers.use.at(-1);
       const err = new multer.MulterError('LIMIT_UNEXPECTED_FILE');
       err.message = 'unexpected file';
@@ -540,12 +521,11 @@ describe('Import Routes', () => {
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Upload error: unexpected file' });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.any(ValidationError));
+      expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should return 400 for non-csv errors', () => {
+    it('should forward non-csv file errors as ValidationError', () => {
       const errorHandler = routeHandlers.use.at(-1);
       const err = new Error('File must be a CSV');
       const req = {};
@@ -554,9 +534,8 @@ describe('Import Routes', () => {
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'File must be a CSV' });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.any(ValidationError));
+      expect(res.status).not.toHaveBeenCalled();
     });
 
     it('should pass unknown errors to next middleware', () => {
@@ -582,12 +561,12 @@ describe('Import Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/supported-banks'](req, res);
 
-      const data = res.json.mock.calls[0][0];
-      expect(data.banks).toBeDefined();
-      expect(data.total).toBe(3);
-      expect(data.banks).toContain('Belfius');
-      expect(data.banks).toContain('Kbc');
-      expect(data.banks).toContain('Revolut');
+      const body = res.json.mock.calls[0][0];
+      expect(body.data.banks).toBeDefined();
+      expect(body.data.total).toBe(3);
+      expect(body.data.banks).toContain('Belfius');
+      expect(body.data.banks).toContain('Kbc');
+      expect(body.data.banks).toContain('Revolut');
     });
   });
 });
@@ -595,6 +574,11 @@ describe('Import Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }
 
