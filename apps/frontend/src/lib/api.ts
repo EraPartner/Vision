@@ -37,53 +37,25 @@ import type {
     OllamaStatus,
     SendChatBody,
 } from '@/types/aiChat';
-
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 import logger from '@/lib/logger';
+import { ApiErrorCode } from '@vision/types';
+import {
+    API_BASE_URL,
+    ApiClientError,
+    DEFAULT_TIMEOUT_MS,
+    MAX_RETRIES,
+    RETRYABLE_STATUS_CODES,
+    backoffDelay,
+    generateRequestId,
+    parseEnvelopeError,
+    unwrapEnvelope,
+} from '@/lib/api/client';
+import type { AggregationEnvelope, ImportProgress, ImportResult } from '@/lib/api/types';
 
-export interface AggregationEnvelope<T> {
-    data: T;
-    meta: {
-        computedAt: string;
-        source: 'mv' | 'live';
-    };
-}
-
-export interface ImportProgress {
-    phase: string;
-    current: number;
-    total: number;
-    imported: number;
-    duplicates: number;
-    errors: number;
-    percent: number;
-}
-
-export interface ImportResult {
-    total_processed: number;
-    imported: number;
-    duplicates: number;
-    errors: number;
-    status?: string;
-    error_message?: string;
-}
-
-/** Default request timeout in milliseconds */
-const DEFAULT_TIMEOUT_MS = 30_000;
-
-/** Max retry attempts for transient failures */
-const MAX_RETRIES = 2;
-
-/** HTTP status codes that are safe to retry */
-const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
-
-/**
- * Sleep for exponential backoff: base * 2^attempt (with jitter).
- */
-function backoffDelay(attempt: number, baseMs: number = 500): Promise<void> {
-    const delay = baseMs * Math.pow(2, attempt) + Math.random() * 200;
-    return new Promise((resolve) => setTimeout(resolve, delay));
-}
+// Re-export shared primitives so existing `import { ... } from '@/lib/api'`
+// call sites keep working during the gradual domain split.
+export { API_BASE_URL, ApiClientError };
+export type { AggregationEnvelope, ImportProgress, ImportResult };
 
 class ApiClient {
     /** Active AbortControllers keyed by a caller-provided signal or auto-generated */
@@ -120,11 +92,16 @@ class ApiClient {
         sort_dir?: 'asc' | 'desc';
     }): Promise<TransactionsListResponse> {
         const res = await this.requestWithQuery<TransactionsListResponse>('/api/transactions', params);
-        res.items = res.items.map((tx: any) => ({
-            ...tx,
-            transaction_date: tx.transaction_date ?? tx.date,
-        }));
-        return res;
+        return {
+            ...res,
+            items: res.items.map((tx) => {
+                const raw = tx as Transaction & { date?: string };
+                return {
+                    ...tx,
+                    transaction_date: raw.transaction_date ?? raw.date ?? '',
+                };
+            }),
+        };
     }
 
     async getTransaction(id: number): Promise<Transaction> {
@@ -339,15 +316,12 @@ class ApiClient {
                 const response = await fetch(url, {
                     method: 'POST',
                     body: formData,
+                    headers: { 'X-Request-Id': generateRequestId() },
                     signal: controller.signal,
                 });
 
                 if (!response.ok) {
-                    const error = await response.json().catch((err) => {
-                        logger.warn('Failed to parse error response', err);
-                        return { detail: 'Request failed' };
-                    });
-                    throw new Error(error.detail || error.message || 'Request failed');
+                    throw await parseEnvelopeError(response, 'Import failed');
                 }
 
                 const reader = response.body?.getReader();
@@ -837,11 +811,16 @@ class ApiClient {
         offset?: number;
     }): Promise<PortfolioTransactionsListResponse> {
         const res = await this.requestWithQuery<PortfolioTransactionsListResponse>(`/api/investments/${investmentId}/transactions`, params);
-        res.items = res.items.map((tx) => ({
-            ...tx,
-            date: tx.date ?? tx.transaction_date,
-        }));
-        return res;
+        return {
+            ...res,
+            items: res.items.map((tx) => {
+                const raw = tx as PortfolioTransaction & { transaction_date?: string };
+                return {
+                    ...tx,
+                    date: raw.date ?? raw.transaction_date ?? '',
+                };
+            }),
+        };
     }
 
     async getPortfolioTransactionsBulk(params: {
@@ -852,11 +831,16 @@ class ApiClient {
         offset?: number;
     }): Promise<PortfolioTransactionsListResponse> {
         const res = await this.requestWithQuery<PortfolioTransactionsListResponse>('/api/investments/transactions', params);
-        res.items = res.items.map((tx) => ({
-            ...tx,
-            date: tx.date ?? tx.transaction_date,
-        }));
-        return res;
+        return {
+            ...res,
+            items: res.items.map((tx) => {
+                const raw = tx as PortfolioTransaction & { transaction_date?: string };
+                return {
+                    ...tx,
+                    date: raw.date ?? raw.transaction_date ?? '',
+                };
+            }),
+        };
     }
 
     async createPortfolioTransaction(investmentId: number, data: PortfolioTransactionCreate): Promise<PortfolioTransaction> {
@@ -978,17 +962,11 @@ class ApiClient {
     async exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {
         const response = await fetch(`${API_BASE_URL}/api/splits/owed/${recipientId}/export/csv`, {
             method: 'GET',
+            headers: { 'X-Request-Id': generateRequestId() },
         });
 
         if (!response.ok) {
-            let detail = 'Failed to export owed transactions';
-            try {
-                const payload = await response.json();
-                detail = payload?.detail || detail;
-            } catch {
-                // keep fallback detail
-            }
-            throw new Error(detail);
+            throw await parseEnvelopeError(response, 'Failed to export owed transactions');
         }
 
         return response.blob();
@@ -1204,15 +1182,11 @@ class ApiClient {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch((err) => {
-                logger.warn('Failed to parse error response', err);
-                return { detail: 'Request failed' };
-            });
-            throw new Error(error.detail || error.message || 'Request failed');
+            throw await parseEnvelopeError(response, 'Request failed');
         }
 
-        const data = await response.json();
-        return { data, wasCreated: response.status === 201 };
+        const body = await response.json();
+        return { data: unwrapEnvelope<TData>(body), wasCreated: response.status === 201 };
     }
 
     private async postMultipartImport<T>(endpoint: string, file: File, queryParams: URLSearchParams): Promise<T> {
@@ -1224,14 +1198,11 @@ class ApiClient {
         const response = await this.rawFetch(url, { method: 'POST', body: formData });
 
         if (!response.ok) {
-            const error = await response.json().catch((err) => {
-                logger.warn('Failed to parse error response', err);
-                return { detail: 'Request failed' };
-            });
-            throw new Error(error.detail || error.message || 'Request failed');
+            throw await parseEnvelopeError(response, 'Request failed');
         }
 
-        return response.json();
+        const body = await response.json();
+        return unwrapEnvelope<T>(body);
     }
 
     private getElectronUpdater(): {
@@ -1331,9 +1302,16 @@ class ApiClient {
 
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+        const requestId = generateRequestId();
+        const mergedHeaders = new Headers(options.headers);
+        if (!mergedHeaders.has('X-Request-Id')) {
+            mergedHeaders.set('X-Request-Id', requestId);
+        }
+
         try {
             const response = await fetch(url, {
                 ...options,
+                headers: mergedHeaders,
                 signal: controller.signal,
             });
             return response;
@@ -1383,39 +1361,26 @@ class ApiClient {
                 }
 
                 if (!response.ok) {
-                    const error = await response.json().catch((err) => {
-                        logger.warn('Failed to parse error response', err);
-                        return { detail: 'Request failed' };
-                    });
-
-                    if (response.status === 422 && error.detail && Array.isArray(error.detail)) {
-                        const validationErrors = error.detail.map((err: any) => {
-                            const field = err.loc ? err.loc.join('.') : 'unknown';
-                            return `${field}: ${err.msg}`;
-                        }).join('; ');
-                        throw new Error(`Validation error: ${validationErrors}`);
-                    }
-
-                    if (response.status === 429) {
-                        const retryAfter = error.retry_after || 'a few';
-                        throw new Error(`Too many requests. Please try again in ${retryAfter} seconds.`);
-                    }
-
-                    if (typeof error.detail === 'string') throw new Error(error.detail);
-                    if (error.message && typeof error.message === 'string') throw new Error(error.message);
-                    throw new Error(`Request failed with status ${response.status}`);
+                    throw await parseEnvelopeError(response, 'Request failed');
                 }
 
-                // Handle 204 No Content
                 if (response.status === 204) {
                     return undefined as unknown as T;
                 }
 
-                return response.json();
+                const body = await response.json();
+                return unwrapEnvelope<T>(body);
             } catch (err: any) {
                 lastError = err;
-                // Don't retry non-idempotent or non-network errors
-                if (!isIdempotent || err.message?.includes('Validation error') || err.message?.includes('Too many requests')) {
+                const nonRetryable =
+                    err instanceof ApiClientError &&
+                    (err.code === ApiErrorCode.VALIDATION_ERROR ||
+                        err.code === ApiErrorCode.RATE_LIMITED ||
+                        err.code === ApiErrorCode.UNAUTHORIZED ||
+                        err.code === ApiErrorCode.FORBIDDEN ||
+                        err.code === ApiErrorCode.NOT_FOUND ||
+                        err.code === ApiErrorCode.CONFLICT);
+                if (!isIdempotent || nonRetryable) {
                     throw err;
                 }
                 if (attempt >= retries) throw err;
@@ -1535,14 +1500,16 @@ class ApiClient {
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Request-Id': generateRequestId(),
+                    },
                     body: JSON.stringify(body),
                     signal: controller.signal,
                 });
 
                 if (!response.ok) {
-                    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-                    throw new Error((error && error.detail) || `Request failed with status ${response.status}`);
+                    throw await parseEnvelopeError(response, 'Chat stream failed');
                 }
 
                 const reader = response.body?.getReader();

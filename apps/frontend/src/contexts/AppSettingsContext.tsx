@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 import type { Language } from '@/contexts/LanguageContext';
@@ -80,8 +80,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         setAppSettings(defaultAppSettings);
     }, []);
 
+    const value = useMemo(
+        () => ({ appSettings, updateAppSettings, resetAppSettings, isLoading }),
+        [appSettings, updateAppSettings, resetAppSettings, isLoading]
+    );
+
     return (
-        <AppSettingsContext.Provider value={{ appSettings, updateAppSettings, resetAppSettings, isLoading }}>
+        <AppSettingsContext.Provider value={value}>
             {children}
         </AppSettingsContext.Provider>
     );

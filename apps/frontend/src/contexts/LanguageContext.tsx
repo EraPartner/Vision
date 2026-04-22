@@ -13,8 +13,10 @@
  *  3. Add the code to the `Language` union type and the `loaders` map below.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+
+import logger from '@/lib/logger';
 
 export type Language = 'en' | 'nl';
 
@@ -60,7 +62,7 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
                 setDicts((prev) => (prev.en ? prev : { ...prev, en: mod.default }));
             })
             .catch((err) => {
-                console.error('Failed to preload fallback locale "en":', err);
+                logger.error('Failed to preload fallback locale "en":', err);
             });
     }, [dicts.en]);
 
@@ -73,7 +75,7 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
                 setDicts((prev) => ({ ...prev, [language]: mod.default }));
             })
             .catch((err) => {
-                console.error(`Failed to load locale "${language}":`, err);
+                logger.error(`Failed to load locale "${language}":`, err);
             });
     }, [language, dicts]);
 
@@ -92,8 +94,13 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
         [dicts, language]
     );
 
+    const value = useMemo(
+        () => ({ language, setLanguage, t }),
+        [language, setLanguage, t]
+    );
+
     return (
-        <LanguageContext.Provider value={{ language, setLanguage, t }}>
+        <LanguageContext.Provider value={value}>
             {children}
         </LanguageContext.Provider>
     );

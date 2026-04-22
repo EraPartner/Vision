@@ -41,8 +41,11 @@ export function RemoteNewsImage({ src, alt = "", className, fallbackClassName }:
     <img
       src={safeSrc}
       alt={alt}
+      width={96}
+      height={64}
       className={cn("h-16 w-24 rounded-md object-cover shrink-0 bg-muted", className)}
       loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />

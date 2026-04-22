@@ -10,7 +10,7 @@ export function useOllamaStatus() {
         queryFn: () => apiClient.getOllamaStatus(),
         staleTime: 15_000,
         refetchInterval: 30_000,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
         retry: 0,
         placeholderData: (prev) => prev,
     });
