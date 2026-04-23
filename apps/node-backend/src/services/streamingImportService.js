@@ -38,8 +38,15 @@ import {
 import { isDuplicateByFields } from './deduplication.js';
 
 // Number of rows processed concurrently within each import batch.
-// Tune this against your DB pool.max setting; keep it <= pool.max / 2.
-const IMPORT_BATCH_SIZE = 20;
+// Derived from pool ceiling so concurrent rows never exhaust connections.
+// floor(poolMax / 2) ensures at least half the pool stays available for
+// other requests; minimum of 2 keeps progress on very small pools.
+// Read directly from process.env to avoid circular/mock issues at module init.
+const _poolMax = Math.max(
+  parseInt(process.env.DB_POOL_SIZE, 10) || 5,
+  parseInt(process.env.DB_MAX_OVERFLOW, 10) || 10,
+);
+const IMPORT_BATCH_SIZE = Math.max(2, Math.floor(_poolMax / 2));
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 

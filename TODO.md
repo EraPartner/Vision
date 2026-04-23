@@ -6,7 +6,7 @@ Legend: **P1** blocker/foundation · **P2** high-value · **P3** nice-to-have
 
 ## Bugs
 
-- Rate limiting kicks in immediately. When disabling GlobalRateLimitier (commenting out), this issue doesn't occur
+~~Rate limiting kicks in immediately. When disabling GlobalRateLimitier (commenting out), this issue doesn't occur~~ — **Fixed**: global limiter removed from API routes; per-route limiters (admin: 10/min, import: 5/min) remain for expensive/destructive ops.
 
 ### Missing translations
 

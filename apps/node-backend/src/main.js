@@ -269,9 +269,13 @@ app.get('/api/', (req, res) => {
 
 // ==================== Route Registration ====================
 
-// Global rate limiter
+// Global rate limiter — intentionally NOT applied to API routes.
+// Self-hosted single-user app: a global API rate limit only restricts the
+// legitimate user (SPA makes 20-50 parallel requests on page load).
+// Per-route limiters (adminRateLimiter, importRateLimiter) guard expensive
+// and destructive operations instead.
+// This limiter is used only for the SPA fallback below.
 const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10000, keyPrefix: 'global' });
-// app.use(globalLimiter); TODO
 
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/categories', categoriesRouter);

@@ -20,8 +20,15 @@ import { logger } from '../config/logger.js';
 import { normalizeForMatching } from './textNormalization.js';
 
 // Number of rows to resolve (dedup + recipient) concurrently in phase 1.
-// Tune against DB pool size; keep <= pool.max / 2.
-const RESOLVE_CONCURRENCY = 20;
+// Derived from pool ceiling so we never exhaust connections.
+// floor(poolMax / 2) ensures at least half the pool stays available for
+// other requests; minimum of 2 keeps progress on very small pools.
+// Read directly from process.env to avoid circular/mock issues at module init.
+const _poolMax = Math.max(
+  parseInt(process.env.DB_POOL_SIZE, 10) || 5,
+  parseInt(process.env.DB_MAX_OVERFLOW, 10) || 10,
+);
+const RESOLVE_CONCURRENCY = Math.max(2, Math.floor(_poolMax / 2));
 
 // Rows per INSERT statement in phase 2; larger = fewer round-trips.
 const BATCH_SIZE = 250;
