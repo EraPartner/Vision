@@ -16,6 +16,7 @@ import { env } from '../config/env.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 import { runImportPipeline } from '../services/importPipeline/index.js';
 import { ValidationError } from '../middleware/errorHandler.js';
+import { createSseWriter } from '../lib/sse.js';
 
 const router = Router();
 
@@ -208,12 +209,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  const sendEvent = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  let aborted = false;
-  req.on('close', () => { aborted = true; });
+  const writer = createSseWriter(req, res);
 
   try {
     let result;
@@ -223,7 +219,7 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
         adapterName: bankName,
         filename: req.file.originalname,
         sizeBytes: req.file.size,
-        onProgress: (ev) => { if (!aborted) sendEvent('progress', v2ProgressToLegacy(ev)); },
+        onProgress: async (ev) => { await writer.write('progress', v2ProgressToLegacy(ev)); },
       });
       result = {
         total: pipelineResult.total,
@@ -237,24 +233,24 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
         req.file.path,
         bankName,
         null,
-        (progress) => { if (!aborted) sendEvent('progress', progress); },
+        async (progress) => { await writer.write('progress', progress); },
       );
     }
 
-    if (!aborted) {
+    if (!writer.closed) {
       if (!PIPELINE_V2_ENABLED) scheduleRefresh();
-      sendEvent('complete', {
+      await writer.write('complete', {
         ...result,
         status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),
         percent: 100,
       });
-      res.end();
+      writer.end();
     }
   } catch (err) {
     logger.error('Streaming CSV import error', { error: err.message });
-    if (!aborted) {
-      sendEvent('error', { detail: 'Import failed' });
-      res.end();
+    if (!writer.closed) {
+      await writer.write('error', { detail: 'Import failed' });
+      writer.end();
     }
   } finally {
     cleanup(req.file.path);

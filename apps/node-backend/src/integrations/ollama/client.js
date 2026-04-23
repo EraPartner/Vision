@@ -242,7 +242,7 @@ export function createOllamaClient({
     let doneReason = null;
     let isDone = false;
 
-    const handleLine = (line) => {
+    const handleLine = async (line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
       let parsed;
@@ -261,7 +261,7 @@ export function createOllamaClient({
       if (deltaContent) {
         accumulatedContent += deltaContent;
         try {
-          onToken?.(deltaContent);
+          await onToken?.(deltaContent);
         } catch (err) {
           logger.warn?.('[ollama] onToken handler threw', { error: err?.message });
         }
@@ -288,11 +288,11 @@ export function createOllamaClient({
         while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
           const line = buffer.slice(0, newlineIndex);
           buffer = buffer.slice(newlineIndex + 1);
-          handleLine(line);
+          await handleLine(line);
           if (isDone) break;
         }
       }
-      if (buffer.length > 0) handleLine(buffer);
+      if (buffer.length > 0) await handleLine(buffer);
     } catch (err) {
       if (err instanceof OllamaError) throw err;
       if (err?.name === 'AbortError') {

@@ -29,6 +29,7 @@
 import { Router } from 'express';
 
 import { logger } from '../config/logger.js';
+import { createSseWriter } from '../lib/sse.js';
 import settings from '../config/config.js';
 import { getOllamaClient, OllamaError } from '../integrations/ollama/client.js';
 import {
@@ -286,15 +287,9 @@ router.post('/chat/stream', async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  let closed = false;
-  const sendEvent = (event, data) => {
-    if (closed) return;
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
+  const writer = createSseWriter(req, res);
   const abortController = new AbortController();
   req.on('close', () => {
-    closed = true;
     if (!res.writableEnded) abortController.abort();
   });
 
@@ -305,20 +300,19 @@ router.post('/chat/stream', async (req, res) => {
       model: parsed.model,
       signal: abortController.signal,
       streaming: true,
-      onEvent: (evt) => {
-        if (closed) return;
+      onEvent: async (evt) => {
         switch (evt.type) {
           case 'user_message':
-            sendEvent('user_message', { message: evt.data });
+            await writer.write('user_message', { message: evt.data });
             break;
           case 'token':
-            sendEvent('token', evt.data);
+            await writer.write('token', evt.data);
             break;
           case 'tool_call':
-            sendEvent('tool_call', evt.data);
+            await writer.write('tool_call', evt.data);
             break;
           case 'tool_message':
-            sendEvent('tool_result', { message: evt.data });
+            await writer.write('tool_result', { message: evt.data });
             break;
           case 'assistant_message':
             // terminal `done` event is emitted after runChatTurn resolves
@@ -329,25 +323,25 @@ router.post('/chat/stream', async (req, res) => {
       },
     });
 
-    if (!closed) {
-      sendEvent('done', {
+    if (!writer.closed) {
+      await writer.write('done', {
         conversation: turn.conversation,
         assistantMessage: turn.assistantMessage,
         usage: turn.usage,
         iterations: turn.iterations,
       });
-      res.end();
+      writer.end();
     }
   } catch (err) {
-    if (closed) return;
+    if (writer.closed) return;
     if (err instanceof AiChatServiceError) {
       logger.warn('[ai] stream service error', { code: err.code, status: err.status, message: err.message });
-      sendEvent('error', { detail: err.message, code: err.code });
+      await writer.write('error', { detail: err.message, code: err.code });
     } else {
       logger.error('Failed to stream AI chat message', { error: err.message, stack: err.stack });
-      sendEvent('error', { detail: 'Failed to stream AI chat message' });
+      await writer.write('error', { detail: 'Failed to stream AI chat message' });
     }
-    res.end();
+    writer.end();
   }
 });
 

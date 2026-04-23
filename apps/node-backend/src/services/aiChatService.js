@@ -102,9 +102,9 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
  * @param {AbortSignal} [args.signal]    - propagate cancellation
  * @param {boolean} [args.streaming=false] - when true, use `ollamaClient.chatStream`
  *   and emit per-chunk `token` events via `onEvent`.
- * @param {(event: {type: string, data: any}) => void} [args.onEvent]
+ * @param {(event: {type: string, data: any}) => void | Promise<void>} [args.onEvent]
  *   Optional hook called for each persisted message, tool call/result,
- *   and (in streaming mode) each content delta. Synchronous — not awaited.
+ *   and (in streaming mode) each content delta. May be async — awaited at each call site.
  *
  * @returns {Promise<{
  *   conversation: object,
@@ -151,7 +151,7 @@ export async function runChatTurn({
     role: 'user',
     content: message,
   });
-  onEvent?.({ type: 'user_message', data: userMessage });
+  await onEvent?.({ type: 'user_message', data: userMessage });
 
   const toolSchemas = getToolSchemas();
   const toolNames = getToolNames();
@@ -176,8 +176,8 @@ export async function runChatTurn({
           messages: baseMessages,
           tools: toolSchemas,
           signal,
-          onToken: (delta) => {
-            if (delta) onEvent?.({ type: 'token', data: delta });
+          onToken: async (delta) => {
+            if (delta) await onEvent?.({ type: 'token', data: delta });
           },
         });
       } else {
@@ -211,7 +211,7 @@ export async function runChatTurn({
         role: 'assistant',
         content: response.content || '',
       });
-      onEvent?.({ type: 'assistant_message', data: assistantMessage });
+      await onEvent?.({ type: 'assistant_message', data: assistantMessage });
 
       return {
         conversation,
@@ -236,7 +236,7 @@ export async function runChatTurn({
         continue;
       }
 
-      onEvent?.({ type: 'tool_call', data: { name, args } });
+      await onEvent?.({ type: 'tool_call', data: { name, args } });
       const result = await dispatchTool(name, args, { conversationId: conversation.id });
       const toolRow = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
@@ -246,7 +246,7 @@ export async function runChatTurn({
         toolResult: result,
       });
       toolMessages.push(toolRow);
-      onEvent?.({ type: 'tool_message', data: toolRow });
+      await onEvent?.({ type: 'tool_message', data: toolRow });
 
       baseMessages.push({
         role: 'tool',
@@ -267,7 +267,7 @@ export async function runChatTurn({
       'I wasn\'t able to finish answering — I hit the tool-call iteration limit. Try rephrasing your question.',
     status: 'error',
   });
-  onEvent?.({ type: 'assistant_message', data: fallbackMessage });
+  await onEvent?.({ type: 'assistant_message', data: fallbackMessage });
 
   return {
     conversation,

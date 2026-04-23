@@ -72,6 +72,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import { AiChatServiceError, runChatTurn } from '../../src/services/aiChatService.js';
+import { ValidationError, AppError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/ai.js');
 
 const UUID = '11111111-2222-4333-8444-555555555555';
@@ -79,6 +80,11 @@ const UUID = '11111111-2222-4333-8444-555555555555';
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }
 
@@ -95,8 +101,11 @@ function mockStreamReq(body) {
   const listeners = {};
   return {
     body,
-    on: vi.fn((event, cb) => { listeners[event] = cb; }),
-    emit: (event, ...args) => listeners[event]?.(...args),
+    on: vi.fn((event, cb) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(cb);
+    }),
+    emit: (event, ...args) => (listeners[event] || []).forEach((cb) => cb(...args)),
   };
 }
 
@@ -106,43 +115,31 @@ function mockStreamReq(body) {
 describe('POST /api/ai/chat/stream', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns 400 JSON when message missing (no SSE headers)', async () => {
+  it('throws ValidationError when message missing (before SSE headers)', async () => {
     const req = mockStreamReq({ conversationId: UUID });
     const res = mockSseResponse();
-    res.status = vi.fn().mockReturnThis();
-    res.json = vi.fn();
 
-    await routeHandlers['post:/chat/stream'](req, res);
+    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ detail: '"message" is required' });
     expect(res.writeHead).not.toHaveBeenCalled();
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when conversationId is not a UUID', async () => {
+  it('throws ValidationError when conversationId is not a UUID', async () => {
     const req = mockStreamReq({ conversationId: 'not-a-uuid', message: 'hi' });
     const res = mockSseResponse();
-    res.status = vi.fn().mockReturnThis();
-    res.json = vi.fn();
 
-    await routeHandlers['post:/chat/stream'](req, res);
+    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ detail: '"conversationId" must be a UUID' });
     expect(res.writeHead).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when message exceeds max length', async () => {
+  it('throws ValidationError when message exceeds max length', async () => {
     const req = mockStreamReq({ message: 'x'.repeat(8001) });
     const res = mockSseResponse();
-    res.status = vi.fn().mockReturnThis();
-    res.json = vi.fn();
 
-    await routeHandlers['post:/chat/stream'](req, res);
+    await expect(routeHandlers['post:/chat/stream'](req, res)).rejects.toBeInstanceOf(ValidationError);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].detail).toContain('8000');
     expect(res.writeHead).not.toHaveBeenCalled();
   });
 
@@ -345,25 +342,20 @@ describe('POST /api/ai/chat/stream', () => {
 describe('POST /api/ai/chat', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns 400 when message missing', async () => {
+  it('throws ValidationError when message missing', async () => {
     const req = { body: {}, on: vi.fn() };
     const res = mockResponse();
 
-    await routeHandlers['post:/chat'](req, res);
+    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(ValidationError);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ detail: '"message" is required' });
     expect(runChatTurn).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when model is an empty string', async () => {
+  it('throws ValidationError when model is an empty string', async () => {
     const req = { body: { message: 'hi', model: '  ' }, on: vi.fn() };
     const res = mockResponse();
 
-    await routeHandlers['post:/chat'](req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ detail: '"model" must be a non-empty string' });
+    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('returns 200 with turn payload on success', async () => {
@@ -386,30 +378,34 @@ describe('POST /api/ai/chat', () => {
     const callArgs = runChatTurn.mock.calls[0][0];
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe('hi');
-    expect(res.json).toHaveBeenCalledWith(turn);
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      data: {
+        conversation: turn.conversation,
+        userMessage: turn.userMessage,
+        toolMessages: turn.toolMessages,
+        assistantMessage: turn.assistantMessage,
+        usage: turn.usage,
+        iterations: turn.iterations,
+      },
+    });
   });
 
-  it('maps AiChatServiceError to proper status + code', async () => {
+  it('throws AppError when AiChatServiceError occurs', async () => {
     runChatTurn.mockRejectedValue(new AiChatServiceError('bad', { code: 'INVALID_INPUT', status: 400 }));
 
     const req = { body: { message: 'hi' }, on: vi.fn() };
     const res = mockResponse();
 
-    await routeHandlers['post:/chat'](req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ detail: 'bad', code: 'INVALID_INPUT' });
+    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(AppError);
   });
 
-  it('maps generic error to 500 with safe detail', async () => {
+  it('throws AppError on generic error', async () => {
     runChatTurn.mockRejectedValue(new Error('internal'));
 
     const req = { body: { message: 'hi' }, on: vi.fn() };
     const res = mockResponse();
 
-    await routeHandlers['post:/chat'](req, res);
-
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to process AI chat message' });
+    await expect(routeHandlers['post:/chat'](req, res)).rejects.toBeInstanceOf(AppError);
   });
 });
