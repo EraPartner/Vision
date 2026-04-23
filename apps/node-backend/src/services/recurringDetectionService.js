@@ -10,6 +10,7 @@
 
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { toDecimal } from '../lib/money.js';
 
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
@@ -88,7 +89,7 @@ function detectAmountChanges(transactions) {
   });
 
   // Calculate baseline (median of all amounts)
-  const amounts = sorted.map((t) => Math.abs(parseFloat(t.amount)));
+  const amounts = sorted.map((t) => toDecimal(t.amount).abs().toNumber());
   const medianAmount = [...amounts].sort((a, b) => a - b)[Math.floor(amounts.length / 2)];
   if (!Number.isFinite(medianAmount) || medianAmount === 0) {
     return [];
@@ -96,7 +97,7 @@ function detectAmountChanges(transactions) {
 
   // Check last few transactions for changes
   for (let i = Math.max(0, sorted.length - 3); i < sorted.length; i++) {
-    const amt = Math.abs(parseFloat(sorted[i].amount));
+    const amt = toDecimal(sorted[i].amount).abs().toNumber();
     const pctChange = ((amt - medianAmount) / medianAmount) * 100;
 
     if (Math.abs(pctChange) > 5) {
@@ -180,7 +181,7 @@ export async function detectRecurringPatterns() {
       if (!detected) continue;
 
       // Get amounts info
-      const amounts = txns.map((t) => Math.abs(parseFloat(t.amount)));
+      const amounts = txns.map((t) => toDecimal(t.amount).abs().toNumber());
       const avgAmount = amounts.reduce((s, v) => s + v, 0) / amounts.length;
       const latestAmount = amounts[amounts.length - 1];
       const currency = txns[0].currency || 'EUR';

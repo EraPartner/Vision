@@ -191,7 +191,7 @@ export const splitRepository = {
     const result = await query(sql, [recipientId]);
     return result.rows.map((row) => ({
       ...row,
-      amount: parseFloat(row.amount),
+      amount: toNumber(toDecimal(row.amount)),
     }));
   },
 
@@ -277,7 +277,7 @@ export const splitRepository = {
     const result = await query(sql, [splitId]);
     return result.rows.map(row => ({
       ...row,
-      amount: parseFloat(row.amount),
+      amount: toNumber(toDecimal(row.amount)),
     }));
   },
 
@@ -330,7 +330,7 @@ export const splitRepository = {
       WHERE split_id = $1
     `;
     const result = await query(sql, [splitId]);
-    return parseFloat(result.rows[0].paid) || 0;
+    return toNumber(toDecimal(result.rows[0].paid));
   },
 
   /**
@@ -364,8 +364,8 @@ function formatSplit(row) {
     transaction_id: row.transaction_id,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
-    amount: parseFloat(row.amount),
-    amount_paid: row.amount_paid != null ? parseFloat(row.amount_paid) : 0,
+    amount: toNumber(toDecimal(row.amount)),
+    amount_paid: toNumber(toDecimal(row.amount_paid)),
     note: row.note,
     is_settled: row.is_settled,
     created_at: row.created_at,

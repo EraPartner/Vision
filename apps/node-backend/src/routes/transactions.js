@@ -19,6 +19,7 @@ import {
   NotFoundError,
   ConflictError,
 } from '../middleware/errorHandler.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 
 const router = Router();
 
@@ -239,7 +240,7 @@ router.get(
         if (chunk.rows.length === 0) break;
         const lines = chunk.rows.map((row) => {
           if (includeBalance) {
-            runningBalance += row.amount != null ? parseFloat(row.amount) : 0;
+            runningBalance = toDecimal(runningBalance).plus(toDecimal(row.amount ?? 0)).toNumber();
             return buildTransactionCsvRow({ ...row, running_balance: runningBalance }, { includeBalance });
           }
           return buildTransactionCsvRow(row);
@@ -362,8 +363,8 @@ router.delete('/:id', validateIdParam, async (req, res) => {
  */
 function formatTransaction(row) {
   if (!row) return null;
-  const amount = row.amount != null ? parseFloat(row.amount) : 0;
-  const amountEur = row.amount_eur != null ? parseFloat(row.amount_eur) : amount;
+  const amount = toNumber(toDecimal(row.amount));
+  const amountEur = row.amount_eur != null ? toNumber(toDecimal(row.amount_eur)) : amount;
   return {
     id: row.id,
     transaction_date: row.date,
@@ -375,7 +376,7 @@ function formatTransaction(row) {
     amount,
     amount_eur: amountEur,
     currency: row.currency,
-    balance: row.balance != null ? parseFloat(row.balance) : null,
+    balance: row.balance != null ? toNumber(toDecimal(row.balance)) : null,
     category_id: row.effective_category_id ?? row.category_id,
     category_name: row.category_name || null,
     comment: row.comment,
