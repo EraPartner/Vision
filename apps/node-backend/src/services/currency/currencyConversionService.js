@@ -14,6 +14,7 @@
 
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { toDecimal, toNumber } from '../../lib/money.js';
 import {
   CACHE_LIFETIME_MS,
   normalizeDateInput,
@@ -208,7 +209,7 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
   const converted = [];
   for (const row of rows) {
     const currency = (row.currency || 'EUR').toUpperCase().trim();
-    const amount = typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount;
+    const amount = toNumber(toDecimal(row.amount));
     const rowDate = resolveDateFromRow(row);
 
     if (currency === toCur) {

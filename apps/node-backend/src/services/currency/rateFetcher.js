@@ -7,6 +7,7 @@
 
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
+import { toDecimal, toNumber } from '../../lib/money.js';
 
 const ECB_LATEST_URL      = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ERAR_LATEST_URL     = 'https://open.er-api.com/v6/latest/EUR';
@@ -149,7 +150,7 @@ export async function loadFromDatabase() {
 
     const rates = { EUR: 1.0 };
     for (const row of result.rows) {
-      rates[row.currency_code] = parseFloat(row.rate_to_eur);
+      rates[row.currency_code] = toNumber(toDecimal(row.rate_to_eur));
     }
     logger.debug(`Loaded ${result.rows.length} exchange rates from database`);
     return rates;
@@ -220,7 +221,7 @@ export async function getNearestRateFromDatabase(currencyCode, dateStr) {
     [currencyCode, dateStr]
   );
   if (result.rows.length === 0) return undefined;
-  return parseFloat(result.rows[0].rate_to_eur);
+  return toNumber(toDecimal(result.rows[0].rate_to_eur));
 }
 
 // ─── Historical rate index (in-memory binary search) ─────────────────────────
@@ -230,7 +231,7 @@ export function buildHistoricalRateIndex(rows) {
   for (const row of rows) {
     const currency = String(row.currency_code || '').toUpperCase().trim();
     const date = normalizeDateInput(row.rate_date);
-    const rate = parseFloat(row.rate_to_eur);
+    const rate = toNumber(toDecimal(row.rate_to_eur));
     if (!currency || !date || !Number.isFinite(rate)) continue;
     if (!byCurrency.has(currency)) byCurrency.set(currency, []);
     byCurrency.get(currency).push({ date, rate });
@@ -281,7 +282,7 @@ export async function getRateToEurForDate(currencyCode, dateValue, { saveFetched
     [currencyCode, dateStr]
   );
   if (exact.rows.length > 0) {
-    return parseFloat(exact.rows[0].rate_to_eur);
+    return toNumber(toDecimal(exact.rows[0].rate_to_eur));
   }
 
   const ecbByDate = await fetchHistoricalFromEcb90d();
