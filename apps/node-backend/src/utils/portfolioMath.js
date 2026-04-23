@@ -6,6 +6,8 @@
  * implementations in frontend hooks.
  */
 
+import { toDecimal, toNumber } from '../lib/money.js';
+
 /**
  * Calculate weighted average cost basis using the moving-average method.
  * Buys and gifts increase the position; sells reduce it at the current avg cost.
@@ -148,10 +150,10 @@ export function computeMetrics(snapshots) {
   const lastDate = new Date(last.snapshot_date);
   const days = Math.max(1, Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24)));
 
-  const totalInvested = parseFloat(last.invested);
-  const currentValue = parseFloat(last.value);
-  const totalGainLoss = parseFloat(last.gain_loss);
-  const inflationAdjustedValue = parseFloat(last.inflation_adjusted_value);
+  const totalInvested = toNumber(toDecimal(last.invested));
+  const currentValue = toNumber(toDecimal(last.value));
+  const totalGainLoss = toNumber(toDecimal(last.gain_loss));
+  const inflationAdjustedValue = toNumber(toDecimal(last.inflation_adjusted_value));
 
   const totalReturnPct = totalInvested > 0
     ? (totalGainLoss / totalInvested) * 100
@@ -218,10 +220,10 @@ export function computeHeatmap(snapshots) {
     const monthIdx = parseInt(monthKeys[i].slice(5, 7)) - 1;
 
     const monthlyReturn = contributionAdjustedMonthlyReturn(
-      parseFloat(curr.value),
-      parseFloat(curr.invested),
-      parseFloat(prev.value),
-      parseFloat(prev.invested),
+      toNumber(toDecimal(curr.value)),
+      toNumber(toDecimal(curr.invested)),
+      toNumber(toDecimal(prev.value)),
+      toNumber(toDecimal(prev.invested)),
     );
 
     const rounded = monthlyReturn !== null ? Math.round(monthlyReturn * 100) / 100 : null;

@@ -18,6 +18,7 @@ import {
 } from '../services/currency/currencyConversionService.js';
 import { getSnapshots, computeMetrics, computeHeatmap, getBreakdownSummary } from '../services/portfolioPerformanceSnapshotService.js';
 import { downsampleLTTB } from '../utils/downsample.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 import {
   getInflationRates,
   clearInflationMemoryCache,
@@ -156,7 +157,7 @@ function getCurrentDateString() {
 }
 
 function parseSnapshotNumber(value) {
-  return parseFloat(value) || 0;
+  return toNumber(toDecimal(value));
 }
 
 function mapPortfolioPerformanceSnapshot(snapshot) {
@@ -400,7 +401,7 @@ router.get(
 
     const rates = result.rows.map(row => ({
       currency: row.currency_code,
-      rate_to_eur: parseFloat(row.rate_to_eur),
+      rate_to_eur: toNumber(toDecimal(row.rate_to_eur)),
       rate_date: row.rate_date instanceof Date ? row.rate_date.toISOString().split('T')[0] : String(row.rate_date),
       fetched_at: row.fetched_at,
     }));

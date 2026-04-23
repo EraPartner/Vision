@@ -12,6 +12,7 @@ import { rateLimiter } from '../middleware/rateLimiter.js';
 import { generateLoanRepaymentSchedule } from '../services/loanRepaymentService.js';
 import { calculateNextDate } from '../services/recurrenceService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 
 const router = Router();
 
@@ -292,7 +293,7 @@ function formatPlannedTransaction(row) {
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
     memo: row.memo,
-    amount: parseFloat(row.amount),
+    amount: toNumber(toDecimal(row.amount)),
     currency: row.currency,
     category_id: row.category_id,
     category_name: row.category_name || null,
@@ -304,20 +305,20 @@ function formatPlannedTransaction(row) {
     last_executed_date: row.last_executed_date,
     is_loan: row.is_loan || false,
     loan_type: row.loan_type || null,
-    loan_principal: row.loan_principal != null ? parseFloat(row.loan_principal) : null,
-    loan_annual_interest_rate: row.loan_annual_interest_rate != null ? parseFloat(row.loan_annual_interest_rate) : null,
+    loan_principal: row.loan_principal != null ? toNumber(toDecimal(row.loan_principal)) : null,
+    loan_annual_interest_rate: row.loan_annual_interest_rate != null ? toNumber(toDecimal(row.loan_annual_interest_rate)) : null,
     loan_term_months: row.loan_term_months != null ? parseInt(row.loan_term_months, 10) : null,
     loan_start_date: row.loan_start_date || null,
     loan_payment_day: row.loan_payment_day != null ? parseInt(row.loan_payment_day, 10) : null,
-    loan_regular_payment_amount: row.loan_regular_payment_amount != null ? parseFloat(row.loan_regular_payment_amount) : null,
+    loan_regular_payment_amount: row.loan_regular_payment_amount != null ? toNumber(toDecimal(row.loan_regular_payment_amount)) : null,
     loan_first_payment_date: row.loan_first_payment_date || null,
     loan_schedule: (row.loan_schedule || []).map((entry) => ({
       installment_number: parseInt(entry.installment_number, 10),
       due_date: entry.due_date,
-      payment_amount: parseFloat(entry.payment_amount),
-      principal_amount: parseFloat(entry.principal_amount),
-      interest_amount: parseFloat(entry.interest_amount),
-      remaining_principal: parseFloat(entry.remaining_principal),
+      payment_amount: toNumber(toDecimal(entry.payment_amount)),
+      principal_amount: toNumber(toDecimal(entry.principal_amount)),
+      interest_amount: toNumber(toDecimal(entry.interest_amount)),
+      remaining_principal: toNumber(toDecimal(entry.remaining_principal)),
     })),
     executed_transaction_id: row.executed_transaction_id || null,
     execution_count: row.execution_count || 0,

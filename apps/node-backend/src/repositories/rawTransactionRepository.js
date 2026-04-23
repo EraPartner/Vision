@@ -15,6 +15,7 @@
 
 import crypto from 'crypto';
 import { query } from '../database/connection.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 
 /**
  * Compute SHA256 hash for raw CSV line deduplication.
@@ -77,7 +78,7 @@ export const belfiusRawRepo = {
        ORDER BY transaction_date DESC, id DESC LIMIT 1`,
       [accountNumber]
     );
-    return result.rows[0]?.balance ? parseFloat(result.rows[0].balance) : null;
+    return result.rows[0]?.balance != null ? toNumber(toDecimal(result.rows[0].balance)) : null;
   },
 };
 
@@ -128,7 +129,7 @@ export const revolutRawRepo = {
        ORDER BY completed_date DESC, id DESC LIMIT 1`,
       [product]
     );
-    return result.rows[0]?.balance ? parseFloat(result.rows[0].balance) : null;
+    return result.rows[0]?.balance != null ? toNumber(toDecimal(result.rows[0].balance)) : null;
   },
 };
 
@@ -185,7 +186,7 @@ export const kbcRawRepo = {
        ORDER BY transaction_date DESC, id DESC LIMIT 1`,
       [accountNumber]
     );
-    return result.rows[0]?.balance ? parseFloat(result.rows[0].balance) : null;
+    return result.rows[0]?.balance != null ? toNumber(toDecimal(result.rows[0].balance)) : null;
   },
 };
 

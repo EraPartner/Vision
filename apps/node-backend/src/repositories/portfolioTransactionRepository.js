@@ -3,6 +3,7 @@
  */
 
 import { query } from '../database/connection.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 
 let _hasPortfolioTransactionInheritanceSchema;
 
@@ -244,7 +245,7 @@ async function getNetUnitsOnOrBeforeDate(investmentId, date, { excludeTransactio
   }
 
   const result = await query(sql, params);
-  return parseFloat(result.rows[0]?.net_units ?? 0) || 0;
+  return toNumber(toDecimal(result.rows[0]?.net_units ?? 0));
 }
 
 async function validateSellUnitsAvailability({
