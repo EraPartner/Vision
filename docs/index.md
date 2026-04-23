@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-23
-tags: [knowledge-base, index, project, overview, phase-3]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 3.1 infoRepository split complete.
+tags: [knowledge-base, index, project, overview, phase-3, phase-4]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 4 includes Zustand unified settings store and runtime feature flags.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 

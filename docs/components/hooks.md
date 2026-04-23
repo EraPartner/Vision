@@ -2,8 +2,8 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-03-31
-tags: [components, hooks, react-query]
+date: 2026-04-23
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4]
 description: Custom React hooks for data fetching and state management
 related_code: ["apps/frontend/src/hooks"]
 ---
@@ -13,6 +13,15 @@ related_code: ["apps/frontend/src/hooks"]
 Vision uses custom hooks for data fetching, state management, and reusable logic.
 
 ## Hook List
+
+### Settings & State Store Hooks (Phase 4)
+
+| Hook | Description | File |
+|------|-------------|------|
+| `useSettingsStore()` | Zustand store access (full state) | [[apps/frontend/src/stores/settingsStore.ts\|settingsStore.ts]] |
+| `useAppSettings()` | App settings slice with shallow selection | [[apps/frontend/src/contexts/AppSettingsContext.tsx\|AppSettingsContext.tsx]] |
+| `useSettings()` | Dashboard/exclusion settings slice | [[apps/frontend/src/contexts/SettingsContext.tsx\|SettingsContext.tsx]] |
+| `useTheme()` | Theme settings slice | [[apps/frontend/src/contexts/ThemeContext.tsx\|ThemeContext.tsx]] |
 
 ### Data Fetching Hooks
 
@@ -34,6 +43,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useWidgetVisibility()` | Widget visibility | [[apps/frontend/src/hooks/useWidgetVisibility.ts\|useWidgetVisibility.ts]] |
 | `useFilteredDashboardStats()` | Filtered dashboard data | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts\|useFilteredDashboardStats.ts]] |
 | `useConfirmDialog()` | Confirmation dialogs | [[apps/frontend/src/hooks/useConfirmDialog.tsx\|useConfirmDialog.tsx]] |
+| `useFormState()` | Generic typed form state with dirty tracking (Phase 4) | [[apps/frontend/src/hooks/useFormState.ts\|useFormState.ts]] |
 
 ### Utility Hooks
 
@@ -41,6 +51,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `useDebounce()` | Debounce value changes | `useDebounce.ts` |
 | `useIsMobile()` | Responsive breakpoint check | `use-mobile.tsx` |
+| `useDataTableColumns()` | Memoized column definitions for DataTable (Phase 4) | [[apps/frontend/src/hooks/useDataTableColumns.ts\|useDataTableColumns.ts]] |
 
 ### Portfolio Hooks
 
@@ -591,9 +602,197 @@ All Statistics page sub-components:
 
 ---
 
+---
+
+## useFormState (Phase 4)
+
+Generic typed form state hook for managing form field changes with dirty tracking.
+
+### API
+
+```typescript
+const { form, setField, setForm, reset, isDirty } = useFormState({
+  name: '',
+  email: '',
+  notes: '',
+});
+```
+
+### Returns
+
+```typescript
+interface UseFormStateReturn<T> {
+  form: T;                                          // Current form values
+  setField: <K extends keyof T>(field: K, value: T[K]) => void;  // Update single field
+  setForm: React.Dispatch<React.SetStateAction<T>>; // Replace entire form
+  reset: () => void;                                // Reset to initial values
+  isDirty: boolean;                                 // Shallow equality check vs. initial
+}
+```
+
+### Features
+
+- **Type-safe**: Generic over form shape, full TypeScript support
+- **Dirty tracking**: Shallow compare to detect unsaved changes
+- **Immutable updates**: Field changes create new state object
+- **Reference stable**: `setField` and `reset` are memoized with `useCallback`
+
+### Usage
+
+```tsx
+const { form, setField, reset, isDirty } = useFormState({
+  name: '',
+  email: '',
+});
+
+return (
+  <>
+    <Input
+      value={form.name}
+      onChange={(e) => setField('name', e.target.value)}
+    />
+    <button onClick={reset} disabled={!isDirty}>
+      Reset
+    </button>
+  </>
+);
+```
+
+### When to Use
+
+- Forms with multiple fields and dirty state tracking
+- Dialog/modal forms where reset is important
+- Any controlled form where you want to avoid repetitive `useState` boilerplate
+
+---
+
+## useDataTableColumns (Phase 4)
+
+Memoized column definition factory for DataTable and VirtualDataTable components.
+
+### API
+
+```typescript
+const columns = useDataTableColumns<T>(
+  () => [
+    { key: 'date', header: 'Date', render: (row) => formatDate(row.date) },
+    { key: 'amount', header: 'Amount', sortable: true },
+  ],
+  [t, formatDate] // dependency array
+);
+```
+
+### Parameters
+
+- **factory**: `() => Column<T>[]` — Function returning column array
+- **deps**: `React.DependencyList` — Dependency array (forwarded to `useMemo`)
+
+### Returns
+
+Stable `Column<T>[]` reference that only changes when `deps` changes.
+
+### Features
+
+- **Prevents re-renders**: Inline column arrays cause table re-renders every parent render; this memoizes them
+- **Works with both DataTable and VirtualDataTable**
+- **Simple wrapper**: Just `useMemo(factory, deps)` for clarity
+
+### Usage
+
+```tsx
+const COLUMNS = useDataTableColumns<Transaction>(
+  () => [
+    { key: 'date', header: t('col.date'), render: (row) => row.date },
+    { key: 'amount', header: t('col.amount'), sortable: true },
+    { key: 'recipient', header: t('col.recipient') },
+  ],
+  [t]
+);
+
+return <DataTable columns={COLUMNS} data={transactions} />;
+```
+
+### When to Use
+
+- Any DataTable/VirtualDataTable with columns defined inline
+- Columns that depend on i18n (`t()`) or formatters
+
+---
+
+## useSettingsStore (Phase 4)
+
+Direct Zustand store access for all application settings (app, dashboard, theme).
+
+### API
+
+```typescript
+// Full state access
+const appSettings = useSettingsStore((s) => s.appSettings);
+const theme = useSettingsStore((s) => s.theme);
+
+// Using useShallow for slice selection (recommended)
+const settings = useSettingsStore(
+  useShallow((s) => ({
+    appSettings: s.appSettings,
+    isLoading: s.isAppSettingsLoading,
+  }))
+);
+
+// Calling actions
+const { updateAppSettings, setTheme, toggleTheme } = useSettingsStore(
+  (s) => ({
+    updateAppSettings: s.updateAppSettings,
+    setTheme: s.setTheme,
+    toggleTheme: s.toggleTheme,
+  })
+);
+```
+
+### Store Shape
+
+```typescript
+interface SettingsStore {
+  // App settings
+  appSettings: AppSettings;
+  isAppSettingsLoading: boolean;
+  updateAppSettings: (updates: Partial<AppSettings>) => void;
+  resetAppSettings: () => void;
+
+  // Dashboard settings
+  dashboardSettings: DashboardSettings;
+  isDashboardSettingsLoading: boolean;
+  updateDashboardSettings: (updates: Partial<DashboardSettings>) => void;
+
+  // Theme
+  theme: 'dark' | 'light';
+  themeMode: 'light' | 'dark' | 'system' | 'schedule';
+  themeSchedule: { lightFrom: string; darkFrom: string };
+  themeVariant: ThemeVariant;
+  isThemeLoaded: boolean;
+  setThemeMode: (mode: ThemeMode) => void;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
+}
+```
+
+### When to Use
+
+- **Direct store access**: Use `useSettingsStore` with `useShallow()` for slice selection
+- **Through context wrappers**: Use `useAppSettings()`, `useSettings()`, `useTheme()` for convenience
+- **Mutations**: Call actions directly: `useSettingsStore().updateAppSettings({...})`
+
+### Internal Hydration (Provider-only)
+
+The AppSettingsContext, SettingsContext, and ThemeContext Providers call store hydration actions once preloaded data arrives. Components should never call `_hydrateAppSettings()`, etc. directly.
+
+---
+
 ## Related Documentation
 
 - [[docs/components/index]] - Components Index
 - [[docs/api/index]] - API documentation
 - [[docs/components/statistics]] - Statistics components
+- [[docs/features/settings]] - Settings feature architecture
+- [[docs/reference/code-patterns#zustand-store-pattern-phase-4]] - Zustand pattern reference
 - [React Query Docs](https://tanstack.com/query)
+- [Zustand Docs](https://github.com/pmndrs/zustand)

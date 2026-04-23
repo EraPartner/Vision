@@ -2,9 +2,9 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, and Framer Motion. Updated April 2026 with Statistics page component refactoring.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. Updated April 2026 with Statistics page component refactoring and Phase 4 unified settings store.
 date: 2026-04-23
-tags: [architecture, frontend, uml, plantuml, react, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring]
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring, zustand, state-management]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
@@ -135,9 +135,18 @@ AppLayout --> PortfolioOverview
 @enduml
 ```
 
-## State Management
+## State Management (Phase 4)
 
-React Context for client state + React Query for server state.
+Zustand for client state (settings) + React Context wrappers for hydration/persistence + React Query for server state.
+
+### Zustand Settings Store
+
+Unified store at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]` consolidates three previously separate contexts:
+- AppSettingsContext (app settings)
+- SettingsContext (dashboard/exclusion settings)
+- ThemeContext (theme settings)
+
+Context Providers still exist as thin wrappers for hydration and persistence side-effects.
 
 ```plantuml
 @startuml
@@ -146,28 +155,41 @@ skinparam linetype ortho
 skinparam nodesep 35
 skinparam ranksep 50
 
+package "Zustand Stores (Phase 4)" {
+  class useSettingsStore {
+    +appSettings
+    +dashboardSettings
+    +theme, themeMode, themeSchedule, themeVariant
+    +updateAppSettings()
+    +updateDashboardSettings()
+    +setTheme(), toggleTheme()
+  }
+}
+
 package "Context Providers" {
   class QueryClientProvider {
     +QueryClient (staleTime: 30s)
   }
   
+  class SettingsPreloadContext {
+    +Fetches before render
+    +Passes to store
+  }
+  
   class ThemeContext {
-    +variant: default|dracula|solarized|nord|high-contrast
-    +mode: light|dark|system|schedule
-    +schedule: {lightFrom,darkFrom}
-    +setVariant(variant)
-    +setMode(mode)
-    +setSchedule(schedule)
+    +Wraps useSettingsStore theme slice
+    +Handles DOM effects (CSS class, matchMedia)
+    +Debounced persistence
   }
   
   class SettingsContext {
-    +settings
-    +updateSettings()
+    +Wraps useSettingsStore dashboard slice
+    +Debounced persistence
   }
   
   class AppSettingsContext {
-    +appSettings
-    +language
+    +Wraps useSettingsStore appSettings slice
+    +useShallow() for performance
   }
   
   class LanguageContext {
@@ -196,18 +218,24 @@ package "Utility Hooks" {
   class useMobile
   class useToast
   class useConfirmDialog
+  class useDataTableColumns
+  class useFormState
 }
 
 QueryClientProvider --> SettingsPreloadContext
-SettingsPreloadContext --> ThemeContext
-ThemeContext --> SettingsContext
-SettingsContext --> AppSettingsContext
+SettingsPreloadContext --> useSettingsStore
+useSettingsStore --> ThemeContext
+useSettingsStore --> SettingsContext
+useSettingsStore --> AppSettingsContext
 AppSettingsContext --> LanguageContext
 LanguageContext --> BelgianTaxProfileContext
 
 useTransactions --> QueryClientProvider
 useCategories --> QueryClientProvider
 useRecipients --> QueryClientProvider
+useAppSettings -.-> useSettingsStore
+useSettings -.-> useSettingsStore
+useTheme -.-> useSettingsStore
 
 @enduml
 ```

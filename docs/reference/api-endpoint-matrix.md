@@ -2,17 +2,17 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-22
-updated: 2026-04-22
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2]
-description: Complete matrix of all 128 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); see openapi.yaml for authoritative spec (Phase 2.4)
+date: 2026-04-23
+updated: 2026-04-23
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, feature-flags]
+description: Complete matrix of all 131 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); includes Phase 4 feature flags; see openapi.yaml for authoritative spec (Phase 2.4)
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 128 API endpoints across 17 route files. Use this as a quick reference to find any endpoint.
+> All 131 API endpoints across 18 route files. Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 
@@ -164,7 +164,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (7 endpoints)
+## Admin (10 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -175,6 +175,9 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/admin/update/apply` | Acknowledge update | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/update/apply-and-restart` | Apply and restart | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/feature-flags` | List all feature flags (Phase 4) | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/feature-flags/:key` | Get single feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
+| PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 
 ## Aggregations (6 endpoints) — Phase 2
 
@@ -247,6 +250,7 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Saved Charts | 4 | 0 |
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
+| Admin | 10 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
 | Admin | 7 | 0 |

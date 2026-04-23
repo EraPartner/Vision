@@ -4,7 +4,7 @@ type: adr-index
 status: active
 date: 2026-04-23
 updated: 2026-04-23
-tags: [adr, index, architecture, decisions, phase-1]
+tags: [adr, index, architecture, decisions, phase-1, phase-4]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -43,6 +43,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-23: Zustand Unified Settings Store
+
+[[docs/adr/032-zustand-unified-settings-store|ADR-032]] — Consolidate three separate React contexts (AppSettingsContext, SettingsContext, ThemeContext) into a single Zustand store (`useSettingsStore`). Context Providers remain as thin wrappers for hydration and persistence side-effects. All consumers use `useShallow()` for slice selection to prevent re-renders on unrelated state changes. Eliminates prop drilling, improves performance, and provides a single source of truth for all user settings (app settings, dashboard exclusions, theme).
+
+### 2026-04-23: Runtime-Toggleable Feature Flags
+
+[[docs/adr/033-runtime-toggleable-feature-flags|ADR-033]] — Add persistent feature flags to PostgreSQL (table: `feature_flags`) with admin API endpoints (`/api/admin/feature-flags/:key`) to toggle features at runtime without redeployment. Replaces hard-coded environment variables (AI_CHAT_ENABLED, AGGREGATIONS_V2_ENABLED) with database-persisted toggles. Safe default behavior: `isEnabled(unknownKey)` returns false. Enables gradual rollouts, emergency disables, and admin control over feature availability.
 
 ### 2026-04-21: Express 5 Compatibility: path-to-regexp Override
 

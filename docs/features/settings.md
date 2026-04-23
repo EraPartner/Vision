@@ -3,10 +3,11 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-04-23
-tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3]
+tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
+  - apps/frontend/src/stores/settingsStore.ts
   - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
   - apps/frontend/src/components/settings/tabs/GeneralTab.tsx
   - apps/frontend/src/components/settings/tabs/DashboardTab.tsx
@@ -16,6 +17,7 @@ related_code:
   - apps/frontend/src/contexts/AppSettingsContext.tsx
   - apps/frontend/src/contexts/SettingsContext.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
+  - apps/frontend/src/contexts/ThemeContext.tsx
   - apps/node-backend/src/routes/settings.js
   - apps/node-backend/src/repositories/settingsRepository.js
 ---
@@ -28,18 +30,44 @@ The Settings system manages all application preferences, from display formatting
 
 ## Architecture
 
-### Three-Layer Context System
+### Zustand Settings Store (Phase 4)
+
+All application settings are managed by a unified **Zustand store** located at `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`. This store consolidates three previously separate React contexts:
+
+- **AppSettingsContext** (app_settings key)
+- **SettingsContext** (dashboard_settings key)
+- **ThemeContext** (theme_settings key)
+
+The Provider components in each context file still exist as thin wrappers to handle:
+- Hydration from SettingsPreloadContext
+- Debounced persistence back to the API
+- DOM side-effects (ThemeContext: CSS class, matchMedia, interval)
+
+Consumer hooks (`useAppSettings`, `useSettings`, `useTheme`) use `useShallow()` to select only the slice they need, preventing unnecessary re-renders when unrelated slices change.
+
+**Three-Layer Context System (now wrapping Zustand)**
 
 ```
-SettingsPreloadContext → SettingsContext → AppSettingsContext
-     (preload)              (raw data)        (processed)
+SettingsPreloadContext → SettingsContext/AppSettingsContext/ThemeContext
+     (preload)                 (wrapper providers)
+          ↓
+        useSettingsStore (Zustand)
+     (source of truth)
 ```
 
-1. **SettingsPreloadContext**: Fetches settings before the app renders, preventing flash of unstyled content. Provides `usePreloadedSetting(key)` for direct access to individual settings.
+1. **SettingsPreloadContext**: Fetches settings before the app renders, preventing flash of unstyled content.
 
-2. **SettingsContext**: Manages the raw settings data from the API. Provides `settings` object with all key-value pairs and methods for individual/bulk updates.
+2. **Zustand Store**: Single source of truth for all settings state. Exports:
+   - `useSettingsStore` — Direct access to full store
+   - Actions: `updateAppSettings`, `updateDashboardSettings`, `setThemeMode`, `setTheme`, `toggleTheme`, etc.
+   - Slices: `appSettings`, `dashboardSettings`, `theme`, `themeMode`, `themeSchedule`, `themeVariant`
 
-3. **AppSettingsContext**: Processes raw settings into a typed `appSettings` object with defaults applied. Provides `useAppSettings()` hook.
+3. **Context Wrappers** (AppSettingsContext, SettingsContext, ThemeContext): Provide convenience hooks that use `useShallow()` to subscribe to store slices. Example:
+   ```typescript
+   export const useAppSettings = () => {
+     return useSettingsStore(useShallow(s => ({ ...s.appSettings, isLoading: s.isAppSettingsLoading })));
+   };
+   ```
 
 ### Settings Keys
 
