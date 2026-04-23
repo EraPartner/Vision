@@ -82,7 +82,7 @@ export const banksRepository = {
         [
           latestBalanceResult.rows.map(r => ({
             ...r,
-            amount: parseFloat(r.balance),
+            amount: toNumber(toDecimal(r.balance)),
             currency: r.currency || 'EUR',
           })),
           historyResult.rows
