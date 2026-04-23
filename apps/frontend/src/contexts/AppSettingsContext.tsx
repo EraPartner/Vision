@@ -1,19 +1,24 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
+/**
+ * AppSettingsContext
+ *
+ * Provider: hydrates the Zustand settings store from the single preloaded
+ * settings fetch and persists changes back to the API (debounced).
+ *
+ * Hook: useAppSettings() selects only the app-settings slice from the store,
+ * so theme or dashboard-settings updates do NOT trigger re-renders here.
+ * useShallow ensures the hook only re-renders when the selected values change.
+ */
+
+import React, { useEffect, useRef, type ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
-import type { Language } from '@/contexts/LanguageContext';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
+import { useSettingsStore, DEFAULT_APP_SETTINGS } from '@/stores/settingsStore';
+import type { AppSettings } from '@/stores/settingsStore';
 
-export interface AppSettings {
-    defaultCurrency: string;
-    dateFormat: string;
-    numberFormat: string;
-    defaultPageSize: number;
-    startOfWeek: 'monday' | 'sunday';
-    showDecimalPlaces: number;
-    language: Language;
-    aiDefaultModel?: string;
-}
+// Re-export so existing consumers don't need to change their imports
+export type { AppSettings };
 
 interface AppSettingsContextType {
     appSettings: AppSettings;
@@ -24,35 +29,32 @@ interface AppSettingsContextType {
 
 const SETTINGS_KEY = 'app_settings';
 
-const defaultAppSettings: AppSettings = {
-    defaultCurrency: 'EUR',
-    dateFormat: 'DD/MM/YYYY',
-    numberFormat: 'eu',
-    defaultPageSize: 50,
-    startOfWeek: 'monday',
-    showDecimalPlaces: 2,
-    language: 'en',
-};
+/** @deprecated Import DEFAULT_APP_SETTINGS from \@/stores/settingsStore instead. */
+export { DEFAULT_APP_SETTINGS as defaultAppSettings };
 
-const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
-    const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
-    const [isLoading, setIsLoading] = useState(true);
+    const { value: preloaded, isLoading: preloadLoading } =
+        usePreloadedSetting<AppSettings>(SETTINGS_KEY);
+
+    const _hydrateAppSettings = useSettingsStore((s) => s._hydrateAppSettings);
+    const appSettings = useSettingsStore((s) => s.appSettings);
+    const isLoading = useSettingsStore((s) => s.isAppSettingsLoading);
+
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstRender = useRef(true);
 
-    // Consume the single preloaded settings fetch instead of making our own request.
-    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<AppSettings>(SETTINGS_KEY);
-
+    // Hydrate store from preloaded data
     useEffect(() => {
-        if (preloadLoading) return; // wait for preload
-        if (preloaded) {
-            setAppSettings({ ...defaultAppSettings, ...preloaded });
-        }
-        setIsLoading(false);
-    }, [preloaded, preloadLoading]);
+        if (preloadLoading) return;
+        const merged = preloaded
+            ? { ...DEFAULT_APP_SETTINGS, ...preloaded }
+            : DEFAULT_APP_SETTINGS;
+        _hydrateAppSettings(merged, false);
+    }, [preloaded, preloadLoading, _hydrateAppSettings]);
 
+    // Debounced persist to API when settings change (skip initial render)
     useEffect(() => {
         if (isFirstRender.current) {
             isFirstRender.current = false;
@@ -72,32 +74,18 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         };
     }, [appSettings, isLoading]);
 
-    const updateAppSettings = useCallback((updates: Partial<AppSettings>) => {
-        setAppSettings((prev) => ({ ...prev, ...updates }));
-    }, []);
-
-    const resetAppSettings = useCallback(() => {
-        setAppSettings(defaultAppSettings);
-    }, []);
-
-    const value = useMemo(
-        () => ({ appSettings, updateAppSettings, resetAppSettings, isLoading }),
-        [appSettings, updateAppSettings, resetAppSettings, isLoading]
-    );
-
-    return (
-        <AppSettingsContext.Provider value={value}>
-            {children}
-        </AppSettingsContext.Provider>
-    );
+    return <>{children}</>;
 }
 
-export function useAppSettings() {
-    const context = useContext(AppSettingsContext);
-    if (!context) {
-        throw new Error('useAppSettings must be used within an AppSettingsProvider');
-    }
-    return context;
-}
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export { defaultAppSettings };
+export function useAppSettings(): AppSettingsContextType {
+    return useSettingsStore(
+        useShallow((s) => ({
+            appSettings: s.appSettings,
+            updateAppSettings: s.updateAppSettings,
+            resetAppSettings: s.resetAppSettings,
+            isLoading: s.isAppSettingsLoading,
+        }))
+    );
+}

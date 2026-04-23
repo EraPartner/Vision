@@ -1,16 +1,24 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+/**
+ * SettingsContext (dashboard settings)
+ *
+ * Provider: hydrates the Zustand settings store from the single preloaded
+ * settings fetch and persists changes back to the API (debounced).
+ *
+ * Hook: useSettings() selects only the dashboard-settings slice from the
+ * store, so app-settings or theme updates do NOT trigger re-renders here.
+ * useShallow ensures the hook only re-renders when the selected values change.
+ */
+
+import React, { useEffect, useRef, type ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
+import { useSettingsStore, DEFAULT_DASHBOARD_SETTINGS } from '@/stores/settingsStore';
+import type { ExclusionScope, DashboardSettings } from '@/stores/settingsStore';
 
-export type ExclusionScope = 'everywhere' | 'dashboard' | 'statistics';
-
-export interface DashboardSettings {
-    excludedCategoryIds: number[];
-    excludedRecipientIds: number[];
-    excludeHiddenCategories: boolean;
-    exclusionScope: ExclusionScope;
-}
+// Re-export so existing consumers don't need to change their imports
+export type { ExclusionScope, DashboardSettings };
 
 interface SettingsContextType {
     settings: DashboardSettings;
@@ -21,50 +29,48 @@ interface SettingsContextType {
 
 const SETTINGS_KEY = 'dashboard_settings';
 
-const defaultSettings: DashboardSettings = {
-    excludedCategoryIds: [],
-    excludedRecipientIds: [],
-    excludeHiddenCategories: true,
-    exclusionScope: 'everywhere',
-};
-
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+// ─── Provider ────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-    const [settings, setSettings] = useState<DashboardSettings>(defaultSettings);
-    const [isLoading, setIsLoading] = useState(true);
+    const { value: preloaded, isLoading: preloadLoading } =
+        usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
+
+    const _hydrateDashboardSettings = useSettingsStore((s) => s._hydrateDashboardSettings);
+    const dashboardSettings = useSettingsStore((s) => s.dashboardSettings);
+    const isLoading = useSettingsStore((s) => s.isDashboardSettingsLoading);
+
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isFirstRender = useRef(true);
 
-    // Consume the single preloaded settings fetch instead of making our own request.
-    const { value: preloaded, isLoading: preloadLoading } = usePreloadedSetting<DashboardSettings>(SETTINGS_KEY);
-
-    // Load settings from preload on mount
+    // Hydrate store from preloaded data (with localStorage migration fallback)
     useEffect(() => {
         if (preloadLoading) return;
+
         if (preloaded) {
-            setSettings({ ...defaultSettings, ...preloaded });
+            _hydrateDashboardSettings({ ...DEFAULT_DASHBOARD_SETTINGS, ...preloaded }, false);
         } else {
-            // Fallback: try localStorage for migration from older versions
+            // Fallback: migrate from localStorage for users upgrading from older versions
             try {
                 const stored = localStorage.getItem('vision_dashboardSettings');
                 if (stored) {
                     const parsed = JSON.parse(stored);
-                    setSettings({ ...defaultSettings, ...parsed });
-                    // Migrate to database
-                    apiClient.saveSetting(SETTINGS_KEY, { ...defaultSettings, ...parsed }).catch((err) => {
+                    const migrated = { ...DEFAULT_DASHBOARD_SETTINGS, ...parsed };
+                    _hydrateDashboardSettings(migrated, false);
+                    apiClient.saveSetting(SETTINGS_KEY, migrated).catch((err) => {
                         logger.error('Failed to migrate settings to database', err);
                     });
                     localStorage.removeItem('vision_dashboardSettings');
+                } else {
+                    _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
                 }
             } catch (err) {
                 logger.warn('Failed to read legacy settings from localStorage', err);
+                _hydrateDashboardSettings(DEFAULT_DASHBOARD_SETTINGS, false);
             }
         }
-        setIsLoading(false);
-    }, [preloaded, preloadLoading]);
+    }, [preloaded, preloadLoading, _hydrateDashboardSettings]);
 
-    // Debounced save to database whenever settings change (skip initial load)
-    const isFirstRender = useRef(true);
+    // Debounced persist to API when settings change (skip initial render)
     useEffect(() => {
         if (isFirstRender.current) {
             isFirstRender.current = false;
@@ -74,7 +80,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            apiClient.saveSetting(SETTINGS_KEY, settings).catch((err) => {
+            apiClient.saveSetting(SETTINGS_KEY, dashboardSettings).catch((err) => {
                 logger.error('Failed to save settings to database:', err);
             });
         }, 500);
@@ -82,27 +88,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         return () => {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [settings, isLoading]);
+    }, [dashboardSettings, isLoading]);
 
-    const updateSettings = useCallback((updates: Partial<DashboardSettings>) => {
-        setSettings((prev) => ({ ...prev, ...updates }));
-    }, []);
-
-    const resetSettings = useCallback(() => {
-        setSettings(defaultSettings);
-    }, []);
-
-    return (
-        <SettingsContext.Provider value={{ settings, updateSettings, resetSettings, isLoading }}>
-            {children}
-        </SettingsContext.Provider>
-    );
+    return <>{children}</>;
 }
 
-export function useSettings() {
-    const context = useContext(SettingsContext);
-    if (!context) {
-        throw new Error('useSettings must be used within a SettingsProvider');
-    }
-    return context;
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useSettings(): SettingsContextType {
+    return useSettingsStore(
+        useShallow((s) => ({
+            settings: s.dashboardSettings,
+            updateSettings: s.updateDashboardSettings,
+            resetSettings: s.resetDashboardSettings,
+            isLoading: s.isDashboardSettingsLoading,
+        }))
+    );
 }
