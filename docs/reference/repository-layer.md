@@ -2,10 +2,10 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-04-21
-tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1]
+date: 2026-04-23
+tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, decimal, money]
 aliases: [repositories, repository layer, data access, DAL, database access]
-description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions
+description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions. Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization.
 related_code: ["apps/node-backend/src/repositories/"]
 ---
 
@@ -37,6 +37,12 @@ Service Layer (business logic)
 - Error handling is delegated to the calling service/route
 
 **Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.js` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
+
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must wrap NUMERIC/DECIMAL columns with `toNumber(toDecimal(value))` to eliminate IEEE 754 floating-point drift. This is enforced across all monetary API output paths:
+- `splitRepository.js` — split amounts, outstanding balance
+- `infoRepositoryBanks.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js` — balance, total, running sums
+- `portfolioTransactionRepository.js`, `rawTransactionRepository.js` — amounts, valuations
+See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for guidance.
 
 ---
 
@@ -359,35 +365,70 @@ Service Layer (business logic)
 
 ---
 
-## 13. infoRepository.js
+## 13. infoRepository.js (Composite Module — Phase 3.1)
 
 **File:** [[apps/node-backend/src/repositories/infoRepository.js]]  
-**Purpose:** Read-only analytics and statistics queries — dashboard data, bank balances, net worth, recipient insights.
+**Purpose:** Barrel module (37 lines) that re-exports analytics and statistics repositories organized by domain. Originally 1445-line monolithic repository; refactored in Phase 3.1 into 7 domain-specific sub-repositories for improved maintainability and separation of concerns.
 
-### Exported Methods
+**Phase 3.1 Refactoring (2026-04-23):**
+- Monolithic 1445-line `infoRepository.js` split into domain-organized sub-modules
+- Batch FX conversion optimization: combined N-row groups into single `convertRowsToEur` call with one `exchange_rates` query, eliminating redundant per-group lookups
+- `getCashflowComparison`: 4 sequential queries → `Promise.all` + 1 batch FX call (saved 3 `exchange_rates` queries)
+- `getAverageVsCurrentSpending`: 2 sequential queries → `Promise.all` (FX already cached)
+- `getBankBalances`: 2 sequential queries → `Promise.all` + 1 batch FX call (saved 1 `exchange_rates` query)
+- All 1223 tests pass; API contracts unchanged
 
-| Method | Signature | Returns |
-|--------|-----------|---------|
-| `getStatistics` | `() => Promise<Statistics>` | General statistics |
-| `getBanks` | `() => Promise<Bank[]>` | Supported bank list |
-| `getTransactionSummary` | `(filters?) => Promise<TransactionSummary>` | Filtered transaction summary |
-| `getMonthlySummary` | `() => Promise<MonthlySummary[]>` | Monthly income/expense |
-| `getCategoryBreakdown` | `() => Promise<CategoryBreakdown[]>` | Spending by category |
-| `getBankBalances` | `(targetCurrency?) => Promise<BankBalance[]>` | Bank balances with FX conversion |
-| `getNetWorth` | `(currency?) => Promise<NetWorth>` | Net worth with daily breakdown |
-| `getRecipientInsights` | `(currency?) => Promise<RecipientInsight[]>` | Recipient analytics |
-| `getExchangeRates` | `() => Promise<ExchangeRate[]>` | Current exchange rates |
+### Domain Sub-Repositories
 
-### Key Query Patterns
+| Sub-Module | File | Lines | Purpose |
+|-----------|------|-------|---------|
+| `infoRepositoryHelpers.js` | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.js]]` | 194 | Shared utilities: mvCache, rounding, date/aggregation/category/currency helpers, spike sanitization, `batchConvertGroupsWithHistoricalRateFallback()` |
+| `statisticsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]` | 186 | `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary` |
+| `monthlyRepository` | `[[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]` | 484 | `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison`; uses batch FX conversion and parallel queries |
+| `banksRepository` | `[[apps/node-backend/src/repositories/infoRepositoryBanks.js]]` | 145 | `getBankBalances`; uses batch FX conversion and parallel queries |
+| `netWorthRepository` | `[[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]]` | 233 | `getNetWorthFromSnapshots` with snapshot-based valuation and spike sanitization |
+| `plannedRepository` | `[[apps/node-backend/src/repositories/infoRepositoryPlanned.js]]` | 94 | `getPlannedExpensesNextMonth` |
+| `recipientInsightsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryRecipients.js]]` | 124 | `getRecipientInsights` |
 
-- **Materialized Views:** Reads from `monthly_summaries_mv`, `category_totals_mv`, `daily_cashflow_mv`, `bank_balances_mv`
-- **FX Conversion:** `getBankBalances` and `getNetWorth` support `targetCurrency` parameter for currency conversion
-- **Spike Sanitization:** `getNetWorth` applies Kinesis spike sanitization on investment value data
+### Barrel Module Exports
+
+The main `infoRepository.js` file:
+- Re-exports `clearMvCache` from helpers for cache invalidation
+- Assembles all sub-repos into a single `infoRepository` object with all methods
+- Supports both `export default infoRepository` and `export const infoRepository` for backward compatibility
+- All 9 existing consumer files import unchanged from `infoRepository.js`; internal organization is transparent
+
+### Original Exported Methods (Now Delegated)
+
+| Method | Delegated To | Signature | Returns |
+|--------|--------------|-----------|---------|
+| `getStatistics` | statisticsRepository | `() => Promise<Statistics>` | General statistics |
+| `getBanks` | statisticsRepository | `() => Promise<Bank[]>` | Supported bank list |
+| `getTransactionSummary` | statisticsRepository | `(filters?) => Promise<TransactionSummary>` | Filtered transaction summary |
+| `getMonthlyFinancialSummary` | monthlyRepository | `() => Promise<MonthlySummary[]>` | Monthly income/expense |
+| `getCategoryBreakdown` | statisticsRepository | `() => Promise<CategoryBreakdown[]>` | Spending by category |
+| `getBankBalances` | banksRepository | `(targetCurrency?) => Promise<BankBalance[]>` | Bank balances with FX conversion |
+| `getNetWorthFromSnapshots` | netWorthRepository | `(currency?) => Promise<NetWorth>` | Net worth with daily breakdown |
+| `getRecipientInsights` | recipientInsightsRepository | `(currency?) => Promise<RecipientInsight[]>` | Recipient analytics |
+| `getAverageVsCurrentSpending` | monthlyRepository | `() => Promise<...>` | Average vs. current spending |
+| `getCashflowComparison` | monthlyRepository | `() => Promise<...>` | Cashflow period comparison |
+| `getPlannedExpensesNextMonth` | plannedRepository | `() => Promise<...>` | Planned expenses forecast |
+| `clearMvCache` | helpers | `() => void` | Clear materialized view cache |
+
+### Key Query Patterns (Unified)
+
+- **Materialized Views:** All sub-repos read from `monthly_summaries_mv`, `category_totals_mv`, `daily_cashflow_mv`, `bank_balances_mv`
+- **FX Conversion:** Multi-currency endpoints support `targetCurrency` parameter with date-aware historical rate fallback
+- **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.js` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
+- **Parallel Query Execution:** `Promise.all` for independent queries (`getMonthlyFinancialSummary`, `getCashflowComparison`, `getBankBalances`, `getAverageVsCurrentSpending`)
+- **Spike Sanitization:** `getNetWorthFromSnapshots` applies Kinesis spike sanitization on investment value data via `sanitizeIsolatedDailyInvestmentSpikes()`
 - **Complex Aggregations:** CTEs with window functions for recipient insights and category breakdowns
+- **Shared Utilities:** Helpers centralize repeated patterns: `mvCache`, `roundToCents`, date formatting (`formatDateToYmd`, `formatYearMonthKey`, `extractYearMonth`), aggregation helpers (`buildMonthlySummary`), category merging, row mapping (`mapRowsForAmountConversion`), currency conversion fallback
 
-### Dependencies
+### Dependencies (All Sub-Modules)
 - `connection.js`
-- `currencyConversionService.js`
+- `currencyConversionService.js` (for FX conversions)
+- `infoRepositoryHelpers.js` (shared utilities and cache)
 
 ---
 
@@ -408,7 +449,31 @@ connection.js (PostgreSQL pool)
     ├── settingsRepository
     ├── savedChartsRepository
     ├── rawTransactionRepository
-    └── infoRepository ──→ currencyConversionService
+    │
+    └── infoRepository (barrel, Phase 3.1 refactor) ──→ currencyConversionService
+            │
+            ├─→ infoRepositoryHelpers (shared utilities: mvCache, rounding, date/agg/category/currency helpers,
+            │                          batchConvertGroupsWithHistoricalRateFallback for batch FX optimization)
+            │
+            ├─→ infoRepositoryStatistics (getStatistics, getCategoryBreakdown, getBanks, getTransactionCount, getTransactionSummary)
+            │       └→ connection.js
+            │
+            ├─→ infoRepositoryMonthly (getMonthlyFinancialSummary, getAverageVsCurrentSpending, getCashflowComparison)
+            │       ├→ connection.js
+            │       └→ batchConvertGroupsWithHistoricalRateFallback (batch FX + parallel queries)
+            │
+            ├─→ infoRepositoryBanks (getBankBalances)
+            │       ├→ connection.js
+            │       └→ batchConvertGroupsWithHistoricalRateFallback (batch FX + parallel queries)
+            │
+            ├─→ infoRepositoryNetWorth (getNetWorthFromSnapshots)
+            │       └→ connection.js
+            │
+            ├─→ infoRepositoryPlanned (getPlannedExpensesNextMonth)
+            │       └→ connection.js
+            │
+            └─→ infoRepositoryRecipients (getRecipientInsights)
+                    └→ connection.js
 ```
 
 ## Common Patterns

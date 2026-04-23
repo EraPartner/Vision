@@ -2,16 +2,16 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-04-02
-tags: [components, forms, dialogs]
-description: Modal dialogs for adding and editing data throughout the application
-aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog]
-related_code: ["apps/frontend/src/components/forms"]
+date: 2026-04-23
+tags: [components, forms, dialogs, settings, refactor, phase-3]
+description: Modal dialogs for adding, editing data, and configuring settings throughout the application
+aliases: [form-dialogs, modal-dialogs, add-dialogs, edit-dialogs, create-dialog, settings-dialog]
+related_code: ["apps/frontend/src/components/forms", "apps/frontend/src/components/settings"]
 ---
 
 # Form Dialogs
 
-Modal dialog components for creating and editing data throughout Vision.
+Modal dialog components for creating, editing data, and configuring application settings throughout Vision.
 
 ## Component List
 
@@ -665,4 +665,120 @@ No props.
 
 ---
 
+## DashboardSettingsDialog (Phase 3 Refactor)
+
+Multi-tab settings dialog for configuring user preferences, display settings, dashboard exclusions, backup options, and application behavior. Originally a ~1400-line monolith, refactored into 6 focused components.
+
+**Full Documentation**: See [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog Documentation]]
+
+### Component Structure
+
+The dialog is split into a thin orchestrator and 6 focused tab/section components:
+
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| `DashboardSettingsDialog` | ~170 | Orchestrator, owns save logic and exclusion state |
+| `GeneralTab` | ~175 | Currency, date/number format, decimal places, start-of-week, page size, language |
+| `AppearanceTab` | (pre-existing) | Theme variant, color mode, schedule |
+| `DashboardTab` | ~240 | Category/recipient exclusion, exclusion scope |
+| `AppTab` | ~230 | Onboarding restart, update check, recurring reset, AI chat, reset-all |
+| `BackupTab` | ~310 | Backup dir, passphrase, encrypt, restore (Electron only) |
+| `AIChatSettingsSection` | ~92 | Ollama status + model selector |
+
+### Props
+
+```typescript
+interface DashboardSettingsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultTab?: string; // 'general' | 'appearance' | 'dashboard' | 'app' | 'backup'
+}
+```
+
+### Features
+
+- **5 tabs**: General (formatting), Appearance (theme), Dashboard (exclusions), App (maintenance), Backup (Electron only)
+- **Thin orchestrator pattern**: Parent owns save-time state; tabs are pure presenters
+- **State isolation**: BackupTab manages its own internal state (passphrase, encrypt) without propagating to parent
+- **React Query integration**: Fetches categories/recipients on demand for exclusion UI
+- **Electron support**: Backup directory picker, auto-backup-on-quit, restore flow
+- **Confirmation dialogs**: Reset-all uses AlertDialog with user confirmation
+
+### Usage
+
+```tsx
+import { DashboardSettingsDialog } from "@/components/settings/DashboardSettingsDialog";
+import { useState } from "react";
+
+function SettingsButton() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Settings</Button>
+      <DashboardSettingsDialog open={open} onOpenChange={setOpen} defaultTab="general" />
+    </>
+  );
+}
+```
+
+### Key Methods
+
+#### Orchestrator Save Logic
+
+```typescript
+const handleSave = () => {
+  updateSettings({
+    excludedCategoryIds: localExcludedCategories,
+    excludedRecipientIds: localExcludedRecipients,
+    excludeHiddenCategories: localExcludeHidden,
+    exclusionScope: localExclusionScope,
+  });
+  updateAppSettings(localAppSettings);
+  if (apiClient.isElectron()) {
+    apiClient.saveBackupSettings({ backupDir, backupOnQuit });
+  }
+  onOpenChange(false);
+  toast.success(t('settings.saved'));
+};
+```
+
+Persists all modified settings, closes the dialog, and shows success toast. Called on Save button click.
+
+#### Reset All
+
+Reset button in AppTab calls parent's `handleReset()`:
+
+```typescript
+const handleReset = () => {
+  resetSettings();
+  resetAppSettings();
+  setLocalExcludedCategories([]);
+  setLocalExcludedRecipients([]);
+  setLocalExcludeHidden(true);
+  setLocalExclusionScope('everywhere');
+  setLocalAppSettings(defaultAppSettings);
+  toast.info(t('settings.resetToDefaults'));
+};
+```
+
+Resets all settings to defaults. Dialog remains open.
+
+### Related Code
+
+- Settings Context: `[[apps/frontend/src/contexts/SettingsContext.tsx]]`
+- App Settings Context: `[[apps/frontend/src/contexts/AppSettingsContext.tsx]]`
+- Settings API: `[[apps/node-backend/src/routes/settings.js]]`
+
+---
+
 ## Related Documentation
+
+- [[docs/components/index|Components Index]] - All components
+- [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog]] - Full settings dialog documentation
+- [[docs/features/settings|Settings Feature]] - Settings system overview
+- [[docs/api/settings|Settings API]] - Backend API endpoints
+- [[docs/api/transactions|Transactions API]] - Transactions API
+- [[docs/api/categories|Categories API]] - Categories API
+- [[docs/api/recipients|Recipients API]] - Recipients API
+- [[docs/api/splits|Splits API]] - Splits API

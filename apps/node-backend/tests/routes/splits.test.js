@@ -39,6 +39,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import splitRepository from '../../src/repositories/splitRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/splits.js');
 
 describe('Splits Routes', () => {
@@ -52,18 +53,19 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/owed'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ items: [{ recipient_id: 2, amount: 12.5 }] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ recipient_id: 2, amount: 12.5 }],
+        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+      });
     });
 
-    it('returns 500 when owed summary fails', async () => {
+    it('propagates error when owed summary fails', async () => {
       splitRepository.getOwedSummary.mockRejectedValue(new Error('boom'));
 
       const req = { params: {}, query: {}, get: () => null };
       const res = mockResponse();
-      await routeHandlers['get:/owed'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error getting owed summary' });
+      await expect(routeHandlers['get:/owed'](req, res)).rejects.toThrow('boom');
     });
   });
 
@@ -71,39 +73,37 @@ describe('Splits Routes', () => {
     it('returns owed items by recipient', async () => {
       splitRepository.getOwedByRecipient.mockResolvedValue([{ id: 1, split_id: 4 }]);
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['get:/owed/:id'](req, res);
 
       expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7);
-      expect(res.json).toHaveBeenCalledWith({ items: [{ id: 1, split_id: 4 }] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ id: 1, split_id: 4 }],
+        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+      });
     });
 
-    it('returns 500 when owed by recipient fails', async () => {
+    it('propagates error when owed by recipient fails', async () => {
       splitRepository.getOwedByRecipient.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['get:/owed/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error getting owed by recipient' });
+      await expect(routeHandlers['get:/owed/:id'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('POST /', () => {
-    it('rejects split that exceeds transaction total', async () => {
+    it('throws ValidationError when split exceeds transaction total', async () => {
       splitRepository.getTransactionSplitTotals.mockResolvedValue({
         transaction_total: 100,
         current_split_total: 90,
       });
 
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 15 } , get: () => null };
+      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 15 }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split amount exceeds transaction total' });
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(splitRepository.createSplit).not.toHaveBeenCalled();
     });
 
@@ -113,8 +113,9 @@ describe('Splits Routes', () => {
         current_split_total: 80,
       });
       splitRepository.createSplit.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
+      splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 20 } , get: () => null };
+      const req = { body: { transaction_id: 1, recipient_id: 2, amount: 20 }, get: () => null };
       const res = mockResponse();
       await routeHandlers['post:/'](req, res);
 
@@ -124,7 +125,7 @@ describe('Splits Routes', () => {
   });
 
   describe('POST /batch', () => {
-    it('returns 404 when transaction does not exist', async () => {
+    it('throws NotFoundError when transaction does not exist', async () => {
       splitRepository.getTransactionSplitTotals.mockResolvedValue(null);
 
       const req = {
@@ -135,14 +136,11 @@ describe('Splits Routes', () => {
         get: () => null,
       };
       const res = mockResponse();
-      await routeHandlers['post:/batch'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Transaction not found' });
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(NotFoundError);
       expect(splitRepository.createSplitsBatch).not.toHaveBeenCalled();
     });
 
-    it('rejects batch when cumulative amount exceeds transaction total', async () => {
+    it('throws ValidationError when cumulative amount exceeds transaction total', async () => {
       splitRepository.getTransactionSplitTotals.mockResolvedValue({
         transaction_total: 100,
         current_split_total: 70,
@@ -159,14 +157,11 @@ describe('Splits Routes', () => {
         get: () => null,
       };
       const res = mockResponse();
-      await routeHandlers['post:/batch'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split amount exceeds transaction total' });
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(splitRepository.createSplit).not.toHaveBeenCalled();
     });
 
-    it('rejects non-positive split amounts in batch', async () => {
+    it('throws ValidationError for non-positive split amounts in batch', async () => {
       splitRepository.getTransactionSplitTotals.mockResolvedValue({
         transaction_total: 100,
         current_split_total: 0,
@@ -180,10 +175,7 @@ describe('Splits Routes', () => {
         get: () => null,
       };
       const res = mockResponse();
-      await routeHandlers['post:/batch'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split amount must be a positive number' });
+      await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(splitRepository.createSplitsBatch).not.toHaveBeenCalled();
     });
 
@@ -193,6 +185,7 @@ describe('Splits Routes', () => {
         current_split_total: 0,
       });
       splitRepository.createSplitsBatch.mockResolvedValue([{ id: 1 }]);
+      splitRepository.writeAudit.mockResolvedValue();
 
       const req = {
         body: {
@@ -212,7 +205,11 @@ describe('Splits Routes', () => {
         splits: [{ recipient_id: 2, amount: 20, note: 'x' }],
       });
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ items: [{ id: 1 }] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ id: 1 }],
+        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+      });
     });
   });
 
@@ -232,7 +229,7 @@ describe('Splits Routes', () => {
         },
       ]);
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['get:/owed/:id/export/csv'](req, res);
 
@@ -243,15 +240,12 @@ describe('Splits Routes', () => {
       expect(body).toContain('2026-03-20,Main,Coffee Shop,Lunch,5,EUR,100,FOOD:LUNCH,shared');
     });
 
-    it('returns 404 when recipient has no unsettled owed transactions', async () => {
+    it('throws NotFoundError when recipient has no unsettled owed transactions', async () => {
       splitRepository.getOwedExportRowsByRecipient.mockResolvedValue([]);
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['get:/owed/:id/export/csv'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'No unsettled owed transactions found for recipient' });
+      await expect(routeHandlers['get:/owed/:id/export/csv'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -259,49 +253,44 @@ describe('Splits Routes', () => {
     it('returns splits for transaction', async () => {
       splitRepository.getSplitsByTransaction.mockResolvedValue([{ id: 8, transaction_id: 2 }]);
 
-      const req = { params: { id: '2' } , get: () => null };
+      const req = { params: { id: '2' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['get:/transaction/:id'](req, res);
 
       expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2);
-      expect(res.json).toHaveBeenCalledWith({ items: [{ id: 8, transaction_id: 2 }] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ id: 8, transaction_id: 2 }],
+        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+      });
     });
 
-    it('returns 500 when transaction splits lookup fails', async () => {
+    it('propagates error when transaction splits lookup fails', async () => {
       splitRepository.getSplitsByTransaction.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '2' } , get: () => null };
+      const req = { params: { id: '2' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['get:/transaction/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error getting splits' });
+      await expect(routeHandlers['get:/transaction/:id'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('POST /:id/pay', () => {
-    it('returns 404 when split does not exist', async () => {
+    it('throws NotFoundError when split does not exist', async () => {
       splitRepository.getSplitById.mockResolvedValue(null);
 
-      const req = { params: { id: '5' }, body: { amount: 5 } , get: () => null };
+      const req = { params: { id: '5' }, body: { amount: 5 }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/:id/pay'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split not found' });
+      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toBeInstanceOf(NotFoundError);
       expect(splitRepository.addPayment).not.toHaveBeenCalled();
     });
 
-    it('returns 400 for non-positive payment amount', async () => {
+    it('throws ValidationError for non-positive payment amount', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 5, amount: 100 });
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
 
-      const req = { params: { id: '5' }, body: { amount: 0 } , get: () => null };
+      const req = { params: { id: '5' }, body: { amount: 0 }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/:id/pay'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Payment amount must be a positive number' });
+      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(splitRepository.addPayment).not.toHaveBeenCalled();
     });
 
@@ -310,7 +299,7 @@ describe('Splits Routes', () => {
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
       splitRepository.addPayment.mockResolvedValue({ id: 5, split_id: 7, amount: 12 });
 
-      const req = { params: { id: '7' }, body: { amount: 12, note: 'partial', paid_at: '2026-03-20' } , get: () => null };
+      const req = { params: { id: '7' }, body: { amount: 12, note: 'partial', paid_at: '2026-03-20' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['post:/:id/pay'](req, res);
 
@@ -322,20 +311,17 @@ describe('Splits Routes', () => {
         actor: null,
       });
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ id: 5, split_id: 7, amount: 12 });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 5, split_id: 7, amount: 12 } });
     });
 
-    it('returns 500 when recording payment fails', async () => {
+    it('propagates error when recording payment fails', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 7, amount: 100 });
       splitRepository.getAlreadyPaid.mockResolvedValue(0);
       splitRepository.addPayment.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' }, body: { amount: 12 } , get: () => null };
+      const req = { params: { id: '7' }, body: { amount: 12 }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/:id/pay'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error recording payment' });
+      await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toThrow('boom');
     });
   });
 
@@ -343,130 +329,116 @@ describe('Splits Routes', () => {
     it('returns split payments', async () => {
       splitRepository.getPayments.mockResolvedValue([{ id: 3, split_id: 7, amount: 6 }]);
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['get:/:id/payments'](req, res);
 
       expect(splitRepository.getPayments).toHaveBeenCalledWith(7);
-      expect(res.json).toHaveBeenCalledWith({ items: [{ id: 3, split_id: 7, amount: 6 }] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ id: 3, split_id: 7, amount: 6 }],
+        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+      });
     });
 
-    it('returns 500 when payments lookup fails', async () => {
+    it('propagates error when payments lookup fails', async () => {
       splitRepository.getPayments.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '7' } , get: () => null };
+      const req = { params: { id: '7' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['get:/:id/payments'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error getting payments' });
+      await expect(routeHandlers['get:/:id/payments'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('POST /:id/settle', () => {
-    it('returns 404 when split is not found', async () => {
+    it('throws NotFoundError when split is not found', async () => {
       splitRepository.settleSplit.mockResolvedValue(null);
 
-      const req = { params: { id: '9' } , get: () => null };
+      const req = { params: { id: '9' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/:id/settle'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split not found' });
+      await expect(routeHandlers['post:/:id/settle'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('returns settled split when found', async () => {
       splitRepository.settleSplit.mockResolvedValue({ id: 9, settled: true });
+      splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '9' } , get: () => null };
+      const req = { params: { id: '9' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['post:/:id/settle'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ id: 9, settled: true });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, settled: true } });
     });
 
-    it('returns 500 when settle fails', async () => {
+    it('propagates error when settle fails', async () => {
       splitRepository.settleSplit.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '9' } , get: () => null };
+      const req = { params: { id: '9' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/:id/settle'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error settling split' });
+      await expect(routeHandlers['post:/:id/settle'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('POST /owed/:id/settle-all', () => {
     it('returns settle-all result', async () => {
-      splitRepository.settleAllByRecipient.mockResolvedValue({ updated: 2 });
+      splitRepository.settleAllByRecipient.mockResolvedValue({ settled_count: 2 });
+      splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '12' } , get: () => null };
+      const req = { params: { id: '12' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['post:/owed/:id/settle-all'](req, res);
 
       expect(splitRepository.settleAllByRecipient).toHaveBeenCalledWith(12);
-      expect(res.json).toHaveBeenCalledWith({ updated: 2 });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { settled_count: 2 } });
     });
 
-    it('returns 500 when settle-all fails', async () => {
+    it('propagates error when settle-all fails', async () => {
       splitRepository.settleAllByRecipient.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '12' } , get: () => null };
+      const req = { params: { id: '12' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['post:/owed/:id/settle-all'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error settling all splits for recipient' });
+      await expect(routeHandlers['post:/owed/:id/settle-all'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('DELETE /:id', () => {
-    it('returns 404 when split does not exist', async () => {
+    it('throws NotFoundError when split does not exist', async () => {
       splitRepository.getSplitById.mockResolvedValue(null);
 
-      const req = { params: { id: '1' } , get: () => null };
+      const req = { params: { id: '1' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split not found' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
       expect(splitRepository.deleteSplit).not.toHaveBeenCalled();
     });
 
-    it('returns 404 when split cannot be deleted', async () => {
+    it('throws NotFoundError when split cannot be deleted', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockResolvedValue(false);
 
-      const req = { params: { id: '1' } , get: () => null };
+      const req = { params: { id: '1' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Split not found' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('returns success payload when split is deleted', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockResolvedValue(true);
+      splitRepository.writeAudit.mockResolvedValue();
 
-      const req = { params: { id: '1' } , get: () => null };
+      const req = { params: { id: '1' }, get: () => null };
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ message: 'Split deleted' });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Split deleted' } });
     });
 
-    it('returns 500 when deleting split fails', async () => {
+    it('propagates error when deleting split fails', async () => {
       splitRepository.getSplitById.mockResolvedValue({ id: 1, transaction_id: 2, recipient_id: 3, amount: 10 });
       splitRepository.deleteSplit.mockRejectedValue(new Error('boom'));
 
-      const req = { params: { id: '1' } , get: () => null };
+      const req = { params: { id: '1' }, get: () => null };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error deleting split' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('boom');
     });
   });
 });
@@ -474,5 +446,10 @@ describe('Splits Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), setHeader: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

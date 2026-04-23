@@ -2,9 +2,9 @@
 title: Features Documentation Index
 type: features-index
 status: active
-date: 2026-04-16
-tags: [features, index, documentation, phase-6]
-description: Feature documentation for all major capabilities of the Vision application
+date: 2026-04-23
+tags: [features, index, documentation, phase-6, statistics-refactoring]
+description: Feature documentation for all major capabilities of the Vision application. Updated April 2026 with Statistics page component refactoring.
 aliases: [features, capabilities]
 ---
 

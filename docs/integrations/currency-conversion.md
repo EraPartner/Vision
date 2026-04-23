@@ -2,10 +2,10 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-04-21
-tags: [integration, currency, exchange-rates, phase-0, phase-1]
-description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion. Phase 0 consolidation under way.
-related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js"]
+date: 2026-04-23
+tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1]
+description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+).
+related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js"]
 ---
 
 # Currency Conversion
@@ -186,7 +186,7 @@ const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 **Implementation Note:** In-memory cache (24h TTL) is the current caching strategy. Postgres-backed `exchange_rate_cache` table was planned for Phase 0 consolidation but is not yet implemented; in-memory rates remain standard.
 
-### ### Batch Conversion
+### Batch Conversion
 
 Convert multiple rows at once:
 
@@ -204,6 +204,40 @@ const converted = await convertRowsToEur(rows, 'USD', {
   dateField: 'day'
 });
 ```
+
+### Batch Grouped Conversion (Phase 3.1+)
+
+Convert N row groups in a single `convertRowsToEur()` call to eliminate redundant `exchange_rates` database queries:
+
+```javascript
+import { batchConvertGroupsWithHistoricalRateFallback } from './repositories/infoRepositoryHelpers.js';
+
+// Merge multiple independent row groups (e.g., current balances + history)
+// with a `_batchGroup` tag for later splitting
+const groups = [
+  { _batchGroup: 'current', currency: 'USD', amount: 5000, date: '2026-04-23' },
+  { _batchGroup: 'current', currency: 'GBP', amount: 3000, date: '2026-04-23' },
+  { _batchGroup: 'history', currency: 'USD', amount: 4500, date: '2026-04-01' },
+  { _batchGroup: 'history', currency: 'GBP', amount: 2800, date: '2026-04-01' },
+];
+
+// Single batch conversion + single exchange_rates query
+const converted = await batchConvertGroupsWithHistoricalRateFallback(
+  groups,
+  'EUR',
+  'date' // dateField for historical lookup
+);
+
+// Split results back by _batchGroup
+const currentConverted = converted.filter(r => r._batchGroup === 'current');
+const historyConverted = converted.filter(r => r._batchGroup === 'history');
+```
+
+**Benefit**: Converts N independent row groups in 1 `exchange_rates` query instead of N queries.
+
+**Example savings** (Phase 3.1 info endpoints):
+- `getCashflowComparison`: Saved 3 redundant `exchange_rates` queries
+- `getBankBalances`: Saved 1 redundant `exchange_rates` query
 
 ### Sparse Historical Backfill (Portfolio)
 
@@ -261,4 +295,4 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 - [[docs/integrations/index]] - Integrations Index
 - [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]

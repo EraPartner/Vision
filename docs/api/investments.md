@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-04-21
-tags: [api, investments, portfolio, stocks, crypto, metals]
+date: 2026-04-23
+tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
@@ -18,6 +18,9 @@ related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backe
 The Investments API manages investment holdings across various asset classes: stocks, ETFs, crypto, metals, real estate, savings, and bonds. It supports live price feeds from multiple providers.
 
 The storage layer uses PostgreSQL inheritance (`investments_base` + asset-specific child tables, and `portfolio_transactions_base` + transaction child tables) while preserving API compatibility via legacy views (`investments`, `portfolio_transactions`).
+
+> [!info] Monetary Precision (Phase 9)
+> All monetary values in responses (amounts, valuations, costs, prices) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
 
 ## Endpoints
 

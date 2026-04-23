@@ -122,6 +122,9 @@ Get detailed quotes and fundamentals for one or more symbols.
 
 **Error Response:** `502 Bad Gateway` - Market quote unavailable
 
+**Validation Notes:**
+- The `symbols` parameter must be a non-empty string. If `symbols` is missing or not a string, returns `400 Bad Request` with `ValidationError`. If the string cannot be split (malformed), returns `502 Bad Gateway` with `AppError`.
+
 ---
 
 ### GET /api/market/chart
@@ -215,13 +218,28 @@ Data is provided by Yahoo Finance via the `yahoo-finance2` library. Some data ma
 - [[docs/api/investments]] - Investments API
 - [[docs/api/watchlist]] - Watchlist API
 
-## Test Coverage Notes (2026-04-10)
+## Test Coverage Notes
 
-Recent backend tests validate:
-- `GET /api/market/quote` missing `symbols` request validation (`400`).
+### Error Handling Improvements (2026-04-22)
+
+The `GET /api/market/quote` handler now performs safe parameter validation:
+- Missing or non-string `symbols` parameter validation occurs early and throws `ValidationError` (400).
+- The `symbols.split()` operation is now wrapped inside the try-catch block, so malformed string operations return `AppError(502)` instead of raw TypeErrors escaping to the error handler.
+- This follows the **envelope-aware error handling** pattern documented in [[docs/adr/026-unified-api-response-envelope|ADR-026]].
+
+### Test Migration (2026-04-22)
+
+Backend import route tests were updated to validate the unified API response envelope (ADR-026):
+- Validation errors use `.rejects.toBeInstanceOf(ValidationError)` to assert exception type.
+- Success responses check `body.data.xxx` fields instead of `body.xxx` (envelope wrapping).
+- Mock response helper now includes `res.ok(data, meta)` method to wrap responses in the envelope.
+- This test pattern is now the canonical approach across all route test suites.
+
+### Earlier Notes (2026-04-10)
+
 - Quote + summary mapping behavior when provider responses are available.
 - Quote failure fallback behavior returning `{"quotes": []}` for partial failure tolerance.
 - `GET /api/market/news` deduplication by title and server-side thumbnail normalization.
 - News search failure tolerance returning `{"articles": []}`.
 
-Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.js]]
+Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.js]], [[apps/node-backend/tests/routes/import.test.js]]

@@ -5,8 +5,28 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
 }));
 
+const routeHandlers = {};
+const mockRouter = {
+  get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
+  post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
+  put: vi.fn((path, ...args) => { routeHandlers[`put:${path}`] = args[args.length - 1]; }),
+  patch: vi.fn((path, ...args) => { routeHandlers[`patch:${path}`] = args[args.length - 1]; }),
+  delete: vi.fn((path, ...args) => { routeHandlers[`delete:${path}`] = args[args.length - 1]; }),
+  use: vi.fn(),
+};
+
+vi.mock('express', () => ({
+  default: { Router: () => mockRouter },
+  Router: () => mockRouter,
+}));
+
+vi.mock('../src/config/logger.js', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
 import { query } from '../src/database/connection.js';
 import settingsRepository from '../src/repositories/settingsRepository.js';
+await import('../src/routes/settings.js');
 
 describe('Settings storage and retrieval', () => {
   beforeEach(() => {
@@ -59,21 +79,13 @@ describe('Settings storage and retrieval', () => {
   it('settings API routes should upsert and return settings', async () => {
     query.mockResolvedValue({});
 
-    const settingsRouter = (await import('../src/routes/settings.js')).default;
-    const stackLayer = settingsRouter.stack.find(
-      (layer) => layer.route?.path === '/:key' && layer.route?.methods?.put
-    );
-
-    expect(stackLayer).toBeTruthy();
-
-    const handler = stackLayer.route.stack.at(-1).handle;
     const payload = { value: { excludedCategoryIds: [7], excludedRecipientIds: [8] } };
     const req = { params: { key: 'dashboard_settings' }, body: payload };
     const res = mockResponse();
 
-    await handler(req, res);
+    await routeHandlers['put:/:key'](req, res);
 
-    expect(res.json).toHaveBeenCalledWith({ key: 'dashboard_settings', value: payload.value });
+    expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'dashboard_settings', value: payload.value } });
   });
 
   it('settingsRepository.getAll should parse JSON string values and preserve invalid JSON strings', async () => {
@@ -128,5 +140,10 @@ describe('Settings storage and retrieval', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

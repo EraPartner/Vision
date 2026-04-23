@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { parseDecimal } from "@/lib/decimal";
 import { ArrowLeft, Check, DollarSign, HandCoins, Trash2, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Progress } from "@/components/ui/progress";
@@ -141,7 +142,7 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
 
     const handlePay = () => {
         if (!payDialog) return;
-        const amount = parseFloat(payAmount);
+        const amount = parseDecimal(payAmount);
         if (!amount || amount <= 0) return;
         recordPayment.mutate(
             { splitId: payDialog.splitId, amount },

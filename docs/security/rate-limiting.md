@@ -2,7 +2,7 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-04-10
+date: 2026-04-23
 tags:
   - security
   - rate-limiting
@@ -29,16 +29,34 @@ The rate limiter is implemented as Express middleware with configurable limits p
 
 ## Implementation
 
-### Global Rate Limiter
+### Why No Global API Rate Limit?
 
-Applied to all routes by default:
+Vision is a self-hosted single-user application. A global API rate limit only restricts the legitimate user's workflow. The SPA frontend makes 20-50 parallel requests on page load alone—a global 200 req/min limit would frequently trigger false positives.
+
+**Instead:** Per-route limiters guard expensive and destructive operations (imports, admin actions), while the global limiter protects only the SPA fallback (production static file serving).
+
+See [[#per-route-rate-limiters|Per-Route Rate Limiters]] for endpoint-specific protections.
+
+### Global Rate Limiter (SPA Fallback Only)
+
+Used only for serving `index.html` fallback in production:
 
 ```javascript
-// 200 requests per minute per IP
-const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 200, keyPrefix: 'global' });
+// 10,000 requests per minute per IP
+const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10000, keyPrefix: 'global' });
+
+// Applied only to the SPA fallback route
+app.get(/^(?!\/api)/, globalLimiter, (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(resolve(distPath, 'index.html'));
+});
 ```
 
-### Admin Rate Limiter
+This high limit is intentional — it protects against filesystem abuse (not API logic), and legitimate SPA page reloads should never hit this limit.
+
+### Per-Route Rate Limiters
+
+#### Admin Rate Limiter
 
 Stricter limits for administrative operations:
 
@@ -47,7 +65,9 @@ Stricter limits for administrative operations:
 export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10, keyPrefix: 'admin' });
 ```
 
-### Import Rate Limiter
+Applied to `POST /api/admin/*` endpoints.
+
+#### Import Rate Limiter
 
 Most restrictive for expensive import operations:
 
@@ -56,11 +76,13 @@ Most restrictive for expensive import operations:
 export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 5, keyPrefix: 'import' });
 ```
 
+Applied to `POST /api/import/*` endpoints.
+
 ## Configuration
 
-### Per-Route Rate Limiters
+### Endpoint-Specific Rate Limits
 
-Certain endpoints have custom rate limits:
+Certain routes have additional custom rate limits beyond the three global presets:
 
 | Endpoint | Limit | Reason |
 |----------|-------|--------|

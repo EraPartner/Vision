@@ -110,7 +110,10 @@ export function formatDateTimeStringWithAppSettings(
   if (!dateStr) return "";
 
   const dateOnly = formatDateStringWithAppSettings(dateStr, appDateFormat);
-  const parsed = new Date(dateStr);
+  const ymdPart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(ymdPart)
+      ? parseLocalDateFromYmd(ymdPart)
+      : new Date(dateStr);
   if (Number.isNaN(parsed.getTime())) {
     return dateOnly;
   }

@@ -71,8 +71,8 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
+      expect(result.data).toEqual([]);
+      expect(result.meta.pagination.total).toBe(0);
     });
 
     it('should return transactions with data', async () => {
@@ -85,7 +85,7 @@ describe('Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].total).toBe(1);
+      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
@@ -96,8 +96,8 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.limit).toBe(2);
-      expect(result.offset).toBe(3);
+      expect(result.meta.pagination.limit).toBe(2);
+      expect(result.meta.pagination.offset).toBe(3);
     });
 
     it('should handle uncategorised filter', async () => {
@@ -121,7 +121,7 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
-      expect(res.json.mock.calls[0][0].items).toHaveLength(1);
+      expect(res.json.mock.calls[0][0].data).toHaveLength(1);
     });
 
     it('should normalize rows when normalize_to_eur is true', async () => {
@@ -163,7 +163,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
+      await callHandler(routeHandlers['get:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -206,10 +206,12 @@ describe('Transaction Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/export/csv'](req, res);
+      await callHandler(routeHandlers['get:/export/csv'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error exporting transactions' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
   });
 
@@ -234,7 +236,7 @@ describe('Transaction Routes', () => {
     it('should return 400 for missing fields', async () => {
       const req = { body: { bank_account: 'Chase', amount: -50.00 } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      await callHandler(routeHandlers['post:/'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
@@ -251,13 +253,16 @@ describe('Transaction Routes', () => {
         },
       };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
+      await callHandler(routeHandlers['post:/'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          detail: 'Duplicate transaction detected',
-          existing_transaction_id: 99,
+          ok: false,
+          error: expect.objectContaining({
+            message: 'Duplicate transaction detected',
+            details: { existing_transaction_id: 99 },
+          }),
         })
       );
       expect(transactionRepository.create).not.toHaveBeenCalled();
@@ -282,7 +287,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' }, body: { amount: -75.00 } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await callHandler(routeHandlers['patch:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -292,10 +297,12 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '1' }, body: { amount: -75.00 } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await callHandler(routeHandlers['patch:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error updating transaction' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
 
     it('should return 400 when recipient_name cannot be resolved', async () => {
@@ -306,7 +313,7 @@ describe('Transaction Routes', () => {
         body: { recipient_name: 'Missing Name' },
       };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await callHandler(routeHandlers['patch:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.update).not.toHaveBeenCalled();
@@ -318,7 +325,7 @@ describe('Transaction Routes', () => {
         body: { category_name: 'INVALID' },
       };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await callHandler(routeHandlers['patch:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.update).not.toHaveBeenCalled();
@@ -336,7 +343,7 @@ describe('Transaction Routes', () => {
         },
       };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
+      await callHandler(routeHandlers['patch:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(transactionRepository.update).not.toHaveBeenCalled();
@@ -351,7 +358,7 @@ describe('Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
+      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
     });
 
     it('should return 404 for non-existent', async () => {
@@ -359,7 +366,7 @@ describe('Transaction Routes', () => {
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
+      await callHandler(routeHandlers['delete:/:id'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -377,5 +384,29 @@ function mockResponse() {
     headersSent: false,
   };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
+}
+
+/**
+ * Simulates Express error-handler middleware for routes that throw typed errors.
+ * Routes use `throw new NotFoundError / ValidationError / ConflictError` which
+ * propagates to the centralized error handler in production. In unit tests we
+ * catch the error here and replicate the handler's response shape.
+ */
+async function callHandler(handler, req, res) {
+  try {
+    await handler(req, res);
+  } catch (err) {
+    const status = err.status ?? 500;
+    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
+    const message = err.message ?? 'Internal server error';
+    const error = { code, message };
+    if (err.details !== undefined) error.details = err.details;
+    res.status(status).json({ ok: false, error });
+  }
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -88,7 +89,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
         symbol: unitBased ? form.symbol.trim().toUpperCase() : undefined,
         currency: form.currency,
         current_price: form.priceProvider === 'manual' && form.currentPrice
-          ? parseFloat(form.currentPrice)
+          ? parseDecimal(form.currentPrice)
           : undefined,
         price_provider: form.priceProvider,
         price_provider_id: form.priceProviderId.trim() || undefined,

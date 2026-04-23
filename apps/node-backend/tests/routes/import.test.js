@@ -48,18 +48,6 @@ vi.mock('os', () => ({
   tmpdir: vi.fn(() => '/tmp'),
 }));
 
-vi.mock('path', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    default: {
-      ...actual,
-      join: vi.fn((...args) => args.join('/')),
-    },
-    join: vi.fn((...args) => args.join('/')),
-  };
-});
-
 vi.mock('../../src/services/importService.js', () => ({
   importCSV: vi.fn(),
 }));
@@ -83,6 +71,14 @@ vi.mock('../../src/services/dataImportService.js', () => ({
 
 vi.mock('../../src/services/materializedViewService.js', () => ({
   scheduleRefresh: vi.fn(),
+  refreshMaterializedViews: vi.fn(),
+  createMaterializedViews: vi.fn(),
+  ensureMaterializedViewIndexes: vi.fn(),
+  default: {
+    scheduleRefresh: vi.fn(),
+    refreshMaterializedViews: vi.fn(),
+    createMaterializedViews: vi.fn(),
+  },
 }));
 
 vi.mock('../../src/config/logger.js', () => ({

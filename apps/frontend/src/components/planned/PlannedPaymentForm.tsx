@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseDecimal } from "@/lib/decimal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,7 +80,7 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
     // If loan is enabled, clear recurrence inputs before submitting - loans drive their own schedule
     const payload: Record<string, unknown> = {
       name: name.trim(),
-      amount: parseFloat(amount || "0"),
+      amount: parseDecimal(amount),
       currency,
       due_date: dueDateStr,
       url: url?.trim() || undefined,
@@ -87,8 +88,8 @@ export default function PlannedPaymentForm({ open, onOpenChange, onSubmit, initi
       is_loan: isLoan,
       ...(isLoan && {
         loan_type: loanType,
-        loan_principal: parseFloat(loanPrincipal),
-        loan_annual_interest_rate: parseFloat(loanRate),
+        loan_principal: parseDecimal(loanPrincipal),
+        loan_annual_interest_rate: parseDecimal(loanRate),
         loan_term_months: parseInt(loanTermMonths, 10),
         loan_start_date: dueDateStr,
         loan_payment_day: loanPaymentDay ? parseInt(loanPaymentDay, 10) : dueDate.getDate(),

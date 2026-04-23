@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowRight } from 'lucide-react';
@@ -13,6 +14,7 @@ import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { AssetTypeSelector } from './AssetTypeSelector';
 import { InvestmentFormFields } from './InvestmentFormFields';
 import type { InvestmentForm } from './InvestmentFormFields';
+import { todayYmd } from '@/lib/timezone';
 
 type Props = {
   // when provided, only these asset classes are shown; if exactly one is provided
@@ -37,7 +39,7 @@ function makeEmptyForm(defaultCurrency: string): InvestmentForm {
     priceProviderHistoryUrl: '', priceProviderHistoryPath: 'points',
     priceProviderHistoryTsPath: 'timestamp_ms', priceProviderHistoryPricePath: 'price',
     addInitialPurchase: true, initialAmount: '', initialUnits: '',
-    initialDate: new Date().toISOString().slice(0, 10), initialFees: '',
+    initialDate: todayYmd(), initialFees: '',
   };
 }
 
@@ -77,13 +79,13 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
         symbol: form.symbol.trim() || undefined,
         asset_class: form.assetClass as AssetClass,
         currency: form.currency || defaultCurrency,
-        current_price: form.currentPrice ? parseFloat(form.currentPrice) : undefined,
-        interest_rate: form.interestRate ? parseFloat(form.interestRate) : undefined,
+        current_price: form.currentPrice ? parseDecimal(form.currentPrice) : undefined,
+        interest_rate: form.interestRate ? parseDecimal(form.interestRate) : undefined,
         maturity_date: form.maturityDate || undefined,
         location: form.location.trim() || undefined,
         municipality: form.municipality.trim() || undefined,
-        cadastral_income: form.cadastralIncome ? parseFloat(form.cadastralIncome) : undefined,
-        municipality_tax_rate: form.municipalityTaxRate ? parseFloat(form.municipalityTaxRate) : undefined,
+        cadastral_income: form.cadastralIncome ? parseDecimal(form.cadastralIncome) : undefined,
+        municipality_tax_rate: form.municipalityTaxRate ? parseDecimal(form.municipalityTaxRate) : undefined,
         notes: form.notes.trim() || undefined,
         price_provider: form.priceProvider,
         price_provider_id: form.priceProviderId.trim() || undefined,
@@ -97,9 +99,9 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
       });
 
       if (form.addInitialPurchase && form.initialAmount && investment) {
-        const amount = parseFloat(form.initialAmount);
-        const units = form.initialUnits ? parseFloat(form.initialUnits) : undefined;
-        const fees = form.initialFees ? parseFloat(form.initialFees) : undefined;
+        const amount = parseDecimal(form.initialAmount);
+        const units = form.initialUnits ? parseDecimal(form.initialUnits) : undefined;
+        const fees = form.initialFees ? parseDecimal(form.initialFees) : undefined;
 
         if (amount > 0) {
           await addTransaction({
@@ -129,7 +131,7 @@ export function AddInvestmentDialog({ allowedAssetClasses }: Props) {
   const realEstate = isRealEstate(form.assetClass as AssetClass);
   const selectedProvider = priceProviders.find(p => p.key === form.priceProvider);
   const computedPricePerUnit = form.initialAmount && form.initialUnits
-    ? (parseFloat(form.initialAmount) / parseFloat(form.initialUnits)).toFixed(4)
+    ? (parseDecimal(form.initialAmount) / parseDecimal(form.initialUnits)).toFixed(4)
     : '';
 
   const visibleAssetClasses = (allowedAssetClasses && allowedAssetClasses.length > 0)

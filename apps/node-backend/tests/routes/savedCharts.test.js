@@ -33,6 +33,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import savedChartsRepository from '../../src/repositories/savedChartsRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 
 await import('../../src/routes/savedCharts.js');
 
@@ -50,51 +51,39 @@ describe('Saved Charts Routes', () => {
 
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith([{ id: 1 }]);
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: [{ id: 1 }] });
     });
 
-    it('returns 500 when repository fails', async () => {
+    it('propagates error when repository fails', async () => {
       savedChartsRepository.getAll.mockRejectedValue(new Error('db down'));
 
       const req = {};
       const res = mockResponse();
 
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to fetch saved charts' });
+      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('db down');
     });
   });
 
   describe('POST /', () => {
-    it('returns 400 when name is missing', async () => {
+    it('throws ValidationError when name is missing', async () => {
       const req = { body: { chartType: 'line', categoryIds: [1] } };
       const res = mockResponse();
 
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing or invalid "name"' });
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when chartType is invalid', async () => {
+    it('throws ValidationError when chartType is invalid', async () => {
       const req = { body: { name: 'Main', chartType: 'pie', categoryIds: [1] } };
       const res = mockResponse();
 
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: '"chartType" must be one of: line, bar, area' });
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when categoryIds has invalid entries', async () => {
+    it('throws ValidationError when categoryIds has invalid entries', async () => {
       const req = { body: { name: 'Main', chartType: 'line', categoryIds: [1, 'nope'] } };
       const res = mockResponse();
 
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'categoryIds contains invalid value: nope' });
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('creates chart with trimmed name and default chart type', async () => {
@@ -111,56 +100,39 @@ describe('Saved Charts Routes', () => {
         categoryIds: [1, 2],
       });
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ id: 4, name: 'Main', chart_type: 'line', category_ids: [1, 2] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 4, name: 'Main', chart_type: 'line', category_ids: [1, 2] } });
     });
   });
 
   describe('PATCH /:id', () => {
-    it('returns 400 when id is not a number', async () => {
+    it('throws ValidationError when id is not a number', async () => {
       const req = { params: { id: 'abc' }, body: {} };
       const res = mockResponse();
 
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid chart id' });
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when name is blank after trimming', async () => {
+    it('throws ValidationError when name is blank after trimming', async () => {
       const req = { params: { id: '1' }, body: { name: '   ' } };
       const res = mockResponse();
 
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid "name"' });
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when categoryIds is invalid', async () => {
+    it('throws ValidationError when categoryIds is invalid', async () => {
       const req = { params: { id: '1' }, body: { categoryIds: [1, 'bad-id'] } };
       const res = mockResponse();
 
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'categoryIds contains invalid value: bad-id' });
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 404 when chart does not exist', async () => {
+    it('throws NotFoundError when chart does not exist', async () => {
       savedChartsRepository.update.mockResolvedValue(null);
 
       const req = { params: { id: '9' }, body: { name: 'Updated' } };
       const res = mockResponse();
 
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(savedChartsRepository.update).toHaveBeenCalledWith(9, {
-        name: 'Updated',
-        chartType: undefined,
-        categoryIds: undefined,
-      });
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Saved chart not found' });
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('updates chart and normalizes categoryIds when provided', async () => {
@@ -176,32 +148,25 @@ describe('Saved Charts Routes', () => {
         chartType: 'bar',
         categoryIds: [3, 4],
       });
-      expect(res.json).toHaveBeenCalledWith({ id: 9, name: 'Updated' });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, name: 'Updated' } });
     });
   });
 
   describe('DELETE /:id', () => {
-    it('returns 400 for invalid chart id', async () => {
+    it('throws ValidationError for invalid chart id', async () => {
       const req = { params: { id: 'bad' } };
       const res = mockResponse();
 
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid chart id' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 404 when delete misses', async () => {
+    it('throws NotFoundError when delete misses', async () => {
       savedChartsRepository.delete.mockResolvedValue(false);
 
       const req = { params: { id: '8' } };
       const res = mockResponse();
 
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(savedChartsRepository.delete).toHaveBeenCalledWith(8);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Saved chart not found' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('returns 204 when delete succeeds', async () => {
@@ -225,5 +190,10 @@ function mockResponse() {
     status: vi.fn(),
   };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

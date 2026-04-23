@@ -139,6 +139,57 @@ vi.mock('../src/database/connection.js', () => ({
 }));
 ```
 
+### Envelope-Aware Route Testing (ADR-026)
+
+All route tests must validate the unified API response envelope. When testing route handlers:
+
+**Mock response helper:**
+```javascript
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
+  return res;
+}
+```
+
+**Testing success responses:**
+```javascript
+it('should return 201 on successful import', async () => {
+  importCSVWithRawStorage.mockResolvedValue({
+    total_processed: 5, imported: 4, duplicates: 1, errors: 0, status: 'completed',
+  });
+
+  const req = { file: { path: '/tmp/test.csv', originalname: 'test.csv' }, query: { bank_name: 'belfius' }, body: {} };
+  const res = mockResponse();
+  await routeHandlers['post:/csv'](req, res);
+
+  expect(res.status).toHaveBeenCalledWith(201);
+  const body = res.json.mock.calls[0][0];
+  expect(body.ok).toBe(true);
+  expect(body.data.total_processed).toBe(5);  // Access wrapped data
+  expect(body.data.status).toBe('completed');
+});
+```
+
+**Testing validation errors:**
+```javascript
+it('should return 400 when no file uploaded', async () => {
+  const req = { file: null, query: { bank_name: 'belfius' }, body: {} };
+  const res = mockResponse();
+
+  await expect(routeHandlers['post:/csv'](req, res)).rejects.toBeInstanceOf(ValidationError);
+});
+```
+
+The envelope middleware (`wrapResponse`) and error handler (`createErrorHandler`) will serialize both success and error cases. Route tests verify the exception type is thrown; the middleware handles serialization to the envelope shape.
+
+Reference: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[apps/node-backend/tests/routes/import.test.js]]
+
 ### Vitest 4 constructor-compatible mocks
 
 With Vitest 4, some module mocks must preserve constructor-compatible behavior when the imported dependency is instantiated.

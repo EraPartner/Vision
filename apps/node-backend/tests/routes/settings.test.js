@@ -28,6 +28,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import settingsRepository from '../../src/repositories/settingsRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 
 await import('../../src/routes/settings.js');
 
@@ -44,18 +45,15 @@ describe('Settings Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ app_settings: { defaultCurrency: 'EUR' } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { app_settings: { defaultCurrency: 'EUR' } } });
     });
 
-    it('returns 500 when fetching all settings fails', async () => {
+    it('propagates error when fetching all settings fails', async () => {
       settingsRepository.getAll.mockRejectedValue(new Error('boom'));
 
       const req = { params: {}, query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to fetch settings' });
+      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('boom');
     });
   });
 
@@ -67,7 +65,7 @@ describe('Settings Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:key'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ key: 'app_settings', value: { defaultCurrency: 'USD' } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'app_settings', value: { defaultCurrency: 'USD' } } });
     });
 
     it('returns default for known key when missing', async () => {
@@ -77,77 +75,59 @@ describe('Settings Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:key'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ key: 'onboarding_complete', value: false });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'onboarding_complete', value: false } });
     });
 
-    it('returns 404 for unknown missing key', async () => {
+    it('throws NotFoundError for unknown missing key', async () => {
       settingsRepository.get.mockResolvedValue(null);
 
       const req = { params: { key: 'unknown_key' } };
       const res = mockResponse();
-      await routeHandlers['get:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: "Setting 'unknown_key' not found" });
+      await expect(routeHandlers['get:/:key'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('returns 500 when fetching setting fails', async () => {
+    it('propagates error when fetching setting fails', async () => {
       settingsRepository.get.mockRejectedValue(new Error('boom'));
 
       const req = { params: { key: 'app_settings' } };
       const res = mockResponse();
-      await routeHandlers['get:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to fetch setting' });
+      await expect(routeHandlers['get:/:key'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('PUT /:key', () => {
-    it('returns 400 when key length exceeds maximum', async () => {
+    it('throws ValidationError when key length exceeds maximum', async () => {
       const req = { params: { key: 'k'.repeat(101) }, body: { value: true } };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Setting key too long (max 100 chars)' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when value is missing from request body', async () => {
+    it('throws ValidationError when value is missing from request body', async () => {
       const req = { params: { key: 'dashboard_settings' }, body: {} };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing "value" in request body' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 for dashboard_settings with invalid exclusionScope', async () => {
+    it('throws ValidationError for dashboard_settings with invalid exclusionScope', async () => {
       const req = {
         params: { key: 'dashboard_settings' },
         body: { value: { exclusionScope: 'invalid-scope' } },
       };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid exclusionScope' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 for dashboard_settings when excludedCategoryIds contains invalid value', async () => {
+    it('throws ValidationError for dashboard_settings when excludedCategoryIds contains invalid value', async () => {
       const req = {
         params: { key: 'dashboard_settings' },
         body: { value: { excludedCategoryIds: [1, 'abc'] } },
       };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'excludedCategoryIds contains invalid value: abc' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('saves setting when payload is valid', async () => {
@@ -158,50 +138,37 @@ describe('Settings Routes', () => {
       await routeHandlers['put:/:key'](req, res);
 
       expect(settingsRepository.set).toHaveBeenCalledWith('theme_settings', { theme: 'dark' });
-      expect(res.json).toHaveBeenCalledWith({ key: 'theme_settings', value: { theme: 'dark' } });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { key: 'theme_settings', value: { theme: 'dark' } } });
     });
 
-    it('returns 400 for theme_settings with unknown variant', async () => {
+    it('throws ValidationError for theme_settings with unknown variant', async () => {
       const req = {
         params: { key: 'theme_settings' },
         body: { value: { variant: 'matrix-green' } },
       };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        detail: 'Invalid theme variant. Allowed: default, dracula, solarized, nord, high-contrast',
-      });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 for theme_settings with unknown mode', async () => {
+    it('throws ValidationError for theme_settings with unknown mode', async () => {
       const req = {
         params: { key: 'theme_settings' },
         body: { value: { mode: 'sepia' } },
       };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        detail: 'Invalid theme mode. Allowed: light, dark, system, schedule',
-      });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 for theme_settings with malformed schedule time', async () => {
+    it('throws ValidationError for theme_settings with malformed schedule time', async () => {
       const req = {
         params: { key: 'theme_settings' },
         body: { value: { schedule: { lightFrom: '25:00', darkFrom: '20:00' } } },
       };
       const res = mockResponse();
 
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'schedule.lightFrom must be HH:MM' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('accepts theme_settings with known variant, mode, and schedule', async () => {
@@ -226,58 +193,43 @@ describe('Settings Routes', () => {
       });
     });
 
-    it('returns 500 when single setting save fails', async () => {
+    it('propagates error when single setting save fails', async () => {
       settingsRepository.set.mockRejectedValue(new Error('boom'));
 
       const req = { params: { key: 'theme_settings' }, body: { value: { theme: 'dark' } } };
       const res = mockResponse();
-      await routeHandlers['put:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to save setting' });
+      await expect(routeHandlers['put:/:key'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('PUT /', () => {
-    it('returns 400 when body is an array', async () => {
+    it('throws ValidationError when body is an array', async () => {
       const req = { body: [] };
       const res = mockResponse();
 
-      await routeHandlers['put:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Body must be a JSON object of key→value pairs' });
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when body is not an object', async () => {
+    it('throws ValidationError when body is not an object', async () => {
       const req = { body: 'invalid' };
       const res = mockResponse();
 
-      await routeHandlers['put:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Body must be a JSON object of key→value pairs' });
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when a key exceeds max length and includes key name in detail', async () => {
+    it('throws ValidationError when a key exceeds max length', async () => {
       const longKey = 'x'.repeat(101);
       const req = { body: { [longKey]: true } };
       const res = mockResponse();
 
-      await routeHandlers['put:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: `Setting key '${longKey}' too long (max 100 chars)` });
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('returns 400 when dashboard_settings payload is not an object', async () => {
+    it('throws ValidationError when dashboard_settings payload is not an object', async () => {
       const req = { body: { dashboard_settings: 'invalid' } };
       const res = mockResponse();
 
-      await routeHandlers['put:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'dashboard_settings must be an object' });
+      await expect(routeHandlers['put:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('bulk saves settings when payload is valid', async () => {
@@ -297,32 +249,26 @@ describe('Settings Routes', () => {
         onboarding_complete: true,
         dashboard_settings: { excludedCategoryIds: [1, 2] },
       });
-      expect(res.json).toHaveBeenCalledWith({ saved: 2 });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { saved: 2 } });
     });
 
-    it('returns 500 when bulk save fails', async () => {
+    it('propagates error when bulk save fails', async () => {
       settingsRepository.setMany.mockRejectedValue(new Error('boom'));
 
       const req = { body: { onboarding_complete: true } };
       const res = mockResponse();
-      await routeHandlers['put:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to save settings' });
+      await expect(routeHandlers['put:/'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('DELETE /:key', () => {
-    it('returns 404 when setting does not exist', async () => {
+    it('throws NotFoundError when setting does not exist', async () => {
       settingsRepository.delete.mockResolvedValue(false);
 
       const req = { params: { key: 'missing_key' } };
       const res = mockResponse();
 
-      await routeHandlers['delete:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: "Setting 'missing_key' not found" });
+      await expect(routeHandlers['delete:/:key'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('returns deleted true when setting exists', async () => {
@@ -333,19 +279,16 @@ describe('Settings Routes', () => {
 
       await routeHandlers['delete:/:key'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ deleted: true });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { deleted: true } });
     });
 
-    it('returns 500 when deleting setting fails', async () => {
+    it('propagates error when deleting setting fails', async () => {
       settingsRepository.delete.mockRejectedValue(new Error('boom'));
 
       const req = { params: { key: 'theme_settings' } };
       const res = mockResponse();
 
-      await routeHandlers['delete:/:key'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to delete setting' });
+      await expect(routeHandlers['delete:/:key'](req, res)).rejects.toThrow('boom');
     });
   });
 });
@@ -353,5 +296,10 @@ describe('Settings Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -98,7 +99,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
           name: selectedAsset.name,
           symbol: selectedAsset.symbol,
           asset_class: assetClass,
-          target_price: parseFloat(targetPrice),
+          target_price: parseDecimal(targetPrice),
           currency,
           notes: notes || null,
           price_provider_id: selectedAsset.symbol,
@@ -239,9 +240,9 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                   />
                 {quoteData && targetPrice && (
                   <p className="text-xs text-muted-foreground">
-                    {parseFloat(targetPrice) < quoteData.price
-                      ? t('addWatchlist.belowCurrent', { n: ((1 - parseFloat(targetPrice) / quoteData.price) * 100).toFixed(1) })
-                      : t('addWatchlist.aboveCurrent', { n: ((parseFloat(targetPrice) / quoteData.price - 1) * 100).toFixed(1) })}
+                    {parseDecimal(targetPrice) < quoteData.price
+                      ? t('addWatchlist.belowCurrent', { n: ((1 - parseDecimal(targetPrice) / quoteData.price) * 100).toFixed(1) })
+                      : t('addWatchlist.aboveCurrent', { n: ((parseDecimal(targetPrice) / quoteData.price - 1) * 100).toFixed(1) })}
                   </p>
                 )}
                 </div>

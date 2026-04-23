@@ -2,8 +2,8 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-04-16
-tags: [endpoint, api, aggregations, backend, phase-2]
+date: 2026-04-23
+tags: [endpoint, api, aggregations, backend, phase-2, phase-9, decimal, money]
 description: Server-computed transaction aggregations with materialized-view source distinction, behind AGGREGATIONS_V2_ENABLED feature flag
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints]
 related_code:
@@ -50,6 +50,10 @@ All endpoints return a standard envelope:
 |-------|------|---------|
 | `source` | `'mv' \| 'live'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions) |
 | `computedAt` | ISO 8601 timestamp | When the computation was performed |
+
+## Monetary Precision (Phase 9)
+
+All monetary values in aggregation responses use **Decimal.js** for precision to eliminate IEEE 754 floating-point drift. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for the decision rationale and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for implementation details.
 
 ## Endpoints
 

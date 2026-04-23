@@ -37,7 +37,23 @@ vi.mock('../../src/config/logger.js', () => ({
   },
 }));
 
+import { ValidationError, AppError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/marketLookup.js');
+
+function mockResponse() {
+  const res = {
+    json: vi.fn(),
+    send: vi.fn(),
+    status: vi.fn(),
+  };
+  res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
+  return res;
+}
 
 describe('Market Lookup Routes', () => {
   beforeEach(() => {
@@ -45,14 +61,11 @@ describe('Market Lookup Routes', () => {
   });
 
   describe('GET /quote', () => {
-    it('should return 400 when symbols query parameter is missing', async () => {
+    it('should throw ValidationError when symbols query parameter is missing', async () => {
       const req = { query: {} };
       const res = mockResponse();
 
-      await routeHandlers['get:/quote'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'symbols parameter required' });
+      await expect(routeHandlers['get:/quote'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should map quote and summary fields into API response', async () => {
@@ -101,8 +114,8 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/quote'](req, res);
 
       const body = res.json.mock.calls[0][0];
-      expect(body.quotes).toHaveLength(1);
-      expect(body.quotes[0]).toMatchObject({
+      expect(body.data.quotes).toHaveLength(1);
+      expect(body.data.quotes[0]).toMatchObject({
         symbol: 'AAPL',
         name: 'Apple Inc.',
         marketCap: 300,
@@ -113,14 +126,14 @@ describe('Market Lookup Routes', () => {
         beta: 1.1,
         priceToBook: 4.4,
       });
-      expect(body.quotes[0].analystConsensus).toEqual({
+      expect(body.data.quotes[0].analystConsensus).toEqual({
         strongBuy: 4,
         buy: 10,
         hold: 3,
         sell: 1,
         strongSell: 0,
       });
-      expect(body.quotes[0].recentAnalystActions).toHaveLength(1);
+      expect(body.data.quotes[0].recentAnalystActions).toHaveLength(1);
     });
 
     it('should return empty quotes when all symbol quote fetches fail', async () => {
@@ -132,7 +145,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ quotes: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { quotes: [] } });
     });
   });
 
@@ -143,7 +156,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/search'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ items: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { items: [] } });
       expect(mockYahooSearch).not.toHaveBeenCalled();
     });
 
@@ -172,33 +185,33 @@ describe('Market Lookup Routes', () => {
 
       expect(mockYahooSearch).toHaveBeenCalledWith('apple', { quotesCount: 8, newsCount: 0 });
       expect(res.json).toHaveBeenCalledWith({
-        items: [
-          {
-            symbol: 'AAPL',
-            name: 'Apple Inc.',
-            type: 'EQUITY',
-            exchange: 'NasdaqGS',
-          },
-          {
-            symbol: 'VUSA.AS',
-            name: 'Vanguard S&P 500 UCITS ETF',
-            type: 'ETF',
-            exchange: 'AEX',
-          },
-        ],
+        ok: true,
+        data: {
+          items: [
+            {
+              symbol: 'AAPL',
+              name: 'Apple Inc.',
+              type: 'EQUITY',
+              exchange: 'NasdaqGS',
+            },
+            {
+              symbol: 'VUSA.AS',
+              name: 'Vanguard S&P 500 UCITS ETF',
+              type: 'ETF',
+              exchange: 'AEX',
+            },
+          ],
+        },
       });
     });
 
-    it('returns 502 when upstream search throws', async () => {
+    it('throws AppError (502) when upstream search throws', async () => {
       mockYahooSearch.mockRejectedValue(new Error('upstream down'));
 
       const req = { query: { q: 'apple' } };
       const res = mockResponse();
 
-      await routeHandlers['get:/search'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(502);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Market search unavailable' });
+      await expect(routeHandlers['get:/search'](req, res)).rejects.toBeInstanceOf(AppError);
     });
 
     it('filters entries without symbol and applies fallback fields', async () => {
@@ -215,27 +228,27 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/search'](req, res);
 
       expect(res.json).toHaveBeenCalledWith({
-        items: [
-          {
-            symbol: 'TSLA',
-            name: 'TSLA',
-            type: 'UNKNOWN',
-            exchange: '',
-          },
-        ],
+        ok: true,
+        data: {
+          items: [
+            {
+              symbol: 'TSLA',
+              name: 'TSLA',
+              type: 'UNKNOWN',
+              exchange: '',
+            },
+          ],
+        },
       });
     });
   });
 
   describe('GET /chart', () => {
-    it('returns 400 when symbol is missing', async () => {
+    it('throws ValidationError when symbol is missing', async () => {
       const req = { query: {} };
       const res = mockResponse();
 
-      await routeHandlers['get:/chart'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'symbol parameter required' });
+      await expect(routeHandlers['get:/chart'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(mockYahooChart).not.toHaveBeenCalled();
     });
 
@@ -247,7 +260,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/chart'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ points: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { points: [] } });
     });
 
     it('maps chart points and filters null closes', async () => {
@@ -264,22 +277,19 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/chart'](req, res);
 
-      const payload = res.json.mock.calls[0][0];
+      const payload = res.json.mock.calls[0][0].data;
       expect(payload.symbol).toBe('AAPL');
       expect(payload.currency).toBe('USD');
       expect(payload.points).toHaveLength(1);
       expect(payload.points[0]).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
     });
 
-    it('returns 502 when chart request crashes', async () => {
+    it('throws AppError (502) when chart request crashes', async () => {
       mockYahooChart.mockRejectedValue(new Error('chart error'));
       const req = { query: { symbol: 'AAPL', range: 'max' } };
       const res = mockResponse();
 
-      await routeHandlers['get:/chart'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(502);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Market chart unavailable' });
+      await expect(routeHandlers['get:/chart'](req, res)).rejects.toBeInstanceOf(AppError);
     });
   });
 
@@ -321,7 +331,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/news'](req, res);
 
-      const body = res.json.mock.calls[0][0];
+      const body = res.json.mock.calls[0][0].data;
       expect(body.articles).toHaveLength(2);
       expect(body.articles[0].title).toBe('Unique headline');
       expect(body.articles[0].thumbnail).toBe('https://img.example.com/c.jpg');
@@ -338,7 +348,7 @@ describe('Market Lookup Routes', () => {
       await routeHandlers['get:/news'](req, res);
 
       expect(res.status).not.toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith({ articles: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { articles: [] } });
     });
 
     it('uses default symbols and caps count at 50', async () => {
@@ -356,26 +366,20 @@ describe('Market Lookup Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('returns 502 when news query parsing fails unexpectedly', async () => {
+    it('throws AppError (502) when news query parsing fails unexpectedly', async () => {
       const req = { query: { symbols: 123 } };
       const res = mockResponse();
 
-      await routeHandlers['get:/news'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(502);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Market news unavailable' });
+      await expect(routeHandlers['get:/news'](req, res)).rejects.toBeInstanceOf(AppError);
     });
   });
 
   describe('GET /quote additional branches', () => {
-    it('returns 502 on unexpected quote route failure', async () => {
+    it('throws AppError (502) on unexpected quote route failure', async () => {
       const req = { query: { symbols: 123 } };
       const res = mockResponse();
 
-      await routeHandlers['get:/quote'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(502);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Market quote unavailable' });
+      await expect(routeHandlers['get:/quote'](req, res)).rejects.toBeInstanceOf(AppError);
     });
 
     it('uses summary fallback buckets and quote defaults', async () => {
@@ -390,7 +394,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      const quote = res.json.mock.calls[0][0].quotes[0];
+      const quote = res.json.mock.calls[0][0].data.quotes[0];
       expect(quote.name).toBe('MSFT');
       expect(quote.currency).toBe('USD');
       expect(quote.analystConsensus).toEqual({ strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 });
@@ -411,7 +415,7 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/quote'](req, res);
 
-      const quote = res.json.mock.calls[0][0].quotes[0];
+      const quote = res.json.mock.calls[0][0].data.quotes[0];
       expect(quote.symbol).toBe('NVDA');
       expect(quote.price).toBe(900);
       expect(quote.analystConsensus).toBeNull();
@@ -454,18 +458,8 @@ describe('Market Lookup Routes', () => {
 
       await routeHandlers['get:/news'](req, res);
 
-      const article = res.json.mock.calls[0][0].articles[0];
+      const article = res.json.mock.calls[0][0].data.articles[0];
       expect(article.thumbnail).toBeNull();
     });
   });
 });
-
-function mockResponse() {
-  const res = {
-    json: vi.fn(),
-    send: vi.fn(),
-    status: vi.fn(),
-  };
-  res.status.mockReturnValue(res);
-  return res;
-}

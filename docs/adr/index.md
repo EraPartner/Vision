@@ -2,8 +2,8 @@
 title: Architecture Decision Records Index
 type: adr-index
 status: active
-date: 2026-04-21
-updated: 2026-04-21
+date: 2026-04-23
+updated: 2026-04-23
 tags: [adr, index, architecture, decisions, phase-1]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]

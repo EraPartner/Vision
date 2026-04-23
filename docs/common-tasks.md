@@ -2,9 +2,9 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-04-10
-tags: [moc, tasks, quick-reference, navigation, how-to]
-description: Task-oriented navigation — find the right docs for what you want to do
+date: 2026-04-22
+tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi]
+description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
 ---
 
@@ -36,6 +36,11 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Add a new page | [[docs/guides/how-to-add-new-page\|How to Add a New Page]] | [[docs/reference/frontend-routes\|Frontend Routes]] |
 | Add a new component | [[docs/guides/how-to-add-react-component\|How to Add a React Component]] | [[docs/reference/code-patterns\|Code Patterns]] |
 | Add a new hook | [[docs/reference/code-patterns\|Code Patterns]] | [[docs/components/hooks\|Hooks]] |
+| Call an API endpoint | [[docs/reference/frontend-api-client\|Frontend API Client]] | [[docs/api/index\|API Documentation]] |
+| Use OpenAPI types | [[docs/adr/031-openapi-type-generation-frontend\|ADR-031: OpenAPI Types]] | [[docs/reference/frontend-api-client\|API Client Architecture]] |
+| Regenerate API types | `bun run generate:types` | [[docs/adr/031-openapi-type-generation-frontend\|ADR-031]], [[docs/reference/scripts\|Scripts Reference]] |
+| Parse decimal values | [[docs/reference/code-patterns#decimal-pattern-frontend-phase-22\|Decimal Pattern]] | [[docs/adr/021-decimal-arithmetic-for-monetary-values\|ADR-021]] |
+| Handle date strings safely | [[docs/reference/code-patterns#timezone-safe-date-utilities-frontend-phase-23\|Timezone Pattern]] | [[docs/adr/009-timezone-policy\|ADR-009]] |
 | Add translations | [[docs/i18n/translations\|Translations]] | [[docs/guides/how-to-add-new-page\|How to Add a New Page]] |
 | Debug a cache issue | [[docs/reference/react-query-keys\|React Query Keys]] | [[docs/performance/caching-strategies\|Caching Strategies]] |
 | Add a chart | [[docs/performance/chart-downsampling\|Chart Downsampling]] | [[docs/components/dashboard\|Dashboard Components]] |

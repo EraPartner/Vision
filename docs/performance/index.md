@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-04-21
+date: 2026-04-23
 tags: [performance, index, optimization]
 description: Performance optimization strategies including caching, materialized views, and chart downsampling
 aliases: [performance, optimization, speed]
@@ -23,6 +23,12 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-04-23: SSE Backpressure for Streaming Endpoints (Phase 3.2)** — New `[[apps/node-backend/src/lib/sse.js|sse.js]]` utility provides backpressure-aware streaming for `POST /api/import/csv/stream` and `POST /api/ai/chat/stream`. When a client consumes events slower than they are produced, the server's write buffer becomes full. Previously, the server would keep writing to an unbounded Node.js TCP buffer, eventually exhausting memory. Now, `createSseWriter()` and `drainIfNeeded()` pause the server loop whenever `res.writableNeedDrain` signals a full buffer, giving the kernel time to drain. Import and AI services now use async callbacks that await the SSE writer's `write()` promise, propagating backpressure all the way into the batch/token loop. See [[docs/reference/code-patterns#SSE Backpressure Pattern|SSE Backpressure Pattern]].
+
+**2026-04-23: Adaptive Import Concurrency & Rate Limiter Cleanup** — Import concurrency (`RESOLVE_CONCURRENCY` and `IMPORT_BATCH_SIZE`) is now adaptive: `Math.max(2, Math.floor(poolMax / 2))` instead of hardcoded 20. Automatically scales with `DB_POOL_SIZE` and `DB_MAX_OVERFLOW` env vars (default: 5 with stock poolMax=10). Removed dead global API rate limiter code; explained why global limits don't fit single-user self-hosted model. See [[docs/security/rate-limiting|Rate Limiting]], [[docs/features/import|CSV Import]], and [[docs/reference/code-patterns#Import Batch Concurrency Pattern|Import Batch Concurrency Pattern]].
+
+**2026-04-23: Phase 3.1 Batch FX Optimization** — Refactored monolithic 1445-line `infoRepository.js` into 7 domain modules with new `batchConvertGroupsWithHistoricalRateFallback()` helper that combines N row groups into 1 `convertRowsToEur()` call. Eliminated 4 redundant `exchange_rates` queries across info endpoints. `getCashflowComparison` (3 queries saved), `getBankBalances` (1 query saved). Converted related queries from sequential to parallel via `Promise.all()`. See [[docs/reference/repository-layer|Repository Layer Reference]].
 
 **2026-04-20: Phase 0 Quick-Wins** — Frontend context memoization (AppSettings, Language), disabled React Query window-focus refetch, added explicit image dimensions for CLS prevention, database covering index on hot path (transactions), prepared-statement plan cache for frequent queries (`getBanks`, `getTransactionCount`, key transactionRepository methods), post-import materialized-view refresh, and async file I/O on Electron startup.
 

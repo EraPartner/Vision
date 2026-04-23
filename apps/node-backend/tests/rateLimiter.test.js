@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../src/config/config.js', () => ({
+  getSettings: () => ({ isDevelopment: () => false }),
+}));
+
 import {
   adminRateLimiter,
   importRateLimiter,
   rateLimiter,
 } from '../src/middleware/rateLimiter.js';
+import { RateLimitedError } from '../src/middleware/errorHandler.js';
 
 function createRequest({ ip, remoteAddress } = {}) {
   const req = {};
@@ -46,6 +51,7 @@ describe('rateLimiter middleware', () => {
     limiter(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeUndefined();
     expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 2);
     expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', 1);
     expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Reset', Math.ceil((now + 1_000) / 1_000));
@@ -65,12 +71,10 @@ describe('rateLimiter middleware', () => {
     const blockedNext = vi.fn();
     limiter(req, blockedRes, blockedNext);
 
-    expect(blockedNext).not.toHaveBeenCalled();
-    expect(blockedRes.status).toHaveBeenCalledWith(429);
-    expect(blockedRes.json).toHaveBeenCalledWith({
-      detail: 'Too many requests. Please try again later.',
-      retry_after: 1,
-    });
+    expect(blockedNext).toHaveBeenCalledTimes(1);
+    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedRes.status).not.toHaveBeenCalled();
+    expect(blockedRes.json).not.toHaveBeenCalled();
   });
 
   it('resets request count after the configured time window', () => {
@@ -87,6 +91,7 @@ describe('rateLimiter middleware', () => {
     limiter(req, createResponse(), next);
 
     expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toBeUndefined();
   });
 
   it('falls back to remoteAddress when req.ip is unavailable', () => {
@@ -98,10 +103,11 @@ describe('rateLimiter middleware', () => {
 
     limiter(req, createResponse(), vi.fn());
 
-    const blockedRes = createResponse();
-    limiter(req, blockedRes, vi.fn());
+    const blockedNext = vi.fn();
+    limiter(req, createResponse(), blockedNext);
 
-    expect(blockedRes.status).toHaveBeenCalledWith(429);
+    expect(blockedNext).toHaveBeenCalledTimes(1);
+    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
   });
 
   it('uses unknown fallback key when IP fields are missing', () => {
@@ -113,10 +119,11 @@ describe('rateLimiter middleware', () => {
 
     limiter(req, createResponse(), vi.fn());
 
-    const blockedRes = createResponse();
-    limiter(req, blockedRes, vi.fn());
+    const blockedNext = vi.fn();
+    limiter(req, createResponse(), blockedNext);
 
-    expect(blockedRes.status).toHaveBeenCalledWith(429);
+    expect(blockedNext).toHaveBeenCalledTimes(1);
+    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
   });
 
   it('enforces stricter admin rate limit', () => {
@@ -135,8 +142,9 @@ describe('rateLimiter middleware', () => {
     adminRateLimiter(req, blockedRes, blockedNext);
 
     expect(next).toHaveBeenCalledTimes(10);
-    expect(blockedNext).not.toHaveBeenCalled();
-    expect(blockedRes.status).toHaveBeenCalledWith(429);
+    expect(blockedNext).toHaveBeenCalledTimes(1);
+    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
   it('enforces import rate limit threshold', () => {
@@ -155,8 +163,9 @@ describe('rateLimiter middleware', () => {
     importRateLimiter(req, blockedRes, blockedNext);
 
     expect(next).toHaveBeenCalledTimes(5);
-    expect(blockedNext).not.toHaveBeenCalled();
-    expect(blockedRes.status).toHaveBeenCalledWith(429);
+    expect(blockedNext).toHaveBeenCalledTimes(1);
+    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
   it('cleans up stale entries on the interval sweep', async () => {

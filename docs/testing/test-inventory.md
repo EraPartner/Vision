@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-04-21
+date: 2026-04-23
 tags:
   - testing
   - inventory
@@ -57,7 +57,13 @@ bun run test
 
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
 
-### Recently Updated Backend Coverage (2026-04-10)
+### Recently Updated Backend Coverage (2026-04-23)
+
+| File | Area | Coverage Added |
+|------|------|----------------|
+| `apps/node-backend/tests/sseWriter.test.js` | SSE backpressure (Phase 3.2) | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format |
+
+### Earlier Backend Coverage (2026-04-10)
 
 | File | Area | Coverage Added |
 |------|------|----------------|
@@ -147,6 +153,15 @@ bun vitest run --test-name-pattern="testName"
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
 Related code: [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/routes/transactions.js]]
+
+### Test Updates (2026-04-22)
+
+| File | Area | Changes |
+|------|------|---------|
+| [[apps/node-backend/tests/routes/import.test.js]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
+| [[apps/node-backend/src/routes/marketLookup.js]] | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError |
+
+Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
 
 ### Backend coverage additions (2026-04-11, repository/schema)
 

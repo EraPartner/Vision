@@ -163,7 +163,47 @@ package "Feature Components - Recipients" {
 }
 
 package "Feature Components - Settings" {
-  class DashboardSettingsDialog
+  class DashboardSettingsDialog {
+    -orchestrator
+    -state: exclusions, appSettings, backup config
+    +handleSave()
+    +handleReset()
+  }
+
+  class GeneralTab {
+    -currency, date format, number format
+    -decimal places, start-of-week, page size
+  }
+
+  class DashboardTab {
+    -category exclusion
+    -recipient exclusion
+    -exclusion scope
+  }
+
+  class AppTab {
+    -onboarding restart
+    -update check/apply
+    -AI chat settings
+    -reset-all
+  }
+
+  class BackupTab {
+    -backup directory
+    -passphrase, encrypt
+    -restore flow
+  }
+
+  class AIChatSettingsSection {
+    -Ollama status
+    -model selector
+  }
+
+  DashboardSettingsDialog --> GeneralTab
+  DashboardSettingsDialog --> DashboardTab
+  DashboardSettingsDialog --> AppTab
+  DashboardSettingsDialog --> BackupTab
+  AppTab --> AIChatSettingsSection
 }
 
 package "Feature Components - Tax" {

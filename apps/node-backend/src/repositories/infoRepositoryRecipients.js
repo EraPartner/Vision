@@ -1,0 +1,124 @@
+/**
+ * Info sub-repository: recipient / merchant insights.
+ */
+
+import { query } from '../database/connection.js';
+import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
+import {
+  roundToCents,
+  formatDateToYm,
+  mapRowsForAmountConversion,
+} from './infoRepositoryHelpers.js';
+
+export const recipientInsightsRepository = {
+  /**
+   * Recipient / Merchant Insights
+   *
+   * Returns:
+   * - top merchants by total spend (full list; frontend slices for chart/KPIs)
+   * - spending frequency & average per recipient
+   * - month-over-month comparison alerts ("You spent X% more at …")
+   */
+  async getRecipientInsights(targetCurrency = 'EUR') {
+    const topRawResult = await query(`
+      SELECT
+        COALESCE(pr.name, r.name)   AS recipient_name,
+        COALESCE(pr.id, r.id)       AS recipient_id,
+        t.currency,
+        SUM(ABS(t.amount))          AS total_abs_amount,
+        COUNT(*)                    AS tx_count,
+        MIN(t.date)                 AS first_seen,
+        MAX(t.date)                 AS last_seen
+      FROM transactions t
+      JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      WHERE t.amount < 0
+        AND t.is_active = true
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.currency
+    `);
+
+    const topConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(topRawResult.rows, 'total_abs_amount', false),
+      targetCurrency
+    );
+
+    const recipientAgg = {};
+    for (const row of topConverted) {
+      const rid = row.recipient_id;
+      const eur = row.amount_eur;
+      const count = parseInt(row.tx_count, 10);
+
+      if (!recipientAgg[rid]) {
+        recipientAgg[rid] = {
+          recipientId: rid,
+          name: row.recipient_name,
+          totalSpend: 0,
+          transactionCount: 0,
+          firstSeen: row.first_seen,
+          lastSeen: row.last_seen,
+        };
+      }
+      recipientAgg[rid].totalSpend += eur;
+      recipientAgg[rid].transactionCount += count;
+      if (row.first_seen < recipientAgg[rid].firstSeen) recipientAgg[rid].firstSeen = row.first_seen;
+      if (row.last_seen > recipientAgg[rid].lastSeen) recipientAgg[rid].lastSeen = row.last_seen;
+    }
+
+    const topMerchants = Object.values(recipientAgg)
+      .sort((a, b) => b.totalSpend - a.totalSpend)
+      .map(r => ({
+        ...r,
+        totalSpend: roundToCents(r.totalSpend),
+        avgAmount: roundToCents(r.totalSpend / r.transactionCount),
+      }));
+
+    const momRawResult = await query(`
+      SELECT
+        COALESCE(pr.id, r.id)       AS recipient_id,
+        COALESCE(pr.name, r.name)   AS recipient_name,
+        TO_CHAR(t.date, 'YYYY-MM')  AS period,
+        t.currency,
+        SUM(ABS(t.amount))          AS abs_amount
+      FROM transactions t
+      JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      WHERE t.amount < 0
+        AND t.is_active = true
+        AND t.date >= (DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month')
+      GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.currency
+    `);
+
+    const momConverted = await convertRowsToEur(
+      mapRowsForAmountConversion(momRawResult.rows, 'abs_amount', false),
+      targetCurrency
+    );
+
+    const currentPeriod = formatDateToYm(new Date());
+    const prevDate = new Date();
+    prevDate.setMonth(prevDate.getMonth() - 1);
+    const prevPeriod = formatDateToYm(prevDate);
+
+    const momAgg = {};
+    for (const row of momConverted) {
+      const rid = row.recipient_id;
+      const eur = row.amount_eur;
+      if (!momAgg[rid]) momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
+      if (row.period === currentPeriod) momAgg[rid].current += eur;
+      else if (row.period === prevPeriod) momAgg[rid].previous += eur;
+    }
+
+    const monthOverMonth = Object.entries(momAgg)
+      .filter(([, v]) => v.previous > 0 && v.current > 0)
+      .map(([rid, v]) => ({
+        recipientId: parseInt(rid, 10),
+        name: v.name,
+        currentSpend: roundToCents(v.current),
+        previousSpend: roundToCents(v.previous),
+        changePercent: Math.round(((v.current - v.previous) / v.previous * 100) * 10) / 10,
+      }))
+      .sort((a, b) => b.currentSpend - a.currentSpend)
+      .slice(0, 10);
+
+    return { topMerchants, monthOverMonth };
+  },
+};

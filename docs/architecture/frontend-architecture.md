@@ -2,9 +2,9 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, and Framer Motion
-date: 2026-04-17
-tags: [architecture, frontend, uml, plantuml, react, phase-6, phase-9, liquid-glass, visx, framer-motion]
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, and Framer Motion. Updated April 2026 with Statistics page component refactoring.
+date: 2026-04-23
+tags: [architecture, frontend, uml, plantuml, react, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
@@ -89,10 +89,42 @@ package "Forms" {
   class PlannedTransactionForm
 }
 
-package "Statistics" {
-  class MonthlyTrendChart
+package "Statistics (April 2026 Refactoring)" {
+  class StatisticsPage {
+    +Tabs orchestrator
+    +Widget visibility
+    +232 lines
+  }
+  
+  class ChartCard {
+    +Exclusion toggle
+    +Render-prop children
+  }
+  
+  class SummaryCards
+  class MonthlyChart
+  class NetTrendChart
   class CategoryPieChart
-  class RecipientInsights
+  class CategoryTrendChart
+  class CategoryPivotTable
+  class TopRecipientsChart
+  class YearlyComparisonChart
+  class YearlySummaryTable
+  class RecipientInsightsTab
+  class SavedChartsSection
+  
+  StatisticsPage --> ChartCard
+  StatisticsPage --> SummaryCards
+  StatisticsPage --> MonthlyChart
+  StatisticsPage --> NetTrendChart
+  StatisticsPage --> CategoryPieChart
+  StatisticsPage --> CategoryTrendChart
+  StatisticsPage --> CategoryPivotTable
+  StatisticsPage --> TopRecipientsChart
+  StatisticsPage --> YearlyComparisonChart
+  StatisticsPage --> YearlySummaryTable
+  StatisticsPage --> RecipientInsightsTab
+  StatisticsPage --> SavedChartsSection
 }
 
 App --> AppLayout

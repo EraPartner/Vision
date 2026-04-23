@@ -4,11 +4,11 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-04-11
-tags: [api, settings, preferences]
+date: 2026-04-23
+tags: [api, settings, preferences, phase-3]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
-related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]]
+related_code: [[apps/node-backend/src/routes/settings.js]], [[apps/node-backend/src/repositories/settingsRepository.js]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
 ---
 
 # Settings API
@@ -231,6 +231,7 @@ Code links: [[apps/frontend/src/components/shared/dateUtils.ts]], [[apps/fronten
 - [[docs/features/appearance|Appearance Feature]] - Theme variant and mode selection UI
 - [[docs/features/views|Views & Pages]] - How settings affect page rendering
 - [[docs/components/form-dialogs|Form Dialogs]] - Settings propagation to forms
+- [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog]] - Settings UI component (Phase 3 refactor)
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
 - [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
 - Coverage code links: [[apps/node-backend/tests/routes/settings.test.js]], [[apps/node-backend/tests/validation.test.js]]

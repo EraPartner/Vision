@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { parseDecimal } from "@/lib/decimal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -7,21 +8,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronLeft, ChevronRight, Filter, Pencil, Search, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
+import type { Column } from "@/types/dataTable";
+
+export type { Column };
 
 type SortDirection = "asc" | "desc" | null;
-
-interface Column<T> {
-    key: string;
-    header: string;
-    editable?: boolean;
-    type?: "text" | "number" | "date";
-    render?: (row: T, isEditing: boolean, index?: number) => React.ReactNode;
-    className?: string;
-    minWidth?: number;
-    defaultWidth?: number;
-    sortable?: boolean;    // default true if header exists
-    filterable?: boolean;  // default true if header exists
-}
 
 interface DataTableProps<T> {
     title: string;
@@ -482,7 +473,7 @@ export function DataTable<T extends Record<string, unknown>>({
                                                                     ...prev,
                                                                     [col.key]:
                                                                         col.type === "number"
-                                                                            ? parseFloat(e.target.value) || 0
+                                                                            ? parseDecimal(e.target.value)
                                                                             : e.target.value,
                                                                 }))
                                                             }

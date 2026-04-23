@@ -2,9 +2,9 @@
 title: API Documentation Index
 type: api-index
 status: active
-date: 2026-04-10
-tags: [api, index, rest, endpoints]
-description: Complete REST API documentation for the Vision backend
+date: 2026-04-22
+tags: [api, index, rest, endpoints, openapi, phase-2]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4)
 aliases: [API, endpoints, REST]
 ---
 
@@ -12,9 +12,13 @@ aliases: [API, endpoints, REST]
 
 > [!abstract] Overview
 > Vision uses a RESTful API built with Express.js. All endpoints return JSON. Base URL: `http://localhost:3002/api`
+>
+> **Phase 2.4 Update:** OpenAPI 3.0.3 specification now available at `openapi.yaml` (project root) — the authoritative source for all API contracts, request/response schemas, and type generation.
 
 > [!tip] Quick Navigation
-> Use `Ctrl/Cmd+O` to search for any endpoint. All API docs follow the pattern `docs/api/<resource>.md`.
+> - **OpenAPI Spec:** See `openapi.yaml` for formal specifications
+> - **Type Generation:** TypeScript types auto-generated via `openapi-typescript` from the spec (see [[docs/adr/031-openapi-type-generation-frontend|ADR-031]])
+> - **Endpoint Lookup:** Use `Ctrl/Cmd+O` to search any endpoint. All API docs follow the pattern `docs/api/<resource>.md`
 
 ## Endpoints by Resource
 

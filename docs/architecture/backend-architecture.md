@@ -2,9 +2,9 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams
-date: 2026-04-16
-tags: [architecture, backend, uml, plantuml, phase-6]
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths.
+date: 2026-04-23
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, decimal, money, precision]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -13,6 +13,10 @@ aliases: [backend architecture, node architecture, server design]
 This document contains UML diagrams for the Node.js backend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
+
+## Monetary Precision (Phase 9)
+
+All repositories and services handling monetary values enforce [[docs/adr/021-decimal-arithmetic-for-monetary-values|Decimal.js precision]] to eliminate IEEE 754 floating-point drift. When reading NUMERIC/DECIMAL columns from the database, all values are wrapped with `toNumber(toDecimal(value))` at the repository layer. This ensures precise monetary calculations across splits, aggregations, currency conversions, and portfolio valuations.
 
 ## Domain Model
 
@@ -247,7 +251,40 @@ package "Repositories" {
   class SettingsRepository
   class SavedChartsRepository
   class RawTransactionRepository
-  class InfoRepository
+  
+  package "infoRepository (Phase 3: Composite)" {
+    class InfoBarrel {
+      +export all sub-repos
+      +clearMvCache()
+    }
+    class StatisticsRepo {
+      +getStatistics()
+      +getCategoryBreakdown()
+      +getBanks()
+    }
+    class MonthlyRepo {
+      +getMonthlyFinancialSummary()
+      +getAverageVsCurrentSpending()
+      +getCashflowComparison()
+    }
+    class BanksRepo {
+      +getBankBalances()
+    }
+    class NetWorthRepo {
+      +getNetWorthFromSnapshots()
+    }
+    class PlannedRepo {
+      +getPlannedExpensesNextMonth()
+    }
+    class RecipientsRepo {
+      +getRecipientInsights()
+    }
+    class Helpers {
+      +mvCache
+      +roundToCents()
+      +formatDateToYmd()
+    }
+  }
 }
 
 ' Relationships
@@ -257,9 +294,36 @@ DB <.. CategoryRepository
 DB <.. PlannedTransactionRepository
 DB <.. InvestmentRepository
 DB <.. PortfolioTransactionRepository
+DB <.. StatisticsRepo
+DB <.. MonthlyRepo
+DB <.. BanksRepo
+DB <.. NetWorthRepo
+DB <.. PlannedRepo
+DB <.. RecipientsRepo
+
+InfoBarrel <.. StatisticsRepo
+InfoBarrel <.. MonthlyRepo
+InfoBarrel <.. BanksRepo
+InfoBarrel <.. NetWorthRepo
+InfoBarrel <.. PlannedRepo
+InfoBarrel <.. RecipientsRepo
+InfoBarrel <.. Helpers
+
+StatisticsRepo <.. Helpers
+MonthlyRepo <.. Helpers
+BanksRepo <.. Helpers
+NetWorthRepo <.. Helpers
+PlannedRepo <.. Helpers
+RecipientsRepo <.. Helpers
 
 @enduml
 ```
+
+**Phase 3 Refactoring Note (2026-04-23):**
+- Original `infoRepository.js` monolith (1445 lines) was split into 7 domain-specific sub-modules
+- Barrel re-export in main `infoRepository.js` (37 lines) maintains backward compatibility
+- All 9 consumer files import unchanged; internal organization is transparent to callers
+- Shared utilities in `infoRepositoryHelpers.js` reduce code duplication across aggregation patterns
 
 ## Service Layer
 
@@ -356,6 +420,28 @@ ImportService --> DeduplicationService
 
 @enduml
 ```
+
+## Utility Libraries
+
+### SSE Writer (Phase 3.2)
+
+**File:** [[apps/node-backend/src/lib/sse.js]]
+
+Backpressure-aware Server-Sent Events utilities for streaming responses (AI chat, CSV import).
+
+**Exports:**
+
+| Export | Purpose |
+|--------|---------|
+| `drainIfNeeded(res)` | Returns resolved promise immediately if `res.writableNeedDrain` is false; otherwise awaits `res.once('drain', ...)` to pause writes until buffer drains |
+| `createSseWriter(req, res)` | Factory returning `{ closed, write(event, data), end() }`. `write()` is async and calls `drainIfNeeded()` after each frame to propagate backpressure into the caller's loop |
+
+**Why it matters:**
+Without backpressure, streaming a large number of events (or import progress frames) faster than a slow client can consume them causes unbounded TCP buffer growth and memory exhaustion. The `drainIfNeeded()` pattern pauses the server loop whenever Node.js signals that its internal write buffer is full, giving the kernel and network time to drain before the next write.
+
+**Usage in routes:** Both `POST /api/ai/chat/stream` and `POST /api/import/csv/stream` now use `createSseWriter()` to manage client lifecycle (track disconnects) and provide backpressure-aware `write()` callbacks.
+
+---
 
 ## Aggregation Calculation Layer (Phase 2)
 

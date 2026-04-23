@@ -2,9 +2,9 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-04-02
-tags: [architecture, index, uml, plantuml, diagrams]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams
+date: 2026-04-23
+tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, and April 2026 Statistics page refactoring
 aliases: [architecture, diagrams, UML, system design]
 ---
 
@@ -101,6 +101,83 @@ To add a new diagram:
 1. Create a `.puml` file in `docs/diagrams/`
 2. Add the PlantUML code to the appropriate documentation file
 3. Update this index
+
+## Frontend Architecture Updates (Phase 2)
+
+### API Client Domain Split (Phase 2.2)
+
+The monolithic `apps/frontend/src/lib/api.ts` (1553 lines) was split into 13 domain modules for better maintainability:
+
+| Module | Responsibility |
+|--------|-----------------|
+| `transactions.ts` | Transaction CRUD operations |
+| `categories.ts` | Category management |
+| `recipients.ts` | Recipient CRUD + merge/unmerge |
+| `planned.ts` | Planned transaction operations |
+| `investments.ts` | Portfolio & investment management |
+| `imports.ts` | CSV import pipeline |
+| `settings.ts` | Application settings |
+| `aggregations.ts` | Data aggregation queries |
+| `charts.ts` | Saved chart operations |
+| `market.ts` | Market data lookup |
+| `ai.ts` | AI chat functionality |
+| `portfolio.ts` | Portfolio transactions |
+| `info.ts` | Statistics & net worth |
+| `api.ts` | Barrel re-export (backward compat) |
+
+All modules share `client.ts` (transport layer) and `types.ts` (envelope + error types).
+
+Documentation:
+- [[docs/reference/frontend-api-client|Frontend API Client Architecture]]
+- [[docs/reference/code-patterns#api-client-pattern|API Client Pattern]]
+
+### OpenAPI Type Generation (Phase 2.4)
+
+Added `openapi.yaml` (hand-written OpenAPI 3.0.3 spec) and `openapi-typescript` codegen:
+
+```bash
+# Generates apps/frontend/src/types/generated.ts
+bun run generate:types
+```
+
+Benefits:
+- Single source of truth for API contract
+- Auto-generated TypeScript types (never manually edited)
+- Type safety: breaking changes caught at compile time
+- IDE autocomplete for all endpoints
+
+Documentation:
+- [[docs/adr/031-openapi-type-generation-frontend|ADR-031: OpenAPI Type Generation]]
+- `openapi.yaml` — Authoritative API spec
+
+### Decimal & Timezone Utilities (Phase 2.1 & 2.3)
+
+New safe utilities for monetary and date operations:
+
+**Decimal (Phase 2.1):**
+- `apps/frontend/src/lib/decimal.ts` — `parseDecimal()` for form input parsing
+- Replaced 46+ `parseFloat()` calls on monetary values
+
+**Timezone (Phase 2.3):**
+- `apps/frontend/src/lib/timezone.ts` — `parseYmd()`, `todayYmd()`, `daysBetween()`
+- Fixed YYYY-MM-DD string parsing (no more UTC midnight shift)
+
+Documentation:
+- [[docs/reference/code-patterns#decimal-pattern-frontend-phase-22|Decimal Pattern]]
+- [[docs/reference/code-patterns#timezone-safe-date-utilities-frontend-phase-23|Timezone Pattern]]
+
+## Backend Repository Layer (Phase 3.1)
+
+The backend repository layer completed a major refactoring in Phase 3.1:
+
+- **Monolith Split**: Original 1445-line `infoRepository.js` refactored into 7 domain-specific sub-modules (`statisticsRepository`, `monthlyRepository`, `banksRepository`, `netWorthRepository`, `plannedRepository`, `recipientInsightsRepository`) plus shared helpers
+- **Batch FX Optimization**: New `batchConvertGroupsWithHistoricalRateFallback()` helper combines N row groups into 1 `convertRowsToEur()` database query, eliminating 4 redundant exchange_rates lookups
+- **Parallel Query Execution**: Sequential queries converted to `Promise.all()` for independent operations
+- **Shared Utilities**: Helpers consolidate duplicated patterns (date formatting, rounding, category merging, row mapping)
+
+Documentation:
+- [[docs/reference/repository-layer|Repository Layer Reference]] - Complete reference with dependency map
+- [[docs/performance/index|Performance Index]] - Phase 3.1 batch FX optimization details
 
 ## Frontend Design System (Phase 9)
 

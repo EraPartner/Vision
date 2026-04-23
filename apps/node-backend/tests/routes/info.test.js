@@ -108,7 +108,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].total_transactions).toBe(5);
+      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(5);
       expect(infoRepository.getStatistics).toHaveBeenCalledWith('EUR');
     });
 
@@ -129,7 +129,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].total_transactions).toBe(0);
+      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(0);
     });
 
     it('should handle database errors', async () => {
@@ -137,7 +137,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
+      await callHandler(routeHandlers['get:/'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -151,7 +151,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/banks'](req, res);
 
-      expect(res.json.mock.calls[0][0].banks).toHaveLength(2);
+      expect(res.json.mock.calls[0][0].data.banks).toHaveLength(2);
     });
 
     it('should return empty for no banks', async () => {
@@ -161,7 +161,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/banks'](req, res);
 
-      expect(res.json.mock.calls[0][0].banks).toEqual([]);
+      expect(res.json.mock.calls[0][0].data.banks).toEqual([]);
     });
 
     it('should handle database errors', async () => {
@@ -169,7 +169,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/banks'](req, res);
+      await callHandler(routeHandlers['get:/banks'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -183,7 +183,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/transaction-count'](req, res);
 
-      expect(res.json.mock.calls[0][0].total_transactions).toBe(42);
+      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(42);
     });
 
     it('should return 0 for empty', async () => {
@@ -193,7 +193,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/transaction-count'](req, res);
 
-      expect(res.json.mock.calls[0][0].total_transactions).toBe(0);
+      expect(res.json.mock.calls[0][0].data.total_transactions).toBe(0);
     });
 
     it('should handle errors', async () => {
@@ -201,7 +201,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/transaction-count'](req, res);
+      await callHandler(routeHandlers['get:/transaction-count'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -250,7 +250,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/transaction-summary'](req, res);
+      await callHandler(routeHandlers['get:/transaction-summary'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -272,7 +272,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/monthly-summary'](req, res);
+      await callHandler(routeHandlers['get:/monthly-summary'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -284,7 +284,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/supported-adapters'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.adapters).toBeDefined();
       expect(result.total_count).toBeGreaterThan(0);
     });
@@ -306,7 +306,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/planned-expenses-next-month'](req, res);
+      await callHandler(routeHandlers['get:/planned-expenses-next-month'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -328,7 +328,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/average-vs-current-spending'](req, res);
+      await callHandler(routeHandlers['get:/average-vs-current-spending'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -346,7 +346,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/cashflow-comparison'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.month).toBe(3);
       expect(result.days_in_month).toBe(31);
       expect(result.without_planned).toHaveLength(31);
@@ -358,7 +358,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/cashflow-comparison'](req, res);
+      await callHandler(routeHandlers['get:/cashflow-comparison'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -377,7 +377,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/bank-balances'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.accounts).toHaveLength(1);
       expect(result.total_net_position).toBe(5000);
     });
@@ -387,7 +387,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/bank-balances'](req, res);
+      await callHandler(routeHandlers['get:/bank-balances'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -405,8 +405,8 @@ describe('Info Routes', () => {
 
       expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith('EUR');
       expect(res.json).toHaveBeenCalledWith({
-        categories: [{ id: 1, name: 'FOOD:GROCERIES', count: 3, total: -120.55 }],
-        links: [],
+        ok: true,
+        data: { categories: [{ id: 1, name: 'FOOD:GROCERIES', count: 3, total: -120.55 }], links: [] },
       });
     });
 
@@ -415,7 +415,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/category-breakdown'](req, res);
+      await callHandler(routeHandlers['get:/category-breakdown'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -438,7 +438,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.current.netWorth).toBe(15000);
       expect(result.monthlyChange).toBe(500);
       expect(result.snapshots).toHaveLength(3);
@@ -456,7 +456,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.current.netWorth).toBe(0);
       expect(result.snapshots).toHaveLength(0);
     });
@@ -466,7 +466,7 @@ describe('Info Routes', () => {
 
       const req = { query: { currency: 'GBP' } };
       const res = mockResponse();
-      await routeHandlers['get:/net-worth'](req, res);
+      await callHandler(routeHandlers['get:/net-worth'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -489,7 +489,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-05');
       expect(result.snapshots[1].date).toBe('2026-03-04');
@@ -513,7 +513,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-02');
       expect(result.snapshots[1].date).toBe('2026-03-01');
@@ -535,7 +535,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/net-worth'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.snapshots).toHaveLength(2);
       expect(result.snapshots[0].date).toBe('2026-03-01');
       expect(result.snapshotsTotal).toBeUndefined();
@@ -558,7 +558,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/recipient-insights'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.topMerchants).toHaveLength(2);
       expect(result.topMerchants[0].name).toBe('Amazon');
       expect(result.monthOverMonth).toHaveLength(1);
@@ -575,7 +575,7 @@ describe('Info Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/recipient-insights'](req, res);
 
-      const result = res.json.mock.calls[0][0];
+      const result = res.json.mock.calls[0][0].data;
       expect(result.topMerchants).toEqual([]);
       expect(result.monthOverMonth).toEqual([]);
     });
@@ -585,7 +585,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/recipient-insights'](req, res);
+      await callHandler(routeHandlers['get:/recipient-insights'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -603,8 +603,8 @@ describe('Info Routes', () => {
       await routeHandlers['get:/recurring-patterns'](req, res);
 
       expect(res.json).toHaveBeenCalledWith({
-        patterns: [{ recipient: 'Netflix', interval_days: 30 }],
-        total: 1,
+        ok: true,
+        data: { patterns: [{ recipient: 'Netflix', interval_days: 30 }], total: 1 },
       });
     });
 
@@ -619,7 +619,7 @@ describe('Info Routes', () => {
         'Error detecting recurring patterns; returning empty result',
         expect.objectContaining({ error: 'detector failed' })
       );
-      expect(res.json).toHaveBeenCalledWith({ patterns: [], total: 0 });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { patterns: [], total: 0 } });
     });
   });
 
@@ -646,16 +646,19 @@ describe('Info Routes', () => {
         expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
         expect(mockWarmCache).toHaveBeenCalledTimes(1);
         expect(res.json).toHaveBeenCalledWith({
-          total_rates: 1,
-          rates: [
-            {
-              currency: 'USD',
-              rate_to_eur: 1.2345,
-              rate_date: '2026-04-10',
-              fetched_at: '2026-04-10T08:30:00.000Z',
-            },
-          ],
-          fallback_rates: { USD: 1.1 },
+          ok: true,
+          data: {
+            total_rates: 1,
+            rates: [
+              {
+                currency: 'USD',
+                rate_to_eur: 1.2345,
+                rate_date: '2026-04-10',
+                fetched_at: '2026-04-10T08:30:00.000Z',
+              },
+            ],
+            fallback_rates: { USD: 1.1 },
+          },
         });
       } finally {
         vi.useRealTimers();
@@ -685,8 +688,11 @@ describe('Info Routes', () => {
         expect(mockWarmCache).not.toHaveBeenCalled();
         expect(res.json).toHaveBeenCalledWith(
           expect.objectContaining({
-            total_rates: 1,
-            rates: [expect.objectContaining({ currency: 'GBP', rate_date: '2026-04-11' })],
+            ok: true,
+            data: expect.objectContaining({
+              total_rates: 1,
+              rates: [expect.objectContaining({ currency: 'GBP', rate_date: '2026-04-11' })],
+            }),
           })
         );
       } finally {
@@ -729,10 +735,12 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/exchange-rates'](req, res);
+      await callHandler(routeHandlers['get:/exchange-rates'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error retrieving exchange rates' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
   });
 
@@ -744,7 +752,7 @@ describe('Info Routes', () => {
 
       expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
       expect(mockWarmCache).toHaveBeenCalledTimes(1);
-      expect(res.json).toHaveBeenCalledWith({ message: 'Exchange rates refreshed from ECB' });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Exchange rates refreshed from ECB' } });
     });
 
     it('should handle exchange refresh errors', async () => {
@@ -752,10 +760,12 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['post:/exchange-rates/refresh'](req, res);
+      await callHandler(routeHandlers['post:/exchange-rates/refresh'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error refreshing exchange rates' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
   });
 
@@ -767,7 +777,10 @@ describe('Info Routes', () => {
 
       expect(mockRefreshMaterializedViews).toHaveBeenCalledTimes(1);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'Materialized views refreshed', duration_ms: expect.any(Number) })
+        expect.objectContaining({
+          ok: true,
+          data: expect.objectContaining({ message: 'Materialized views refreshed', duration_ms: expect.any(Number) }),
+        })
       );
     });
 
@@ -776,10 +789,12 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['post:/refresh-views'](req, res);
+      await callHandler(routeHandlers['post:/refresh-views'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error refreshing materialized views' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
   });
 
@@ -812,25 +827,28 @@ describe('Info Routes', () => {
         expect(mockGetSnapshots).toHaveBeenCalledWith('2000-01-01', '2026-04-11', 'USD');
         expect(res.json).toHaveBeenCalledWith(
           expect.objectContaining({
-            currency: 'USD',
-            start_date: '2000-01-01',
-            end_date: '2026-04-11',
-            snapshots: [
-              {
-                date: '2026-04-10',
-                invested: 1000.5,
-                value: 1234.56,
-                stocks_etfs_value: 500,
-                crypto_value: 200,
-                metals_value: 100,
-                stocks_etfs_invested: 450,
-                crypto_invested: 180,
-                metals_invested: 90,
-                inflation_adjusted_value: 1234.56,
-                gain_loss: 234.06,
-                return_pct: 23.4,
-              },
-            ],
+            ok: true,
+            data: expect.objectContaining({
+              currency: 'USD',
+              start_date: '2000-01-01',
+              end_date: '2026-04-11',
+              snapshots: [
+                {
+                  date: '2026-04-10',
+                  invested: 1000.5,
+                  value: 1234.56,
+                  stocks_etfs_value: 500,
+                  crypto_value: 200,
+                  metals_value: 100,
+                  stocks_etfs_invested: 450,
+                  crypto_invested: 180,
+                  metals_invested: 90,
+                  inflation_adjusted_value: 1234.56,
+                  gain_loss: 234.06,
+                  return_pct: 23.4,
+                },
+              ],
+            }),
           })
         );
       } finally {
@@ -859,10 +877,12 @@ describe('Info Routes', () => {
 
       const req = { query: { start_date: '2026-01-01', end_date: '2026-01-31' } };
       const res = mockResponse();
-      await routeHandlers['get:/portfolio-performance'](req, res);
+      await callHandler(routeHandlers['get:/portfolio-performance'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error retrieving portfolio performance' });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
+      );
     });
   });
 
@@ -905,9 +925,12 @@ describe('Info Routes', () => {
 
         expect(infoRepository.getNetWorthFromSnapshots).toHaveBeenCalledTimes(1);
         expect(mockGetSnapshots).toHaveBeenCalledTimes(1);
-        expect(netWorthRes.json).toHaveBeenCalledWith(netWorthPayload);
+        expect(netWorthRes.json).toHaveBeenCalledWith({ ok: true, data: netWorthPayload });
         expect(perfRes.json).toHaveBeenCalledWith(
-          expect.objectContaining({ currency: 'JPY', start_date: '2000-01-01', end_date: '2026-04-11' })
+          expect.objectContaining({
+            ok: true,
+            data: expect.objectContaining({ currency: 'JPY', start_date: '2000-01-01', end_date: '2026-04-11' }),
+          })
         );
       } finally {
         vi.useRealTimers();
@@ -972,7 +995,7 @@ describe('Info Routes', () => {
         dbOnly: false,
         scheduleBackgroundRefresh: false,
       });
-      const payload = res.json.mock.calls[0][0];
+      const payload = res.json.mock.calls[0][0].data;
       expect(payload.total_rates).toBe(2);
       expect(payload.source).toBe('database');
     });
@@ -1015,7 +1038,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/inflation-rates'](req, res);
+      await callHandler(routeHandlers['get:/inflation-rates'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -1031,7 +1054,7 @@ describe('Info Routes', () => {
 
       expect(mockInflationService.clearInflationMemoryCache).toHaveBeenCalled();
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({ forceRefresh: true });
-      const payload = res.json.mock.calls[0][0];
+      const payload = res.json.mock.calls[0][0].data;
       expect(payload.total_rates).toBe(1);
       expect(payload.source).toBe('statbel');
     });
@@ -1041,7 +1064,7 @@ describe('Info Routes', () => {
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['post:/inflation-rates/refresh'](req, res);
+      await callHandler(routeHandlers['post:/inflation-rates/refresh'], req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
     });
@@ -1051,5 +1074,29 @@ describe('Info Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
+}
+
+/**
+ * Simulates Express error-handler middleware for routes that throw typed errors.
+ * Routes use `throw new AppError / NotFoundError / ValidationError` which
+ * propagates to the centralized error handler in production. In unit tests we
+ * catch the error here and replicate the handler's response shape.
+ */
+async function callHandler(handler, req, res) {
+  try {
+    await handler(req, res);
+  } catch (err) {
+    const status = err.status ?? 500;
+    const code = err.code ?? 'INTERNAL_SERVER_ERROR';
+    const message = err.message ?? 'Internal server error';
+    const error = { code, message };
+    if (err.details !== undefined) error.details = err.details;
+    res.status(status).json({ ok: false, error });
+  }
 }

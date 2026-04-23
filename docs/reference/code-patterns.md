@@ -2,10 +2,10 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-19
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6, phase-9, motion, liquid-glass, design-system, decimal, money, timezone]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, motion consumers, surface shells, gradient icon tiles, money utilities, and timezone boundary handling
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern]
+date: 2026-04-23
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-5, phase-6, phase-9, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, concurrency, batching, decimal-enforcement]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, and domain-split API client
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi]
 ---
 
 # Code Patterns Reference
@@ -52,18 +52,123 @@ const dbAmount = toNumber(toDecimal('100.00')); // Safe from string precision lo
 | Database NUMERIC | Convert string to `toDecimal(string)` for safe math |
 | Banker's rounding | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02 |
 
+### Mandatory Scopes (Phase 9 Complete)
+
+As of 2026-04-23, decimal enforcement is **mandatory** for all monetary API output paths:
+
+| Scope | Files | Enforcement |
+|-------|-------|-----------|
+| **Repository reads** | splitRepository, infoRepositoryBanks/Helpers/Monthly, portfolioTransactionRepository, rawTransactionRepository | `toNumber(toDecimal(value))` on all NUMERIC/DECIMAL DB columns |
+| **Route responses** | transactions, plannedTransactions, info, aggregations | `toDecimal()` → math → `toNumber()` before JSON serialization |
+| **Service calculations** | recurringDetectionService, currencyConversionService, portfolioMath, snapshotBuilder | Decimal.js throughout; `toNumber()` for output |
+| **CSV/XML parsing** | Bank import adapters | parseFloat only; DB writes go through repositories (which enforce decimal) |
+
 ### When to Use
 
+- **Database reads** — All monetaryvalues from DB (MANDATORY in Phase 9)
 - **Split calculations** — outstanding balance, payment allocation
 - **Aggregations** — running totals, monthly sums, portfolio valuations
 - **Currency conversion** — avoid rounding errors across exchanges
 - **Any accumulation loop** — use `addAll()` instead of `for` loop with native arithmetic
+- **API output** — All final JSON serialization uses `toNumber()`
 
-### When NOT to Necessary
+### When NOT Necessary
 
-- Display-only values from database (already NUMERIC, safe to 2 DP)
-- Frontend UI (server sends precise JSON; frontend displays only)
-- Non-monetary calculations (use native number for counts, ratios, etc.)
+- **Frontend UI** — server sends precise JSON (already 2 DP); frontend displays only
+- **Non-monetary calculations** — use native number for counts, ratios, percentages
+- **Text parsing for import** — CSV/XML text use parseFloat; decimal enforcement happens at DB write
+
+---
+
+## Decimal Pattern (Frontend, Phase 2.2)
+
+**Source:** [[apps/frontend/src/lib/decimal.ts|decimal.ts]]
+
+Frontend monetary display and form parsing use `parseDecimal()` for safe handling of comma-formatted input and edge cases:
+
+```typescript
+import { parseDecimal } from '@/lib/decimal';
+
+// Parse user input (form field)
+const amount = parseDecimal('1.234,56'); // → 1234.56
+const amount2 = parseDecimal('100');     // → 100
+const amount3 = parseDecimal(null);      // → 0 (fallback)
+
+// Safe fallback
+const value = parseDecimal(userInput, 0);  // Use 0 if parsing fails
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| User form input | Always wrap in `parseDecimal()` |
+| Comma handling | Automatically strips commas (locale-aware parsing) |
+| Null/undefined/empty | Returns `fallback` (default 0) |
+| Non-finite results | Returns `fallback` (NaN, Infinity handled) |
+| API responses | Already precise (server sends 2 DP numbers), display as-is |
+| Frontend calculations | Avoid frontend monetary math; compute server-side |
+
+### When to Use
+
+- **Form field parsing** — user enters "1.234,56", parse to 1234.56
+- **CSV import preview** — preview user-provided amounts
+- **Legacy number input** — handle both comma and decimal separators
+- **Fallback safety** — never show NaN in UI
+
+### When NOT to Use
+
+- **API response values** — already precise from backend
+- **Arithmetic operations** — keep math on server side
+- **Non-monetary numbers** — use `parseFloat()` or `Number()` for counts, ratios
+
+---
+
+## Timezone-Safe Date Utilities (Frontend, Phase 2.3)
+
+**Source:** [[apps/frontend/src/lib/timezone.ts|timezone.ts]]
+
+Frontend date operations avoid the pitfall of `new Date("YYYY-MM-DD")`, which parses as UTC midnight and shifts the calendar date in timezones east of UTC. Use helper functions instead:
+
+```typescript
+import { parseYmd, toYmd, todayYmd, daysBetween } from '@/lib/timezone';
+
+// Parse a YYYY-MM-DD string as local midnight (not UTC)
+const date = parseYmd('2026-04-22');  // → Date at 00:00:00 local time
+
+// Convert Date to YYYY-MM-DD string
+const ymdString = toYmd(new Date());  // → "2026-04-22"
+
+// Today's date as string
+const today = todayYmd();              // → "2026-04-22"
+
+// Days between two dates (fractional)
+const elapsed = daysBetween(startDate, endDate);  // → 5.5 (days)
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Date-only values | Always use `parseYmd()`, never `new Date("YYYY-MM-DD")` |
+| String output | Use `toYmd()` for YYYY-MM-DD format |
+| Today | Use `todayYmd()` for current date string |
+| Date arithmetic | Use `daysBetween()` for elapsed time calculations |
+| No timezone conversion | These functions work in browser local time (no APP_TIMEZONE crossing) |
+| Server dates | Backend sends ISO 8601; parse with `parseYmd(txn.date)` |
+
+### When to Use
+
+- **Form defaults** — "Today's date" field gets `todayYmd()`
+- **Date comparisons** — is planned date in future? Compare with `todayLocal()`
+- **Calendar UI** — render days using local midnight
+- **Filters** — date range "from Jan 1 to Dec 31 local"
+
+### When NOT to Use
+
+- **Backend aggregations** — server uses `APP_TIMEZONE` for bucketing
+- **UTC operations** — use native Date for UTC math
+- **Timestamp storage** — use ISO 8601 strings from API
 
 ---
 
@@ -1114,6 +1219,249 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 | Probe first | Check for empty results before streaming to return 404 with JSON |
 | Error recovery | If headers sent, close gracefully; otherwise return JSON error |
 | Rate limiting | Apply per-route limiter to protect DB from concurrent bulk exports |
+
+---
+
+## Import Batch Concurrency Pattern (Phase 1, Phase 3.1)
+
+**Source:** [[apps/node-backend/src/services/importService.js|importService.js]], [[apps/node-backend/src/services/streamingImportService.js|streamingImportService.js]], [[apps/node-backend/src/services/rawTransactionImportService.js|rawTransactionImportService.js]]
+
+For bulk CSV imports, rows are processed in adaptive concurrent batches to balance throughput against database pool constraints. Concurrency is derived from the pool configuration, not hardcoded, to remain safe across different deployment pool sizes.
+
+### Pattern
+
+```js
+// At module scope (import time, not per-request)
+// Derive from DB pool config: ensure at least half the pool remains available for other requests
+const _poolMax = Math.max(
+  parseInt(process.env.DB_POOL_SIZE, 10) || 5,      // Default: 5
+  parseInt(process.env.DB_MAX_OVERFLOW, 10) || 10,  // Default: 10
+);
+const IMPORT_BATCH_SIZE = Math.max(2, Math.floor(_poolMax / 2));
+// With stock settings (poolMax=10): IMPORT_BATCH_SIZE=5
+// With custom pool (poolMax=50): IMPORT_BATCH_SIZE=25
+
+// In import processing loop
+for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
+  const batch = rows.slice(i, i + IMPORT_BATCH_SIZE);
+  
+  // Process batch rows in parallel (up to IMPORT_BATCH_SIZE concurrent queries)
+  const settled = await Promise.allSettled(
+    batch.map(async (row) => {
+      // Dedup check
+      const isDup = await isDuplicateByFields(row.date, row.amount, row.recipient, row.memo);
+      if (isDup) return { dup: true };
+      
+      // Recipient upsert (single round-trip via INSERT ... ON CONFLICT)
+      const recipientId = await getOrCreateRecipient(row.recipient, row.account, row.address, row.bank);
+      
+      return { dup: false, row: [row.date, row.amount, recipientId, ...] };
+    })
+  );
+  
+  // Aggregate results
+  for (const outcome of settled) {
+    if (outcome.status === 'rejected') {
+      results.errors++;
+    } else if (outcome.value.dup) {
+      results.duplicates++;
+    } else {
+      results.imported++;
+      pendingInserts.push(outcome.value.row);
+    }
+  }
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Compute concurrency from pool ceiling | Adapts to deployment config (local dev vs. production) |
+| Use `Math.max(2, Math.floor(poolMax / 2))` | Always keep ≥50% of pool for other requests |
+| Read env vars at module init | Avoid per-request resolution overhead |
+| Default: 5 (for poolMax=10) | Safe for single-user self-hosted deployments |
+| Use `Promise.allSettled()` per batch | One bad row doesn't stall the entire batch |
+| Preserve insertion order | `pendingInserts` array maintains order across batches |
+
+### When to Use
+
+- **Large CSV imports** (100+ rows) — batching prevents connection pool exhaustion
+- **Streaming imports** — backpressure from concurrent batch processing limits memory growth
+- **Multi-bank imports** — handles raw data preservation and dedup across multiple tables
+
+### Configuration
+
+```bash
+# Stock settings (recommended for local/small deployments)
+DB_POOL_SIZE=5           # Min pool size
+DB_MAX_OVERFLOW=10       # Max overflow; total poolMax=10
+# Result: IMPORT_BATCH_SIZE = Math.max(2, floor(10/2)) = 5
+
+# Production (larger pool)
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=30       # poolMax=30
+# Result: IMPORT_BATCH_SIZE = 15 (up to 15 concurrent dedup/recipient checks)
+```
+
+---
+
+## SSE Backpressure Pattern (Phase 3.2)
+
+**Source:** [[apps/node-backend/src/lib/sse.js|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+
+For long-running streaming responses (AI chat, CSV import progress), propagate TCP backpressure from the HTTP client into the server's event-generation loop to prevent unbounded write buffer growth and memory exhaustion.
+
+### Problem
+
+Without backpressure handling:
+
+```js
+// ❌ WRONG: Unbounded memory growth if client is slow
+while (importing) {
+  res.write(`event: progress\ndata: ${JSON.stringify(progress)}\n\n`);
+  // If the client reads slowly, Node.js TCP buffer fills up
+  // Memory keeps growing as rows are processed
+}
+```
+
+Node.js's `res.write()` returns `false` when the internal buffer is full (`res.writableNeedDrain === true`), signaling that the caller should pause. Ignoring this signal causes the write buffer to grow without bound, consuming all available memory.
+
+### Solution
+
+Create a backpressure-aware writer and `await` after each frame:
+
+```js
+import { createSseWriter } from '../lib/sse.js';
+
+router.post('/import/csv/stream', async (req, res) => {
+  const writer = createSseWriter(req, res);
+  
+  try {
+    // Probe for data...
+    
+    res.setHeader('Content-Type', 'text/event-stream');
+    
+    // Import in batches
+    for (const batch of batches) {
+      for (const row of batch) {
+        const { imported, duplicates, errors } = await processRow(row);
+        
+        // Backpressure-aware write
+        await writer.write('progress', {
+          imported,
+          duplicates,
+          errors,
+          total: totalRows,
+        });
+        
+        // Early exit if client disconnected
+        if (writer.closed) return;
+      }
+    }
+    
+    await writer.write('complete', { imported, duplicates, errors });
+    writer.end();
+  } catch (err) {
+    if (!writer.closed) {
+      await writer.write('error', { detail: 'Import failed' });
+    }
+    writer.end();
+  }
+});
+```
+
+### API Reference
+
+#### `drainIfNeeded(res)`
+
+**Returns:** `Promise<void>`
+
+- If `res.writableNeedDrain` is false: resolves immediately (no pause needed)
+- If `res.writableNeedDrain` is true: awaits `res.once('drain', ...)` (TCP buffer full)
+
+#### `createSseWriter(req, res)`
+
+**Returns:** `{ closed: boolean, write(event, data): Promise<void>, end(): void }`
+
+| Property | Purpose |
+|----------|---------|
+| `closed` | Getter that returns `true` if the client disconnected |
+| `write(event, data)` | Async. Writes SSE frame if not closed; calls `drainIfNeeded()` after write |
+| `end()` | Ends the response if not already ended |
+
+### Implementation Details
+
+```js
+export function createSseWriter(req, res) {
+  let closed = false;
+  req.on('close', () => { closed = true; });
+
+  return {
+    get closed() { return closed; },
+
+    async write(event, data) {
+      if (closed) return;  // No-op if client disconnected
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      await drainIfNeeded(res);  // Pause if buffer full
+    },
+
+    end() {
+      if (!res.writableEnded) res.end();
+    },
+  };
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Always use `createSseWriter` for streaming | Single source of truth for backpressure and client tracking |
+| `await writer.write()` in loops | Critical: pauses production when client can't keep up |
+| Check `writer.closed` between writes | Exit early if client disconnected to avoid wasted work |
+| Async progress callbacks | Make import/AI callbacks `async` and `await` the `write()` result |
+| Call `writer.end()` in finally | Ensures response is always closed, even on error |
+
+### When to Use
+
+- **Long-running SSE streams** (>1 second, >100 events)
+- **CSV import with progress** — especially large files
+- **AI chat streaming** — token-by-token generation
+- **Any endpoint that writes multiple times before closing** — prevents memory leak
+
+### When NOT Necessary
+
+- **Single-shot responses** — normal `res.json()` handles backpressure automatically
+- **Small fixed-size responses** — TCP buffer unlikely to fill
+- **Webhook events** — if you own the client, size is known
+
+### Testing
+
+```js
+import { test, expect } from 'vitest';
+import { createSseWriter, drainIfNeeded } from '../lib/sse.js';
+
+test('drainIfNeeded returns immediately when buffer not full', async () => {
+  const res = { writableNeedDrain: false };
+  const start = Date.now();
+  await drainIfNeeded(res);
+  expect(Date.now() - start).toBeLessThan(10);  // No pause
+});
+
+test('createSseWriter tracks client close', (done) => {
+  const req = new EventEmitter();
+  const res = { write: () => true, writableEnded: false };
+  
+  const writer = createSseWriter(req, res);
+  expect(writer.closed).toBe(false);
+  
+  req.emit('close');
+  expect(writer.closed).toBe(true);
+  
+  done();
+});
+```
 
 ---
 

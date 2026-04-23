@@ -8,6 +8,7 @@ import {
   validateDateString, validatePagination,
   sanitizeUpdateFields, validateIntArray, validateIdParam,
 } from '../src/middleware/validation.js';
+import { ValidationError } from '../src/middleware/errorHandler.js';
 
 describe('Validation Middleware', () => {
   describe('validateId', () => {
@@ -144,16 +145,17 @@ describe('Validation Middleware', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('returns 400 with detail for invalid id and does not call next', () => {
+    it('calls next with ValidationError for invalid id and does not touch res', () => {
       const req = { params: { id: 'abc' } };
       const res = mockResponse();
       const next = vi.fn();
 
       validateIdParam(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'id must be a positive integer' });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0]).toBeInstanceOf(ValidationError);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
     });
 
     it('coerces valid id to number and calls next', () => {

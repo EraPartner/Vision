@@ -10,6 +10,7 @@
  */
 // @refresh reset
 import { useState, type ElementType, type ReactNode } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import {
     Sheet,
     SheetContent,
@@ -256,7 +257,7 @@ function IncomeStep({
                     min={0}
                     step={100}
                     value={profile.grossAnnualIncome || ''}
-                    onChange={(e) => updateProfile({ grossAnnualIncome: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => updateProfile({ grossAnnualIncome: parseDecimal(e.target.value) })}
                     placeholder={t('tax.profile.placeholder.grossIncome')}
                 />
             </div>
@@ -272,7 +273,7 @@ function IncomeStep({
                     min={0}
                     step={100}
                     value={profile.otherTaxableIncome || ''}
-                    onChange={(e) => updateProfile({ otherTaxableIncome: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => updateProfile({ otherTaxableIncome: parseDecimal(e.target.value) })}
                     placeholder={t('tax.profile.placeholder.otherIncome')}
                 />
             </div>
@@ -320,7 +321,7 @@ function IncomeStep({
                             min={0}
                             step={100}
                             value={profile.actualProfessionalExpenses || ''}
-                            onChange={(e) => updateProfile({ actualProfessionalExpenses: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => updateProfile({ actualProfessionalExpenses: parseDecimal(e.target.value) })}
                             placeholder={t('tax.profile.placeholder.actualExpenses')}
                         />
                     </div>
@@ -338,7 +339,7 @@ function IncomeStep({
                         min={0}
                         step={10}
                         value={profile.cadastralIncome || ''}
-                        onChange={(e) => updateProfile({ cadastralIncome: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => updateProfile({ cadastralIncome: parseDecimal(e.target.value) })}
                         placeholder={t('tax.profile.placeholder.cadastral')}
                     />
                 </div>
@@ -361,7 +362,7 @@ function IncomeStep({
                                 <Label className="text-xs">{t('tax.profile.field.cadastralIncome')}</Label>
                                 <Input type="number" min={0} step={10} value={r.cadastralIncome || ''} onChange={(e) => {
                                     const copy = [...(profile.additionalResidences || [])];
-                                    copy[idx] = { ...copy[idx], cadastralIncome: parseFloat(e.target.value) || 0 };
+                                    copy[idx] = { ...copy[idx], cadastralIncome: parseDecimal(e.target.value) };
                                     updateProfile({ additionalResidences: copy });
                                 }} />
                             </div>
@@ -464,12 +465,12 @@ function ExemptionsStep({
             <div className="grid grid-cols-1 gap-3">
                 <div>
                     <Label htmlFor="alimony">{t('tax.profile.field.alimonyPaid')}</Label>
-                    <Input id="alimony" type="number" min={0} step={10} value={profile.alimonyPaid || ''} onChange={(e) => updateProfile({ alimonyPaid: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.alimonyPaid')} />
+                    <Input id="alimony" type="number" min={0} step={10} value={profile.alimonyPaid || ''} onChange={(e) => updateProfile({ alimonyPaid: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.alimonyPaid')} />
                 </div>
 
                 <div>
                     <Label htmlFor="pension">{t('tax.profile.field.personalPensionContributions')}</Label>
-                    <Input id="pension" type="number" min={0} step={10} value={profile.personalPensionContributions || ''} onChange={(e) => updateProfile({ personalPensionContributions: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.personalPensionContributions')} />
+                    <Input id="pension" type="number" min={0} step={10} value={profile.personalPensionContributions || ''} onChange={(e) => updateProfile({ personalPensionContributions: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.personalPensionContributions')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Select value={profile.pensionScheme} onValueChange={(v) => updateProfile({ pensionScheme: v as '1050' | '1350' })}>
                             <SelectTrigger id="pension-scheme" className="w-56">
@@ -489,7 +490,7 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="group-insurance">{t('tax.profile.field.employeeGroupInsuranceContributions')}</Label>
-                    <Input id="group-insurance" type="number" min={0} step={10} value={profile.employeeGroupInsuranceContributions || ''} onChange={(e) => updateProfile({ employeeGroupInsuranceContributions: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.employeeGroupInsuranceContributions')} />
+                    <Input id="group-insurance" type="number" min={0} step={10} value={profile.employeeGroupInsuranceContributions || ''} onChange={(e) => updateProfile({ employeeGroupInsuranceContributions: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.employeeGroupInsuranceContributions')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="group-insurance-eligible" checked={!!profile.employeeGroupInsuranceEligible} onCheckedChange={(v) => updateProfile({ employeeGroupInsuranceEligible: v })} />
                         <Label htmlFor="group-insurance-eligible" className="cursor-pointer">{t('tax.profile.flag.employeeGroupInsuranceEligible')}</Label>
@@ -498,7 +499,7 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="life">{t('tax.profile.field.lifeInsurancePremiums')}</Label>
-                    <Input id="life" type="number" min={0} step={10} value={profile.lifeInsurancePremiums || ''} onChange={(e) => updateProfile({ lifeInsurancePremiums: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.lifeInsurancePremiums')} />
+                    <Input id="life" type="number" min={0} step={10} value={profile.lifeInsurancePremiums || ''} onChange={(e) => updateProfile({ lifeInsurancePremiums: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.lifeInsurancePremiums')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="life-eligible" checked={!!profile.lifeInsuranceEligible} onCheckedChange={(v) => updateProfile({ lifeInsuranceEligible: v })} />
                         <Label htmlFor="life-eligible" className="cursor-pointer">{t('tax.profile.flag.lifeInsuranceEligible')}</Label>
@@ -507,7 +508,7 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="donations">{t('tax.profile.field.charitableDonations')}</Label>
-                    <Input id="donations" type="number" min={0} step={10} value={profile.charitableDonations || ''} onChange={(e) => updateProfile({ charitableDonations: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.charitableDonations')} />
+                    <Input id="donations" type="number" min={0} step={10} value={profile.charitableDonations || ''} onChange={(e) => updateProfile({ charitableDonations: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.charitableDonations')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="donations-eligible" checked={!!profile.charitableDonationsEligible} onCheckedChange={(v) => updateProfile({ charitableDonationsEligible: v })} />
                         <Label htmlFor="donations-eligible" className="cursor-pointer">{t('tax.profile.flag.charitableDonationsEligible')}</Label>
@@ -516,7 +517,7 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="childcare">{t('tax.profile.field.childcareCosts')}</Label>
-                    <Input id="childcare" type="number" min={0} step={10} value={profile.childcareCosts || ''} onChange={(e) => updateProfile({ childcareCosts: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.childcareCosts')} />
+                    <Input id="childcare" type="number" min={0} step={10} value={profile.childcareCosts || ''} onChange={(e) => updateProfile({ childcareCosts: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.childcareCosts')} />
                     <div className="mt-2">
                         <Label htmlFor="childcare-days">{t('tax.profile.field.childcareEligibleDays')}</Label>
                         <Input id="childcare-days" type="number" min={0} step={1} value={profile.childcareEligibleDays || ''} onChange={(e) => updateProfile({ childcareEligibleDays: parseInt(e.target.value || '0', 10) || 0 })} placeholder={t('tax.profile.placeholder.childcareEligibleDays')} />
@@ -529,7 +530,7 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="domestic-help">{t('tax.profile.field.domesticHelpCosts')}</Label>
-                    <Input id="domestic-help" type="number" min={0} step={10} value={profile.domesticHelpCosts || ''} onChange={(e) => updateProfile({ domesticHelpCosts: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.domesticHelpCosts')} />
+                    <Input id="domestic-help" type="number" min={0} step={10} value={profile.domesticHelpCosts || ''} onChange={(e) => updateProfile({ domesticHelpCosts: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.domesticHelpCosts')} />
                     <div className="flex items-center gap-3 mt-2">
                         <Switch id="domestic-help-eligible" checked={!!profile.domesticHelpEligible} onCheckedChange={(v) => updateProfile({ domesticHelpEligible: v })} />
                         <Label htmlFor="domestic-help-eligible" className="cursor-pointer">{t('tax.profile.flag.domesticHelpEligible')}</Label>
@@ -538,17 +539,17 @@ function ExemptionsStep({
 
                 <div>
                     <Label htmlFor="mortgage">{t('tax.profile.field.mortgageInterestPaid')}</Label>
-                    <Input id="mortgage" type="number" min={0} step={10} value={profile.mortgageInterestPaid || ''} onChange={(e) => updateProfile({ mortgageInterestPaid: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.mortgageInterestPaid')} />
+                    <Input id="mortgage" type="number" min={0} step={10} value={profile.mortgageInterestPaid || ''} onChange={(e) => updateProfile({ mortgageInterestPaid: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.mortgageInterestPaid')} />
                 </div>
 
                 <div>
                     <Label htmlFor="union">{t('tax.profile.field.unionDues')}</Label>
-                    <Input id="union" type="number" min={0} step={10} value={profile.unionDues || ''} onChange={(e) => updateProfile({ unionDues: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.unionDues')} />
+                    <Input id="union" type="number" min={0} step={10} value={profile.unionDues || ''} onChange={(e) => updateProfile({ unionDues: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.unionDues')} />
                 </div>
 
                 <div>
                     <Label htmlFor="medical">{t('tax.profile.field.medicalExpenses')}</Label>
-                    <Input id="medical" type="number" min={0} step={10} value={profile.medicalExpenses || ''} onChange={(e) => updateProfile({ medicalExpenses: parseFloat(e.target.value) || 0 })} placeholder={t('tax.profile.placeholder.medicalExpenses')} />
+                    <Input id="medical" type="number" min={0} step={10} value={profile.medicalExpenses || ''} onChange={(e) => updateProfile({ medicalExpenses: parseDecimal(e.target.value) })} placeholder={t('tax.profile.placeholder.medicalExpenses')} />
                 </div>
             </div>
 
@@ -640,7 +641,7 @@ function RegionStep({
                         max={9}
                         step={0.1}
                         value={profile.communalSurchargePercent}
-                        onChange={(e) => updateProfile({ communalSurchargePercent: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => updateProfile({ communalSurchargePercent: parseDecimal(e.target.value) })}
                         className="w-24"
                     />
                     <span className="text-sm text-muted-foreground">{t('tax.profile.communalSurchargePct')}</span>

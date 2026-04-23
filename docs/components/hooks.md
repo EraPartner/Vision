@@ -48,6 +48,12 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 |------|-------------|------|
 | `usePortfolioTaxAdjustments()` | Per-investment tax/fee adjustments by year | `usePortfolioTaxAdjustments.ts` |
 
+### Chart & Formatting Hooks
+
+| Hook | Description | File |
+|------|-------------|------|
+| `useChartCurrencyFormatter()` | Currency formatting for chart components | `useChartCurrencyFormatter.ts` |
+
 ---
 
 ## useTransactions
@@ -529,8 +535,65 @@ Currency formatting and parsing utilities.
 
 ---
 
+---
+
+## useChartCurrencyFormatter
+
+Shared hook for currency formatting in chart components. Eliminates duplicated `formatCurrency` / `currencySymbol` pattern across statistics charts.
+
+### API
+
+```typescript
+const {
+  formatCurrency,    // (val: number) => string
+  currencySymbol,    // string (e.g. "€")
+  locale,            // string (e.g. "en-US")
+  currency,          // string (e.g. "EUR")
+} = useChartCurrencyFormatter();
+```
+
+### Features
+
+- Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
+- Derives locale from `AppSettingsContext.numberFormat`
+- Returns `formatCurrency()` function formatted with user's decimal place preference
+- Respects app-wide currency and locale settings
+
+### Usage
+
+```tsx
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+
+function MyChart() {
+  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  
+  return (
+    <BarChart
+      data={data}
+      yAxisTickFormatter={(val) => formatCurrency(val)}
+      tooltipFormatter={(val) => formatCurrency(val)}
+    />
+  );
+}
+```
+
+### Used By
+
+All Statistics page sub-components:
+- `MonthlyChart`
+- `NetTrendChart`
+- `CategoryPieChart`
+- `CategoryTrendChart`
+- `TopRecipientsChart`
+- `YearlyComparisonChart`
+- `SummaryCards`
+- `YearlySummaryTable`
+
+---
+
 ## Related Documentation
 
 - [[docs/components/index]] - Components Index
 - [[docs/api/index]] - API documentation
+- [[docs/components/statistics]] - Statistics components
 - [React Query Docs](https://tanstack.com/query)

@@ -39,6 +39,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import categoryRepository from '../../src/repositories/categoryRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 
 // Import routes AFTER mocks are set up
 await import('../../src/routes/categories.js');
@@ -56,10 +57,9 @@ describe('Category Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        items: [],
-        total: 0,
-        limit: 50,
-        offset: 0,
+        ok: true,
+        data: [],
+        meta: { pagination: { total: 0, limit: 50, offset: 0 } },
       }));
     });
 
@@ -76,8 +76,8 @@ describe('Category Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.total).toBe(2);
-      expect(result.items.length).toBe(2);
+      expect(result.meta.pagination.total).toBe(2);
+      expect(result.data.length).toBe(2);
     });
 
     it('should respect pagination parameters', async () => {
@@ -89,8 +89,8 @@ describe('Category Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.limit).toBe(2);
-      expect(result.offset).toBe(1);
+      expect(result.meta.pagination.limit).toBe(2);
+      expect(result.meta.pagination.offset).toBe(1);
     });
   });
 
@@ -121,12 +121,10 @@ describe('Category Routes', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
-    it('should return 400 for missing fields', async () => {
+    it('should throw ValidationError for missing fields', async () => {
       const req = { body: { general: 'groceries' } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
@@ -141,14 +139,12 @@ describe('Category Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       categoryRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -163,14 +159,12 @@ describe('Category Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       categoryRepository.update.mockResolvedValue(null);
 
       const req = { params: { id: '99999' }, body: { general: 'test' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -182,17 +176,15 @@ describe('Category Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
+      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       categoryRepository.hardDelete.mockResolvedValue(false);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -204,15 +196,13 @@ describe('Category Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/:id/assign'](req, res);
 
-      expect(res.json.mock.calls[0][0].updated_recipients).toBe(2);
+      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(2);
     });
 
-    it('should return 400 for missing recipient_ids', async () => {
+    it('should throw ValidationError for missing recipient_ids', async () => {
       const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/:id/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/:id/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
@@ -229,31 +219,25 @@ describe('Category Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/assign'](req, res);
 
-      expect(res.json.mock.calls[0][0].updated_recipients).toBe(3);
+      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(3);
     });
 
-    it('should return 400 for missing category_general', async () => {
+    it('should throw ValidationError for missing category_general', async () => {
       const req = { body: { category_detail: 'FOOD', recipient_ids: [1] } };
       const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 400 for missing category_detail', async () => {
+    it('should throw ValidationError for missing category_detail', async () => {
       const req = { body: { category_general: 'GROCERIES', recipient_ids: [1] } };
       const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 400 for missing recipient_ids', async () => {
+    it('should throw ValidationError for missing recipient_ids', async () => {
       const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD' } };
       const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/assign'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should handle single recipient_id (not array)', async () => {
@@ -267,80 +251,66 @@ describe('Category Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/assign'](req, res);
 
-      expect(res.json.mock.calls[0][0].updated_recipients).toBe(1);
+      expect(res.json.mock.calls[0][0].data.updated_recipients).toBe(1);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should propagate error when DB throws', async () => {
       categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
 
       const req = { body: { category_general: 'GROCERIES', category_detail: 'FOOD', recipient_ids: [1] } };
       const res = mockResponse();
-      await routeHandlers['post:/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/assign'](req, res)).rejects.toThrow('DB error');
     });
   });
 
   // ── Error paths for existing routes ────────────────────────
   describe('Error handling', () => {
-    it('GET / should handle errors with 500', async () => {
+    it('GET / should propagate error when DB throws', async () => {
       categoryRepository.getAll.mockRejectedValue(new Error('DB error'));
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('POST / should handle errors with 500', async () => {
+    it('POST / should propagate error when DB throws', async () => {
       categoryRepository.createOrGet.mockRejectedValue(new Error('DB error'));
 
       const req = { body: { general: 'TEST', detail: 'TEST' } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('GET /:id should handle errors with 500', async () => {
+    it('GET /:id should propagate error when DB throws', async () => {
       categoryRepository.getById.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('PATCH /:id should handle errors with 500', async () => {
+    it('PATCH /:id should propagate error when DB throws', async () => {
       categoryRepository.update.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, body: { general: 'test' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('DELETE /:id should handle errors with 500', async () => {
+    it('DELETE /:id should propagate error when DB throws', async () => {
       categoryRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('POST /:id/assign should handle errors with 500', async () => {
+    it('POST /:id/assign should propagate error when DB throws', async () => {
       categoryRepository.assignToRecipients.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, body: { recipient_ids: [1] } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/assign'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/:id/assign'](req, res)).rejects.toThrow('DB error');
     });
   });
 });
@@ -348,5 +318,10 @@ describe('Category Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

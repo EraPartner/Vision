@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { parseDecimal } from "@/lib/decimal";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,21 +11,11 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
+import type { Column } from "@/types/dataTable";
+
+export type { Column };
 
 type SortDirection = "asc" | "desc" | null;
-
-interface Column<T> {
-    key: string;
-    header: string;
-    editable?: boolean;
-    type?: "text" | "number" | "date";
-    render?: (row: T, isEditing: boolean, index?: number) => React.ReactNode;
-    className?: string;
-    minWidth?: number;
-    defaultWidth?: number;
-    sortable?: boolean;
-    filterable?: boolean;
-}
 
 interface VirtualDataTableProps<T> {
     title: string;
@@ -586,7 +577,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                                 setEditValues((prev) => ({
                                                                     ...prev,
                                                                     [col.key]: col.type === "number"
-                                                                        ? parseFloat(e.target.value) || 0
+                                                                        ? parseDecimal(e.target.value)
                                                                         : e.target.value,
                                                                 }))
                                                             }

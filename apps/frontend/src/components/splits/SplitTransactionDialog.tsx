@@ -10,6 +10,7 @@ import { useCreateSplits, useSplitsByTransaction } from "@/hooks/useSplits";
 import { Split, Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatCurrency } from "@/utils/currency";
+import { parseDecimal } from "@/lib/decimal";
 
 interface SplitEntry {
     recipient_id: number | null;
@@ -49,7 +50,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
 
     const equalShare = totalPeople > 1 ? Math.round((absAmount / totalPeople) * 100) / 100 : 0;
 
-    const customTotal = validEntries.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    const customTotal = validEntries.reduce((s, e) => s + parseDecimal(e.amount), 0);
     const existingSplits = existingSplitsData?.items ?? [];
     const existingSplitTotal = existingSplits.reduce((sum, split) => sum + (split.amount || 0), 0);
     const existingRecipientNames = existingSplits
@@ -61,7 +62,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
         ? validEntries.length > 0 && equalShare <= 0
         : validEntries.some((entry) => {
             if (!entry.recipient_id) return false;
-            return (parseFloat(entry.amount) || 0) <= 0;
+            return parseDecimal(entry.amount) <= 0;
         });
     const totalAfterSubmit = existingSplitTotal + newSplitTotal;
     const remainingSplitCapacity = Math.max(absAmount - existingSplitTotal, 0);
@@ -70,7 +71,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const handleSubmit = () => {
         const splits = validEntries.map(e => ({
             recipient_id: e.recipient_id!,
-            amount: splitType === "equal" ? equalShare : parseFloat(e.amount) || 0,
+            amount: splitType === "equal" ? equalShare : parseDecimal(e.amount),
             note: e.note || undefined,
         }));
 

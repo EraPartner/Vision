@@ -12,11 +12,16 @@
     "db:migrate": "cd ../.. && alembic upgrade head",
     "db:migrate:down": "cd ../.. && alembic downgrade -1",
     "db:new-migration": "cd ../.. && alembic revision -m",
-    "db:reset": "cd ../.. && alembic downgrade base && alembic upgrade head"
+    "db:reset": "cd ../.. && alembic downgrade base && alembic upgrade head",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "vitest": "^4.1.4"
   },
   "dependencies": {

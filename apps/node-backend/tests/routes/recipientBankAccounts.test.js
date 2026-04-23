@@ -39,7 +39,19 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import bankAccountRepo from '../../src/repositories/recipientBankAccountRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/recipientBankAccounts.js');
+
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
+  return res;
+}
 
 describe('Recipient Bank Account Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -55,8 +67,8 @@ describe('Recipient Bank Account Routes', () => {
       await routeHandlers['get:/:id/bank-accounts'](req, res);
 
       const data = res.json.mock.calls[0][0];
-      expect(data.items).toHaveLength(1);
-      expect(data.items[0].account_number).toBe('BE61734041478017');
+      expect(data.data).toHaveLength(1);
+      expect(data.data[0].account_number).toBe('BE61734041478017');
     });
 
     it('should return empty list', async () => {
@@ -66,7 +78,7 @@ describe('Recipient Bank Account Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id/bank-accounts'](req, res);
 
-      expect(res.json.mock.calls[0][0].items).toEqual([]);
+      expect(res.json.mock.calls[0][0].data).toEqual([]);
     });
   });
 
@@ -103,27 +115,22 @@ describe('Recipient Bank Account Routes', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
-    it('should return 400 for missing account_number', async () => {
+    it('should throw ValidationError for missing account_number', async () => {
       const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/:id/bank-accounts'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/:id/bank-accounts'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
   describe('PATCH /:recipientId/bank-accounts/:accountId', () => {
-    it('should return 400 for invalid account ID', async () => {
+    it('should throw ValidationError for invalid account ID', async () => {
       const req = { params: { id: '1', accountId: '0' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      await expect(routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(bankAccountRepo.update).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when account does not exist', async () => {
+    it('should throw NotFoundError when account does not exist', async () => {
       bankAccountRepo.update.mockResolvedValue(null);
 
       const req = {
@@ -131,15 +138,13 @@ describe('Recipient Bank Account Routes', () => {
         body: { bank_name: 'Belfius' },
       };
       const res = mockResponse();
-      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
+      await expect(routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
 
       expect(bankAccountRepo.update).toHaveBeenCalledWith(99, {
         bankName: 'Belfius',
         address: undefined,
         accountLabel: undefined,
       });
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found' });
     });
 
     it('should return updated account with links when update succeeds', async () => {
@@ -157,10 +162,10 @@ describe('Recipient Bank Account Routes', () => {
         address: 'Main Street 1',
         accountLabel: 'Primary',
       });
-      expect(res.json).toHaveBeenCalledWith({ id: 5, bank_name: 'Updated Bank', links: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 5, bank_name: 'Updated Bank', links: [] } });
     });
 
-    it('should return 500 when update throws', async () => {
+    it('should propagate thrown error when update throws', async () => {
       bankAccountRepo.update.mockRejectedValue(new Error('boom'));
 
       const req = {
@@ -168,33 +173,24 @@ describe('Recipient Bank Account Routes', () => {
         body: { bank_name: 'Updated Bank' },
       };
       const res = mockResponse();
-      await routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error updating bank account' });
+      await expect(routeHandlers['patch:/:id/bank-accounts/:accountId'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('DELETE /:recipientId/bank-accounts/:accountId', () => {
-    it('should return 400 for invalid account ID', async () => {
+    it('should throw ValidationError for invalid account ID', async () => {
       const req = { params: { id: '1', accountId: '0' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      await expect(routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(bankAccountRepo.softDelete).not.toHaveBeenCalled();
     });
 
-    it('should return 404 when delete target does not exist', async () => {
+    it('should throw NotFoundError when delete target does not exist', async () => {
       bankAccountRepo.softDelete.mockResolvedValue(false);
 
       const req = { params: { id: '1', accountId: '15' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found' });
+      await expect(routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('should deactivate account and return message when delete succeeds', async () => {
@@ -204,41 +200,32 @@ describe('Recipient Bank Account Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ message: 'Bank account 15 deactivated', links: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { message: 'Bank account 15 deactivated', links: [] } });
     });
 
-    it('should return 500 when delete throws', async () => {
+    it('should propagate thrown error when delete throws', async () => {
       bankAccountRepo.softDelete.mockRejectedValue(new Error('boom'));
 
       const req = { params: { id: '1', accountId: '15' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error deleting bank account' });
+      await expect(routeHandlers['delete:/:id/bank-accounts/:accountId'](req, res)).rejects.toThrow('boom');
     });
   });
 
   describe('POST /:recipientId/bank-accounts/:accountId/set-primary', () => {
-    it('should return 404 when setPrimary fails', async () => {
+    it('should throw NotFoundError when setPrimary fails', async () => {
       bankAccountRepo.setPrimary.mockResolvedValue(false);
 
       const req = { params: { id: '1', accountId: '99' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
-
+      await expect(routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res)).rejects.toBeInstanceOf(NotFoundError);
       expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(99, 1);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Bank account not found or does not belong to this recipient' });
     });
 
-    it('should return 400 when account ID is invalid', async () => {
+    it('should throw ValidationError when account ID is invalid', async () => {
       const req = { params: { id: '1', accountId: 'invalid' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Invalid account ID' });
+      await expect(routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(bankAccountRepo.setPrimary).not.toHaveBeenCalled();
     });
 
@@ -252,24 +239,15 @@ describe('Recipient Bank Account Routes', () => {
 
       expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(2, 1);
       expect(bankAccountRepo.getById).toHaveBeenCalledWith(2);
-      expect(res.json).toHaveBeenCalledWith({ id: 2, recipient_id: 1, is_primary: true, links: [] });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 2, recipient_id: 1, is_primary: true, links: [] } });
     });
 
-    it('should return 500 when setPrimary throws', async () => {
+    it('should propagate thrown error when setPrimary throws', async () => {
       bankAccountRepo.setPrimary.mockRejectedValue(new Error('boom'));
 
       const req = { params: { id: '1', accountId: '2' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Error setting primary bank account' });
+      await expect(routeHandlers['post:/:id/bank-accounts/:accountId/set-primary'](req, res)).rejects.toThrow('boom');
     });
   });
 });
-
-function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  return res;
-}

@@ -386,14 +386,10 @@ describe('InfoRepository', () => {
       expect(result.accounts[0].bank_account).toBe('Revolut');
       expect(result.accounts[0].balance).toBe(2500);
       expect(result.total_net_position).toBe(2500);
-      expect(convertRowsToEur).toHaveBeenNthCalledWith(
-        1,
-        expect.any(Array),
-        'EUR',
-        { useHistoricalRatesByDate: true, dateField: 'date' }
-      );
-      expect(convertRowsToEur).toHaveBeenNthCalledWith(
-        2,
+      // Both current-balance and history rows are now batched into a single
+      // convertRowsToEur call inside batchConvertGroupsWithHistoricalRateFallback.
+      expect(convertRowsToEur).toHaveBeenCalledTimes(1);
+      expect(convertRowsToEur).toHaveBeenCalledWith(
         expect.any(Array),
         'EUR',
         { useHistoricalRatesByDate: true, dateField: 'date' }

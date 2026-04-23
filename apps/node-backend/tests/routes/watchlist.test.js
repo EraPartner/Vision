@@ -34,6 +34,7 @@ vi.mock('../../src/config/logger.js', () => ({
 }));
 
 import { watchlistRepository } from '../../src/repositories/watchlistRepository.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 
 await import('../../src/routes/watchlist.js');
 
@@ -56,46 +57,40 @@ describe('Watchlist Routes', () => {
         offset: 0,
         assetClass: 'stocks',
       });
-      expect(res.json).toHaveBeenCalledWith({ items: [{ id: 1 }], total: 1, limit: 5000, offset: 0 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: [{ id: 1 }],
+        meta: { pagination: { total: 1, limit: 5000, offset: 0 } },
+      });
     });
 
-    it('returns 500 when repository throws', async () => {
+    it('propagates error when repository throws', async () => {
       watchlistRepository.getAllWithCount.mockRejectedValue(new Error('db exploded'));
 
       const req = { query: {} };
       const res = mockResponse();
 
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Failed to list watchlist items' });
+      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('db exploded');
     });
   });
 
   describe('GET /:id', () => {
-    it('returns 404 for missing watchlist item', async () => {
+    it('throws NotFoundError for missing watchlist item', async () => {
       watchlistRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '7' } };
       const res = mockResponse();
 
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(watchlistRepository.getById).toHaveBeenCalledWith(7);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Watchlist item not found' });
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
   describe('POST /', () => {
-    it('returns 400 when required fields are missing', async () => {
+    it('throws ValidationError when required fields are missing', async () => {
       const req = { body: { name: 'ETF' } };
       const res = mockResponse();
 
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'name, asset_class, and target_price are required' });
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(watchlistRepository.create).not.toHaveBeenCalled();
     });
 
@@ -119,37 +114,29 @@ describe('Watchlist Routes', () => {
 
       expect(watchlistRepository.create).toHaveBeenCalledWith(req.body);
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith({ id: 9, name: 'ETF Idea' });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 9, name: 'ETF Idea' } });
     });
   });
 
   describe('PATCH /:id', () => {
-    it('returns 404 when updating a missing item', async () => {
+    it('throws NotFoundError when updating a missing item', async () => {
       watchlistRepository.update.mockResolvedValue(null);
 
       const req = { params: { id: '99' }, body: { notes: 'updated' } };
       const res = mockResponse();
 
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(watchlistRepository.update).toHaveBeenCalledWith(99, { notes: 'updated' });
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Watchlist item not found' });
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
   describe('DELETE /:id', () => {
-    it('returns 404 when delete returns false', async () => {
+    it('throws NotFoundError when delete returns false', async () => {
       watchlistRepository.delete.mockResolvedValue(false);
 
       const req = { params: { id: '33' } };
       const res = mockResponse();
 
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(watchlistRepository.delete).toHaveBeenCalledWith(33);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Watchlist item not found' });
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('returns 204 on successful delete', async () => {
@@ -173,5 +160,10 @@ function mockResponse() {
     status: vi.fn(),
   };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

@@ -2,8 +2,8 @@
 title: Feature - CSV Import & Deduplication
 type: feature
 status: active
-date: 2026-04-21
-tags: [feature, import, csv, deduplication, phase-1]
+date: 2026-04-23
+tags: [feature, import, csv, deduplication, phase-1, performance, concurrency]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
 related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
@@ -43,7 +43,7 @@ The original import service. Processes CSV files sequentially, using field-based
 **File:** [[apps/node-backend/src/services/streamingImportService.js]]
 
 Optimized for large files with real-time progress reporting via callbacks (used by SSE endpoints). Key performance features:
-- **Parallel batch processing**: Rows processed in concurrent batches of 20 (`IMPORT_BATCH_SIZE`), capped to avoid DB pool overload
+- **Adaptive parallel batch processing**: Rows processed in concurrent batches sized automatically from DB pool config. Calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. This ensures at least half the connection pool remains available for other requests.
 - **Single-round-trip recipient upsert**: `INSERT ... ON CONFLICT DO NOTHING RETURNING id` with fallback SELECT (down from 2-4 round-trips)
 - **Single-round-trip raw dedup**: `INSERT ... ON CONFLICT DO NOTHING RETURNING *` — null return means duplicate
 - **Fire-and-forget non-critical writes**: Bank account linking and raw reference creation don't block import outcome
@@ -51,6 +51,7 @@ Optimized for large files with real-time progress reporting via callbacks (used 
 
 Implementation note:
 - Remaining dynamic dedup import in the generic/legacy streaming path was removed; the service now uses module-scoped `isRawDuplicate` with fallback to `isDuplicateByFields`, preserving duplicate-detection behavior while reducing runtime import overhead.
+- Concurrency calculation moved from hardcoded `20` to adaptive `Math.max(2, Math.floor(poolMax / 2))` to respect pool ceiling and prevent connection exhaustion on non-default pool configs.
 
 **Progress phases:** `counting` → `parsing` → `importing` → `complete`/`error`
 
@@ -69,7 +70,7 @@ Orchestrates CSV import with full raw data preservation. Architecture:
 Falls back to `importService.js` for generic/unsupported bank types.
 
 Implementation notes:
-- Raw import processing now uses bounded concurrent batching (`RAW_IMPORT_BATCH_SIZE = 20`) with `Promise.allSettled`, preserving imported/duplicate/error accounting semantics while reducing end-to-end latency on larger files.
+- Raw import processing uses adaptive bounded concurrent batching (same formula as streaming import: `Math.max(2, Math.floor(poolMax / 2))`) with `Promise.allSettled`, preserving imported/duplicate/error accounting semantics while reducing end-to-end latency on larger files.
 - Hot-path dynamic imports were replaced with module-scoped imports (`importCSV`, `isDuplicateByFields`, `normalizeForMatching`) to remove per-row/per-request import resolution overhead.
 - Raw duplicate checking now prefers repository-level `isRawDuplicate(...)` with fallback to field-based dedup when repository/raw-table paths fail, preserving fallback semantics.
 
@@ -215,6 +216,10 @@ data: {"processed": 50, "total": 150, "status": "processing"}
 event: complete  
 data: {"imported": 145, "duplicates_skipped": 5, "errors": 0}
 ```
+
+**Backpressure Handling (Phase 3.2, 2026-04-23):**
+- Streaming import now uses `createSseWriter(req, res)` [[apps/node-backend/src/lib/sse.js]] to propagate backpressure from the HTTP client all the way into the import batch loop. When the client consumes events slower than they are produced, `drainIfNeeded()` pauses the server's write buffer, preventing unbounded memory growth in Node.js TCP buffers.
+- Import progress callbacks are now `async` and await the SSE writer's `write()` promise.
 
 Frontend SSE robustness updates:
 - Stream parsing in [[apps/frontend/src/lib/api.ts]] now consumes blank-line-delimited event blocks correctly and supports multi-line `data:` fields.

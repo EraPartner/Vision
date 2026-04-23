@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -62,7 +63,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
 
   const [form, setForm] = useState({
     type: 'buy' as PortfolioTxnType,
-    date: new Date().toISOString().slice(0, 10),
+    date: toYmd(new Date()),
     amount: '',
     units: '',
     pricePerUnit: '',
@@ -76,7 +77,7 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
   });
 
   const reset = () => setForm({
-    type: 'buy', date: new Date().toISOString().slice(0, 10),
+    type: 'buy', date: toYmd(new Date()),
     amount: '', units: '', pricePerUnit: '', fees: '', taxes: '', fxRateToEur: '', note: '',
     isRecurring: false, recurrenceInterval: 'monthly', recurrenceEndDate: '',
   });
@@ -141,9 +142,9 @@ export function AddPortfolioTxnDialog({ investment, trigger }: Props) {
         amount: isGift ? 0 : effectiveAmount,
         units: effectiveUnits,
         price_per_unit: effectivePrice,
-        fees: isGift ? 0 : (form.fees ? parseFloat(form.fees) : undefined),
-        taxes: isGift ? 0 : (form.taxes ? parseFloat(form.taxes) : undefined),
-        fx_rate_to_eur: form.fxRateToEur ? parseFloat(form.fxRateToEur) : undefined,
+        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : undefined),
+        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
+        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
         currency: investment.currency,
         note: form.note.trim() || undefined,
         is_recurring: form.isRecurring,

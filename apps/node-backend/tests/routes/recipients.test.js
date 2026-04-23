@@ -42,6 +42,7 @@ vi.mock('../../src/config/logger.js', () => ({
 
 import recipientRepository from '../../src/repositories/recipientRepository.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../../src/services/recipientMergeService.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/recipients.js');
 
 describe('Recipient Routes', () => {
@@ -57,8 +58,9 @@ describe('Recipient Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
+      expect(result.ok).toBe(true);
+      expect(result.data).toEqual([]);
+      expect(result.meta.pagination.total).toBe(0);
     });
 
     it('should return recipients with data', async () => {
@@ -72,7 +74,7 @@ describe('Recipient Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].total).toBe(2);
+      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(2);
     });
   });
 
@@ -103,12 +105,10 @@ describe('Recipient Routes', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
-    it('should return 400 for missing name', async () => {
+    it('should throw ValidationError for missing name', async () => {
       const req = { body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
@@ -123,14 +123,12 @@ describe('Recipient Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       recipientRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -145,14 +143,12 @@ describe('Recipient Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       recipientRepository.update.mockResolvedValue(null);
 
       const req = { params: { id: '99999' }, body: { notes: 'x' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -164,42 +160,31 @@ describe('Recipient Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
+      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       recipientRepository.hardDelete.mockResolvedValue(false);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
   describe('POST /:id/merge', () => {
-    it('should return 400 when alias_ids is missing', async () => {
+    it('should throw ValidationError when alias_ids is missing', async () => {
       const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/:id/merge'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Missing required field: alias_ids (array of recipient IDs)' });
+      await expect(routeHandlers['post:/:id/merge'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 400 when primary recipient is itself an alias', async () => {
+    it('should throw ValidationError when primary recipient is itself an alias', async () => {
       recipientRepository.getById.mockResolvedValue({ id: 1, primary_recipient_id: 2 });
 
       const req = { params: { id: '1' }, body: { alias_ids: [3] } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/merge'](req, res);
-
-      expect(recipientRepository.getById).toHaveBeenCalledWith(1);
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        detail: 'Cannot merge into a recipient that is itself an alias. Use its primary instead.',
-      });
+      await expect(routeHandlers['post:/:id/merge'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should merge aliases and return primary plus aliases', async () => {
@@ -221,39 +206,35 @@ describe('Recipient Routes', () => {
 
       expect(mergeRecipientsAtomic).toHaveBeenCalledWith(1, [3, 4]);
       expect(res.json).toHaveBeenCalledWith({
-        primary: { id: 1, name: 'PRIMARY', primary_recipient_id: null, links: [] },
-        merged_ids: [3, 4],
-        reassigned: { transactions: 7, splits: 0, planned: 0, bankAccounts: 1 },
-        aliases: [
-          { id: 3, name: 'ALIAS A' },
-          { id: 4, name: 'ALIAS B' },
-        ],
+        ok: true,
+        data: {
+          primary: { id: 1, name: 'PRIMARY', primary_recipient_id: null, links: [] },
+          merged_ids: [3, 4],
+          reassigned: { transactions: 7, splits: 0, planned: 0, bankAccounts: 1 },
+          aliases: [
+            { id: 3, name: 'ALIAS A' },
+            { id: 4, name: 'ALIAS B' },
+          ],
+        },
       });
     });
 
-    it('should return 404 when primary recipient does not exist', async () => {
+    it('should throw NotFoundError when primary recipient does not exist', async () => {
       recipientRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '123' }, body: { alias_ids: [5] } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/merge'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Primary recipient not found' });
+      await expect(routeHandlers['post:/:id/merge'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
   describe('POST /:id/unmerge', () => {
-    it('should return 404 when recipient cannot be unmerged', async () => {
+    it('should throw NotFoundError when recipient cannot be unmerged', async () => {
       recipientRepository.unmergeRecipient.mockResolvedValue(false);
 
       const req = { params: { id: '44' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/unmerge'](req, res);
-
-      expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({ detail: 'Recipient not found' });
+      await expect(routeHandlers['post:/:id/unmerge'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('should return updated recipient when unmerge succeeds', async () => {
@@ -266,12 +247,15 @@ describe('Recipient Routes', () => {
 
       expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
       expect(recipientRepository.getById).toHaveBeenCalledWith(44);
-      expect(res.json).toHaveBeenCalledWith({ id: 44, name: 'UNMERGED', primary_recipient_id: null, links: [] });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        data: { id: 44, name: 'UNMERGED', primary_recipient_id: null, links: [] },
+      });
     });
   });
 
   describe('GET /:id/aliases', () => {
-    it('should return aliases with items and total', async () => {
+    it('should return aliases with pagination meta', async () => {
       recipientRepository.getAliases.mockResolvedValue([
         { id: 10, name: 'Alias One', primary_recipient_id: 1 },
         { id: 11, name: 'Alias Two', primary_recipient_id: 1 },
@@ -283,11 +267,12 @@ describe('Recipient Routes', () => {
 
       expect(recipientRepository.getAliases).toHaveBeenCalledWith(1);
       expect(res.json).toHaveBeenCalledWith({
-        items: [
+        ok: true,
+        data: [
           { id: 10, name: 'Alias One', primary_recipient_id: 1, links: [] },
           { id: 11, name: 'Alias Two', primary_recipient_id: 1, links: [] },
         ],
-        total: 2,
+        meta: { pagination: { total: 2, limit: 2, offset: 0 } },
       });
     });
   });
@@ -296,5 +281,10 @@ describe('Recipient Routes', () => {
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }

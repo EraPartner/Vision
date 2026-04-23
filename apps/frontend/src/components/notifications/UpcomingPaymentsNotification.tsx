@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { toYmd } from "@/lib/timezone";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
 
 const DISMISSED_UPCOMING_PLANNED_STORAGE_KEY = "dismissed_upcoming_planned_payments";
@@ -64,8 +65,8 @@ export function UpcomingPaymentsNotification() {
 
       const response = await apiClient.getPlannedTransactions({
         active: true,
-        start_date: today.toISOString().split("T")[0],
-        end_date: nextWeek.toISOString().split("T")[0],
+        start_date: toYmd(today),
+        end_date: toYmd(nextWeek),
         limit: 100,
       });
 

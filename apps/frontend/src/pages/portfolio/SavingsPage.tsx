@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -19,10 +20,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 
 function daysUntil(dateStr?: string) {
   if (!dateStr) return null;
-  const target = new Date(dateStr);
-  const now = new Date();
-  const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  return diff;
+  return Math.ceil(daysBetween(new Date(), parseYmd(dateStr)));
 }
 
 export default function SavingsPage() {

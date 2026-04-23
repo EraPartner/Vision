@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions
-date: 2026-04-16
-tags: [api, transactions, finance]
+date: 2026-04-23
+tags: [api, transactions, finance, phase-9, decimal, money]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
 related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
@@ -16,6 +16,9 @@ related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-back
 ## Overview
 
 The Transactions API provides CRUD operations for managing financial transactions. Each transaction represents an income or expense with associated recipient, category, and amount.
+
+> [!info] Monetary Precision (Phase 9)
+> All monetary values in responses (amounts, balances, totals) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
 
 ## Endpoints
 

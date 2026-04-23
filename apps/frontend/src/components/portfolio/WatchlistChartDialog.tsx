@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseDecimal } from "@/lib/decimal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -84,7 +85,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
       const res = await fetch(`${API_BASE_URL}/api/watchlist/${item.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target_price: parseFloat(newTargetPrice) }),
+        body: JSON.stringify({ target_price: parseDecimal(newTargetPrice) }),
       });
 
       if (!res.ok) throw new Error("Failed to update");

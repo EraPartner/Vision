@@ -180,3 +180,124 @@ export function unwrapEnvelope<T>(body: unknown): T {
     }
     return body as T;
 }
+
+// ---------------------------------------------------------------------------
+// Module-level transport — used by domain modules instead of the ApiClient class
+// ---------------------------------------------------------------------------
+
+/** Param values accepted by buildQuery / requestWithQuery. */
+export type QueryParams = Record<string, string | number | boolean | null | undefined>;
+
+const activeControllers = new Set<AbortController>();
+
+/** Cancel every in-flight request (e.g. on logout). */
+export function cancelAllRequests(): void {
+    for (const controller of activeControllers) {
+        controller.abort();
+    }
+    activeControllers.clear();
+}
+
+/**
+ * Raw fetch with timeout and AbortController tracking.
+ * Does NOT parse the response — callers handle that.
+ */
+export async function rawFetch(
+    url: string,
+    options: RequestInit = {},
+    timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<Response> {
+    const controller = new AbortController();
+    activeControllers.add(controller);
+
+    if (options.signal) {
+        options.signal.addEventListener('abort', () => controller.abort());
+    }
+
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const requestId = generateRequestId();
+    const mergedHeaders = new Headers(options.headers);
+    if (!mergedHeaders.has('X-Request-Id')) {
+        mergedHeaders.set('X-Request-Id', requestId);
+    }
+
+    try {
+        return await fetch(url, {
+            ...options,
+            headers: mergedHeaders,
+            signal: controller.signal,
+        });
+    } catch (err: unknown) {
+        if ((err as Error).name === 'AbortError') {
+            throw new Error('Request timed out or was cancelled');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+        activeControllers.delete(controller);
+    }
+}
+
+/**
+ * Core request with timeout, exponential-backoff retry, and envelope unwrap.
+ * Domain modules import this instead of going through ApiClient.
+ */
+export async function apiRequest<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retries: number = MAX_RETRIES,
+): Promise<T> {
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+
+    const url = `${API_BASE_URL}${endpoint}`;
+    const method = options.method ?? 'GET';
+    const isIdempotent = ['GET', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'].includes(method);
+
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= (isIdempotent ? retries : 0); attempt++) {
+        if (attempt > 0) {
+            await backoffDelay(attempt - 1);
+        }
+
+        try {
+            const response = await rawFetch(url, { ...options, headers });
+
+            if (RETRYABLE_STATUS_CODES.has(response.status) && isIdempotent && attempt < retries) {
+                lastError = new Error(`Server returned ${response.status}`);
+                continue;
+            }
+
+            if (!response.ok) {
+                throw await parseEnvelopeError(response, 'Request failed');
+            }
+
+            if (response.status === 204) {
+                return undefined as unknown as T;
+            }
+
+            const body = await response.json();
+            return unwrapEnvelope<T>(body);
+        } catch (err: unknown) {
+            lastError = err as Error;
+            const nonRetryable =
+                err instanceof ApiClientError &&
+                (err.code === ApiErrorCode.VALIDATION_ERROR ||
+                    err.code === ApiErrorCode.RATE_LIMITED ||
+                    err.code === ApiErrorCode.UNAUTHORIZED ||
+                    err.code === ApiErrorCode.FORBIDDEN ||
+                    err.code === ApiErrorCode.NOT_FOUND ||
+                    err.code === ApiErrorCode.CONFLICT);
+            if (!isIdempotent || nonRetryable) {
+                throw err;
+            }
+            if (attempt >= retries) throw err;
+        }
+    }
+
+    throw lastError ?? new Error('Request failed');
+}

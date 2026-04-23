@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -170,9 +171,9 @@ export function EditPortfolioTxnDialog({ investment, transaction, trigger }: Pro
         amount: effectiveAmount,
         units: effectiveUnits,
         price_per_unit: effectivePrice,
-        fees: isGift ? 0 : (form.fees ? parseFloat(form.fees) : undefined),
-        taxes: isGift ? 0 : (form.taxes ? parseFloat(form.taxes) : undefined),
-        fx_rate_to_eur: form.fxRateToEur ? parseFloat(form.fxRateToEur) : undefined,
+        fees: isGift ? 0 : (form.fees ? parseDecimal(form.fees) : undefined),
+        taxes: isGift ? 0 : (form.taxes ? parseDecimal(form.taxes) : undefined),
+        fx_rate_to_eur: form.fxRateToEur ? parseDecimal(form.fxRateToEur) : undefined,
         note: form.note.trim() || undefined,
         is_recurring: form.isRecurring,
         recurrence_interval: form.isRecurring ? form.recurrenceInterval : undefined,

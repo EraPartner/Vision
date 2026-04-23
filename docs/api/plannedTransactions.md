@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-04-16
-tags: [api, planned, recurring, schedule, phase-3, idempotency]
+date: 2026-04-23
+tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
 related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
@@ -16,6 +16,9 @@ related_code: [[apps/node-backend/src/routes/plannedTransactions.js]], [[apps/no
 ## Overview
 
 Planned Transactions manage scheduled and recurring payments. They can be simple one-time scheduled transactions or complex recurring payments with loan amortization schedules.
+
+> [!info] Monetary Precision (Phase 9)
+> All monetary values in responses (amounts, calculated payments) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
 
 ## Endpoints
 

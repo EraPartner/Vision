@@ -2,10 +2,10 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-16
-updated: 2026-04-20
-tags: [reference, api, endpoints, matrix, overview]
-description: Complete matrix of all 128 API endpoints organized by resource for quick lookup (AI Chat with 30 tools)
+date: 2026-04-22
+updated: 2026-04-22
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2]
+description: Complete matrix of all 128 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); see openapi.yaml for authoritative spec (Phase 2.4)
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
@@ -13,6 +13,8 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 > [!abstract] Overview
 > All 128 API endpoints across 17 route files. Use this as a quick reference to find any endpoint.
+> 
+> **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 
 ## Transactions (6 endpoints)
 

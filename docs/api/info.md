@@ -2,11 +2,11 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-17
+date: 2026-04-23
 tags: [api, analytics, statistics, dashboard]
 description: API endpoints for statistics, analytics, and dashboard data
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/utils/downsample.js"]
+related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/utils/downsample.js"]
 ---
 
 # Info & Analytics API
@@ -27,6 +27,10 @@ Comprehensive analytics and statistics endpoints for dashboards and financial in
 - Conversion-capable info endpoints accept `currency` (preferred) and `target_currency` (alias).
 - Values are normalized to uppercase 3-letter codes.
 - Invalid/unsupported target values fall back to EUR behavior.
+
+## Monetary Precision (Phase 9)
+
+All monetary values in responses use **Decimal.js** for precision to eliminate IEEE 754 floating-point drift. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). This enforcement is applied at the repository layer; see [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for implementation details.
 
 ## Endpoints
 
@@ -169,11 +173,9 @@ Get monthly financial summary for the last 12 months.
 Notes:
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
-- Internal repository refactor extracted shared monthly summary aggregation logic (`buildMonthlySummary`) to remove duplicate summary reducers across MV and fallback paths without changing endpoint output semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
-- Internal repository refactor now also reuses a shared row-mapping helper (`mapRowsForAmountConversion`) across summary/cashflow/planned/insights conversions to remove repeated `parseFloat` mapping while preserving all endpoint contracts and conversion semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
-- Internal repository refactor additionally consolidates repeated date-to-`YYYY-MM-DD` normalization behind `formatDateToYmd()` to reduce formatting duplication without changing output fields or date semantics ([[apps/node-backend/src/repositories/infoRepository.js]]).
-- Internal repository refactor also centralizes repeated month-key formatting/extraction (`formatYearMonthKey`, `extractYearMonth`, `formatDateToYm`) used by monthly summary, bank history, spending trend, and MoM period logic; response fields and values remain unchanged ([[apps/node-backend/src/repositories/infoRepository.js]]).
-- Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now in `monthlyRepository` (`infoRepositoryMonthly.js`). Shared helpers (`buildMonthlySummary`, `mapRowsForAmountConversion`, `formatDateToYmd`, `formatYearMonthKey`) extracted to `infoRepositoryHelpers.js` to eliminate duplication without changing endpoint contracts ([[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]).
+- Phase 3.1 optimization: income/spending rows batch-converted in 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` instead of separate conversions per month.
+- Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged.
 
 ---
 
@@ -265,6 +267,7 @@ Notes:
 - Historical and current transaction rows are converted with date-specific FX (`date` field).
 - Planned rows are converted with date-specific FX using `planned_date`.
 - This avoids retroactive movement of historical daily/average cashflow lines when latest exchange rates change.
+- Phase 3.1 optimization: eliminated 3 redundant `exchange_rates` queries by batching all row groups into 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` helper.
 
 ---
 
@@ -294,9 +297,10 @@ Get spending breakdown by category.
 }
 ```
 
-Implementation note:
-- Route now calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
-- Category aggregation in MV-backed breakdown/statistics paths now uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.js]]).
+Implementation notes:
+- Route calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
+- Category aggregation in MV-backed breakdown/statistics paths uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Phase 3.1: categorization logic is part of `statisticsRepository` domain module within composite `infoRepository` barrel ([[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]).
 
 ---
 
@@ -308,7 +312,7 @@ Notes:
 - For non-EUR targets, conversion is date-aware for both the current account balances and monthly history rows.
 - Historical FX lookup uses each row `date` when converting bank-balance datasets.
 - If historical conversion fails for a row set, conversion retries with latest available rates so the endpoint still returns balance data.
-- Internal repository refactor extracted shared historical-FX fallback conversion helper for current balances and history rows, preserving identical fallback behavior while reducing duplication ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Phase 3.1 optimization: eliminated 1 redundant `exchange_rates` query by batching current balances and history rows into 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` helper; queries now execute in parallel via `Promise.all()` ([[apps/node-backend/src/repositories/infoRepository.js]]).
 
 **Query Parameters:**
 
@@ -692,4 +696,4 @@ These endpoints are optimized using:
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.js]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.js]] (shared), [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.js]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.js]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.js]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]] (recipients), [[apps/node-backend/src/services/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]

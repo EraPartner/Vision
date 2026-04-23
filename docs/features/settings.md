@@ -2,11 +2,17 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-04-09
-tags: [feature, settings, configuration, preferences, frontend, backend]
-description: Application settings system with JSONB storage, preload optimization, and propagation across all pages
+date: 2026-04-23
+tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3]
+description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
+  - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
+  - apps/frontend/src/components/settings/tabs/GeneralTab.tsx
+  - apps/frontend/src/components/settings/tabs/DashboardTab.tsx
+  - apps/frontend/src/components/settings/tabs/AppTab.tsx
+  - apps/frontend/src/components/settings/tabs/BackupTab.tsx
+  - apps/frontend/src/components/settings/AIChatSettingsSection.tsx
   - apps/frontend/src/contexts/AppSettingsContext.tsx
   - apps/frontend/src/contexts/SettingsContext.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
@@ -183,6 +189,21 @@ settings.json.corrupt-2026-04-19T14-30-45-123Z
 ```
 
 This automatic recovery prevents startup failure while preserving the corrupted file for debugging.
+
+## Frontend UI (DashboardSettingsDialog)
+
+The primary UI for managing settings is the **DashboardSettingsDialog** component, split into 6 focused components:
+
+- **DashboardSettingsDialog** (orchestrator, ~170 lines) — Owns save-time state and dialog open/close logic
+- **GeneralTab** (~175 lines) — Currency, date/number format, decimal places, start-of-week, page size, language
+- **AppearanceTab** — Theme variant, color mode, schedule
+- **DashboardTab** (~240 lines) — Category/recipient exclusion, exclusion scope
+- **AppTab** (~230 lines) — Onboarding restart, update check, recurring reset, AI chat, reset-all
+- **BackupTab** (~310 lines) — Backup directory, passphrase, encrypt, restore (Electron only)
+
+**Full Documentation**: See [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog Documentation]]
+
+This split follows the **thin-orchestrator pattern** established in Phase 3 for better cohesion, testability, and maintainability.
 
 ## Related Features
 

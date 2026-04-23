@@ -1,3 +1,5 @@
+import { todayYmd } from '@/lib/timezone';
+
 export type AddTransactionFormState = {
   transaction_date: string;
   bank_account: string;
@@ -11,7 +13,7 @@ export type AddTransactionFormState = {
 
 export function createAddTransactionFormState(defaultCurrency?: string): AddTransactionFormState {
   return {
-    transaction_date: new Date().toISOString().split("T")[0],
+    transaction_date: todayYmd(),
     bank_account: "",
     recipient_id: "",
     category_id: "",

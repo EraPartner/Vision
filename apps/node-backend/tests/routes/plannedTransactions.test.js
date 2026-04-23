@@ -52,13 +52,44 @@ vi.mock('../../src/services/loanRepaymentService.js', () => ({
   })),
 }));
 
+vi.mock('../../src/middleware/validation.js', () => ({
+  validateIdParam: (_req, _res, next) => next(),
+}));
+
+vi.mock('../../src/middleware/rateLimiter.js', () => ({
+  rateLimiter: () => (_req, _res, next) => next(),
+}));
+
+vi.mock('../../src/services/recurrenceService.js', () => ({
+  calculateNextDate: vi.fn((base, pattern) => {
+    if (pattern === 'monthly') {
+      const d = new Date(base);
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    }
+    return null;
+  }),
+}));
+
 vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.js';
 import { query as dbQuery } from '../../src/database/connection.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/plannedTransactions.js');
+
+function mockResponse() {
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), set: vi.fn() };
+  res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
+  return res;
+}
 
 describe('Planned Transaction Routes', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -72,8 +103,8 @@ describe('Planned Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
+      expect(result.data).toEqual([]);
+      expect(result.meta.pagination.total).toBe(0);
     });
 
     it('should return planned transactions', async () => {
@@ -86,7 +117,7 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].total).toBe(1);
+      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
@@ -96,9 +127,9 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      const result = res.json.mock.calls[0][0];
-      expect(result.limit).toBe(5);
-      expect(result.offset).toBe(2);
+      const meta = res.json.mock.calls[0][0].meta.pagination;
+      expect(meta.limit).toBe(5);
+      expect(meta.offset).toBe(2);
     });
 
     it('should filter by is_recurring', async () => {
@@ -140,12 +171,10 @@ describe('Planned Transaction Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('should return 400 for missing fields', async () => {
+    it('should throw ValidationError for missing fields', async () => {
       const req = { body: { amount: 50 } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
     it('should create loan payment and overwrite amount/date from schedule', async () => {
@@ -184,7 +213,7 @@ describe('Planned Transaction Routes', () => {
       );
     });
 
-    it('should return 400 when loan_term_months is out of bounds', async () => {
+    it('should throw ValidationError when loan_term_months is out of bounds', async () => {
       const req = {
         body: {
           bank_account: 'Mortgage',
@@ -193,9 +222,7 @@ describe('Planned Transaction Routes', () => {
         },
       };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
   });
@@ -213,14 +240,12 @@ describe('Planned Transaction Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -236,14 +261,12 @@ describe('Planned Transaction Routes', () => {
       expect(res.json).toHaveBeenCalled();
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '99999' }, body: { amount: 75 } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('should resolve recipient_name and category_name to IDs', async () => {
@@ -353,22 +376,18 @@ describe('Planned Transaction Routes', () => {
       expect(call[3].is_executed).toBe(false);
     });
 
-    it('should return 400 without executed_transaction_id', async () => {
+    it('should throw ValidationError without executed_transaction_id', async () => {
       const req = { params: { id: '1' }, body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/:id/execute'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/:id/execute'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '99999' }, body: { executed_transaction_id: 10 } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/execute'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['post:/:id/execute'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 
@@ -380,23 +399,15 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['delete:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].message).toContain('deleted permanently');
+      expect(res.json.mock.calls[0][0].data.message).toContain('deleted permanently');
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       plannedTransactionRepository.hardDelete.mockResolvedValue(false);
 
       const req = { params: { id: '99999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 });
-
-function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
-  res.status.mockReturnValue(res);
-  return res;
-}

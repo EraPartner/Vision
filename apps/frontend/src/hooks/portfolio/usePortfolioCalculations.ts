@@ -4,6 +4,7 @@
  */
 
 import type { PortfolioTransaction } from '@/types/api';
+import { parseYmd, daysBetween, todayLocal } from '@/lib/timezone';
 
 export interface CostBasisResult {
   totalUnits: number;
@@ -83,10 +84,7 @@ export function calculateAccruedInterest(
   const startDate = lastInterestTxn?.date ?? firstBuyTxn?.date;
   if (!startDate) return 0;
 
-  const daysSince = Math.max(
-    0,
-    (Date.now() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysSince = Math.max(0, daysBetween(parseYmd(startDate), todayLocal()));
 
   return principal * (interestRate / 100 / 365) * daysSince;
 }

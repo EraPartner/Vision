@@ -1,0 +1,130 @@
+import { API_BASE_URL, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
+import { postMultipartImport } from '@/lib/api/helpers';
+import { readSseStream } from '@/lib/api/sse';
+import type { ImportProgress, ImportResult } from '@/lib/api/types';
+
+export function importCSV(
+    file: File,
+    bankName: string,
+): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('bank_name', bankName);
+    return postMultipartImport('/api/import/csv', file, queryParams);
+}
+
+export function importCSVWithProgress(
+    file: File,
+    bankName: string,
+    onProgress: (progress: ImportProgress) => void,
+): { abort: () => void; result: Promise<ImportResult> } {
+    const controller = new AbortController();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const queryParams = new URLSearchParams();
+    queryParams.append('bank_name', bankName);
+
+    const url = `${API_BASE_URL}/api/import/csv/stream?${queryParams.toString()}`;
+
+    const extractErrorDetail = (payload: unknown): string => {
+        if (payload && typeof payload === 'object' && 'detail' in payload) {
+            const detail = (payload as { detail?: unknown }).detail;
+            if (typeof detail === 'string' && detail.trim()) return detail;
+        }
+        return 'Import failed';
+    };
+
+    const result = (async (): Promise<ImportResult> => {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Request-Id': generateRequestId() },
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                throw await parseEnvelopeError(response, 'Import failed');
+            }
+
+            let finalResult: ImportResult | null = null;
+
+            for await (const { event, data } of readSseStream<unknown>(response)) {
+                if (event === 'progress') {
+                    onProgress(data as ImportProgress);
+                    continue;
+                }
+                if (event === 'complete') {
+                    finalResult = data as ImportResult;
+                    onProgress({
+                        ...(data as Partial<ImportProgress>),
+                        phase: 'complete',
+                        percent: 100,
+                    } as ImportProgress);
+                    continue;
+                }
+                if (event === 'error') {
+                    throw new Error(extractErrorDetail(data));
+                }
+            }
+
+            return finalResult ?? {
+                total_processed: 0,
+                imported: 0,
+                duplicates: 0,
+                errors: 0,
+                status: 'completed',
+            };
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') {
+                throw new Error('Import cancelled');
+            }
+            throw err;
+        }
+    })();
+
+    return { abort: () => controller.abort(), result };
+}
+
+export function importCSVCustom(
+    file: File,
+    bankName: string,
+    dateFormat: string,
+    dateColumn: string,
+    recipientColumn: string,
+    amountColumn: string,
+    memoColumn?: string,
+    separator: string = ',',
+    encoding: string = 'utf-8',
+    skipRows: number = 0,
+): Promise<{ batch_id: string; imported: number; duplicates: number; total_processed: number; message: string }> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('bank_name', bankName);
+    queryParams.append('date_format', dateFormat);
+    queryParams.append('date_column', dateColumn);
+    queryParams.append('recipient_column', recipientColumn);
+    queryParams.append('amount_column', amountColumn);
+    if (memoColumn) queryParams.append('memo_column', memoColumn);
+    queryParams.append('separator', separator);
+    queryParams.append('encoding', encoding);
+    queryParams.append('skip_rows', skipRows.toString());
+    return postMultipartImport('/api/import/csv/custom', file, queryParams);
+}
+
+export function importRecipients(
+    file: File,
+    separator: string = ',',
+    encoding: string = 'utf-8',
+): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
+    const queryParams = new URLSearchParams({ separator, encoding });
+    return postMultipartImport('/api/import/recipients', file, queryParams);
+}
+
+export function importCategories(
+    file: File,
+    separator: string = ',',
+    encoding: string = 'utf-8',
+): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
+    const queryParams = new URLSearchParams({ separator, encoding });
+    return postMultipartImport('/api/import/categories', file, queryParams);
+}

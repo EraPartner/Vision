@@ -2,12 +2,15 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-04-16
+date: 2026-04-23
 tags:
   - api
   - splits
   - transactions
   - debt
+  - phase-9
+  - decimal
+  - money
 aliases:
   - splits-api
   - owes
@@ -31,6 +34,10 @@ Endpoints for transaction splitting and debt tracking. Allows splitting expenses
 /api/splits
 ```
 
+## Monetary Precision (Phase 9)
+
+All monetary values in split responses (amounts, outstanding, paid) use **Decimal.js** for precision to eliminate IEEE 754 floating-point drift. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/features/splits|Splits Feature]] for details.
+
 ## Validation Rules
 
 ### Split Allocation
@@ -38,7 +45,7 @@ Endpoints for transaction splitting and debt tracking. Allows splitting expenses
 - Split amounts must be **positive numbers**.
 - The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
 - Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/services/calculations/splits.js]]).
-- Floating-point tolerance: amounts are rounded to cents (CENT_TOLERANCE = 0.005) to guard against JSON round-tripping artifacts.
+- Phase 9: Decimal.js enforcement eliminates floating-point tolerance checks; legacy CENT_TOLERANCE = 0.005 kept for backward compatibility.
 - If a transaction does not exist, split creation returns `404`.
 
 ### Payment Validation

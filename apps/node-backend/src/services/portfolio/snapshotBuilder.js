@@ -55,11 +55,11 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     fxResult,
   ] = await Promise.all([
     query(`
-      SELECT id, COALESCE(currency, 'EUR') AS currency,
-             COALESCE(current_price, 0) AS current_price, asset_class
-      FROM investments
-      WHERE is_active = true
-        AND asset_class IN ('stock', 'etf', 'crypto', 'metals')
+      SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
+             COALESCE(i.current_price, 0) AS current_price, i.asset_class
+      FROM investments i
+      WHERE i.is_active = true
+        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
     `),
     query(`
       SELECT pt.investment_id,

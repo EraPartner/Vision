@@ -85,6 +85,7 @@ vi.mock('../../src/config/logger.js', () => ({
 import investmentRepository from '../../src/repositories/investmentRepository.js';
 import portfolioTransactionRepository from '../../src/repositories/portfolioTransactionRepository.js';
 import { fetchHistoricalPrices, fetchLivePricesDetailed } from '../../src/services/priceProviderService.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/investments.js');
 
 let nowSpy;
@@ -92,6 +93,11 @@ let nowSpy;
 function mockResponse() {
   const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), end: vi.fn() };
   res.status.mockReturnValue(res);
+  res.ok = (data, meta) => {
+    const body = { ok: true, data };
+    if (meta) body.meta = meta;
+    return res.json(body);
+  };
   return res;
 }
 
@@ -134,15 +140,21 @@ describe('Investment Routes', () => {
 
       const resA1 = mockResponse();
       await routeHandlers['get:/transactions'](reqLimit10, resA1);
-      expect(resA1.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultA, limit: 10 }));
+      expect(resA1.json).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ items: repoResultA, limit: 10 }),
+      }));
 
       const resA2 = mockResponse();
       await routeHandlers['get:/transactions'](reqLimit10, resA2);
-      expect(resA2.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultA, limit: 10 }));
+      expect(resA2.json).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ items: repoResultA, limit: 10 }),
+      }));
 
       const resB = mockResponse();
       await routeHandlers['get:/transactions'](reqLimit20, resB);
-      expect(resB.json).toHaveBeenCalledWith(expect.objectContaining({ items: repoResultB, limit: 20 }));
+      expect(resB.json).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ items: repoResultB, limit: 20 }),
+      }));
 
       expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenCalledTimes(2);
       expect(portfolioTransactionRepository.getAllByInvestmentIds).toHaveBeenNthCalledWith(
@@ -169,8 +181,8 @@ describe('Investment Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const data = res.json.mock.calls[0][0];
-      expect(data.items).toHaveLength(1);
-      expect(data.total).toBe(1);
+      expect(data.data.items).toHaveLength(1);
+      expect(data.data.total).toBe(1);
     });
 
     it('should return empty list', async () => {
@@ -180,7 +192,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].items).toEqual([]);
+      expect(res.json.mock.calls[0][0].data.items).toEqual([]);
     });
 
     it('should respect pagination and filters', async () => {
@@ -195,14 +207,12 @@ describe('Investment Routes', () => {
       }));
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
       const req = { query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -218,30 +228,24 @@ describe('Investment Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('should return 400 for missing required fields', async () => {
+    it('should throw ValidationError for missing required fields', async () => {
       const req = { body: { name: 'Bitcoin' } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 400 for missing name', async () => {
+    it('should throw ValidationError for missing name', async () => {
       const req = { body: { asset_class: 'crypto' } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.create.mockRejectedValue(new Error('DB error'));
 
       const req = { body: { name: 'Bitcoin', asset_class: 'crypto' } };
       const res = mockResponse();
-      await routeHandlers['post:/'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -253,8 +257,8 @@ describe('Investment Routes', () => {
       await routeHandlers['get:/providers'](req, res);
 
       const data = res.json.mock.calls[0][0];
-      expect(data.providers).toBeDefined();
-      expect(data.providers.length).toBeGreaterThan(0);
+      expect(data.data.providers).toBeDefined();
+      expect(data.data.providers.length).toBeGreaterThan(0);
     });
   });
 
@@ -271,7 +275,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/refresh-prices'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.updated).toBe(1);
       expect(data.priceSources).toEqual({ 1: 'live' });
       expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
@@ -287,7 +291,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/refresh-prices'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.updated).toBe(0);
       expect(data.prices).toEqual({ 1: 123.45 });
       expect(data.priceSources).toEqual({ 1: 'cached' });
@@ -305,7 +309,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/refresh-prices'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.total).toBe(1);
       expect(data.updated).toBe(1);
       expect(investmentRepository.updatePrice).toHaveBeenCalledTimes(1);
@@ -322,7 +326,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/refresh-prices'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.total).toBe(1);
       expect(data.updated).toBe(1);
       expect(data.prices).toEqual({ 1: 101.25 });
@@ -339,21 +343,19 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/refresh-prices'](req, res);
 
-      expect(res.json.mock.calls[0][0].updated).toBe(0);
+      expect(res.json.mock.calls[0][0].data.updated).toBe(0);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.getAll.mockRejectedValue(new Error('DB error'));
 
       const req = { body: {} };
       const res = mockResponse();
-      await routeHandlers['post:/refresh-prices'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/refresh-prices'](req, res)).rejects.toThrow('DB error');
     });
   });
 
-  // ── GET /api/investments/:id ───────────────────────────────
+  // ── GET /api/investments/:id/price-history ─────────────────
   describe('GET /:id/price-history', () => {
     it('should return custom provider history', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 12, price_provider: 'custom' });
@@ -370,9 +372,12 @@ describe('Investment Routes', () => {
         { fromMs: 1699999999999, toMs: 1700000000001, dbOnly: false }
       );
       expect(res.json).toHaveBeenCalledWith({
-        investment_id: 12,
-        provider: 'custom',
-        points: [{ timestampMs: 1700000000000, price: 700 }],
+        ok: true,
+        data: {
+          investment_id: 12,
+          provider: 'custom',
+          points: [{ timestampMs: 1700000000000, price: 700 }],
+        },
       });
     });
   });
@@ -386,27 +391,23 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].name).toBe('Bitcoin');
+      expect(res.json.mock.calls[0][0].data.name).toBe('Bitcoin');
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '999' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.getById.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/:id'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -419,39 +420,33 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['patch:/:id'](req, res);
 
-      expect(res.json.mock.calls[0][0].name).toBe('Updated');
+      expect(res.json.mock.calls[0][0].data.name).toBe('Updated');
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.update.mockResolvedValue(null);
 
       const req = { params: { id: '999' }, body: { name: 'Updated' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.update.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, body: { name: 'Updated' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('should return 400 for validation errors', async () => {
+    it('should throw ValidationError for validation errors', async () => {
       const err = new Error('symbol must be unique');
       err.code = 'VALIDATION_ERROR';
       investmentRepository.update.mockRejectedValue(err);
 
       const req = { params: { id: '1' }, body: { symbol: 'AAPL' } };
       const res = mockResponse();
-      await routeHandlers['patch:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['patch:/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
@@ -467,24 +462,20 @@ describe('Investment Routes', () => {
       expect(res.status).toHaveBeenCalledWith(204);
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       investmentRepository.hardDelete.mockResolvedValue(false);
 
       const req = { params: { id: '999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await routeHandlers['delete:/:id'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['delete:/:id'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -500,7 +491,7 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id/transactions'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.items).toHaveLength(1);
       expect(data.total).toBe(1);
     });
@@ -517,14 +508,12 @@ describe('Investment Routes', () => {
       );
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       portfolioTransactionRepository.getAllWithCount.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, query: {} };
       const res = mockResponse();
-      await routeHandlers['get:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/:id/transactions'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -563,27 +552,23 @@ describe('Investment Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('should return 404 if investment not found', async () => {
+    it('should throw NotFoundError if investment not found', async () => {
       investmentRepository.getById.mockResolvedValue(null);
 
       const req = { params: { id: '999' }, body: { type: 'buy', date: '2026-01-15', amount: 1000 } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should return 400 for missing required fields', async () => {
+    it('should throw ValidationError for missing required fields', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
 
       const req = { params: { id: '1' }, body: { type: 'buy' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should return 400 when repository raises validation error', async () => {
+    it('should throw ValidationError when repository raises validation error', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
       const err = new Error('For buy/sell transactions, provide at least two of amount, units, and price_per_unit');
       err.code = 'VALIDATION_ERROR';
@@ -591,20 +576,16 @@ describe('Investment Routes', () => {
 
       const req = { params: { id: '1' }, body: { type: 'buy', date: '2026-01-15' } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       investmentRepository.getById.mockResolvedValue({ id: 1, currency: 'EUR' });
       portfolioTransactionRepository.create.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' }, body: { type: 'buy', date: '2026-01-15', amount: 1000 } };
       const res = mockResponse();
-      await routeHandlers['post:/:id/transactions'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['post:/:id/transactions'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -621,33 +602,27 @@ describe('Investment Routes', () => {
       expect(res.status).toHaveBeenCalledWith(204);
     });
 
-    it('should return 404 for non-existent', async () => {
+    it('should throw NotFoundError for non-existent', async () => {
       portfolioTransactionRepository.getById.mockResolvedValue(null);
 
       const req = { params: { txnId: '999' } };
       const res = mockResponse();
-      await routeHandlers['delete:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should return 400 for invalid ID', async () => {
+    it('should throw ValidationError for invalid ID', async () => {
       const req = { params: { txnId: 'abc' } };
       const res = mockResponse();
-      await routeHandlers['delete:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       portfolioTransactionRepository.getById.mockResolvedValue({ id: 1, investment_id: 10 });
       portfolioTransactionRepository.hardDelete.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { txnId: '1' } };
       const res = mockResponse();
-      await routeHandlers['delete:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['delete:/transactions/:txnId'](req, res)).rejects.toThrow('DB error');
     });
   });
 
@@ -661,47 +636,39 @@ describe('Investment Routes', () => {
       await routeHandlers['patch:/transactions/:txnId'](req, res);
 
       expect(portfolioTransactionRepository.update).toHaveBeenCalledWith(1, { amount: 1200 });
-      expect(res.json).toHaveBeenCalledWith({ id: 1, amount: 1200 });
+      expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 1, amount: 1200 } });
     });
 
-    it('should return 404 for non-existent transaction', async () => {
+    it('should throw NotFoundError for non-existent transaction', async () => {
       portfolioTransactionRepository.update.mockResolvedValue(null);
 
       const req = { params: { txnId: '999' }, body: { amount: 1200 } };
       const res = mockResponse();
-      await routeHandlers['patch:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(404);
+      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('should return 400 for invalid ID', async () => {
+    it('should throw ValidationError for invalid ID', async () => {
       const req = { params: { txnId: 'abc' }, body: { amount: 1200 } };
       const res = mockResponse();
-      await routeHandlers['patch:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       portfolioTransactionRepository.update.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { txnId: '1' }, body: { amount: 1200 } };
       const res = mockResponse();
-      await routeHandlers['patch:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toThrow('DB error');
     });
 
-    it('should return 400 for validation errors', async () => {
+    it('should throw ValidationError for validation errors', async () => {
       const err = new Error('Validation failed');
       err.code = 'VALIDATION_ERROR';
       portfolioTransactionRepository.update.mockRejectedValue(err);
 
       const req = { params: { txnId: '1' }, body: { amount: 1200 } };
       const res = mockResponse();
-      await routeHandlers['patch:/transactions/:txnId'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      await expect(routeHandlers['patch:/transactions/:txnId'](req, res)).rejects.toBeInstanceOf(ValidationError);
     });
   });
 
@@ -716,19 +683,17 @@ describe('Investment Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id/summary'](req, res);
 
-      const data = res.json.mock.calls[0][0];
+      const data = res.json.mock.calls[0][0].data;
       expect(data.investment_id).toBe(1);
       expect(data.breakdown).toHaveLength(1);
     });
 
-    it('should handle errors with 500', async () => {
+    it('should handle errors', async () => {
       portfolioTransactionRepository.getSummary.mockRejectedValue(new Error('DB error'));
 
       const req = { params: { id: '1' } };
       const res = mockResponse();
-      await routeHandlers['get:/:id/summary'](req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      await expect(routeHandlers['get:/:id/summary'](req, res)).rejects.toThrow('DB error');
     });
   });
 });

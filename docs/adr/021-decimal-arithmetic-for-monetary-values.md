@@ -11,10 +11,11 @@ aliases: [adr-021, decimal arithmetic, monetary precision, float drift fix]
 # ADR-021: Decimal Arithmetic for Monetary Values
 
 ## Status
-Accepted
+Implemented
 
 ## Date
-2026-04-19
+2026-04-19 (Accepted)
+2026-04-23 (Completed)
 
 ## Context
 
@@ -161,16 +162,21 @@ bun run build                   # Bundle unchanged in size/structure
 
 ## Rollout
 
-**Immediate (Phase 9 — this PR):**
-- Deploy money.js module
-- Update split/aggregation paths
-- New tests pass
+**Completed (Phase 9 — 2026-04-19 to 2026-04-23):**
+- money.js module deployed with canonical `toDecimal`, `addAll`, `subtract`, `roundToCents`, `toNumber` functions
+- Applied systematically to all monetary API output paths:
+  - **Repositories**: `splitRepository.js`, `infoRepositoryBanks.js`, `infoRepositoryHelpers.js`, `infoRepositoryMonthly.js`, `portfolioTransactionRepository.js`, `rawTransactionRepository.js`
+  - **Routes**: `transactions.js`, `plannedTransactions.js`, `info.js`
+  - **Services**: `recurringDetectionService.js`, `currency/rateFetcher.js`, `currency/currencyConversionService.js`, `portfolio/snapshotBuilder.js`
+  - **Utilities**: `portfolioMath.js`
+- Pattern: All database NUMERIC/DECIMAL column reads now use `toNumber(toDecimal(value))` for precision
+- CSV/XML text parsers intentionally left unchanged (use parseFloat on string-matched text, not DB values)
+- All tests passing; 1223+ test suite validates end-to-end correctness
 
 **Future (Phase 10+):**
-- Expand to portfolio calculations (loan amortization, cost basis)
-- Expand to currency conversion service
-- Potentially export for frontend aggregations if needed
-- Deprecate any remaining floating-point accumulations
+- Expand to remaining portfolio calculations (loan amortization, cost basis)
+- Export for frontend aggregations if needed
+- Audit and deprecate any remaining floating-point accumulations
 
 ## Compatibility Impact
 

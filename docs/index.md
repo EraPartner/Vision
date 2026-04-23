@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-21
-tags: [knowledge-base, index, project, overview]
-description: Main entry point to the Vision project documentation - financial transaction management application
+date: 2026-04-23
+tags: [knowledge-base, index, project, overview, phase-3]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 3.1 infoRepository split complete.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -182,6 +182,26 @@ See [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017]], [[docs/adr/01
 - **Font optimization**: Swapped `@fontsource-variable/*` → `@fontsource/*` static weights (400/500/600 latin), reducing font file size.
 
 See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]]
+
+### 2026-04-23 Phase 3.1 - Backend Repository Split + Batch FX Optimization (infoRepository)
+
+- **infoRepository.js Monolith → Composite Module**: Original 1445-line monolithic `infoRepository.js` split into 7 domain-specific sub-modules for improved maintainability and clarity:
+  - `infoRepositoryHelpers.js` (194 lines) — Shared utilities: mvCache, rounding, date/aggregation/category/currency helpers, spike sanitization, `batchConvertGroupsWithHistoricalRateFallback()`
+  - `infoRepositoryStatistics.js` (186 lines) — Statistics: `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`
+  - `infoRepositoryMonthly.js` (484 lines) — Monthly aggregations: `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison` (now with parallel queries + batch FX)
+  - `infoRepositoryBanks.js` (145 lines) — Bank operations: `getBankBalances` (now with parallel queries + batch FX)
+  - `infoRepositoryNetWorth.js` (233 lines) — Net worth: `getNetWorthFromSnapshots` with snapshot-based calculation and spike sanitization
+  - `infoRepositoryPlanned.js` (94 lines) — Planned operations: `getPlannedExpensesNextMonth`
+  - `infoRepositoryRecipients.js` (124 lines) — Recipient analytics: `getRecipientInsights`
+- **Backward Compatibility**: Barrel re-export in main `infoRepository.js` (37 lines) maintains API transparency; all 9 consumer files import unchanged
+- **Shared Utility Consolidation**: Helpers eliminate duplicated patterns across aggregation endpoints (FX conversion fallback, date formatting, category merging, rounding, row mapping)
+- **Batch FX Conversion**: New `batchConvertGroupsWithHistoricalRateFallback()` helper combines N row groups into 1 `convertRowsToEur` query, eliminating redundant exchange_rates lookups:
+  - `getCashflowComparison`: 4 sequential queries → `Promise.all` + 1 batch FX call (saved 3 exchange_rates queries)
+  - `getAverageVsCurrentSpending`: 2 sequential queries → `Promise.all` (FX already cached)
+  - `getBankBalances`: 2 sequential queries → `Promise.all` + 1 batch FX call (saved 1 exchange_rates query)
+- **Testing**: 1223 tests pass; all endpoint contracts and behavior unchanged
+
+See [[docs/reference/repository-layer|Repository Layer Reference]], [[docs/architecture/backend-architecture|Backend Architecture]], [[docs/api/info|Info & Analytics API]]
 
 ### 2026-04-17 Phase 3.5 & 3.6 - Metals DRY Refactor & Watchlist API Integration
 

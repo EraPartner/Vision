@@ -75,8 +75,8 @@ describe('createErrorHandler', () => {
     handler(new ValidationError('email required'), req, res, () => {});
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      detail: 'email required',
-      error_code: 'VALIDATION_ERROR',
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', message: 'email required' },
     });
   });
 
@@ -85,8 +85,8 @@ describe('createErrorHandler', () => {
     handler(new NotFoundError('recipe not found'), req, res, () => {});
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({
-      detail: 'recipe not found',
-      error_code: 'NOT_FOUND',
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'recipe not found' },
     });
   });
 
@@ -95,8 +95,8 @@ describe('createErrorHandler', () => {
     handler(new Error('DB password wrong'), req, res, () => {});
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({
-      detail: 'An internal server error occurred. Please try again later.',
-      error_code: 'INTERNAL_SERVER_ERROR',
+      ok: false,
+      error: { code: 'INTERNAL_SERVER_ERROR', message: 'An internal server error occurred. Please try again later.' },
     });
   });
 
@@ -105,8 +105,8 @@ describe('createErrorHandler', () => {
     handler(new Error('DB password wrong'), req, res, () => {});
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({
-      detail: 'DB password wrong',
-      error_code: 'INTERNAL_SERVER_ERROR',
+      ok: false,
+      error: { code: 'INTERNAL_SERVER_ERROR', message: 'DB password wrong' },
     });
   });
 
@@ -115,8 +115,8 @@ describe('createErrorHandler', () => {
     handler(new AppError('internal integrity check', { status: 503, code: 'UPSTREAM_DOWN' }), req, res, () => {});
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({
-      detail: 'An internal server error occurred. Please try again later.',
-      error_code: 'UPSTREAM_DOWN',
+      ok: false,
+      error: { code: 'UPSTREAM_DOWN', message: 'An internal server error occurred. Please try again later.' },
     });
   });
 });

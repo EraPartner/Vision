@@ -22,6 +22,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { parseYmd } from "@/lib/timezone";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -195,7 +196,7 @@ export default function PortfolioOverviewPage() {
       const signed = txn.type === 'sell' ? -amount : amount;
       const ccy = investmentCurrency.get(txn.investment_id) || targetCurrency;
       const inTarget = convertToTarget(signed, ccy);
-      const txnDate = new Date(txn.date);
+      const txnDate = parseYmd(txn.date);
       txnDate.setHours(0, 0, 0, 0);
       const ms = txnDate.getTime();
       if (ms < startMs) {

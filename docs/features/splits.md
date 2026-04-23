@@ -2,11 +2,11 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-04-16
-tags: [feature, splits, owes, debts, shared-expenses, phase-4]
-description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail
+date: 2026-04-22
+tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, decimal, money]
+description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
-related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
+related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
 
 # Feature: Splits & Owes
@@ -97,7 +97,7 @@ Phase 4 introduces pure calculation functions in [[apps/node-backend/src/service
 
 1. **Split allocation** — The sum of splits on a transaction cannot exceed the transaction's absolute amount.
 2. **Payment amount** — The sum of payments on a split cannot exceed the split's amount.
-3. **Floating-point tolerance** — Use `CENT_TOLERANCE = 0.005` to guard against JSON round-tripping artifacts.
+3. **Decimal precision** — All monetary calculations use [[docs/adr/021-decimal-arithmetic-for-monetary-values|Decimal.js]] (Phase 9) to eliminate floating-point drift. Legacy tolerance checks `CENT_TOLERANCE = 0.005` are now redundant but kept for backward compatibility with pre-Phase-9 imports.
 
 ### Key Functions
 

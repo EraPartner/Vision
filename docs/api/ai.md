@@ -2,7 +2,7 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-04-21
+date: 2026-04-23
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with 30 tool-calling tools
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -154,9 +154,14 @@ Non-streaming chat turn — runs the tool loop to completion then returns the fu
 
 ## POST /api/ai/chat/stream
 
-Same contract as `/chat` but streamed over Server-Sent Events. Mirror of the CSV-import SSE pattern.
+Same contract as `/chat` but streamed over Server-Sent Events. Uses backpressure-aware writer (Phase 3.2) to prevent unbounded memory growth.
 
 **Request headers / body:** identical to `/chat`. **Response:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
+
+**Backpressure Handling (Phase 3.2):**
+- Server uses `createSseWriter(req, res)` [[apps/node-backend/src/lib/sse.js]] to track client lifecycle and propagate TCP write buffer backpressure.
+- When Node.js signals write buffer is full (`res.writableNeedDrain`), `await writer.write()` pauses the token-streaming loop until the kernel drains pending data, preventing memory exhaustion.
+- If client disconnects mid-stream, the server stops writing immediately and no further frames are emitted.
 
 ### Event Sequence
 

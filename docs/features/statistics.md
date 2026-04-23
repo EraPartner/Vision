@@ -2,17 +2,17 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-04-02
-tags: [feature, statistics, analytics, charts, frontend, backend]
-description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, and saved custom charts
+date: 2026-04-23
+tags: [feature, statistics, analytics, charts, frontend, backend, refactor]
+description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, and saved custom charts. Refactored (Apr 2026) into composable sub-components with shared utilities.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
+  - apps/frontend/src/components/statistics/
   - apps/frontend/src/hooks/useStatistics.ts
+  - apps/frontend/src/hooks/useChartCurrencyFormatter.ts
   - apps/frontend/src/hooks/statisticsProcessing.ts
   - apps/frontend/src/hooks/useSavedCharts.ts
-  - apps/frontend/src/components/statistics/RecipientInsightsTab.tsx
-  - apps/frontend/src/components/statistics/CustomCategoryChart.tsx
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/repositories/infoRepository.js
 ---
@@ -23,12 +23,63 @@ related_code:
 
 The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 4 tabbed sections.
 
+## Refactoring (April 2026)
+
+The Statistics page was refactored from a 920-line monolith into a thin 232-line orchestrator that composes sub-components from `apps/frontend/src/components/statistics/`. This improves testability, reusability, and maintainability while preserving all functionality.
+
 ## Current Status (Phase 2, April 2026)
 
 > [!warning] Dashboard Stat Cards vs. Statistics Page
 > **Phase 2 (April 2026) updated only the Dashboard stat cards** to use `/api/aggregations/monthly-summary`. The full **Statistics page remains on client-side computation** (blocked on MV history extension). See [[docs/api/aggregations|Aggregations API]] for dashboard details.
 
+> [!info] Component Refactoring Complete
+> **April 2026 refactored StatisticsPage** into a thin orchestrator + 11 composable sub-components. See [[#component-architecture|Component Architecture]] below.
+
 ## Architecture
+
+### Component Architecture
+
+**Location:** `[[apps/frontend/src/components/statistics/]]`
+
+The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator that:
+
+1. Fetches data via `useStatistics()` hook
+2. Manages widget visibility via `useWidgetVisibility()` hook
+3. Composes 11 sub-components into 4 tabs
+
+**Sub-components:**
+
+| Component | Lines | Purpose | Tabs |
+|-----------|-------|---------|------|
+| `ChartCard.tsx` | 48 | Card wrapper with ExclusionToggle and render-prop children | All |
+| `SummaryCards.tsx` | 72 | 4-card KPI grid (income, spending, net, months tracked) | Overview |
+| `MonthlyChart.tsx` | 42 | Monthly income/spending bar chart | Overview |
+| `NetTrendChart.tsx` | 44 | Net balance area chart over time | Overview |
+| `CategoryPieChart.tsx` | 64 | Category spending donut chart (top 10, year-filterable) | Categories |
+| `CategoryTrendChart.tsx` | 50 | Top-5 category trend line chart | Categories |
+| `CategoryPivotTable.tsx` | 240 | Hierarchical pivot table with mode/year filters | Categories |
+| `TopRecipientsChart.tsx` | 67 | Top recipients horizontal bar chart (year-filterable) | Recipients |
+| `YearlyComparisonChart.tsx` | 41 | Year-over-year bar chart | Yearly |
+| `YearlySummaryTable.tsx` | 67 | Yearly summary table (income, spending, net, tx count) | Yearly |
+| `SavedChartsSection.tsx` | 42 | Renders saved custom category charts | All |
+| `RecipientInsightsTab.tsx` | 311 | Merchant spending insights (MoM alerts, filters) | Recipients |
+
+**Shared utilities:**
+
+| Export | File | Purpose |
+|--------|------|---------|
+| `STATISTICS_WIDGETS` | `statisticsUtils.ts` | Widget definitions (id, labelKey, defaultVisible) |
+| `PivotValueMode` type | `statisticsUtils.ts` | Mode union: `"absolute" \| "net" \| "income" \| "expense"` |
+| `formatPeriodLabel()` | `statisticsUtils.ts` | Format period "2026-03" → "Mar 2026" |
+| `formatPeriodShort()` | `statisticsUtils.ts` | Format period "2026-03" → "Mar 26" |
+
+**Shared hooks:**
+
+| Hook | File | Purpose |
+|------|------|---------|
+| `useChartCurrencyFormatter()` | `[[apps/frontend/src/hooks/useChartCurrencyFormatter.ts]]` | Shared currency formatting for all chart components (eliminates 8+ duplicated definitions) |
+
+See [[docs/components/statistics|Statistics Components]] for detailed component documentation.
 
 ### Data Flow (Statistics Page)
 

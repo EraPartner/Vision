@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseDecimal } from '@/lib/decimal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -111,7 +112,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         symbol: newInvestmentForm.symbol.trim(),
         asset_class: assetClass,
         currency: newInvestmentForm.currency,
-        current_price: parseFloat(newInvestmentForm.currentPrice),
+        current_price: parseDecimal(newInvestmentForm.currentPrice),
         notes: newInvestmentForm.notes.trim() || undefined,
         price_provider: 'yahoo',
         price_provider_id: quote.symbol,
@@ -125,15 +126,15 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   };
 
   const computedAmount = transactionForm.units && transactionForm.pricePerUnit
-    ? (parseFloat(transactionForm.units) * parseFloat(transactionForm.pricePerUnit)).toFixed(2)
+    ? (parseDecimal(transactionForm.units) * parseDecimal(transactionForm.pricePerUnit)).toFixed(2)
     : '';
 
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!existingInvestment) return;
     
-    const amount = parseFloat(transactionForm.amount || computedAmount);
-    if (!amount || isNaN(amount)) { 
+    const amount = parseDecimal(transactionForm.amount || computedAmount);
+    if (!amount || isNaN(amount)) {
       toast.error(t('addPortTxn.error.amountRequired'));
       return; 
     }
@@ -144,10 +145,10 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
         type: transactionForm.type,
         date: transactionForm.date,
         amount,
-        units: transactionForm.units ? parseFloat(transactionForm.units) : undefined,
-        price_per_unit: transactionForm.pricePerUnit ? parseFloat(transactionForm.pricePerUnit) : undefined,
-        fees: transactionForm.fees ? parseFloat(transactionForm.fees) : undefined,
-        taxes: transactionForm.taxes ? parseFloat(transactionForm.taxes) : undefined,
+        units: transactionForm.units ? parseDecimal(transactionForm.units) : undefined,
+        price_per_unit: transactionForm.pricePerUnit ? parseDecimal(transactionForm.pricePerUnit) : undefined,
+        fees: transactionForm.fees ? parseDecimal(transactionForm.fees) : undefined,
+        taxes: transactionForm.taxes ? parseDecimal(transactionForm.taxes) : undefined,
         currency: existingInvestment.currency,
         note: transactionForm.note.trim() || undefined,
         is_recurring: transactionForm.isRecurring,
