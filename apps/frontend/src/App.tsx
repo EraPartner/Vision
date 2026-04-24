@@ -38,6 +38,8 @@ const PerformancePage = lazy(() => import("./pages/portfolio/PerformancePage"));
 const NetWorthPage = lazy(() => import("./pages/portfolio/net-worth/NetWorthPage"));
 const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage"));
 const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
+const ReconciliationPage = lazy(() => import("./pages/ReconciliationPage"));
+const DbMaintenancePage = lazy(() => import("./pages/DbMaintenancePage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -120,6 +122,8 @@ const App = () => {
                                                     <Route path="/import" element={<ImportPage />} />
                                                     <Route path="/owes" element={<OwesPage />} />
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
+                                                    <Route path="/reconciliation" element={<ReconciliationPage />} />
+                                                    <Route path="/admin/db" element={<DbMaintenancePage />} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                     <Route path="/portfolio/market" element={<MarketLookupPage />} />

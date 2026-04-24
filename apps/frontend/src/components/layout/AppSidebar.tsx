@@ -34,6 +34,8 @@ import {
   Users,
   Wallet,
   ArrowLeftRight,
+  Database,
+  GitMerge,
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -81,12 +83,14 @@ export function AppSidebar() {
         { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
         { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
         { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
+        { title: t('nav.reconciliation'), url: "/reconciliation", icon: GitMerge },
       ],
     },
     {
       label: t('nav.data'),
       items: [
         { title: t('nav.importExport'), url: "/import", icon: Import },
+        { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
       ],
     },
   ];
