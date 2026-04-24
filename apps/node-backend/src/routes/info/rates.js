@@ -1,0 +1,104 @@
+/**
+ * FX + inflation rate endpoints:
+ *   - GET  /exchange-rates
+ *   - POST /exchange-rates/refresh
+ *   - GET  /inflation-rates
+ *   - POST /inflation-rates/refresh
+ */
+
+import { Router } from 'express';
+import { query as dbQuery } from '../../database/connection.js';
+import { logger } from '../../config/logger.js';
+import { rateLimiter, adminRateLimiter } from '../../middleware/rateLimiter.js';
+import {
+  FALLBACK_RATES,
+  warmCache,
+  clearMemoryCache,
+} from '../../services/currency/currencyConversionService.js';
+import {
+  getInflationRates,
+  clearInflationMemoryCache,
+} from '../../services/belgianInflationService.js';
+import { toDecimal, toNumber } from '../../lib/money.js';
+import {
+  getMonthParam,
+  isTruthyQueryParam,
+  getCurrentDateString,
+} from './_queryParams.js';
+
+const router = Router();
+
+router.get(
+  '/exchange-rates',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
+  async (req, res) => {
+    const result = await dbQuery(`
+      SELECT currency_code, rate_to_eur, rate_date, fetched_at
+      FROM exchange_rates
+      WHERE is_latest = true
+      ORDER BY currency_code ASC
+    `);
+
+    const rates = result.rows.map(row => ({
+      currency: row.currency_code,
+      rate_to_eur: toNumber(toDecimal(row.rate_to_eur)),
+      rate_date: row.rate_date instanceof Date ? row.rate_date.toISOString().split('T')[0] : String(row.rate_date),
+      fetched_at: row.fetched_at,
+    }));
+
+    const today = getCurrentDateString();
+    const storedDate = rates.length > 0 ? rates[0].rate_date : null;
+    if (!storedDate || storedDate < today) {
+      clearMemoryCache();
+      warmCache().catch((err) =>
+        logger.warn('Background exchange rate refresh failed', { error: err.message })
+      );
+    }
+
+    res.ok({
+      total_rates: rates.length,
+      rates,
+      fallback_rates: FALLBACK_RATES || {},
+    });
+  },
+);
+
+router.post('/exchange-rates/refresh', adminRateLimiter, async (req, res) => {
+  clearMemoryCache();
+  await warmCache();
+  res.ok({ message: 'Exchange rates refreshed from ECB' });
+});
+
+router.get(
+  '/inflation-rates',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'inflation-rates' }),
+  async (req, res) => {
+    const startMonth = getMonthParam(req.query.start_month);
+    const endMonth = getMonthParam(req.query.end_month);
+    const dbOnly = isTruthyQueryParam(req.query.db_only);
+    const result = await getInflationRates({
+      startMonth,
+      endMonth,
+      dbOnly,
+      scheduleBackgroundRefresh: dbOnly,
+    });
+
+    res.ok({
+      source: result.source,
+      total_rates: result.rates.length,
+      rates: result.rates,
+    });
+  },
+);
+
+router.post('/inflation-rates/refresh', adminRateLimiter, async (req, res) => {
+  clearInflationMemoryCache();
+  const result = await getInflationRates({ forceRefresh: true });
+  res.ok({
+    message: 'Belgian inflation rates refreshed from Statbel',
+    source: result.source,
+    total_rates: result.rates.length,
+  });
+});
+
+export default router;
