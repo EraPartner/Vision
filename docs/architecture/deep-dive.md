@@ -134,7 +134,7 @@ Import Pipeline:
 6. Create transactions (fixed)
 ```
 
-**Implementation:** [[apps/node-backend/src/services/importService.js]]
+**Implementation:** [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C unified orchestrator)
 
 ---
 

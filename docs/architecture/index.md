@@ -2,9 +2,9 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-04-23
-tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, and April 2026 Statistics page refactoring
+date: 2026-04-24
+tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, and Phase E component decomposition
 aliases: [architecture, diagrams, UML, system design]
 ---
 
@@ -178,6 +178,30 @@ The backend repository layer completed a major refactoring in Phase 3.1:
 Documentation:
 - [[docs/reference/repository-layer|Repository Layer Reference]] - Complete reference with dependency map
 - [[docs/performance/index|Performance Index]] - Phase 3.1 batch FX optimization details
+
+## Frontend Component Decomposition (Phase E)
+
+ImportPage component refactored from monolithic 1019 lines to modular architecture:
+
+**Structure:**
+- `apps/frontend/src/pages/ImportPage.tsx` (35 lines) — Thin orchestrator
+- `apps/frontend/src/features/imports/` (6 components + 1 hook, ~914 lines):
+  - `TransactionImportCard.tsx` (394 lines) — CSV import, SSE progress, column mapper, exports
+  - `RecipientsImportCard.tsx` (155 lines) — Bulk recipients import
+  - `CategoriesImportCard.tsx` (140 lines) — Categories import
+  - `ExportCard.tsx` (159 lines) — CSV/JSON export UI
+  - `SupportedBanksCard.tsx` (38 lines) — Read-only banks chip list
+  - `useAdapters.ts` (28 lines) — Shared hook prevents duplicate API calls
+
+**Benefits:**
+- High cohesion: each component has single responsibility
+- Low coupling: no prop-drilling; state stays with owner
+- Testability: each card independently testable
+- Reusability: components can be imported elsewhere
+
+Documentation:
+- [[docs/features/import#phase-e--frontend-component-decomposition-april-2026|Feature: Phase E Import Decomposition]]
+- [[docs/reference/agent-navigation-map#import-phase-e--component-decomposition|Agent Navigation Map: Import Components]]
 
 ## Frontend Design System (Phase 9)
 

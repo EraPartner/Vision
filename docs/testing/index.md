@@ -111,9 +111,12 @@ bun vitest run src/path/to/test.test.js
 
 ### Coverage update addendum (2026-04-11, adapters/raw import)
 
-- Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus raw-transaction import service fallback/delegation/routing paths.
-- Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/rawTransactionImportService.test.js]]
-- Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/rawTransactionImportService.js]]
+> [!info] Phase C Update (April 2026)
+> The raw transaction import service tests have been refactored as part of the Phase C consolidation into the unified `importPipeline` orchestrator. See import route tests and Feature: CSV Import for current implementation.
+
+- Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus import orchestration paths.
+- Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.js]] (Phase C)
+- Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 

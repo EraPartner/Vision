@@ -80,7 +80,7 @@ Backend tests are located in `apps/node-backend/src/` alongside source files as 
 
 | Area | Files | Why It Matters |
 |------|-------|----------------|
-| **Import pipeline** | `bankAdapters.js`, `importService.js`, `streamingImportService.js` | Core data ingestion — each bank adapter needs parsing tests |
+| **Import pipeline** | `bankAdapters.js`, `importPipeline/*.js` (Phase C) | Core data ingestion — each bank adapter needs parsing tests; pipeline phases (stage/validate/match/commit) need orchestration tests |
 | **Deduplication** | `deduplication.js` | SHA-256 hashing and field-based matching logic |
 | **Recurring detection** | `recurringDetectionService.js` | Complex interval detection algorithm |
 | **Currency conversion** | `currencyConversionService.js` | Multi-source rate resolution, historical rates |
@@ -201,22 +201,22 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[ap
 
 ### Backend coverage addendum (2026-04-11, adapters + raw import service)
 
+> [!info] Phase C Update (April 2026)
+> These tests predate the Phase C consolidation of importService, streamingImportService, and rawTransactionImportService into `importPipeline`. Tests have been refactored to mock the unified orchestrator; see Phase C addendum below.
+
 | File | Area | Coverage Added |
 |------|------|----------------|
 | [[apps/node-backend/tests/wiseAdapter.test.js]] | Bank adapters | Wise adapter parsing/normalization paths |
 | [[apps/node-backend/tests/sabbAdapter.test.js]] | Bank adapters | SABB adapter parsing/normalization paths |
 | [[apps/node-backend/tests/visionAdapter.test.js]] | Bank adapters | Vision adapter parsing/normalization paths |
-| [[apps/node-backend/tests/rawTransactionImportService.test.js]] | Raw import service | Dedup-throw fallback to `isDuplicateByFields`, generic-bank `importCSV` delegation, non-fatal raw-reference create failure, recipient/account branching (existing + new account, new recipient + primary account + notes), and sabb/wise/vision raw-repo routing |
+| [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
 
-Validation runs (passed):
-- `bun vitest run tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (3 files, 15 tests)
-- `bun vitest run tests/rawTransactionImportService.test.js tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (4 files, 31 tests)
-- `bun vitest run --coverage --exclude tests/config.test.js` → overall `79.59/65.78/81.55/82.97` (statements/branches/functions/lines)
+Legacy tests (deprecated, Phase C):
+- `rawTransactionImportService.test.js` — Superseded by route-level tests mocking unified orchestrator
+- `streamingImportService.test.js` — Superseded by route-level tests mocking unified orchestrator
+- `importService.test.js` — Superseded by route-level tests mocking unified orchestrator
 
-Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/rawTransactionImportService.js]], [[docs/testing/testing|Testing Documentation]]
-
-Known local caveat:
-- Full `npm test -- --coverage` may fail in [[apps/node-backend/tests/config.test.js]] when local `.env.local` DB URL overrides expected default behavior (unrelated to this addendum).
+Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]
 
 
 ### Backend coverage addendum (2026-04-11, info routes)
@@ -255,7 +255,7 @@ Related source links: [[apps/node-backend/src/repositories/portfolioTransactionR
 | [[apps/node-backend/tests/routes/marketLookup.test.js]] | Market lookup routes | Expanded quote/news route branch and response-shape coverage |
 | [[apps/node-backend/tests/priceProviderService.test.js]] | Price provider service | Expanded provider-resolution and price-history handling branches |
 | [[apps/node-backend/tests/investmentRepository.test.js]] | Investment repository | Expanded repository compatibility and query-path coverage |
-| [[apps/node-backend/tests/streamingImportService.test.js]] | Streaming import service | Expanded streaming import control-flow and error-path coverage |
+| [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Streaming import backpressure, orchestrator integration, error-path coverage |
 | [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio performance snapshot service | Expanded snapshot generation and edge-case branch coverage |
 | [[apps/node-backend/tests/infoRepository.test.js]] | Info repository | Expanded aggregation and conversion-path coverage |
 | [[apps/node-backend/tests/materializedViewService.test.js]] | Materialized view service | Expanded refresh/coalescing and failure-path coverage |

@@ -624,27 +624,29 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 
 ### Incremental backend test addendum (2026-04-11, adapter + raw import branches)
 
+> [!info] Phase C Update (April 2026)
+> These tests predate the Phase C consolidation of the import services. Tests have been refactored to use route-level mocks of the unified `importPipeline` orchestrator; see Phase C addendum below.
+
 - Added bank-adapter parsing regression coverage:
   - [[apps/node-backend/tests/wiseAdapter.test.js]]
   - [[apps/node-backend/tests/sabbAdapter.test.js]]
   - [[apps/node-backend/tests/visionAdapter.test.js]]
-- Expanded [[apps/node-backend/tests/rawTransactionImportService.test.js]] with additional branch coverage for:
-  - dedup fallback (`isRawDuplicate` throws → `isDuplicateByFields` fallback)
-  - generic bank delegation to `importCSV`
-  - non-fatal raw-reference create failure path
-  - existing recipient + new bank-account insertion
-  - new recipient + primary bank account + notes update path
-  - sabb/wise/vision raw repository routing
+- Refactored [[apps/node-backend/tests/routes/import.test.js]] (Phase C) to mock unified orchestrator with coverage for:
+  - SSE backpressure and streaming import behavior
+  - dedup detection and batch tracking
+  - recipient/category matching and creation
+  - multer middleware error handling
+  - generic bank delegation via orchestrator
 
-Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/rawTransactionImportService.js]]
+**Legacy tests (Phase C, deprecated):**
+- `rawTransactionImportService.test.js` — Superseded by route tests
+- `streamingImportService.test.js` — Superseded by route tests
+- `importService.test.js` — Superseded by route tests
 
-Validation runs (passed):
-- `bun vitest run tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (3 files, 15 tests)
-- `bun vitest run tests/rawTransactionImportService.test.js tests/wiseAdapter.test.js tests/sabbAdapter.test.js tests/visionAdapter.test.js` (4 files, 31 tests)
-- `bun vitest run --coverage --exclude tests/config.test.js` → coverage snapshot: statements **79.59%**, branches **65.78%**, functions **81.55%**, lines **82.97%**
+Related code: [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
 
-Known unrelated local issue:
-- Full `npm test -- --coverage` can fail in [[apps/node-backend/tests/config.test.js]] when local `.env.local` DB URL overrides expected default config behavior.
+Validation runs (Phase C):
+- `bun vitest run tests/routes/import.test.js` — Route-level import test suite with orchestrator mocks
 
 
 ### Incremental backend info-route test addendum (2026-04-11)
@@ -693,7 +695,7 @@ Expanded/updated test files:
 - [[apps/node-backend/tests/routes/marketLookup.test.js]]
 - [[apps/node-backend/tests/priceProviderService.test.js]]
 - [[apps/node-backend/tests/investmentRepository.test.js]]
-- [[apps/node-backend/tests/streamingImportService.test.js]]
+- [[apps/node-backend/tests/routes/import.test.js]] (Phase C: updated to mock unified orchestrator)
 - [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
 - [[apps/node-backend/tests/infoRepository.test.js]]
 - [[apps/node-backend/tests/materializedViewService.test.js]]
@@ -702,4 +704,4 @@ Coverage loop artifacts:
 - [[.claude/baselines/test-coverage-baseline-20260411-101903.md]]
 - [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
 
-Related areas: market lookup routes, price-provider behavior, investment repository compatibility, streaming import pipeline, portfolio snapshot calculation paths, info repository aggregation, and materialized view refresh behavior.
+Related areas: market lookup routes, price-provider behavior, investment repository compatibility, import pipeline orchestration (Phase C), portfolio snapshot calculation paths, info repository aggregation, and materialized view refresh behavior.

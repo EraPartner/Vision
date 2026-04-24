@@ -2,9 +2,9 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-04-21
-tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1]
-description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task
+date: 2026-04-24
+tags: [ai-agent, navigation, codebase-map, developer-tool, phase-1, phase-c, phase-e]
+description: Navigation map for AI agents and developers to quickly find code by feature, layer, or task. Updated for Phase C import pipeline consolidation and Phase E component decomposition.
 aliases: [agent navigation, codebase map, file map, navigation guide]
 ---
 
@@ -98,13 +98,29 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | API Doc | [[docs/api/splits]] |
 | Feature Doc | [[docs/features/splits]] |
 
-### Import
+### Import (Phase E — Component Decomposition)
 
-| Layer | Files |
-|-------|-------|
-| Frontend Page | [[apps/frontend/src/pages/ImportPage.tsx]] |
-| Backend Route | [[apps/node-backend/src/routes/importRoutes.js]] |
-| Backend Services | [[apps/node-backend/src/services/importService.js]], [[apps/node-backend/src/services/streamingImportService.js]], [[apps/node-backend/src/services/rawTransactionImportService.js]], [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/services/textNormalization.js]] |
+**Orchestrator Page:** [[apps/frontend/src/pages/ImportPage.tsx]] (35 lines, manages history refresh)
+
+**Feature Components** (apps/frontend/src/features/imports/):
+
+| Component | Lines | Responsibility |
+|-----------|-------|-----------------|
+| [[apps/frontend/src/features/imports/TransactionImportCard.tsx]] | 394 | Transaction CSV import, SSE progress, column mapper, export buttons |
+| [[apps/frontend/src/features/imports/RecipientsImportCard.tsx]] | 155 | Bulk recipients CSV import |
+| [[apps/frontend/src/features/imports/CategoriesImportCard.tsx]] | 140 | Categories CSV import |
+| [[apps/frontend/src/features/imports/ExportCard.tsx]] | 159 | CSV/JSON export UI |
+| [[apps/frontend/src/features/imports/SupportedBanksCard.tsx]] | 38 | Supported banks chip list (read-only) |
+| [[apps/frontend/src/features/imports/useAdapters.ts]] | 28 | Shared hook: fetch bank adapters (prevents duplicate API calls) |
+
+**Related Components:**
+| Component | Purpose |
+|-----------|---------|
+| [[apps/frontend/src/components/import/ImportHistoryCard.tsx]] | Import history view (composed in ImportPage) |
+| [[apps/frontend/src/components/import/CsvColumnMapper.tsx]] | CSV column mapping UI (used by TransactionImportCard) |
+
+**Backend Route** | [[apps/node-backend/src/routes/importRoutes.js]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/bankAdapters.js]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/services/textNormalization.js]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -240,27 +256,27 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Settings | [[apps/node-backend/src/repositories/settingsRepository.js]] |
 | Info | [[apps/node-backend/src/repositories/infoRepository.js]] |
 
-### Backend Services (16 files)
+### Backend Services (18 files)
 
 Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 
 | Service | File |
 |---------|------|
+| AI Chat | [[apps/node-backend/src/services/aiChatService.js]] |
 | Bank Adapters | [[apps/node-backend/src/services/bankAdapters.js]] |
 | Belgian Inflation | [[apps/node-backend/src/services/belgianInflationService.js]] |
 | Currency Conversion | [[apps/node-backend/src/services/currencyConversionService.js]] |
 | Data Import | [[apps/node-backend/src/services/dataImportService.js]] |
 | Deduplication | [[apps/node-backend/src/services/deduplication.js]] |
 | IBAN | [[apps/node-backend/src/services/iban.js]] |
-| Import | [[apps/node-backend/src/services/importService.js]] |
+| Import Pipeline | [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C) |
 | Loan Repayment | [[apps/node-backend/src/services/loanRepaymentService.js]] |
 | Materialized Views | [[apps/node-backend/src/services/materializedViewService.js]] |
 | Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] |
 | Price Provider | [[apps/node-backend/src/services/priceProviderService.js]] |
-| Raw Transaction Import | [[apps/node-backend/src/services/rawTransactionImportService.js]] |
+| Quote Backfill | [[apps/node-backend/src/services/quoteBackfillService.js]] |
 | Recurrence | [[apps/node-backend/src/services/recurrenceService.js]] |
 | Recurring Detection | [[apps/node-backend/src/services/recurringDetectionService.js]] |
-| Streaming Import | [[apps/node-backend/src/services/streamingImportService.js]] |
 | Text Normalization | [[apps/node-backend/src/services/textNormalization.js]] |
 
 ### Database
@@ -317,7 +333,8 @@ Directory: `alembic/versions/` — 24 numbered migrations from `0001_initial_dat
 
 1. Read [[docs/features/import|Import Feature]]
 2. Read [[docs/integrations/bank-adapters|Bank Adapters]]
-3. Trace: `importRoutes.js` → `streamingImportService.js` → `bankAdapters.js` → `deduplication.js`
+3. Trace: `importRoutes.js` → `importPipeline/index.js` (orchestrator) → stages: stage/validate/match/commit → `bankAdapters.js` → `deduplication.js`
+4. See [[docs/api/imports|Imports API]] for endpoint contracts (standard, custom, streaming)
 
 ### "I want to understand how prices are fetched"
 

@@ -3,8 +3,9 @@ title: Features Documentation Index
 type: features-index
 status: active
 date: 2026-04-24
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, statistics-refactoring, bank-reconciliation, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report]
-description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with bank reconciliation, cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export.
+updated: 2026-04-25
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-f, statistics-refactoring, bank-reconciliation, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, shadow-divergences, admin-observability]
+description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with bank reconciliation, cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase F adds admin observability dashboards for shadow divergence monitoring during aggregation migration.
 aliases: [features, capabilities]
 ---
 
@@ -69,8 +70,9 @@ SORT title ASC
 - [[docs/features/settings\|Settings]] - Application preferences with JSONB storage and preload optimization
 - [[docs/features/appearance\|Appearance]] - Theme variant selection with five color palettes, light/dark mode, and schedule-based transitions
 
-### Administration & Maintenance (Phase 7)
+### Administration & Maintenance (Phase 7 & Phase F)
 - [[docs/features/database-maintenance\|Database Maintenance]] - Table statistics monitoring and VACUUM operations
+- [[docs/features/admin-observability\|Admin Observability]] - Shadow divergence monitoring, feature flags, and system health dashboards (Phase F)
 
 ### AI & Natural Language
 - [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)

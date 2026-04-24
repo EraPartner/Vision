@@ -2,9 +2,9 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-04-21
-tags: [backend, services, reference, business-logic, phase-1]
-description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for snapshot-backed net worth computation, quoteBackfillService refactor, and AI Chat service.
+date: 2026-04-24
+tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline]
+description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, and AI Chat service.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -221,40 +221,65 @@ Repository Layer (SQL queries)
 
 ---
 
-## 7. importService.js
+## 7. importPipeline/ (Phase C)
 
-**File:** [[apps/node-backend/src/services/importService.js]]  
-**Purpose:** Orchestrates the standard CSV transaction import pipeline.
+**File:** [[apps/node-backend/src/services/importPipeline/index.js]]  
+**Purpose:** Unified orchestrator for all CSV transaction imports (standard, custom, and streaming). Replaced legacy `importService`, `streamingImportService`, and `rawTransactionImportService` in Phase C.
 
 ### Exported Functions
 
 | Function | Signature | Returns |
 |----------|-----------|---------|
-| `importCSV` | `(filePath, bankName, customConfig?) => Promise<{ total_processed, imported, duplicates, errors }>` | Import results |
+| `runImportPipeline` | `({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? }) => Promise<{ batchId, total, imported, duplicates, errors }>` | Import results with batch ID |
+| `createBatch` | `({ adapterName, filename?, sizeBytes?, customConfig? }) => Promise<number>` | Batch ID |
+| `stageBatch` | `({ batchId, filePath, adapterName, customConfig?, onProgress? }) => Promise<{ rowsTotal }>` | Staged row count |
+| `validateBatch` | `({ batchId, onProgress? }) => Promise<{ errors }>` | Validation error count |
+| `matchBatch` | `({ batchId, onProgress? }) => Promise<void>` | Recipients/categories matched |
+| `commitBatch` | `({ batchId, onProgress? }) => Promise<{ imported, duplicates, errors }>` | Final counts |
 
-### Pipeline
+### Pipeline Phases
 
 ```
-1. Read CSV file
-2. Detect bank format → select adapter
-3. Parse rows → RawTransaction[]
-4. Phase 1 (parallel, concurrency=20):
-   a. Deduplication check per row
-   b. Recipient resolution (normalized matching)
-5. Phase 2: Batch insert (250 rows per statement)
-6. Fire-and-forget: bank account linking, address storage
+createBatch → stageBatch → validateBatch → matchBatch → commitBatch → scheduleRefresh
 ```
 
-### Key Algorithms
+1. **Stage:** Parse CSV via bank adapter, store raw rows in `import_staging` table
+2. **Validate:** Check required fields, dedup hashes, mark invalid rows with errors
+3. **Match:** Look up or create recipients, categories, resolve aliases
+4. **Commit:** Insert canonical transactions, raw references, aggregate stats
+5. **Refresh:** Schedule non-blocking materialized view refresh
 
-- **Two-Phase Import:** Parallel dedup + resolution, then batch insert
-- **Optimistic Upsert:** `INSERT ... ON CONFLICT (normalized_name) DO NOTHING RETURNING id` reduces recipient lookups from 2-4 round-trips to 1-2
-- **Promise.allSettled:** One bad row does not abort the entire batch
-- **Concurrency Cap:** 20 concurrent operations during Phase 1
+### Key Features
+
+- **Idempotent Phases:** Each phase isolated; failure marks batch as `failed` without cascade
+- **Async Progress Callbacks:** `onProgress` callback is `await`-ed, propagates SSE backpressure into pipeline
+- **Batch Persistence:** All imports assigned `batchId`, tracked in `import_batches` table for history/rollback
+- **Adaptive Concurrency:** Row batches processed with `Math.max(2, Math.floor(poolMax / 2))` concurrency based on DB pool size
+- **Error Sanitization:** Generic error messages prevent internal exception leakage
+
+### Sub-modules
+
+| Module | Export | Purpose |
+|--------|--------|---------|
+| `stage.js` | `stageBatch()` | CSV parsing and row staging |
+| `validate.js` | `validateBatch()` | Field validation and dedup detection |
+| `match.js` | `matchBatch()` | Recipient/category lookup or creation |
+| `commit.js` | `commitBatch()` | Transaction insertion and accounting |
 
 ### Dependencies
 - `bankAdapters.js`, `deduplication.js`, `textNormalization.js`
-- `connection.js`, `logger.js`
+- `materializedViewService.js` (post-pipeline refresh)
+- `importBatchRepository.js`, `connection.js`, `logger.js`
+
+### Related Services (Deprecated, Phase C)
+
+> [!warning] Deprecated
+> The following services are no longer used by active code paths but remain in codebase for backwards compatibility:
+> - `importService.js` — legacy sequential import
+> - `streamingImportService.js` — legacy streaming with callbacks
+> - `rawTransactionImportService.js` — legacy raw data orchestrator
+> 
+> All functionality consolidated into `importPipeline`.
 
 ---
 
@@ -463,37 +488,25 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 
 ---
 
-## 13. rawTransactionImportService.js
+## 13. rawTransactionImportService.js (Deprecated — Phase C)
+
+> [!warning] Deprecated Service
+> **Status:** Superseded by `importPipeline` (Phase C). Functionality consolidated into `importPipeline/commit.js`.
+> 
+> Remains in codebase for backwards compatibility; not used by active routes.
 
 **File:** [[apps/node-backend/src/services/rawTransactionImportService.js]]  
-**Purpose:** Imports CSV transactions while preserving raw data in bank-specific tables for audit trail.
+**Previous Purpose:** Imported CSV transactions while preserving raw data in bank-specific tables for audit trail.
 
-### Exported Functions
+**Current Implementation:** `importPipeline` handles raw data preservation in the **commit phase**. The pipeline's `commitBatch()` function inserts canonical transactions and raw references in a single coordinated operation with proper error handling and batch tracking.
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `importCSVWithRawStorage` | `(filePath, bankName, customConfig?) => Promise<ImportResult>` | Import results with raw references |
-
-### Architecture
-
-```
-CSV → Parse → Raw Data (bank-specific table)
-                ↓
-         Normalized Transaction (transactions table)
-                ↓
-         Raw Reference Link (raw_references table)
-```
-
-### Key Algorithms
-
+**Key features now in importPipeline:**
 - **Dual Storage:** Raw data in bank-specific tables + normalized transactions, linked via `raw_references`
-- **Hash-based Raw Dedup:** SHA-256 hash of raw CSV line checked before insert
-- **Sequential Processing:** One row at a time to maintain ordering
-- **Graceful Degradation:** Falls back to field-based dedup if raw tables don't exist
+- **Hash-based Raw Dedup:** SHA-256 hash validation moved to **validate phase**
+- **Atomic Commits:** Transaction + raw reference insertion coordinated in single batch
+- **Batch Persistence:** All imports tracked in `import_batches` table
 
-### Dependencies
-- `bankAdapters.js`, `rawTransactionRepository.js`, `textNormalization.js`
-- `connection.js`, `logger.js`
+See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipeline Orchestrator]] for current implementation details.
 
 ---
 
@@ -546,37 +559,25 @@ CSV → Parse → Raw Data (bank-specific table)
 
 ---
 
-## 16. streamingImportService.js
+## 16. streamingImportService.js (Deprecated — Phase C)
+
+> [!warning] Deprecated Service
+> **Status:** Superseded by `importPipeline` (Phase C). Functionality consolidated into unified import orchestrator.
+> 
+> Remains in codebase for backwards compatibility; not used by active routes.
 
 **File:** [[apps/node-backend/src/services/streamingImportService.js]]  
-**Purpose:** Imports CSV transactions with real-time progress reporting via callbacks.
+**Previous Purpose:** Imported CSV transactions with real-time progress reporting via callbacks.
 
-### Exported Functions
+**Current Implementation:** `importPipeline` handles streaming imports via the **streaming endpoint** (`POST /api/import/csv/stream`). The pipeline's `runImportPipeline()` function accepts an `onProgress` callback (async) that propagates backpressure from `createSseWriter()` into the batch processing loop.
 
-| Function | Signature | Returns |
-|----------|-----------|---------|
-| `importCSVStreaming` | `(filePath, bankName, customConfig?, onProgress) => Promise<ImportResult>` | Import results with progress events |
+**Key features now in importPipeline:**
+- **Phase-based Progress Events:** Staging → validating → matching → committing (not raw line counts)
+- **Async Backpressure:** Progress callbacks are `await`-ed to propagate TCP socket backpressure
+- **Adaptive Concurrency:** Row batches processed with `Math.max(2, Math.floor(poolMax / 2))` based on DB pool size
+- **Batch Persistence:** All imports tracked in `import_batches` table with `batchId`
 
-### Progress Events
-
-| Phase | Description |
-|-------|-------------|
-| `counting` | Streaming line count via `fs.createReadStream` |
-| `parsing` | CSV parsing progress |
-| `importing` | 10-95% progress during batch processing |
-| `complete` | Final results |
-| `error` | Error details |
-
-### Key Algorithms
-
-- **Parallel Batch Processing:** 20 rows concurrently per batch via `Promise.allSettled`
-- **Streaming Line Count:** Uses `fs.createReadStream` to count lines without loading entire file
-- **Single-Round-Trip Raw Dedup:** `ON CONFLICT DO NOTHING RETURNING *`; null return means duplicate
-- **Fire-and-Forget:** Raw reference linking is non-blocking after transaction insert
-
-### Dependencies
-- `bankAdapters.js`, `rawTransactionRepository.js`, `textNormalization.js`
-- `connection.js`, `logger.js`
+See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import Feature — Streaming Import]] for current implementation details.
 
 ---
 
@@ -678,15 +679,15 @@ Maps Ollama errors to `AiChatServiceError` with HTTP status:
      ┌────────────────────┼────────────────────┐   │
      ▼                    ▼                    ▼   ▼
 ┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ portfolio   │ │ rawTransaction     │ │ streamingImport │
-│ Performance │ │ Import             │ │ Service         │
-│ Snapshot    │ │ Service            │ │                 │
+│ portfolio   │ │ importPipeline     │ │ dataImport      │
+│ Performance │ │ (Phase C)          │ │ Service         │
+│ Snapshot    │ │                    │ │                 │
 └────────────┘ └────────────────────┘ └─────────────────┘
      │                    │                    │
      ▼                    ▼                    ▼
 ┌────────────┐ ┌────────────────────┐ ┌─────────────────┐
-│ materialized│ │ importService      │ │ dataImport      │
-│ View        │ │                    │ │ Service         │
+│ materialized│ │ bankAdapters       │ │ deduplication   │
+│ View        │ │ (+ other helpers)  │ │                 │
 └────────────┘ └────────────────────┘ └─────────────────┘
      │                    │                    │
      ▼                    ▼                    ▼
@@ -709,7 +710,7 @@ Maps Ollama errors to `AiChatServiceError` with HTTP status:
 | **Pure Computation** | `loanRepaymentService`, `recurrenceService`, `iban`, `textNormalization` |
 | **External Data** | `belgianInflationService`, `currencyConversionService`, `priceProviderService` |
 | **Quote Management** | `quoteBackfillService` |
-| **Import Pipeline** | `bankAdapters`, `importService`, `streamingImportService`, `rawTransactionImportService`, `dataImportService` |
+| **Import Pipeline** | `importPipeline` (unified orchestrator), `bankAdapters`, `dataImportService` (reference data), deprecated: `importService`, `streamingImportService`, `rawTransactionImportService` |
 | **Data Quality** | `deduplication`, `recurringDetectionService` |
 | **Performance** | `materializedViewService`, `portfolioPerformanceSnapshotService` |
 | **AI & Natural Language** | `aiChatService` |
