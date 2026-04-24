@@ -3,7 +3,7 @@ import { parseISO } from "date-fns";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { NetSummaryCard } from "@/components/dashboard/NetSummaryCard";
 import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";
-import { CashFlowComparisonChart } from "@/components/dashboard/CashFlowComparisonChart";
+import { CashFlowForecastChart } from "@/components/dashboard/CashFlowForecastChart";
 import { CategoryPieChart } from "@/components/dashboard/CategoryPieChart";
 import { BankBalancesWidget } from "@/components/dashboard/BankBalancesWidget";
 import { DataTable } from "@/components/shared/DataTable";
@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, DollarSign, LayoutDashboard, Receipt, TrendingDown, Tags } from "lucide-react";
+import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -24,7 +24,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { formatDateWithAppSettings, formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateWithAppSettings } from "@/components/shared/dateUtils";
 import type { Transaction } from "@/lib/api";
 
 type GraphExclusions = Record<string, boolean>;
@@ -120,24 +120,6 @@ export default function DashboardPage() {
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
 
-    // Fetch cashflow comparison — FILTERED version (stable query key)
-    const { data: cashflowDataFiltered, isLoading: cashflowFilteredLoading } = useQuery({
-        queryKey: ['cashflowComparison', 'filtered', targetCurrency, filteredExclusionParams],
-        queryFn: () => apiClient.getCashflowComparison({ ...filteredExclusionParams, currency: targetCurrency }),
-        staleTime: 30000,
-        enabled: exclusionsApply,
-    });
-
-    // Fetch cashflow comparison — UNFILTERED version (stable query key)
-    // Always enabled as fallback when users toggle a graph to "ignore filters"
-    const { data: cashflowDataUnfiltered, isLoading: cashflowUnfilteredLoading } = useQuery({
-        queryKey: ['cashflowComparison', 'unfiltered', targetCurrency],
-        queryFn: () => apiClient.getCashflowComparison({ currency: targetCurrency }),
-        staleTime: 30000,
-        enabled: true,
-    });
-
-    const cashflowLoading = cashflowFilteredLoading || cashflowUnfilteredLoading;
 
     // Fetch recent transactions that survive exclusions (up to 5),
     // scanning additional pages when early rows are excluded.
@@ -251,16 +233,7 @@ export default function DashboardPage() {
         return monthlySummaryUnfiltered?.months || [];
     };
 
-    const getCashflowData = () => {
-        const useExclusions = graphExclusions['cashflowComparison'] ?? true;
-        if (useExclusions && exclusionsApply && cashflowDataFiltered) {
-            return cashflowDataFiltered;
-        }
-        return cashflowDataUnfiltered;
-    };
-
     const monthlyData = getMonthlyData();
-    const effectiveCashflowData = getCashflowData();
 
     // Calculate category breakdown from transactions (with per-graph toggle)
     const categoryBreakdown = (() => {
@@ -380,7 +353,7 @@ export default function DashboardPage() {
         },
     ];
 
-    if (statsLoading || transactionsLoading || monthlyLoading || cashflowLoading || recentTransactionsLoading) {
+    if (statsLoading || transactionsLoading || monthlyLoading || recentTransactionsLoading) {
         return (
             <div className="space-y-8 animate-in">
                 <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.loadingData')} icon={LayoutDashboard} />
@@ -538,39 +511,13 @@ export default function DashboardPage() {
                 )}
             </div>
 
-            {/* Cash Flow Comparison */}
-            {isVisible('cashflowComparison') && effectiveCashflowData && (
-                <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm lg:col-span-2">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center shadow-sm text-accent transition-transform duration-300 group-hover:scale-105">
-                                <DollarSign className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-lg">{t('cashflow.title')}</CardTitle>
-                                <CardDescription>
-                                    {t('cashflow.chartDesc', { monthName: formatMonthYearWithAppSettings(new Date(effectiveCashflowData.year, effectiveCashflowData.month - 1, 1), appSettings.dateFormat, locale) })}
-                                </CardDescription>
-                            </div>
-                        </div>
-                        <ExclusionToggle
-                            graphKey="cashflowComparison"
-                            isFiltered={graphExclusions['cashflowComparison'] ?? true}
-                            onToggle={toggleGraphExclusion}
-                            exclusionsApply={exclusionsApply}
-                        />
-                    </CardHeader>
-                    <CardContent>
-                        <CashFlowComparisonChart
-                            withoutPlanned={effectiveCashflowData.without_planned}
-                            withPlanned={effectiveCashflowData.with_planned}
-                            currentDay={effectiveCashflowData.current_day}
-                            month={effectiveCashflowData.month}
-                            year={effectiveCashflowData.year}
-                            embedded
-                        />
-                    </CardContent>
-                </Card>
+            {/* Cash Flow Forecast */}
+            {isVisible('cashflowComparison') && (
+                <CashFlowForecastChart
+                    excludedCategoryIds={allExcludedCategoryIds}
+                    excludedRecipientIds={excludedRecipientIds}
+                    currency={targetCurrency}
+                />
             )}
 
             {/* Recent transactions */}
