@@ -84,11 +84,60 @@ function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
   return cols.map(escapeCsvValue).join(',');
 }
 
-const CSV_EXPORT_CHUNK_SIZE = 1000;
+const EXPORT_CHUNK_SIZE = 1000;
+
+function buildExportTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
 
 function buildTransactionExportFilename() {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  return `transactions_export_${timestamp}.csv`;
+  return `transactions_export_${buildExportTimestamp()}.csv`;
+}
+
+function buildTransactionExportJsonFilename() {
+  return `transactions_export_${buildExportTimestamp()}.ndjson`;
+}
+
+/**
+ * Build WHERE clause + params array from common export filter query params.
+ * Returns { whereSql, params, nextParamIdx }.
+ */
+function buildExportFilters(query) {
+  const { start_date, end_date, bank_account, category_id } = query;
+  const filterClauses = [`t.is_active = true`];
+  const params = [];
+  let paramIdx = 1;
+
+  if (start_date) { filterClauses.push(`t.date >= $${paramIdx++}`); params.push(start_date); }
+  if (end_date) { filterClauses.push(`t.date <= $${paramIdx++}`); params.push(end_date); }
+  if (bank_account) { filterClauses.push(`t.bank_account ILIKE $${paramIdx++}`); params.push(`%${bank_account}%`); }
+  if (category_id) { filterClauses.push(`t.category_id = $${paramIdx++}`); params.push(parseInt(category_id, 10)); }
+
+  return { whereSql: filterClauses.join(' AND '), params, nextParamIdx: paramIdx };
+}
+
+function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
+  return `
+    SELECT t.id, t.date, t.bank_account,
+           COALESCE(pr.name, r.name) AS recipient_name, t.memo,
+           t.amount, t.currency, t.balance,
+           CASE
+             WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+             WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
+             WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+             ELSE ''
+           END AS category_name,
+           t.comment
+    FROM transactions t
+    LEFT JOIN recipients r ON t.recipient_id = r.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON t.category_id = c.id
+    LEFT JOIN categories rc ON r.default_category_id = rc.id
+    LEFT JOIN categories pc ON pr.default_category_id = pc.id
+    WHERE ${whereSql}
+    ORDER BY t.date ASC, t.id ASC
+    LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
+  `;
 }
 
 function normalizeTransactionPatchFields(body) {
@@ -173,70 +222,34 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/transactions/export/csv
-// Rate-limited, streamed CSV. Chunked keyset-free pagination bounds memory.
+// Rate-limited, streamed CSV. Chunked pagination bounds memory.
 router.get(
   '/export/csv',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-csv' }),
   async (req, res) => {
-    const { start_date, end_date, bank_account, category_id, include_balance } = req.query;
-    const includeBalance = include_balance === 'true';
+    const includeBalance = req.query.include_balance === 'true';
+    const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
 
-    const filterClauses = [`t.is_active = true`];
-    const params = [];
-    let paramIdx = 1;
-
-    if (start_date) { filterClauses.push(`t.date >= $${paramIdx++}`); params.push(start_date); }
-    if (end_date) { filterClauses.push(`t.date <= $${paramIdx++}`); params.push(end_date); }
-    if (bank_account) { filterClauses.push(`t.bank_account ILIKE $${paramIdx++}`); params.push(`%${bank_account}%`); }
-    if (category_id) { filterClauses.push(`t.category_id = $${paramIdx++}`); params.push(parseInt(category_id, 10)); }
-
-    const whereSql = filterClauses.join(' AND ');
-
-    const probeSql = `SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`;
-    const probe = await dbQuery(probeSql, params);
+    const probe = await dbQuery(`SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`, params);
     if (probe.rows.length === 0) {
       throw new NotFoundError('No transactions found matching filters');
     }
 
-    const filename = buildTransactionExportFilename();
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Disposition', `attachment; filename=${buildTransactionExportFilename()}`);
 
     const header = includeBalance
       ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance'
       : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
-    res.write(header);
-    res.write('\n');
+    res.write(`${header}\n`);
 
-    const limitParamIdx = paramIdx;
-    const offsetParamIdx = paramIdx + 1;
-    const chunkSql = `
-      SELECT t.id, t.date, t.bank_account, COALESCE(pr.name, r.name) AS recipient_name, t.memo,
-             t.amount, t.currency, t.balance,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
-               WHEN pc.id IS NOT NULL THEN pc.general || ':' || pc.detail
-               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
-               ELSE ''
-             END AS category_name,
-             t.comment
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
-      LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      WHERE ${whereSql}
-      ORDER BY t.date ASC, t.id ASC
-      LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
-    `;
-
-    let offset = 0;
+    const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
+    let chunkOffset = 0;
     let runningBalance = 0;
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
+        const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
         if (chunk.rows.length === 0) break;
         const lines = chunk.rows.map((row) => {
           if (includeBalance) {
@@ -245,17 +258,67 @@ router.get(
           }
           return buildTransactionCsvRow(row);
         });
-        res.write(lines.join('\n'));
-        res.write('\n');
-        if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
-        offset += CSV_EXPORT_CHUNK_SIZE;
+        res.write(`${lines.join('\n')}\n`);
+        if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
+        chunkOffset += EXPORT_CHUNK_SIZE;
       }
       res.end();
     } catch (err) {
-      // Stream already open — cannot emit JSON envelope. Close the response and
-      // let the error handler log the failure from the re-thrown error.
       if (res.headersSent) {
         logger.error('CSV export failed mid-stream', { error: err.message });
+        res.end();
+        return;
+      }
+      throw err;
+    }
+  },
+);
+
+// GET /api/transactions/export/json
+// Rate-limited, streamed NDJSON (newline-delimited JSON). One JSON object per line.
+router.get(
+  '/export/json',
+  rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'transactions-export-json' }),
+  async (req, res) => {
+    const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
+
+    const probe = await dbQuery(`SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`, params);
+    if (probe.rows.length === 0) {
+      throw new NotFoundError('No transactions found matching filters');
+    }
+
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Content-Disposition', `attachment; filename=${buildTransactionExportJsonFilename()}`);
+
+    const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
+    let chunkOffset = 0;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
+        if (chunk.rows.length === 0) break;
+        for (const row of chunk.rows) {
+          res.write(JSON.stringify({
+            id: row.id,
+            date: row.date,
+            bank_account: row.bank_account,
+            recipient: row.recipient_name ?? null,
+            memo: row.memo ?? null,
+            amount: row.amount,
+            currency: row.currency ?? null,
+            balance: row.balance ?? null,
+            category: row.category_name || null,
+            comment: row.comment ?? null,
+          }));
+          res.write('\n');
+        }
+        if (chunk.rows.length < EXPORT_CHUNK_SIZE) break;
+        chunkOffset += EXPORT_CHUNK_SIZE;
+      }
+      res.end();
+    } catch (err) {
+      if (res.headersSent) {
+        logger.error('JSON export failed mid-stream', { error: err.message });
         res.end();
         return;
       }

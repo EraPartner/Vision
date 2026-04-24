@@ -291,47 +291,33 @@ export default function ImportPage() {
     }
   };
 
-  const [exporting, setExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
 
-  const handleExport = async () => {
-    setExporting(true);
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExportingFormat(format);
     try {
-      // Build query parameters for export with filters
       const queryParams = new URLSearchParams();
+      if (exportFilters.startDate) queryParams.append('start_date', exportFilters.startDate);
+      if (exportFilters.endDate) queryParams.append('end_date', exportFilters.endDate);
+      if (exportFilters.bankAccount) queryParams.append('bank_account', exportFilters.bankAccount);
+      if (exportFilters.categoryId) queryParams.append('category_id', exportFilters.categoryId);
 
-      if (exportFilters.startDate) {
-        queryParams.append('start_date', exportFilters.startDate);
-      }
-      if (exportFilters.endDate) {
-        queryParams.append('end_date', exportFilters.endDate);
-      }
-      if (exportFilters.bankAccount) {
-        queryParams.append('bank_account', exportFilters.bankAccount);
-      }
-      if (exportFilters.categoryId) {
-        queryParams.append('category_id', exportFilters.categoryId);
-      }
-
-      const url = `${API_BASE_URL}/api/transactions/export/csv?${queryParams.toString()}`;
-
-      // Call the backend export endpoint
-      const response = await fetch(url, {
-        method: 'GET',
-      });
+      const url = `${API_BASE_URL}/api/transactions/export/${format}?${queryParams.toString()}`;
+      const response = await fetch(url, { method: 'GET' });
 
       if (!response.ok) {
-        throw new Error('Failed to export transactions');
+        throw new Error(t('importPage.toast.exportFailed'));
       }
 
-      // Get the blob from the response
       const blob = await response.blob();
-
-      // Create download link
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = format === 'json'
+        ? `transactions_${date}.ndjson`
+        : `transactions_${date}.csv`;
       link.click();
       URL.revokeObjectURL(downloadUrl);
 
@@ -342,7 +328,7 @@ export default function ImportPage() {
       const message = error instanceof Error ? error.message : t('importPage.toast.exportFailed');
       toast.error(t('importPage.toast.exportFailed'), { description: message });
     } finally {
-      setExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -1011,25 +997,46 @@ export default function ImportPage() {
             </div>
           )}
 
-          <Button
-            onClick={handleExport}
-            disabled={exporting}
-            variant="outline"
-            className="w-full h-11"
-            size="lg"
-          >
-            {exporting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {t('importPage.exporting')}
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                 {t('importPage.exportBtn')}
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => handleExport('csv')}
+              disabled={exportingFormat !== null}
+              variant="outline"
+              className="flex-1 h-11"
+              size="lg"
+            >
+              {exportingFormat === 'csv' ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t('importPage.exporting')}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  {t('importPage.exportBtn')}
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => handleExport('json')}
+              disabled={exportingFormat !== null}
+              variant="outline"
+              className="flex-1 h-11"
+              size="lg"
+            >
+              {exportingFormat === 'json' ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t('importPage.exporting')}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  {t('importPage.exportJsonBtn')}
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

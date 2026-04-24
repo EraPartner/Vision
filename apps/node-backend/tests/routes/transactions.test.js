@@ -215,6 +215,97 @@ describe('Transaction Routes', () => {
     });
   });
 
+  describe('GET /export/json', () => {
+    const sampleRow = {
+      id: 1,
+      date: '2026-01-15',
+      bank_account: 'Main',
+      recipient_name: 'Netflix',
+      memo: 'Monthly sub',
+      amount: '-12.99',
+      currency: 'EUR',
+      balance: '987.01',
+      category_name: 'ENTERTAINMENT:STREAMING',
+      comment: null,
+    };
+
+    it('should stream NDJSON with correct Content-Type', async () => {
+      // probe returns a row; chunk has 1 row (< EXPORT_CHUNK_SIZE) → breaks after first chunk
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })       // probe
+        .mockResolvedValueOnce({ rows: [sampleRow] }); // chunk (1 row < 1000 → break)
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/export/json'](req, res);
+
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/x-ndjson');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        expect.stringMatching(/filename=transactions_export.*\.ndjson/),
+      );
+      expect(res.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('should emit one JSON object per transaction line', async () => {
+      // 2 rows in chunk → still < EXPORT_CHUNK_SIZE → breaks after first chunk
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [sampleRow, { ...sampleRow, id: 2, amount: '-5.00' }] });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/export/json'](req, res);
+
+      const written = res.write.mock.calls.map(([chunk]) => chunk).join('');
+      const lines = written.trim().split('\n').filter(Boolean);
+      expect(lines).toHaveLength(2);
+      const parsed = lines.map((l) => JSON.parse(l));
+      expect(parsed[0]).toMatchObject({
+        id: 1, date: '2026-01-15', recipient: 'Netflix',
+        amount: '-12.99', category: 'ENTERTAINMENT:STREAMING',
+      });
+      expect(parsed[1].id).toBe(2);
+    });
+
+    it('should return 404 when no transactions match filters', async () => {
+      dbQuery.mockResolvedValueOnce({ rows: [] }); // probe
+
+      const req = { query: { start_date: '2099-01-01' } };
+      const res = mockResponse();
+      await callHandler(routeHandlers['get:/export/json'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('should return 500 on unexpected error before headers sent', async () => {
+      dbQuery.mockRejectedValueOnce(new Error('db error'));
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await callHandler(routeHandlers['get:/export/json'], req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+
+    it('should include all expected fields in output', async () => {
+      // 1 row < EXPORT_CHUNK_SIZE → loop breaks after first chunk; only 2 DB calls needed
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [sampleRow] });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/export/json'](req, res);
+
+      const written = res.write.mock.calls.map(([chunk]) => chunk).join('');
+      const obj = JSON.parse(written.trim().split('\n')[0]);
+      expect(Object.keys(obj).sort()).toEqual(
+        ['amount', 'balance', 'bank_account', 'category', 'comment', 'currency', 'date', 'id', 'memo', 'recipient'].sort()
+      );
+    });
+  });
+
   describe('POST /', () => {
     it('should create transaction with 201', async () => {
       transactionRepository.create.mockResolvedValue({
