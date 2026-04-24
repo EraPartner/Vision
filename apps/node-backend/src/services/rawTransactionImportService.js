@@ -23,7 +23,6 @@ import {
   rawReferenceRepo,
   isRawDuplicate,
 } from '../repositories/rawTransactionRepository.js';
-import { importCSV } from './importService.js';
 import { isDuplicateByFields } from './deduplication.js';
 import {
   normalizeForMatching,
@@ -291,12 +290,6 @@ export async function importCSVWithRawStorage(filePath, bankName, customConfig =
       duplicates: 0,
       errors: 0,
     };
-
-    // If bank type is generic (no raw table), fall back to the legacy dedup
-    if (bankType === 'generic') {
-      logger.warn('No raw table for generic bank type, using legacy import');
-      return importCSV(filePath, bankName, customConfig);
-    }
 
     for (let i = 0; i < transactionDataList.length; i += RAW_IMPORT_BATCH_SIZE) {
       const batch = transactionDataList.slice(i, i + RAW_IMPORT_BATCH_SIZE);

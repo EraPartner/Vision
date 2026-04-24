@@ -7,13 +7,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import os from 'os';
-import { importCSVWithRawStorage } from '../services/rawTransactionImportService.js';
-import { importCSVStreaming } from '../services/streamingImportService.js';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
-import { env } from '../config/env.js';
-import { scheduleRefresh } from '../services/materializedViewService.js';
 import { runImportPipeline } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
@@ -21,8 +17,6 @@ import { listBatches, getBatch, rollbackBatch } from '../repositories/importBatc
 import { refreshAggregations } from '../services/aggregationRefresh.js';
 
 const router = Router();
-
-const PIPELINE_V2_ENABLED = env.IMPORT_PIPELINE_V2;
 
 function v2ProgressToLegacy(ev) {
   const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
@@ -87,33 +81,21 @@ router.post('/csv', upload.single('file'), async (req, res) => {
   }
 
   try {
-    let result;
-    if (PIPELINE_V2_ENABLED) {
-      const pipelineResult = await runImportPipeline({
-        filePath: req.file.path,
-        adapterName: bankName,
-        filename: req.file.originalname,
-        sizeBytes: req.file.size,
-      });
-      result = {
-        total: pipelineResult.total,
-        imported: pipelineResult.imported,
-        duplicates: pipelineResult.duplicates,
-        errors: pipelineResult.errors,
-        batch_id: pipelineResult.batchId,
-      };
-    } else {
-      result = await importCSVWithRawStorage(req.file.path, bankName);
-    }
-
-    logger.info('CSV import completed', {
-      bankName,
-      fileName: req.file.originalname,
-      pipeline: PIPELINE_V2_ENABLED ? 'v2' : 'legacy',
-      ...result,
+    const pipelineResult = await runImportPipeline({
+      filePath: req.file.path,
+      adapterName: bankName,
+      filename: req.file.originalname,
+      sizeBytes: req.file.size,
     });
+    const result = {
+      total: pipelineResult.total,
+      imported: pipelineResult.imported,
+      duplicates: pipelineResult.duplicates,
+      errors: pipelineResult.errors,
+      batch_id: pipelineResult.batchId,
+    };
 
-    if (!PIPELINE_V2_ENABLED) scheduleRefresh();
+    logger.info('CSV import completed', { bankName, fileName: req.file.originalname, ...result });
     res.status(201);
     res.ok(buildImportResult(result));
   } catch (err) {
@@ -164,27 +146,20 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
   };
 
   try {
-    let result;
-    if (PIPELINE_V2_ENABLED) {
-      const pipelineResult = await runImportPipeline({
-        filePath: req.file.path,
-        adapterName: bank_name,
-        customConfig,
-        filename: req.file.originalname,
-        sizeBytes: req.file.size,
-      });
-      result = {
-        total: pipelineResult.total,
-        imported: pipelineResult.imported,
-        duplicates: pipelineResult.duplicates,
-        errors: pipelineResult.errors,
-        batch_id: pipelineResult.batchId,
-      };
-    } else {
-      result = await importCSVWithRawStorage(req.file.path, bank_name, customConfig);
-    }
-
-    if (!PIPELINE_V2_ENABLED) scheduleRefresh();
+    const pipelineResult = await runImportPipeline({
+      filePath: req.file.path,
+      adapterName: bank_name,
+      customConfig,
+      filename: req.file.originalname,
+      sizeBytes: req.file.size,
+    });
+    const result = {
+      total: pipelineResult.total,
+      imported: pipelineResult.imported,
+      duplicates: pipelineResult.duplicates,
+      errors: pipelineResult.errors,
+      batch_id: pipelineResult.batchId,
+    };
     res.status(201);
     res.ok(buildImportResult(result));
   } finally {
@@ -214,33 +189,22 @@ router.post('/csv/stream', upload.single('file'), async (req, res) => {
   const writer = createSseWriter(req, res);
 
   try {
-    let result;
-    if (PIPELINE_V2_ENABLED) {
-      const pipelineResult = await runImportPipeline({
-        filePath: req.file.path,
-        adapterName: bankName,
-        filename: req.file.originalname,
-        sizeBytes: req.file.size,
-        onProgress: async (ev) => { await writer.write('progress', v2ProgressToLegacy(ev)); },
-      });
-      result = {
-        total: pipelineResult.total,
-        imported: pipelineResult.imported,
-        duplicates: pipelineResult.duplicates,
-        errors: pipelineResult.errors,
-        batch_id: pipelineResult.batchId,
-      };
-    } else {
-      result = await importCSVStreaming(
-        req.file.path,
-        bankName,
-        null,
-        async (progress) => { await writer.write('progress', progress); },
-      );
-    }
+    const pipelineResult = await runImportPipeline({
+      filePath: req.file.path,
+      adapterName: bankName,
+      filename: req.file.originalname,
+      sizeBytes: req.file.size,
+      onProgress: async (ev) => { await writer.write('progress', v2ProgressToLegacy(ev)); },
+    });
+    const result = {
+      total: pipelineResult.total,
+      imported: pipelineResult.imported,
+      duplicates: pipelineResult.duplicates,
+      errors: pipelineResult.errors,
+      batch_id: pipelineResult.batchId,
+    };
 
     if (!writer.closed) {
-      if (!PIPELINE_V2_ENABLED) scheduleRefresh();
       await writer.write('complete', {
         ...result,
         status: result.status || (result.errors > 0 ? 'completed_with_errors' : 'completed'),

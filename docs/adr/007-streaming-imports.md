@@ -6,7 +6,7 @@ date: 2026-04-02
 tags: [architecture, imports, streaming, sse, performance]
 description: Decision to implement streaming CSV imports using Server-Sent Events for real-time progress feedback
 aliases: [streaming imports, SSE, server-sent events, large file imports]
-related_code: ["apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/routes/importRoutes.js"]
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/importBatchRepository.js"]
 ---
 
 # ADR-007: Streaming Import with Server-Sent Events
@@ -66,6 +66,22 @@ Regular (non-streaming) import remains available for small files.
 - **Complexity** — SSE adds implementation overhead
 - **Browser support** — SSE not supported in all environments (but fine for Electron)
 - **Error handling** — partial failures harder to communicate
+
+## Implementation Updates
+
+### Phase C (April 2026)
+
+The original implementation using separate `importService`, `streamingImportService`, and `rawTransactionImportService` was consolidated into a unified **import pipeline orchestrator** ([[apps/node-backend/src/services/importPipeline/index.js]]):
+
+- **Single orchestrator**: `runImportPipeline()` manages staging → validation → matching → commit phases
+- **Unified progress reporting**: All phases emit standardized progress events keyed on `phase` (not just row counts)
+- **SSE backpressure**: New `createSseWriter()` ([[apps/node-backend/src/lib/sse.js]]) propagates backpressure from the HTTP client into the pipeline
+- **Batch tracking**: All imports tracked in `import_batches` table for history/rollback
+- **Aggregation refresh**: Pipeline schedules materialized view refresh post-import
+
+Both streaming (`POST /api/import/csv/stream`) and non-streaming (`POST /api/import/csv`) routes now use the same orchestrator, differing only in their progress event forwarding mechanism.
+
+See [[docs/features/import#import-service-architecture-phase-c-refactor|Import Service Architecture (Phase C Refactor)]] for details.
 
 ## Related
 

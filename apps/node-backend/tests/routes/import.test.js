@@ -49,20 +49,12 @@ vi.mock('os', () => ({
   tmpdir: vi.fn(() => '/tmp'),
 }));
 
-vi.mock('../../src/services/importService.js', () => ({
-  importCSV: vi.fn(),
-}));
-
-vi.mock('../../src/services/rawTransactionImportService.js', () => ({
-  importCSVWithRawStorage: vi.fn(),
+vi.mock('../../src/services/importPipeline/index.js', () => ({
+  runImportPipeline: vi.fn(),
 }));
 
 vi.mock('../../src/services/bankAdapters.js', () => ({
   getSupportedBanks: vi.fn(() => ['belfius', 'kbc', 'revolut']),
-}));
-
-vi.mock('../../src/services/streamingImportService.js', () => ({
-  importCSVStreaming: vi.fn(),
 }));
 
 vi.mock('../../src/services/dataImportService.js', () => ({
@@ -96,9 +88,8 @@ vi.mock('../../src/services/aggregationRefresh.js', () => ({
   refreshAggregations: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { importCSVWithRawStorage } from '../../src/services/rawTransactionImportService.js';
+import { runImportPipeline } from '../../src/services/importPipeline/index.js';
 import { getSupportedBanks } from '../../src/services/bankAdapters.js';
-import { importCSVStreaming } from '../../src/services/streamingImportService.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../../src/services/dataImportService.js';
 import { listBatches, getBatch, rollbackBatch } from '../../src/repositories/importBatchRepository.js';
 import multer from 'multer';
@@ -127,8 +118,8 @@ describe('Import Routes', () => {
     });
 
     it('should return 201 on successful import', async () => {
-      importCSVWithRawStorage.mockResolvedValue({
-        total_processed: 5, imported: 4, duplicates: 1, errors: 0, status: 'completed',
+      runImportPipeline.mockResolvedValue({
+        total: 5, imported: 4, duplicates: 1, errors: 0,
       });
 
       const req = {
@@ -141,7 +132,7 @@ describe('Import Routes', () => {
 
       expect(res.status).toHaveBeenCalledWith(201);
       const body = res.json.mock.calls[0][0];
-      expect(body.data.total_processed).toBe(5);
+      expect(body.data.total).toBe(5);
       expect(body.data.imported).toBe(4);
       expect(body.data.duplicates).toBe(1);
       expect(body.data.errors).toBe(0);
@@ -149,8 +140,8 @@ describe('Import Routes', () => {
     });
 
     it('should return completed_with_errors status', async () => {
-      importCSVWithRawStorage.mockResolvedValue({
-        total_processed: 10, imported: 8, duplicates: 1, errors: 1,
+      runImportPipeline.mockResolvedValue({
+        total: 10, imported: 8, duplicates: 1, errors: 1,
       });
 
       const req = {
@@ -167,7 +158,7 @@ describe('Import Routes', () => {
     });
 
     it('should return 400 for invalid bank config', async () => {
-      importCSVWithRawStorage.mockRejectedValue(new Error('No configuration found for bank'));
+      runImportPipeline.mockRejectedValue(new Error('No configuration found for bank'));
 
       const req = {
         file: { path: '/tmp/test.csv', originalname: 'test.csv' },
@@ -180,7 +171,7 @@ describe('Import Routes', () => {
     });
 
     it('should return 500 on general import failure', async () => {
-      importCSVWithRawStorage.mockRejectedValue(new Error('Parse error'));
+      runImportPipeline.mockRejectedValue(new Error('Parse error'));
 
       const req = {
         file: { path: '/tmp/test.csv', originalname: 'test.csv' },
@@ -193,7 +184,7 @@ describe('Import Routes', () => {
     });
 
     it('should not leak internal error details on import failure', async () => {
-      importCSVWithRawStorage.mockRejectedValue(new Error('sensitive parser trace'));
+      runImportPipeline.mockRejectedValue(new Error('sensitive parser trace'));
 
       const req = {
         file: {
@@ -248,8 +239,8 @@ describe('Import Routes', () => {
     });
 
     it('should return 201 on success', async () => {
-      importCSVWithRawStorage.mockResolvedValue({
-        total_processed: 1, imported: 1, duplicates: 0, errors: 0, status: 'completed',
+      runImportPipeline.mockResolvedValue({
+        total: 1, imported: 1, duplicates: 0, errors: 0,
       });
 
       const req = {
@@ -267,7 +258,7 @@ describe('Import Routes', () => {
     });
 
     it('should return 500 on error', async () => {
-      importCSVWithRawStorage.mockRejectedValue(new Error('Import failed'));
+      runImportPipeline.mockRejectedValue(new Error('Import failed'));
 
       const req = {
         file: { path: '/tmp/custom.csv', originalname: 'custom.csv' },
@@ -288,9 +279,9 @@ describe('Import Routes', () => {
   // ──────────────────────────────────────────
   describe('POST /csv/stream', () => {
     it('should stream progress and complete SSE events on success', async () => {
-      importCSVStreaming.mockImplementation(async (filePath, bankName, customConfig, onProgress) => {
-        onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
-        return { total_processed: 2, imported: 2, duplicates: 0, errors: 0 };
+      runImportPipeline.mockImplementation(async ({ onProgress }) => {
+        await onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
+        return { total: 2, imported: 2, duplicates: 0, errors: 0 };
       });
 
       const req = {
@@ -326,7 +317,7 @@ describe('Import Routes', () => {
     });
 
     it('should emit SSE error event and end response on failure', async () => {
-      importCSVStreaming.mockRejectedValue(new Error('adapter failed'));
+      runImportPipeline.mockRejectedValue(new Error('adapter failed'));
 
       const req = {
         file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
@@ -346,10 +337,10 @@ describe('Import Routes', () => {
 
     it('should not emit complete or error event after client abort', async () => {
       let closeHandler;
-      importCSVStreaming.mockImplementation(async (filePath, bankName, customConfig, onProgress) => {
-        onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
+      runImportPipeline.mockImplementation(async ({ onProgress }) => {
+        await onProgress({ phase: 'importing', current: 1, total: 2, imported: 1, duplicates: 0, errors: 0, percent: 50 });
         closeHandler();
-        return { total_processed: 2, imported: 2, duplicates: 0, errors: 0 };
+        return { total: 2, imported: 2, duplicates: 0, errors: 0 };
       });
 
       const req = {

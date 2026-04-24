@@ -3,10 +3,10 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-1, performance, concurrency]
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, performance, concurrency, import-pipeline, component-split]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication
-related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
+description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components.
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -14,6 +14,57 @@ related_code: ["apps/node-backend/src/services/importService.js", "apps/node-bac
 ## Overview
 
 Vision provides comprehensive CSV import capabilities with support for multiple bank formats, automatic deduplication, and category detection.
+
+## Phase E — Frontend Component Decomposition (April 2026)
+
+**Status:** Complete  
+**Impact:** 1019-line `ImportPage.tsx` refactored into 6 self-contained feature components (~914 lines total, ~35 lines remaining in orchestrator)
+
+### Component Breakdown
+
+The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/imports/`:
+
+| Component | Lines | Responsibility |
+|-----------|-------|-----------------|
+| `TransactionImportCard.tsx` | 394 | CSV transaction import with SSE progress, column mapper, export buttons |
+| `RecipientsImportCard.tsx` | 155 | Bulk recipients CSV import with file upload and status |
+| `CategoriesImportCard.tsx` | 140 | Categories CSV import with category format validation |
+| `ExportCard.tsx` | 159 | Dual export UI (CSV + JSON) with download triggers |
+| `SupportedBanksCard.tsx` | 38 | Read-only chip list of supported bank adapters |
+| `useAdapters.ts` | 28 | Shared hook for fetching bank adapters (prevents duplicate API calls) |
+
+**Orchestrator**  
+`apps/frontend/src/pages/ImportPage.tsx` (35 lines):
+- Imports all sub-components
+- Manages `historyKey` state (passed to `ImportHistoryCard` via `onImportSuccess` callback from `TransactionImportCard`)
+- Renders layout with `PageHeader` and all cards
+
+### Architecture Decisions
+
+**Self-Contained State:**
+- Each import card owns its own form state, upload progress, and error handling
+- No prop-drilling; each card is independent except for shared hooks
+
+**Shared Adapter Hook:**
+- `useAdapters.ts` exported hook prevents duplicate API calls in both `TransactionImportCard` and `SupportedBanksCard`
+- Both components call `useAdapters()` independently; hook deduplicates requests via React Query
+
+**History Refresh Pattern:**
+- `historyKey` state lives in `ImportPage` (only orchestrator needs it)
+- `TransactionImportCard` calls `onImportSuccess()` callback after successful import
+- Callback increments `historyKey`, forcing `ImportHistoryCard` to refetch history
+- Avoids exposing `setHistoryKey` to child components
+
+**Existing Imports:**
+- `ImportHistoryCard` remains in `@/components/import/ImportHistoryCard` (not moved to features folder)
+- Re-imported by `ImportPage` and composed alongside feature components
+
+### Benefits
+
+1. **Maintainability:** Each card is 30–400 lines with focused responsibility
+2. **Reusability:** Components can be imported independently in other contexts
+3. **Testability:** Each card can be tested in isolation without mocking the entire page
+4. **Scalability:** New import card types can be added without growing page size
 
 ## Supported Banks
 
@@ -28,55 +79,75 @@ Vision provides comprehensive CSV import capabilities with support for multiple 
 | Vision | Internal format | Standard transaction fields |
 | Custom | User-defined | Configurable column mapping |
 
-## Import Service Architecture
+## Import Service Architecture (Phase C Refactor)
 
-Vision has **three** CSV import services, each serving a different purpose:
+Phase C (April 2026) unified import processing into a **single orchestrator pipeline** that manages staging, validation, matching, and commit phases. The pipeline replaces the three separate services (`importService`, `streamingImportService`, `rawTransactionImportService`) with a modular, idempotent architecture.
 
-### 1. `importService.js` — Legacy Import
-**File:** [[apps/node-backend/src/services/importService.js]]
+### Import Pipeline Orchestrator
+**File:** [[apps/node-backend/src/services/importPipeline/index.js]]
 
-The original import service. Processes CSV files sequentially, using field-based deduplication for generic banks and hash-based deduplication for known banks. Falls back to `isDuplicateByFields()` when raw tables aren't available.
+**Main export:** `runImportPipeline({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? })`
 
-**Use case:** Small files, generic bank formats, backward compatibility.
+Runs the full import pipeline end-to-end:
 
-### 2. `streamingImportService.js` — Streaming Import with Progress
-**File:** [[apps/node-backend/src/services/streamingImportService.js]]
+```
+createBatch → stageBatch → validateBatch → matchBatch → commitBatch → scheduleRefresh
+```
 
-Optimized for large files with real-time progress reporting via callbacks (used by SSE endpoints). Key performance features:
-- **Adaptive parallel batch processing**: Rows processed in concurrent batches sized automatically from DB pool config. Calculated as `Math.max(2, Math.floor(poolMax / 2))` where `poolMax = max(DB_POOL_SIZE, DB_MAX_OVERFLOW)`. With default pool settings (poolMax=10), concurrency is 5. This ensures at least half the connection pool remains available for other requests.
-- **Single-round-trip recipient upsert**: `INSERT ... ON CONFLICT DO NOTHING RETURNING id` with fallback SELECT (down from 2-4 round-trips)
-- **Single-round-trip raw dedup**: `INSERT ... ON CONFLICT DO NOTHING RETURNING *` — null return means duplicate
-- **Fire-and-forget non-critical writes**: Bank account linking and raw reference creation don't block import outcome
-- **Promise.allSettled per batch**: One bad row doesn't stall others
+Each phase is idempotent at its boundary. On error, the batch is marked `failed` and the error is propagated. Progress callbacks are async and propagate SSE backpressure all the way into the batch loop.
 
-Implementation note:
-- Remaining dynamic dedup import in the generic/legacy streaming path was removed; the service now uses module-scoped `isRawDuplicate` with fallback to `isDuplicateByFields`, preserving duplicate-detection behavior while reducing runtime import overhead.
-- Concurrency calculation moved from hardcoded `20` to adaptive `Math.max(2, Math.floor(poolMax / 2))` to respect pool ceiling and prevent connection exhaustion on non-default pool configs.
+**Return value:**
+```typescript
+{
+  batchId: number,
+  total: number,         // total rows parsed
+  imported: number,      // rows committed
+  duplicates: number,    // rows skipped (existing)
+  errors: number         // rows failed during validation/commit
+}
+```
 
-**Progress phases:** `counting` → `parsing` → `importing` → `complete`/`error`
+### Pipeline Phases
 
-**Use case:** Large CSV files, UI progress display, SSE streaming endpoint (`POST /api/import/csv/stream`).
+#### 1. **Staging** (`stageBatch`)
+- Parse CSV via bank adapter (Belfius, Revolut, KBC, SABB, Wise, Vision, or custom)
+- Store raw rows in `import_staging` table
+- Emit progress events: `{ phase: 'staging', current, total }`
 
-### 3. `rawTransactionImportService.js` — Raw Data Preservation Import
-**File:** [[apps/node-backend/src/services/rawTransactionImportService.js]]
+#### 2. **Validation** (`validateBatch`)
+- Check required fields (date, recipient, amount)
+- Parse amounts and dates to canonical form
+- Detect deduplication hash collisions (if raw table exists for bank)
+- Mark invalid rows with error details
+- Emit progress events: `{ phase: 'validating', current, total, errors }`
 
-Orchestrates CSV import with full raw data preservation. Architecture:
-1. Parse CSV via bank adapter
-2. Check raw table deduplication (hash-based per bank)
-3. Store raw data in bank-specific table
-4. Create normalized transaction record
-5. Link transaction to raw data via `transaction_raw_references`
+#### 3. **Matching** (`matchBatch`)
+- Look up or create recipients
+- Look up or create categories (via recipient default or explicit mapping)
+- Resolve recipient aliases
+- Emit progress events: `{ phase: 'matching', current, total }`
 
-Falls back to `importService.js` for generic/unsupported bank types.
+#### 4. **Commit** (`commitBatch`)
+- Insert canonical transactions
+- Insert raw references (link transaction to raw bank data)
+- Return final counts: `{ imported, duplicates, errors }`
+- Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 
-Implementation notes:
-- Raw import processing uses adaptive bounded concurrent batching (same formula as streaming import: `Math.max(2, Math.floor(poolMax / 2))`) with `Promise.allSettled`, preserving imported/duplicate/error accounting semantics while reducing end-to-end latency on larger files.
-- Hot-path dynamic imports were replaced with module-scoped imports (`importCSV`, `isDuplicateByFields`, `normalizeForMatching`) to remove per-row/per-request import resolution overhead.
-- Raw duplicate checking now prefers repository-level `isRawDuplicate(...)` with fallback to field-based dedup when repository/raw-table paths fail, preserving fallback semantics.
+#### 5. **Aggregation Refresh** (post-pipeline)
+- Schedule non-blocking refresh of materialized views
+- Ensures `/api/aggregations/*` endpoints see new data
 
-**Use case:** Audit trail requirements, re-import capability, supported banks (Belfius, Revolut, KBC, SABB, Wise, Vision).
+### Legacy Services (Deprecated)
 
-### 4. `dataImportService.js` — Recipients & Categories Bulk Import
+> [!warning] Deprecated
+> The following services are no longer used by routes as of Phase C:
+> - `importService.js`
+> - `streamingImportService.js`
+> - `rawTransactionImportService.js`
+> 
+> Routes now call `runImportPipeline()` directly. Legacy services remain in codebase for backwards compatibility but are not part of the active code path.
+
+### Data Import Service (Recipients & Categories)
 **File:** [[apps/node-backend/src/services/dataImportService.js]]
 
 Handles bulk CSV import for **recipients** and **categories** (not transactions).
@@ -225,34 +296,61 @@ The Import Page now features an interactive visual CSV column mapper for flexibl
 4. Map each required field using dropdown
 5. Click import when ready
 
-## Streaming Import
+## Streaming Import with Server-Sent Events (SSE)
 
-For large files, use streaming import with progress:
+For large files, use streaming import with real-time progress:
 
 ```
 POST /api/import/csv/stream
+Content-Type: multipart/form-data
+
+file: <CSV file>
+bank_name: belfius
 ```
 
-Returns Server-Sent Events with progress:
-```javascript
+Returns Server-Sent Events with progress updates keyed on phase:
+
+```
 event: progress
-data: {"processed": 50, "total": 150, "status": "processing"}
+data: {"phase":"staging","current":50,"total":150}
 
-event: complete  
-data: {"imported": 145, "duplicates_skipped": 5, "errors": 0}
+event: progress
+data: {"phase":"validating","current":50,"total":150,"errors":0}
+
+event: progress
+data: {"phase":"matching","current":50,"total":150}
+
+event: progress
+data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":2,"errors":0}
+
+event: complete
+data: {"batchId":42,"total":150,"imported":148,"duplicates":2,"errors":0}
 ```
 
-**Backpressure Handling (Phase 3.2, 2026-04-23):**
-- Streaming import now uses `createSseWriter(req, res)` [[apps/node-backend/src/lib/sse.js]] to propagate backpressure from the HTTP client all the way into the import batch loop. When the client consumes events slower than they are produced, `drainIfNeeded()` pauses the server's write buffer, preventing unbounded memory growth in Node.js TCP buffers.
-- Import progress callbacks are now `async` and await the SSE writer's `write()` promise.
+### Backpressure & Resource Management (Phase C)
 
-Frontend SSE robustness updates:
-- Stream parsing in [[apps/frontend/src/lib/api.ts]] now consumes blank-line-delimited event blocks correctly and supports multi-line `data:` fields.
-- Import progress handling no longer uses the async Promise executor anti-pattern; stream lifecycle/error propagation is now explicit and safer.
-- Malformed/partial SSE payloads are tolerated with defensive parsing and sanitized fallback errors.
+The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src/lib/sse.js]]) to propagate backpressure from the HTTP client into the import pipeline:
 
-Backend error-hardening updates:
-- Import routes now return generic error details (`Import failed`) and avoid exposing internal exception messages in JSON and SSE error events ([[apps/node-backend/src/routes/importRoutes.js]]).
+- **SSE Write Promises:** Progress callbacks in the pipeline are `async` and `await` the SSE writer's `write()` call
+- **Drain Pausing:** When client consumes events slower than the server produces them, `drainIfNeeded()` pauses the write buffer, preventing unbounded memory growth in Node.js TCP buffers
+- **Connection Monitoring:** Server detects client disconnection and stops processing to conserve resources
+
+### Frontend SSE Integration
+
+[[apps/frontend/src/lib/api.ts]] handles streaming:
+
+- **Blank-line delimited:** Parses event blocks separated by blank lines
+- **Multi-line data:** Supports `data:` fields spanning multiple lines
+- **Defensive parsing:** Tolerates malformed/partial SSE payloads with sanitized fallback errors
+- **Error propagation:** Explicit error handling without async Promise executor anti-pattern
+
+### Error Handling
+
+Import routes sanitize error details to prevent exposure of internal exception messages:
+
+- JSON responses return generic `"Import failed"` message
+- SSE error events also sanitized (see [[apps/node-backend/src/routes/importRoutes.js]])
+- Batch status marked as `'failed'` with truncated error summary (2000 chars max) stored in database
 
 ## Raw Transaction Storage
 
@@ -320,10 +418,21 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 - [[docs/api/recipients|API: Recipients]]
 - [[docs/api/attachments|API: Attachments]]
 
-## Testing references (2026-04-10)
+## Testing References
 
-- [[apps/node-backend/tests/routes/import.test.js]] extends route-level import coverage for SSE stream behavior, recipients/categories route handling, and multer middleware error paths.
-- [[apps/node-backend/tests/dataImportService.test.js]] adds recipients/categories bulk import service coverage.
-- [[apps/node-backend/tests/streamingImportService.test.js]] adds streaming import progress/error and result aggregation coverage.
+### Phase C (April 2026)
+
+- [[apps/node-backend/tests/routes/import.test.js]]: Updated to mock `runImportPipeline` from the new orchestrator. Covers SSE stream behavior, recipients/categories route handling, multer middleware error paths, and backpressure scenarios.
+- Removed: `importService.test.js`, `streamingImportService.test.js`, `rawTransactionImportService.test.js` — superseded by pipeline integration tests.
+
+### Phase 5A (April 2026)
+
+- CSV column mapper integration in [[apps/frontend/src/hooks/useCsvPreview.ts]]
+- Dual export (CSV + JSON) in [[apps/frontend/src/pages/ImportPage.tsx]]
+- Streaming import progress tracking via SSE in [[apps/frontend/src/lib/api.ts]]
+
+### Phase F (April 2026)
+
+Admin observability for aggregation shadow divergences added. See [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] for decision context and [[docs/api/admin|Admin API]] for monitoring endpoints.
 
 Related testing docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].
