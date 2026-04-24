@@ -161,10 +161,13 @@ router.get('/', async (req, res) => {
   };
 
   const { items, total } = await plannedTransactionRepository.getAll(opts);
-  res.ok(
-    items.map(formatPlannedTransaction),
-    { pagination: { total, limit: opts.limit, offset: opts.offset } },
-  );
+  res.ok({
+    items: items.map(formatPlannedTransaction),
+    total,
+    limit: opts.limit,
+    offset: opts.offset,
+    links: [],
+  });
 });
 
 router.post('/', async (req, res) => {
@@ -198,6 +201,20 @@ router.post('/', async (req, res) => {
   const created = await plannedTransactionRepository.create(data);
   res.status(201);
   res.ok(formatPlannedTransaction(created));
+});
+
+/**
+ * GET /api/planned-transactions/due-soon?days=7
+ *
+ * Returns active, unexecuted planned transactions whose planned_date falls
+ * within the next N days (default 7, max 365).  Used by bill-reminder widgets.
+ */
+router.get('/due-soon', async (req, res) => {
+  const raw = parseInt(req.query.days, 10);
+  const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
+  const rows = await plannedTransactionRepository.getDueSoon(days);
+  const items = rows.map(formatPlannedTransaction);
+  res.ok(items, { days, total: items.length });
 });
 
 router.get('/:id', validateIdParam, async (req, res) => {
@@ -301,6 +318,7 @@ function formatPlannedTransaction(row) {
     url: row.url || null,
     is_recurring: row.is_recurring,
     recurrence_pattern: row.recurrence_pattern,
+    reminder_days_before: row.reminder_days_before != null ? parseInt(row.reminder_days_before, 10) : null,
     is_executed: row.is_executed,
     last_executed_date: row.last_executed_date,
     is_loan: row.is_loan || false,

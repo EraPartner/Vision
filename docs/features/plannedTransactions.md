@@ -256,6 +256,36 @@ Analyzes transaction history to detect recurring payment patterns and suggests p
 
 ---
 
+## Bill Reminders (Phase 6)
+
+New endpoint to fetch upcoming bills within a specified number of days, useful for dashboard notifications and quick checks.
+
+**Endpoint:** `GET /api/planned-transactions/due-soon?days=N`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `days` | integer | 7 | 90 | Look-ahead window in days |
+
+**Response:** List of active, unexecuted planned transactions with planned dates within the next N days, sorted by date.
+
+**Example:**
+```http
+GET /api/planned-transactions/due-soon?days=14
+```
+
+Returns bills due in the next 14 days (common use: dashboard notification banner, weekly bill checklist).
+
+**i18n Keys (Phase 6):**
+- `planned.dueSoon` — "Due Soon"
+- `planned.dueSoonEmpty` — "No bills due in the next N days"
+- `planned.dueSoonTitle` — "Upcoming Bills"
+- `planned.dueInDays` — "Due in X days"
+- `planned.overdueBy` — "X days overdue"
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -266,6 +296,7 @@ Analyzes transaction history to detect recurring payment patterns and suggests p
 | PATCH | `/api/planned-transactions/:id` | Update planned transaction |
 | DELETE | `/api/planned-transactions/:id` | Delete planned transaction |
 | POST | `/api/planned-transactions/:id/execute` | Execute as transaction |
+| GET | `/api/planned-transactions/due-soon` | Upcoming bills within N days (Phase 6) |
 
 ---
 

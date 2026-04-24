@@ -243,6 +243,7 @@ export const plannedTransactionRepository = {
     url,
     is_recurring,
     recurrence_pattern,
+    reminder_days_before,
     is_loan,
     loan_type,
     loan_principal,
@@ -257,17 +258,17 @@ export const plannedTransactionRepository = {
     const sql = `
       INSERT INTO planned_transactions (
         planned_date, bank_account, recipient_id, amount, memo, currency, category_id, comment, url,
-        is_recurring, recurrence_pattern, is_executed, is_active,
+        is_recurring, recurrence_pattern, reminder_days_before, is_executed, is_active,
         is_loan, loan_type, loan_principal, loan_annual_interest_rate,
         loan_term_months, loan_start_date, loan_payment_day,
         loan_regular_payment_amount, loan_first_payment_date
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9,
-        $10, $11, false, true,
-        $12, $13, $14, $15,
-        $16, $17, $18,
-        $19, $20
+        $10, $11, $12, false, true,
+        $13, $14, $15, $16,
+        $17, $18, $19,
+        $20, $21
       )
       RETURNING *
     `;
@@ -285,6 +286,7 @@ export const plannedTransactionRepository = {
       category_id, comment, url || null,
       is_recurring || false,
       recurrence_pattern || null,
+      reminder_days_before != null ? Number(reminder_days_before) : null,
       is_loan || false,
       loan_type || null,
       loan_principal != null ? Number(loan_principal) : null,
@@ -378,6 +380,67 @@ export const plannedTransactionRepository = {
     }
 
     return row;
+  },
+
+  /**
+   * Return active, unexecuted planned transactions whose planned_date falls within
+   * the next `days` days. Used by the bill-reminder endpoint.
+   *
+   * @param {number} days - Lookahead window (1–365)
+   * @returns {Promise<Array>}
+   */
+  async getDueSoon(days) {
+    const sql = `
+      SELECT pt.*,
+             r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM planned_transactions pt
+      LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN categories c ON pt.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      WHERE pt.is_active = true
+        AND pt.is_executed = false
+        AND pt.planned_date >= CURRENT_DATE
+        AND pt.planned_date <= CURRENT_DATE + ($1 || ' days')::INTERVAL
+      ORDER BY pt.planned_date ASC
+    `;
+    const result = await query(sql, [days]);
+    return result.rows;
+  },
+
+  /**
+   * Return all active, unexecuted planned transactions whose planned_date is on or
+   * before the forecast horizon (today + `months` months). Includes recurring
+   * transactions that have already started (planned_date may be before today if
+   * the user hasn't executed them yet).
+   *
+   * @param {number} months - Forecast horizon in months (1–24)
+   * @returns {Promise<Array>}
+   */
+  async getForForecast(months) {
+    const sql = `
+      SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
+             pt.memo, pt.is_recurring, pt.recurrence_pattern,
+             r.name AS recipient_name,
+             CASE
+               WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail
+               WHEN rc.id IS NOT NULL THEN rc.general || ':' || rc.detail
+               ELSE NULL
+             END AS category_name
+      FROM planned_transactions pt
+      LEFT JOIN recipients r ON pt.recipient_id = r.id
+      LEFT JOIN categories c ON pt.category_id = c.id
+      LEFT JOIN categories rc ON r.default_category_id = rc.id
+      WHERE pt.is_active = true
+        AND pt.is_executed = false
+      ORDER BY pt.planned_date ASC
+    `;
+    const result = await query(sql, []);
+    return result.rows;
   },
 
   async hardDelete(id) {

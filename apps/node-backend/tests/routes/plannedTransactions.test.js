@@ -103,8 +103,8 @@ describe('Planned Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.data).toEqual([]);
-      expect(result.meta.pagination.total).toBe(0);
+      expect(result.data.items).toEqual([]);
+      expect(result.data.total).toBe(0);
     });
 
     it('should return planned transactions', async () => {
@@ -117,7 +117,7 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(1);
+      expect(res.json.mock.calls[0][0].data.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
@@ -127,9 +127,9 @@ describe('Planned Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      const meta = res.json.mock.calls[0][0].meta.pagination;
-      expect(meta.limit).toBe(5);
-      expect(meta.offset).toBe(2);
+      const data = res.json.mock.calls[0][0].data;
+      expect(data.limit).toBe(5);
+      expect(data.offset).toBe(2);
     });
 
     it('should filter by is_recurring', async () => {
