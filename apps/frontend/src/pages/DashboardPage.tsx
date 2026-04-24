@@ -25,6 +25,7 @@ import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVis
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateWithAppSettings, formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
+import type { Transaction } from "@/lib/api";
 
 type GraphExclusions = Record<string, boolean>;
 
@@ -149,7 +150,7 @@ export default function DashboardPage() {
         queryFn: async () => {
             const pageSize = 200;
             let offset = 0;
-            const picked: any[] = [];
+            const picked: Transaction[] = [];
 
             const excludedCategoryIdSet = new Set(allExcludedCategoryIds);
             const excludedRecipientIdSet = new Set(excludedRecipientIds);
@@ -333,7 +334,7 @@ export default function DashboardPage() {
 
     const recentTransactions = recentTransactionsSource.slice(0, 5).map((txn) => ({
         id: txn.id,
-        date: (txn as any).date || txn.transaction_date || null,
+        date: txn.transaction_date || null,
         description: txn.memo || t('txPage.field.description'),
         amount: txn.amount,
         currency: txn.currency || appSettings.defaultCurrency,

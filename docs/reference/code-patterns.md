@@ -2,10 +2,10 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-23
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, concurrency, batching, decimal-enforcement, zustand, feature-flags, slice-selection]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi]
+date: 2026-04-24
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, feature-flags, slice-selection, typescript, error-handling, type-safety]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types]
 ---
 
 # Code Patterns Reference
@@ -121,6 +121,101 @@ const value = parseDecimal(userInput, 0);  // Use 0 if parsing fails
 - **API response values** — already precise from backend
 - **Arithmetic operations** — keep math on server side
 - **Non-monetary numbers** — use `parseFloat()` or `Number()` for counts, ratios
+
+---
+
+## TypeScript Type Annotation Best Practices (Phase 5+)
+
+**Applies to:** Both frontend and backend TypeScript files
+
+### Explicit Type Annotations for Uninitialized Variables
+
+Always explicitly type variables on declaration when not initialized:
+
+```typescript
+// WRONG: Type inference on uninitialized variable
+let count = 0;  // inferred as number, but looks unintentional
+let values = [];  // inferred as unknown[], unclear intent
+let currentValue = 0;  // ambiguous for linting
+
+// CORRECT: Explicit type annotation
+let count: number;
+let values: string[];
+let currentValue: number = 0;
+
+// Or use const in loop/scope when possible
+let maxValue: number;
+for (const item of items) {
+  maxValue = Math.max(item.value);  // Now clearly typed
+}
+```
+
+### Type Narrowing in Conditionals
+
+```typescript
+// Avoid casting with `as any`
+const value = data.field as any;  // ❌ Disables type safety
+
+// Instead, use type guards with `instanceof` or `typeof`
+if (value instanceof Error) {
+  console.log(value.message);  // ✅ value is Error here
+} else if (typeof value === 'string') {
+  console.log(value.toUpperCase());  // ✅ value is string here
+}
+```
+
+### Interface vs Type (Phase 5+)
+
+**Rule:** Use `type` for simple aliases; use `interface` for object contracts
+
+```typescript
+// Type alias (simple/discriminated union)
+type ThemeVariant = 'default' | 'dracula' | 'solarized';
+type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
+// Empty interface extends becomes type alias (cleaner)
+// BEFORE: interface X extends Y { }
+// AFTER:  type X = Y;
+
+// Use interface for object contracts with inheritance
+interface Entity {
+  id: number;
+  createdAt: string;
+}
+
+interface Transaction extends Entity {
+  amount: number;
+  category: string;
+}
+```
+
+### Function Parameter Types (Phase 5+)
+
+```typescript
+// WRONG: Accept 'any' parameter
+function process(item: any) { ... }  // ❌ Loses type info
+
+// CORRECT: Use specific type
+function process(item: Transaction) { ... }  // ✅ Type-safe
+
+// Generic when flexible:
+function process<T extends Entity>(item: T) { ... }
+```
+
+### No "Useless Assignment" Anti-Pattern
+
+```typescript
+// WRONG: Variable assigned but never used before reassignment
+let total = 0;
+total = calculateSum(items);  // First assignment is useless
+
+// CORRECT: Declare without initial assignment, or initialize correctly
+let total: number;
+total = calculateSum(items);
+
+// Or use const when possible
+const total = calculateSum(items);
+```
 
 ---
 
@@ -709,14 +804,59 @@ All errors return this envelope:
 | 409 | ConflictError | CONFLICT | Duplicate entry |
 | 500 | AppError | APP_ERROR | Internal server error |
 
-### Frontend Error Handling
+### Frontend Error Handling (Phase 5+)
 
 ```ts
+// Type-safe error handling with unknown type
 try {
   const result = await apiClient.createEntity(data);
   toast.success('Created successfully');
-} catch (error) {
-  toast.error('Failed to create', { description: error.message });
+} catch (err: unknown) {
+  // Always type err as unknown, then narrow
+  const message = err instanceof Error ? err.message : String(err);
+  toast.error('Failed to create', { description: message });
+}
+
+// When re-throwing, preserve error context
+try {
+  await riskyOperation();
+} catch (err: unknown) {
+  // Chain error context for logging
+  throw new Error('Operation failed', { cause: err });
+}
+
+// Empty catch blocks must include comment
+try {
+  await nonCriticalTask();
+} catch {
+  // Failure is expected/handled elsewhere
+}
+```
+
+### Type-Safe Catch Pattern (Phase 5+)
+
+Always use `catch (err: unknown)` instead of `catch (err: any)`:
+
+| Pattern | Status | Reason |
+|---------|--------|--------|
+| `catch (err: any)` | ❌ **Deprecated** | Disables type checking; allows silent bugs |
+| `catch (err: unknown)` | ✅ **Required** | Enforces type narrowing before access |
+| `catch { ... }` | ✅ **Acceptable** | When error is unused; must have comment |
+
+Type narrowing in catch blocks:
+
+```ts
+try {
+  // operation
+} catch (err: unknown) {
+  // Narrowing examples:
+  if (err instanceof Error) {
+    logger.error('Error message:', err.message);
+  } else if (typeof err === 'string') {
+    logger.error('String error:', err);
+  } else {
+    logger.error('Unknown error type:', String(err));
+  }
 }
 ```
 
@@ -727,7 +867,7 @@ class AppError extends Error {
   constructor(message, {
     status = 500,
     code = 'APP_ERROR',
-    cause,        // native Error for logging
+    cause,        // native Error for logging (Phase 5+)
     details = {}  // non-sensitive debug context
   } = {})
 }
@@ -1274,9 +1414,12 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 
 ---
 
-## Import Batch Concurrency Pattern (Phase 1, Phase 3.1)
+## Import Batch Concurrency Pattern (Phase 1, Phase 3.1, Phase C)
 
-**Source:** [[apps/node-backend/src/services/importService.js|importService.js]], [[apps/node-backend/src/services/streamingImportService.js|streamingImportService.js]], [[apps/node-backend/src/services/rawTransactionImportService.js|rawTransactionImportService.js]]
+**Source:** [[apps/node-backend/src/services/importPipeline/index.js|importPipeline/index.js]], [[apps/node-backend/src/services/importPipeline/validate.js|validate.js]], [[apps/node-backend/src/services/importPipeline/commit.js|commit.js]]
+
+> [!info] Phase C Refactor
+> Import batch concurrency was consolidated into the unified `importPipeline` orchestrator (Phase C, April 2026). The pattern remains unchanged; the three legacy services are deprecated.
 
 For bulk CSV imports, rows are processed in adaptive concurrent batches to balance throughput against database pool constraints. Concurrency is derived from the pool configuration, not hardcoded, to remain safe across different deployment pool sizes.
 

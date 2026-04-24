@@ -165,7 +165,7 @@ export function streamChat(
             return terminal;
         } catch (err) {
             if ((err as Error).name === 'AbortError') {
-                throw new Error('Chat cancelled');
+                throw new Error('Chat cancelled', { cause: err });
             }
             throw err;
         }

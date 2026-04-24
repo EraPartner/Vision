@@ -121,7 +121,6 @@ export default function StocksPage({
       }
     }
 
-    poolUnits = Math.max(0, poolUnits);
     poolCostEur = Math.max(0, poolCostEur);
 
     const currentPrice = Number(holding.currentPrice ?? holding.current_price) || 0;

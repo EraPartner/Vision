@@ -217,7 +217,7 @@ export function DataTable<T extends Record<string, unknown>>({
             result.sort((a, b) => {
                 const va = getSortValue(a.row[sortKey]);
                 const vb = getSortValue(b.row[sortKey]);
-                let cmp = 0;
+                let cmp: number;
                 if (typeof va === "number" && typeof vb === "number") {
                     cmp = va - vb;
                 } else {

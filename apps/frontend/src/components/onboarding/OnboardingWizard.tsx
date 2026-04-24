@@ -211,8 +211,8 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             const result = await apiClient.importCSV(file, selectedBank);
             setImportResult({ imported: result.imported, duplicates: result.duplicates });
             toast.success(t('onboarding.toast.imported', { n: String(result.imported) }));
-        } catch (err: any) {
-            toast.error(t('onboarding.toast.importFailed', { msg: err.message }));
+        } catch (err: unknown) {
+            toast.error(t('onboarding.toast.importFailed', { msg: (err as Error).message }));
         } finally {
             setImporting(false);
         }
@@ -231,8 +231,8 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
             }
             setCategoriesCreated(true);
             toast.success(t('onboarding.toast.categoriesCreated', { n: String(created) }));
-        } catch (err: any) {
-            toast.error(t('onboarding.toast.categoriesFailed', { msg: err.message }));
+        } catch (err: unknown) {
+            toast.error(t('onboarding.toast.categoriesFailed', { msg: (err as Error).message }));
         } finally {
             setCreatingCategories(false);
         }

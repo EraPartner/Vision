@@ -83,9 +83,9 @@ export function AppearanceTab() {
                                 aria-pressed={active}
                             >
                                 <div className="flex flex-col">
-                                    <span className="text-sm font-medium">{t(v.labelKey as any)}</span>
+                                    <span className="text-sm font-medium">{t(v.labelKey)}</span>
                                     <span className="text-xs text-muted-foreground">
-                                        {t(v.descKey as any)}
+                                        {t(v.descKey)}
                                     </span>
                                 </div>
                                 <VariantSwatch variant={v.value} mode={theme} />

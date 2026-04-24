@@ -2,10 +2,10 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-04-02
-tags: [guide, contributing, development, workflow]
-description: How to contribute to Vision
-aliases: [contributing-guide, development-workflow, code-standards, pull-requests]
+date: 2026-04-24
+tags: [guide, contributing, development, workflow, code-standards, typescript, error-handling, type-safety]
+description: How to contribute to Vision — development workflow, code standards, testing, and type-safe TypeScript patterns
+aliases: [contributing-guide, development-workflow, code-standards, pull-requests, typescript-standards, error-handling-guide]
 related_code: [[AGENTS.md]]
 ---
 
@@ -113,11 +113,33 @@ interface TransactionFormProps {
 // Use union types for variants
 type ButtonVariant = 'default' | 'destructive' | 'outline';
 
+// Type-safe error handling (Phase 5+)
+try {
+  const result = await apiClient.loadData();
+} catch (err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  toast.error(message);
+}
+
+// Explicit type annotations for variables
+let currentValue: number;  // ✅ Clear intent
+let values: string[] = [];  // ✅ Explicit type
+
+// Avoid:
+let count = 0;  // ❌ Looks uninitialized
+const data: any = {};  // ❌ Disables type checking
+
 // Path alias: @/* maps to apps/frontend/src/*
 import { useTransaction } from '@/hooks/useTransaction';
 ```
 
-See [[docs/components/index|Component Documentation]] for more.
+**Type Safety Rules:**
+- Always use `catch (err: unknown)` instead of `catch (err: any)`
+- Avoid `as any` casts — use type guards instead
+- Explicitly type variables on declaration when not initialized
+- Use `type` for simple aliases, `interface` for object contracts
+
+See [[docs/reference/code-patterns#typescript-type-annotation-best-practices-phase-5|Type Annotation Best Practices]] and [[docs/components/index|Component Documentation]] for more.
 
 ### JavaScript/Node.js (Backend)
 

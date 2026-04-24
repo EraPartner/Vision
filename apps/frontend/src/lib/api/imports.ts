@@ -77,7 +77,7 @@ export function importCSVWithProgress(
             };
         } catch (err) {
             if ((err as Error).name === 'AbortError') {
-                throw new Error('Import cancelled');
+                throw new Error('Import cancelled', { cause: err });
             }
             throw err;
         }

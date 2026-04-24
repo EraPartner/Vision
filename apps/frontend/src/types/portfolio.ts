@@ -1,6 +1,7 @@
 /**
  * Portfolio investment types — shared between frontend components.
  */
+import type { PortfolioTransaction } from './api';
 
 export type AssetClass = 'stock' | 'etf' | 'crypto' | 'metals' | 'real_estate' | 'savings' | 'bond';
 
@@ -119,6 +120,6 @@ export interface InvestmentSummary {
   totalBuyCost: number;        // Total spent on buys (including fees)
   totalSellProceeds: number;   // Total received from sells
   
-  transactions: any[];
+  transactions: PortfolioTransaction[];
   description?: string;
 }

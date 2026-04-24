@@ -15,6 +15,7 @@ import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
+import type { Recipient } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -44,7 +45,7 @@ export default function RecipientsPage() {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-    const [allItems, setAllItems] = useState<any[]>([]);
+    const [allItems, setAllItems] = useState<Recipient[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
     const offsetRef = useRef(0);
@@ -88,8 +89,8 @@ export default function RecipientsPage() {
                 sort_dir: sortDir || undefined,
             });
             setAllItems(prev => {
-                const existingIds = new Set(prev.map((r: any) => r.id));
-                const newItems = result.items.filter((r: any) => !existingIds.has(r.id));
+                const existingIds = new Set(prev.map((r) => r.id));
+                const newItems = result.items.filter((r) => !existingIds.has(r.id));
                 return [...prev, ...newItems];
             });
             offsetRef.current += result.items.length;
@@ -160,7 +161,7 @@ export default function RecipientsPage() {
         );
     }
 
-    const recipients: TableRecipient[] = allItems.map((r: any) => ({
+    const recipients: TableRecipient[] = allItems.map((r) => ({
         id: r.id,
         name: r.name,
         primary_bank_account: r.primary_bank_account || t('recipientsPage.none'),

@@ -156,8 +156,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
             queryClient.invalidateQueries({ queryKey: ["recurringPatterns"] });
             queryClient.invalidateQueries({ queryKey: ["plannedTransactions"] });
             toast.success(t('recurring.toast.created', { name: pattern.recipientName }));
-        } catch (err: any) {
-            toast.error(t('recurring.toast.failed', { msg: err.message }));
+        } catch (err: unknown) {
+            toast.error(t('recurring.toast.failed', { msg: (err as Error).message }));
         }
     };
 
@@ -365,7 +365,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
     );
 }
 
-function ConfidenceBadge({ confidence, t }: { confidence: number; t: (key: any) => string }) {
+function ConfidenceBadge({ confidence, t }: { confidence: number; t: (key: string) => string }) {
     let color = "text-muted-foreground border-muted";
     let label = t('recurring.confidence.low');
 

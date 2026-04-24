@@ -75,7 +75,7 @@ export function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
                         </SelectTrigger>
                         <SelectContent>
                             {DATE_FORMATS.map((f) => (
-                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey as any)}</SelectItem>
+                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey)}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -95,7 +95,7 @@ export function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
                         </SelectTrigger>
                         <SelectContent>
                             {NUMBER_FORMATS.map((f) => (
-                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey as any)}</SelectItem>
+                                <SelectItem key={f.value} value={f.value}>{t(f.labelKey)}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>

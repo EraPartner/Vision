@@ -29,7 +29,7 @@ export function MergeRecipientsDialog({open, onOpenChange}: MergeRecipientsDialo
         queryFn: async () => {
             const pageSize = 1000;
             let offset = 0;
-            let total = 0;
+            let total: number;
             const all: Recipient[] = [];
 
             do {

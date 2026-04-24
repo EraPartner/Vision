@@ -230,7 +230,7 @@ export async function rawFetch(
         });
     } catch (err: unknown) {
         if ((err as Error).name === 'AbortError') {
-            throw new Error('Request timed out or was cancelled');
+            throw new Error('Request timed out or was cancelled', { cause: err });
         }
         throw err;
     } finally {

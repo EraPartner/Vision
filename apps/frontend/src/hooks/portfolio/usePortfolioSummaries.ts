@@ -77,8 +77,8 @@ function buildSummary(
   let avgCostBasis = 0;
   let realizedGain = 0;
   let unrealizedGain = 0;
-  let currentValue = 0;
-  let totalInvested = 0;
+  let currentValue: number;
+  let totalInvested: number;
   let totalBuyCost = 0;
   let totalSellProceeds = 0;
   let accruedInterest = 0;

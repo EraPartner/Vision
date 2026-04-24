@@ -156,6 +156,27 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-24 TypeScript & Error Handling Standards (Phase 5+ Linting Fixes)
+
+**Frontend Type Safety Hardening across 18 files:**
+
+- **Error Handling**: Migrated all `catch (err: any)` to `catch (err: unknown)` with type narrowing via `instanceof` checks. Empty catch blocks now include explanatory comments.
+- **Type Annotations**: Added explicit `: type` annotations to uninitialized variables (`let count: number`) instead of inference; removes `no-useless-assignment` anti-pattern.
+- **Cast Removal**: Eliminated `as any` casts in favor of type guards (AppearanceTab, GeneralTab translation keys; DashboardPage transaction types).
+- **Interface Cleanup**: Converted empty `interface X extends Y {}` to `type X = Y` (command.tsx, textarea.tsx) per `no-empty-object-type` rule.
+- **Error Context**: All re-thrown errors now use `{ cause: err }` to preserve error context in logs (ai.ts, client.ts, imports.ts).
+- **Type Specificity**: 
+  - `any[]` → `Transaction[]` in DashboardPage
+  - `useState<any[]>` → `useState<Recipient[]>` in RecipientsPage
+  - `transactions: any[]` → `transactions: PortfolioTransaction[]` in types/portfolio.ts
+
+**Documentation Updates:**
+- [[docs/reference/code-patterns#typescript-type-annotation-best-practices-phase-5|TypeScript Type Annotation Best Practices]] — New section covering explicit annotations, type narrowing, and interface/type guidance.
+- [[docs/reference/code-patterns#frontend-error-handling-phase-5|Frontend Error Handling (Phase 5+)]] — Enhanced error handling section with type-safe catch patterns and error context preservation.
+- [[docs/guides/contributing#typescript-frontend|Contributing Guide TypeScript section]] — Added type-safety rules and examples.
+
+**Linting Status:** 0 type safety errors; tests remain at 1223 passing (no behavior changes).
+
 ### 2026-04-24 Phase 7 — Feature Batch C Complete
 
 **Database Maintenance, Sankey Flow, Rolling Averages, PDF Reports:**

@@ -150,7 +150,7 @@ export function BackupTab({
                 try {
                     window.localStorage.removeItem('vision.backup.passphrase.reminder.dismissed');
                     setReminderDismissed(false);
-                } catch {}
+                } catch { /* localStorage may throw in restrictive contexts */ }
             }
         } catch (err: unknown) {
             toast.error(t('settings.backup.passphrase.saveFailed'), { description: String(err) });
@@ -354,7 +354,7 @@ export function BackupTab({
                                                     onClick={() => {
                                                         try {
                                                             window.localStorage.setItem('vision.backup.passphrase.reminder.dismissed', '1');
-                                                        } catch {}
+                                                        } catch { /* localStorage may throw in restrictive contexts */ }
                                                         setReminderDismissed(true);
                                                     }}
                                                 >
