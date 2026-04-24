@@ -4,15 +4,16 @@ type: reference
 status: active
 date: 2026-04-24
 updated: 2026-04-24
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-5a, phase-2, phase-4, feature-flags]
-description: Complete matrix of all 129 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); includes Phase 4 feature flags; JSON export in Phase 5A; see openapi.yaml for authoritative spec (Phase 2.4)
+adr-reference: 026
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, phase-5a, phase-6, phase-7, feature-flags, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance]
+description: Complete matrix of all 150 API endpoints organized by resource for quick lookup; includes Phase 4 feature flags; JSON export and attachments in Phase 5A; bank reconciliation, cash flow forecast, and bill reminders in Phase 6; Sankey flow, DB maintenance, PDF reports in Phase 7; see openapi.yaml for authoritative spec
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 131 API endpoints across 18 route files. Use this as a quick reference to find any endpoint.
+> All 150 API endpoints across 20 route files (updated Phase 7). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 
@@ -53,7 +54,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/recipients/:id/unmerge` | Unmerge from primary | — | [[docs/api/recipients\|Recipients]] |
 | GET | `/api/recipients/:id/aliases` | Get aliases | — | [[docs/api/recipients\|Recipients]] |
 
-## Planned Transactions (6 endpoints)
+## Planned Transactions (7 endpoints) — Phase 3 / Phase 6
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -63,6 +64,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | PATCH | `/api/planned-transactions/:id` | Update | 30 req/min | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | POST | `/api/planned-transactions/:id/execute` | Execute (atomic, idempotent — Phase 3) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | DELETE | `/api/planned-transactions/:id` | Hard delete | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET | `/api/planned-transactions/due-soon` | Upcoming bills within N days (Phase 6) | — | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
 ## Investments (14 endpoints)
 
@@ -113,6 +115,15 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/import/recipients` | Bulk import recipients | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/categories` | Bulk import categories | — | [[docs/api/imports\|Imports]] |
 
+## Attachments (4 endpoints) — Phase 5A
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| POST | `/api/attachments/transaction/:id` | Upload attachment | — | [[docs/api/attachments\|Attachments]] |
+| GET | `/api/attachments/transaction/:id` | List attachments for transaction | — | [[docs/api/attachments\|Attachments]] |
+| GET | `/api/attachments/:id/download` | Download attachment file | — | [[docs/api/attachments\|Attachments]] |
+| DELETE | `/api/attachments/:id` | Delete attachment | — | [[docs/api/attachments\|Attachments]] |
+
 ## Saved Charts (4 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
@@ -158,6 +169,23 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/splits/owed/:id/settle-all` | Settle all for recipient | — | [[docs/api/splits\|Splits]] |
 | DELETE | `/api/splits/:id` | Delete split | — | [[docs/api/splits\|Splits]] |
 
+## Reconciliation (10 endpoints) — Phase 6
+
+Bank statement import and transaction matching with auto-match candidate scoring.
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/reconciliation/statements` | List statements | — | [[docs/api/reconciliation\|Reconciliation]] |
+| POST | `/api/reconciliation/statements` | Create statement | — | [[docs/api/reconciliation\|Reconciliation]] |
+| GET | `/api/reconciliation/statements/:id` | Get statement with entry summary | — | [[docs/api/reconciliation\|Reconciliation]] |
+| PATCH | `/api/reconciliation/statements/:id` | Update statement header | — | [[docs/api/reconciliation\|Reconciliation]] |
+| DELETE | `/api/reconciliation/statements/:id` | Delete statement (cascades entries) | — | [[docs/api/reconciliation\|Reconciliation]] |
+| GET | `/api/reconciliation/statements/:id/entries` | List entries for statement | — | [[docs/api/reconciliation\|Reconciliation]] |
+| POST | `/api/reconciliation/statements/:id/entries` | Add entry or bulk entries | — | [[docs/api/reconciliation\|Reconciliation]] |
+| DELETE | `/api/reconciliation/statements/:id/entries/:entryId` | Delete entry | — | [[docs/api/reconciliation\|Reconciliation]] |
+| GET | `/api/reconciliation/statements/:id/entries/:entryId/candidates` | Auto-match candidates with scores | — | [[docs/api/reconciliation\|Reconciliation]] |
+| POST/DELETE | `/api/reconciliation/statements/:id/entries/:entryId/match` | Set/clear transaction match | — | [[docs/api/reconciliation\|Reconciliation]] |
+
 ## Health (2 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
@@ -179,10 +207,20 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/api/admin/feature-flags` | List all feature flags (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/feature-flags/:key` | Get single feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 
-## Aggregations (6 endpoints) — Phase 2
+## Reports (1 endpoint) — Phase 7
 
-Server-computed aggregations with materialized-view/live distinction. Behind `AGGREGATIONS_V2_ENABLED` feature flag.
+Server-side PDF generation via PDFKit. Returns binary stream (`application/pdf`).
+
+| Method | Path | Description | Rate Limit | Doc |
+|--------|------|-------------|------------|-----|
+| GET | `/api/reports/financial` | Export full financial PDF report (monthly + categories) | — | — |
+
+## Aggregations (8 endpoints) — Phase 2 / Phase 6 / Phase 7
+
+Server-computed aggregations with materialized-view/live distinction. Behind `AGGREGATIONS_V2_ENABLED` feature flag. Cash flow forecast added in Phase 6. Sankey flow added in Phase 7.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -192,6 +230,8 @@ Server-computed aggregations with materialized-view/live distinction. Behind `AG
 | GET | `/api/aggregations/cashflow-comparison` | Current vs. historical daily flow | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/average-vs-current` | Average vs. current period metrics | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/bank-balances` | Account balances and history | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/cashflow-forecast` | N-month forward cash flow from planned transactions (Phase 6) | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/sankey` | Directed income→category flow graph for d3-sankey (Phase 7) | — | [[docs/api/aggregations\|Aggregations]] |
 
 ## Info/Statistics (20 endpoints)
 
@@ -243,22 +283,23 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Transactions | 7 | 2 |
 | Categories | 7 | 0 |
 | Recipients | 8 | 0 |
-| Planned Transactions | 6 | 1 |
+| Planned Transactions | 7 | 1 |
 | Investments | 14 | 0 |
 | Watchlist | 5 | 0 |
 | Market Lookup | 4 | 0 |
 | Import | 6 | 0 |
+| Attachments (Phase 5A) | 4 | 0 |
 | Saved Charts | 4 | 0 |
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
+| Reconciliation (Phase 6) | 10 | 0 |
 | Admin | 10 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
-| Admin | 7 | 0 |
-| Aggregations (Phase 2) | 6 | 0 |
+| Aggregations (Phase 2/6) | 7 | 0 |
 | Info/Statistics | 20 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **129** | **10** |
+| **Total** | **144** | **10** |
 
 ## Related
 

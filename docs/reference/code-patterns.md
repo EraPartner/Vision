@@ -304,84 +304,66 @@ Two new test cases in `timezone.test.js`:
 
 ## Backend Route Pattern
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/categories.js|categories.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/categories.js|categories.js]]
+
+Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware:
 
 ```js
 import { Router } from 'express';
 import entityRepository from '../repositories/entityRepository.js';
 import { logger } from '../config/logger.js';
 import { validateIdParam } from '../middleware/validation.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 // GET /api/entities — paginated list
 router.get('/', async (req, res) => {
-  try {
-    const { limit = 50, offset = 0, ...filters } = req.query;
-    const opts = {
-      limit: Math.min(parseInt(limit, 10) || 50, 1000),
-      offset: parseInt(offset, 10) || 0,
-    };
+  const { limit = 50, offset = 0, ...filters } = req.query;
+  const opts = {
+    limit: Math.min(parseInt(limit, 10) || 50, 1000),
+    offset: parseInt(offset, 10) || 0,
+  };
 
-    const [items, total] = await Promise.all([
-      entityRepository.getAll(opts),
-      entityRepository.getCount(opts),
-    ]);
+  const [items, total] = await Promise.all([
+    entityRepository.getAll(opts),
+    entityRepository.getCount(opts),
+  ]);
 
-    res.json({ items, total, limit: opts.limit, offset: opts.offset, links: [] });
-  } catch (err) {
-    logger.error('Error retrieving entities', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve entities' });
-  }
+  // List response: wrap payload as {items, total, ...} inside data
+  res.ok({ items, total, limit: opts.limit, offset: opts.offset });
 });
 
 // GET /api/entities/:id
 router.get('/:id', validateIdParam, async (req, res) => {
-  try {
-    const entity = await entityRepository.getById(parseInt(req.params.id, 10));
-    if (!entity) return res.status(404).json({ detail: 'Entity not found' });
-    res.json(entity);
-  } catch (err) {
-    logger.error('Error retrieving entity', { error: err.message });
-    res.status(500).json({ detail: 'Failed to retrieve entity' });
-  }
+  const entity = await entityRepository.getById(parseInt(req.params.id, 10));
+  if (!entity) throw new NotFoundError('Entity not found');
+  res.ok(entity);
 });
 
 // POST /api/entities
 router.post('/', async (req, res) => {
-  try {
-    const { requiredField, ...data } = req.body;
-    if (!requiredField) return res.status(400).json({ detail: 'Missing required fields' });
-    const entity = await entityRepository.create(data);
-    res.status(201).json(entity);
-  } catch (err) {
-    logger.error('Error creating entity', { error: err.message });
-    res.status(500).json({ detail: 'Failed to create entity' });
+  const { requiredField, ...data } = req.body;
+  if (!requiredField) {
+    throw new ValidationError('Missing required fields: requiredField');
   }
+  const entity = await entityRepository.create(data);
+  res.status(201);
+  res.ok(entity);
 });
 
 // PATCH /api/entities/:id
 router.patch('/:id', validateIdParam, async (req, res) => {
-  try {
-    const updated = await entityRepository.update(parseInt(req.params.id, 10), req.body);
-    if (!updated) return res.status(404).json({ detail: 'Entity not found' });
-    res.json(updated);
-  } catch (err) {
-    logger.error('Error updating entity', { error: err.message });
-    res.status(500).json({ detail: 'Failed to update entity' });
-  }
+  const updated = await entityRepository.update(parseInt(req.params.id, 10), req.body);
+  if (!updated) throw new NotFoundError('Entity not found');
+  res.ok(updated);
 });
 
 // DELETE /api/entities/:id
 router.delete('/:id', validateIdParam, async (req, res) => {
-  try {
-    const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
-    if (!deleted) return res.status(404).json({ detail: 'Entity not found' });
-    res.json({ message: 'Entity deleted', links: [] });
-  } catch (err) {
-    logger.error('Error deleting entity', { error: err.message });
-    res.status(500).json({ detail: 'Failed to delete entity' });
-  }
+  const deleted = await entityRepository.hardDelete(parseInt(req.params.id, 10));
+  if (!deleted) throw new NotFoundError('Entity not found');
+  res.ok({ id: parseInt(req.params.id, 10) });
 });
 
 export default router;
@@ -391,13 +373,82 @@ export default router;
 
 | Pattern | Rule |
 |---------|------|
-| Parallel fetch | `Promise.all([getAll, getCount])` for list endpoints |
-| ID validation | `validateIdParam` middleware on all `/:id` routes |
-| Error format | Always `{ detail: 'message' }` |
-| Pagination response | `{ items, total, limit, offset, links: [] }` |
-| Route ordering | Static routes (e.g., `/providers`) BEFORE `/:id` routes |
-| Rate limiting | Per-route limiters for heavy endpoints |
-| Export | `export default router` |
+| **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
+| **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
+| **ID validation** | `validateIdParam` middleware on all `/:id` routes |
+| **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
+| **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` |
+| **Route ordering** | Static routes (e.g., `/providers`) BEFORE `/:id` routes |
+| **Rate limiting** | Per-route limiters for heavy endpoints (e.g., export, search) |
+| **Export** | `export default router` |
+
+---
+
+## List Response Envelope Pattern (ADR-026 Compliance)
+
+**Source:** [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/attachments.js|attachments.js]], test suite
+
+All list/paginated endpoints return a consistent envelope shape per [[docs/adr/026-unified-api-response-envelope|ADR-026]]:
+
+```js
+// Backend: Route returns wrapped payload
+router.get('/', async (req, res) => {
+  const [items, total] = await Promise.all([
+    repository.getAll({ limit, offset }),
+    repository.getCount(),
+  ]);
+  // Payload wraps inside res.ok(data) — data object becomes {items, total, ...}
+  res.ok({ items, total, limit, offset });
+});
+
+// HTTP Response:
+{
+  "ok": true,
+  "data": {
+    "items": [...],
+    "total": 42,
+    "limit": 50,
+    "offset": 0
+  },
+  "meta": {
+    "requestId": "...",
+    "computedAt": "2026-04-24T..."
+  }
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| **Items always present** | `data.items` is the array; never bare `data` as array |
+| **Total count required** | Pagination requires `data.total` (total records matching filter) |
+| **Limit/offset optional** | Include if pagination is used; omit for fixed-size responses |
+| **Payload wrapping** | `res.ok({items, total, ...})` wraps the list payload inside `data`; never `res.ok(items)` |
+| **Parallel fetch** | Use `Promise.all([getAll, getCount])` to avoid N+1 queries |
+| **Frontend unwrapping** | API client returns `body.data` automatically; consumer receives `{items, total, ...}` |
+
+### Common Patterns
+
+```js
+// List endpoint with filtering
+res.ok({ items, total, limit: opts.limit, offset: opts.offset });
+
+// Small fixed list (no pagination)
+res.ok({ items: summary, total: summary.length });
+
+// With metadata
+res.ok({ items, total }, { source: 'mv', computedAt: '...' });
+```
+
+### Frontend Consumption
+
+```typescript
+// API client unwraps envelope; frontend gets {items, total, ...}
+const { items, total } = await apiClient.getEntities({ limit: 50 });
+
+items.forEach(item => console.log(item));  // items is already the array
+```
 
 ---
 
@@ -840,31 +891,48 @@ See [[docs/testing/testing#Property Test Pattern (Phase 8)|Property Test Pattern
 
 ---
 
-## Aggregation Envelope Pattern (Phase 2)
+## Aggregation Envelope Pattern (Phase 2, Updated Phase 1)
 
 **Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.js|aggregations.js]]
 
-All `/api/aggregations/*` endpoints return a standard envelope with metadata about data freshness and source.
+All `/api/aggregations/*` endpoints follow the unified transport envelope (ADR-026) with a nested aggregation domain envelope. Calculation modules return `{ data, meta: { source, computedAt } }`, and routes pass this directly to `res.ok()`.
 
-### Envelope Structure
+### Double-Nested Envelope Structure (Phase 1 Compliance)
+
+Routes use `res.ok({ data, meta })` to nest the aggregation envelope inside the transport envelope. After the frontend unwraps the outer `{ ok, data }` transport layer, consumers receive the inner `AggregationEnvelope<T>`:
 
 ```js
-import { buildEnvelope } from '../services/calculations/aggregation/_envelope.js';
-
-const data = { /* calculation result */ };
-const envelope = buildEnvelope(data, {
-  source: 'mv',           // 'mv' | 'live'
-  computedAt: new Date().toISOString()  // optional; defaults to now
+// Route handler (aggregations.js)
+router.get('/monthly-summary', async (req, res) => {
+  const { data, meta } = await computeMonthlySummary({
+    targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  // Nest domain envelope inside transport envelope
+  res.ok({ data, meta });
 });
 
-// Returns:
-// {
-//   data: { /* calculation result */ },
-//   meta: {
-//     source: "mv" | "live",
-//     computedAt: "2026-04-16T12:34:56.789Z"
-//   }
-// }
+// HTTP Response:
+{
+  "ok": true,
+  "data": {
+    "data": { /* calculation result */ },
+    "meta": {
+      "source": "mv" | "live",
+      "computedAt": "2026-04-16T12:34:56.789Z"
+    }
+  },
+  "meta": {
+    "requestId": "..."
+  }
+}
+
+// Frontend receives (after unwrapEnvelope):
+{
+  data: { /* calculation result */ },
+  meta: { source: "mv" | "live", computedAt: "..." }
+}
 ```
 
 ### Source Heuristic
@@ -887,28 +955,10 @@ The `meta.source` field indicates whether the response was served from a materia
    - `/average-vs-current` (Phase 2 always computes current-period live)
    - Any endpoint computing "now" relative to historical averages
 
-### Implementation in Routes
-
-```js
-// Route: GET /api/aggregations/monthly-summary
-router.get('/monthly-summary', async (req, res) => {
-  try {
-    const envelope = await computeMonthlySummary({
-      targetCurrency: getTargetCurrency(req),
-      excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
-      excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
-    });
-    res.json(envelope);  // Already wrapped by computeMonthlySummary
-  } catch (err) {
-    respondError(res, 'monthly-summary', err);
-  }
-});
-```
-
 ### Implementation in Calculation Services
 
 ```js
-// Service: computeMonthlySummary
+// Service: computeMonthlySummary (calculation module)
 import { buildEnvelope } from './_envelope.js';
 import { getMonthlyFinancialSummary } from '../../repositories/infoRepository.js';
 
@@ -923,16 +973,17 @@ export async function computeMonthlySummary({
   const data = await getMonthlyFinancialSummary(
     excludedCategoryIds,
     targetCurrency,
-    excludedRecipientIds  // 3rd positional param (Phase 2 addition)
+    excludedRecipientIds
   );
 
+  // Return domain envelope; route will nest inside transport envelope
   return buildEnvelope(data, { source });
 }
 ```
 
 ### Frontend Consumption
 
-The UI can inspect `meta.source` to surface data freshness:
+The API client unwraps the outer envelope, so consumers receive the aggregation envelope directly:
 
 ```tsx
 function DashboardStatCards() {
@@ -942,6 +993,7 @@ function DashboardStatCards() {
 
   if (!envelope) return null;
 
+  // envelope has shape: { data: {...}, meta: { source, computedAt } }
   const isMV = envelope.meta.source === 'mv';
   const freshness = isMV ? '~15 min old' : 'current';
 

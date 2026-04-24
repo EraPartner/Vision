@@ -2,9 +2,9 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-04-23
-tags: [feature, statistics, analytics, charts, frontend, backend, refactor]
-description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, and saved custom charts. Refactored (Apr 2026) into composable sub-components with shared utilities.
+date: 2026-04-24
+tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, sankey-flow, rolling-averages, pdf-export]
+description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -63,6 +63,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | `YearlySummaryTable.tsx` | 67 | Yearly summary table (income, spending, net, tx count) | Yearly |
 | `SavedChartsSection.tsx` | 42 | Renders saved custom category charts | All |
 | `RecipientInsightsTab.tsx` | 311 | Merchant spending insights (MoM alerts, filters) | Recipients |
+| `SankeyTab.tsx` | 88 | Sankey flow diagram with year selector and exclusion toggle | Flow |
 
 **Shared utilities:**
 
@@ -234,6 +235,45 @@ The statistics feature relies on these backend endpoints via `[[apps/node-backen
 | `GET /api/info/recipient-insights` | Merchant spending insights |
 | `GET /api/info/exchange-rates` | Exchange rates for currency normalization |
 
+## Phase 7 Additions (April 2026)
+
+### New Tab: Flow (Sankey Diagram)
+
+A fourth tab showing income allocation flow to spending categories via d3-sankey visualization:
+
+- **Year selector**: Choose which year to analyze
+- **ExclusionToggle**: Per-graph toggle to show/hide category and recipient exclusion filters
+- **Nodes**: Income source, top 12 spending categories, "Savings/Unspent" node
+- **Links**: Weighted flows showing amount allocated to each category
+- **Exclusion support**: Backend filters transactions by excluded categories/recipients when computing flows
+- **Endpoint**: `GET /api/aggregations/sankey?year=2026&currency=EUR&excluded_category_ids[]=5&excluded_category_ids[]=10`
+- **Backend service**: `apps/node-backend/src/services/calculations/aggregation/sankey.js`
+- **Component integration**: `SankeyTab` receives `graphExclusions`, `onToggleExclusion`, `exclusionsApply` props from parent `StatisticsPage`
+
+See [[docs/features/sankey-flow|Sankey Flow Feature]].
+
+### Monthly Chart Enhancement: Rolling Average Overlay
+
+The Monthly Chart now supports optional 3-month rolling average visualization:
+
+- **Toggle button**: Show/hide rolling average line overlay
+- **Computation**: `computeRollingAverage(values, 3)` with null handling for sparse data
+- **Visual**: Line overlay on top of bar chart, distinct color
+- **Use case**: Identify trends beneath seasonal variation
+
+See [[docs/features/rolling-averages|Rolling Averages Feature]].
+
+### PDF Export Button
+
+Statistics page header includes "Export PDF" button:
+
+- **Generates**: A4 PDF with summary cards, monthly table, top 10 categories
+- **Endpoint**: `GET /api/reports/financial?currency=EUR`
+- **Implementation**: Server-side via `pdfkit@0.18.0` with streaming response
+- **Download**: Browser automatically downloads as `financial-report-{YYYY-MM-DD}.pdf`
+
+See [[docs/features/pdf-report-export|PDF Report Export Feature]].
+
 ## Related Features
 
 - [[docs/features/splits|Splits & Owes]] — Owed summary uses similar aggregation patterns
@@ -241,3 +281,6 @@ The statistics feature relies on these backend endpoints via `[[apps/node-backen
 - [[docs/features/saved-charts|Saved Charts]] — Custom charts render within Statistics page
 - [[docs/features/recipient-insights|Recipient Insights]] — Embedded as a tab within Statistics
 - [[docs/features/portfolio|Portfolio Performance]] — Separate analytics for investment data
+- [[docs/features/sankey-flow|Sankey Flow]] — Phase 7 income flow visualization
+- [[docs/features/rolling-averages|Rolling Averages]] — Phase 7 trend overlays
+- [[docs/features/pdf-report-export|PDF Report Export]] — Phase 7 financial report download

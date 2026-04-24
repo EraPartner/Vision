@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-23
-tags: [knowledge-base, index, project, overview, phase-3, phase-4]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 4 includes Zustand unified settings store and runtime feature flags.
+date: 2026-04-24
+tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 7 complete with database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -155,6 +155,40 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-24 Phase 7 — Feature Batch C Complete
+
+**Database Maintenance, Sankey Flow, Rolling Averages, PDF Reports:**
+
+- **Database Maintenance UI** (`GET /api/admin/db/stats`, `POST /api/admin/db/vacuum`): Real-time table statistics display and per-table/bulk VACUUM ANALYZE operations. Uses raw database client (not pool) because VACUUM cannot run in transactions. Frontend page at `/admin/db`.
+- **Sankey Flow Visualization** (`GET /api/aggregations/sankey`): Interactive income→category flow diagram via d3-sankey showing top 12 categories + Savings node. New "Flow" tab in Statistics page with year selector. Backend service in `aggregation/sankey.js` with top-12 category aggregation and savings calculation.
+- **Rolling Average Overlays**: New utility `computeRollingAverage()` (window-based moving average with null-handling) + BarChart overlay support. MonthlyChart toggle displays 3-month rolling average line overlay. Helps identify trends beneath seasonal noise.
+- **PDF Financial Report Export** (`GET /api/reports/financial`): Server-side PDF generation via `pdfkit@0.18.0` with streaming response. Includes summary cards, monthly breakdown table, top 10 categories. "Export PDF" button added to StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
+- **Endpoint Matrix Updated**: All 150 endpoints now documented including Phase 7 additions.
+
+See [[docs/features/database-maintenance|DB Maintenance]], [[docs/features/sankey-flow|Sankey Flow]], [[docs/features/rolling-averages|Rolling Averages]], [[docs/features/pdf-report-export|PDF Reports]], [[docs/api/aggregations|Aggregations API]], [[docs/api/admin|Admin API]]
+
+### 2026-04-24 Phase 5A Feature Batch A Complete
+
+**CSV Import & Receipt Attachments:**
+
+- **ADR-{pending}**: Receipt attachment system with file storage in `{ATTACHMENTS_DIR}/{txId}/{uuid}.ext` structure; configurable size limits via `ATTACHMENT_MAX_SIZE_MB`.
+- **Visual CSV Mapper**: New `useCsvPreview` hook + `CsvColumnMapper` component for client-side header detection and column mapping with preview table showing mapped columns highlighted.
+- **Attachment Routes**: Four endpoints:
+  - `POST /api/attachments/transaction/:id` — Upload
+  - `GET /api/attachments/transaction/:id` — List with metadata
+  - `GET /api/attachments/:id/download` — Stream file
+  - `DELETE /api/attachments/:id` — Delete file + record
+- **Frontend AttachmentPanel**: React Query integration with image thumbnails, hover-reveal delete button, upload progress feedback.
+- **Database Migration 0004**: `attachments` table with transaction FK CASCADE, stored_path, mime_type, size_bytes.
+- **Phase 5A Feature Checklist**:
+  - ✅ Import rollback (batch_id + delete-by-batch)
+  - ✅ Import history view with UI
+  - ✅ JSON/CSV portability export
+  - ✅ Visual CSV column mapper (useCsvPreview hook)
+  - ✅ Receipt attachments (upload, list, download, delete)
+
+See [[docs/features/import|Import Feature]], [[docs/api/attachments|Attachments API]], [[docs/reference/api-endpoint-matrix|API Endpoint Matrix (133 endpoints)]]
 
 ### 2026-04-17 Phase 9 — UI Revamp: Liquid Glass Aesthetic, visx Charts, Framer Motion
 

@@ -3,7 +3,7 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-04-11
-updated: 2026-04-21
+updated: 2026-04-24
 tags: [reference, environment, configuration, deployment]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
@@ -40,6 +40,24 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`; when unset, admin routes remain open for backward compatibility | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
 | `ALEMBIC_BIN` | `alembic` | No | Path to alembic binary; override in containers where alembic is installed to a venv (e.g. `/venv/bin/alembic`). Used by `runMigrations()` on startup | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `ALEMBIC_CONFIG` | `config/alembic.ini` | No | Path to alembic config file relative to repo root, passed to alembic via `-c` flag | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
+| `APP_TIMEZONE` | `Europe/Brussels` | No | Default timezone for business math (ADR-009) | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AGGREGATIONS_V2_ENABLED` | `false` | No | Gate for aggregation v2 routes | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `IMPORT_PIPELINE_V2` | `false` | No | Gate for import pipeline v2 | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `ATTACHMENTS_DIR` | `./data/attachments` | No | Filesystem root for receipt attachments (Phase 5A) | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `ATTACHMENT_MAX_SIZE_MB` | `10` | No | Per-file upload ceiling in MB | [[apps/node-backend/src/config/env.js\|env.js]] |
+
+## AI Chat / Ollama
+
+| Variable | Default | Required | Description | Code |
+|----------|---------|----------|-------------|------|
+| `OLLAMA_URL` | _(unset)_ | No | Base URL for local Ollama server | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | No | Default model for AI chat | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `60000` | No | Chat request timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | No | Health-check timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AI_CHAT_ENABLED` | `false` | No | Feature gate for AI chat endpoint | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AI_CHAT_RATE_LIMIT` | `30` | No | Per-minute rate limit | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AI_CHAT_MAX_HISTORY` | `30` | No | Max prior turns sent to model | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `AI_CHAT_MAX_TOOL_ROWS` | `500` | No | Cap on rows returned to tool calls | [[apps/node-backend/src/config/env.js\|env.js]] |
 
 ## Kinesis Price Provider
 
@@ -66,6 +84,8 @@ aliases: [env vars, environment variables, .env, configuration, env]
 |----------|---------|----------|-------------|------|
 | `VISION_HEALTH_POLL_ATTEMPTS` | `200` | No | Max startup health poll attempts; 200 × 300ms = 60s timeout | [[packaging/electron/main.js\|main.js]] |
 | `VISION_HEALTH_POLL_INTERVAL_MS` | `300` | No | Interval (ms) between health poll retries at startup | [[packaging/electron/main.js\|main.js]] |
+| `VISION_BACKUP_PASSPHRASE` | _(unset)_ | No | AES-GCM passphrase for encrypted SQL backup; unset → unencrypted backup with warning | [[packaging/electron/main.js\|main.js]] |
+| `VISION_COMPOSE_OVERRIDE` | _(unset)_ | No | Filename (relative to `workDir`) layered onto base `docker-compose.yml` | [[packaging/electron/main.js\|main.js]] |
 
 ## Docker/Deployment Variables
 
@@ -74,6 +94,31 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `POSTGRES_PASSWORD` | _(none)_ | Yes | PostgreSQL admin password | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_USER` | `ftm_user` | No | PostgreSQL username | [[docker-compose.yml\|docker-compose.yml]] |
 | `POSTGRES_DB` | `financial_transactions` | No | PostgreSQL database name | [[docker-compose.yml\|docker-compose.yml]] |
+| `PORT` | `3002` | No | Host port → app container mapping; also read by backend at startup | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_HOST` | `db` | No | Postgres host injected into app container for Alembic | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_PORT` | `5432` | No | Postgres port for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_USER` | `ftm_user` | No | Postgres user for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
+| `DB_NAME` | `financial_transactions` | No | Postgres database for Alembic migrations | [[docker-compose.yml\|docker-compose.yml]] |
+
+## Source-of-Truth
+
+Canonical backend schema: [[apps/node-backend/src/config/env.js|env.js]] — Zod-validated, loaded at boot. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for the frontend equivalent.
+
+## Shared Variables
+
+Cross-surface vars — must agree across layers:
+
+| Variable | Surfaces |
+|----------|----------|
+| `DATABASE_URL` | backend, docker-compose (`.env`) |
+| `POSTGRES_PASSWORD` | `.env` file, substituted into `DATABASE_URL` |
+| `PORT` | backend, docker-compose (`${PORT:-3002}`) |
+| `CORS_ORIGINS` | backend, docker-compose (`http://localhost:${PORT:-3002}`) |
+| `SERVER_HOST` | backend (`0.0.0.0` inside container) |
+
+## Noted Inconsistencies
+
+_None currently flagged._ Re-audit when adding cross-surface vars.
 
 ## Related
 

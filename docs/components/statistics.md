@@ -2,7 +2,7 @@
 title: Statistics Components
 type: component
 status: active
-date: 2026-04-23
+date: 2026-04-24
 tags: [components, statistics, charts, frontend, refactoring]
 description: Statistics page sub-components and shared utilities for composable analytics widgets
 related_code:
@@ -418,6 +418,113 @@ interface RecipientInsightsTabProps {
 <TabsContent value="recipients">
   <RecipientInsightsTab />
 </TabsContent>
+```
+
+---
+
+### SankeyChart
+
+**File:** `SankeyChart.tsx` (208 lines)  
+**Purpose:** D3-based Sankey flow diagram showing income allocation to spending categories
+
+**Props:**
+
+```typescript
+interface SankeyChartProps {
+  readonly data: SankeyFlowData;
+  readonly height?: number;
+}
+
+interface SankeyFlowData {
+  nodes: Array<{
+    id: string;      // Must be string: "__income__", "cat:{name}", "__savings__"
+    label: string;   // Display name
+    value: number;   // Total amount
+  }>;
+  links: Array<{
+    source: string;  // Source node ID
+    target: string;  // Target node ID
+    value: number;   // Flow amount
+  }>;
+  year: number;
+}
+```
+
+**Implementation:**
+
+- Uses `d3-sankey` library for layout computation
+- SVG-rendered with:
+  - `<path>` elements for curved links (via `sankeyLinkHorizontal`)
+  - `<rect>` elements for nodes with rounded corners
+  - Automatic text label positioning (left/right based on node x-position)
+  - Value tooltip on node hover
+- Deep-clones data before layout because d3-sankey mutates node/link objects in-place
+- **Critical:** Node IDs must be **strings** (not integers) for d3-sankey's `nodeId` accessor to properly resolve link source/target references. Integer indices cause silent layout failures.
+
+**Features:**
+
+- Responsive width (fills container via `ParentSize` wrapper)
+- Interactive hover: highlights related nodes/links with opacity transitions
+- Color-coded nodes: each node gets a consistent color from a 14-color palette
+- Currency-aware value display on node hover
+
+**Usage:**
+
+```tsx
+<SankeyChart data={flowData} height={420} />
+```
+
+---
+
+### SankeyTab
+
+**File:** `SankeyTab.tsx` (88 lines)  
+**Purpose:** Year selector + ExclusionToggle + SankeyChart wrapper for the Statistics Flow tab
+
+**Props:**
+
+```typescript
+interface SankeyTabProps {
+  graphExclusions: Record<string, boolean>;
+  onToggleExclusion: (key: string) => void;
+  exclusionsApply: boolean;
+}
+```
+
+**Features:**
+
+- Year selector dropdown (current year ± 5 years)
+- **ExclusionToggle button** in card header: Shows/hides exclusion filters (consistent with MonthlyChart and other charts)
+- Fetches Sankey data via `getSankeyFlow()` API client method
+- Conditionally includes excluded category/recipient IDs in query key and API call based on `exclusionsApply && isFiltered`
+- Displays loading skeleton during fetch
+- Shows error state if fetch fails
+- Renders SankeyChart with fetched data
+
+**Data Flow:**
+
+```
+SankeyTab
+  ├─ [selectedYear state]
+  ├─ [currency from useChartCurrencyFormatter]
+  ├─ [ExclusionToggle] → toggles graphExclusions["sankey"]
+  ├─ [useQuery] → getSankeyFlow({ year, currency, excluded_category_ids?, excluded_recipient_ids? })
+  └─ SankeyChart (renders fetched data)
+```
+
+**Usage:**
+
+```tsx
+<Tabs defaultValue="overview">
+  {/* ... other tabs ... */}
+  <TabsContent value="flow">
+    <SankeyTab
+      graphExclusions={graphExclusions}
+      onToggleExclusion={toggleGraphExclusion}
+      exclusionsApply={exclusionsApply}
+    />
+  </TabsContent>
+</Tabs>
 ```
 
 ---

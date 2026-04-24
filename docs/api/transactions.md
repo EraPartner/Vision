@@ -320,6 +320,7 @@ await apiClient.deleteTransaction(123);
 - [[docs/api/categories|Categories API]]
 - [[docs/api/recipients|Recipients API]]
 - [[docs/api/imports|Imports API]]
+- [[docs/api/attachments|Attachments API]] (Phase 5A)
 
 ## Testing Coverage Note (2026-04-16 Phase 5)
 

@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-04-16
-tags: [reference, data-model, entities, database, schema, phase-0, phase-1]
-description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0) and aggregation tables (Phase 1).
+date: 2026-04-24
+tags: [reference, data-model, entities, database, schema, phase-5a, phase-0, phase-1]
+description: Complete reference for all data entities in Vision — core, portfolio, planning, supporting, and aggregation entities. Includes exchange_rate_cache (Phase 0), aggregation tables (Phase 1), and attachment entity (Phase 5A).
 aliases: [data model, entities, domain model, schema entities]
 related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 ---
@@ -111,6 +111,7 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `category_id` | INTEGER | FK → categories | Category |
 | `is_recurring` | BOOLEAN | DEFAULT false | Recurring flag |
 | `recurrence_pattern` | TEXT | NULLABLE | Pattern (daily, weekly, monthly, etc.) |
+| `reminder_days_before` | INTEGER | NULLABLE | Days before planned_date to show reminder (Phase 6) |
 | `is_loan` | BOOLEAN | DEFAULT false | Loan flag |
 | `is_executed` | BOOLEAN | DEFAULT false | Execution flag |
 | `is_active` | BOOLEAN | DEFAULT true | Soft delete |
@@ -294,6 +295,32 @@ related_code: ["apps/node-backend/src/repositories/", "alembic/versions/"]
 | `source` | VARCHAR(50) | Statbel or Eurostat |
 
 **Related:** [[docs/integrations/belgian-inflation|Belgian Inflation]]
+
+---
+
+### Attachment (Phase 5A)
+
+**Purpose:** Receipt and document attachments for transactions.
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | SERIAL | PK | Unique identifier |
+| `transaction_id` | INTEGER | FK → transactions ON CASCADE | Parent transaction (cascade delete) |
+| `stored_path` | VARCHAR | NOT NULL | Relative file path: `{txId}/{uuid}.ext` |
+| `mime_type` | VARCHAR | NULLABLE | MIME type (e.g., "application/pdf") |
+| `size_bytes` | INTEGER | NULLABLE | File size in bytes |
+| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
+
+**Constraints:**
+- `FOREIGN KEY (transaction_id)` references `transactions(id) ON DELETE CASCADE` — deleting transaction removes attachments
+- Index on `transaction_id` for efficient listing by transaction
+
+**Storage:**
+- Files stored in `{ATTACHMENTS_DIR}/{txId}/{uuid}.ext` (e.g., `./data/attachments/123/a1b2c3d4-e5f6.pdf`)
+- `ATTACHMENTS_DIR` configurable via environment (default `./data/attachments`)
+- `ATTACHMENT_MAX_SIZE_MB` configurable via environment (default 10)
+
+**Related:** [[docs/api/attachments|Attachments API]], [[docs/features/import|Import Feature (Phase 5A)]], migration [[alembic/versions/0004_attachments.py|0004]]
 
 ---
 

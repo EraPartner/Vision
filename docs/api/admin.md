@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-04-10
+date: 2026-04-25
 tags:
   - api
   - admin
@@ -154,6 +154,109 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
   "detail": "Failed to sanitize Kinesis history"
 }
 ```
+
+---
+
+### GET /api/admin/db/stats (Phase 7)
+
+Retrieve current database table statistics.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `table` | string | Optional: specific table name; omit for all tables |
+
+**Response:** `200 OK`
+
+```json
+{
+  "tables": [
+    {
+      "table_name": "transactions",
+      "live_rows": 2453,
+      "dead_rows": 127,
+      "size_mb": 3.2,
+      "last_vacuum": "2026-04-24T10:15:32Z",
+      "last_analyze": "2026-04-24T10:15:32Z",
+      "autovacuum_enabled": true
+    },
+    {
+      "table_name": "categories",
+      "live_rows": 45,
+      "dead_rows": 2,
+      "size_mb": 0.1,
+      "last_vacuum": "2026-04-23T03:21:15Z",
+      "last_analyze": "2026-04-23T03:21:15Z",
+      "autovacuum_enabled": true
+    }
+  ],
+  "timestamp": "2026-04-24T12:34:56Z"
+}
+```
+
+**Important Note on Row Counts:**
+- `live_rows` and `dead_rows` are estimates from PostgreSQL's `pg_stat_user_tables` view, not authoritative counts
+- These estimates are only updated when VACUUM ANALYZE is executed
+- Tables inserted into but never analyzed will return `0` (represented as `—` in the frontend UI) until the first VACUUM ANALYZE run
+- This is expected PostgreSQL behavior; see [[docs/features/database-maintenance|Database Maintenance Feature]] for context
+
+**Response:** `500 Internal Server Error`
+
+```json
+{
+  "detail": "Failed to retrieve database statistics"
+}
+```
+
+See [[docs/features/database-maintenance|Database Maintenance Feature]] for details.
+
+---
+
+### POST /api/admin/db/vacuum (Phase 7)
+
+Run `VACUUM ANALYZE` on one or all tables.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `table` | string | No | Specific table name to vacuum; omit to vacuum all |
+| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM |
+
+**Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "VACUUM ANALYZE completed on 3 table(s)",
+  "tables_vacuumed": [
+    {
+      "table_name": "transactions",
+      "status": "completed",
+      "duration_ms": 245
+    },
+    {
+      "table_name": "investments",
+      "status": "completed",
+      "duration_ms": 67
+    }
+  ],
+  "total_duration_ms": 312
+}
+```
+
+**Response:** `409 Conflict` (VACUUM already running)
+
+```json
+{
+  "detail": "VACUUM already running. Please wait."
+}
+```
+
+**Implementation note:**
+- Uses raw database client (not connection pool) because VACUUM cannot run inside a transaction
+- See [[docs/features/database-maintenance|Database Maintenance Feature]] for architectural details
 
 ---
 

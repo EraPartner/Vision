@@ -1,14 +1,14 @@
 ---
-title: ADR-028 - Express 5 Compatibility: path-to-regexp Override
+title: ADR-029 - Express 5 Compatibility: path-to-regexp Override
 type: adr
 status: Accepted
 date: 2026-04-21
 tags: [adr, backend, dependencies, express, routing, phase-1]
 description: Override path-to-regexp to ^8.2.0 to enable Express 5 router (router@2.2.0) compatibility; legacy Express 4 version 0.1.13 lacks .match() method required by Express 5
-aliases: [adr-028, express5-compat, path-to-regexp-override]
+aliases: [adr-029, express5-compat, path-to-regexp-override]
 ---
 
-# ADR-028: Express 5 Compatibility: path-to-regexp Override
+# ADR-029: Express 5 Compatibility: path-to-regexp Override
 
 ## Status
 Accepted

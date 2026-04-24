@@ -2,9 +2,9 @@
 title: Features Documentation Index
 type: features-index
 status: active
-date: 2026-04-23
-tags: [features, index, documentation, phase-6, statistics-refactoring]
-description: Feature documentation for all major capabilities of the Vision application. Updated April 2026 with Statistics page component refactoring.
+date: 2026-04-24
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, statistics-refactoring, bank-reconciliation, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report]
+description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with bank reconciliation, cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export.
 aliases: [features, capabilities]
 ---
 
@@ -37,6 +37,10 @@ SORT title ASC
 
 ### Planning & Scheduling
 - [[docs/features/plannedTransactions\|Planned Payments]] - Scheduled and recurring transactions, including loan support
+- [[docs/features/cash-flow-forecast\|Cash Flow Forecast]] - N-month forward projection from active planned transactions (Phase 6)
+
+### Bank Reconciliation (Phase 6)
+- [[docs/features/bank-reconciliation\|Bank Reconciliation]] - Match bank statement entries to transactions with auto-match scoring
 
 ### Portfolio & Investments
 - [[docs/features/portfolio\|Portfolio]] - Investment tracking (stocks, ETFs, crypto, metals, real estate, savings, bonds)
@@ -54,13 +58,19 @@ SORT title ASC
 
 ### Analytics & Reporting
 - [[docs/features/statistics\|Statistics]] - Comprehensive analytics with charts, pivot tables, and exclusions
+- [[docs/features/sankey-flow\|Sankey Flow]] - Income allocation visualization showing flow to spending categories (Phase 7)
+- [[docs/features/rolling-averages\|Rolling Averages]] - 3-month moving average overlays on spending/income charts (Phase 7)
 - [[docs/features/recipient-insights\|Recipient Insights]] - Merchant spending analytics with MoM alerts
 - [[docs/features/saved-charts\|Saved Charts]] - Custom category charts that persist across sessions
+- [[docs/features/pdf-report-export\|PDF Report Export]] - One-click PDF export of financial summary (Phase 7)
 
 ### User Experience
 - [[docs/features/onboarding\|Onboarding]] - First-run setup wizard
 - [[docs/features/settings\|Settings]] - Application preferences with JSONB storage and preload optimization
 - [[docs/features/appearance\|Appearance]] - Theme variant selection with five color palettes, light/dark mode, and schedule-based transitions
+
+### Administration & Maintenance (Phase 7)
+- [[docs/features/database-maintenance\|Database Maintenance]] - Table statistics monitoring and VACUUM operations
 
 ### AI & Natural Language
 - [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)

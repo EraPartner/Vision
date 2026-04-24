@@ -188,7 +188,24 @@ package "Routes" {
     +POST /update/apply : apply update
     +POST /update/apply-and-restart : apply and restart
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
+    +GET /db/stats : database table statistics (Phase 7)
+    +POST /db/vacuum : run VACUUM ANALYZE (Phase 7)
     +/api/admin/* : optional bearer auth gate
+  }
+
+  class AggregationsRouter {
+    +GET /monthly-summary : monthly aggregations
+    +GET /category-breakdown : category totals
+    +GET /recipient-insights : top merchants
+    +GET /cashflow-comparison : cash flow comparison
+    +GET /average-vs-current : avg vs current spending
+    +GET /bank-balances : account balances
+    +GET /cashflow-forecast : N-month forecast (Phase 6)
+    +GET /sankey : income flow diagram (Phase 7)
+  }
+
+  class ReportsRouter <<Phase 7>> {
+    +GET /financial : PDF financial report
   }
 }
 
@@ -252,6 +269,8 @@ Main --> SplitsRouter
 Main --> MarketLookupRouter
 Main --> InfoRouter
 Main --> AdminRouter
+Main --> AggregationsRouter
+Main --> ReportsRouter
 
 ' Nested route (RecipientsRouter mounts RecipientBankAccountsRouter at /recipients/:id/bank-accounts)
 RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts

@@ -1,9 +1,9 @@
 ---
-title: Feature - CSV Import, Export & Deduplication
+title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-tags: [feature, import, export, csv, json, deduplication, phase-5a, phase-1, performance, concurrency]
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-1, performance, concurrency]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
 related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
@@ -200,6 +200,31 @@ Parameters:
 - `amount_column`: Column name for amount
 - `memo_column`: Optional memo/description column
 
+## Visual CSV Column Mapper (Phase 5A)
+
+The Import Page now features an interactive visual CSV column mapper for flexible bank format support.
+
+### Features
+- **Client-side header detection**: Reads first 16 KB of CSV via FileReader to extract headers automatically
+- **Preview table**: Shows up to 5 rows of data with mapped columns highlighted
+- **Configurable separators**: Auto-detect or manually select `;`, `,`, `\t`
+- **Dropdown mapping**: Each required field (date, recipient, amount) maps to a CSV column via dropdown
+- **Text input fallback**: For unmapped fields, optional text input for defaults or overrides
+- **Validation**: Prevents import until required fields are mapped
+
+### Implementation
+- **Hook**: [[apps/frontend/src/hooks/useCsvPreview.ts]] — handles CSV parsing, header extraction, preview row generation
+- **Component**: [[apps/frontend/src/components/import/CsvColumnMapper.tsx]] — UI for dropdown mapping and preview display
+- **Integration**: Replaces 4 inline text inputs in [[apps/frontend/src/pages/ImportPage.tsx]]; separator field moved above mapper
+- **i18n**: New keys: `csvParsing`, `csvParseError`, `csvPreviewTitle`, `noMapping` (en + nl translations)
+
+### Usage
+1. Select CSV file or drag-and-drop
+2. Choose separator (auto-detected by default)
+3. Preview table shows detected headers and sample data
+4. Map each required field using dropdown
+5. Click import when ready
+
 ## Streaming Import
 
 For large files, use streaming import with progress:
@@ -262,11 +287,38 @@ Vision supports transaction export in two formats:
 - [[apps/frontend/src/pages/ImportPage.tsx]]: Dual export buttons (CSV + JSON) with `exportingFormat` state management
 - i18n: `importPage.exportBtn` ("Export CSV") and `importPage.exportJsonBtn` ("Export JSON")
 
+## Attachments (Phase 5A)
+
+Vision supports receipt and document attachments for transactions via the attachment service.
+
+### Features
+- **File upload**: Attach receipts, invoices, and supporting documents to transactions
+- **Image preview**: Automatic thumbnail generation for image attachments
+- **File management**: Upload, download, and delete attachments
+- **Storage**: Files stored in `{ATTACHMENTS_DIR}/{txId}/{uuid}.ext` structure with relative path tracking in database
+- **Size limits**: Configurable via `ATTACHMENT_MAX_SIZE_MB` environment variable (default 10 MB)
+- **MIME types**: Supports PDF, JPEG, PNG, and other standard document formats
+
+### Backend Services
+- [[apps/node-backend/src/services/attachmentService.js]]: Core attachment lifecycle (upload, store, remove)
+- [[apps/node-backend/src/repositories/attachmentRepository.js]]: Database operations (CRUD)
+- [[apps/node-backend/src/routes/attachments.js]]: Four REST endpoints for attachment management
+- Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
+
+### Frontend Components
+- [[apps/frontend/src/components/shared/AttachmentPanel.tsx]]: React Query-integrated upload/list/delete UI with thumbnail preview and hover-reveal delete button
+- [[apps/frontend/src/lib/api/attachments.ts]]: Typed API client for attachment operations
+- [[apps/frontend/src/features/transactions/components/TransactionInfoDialog.tsx]]: AttachmentPanel integrated into transaction detail view
+
+### API
+See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples.
+
 ## Related
 
 - [[docs/api/imports|API: Imports]]
 - [[docs/api/transactions|API: Transactions]]
 - [[docs/api/recipients|API: Recipients]]
+- [[docs/api/attachments|API: Attachments]]
 
 ## Testing references (2026-04-10)
 

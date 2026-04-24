@@ -3,8 +3,8 @@ title: API Documentation Index
 type: api-index
 status: active
 date: 2026-04-24
-tags: [api, index, rest, endpoints, openapi, phase-5a, phase-2]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export added in Phase 5A
+tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A
 aliases: [API, endpoints, REST]
 ---
 
@@ -12,6 +12,8 @@ aliases: [API, endpoints, REST]
 
 > [!abstract] Overview
 > Vision uses a RESTful API built with Express.js. All endpoints return JSON. Base URL: `http://localhost:3002/api`
+>
+> **Phase 1 Update (ADR-026):** All endpoints use a unified response envelope with `{ ok: true/false, data, error?, meta? }` structure. See [[docs/adr/026-unified-api-response-envelope|ADR-026]].
 >
 > **Phase 2.4 Update:** OpenAPI 3.0.3 specification now available at `openapi.yaml` (project root) — the authoritative source for all API contracts, request/response schemas, and type generation.
 
@@ -44,11 +46,14 @@ SORT path ASC
 | Watchlist | `/api/watchlist` | GET, POST, PATCH, DELETE | [[docs/api/watchlist\|Watchlist API]] |
 | Market Lookup | `/api/market-lookup` | GET | [[docs/api/marketLookup\|Market Lookup API]] |
 | Imports | `/api/import` | GET, POST | [[docs/api/imports\|Imports API]] |
+| Attachments (Phase 5A) | `/api/attachments` | GET, POST, DELETE | [[docs/api/attachments\|Attachments API]] |
+| Reconciliation (Phase 6) | `/api/reconciliation` | GET, POST, PATCH, DELETE | [[docs/api/reconciliation\|Reconciliation API]] |
 | Saved Charts | `/api/saved-charts` | GET, POST, PATCH, DELETE | [[docs/api/savedCharts\|Saved Charts API]] |
 | Settings | `/api/settings` | GET, PUT, DELETE | [[docs/api/settings\|Settings API]] |
 | Recipient Bank Accounts | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |
 | Splits | `/api/splits` | GET, POST, PATCH, DELETE | [[docs/api/splits\|Splits API]] |
 | Admin | `/api/admin` | GET, POST | [[docs/api/admin\|Admin API]] |
+| Reports (Phase 7) | `/api/reports` | GET | [[docs/api/reports\|Reports API]] |
 | Aggregations (Phase 2) | `/api/aggregations` | GET | [[docs/api/aggregations\|Aggregations API]] |
 | Info & Analytics | `/api/info` | GET | [[docs/api/info\|Info & Analytics API]] |
 | AI Chat | `/api/ai` | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]] |
@@ -79,22 +84,61 @@ SORT path ASC
 - Most endpoints are currently workspace-internal and do not require user auth.
 - `/api/admin/*` supports optional Bearer-token protection via `ADMIN_AUTH_TOKEN`; when configured, requests must include `Authorization: Bearer <token>`.
 
-## Error Handling
+## Response Envelope (ADR-026)
 
-All error responses follow this format:
-
+**Success Response** (`ok: true`):
 ```json
 {
-  "detail": "Error message description"
+  "ok": true,
+  "data": { /* endpoint-specific data */ },
+  "meta": {
+    "requestId": "req-12345...",
+    "computedAt": "2026-04-24T...",
+    "source": "live",
+    "pagination": { "total": 42, "limit": 50, "offset": 0 }
+  }
 }
 ```
 
-| Status Code | Meaning |
-|-------------|---------|
-| 400 | Bad Request (validation error) |
-| 404 | Not Found |
-| 409 | Conflict (duplicate detection) |
-| 429 | Rate Limited |
+**Error Response** (`ok: false`):
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input",
+    "details": { /* optional details */ }
+  },
+  "meta": {
+    "requestId": "req-12345..."
+  }
+}
+```
+
+**List Response Envelope** (all paginated endpoints):
+```json
+{
+  "ok": true,
+  "data": {
+    "items": [ /* array of items */ ],
+    "total": 42,
+    "limit": 50,
+    "offset": 0
+  },
+  "meta": { "requestId": "..." }
+}
+```
+
+See [[docs/reference/code-patterns#List Response Envelope Pattern|List Response Envelope Pattern]] for details.
+
+## Error Codes and HTTP Status
+
+| HTTP | Code | Meaning |
+|------|------|---------|
+| 400 | VALIDATION_ERROR | Invalid input or missing required fields |
+| 404 | NOT_FOUND | Resource not found |
+| 409 | CONFLICT | Duplicate or constraint violation |
+| 429 | RATE_LIMITED | Rate limit exceeded |
 | 500 | Internal Server Error |
 
 ## Related Documentation
