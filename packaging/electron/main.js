@@ -1,14 +1,18 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage, session } = require('electron');
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-// Small i18n loader for main process dialogs
-function loadI18n() {
+// Async i18n loader for main process dialogs. Populated during launch() before
+// any t() use. Until then, t() falls back to the key itself — which only
+// happens if a dialog fires before initI18n() resolves (startup error paths).
+let i18n = {};
+
+async function loadI18nAsync() {
   const locale = (app && app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en';
   const lang = locale && locale.startsWith('nl') ? 'nl' : 'en';
 
@@ -16,36 +20,36 @@ function loadI18n() {
   const resourceI18nDir = path.join(process.resourcesPath || '', 'i18n');
   const fallbackI18nDir = path.join(__dirname, 'i18n');
 
-  const tryLoad = (dir) => {
+  const tryLoad = async (dir, file) => {
     try {
-      const p = path.join(dir, `${lang}.json`);
-      if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch (e) {
-      // ignore
+      const p = path.join(dir, file);
+      const raw = await fs.promises.readFile(p, 'utf8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
     }
-    return null;
   };
 
-  const byResources = resourceI18nDir && tryLoad(resourceI18nDir);
+  const localeFile = `${lang}.json`;
+  const byResources = resourceI18nDir && await tryLoad(resourceI18nDir, localeFile);
   if (byResources) return byResources;
 
-  const byFallback = tryLoad(fallbackI18nDir);
+  const byFallback = await tryLoad(fallbackI18nDir, localeFile);
   if (byFallback) return byFallback;
 
   // Last resort: try English in resources then fallback dir
-  try {
-    const p2 = path.join(resourceI18nDir, 'en.json');
-    if (fs.existsSync(p2)) return JSON.parse(fs.readFileSync(p2, 'utf8'));
-  } catch (e) {}
-  try {
-    const p3 = path.join(fallbackI18nDir, 'en.json');
-    if (fs.existsSync(p3)) return JSON.parse(fs.readFileSync(p3, 'utf8'));
-  } catch (e) {}
+  const enRes = await tryLoad(resourceI18nDir, 'en.json');
+  if (enRes) return enRes;
+  const enFb = await tryLoad(fallbackI18nDir, 'en.json');
+  if (enFb) return enFb;
 
   return {};
 }
 
-const i18n = loadI18n();
+async function initI18n() {
+  i18n = await loadI18nAsync();
+}
+
 function t(key, vars) {
   let txt = i18n[key] || key;
   if (vars) {
@@ -67,6 +71,36 @@ const BACKUP_ENC_IV_BYTES = 16;
 const BACKUP_RETENTION_KEEP = 7;
 const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Prod-only CSP. Dev leaves Vite HMR unrestricted (app.isPackaged gate below).
+// 'unsafe-inline' on style-src kept — Tailwind/inline styles still in use.
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  `connect-src 'self' http://localhost:*`,
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
+function registerSecurityHeaders() {
+  if (!app.isPackaged) return;
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [CSP_POLICY],
+        'X-Content-Type-Options': ['nosniff'],
+        'X-Frame-Options': ['DENY'],
+        'Referrer-Policy': ['strict-origin-when-cross-origin'],
+      },
+    });
+  });
+}
 
 // Resolved at launch — see findFreePort() below
 let appPort = DEFAULT_APP_PORT;
@@ -95,10 +129,10 @@ function findFreePort(preferred) {
 // ── Settings (persisted across launches) ─────────────────────────────────────
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
-function loadSettings() {
+async function loadSettings() {
   let raw;
   try {
-    raw = fs.readFileSync(settingsPath, 'utf8');
+    raw = await fs.promises.readFile(settingsPath, 'utf8');
   } catch {
     return {};
   }
@@ -107,7 +141,7 @@ function loadSettings() {
   } catch (err) {
     try {
       const corruptPath = `${settingsPath}.corrupt-${Date.now()}`;
-      fs.renameSync(settingsPath, corruptPath);
+      await fs.promises.rename(settingsPath, corruptPath);
       console.warn(`[settings] Corrupt settings.json renamed to ${corruptPath}: ${err && err.message ? err.message : err}`);
     } catch (renameErr) {
       console.warn('[settings] Failed to quarantine corrupt settings.json:', renameErr && renameErr.message ? renameErr.message : renameErr);
@@ -116,9 +150,9 @@ function loadSettings() {
   }
 }
 
-function saveSettings(data) {
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2));
+async function saveSettings(data) {
+  await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.promises.writeFile(settingsPath, JSON.stringify(data, null, 2));
 }
 
 // ── Repo/workDir resolution ───────────────────────────────────────────────────
@@ -132,17 +166,19 @@ async function resolveWorkDir() {
   // Ensure the generated i18n is present in the packaged app resources
   try {
     const packagedI18n = path.join(process.resourcesPath, 'i18n');
-    if (!fs.existsSync(packagedI18n)) {
+    const packagedI18nExists = await fs.promises.access(packagedI18n).then(() => true).catch(() => false);
+    if (!packagedI18nExists) {
       // If it's missing, attempt to copy from the repo i18n/source (best effort)
       const repoI18n = path.join(__dirname, '..', 'i18n');
-      if (fs.existsSync(repoI18n)) {
-        fs.mkdirSync(packagedI18n, { recursive: true });
-        const files = fs.readdirSync(repoI18n);
-        for (const f of files) {
+      const repoI18nExists = await fs.promises.access(repoI18n).then(() => true).catch(() => false);
+      if (repoI18nExists) {
+        await fs.promises.mkdir(packagedI18n, { recursive: true });
+        const files = await fs.promises.readdir(repoI18n);
+        await Promise.all(files.map(async (f) => {
           const src = path.join(repoI18n, f);
           const dst = path.join(packagedI18n, f);
-          try { fs.copyFileSync(src, dst); } catch (e) { /* ignore */ }
-        }
+          try { await fs.promises.copyFile(src, dst); } catch (e) { /* ignore */ }
+        }));
       }
     }
   } catch (e) {
@@ -151,8 +187,10 @@ async function resolveWorkDir() {
   }
 
   // If we've already set up the embedded compose, reuse it.
-  const settings = loadSettings();
-  if (settings.embeddedDir && fs.existsSync(path.join(settings.embeddedDir, 'docker-compose.yml'))) {
+  const settings = await loadSettings();
+  const embeddedCompose = settings.embeddedDir && path.join(settings.embeddedDir, 'docker-compose.yml');
+  const hasEmbedded = embeddedCompose && await fs.promises.access(embeddedCompose).then(() => true).catch(() => false);
+  if (hasEmbedded) {
     return settings.embeddedDir;
   }
 
@@ -160,11 +198,11 @@ async function resolveWorkDir() {
   const embeddedSrc = path.join(process.resourcesPath, 'resources', 'docker-compose.yml');
   const embeddedDir = path.join(app.getPath('userData'), 'embedded_compose');
   try {
-    fs.mkdirSync(embeddedDir, { recursive: true });
+    await fs.promises.mkdir(embeddedDir, { recursive: true });
     const dest = path.join(embeddedDir, 'docker-compose.yml');
     // Overwrite if exists to allow updates on new app versions
-    fs.copyFileSync(embeddedSrc, dest);
-    saveSettings({ ...loadSettings(), embeddedDir });
+    await fs.promises.copyFile(embeddedSrc, dest);
+    await saveSettings({ ...(await loadSettings()), embeddedDir });
     return embeddedDir;
   } catch (err) {
     await dialog.showMessageBox({
@@ -180,16 +218,17 @@ async function resolveWorkDir() {
 }
 
 // ── .env generation ───────────────────────────────────────────────────────────
-function ensureEnv(workDir) {
+async function ensureEnv(workDir) {
   const envFile = path.join(workDir, '.env');
-  if (!fs.existsSync(envFile)) {
+  const exists = await fs.promises.access(envFile).then(() => true).catch(() => false);
+  if (!exists) {
     const pgPass = crypto.randomBytes(32).toString('hex');
     const contents = [
       '# Auto-generated by Vision on first launch. Do not commit this file.',
       `POSTGRES_PASSWORD=${pgPass}`,
       `DATABASE_URL=postgresql://ftm_user:${pgPass}@db:5432/financial_transactions`,
     ].join('\n') + '\n';
-    fs.writeFileSync(envFile, contents, { encoding: 'utf8', mode: 0o600 });
+    await fs.promises.writeFile(envFile, contents, { encoding: 'utf8', mode: 0o600 });
   }
 }
 
@@ -235,8 +274,8 @@ function resolveBackupSettingsWithDefaults(raw = {}) {
   return { backupDir, backupOnQuit };
 }
 
-function getBackupDeviceId() {
-  const settings = loadSettings();
+async function getBackupDeviceId() {
+  const settings = await loadSettings();
   if (typeof settings.backupDeviceId === 'string' && settings.backupDeviceId) {
     return settings.backupDeviceId;
   }
@@ -247,18 +286,18 @@ function getBackupDeviceId() {
     app.getPath('userData'),
   ].join('|');
   const backupDeviceId = crypto.createHash('sha1').update(machineToken).digest('hex').slice(0, 8);
-  saveSettings({ ...settings, backupDeviceId });
+  await saveSettings({ ...settings, backupDeviceId });
   return backupDeviceId;
 }
 
-function getBackupPassphrase() {
+async function getBackupPassphrase() {
   const envPassphrase = process.env.VISION_BACKUP_PASSPHRASE;
   if (envPassphrase) return envPassphrase;
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
     return null;
   }
   try {
-    const settings = loadSettings();
+    const settings = await loadSettings();
     const encoded = settings.backupPassphraseEncrypted;
     if (!encoded || typeof encoded !== 'string') return null;
     const raw = Buffer.from(encoded, 'base64');
@@ -268,12 +307,12 @@ function getBackupPassphrase() {
   }
 }
 
-function setBackupPassphrase(passphrase) {
-  const settings = loadSettings();
+async function setBackupPassphrase(passphrase) {
+  const settings = await loadSettings();
   const next = { ...settings };
   if (!passphrase) {
     delete next.backupPassphraseEncrypted;
-    saveSettings(next);
+    await saveSettings(next);
     return { success: true, available: true };
   }
   if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
@@ -282,15 +321,15 @@ function setBackupPassphrase(passphrase) {
   try {
     const encrypted = safeStorage.encryptString(passphrase);
     next.backupPassphraseEncrypted = encrypted.toString('base64');
-    saveSettings(next);
+    await saveSettings(next);
     return { success: true, available: true };
   } catch (err) {
     return { success: false, available: true, error: String(err) };
   }
 }
 
-function getBackupPassphraseStatus() {
-  const settings = loadSettings();
+async function getBackupPassphraseStatus() {
+  const settings = await loadSettings();
   return {
     hasEnvPassphrase: Boolean(process.env.VISION_BACKUP_PASSPHRASE),
     hasStoredPassphrase: typeof settings.backupPassphraseEncrypted === 'string' && settings.backupPassphraseEncrypted.length > 0,
@@ -298,8 +337,8 @@ function getBackupPassphraseStatus() {
   };
 }
 
-function getBackupEncryptionKey() {
-  const passphrase = getBackupPassphrase();
+async function getBackupEncryptionKey() {
+  const passphrase = await getBackupPassphrase();
   if (!passphrase) return null;
   return crypto.scryptSync(passphrase, `${APP_NAME.toLowerCase()}-backup-v1`, 32);
 }
@@ -341,24 +380,25 @@ async function cleanupOldBackups(destDir, deviceId, keep = BACKUP_RETENTION_KEEP
   return { removed };
 }
 
-function isEncryptedBackupFile(filePath) {
+async function isEncryptedBackupFile(filePath) {
+  let handle;
   try {
-    const fd = fs.openSync(filePath, 'r');
-    try {
-      const magic = Buffer.alloc(BACKUP_ENC_MAGIC.length);
-      const bytesRead = fs.readSync(fd, magic, 0, magic.length, 0);
-      if (bytesRead !== BACKUP_ENC_MAGIC.length) return false;
-      return magic.equals(BACKUP_ENC_MAGIC);
-    } finally {
-      fs.closeSync(fd);
-    }
+    handle = await fs.promises.open(filePath, 'r');
+    const magic = Buffer.alloc(BACKUP_ENC_MAGIC.length);
+    const { bytesRead } = await handle.read(magic, 0, magic.length, 0);
+    if (bytesRead !== BACKUP_ENC_MAGIC.length) return false;
+    return magic.equals(BACKUP_ENC_MAGIC);
   } catch {
     return false;
+  } finally {
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
   }
 }
 
 async function encryptBackupFile(sqlFilePath) {
-  const key = getBackupEncryptionKey();
+  const key = await getBackupEncryptionKey();
   if (!key) {
     return { file: sqlFilePath, encrypted: false, warning: 'Backup encryption skipped: VISION_BACKUP_PASSPHRASE is not set.' };
   }
@@ -403,21 +443,24 @@ async function encryptBackupFile(sqlFilePath) {
 }
 
 async function decryptBackupFileToTemp(encryptedFilePath) {
-  const key = getBackupEncryptionKey();
+  const key = await getBackupEncryptionKey();
   if (!key) {
     throw new Error('This backup is encrypted. Set VISION_BACKUP_PASSPHRASE to restore it.');
   }
 
   const headerLen = BACKUP_ENC_MAGIC.length + BACKUP_ENC_IV_BYTES;
   const header = Buffer.alloc(headerLen);
-  const fd = fs.openSync(encryptedFilePath, 'r');
+  let handle;
   try {
-    const bytesRead = fs.readSync(fd, header, 0, headerLen, 0);
+    handle = await fs.promises.open(encryptedFilePath, 'r');
+    const { bytesRead } = await handle.read(header, 0, headerLen, 0);
     if (bytesRead !== headerLen) {
       throw new Error('Invalid encrypted backup header.');
     }
   } finally {
-    fs.closeSync(fd);
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
   }
 
   const magic = header.subarray(0, BACKUP_ENC_MAGIC.length);
@@ -1080,12 +1123,12 @@ async function runBackup(destDir) {
     if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
   } catch { /* use defaults */ }
 
-  const deviceId = getBackupDeviceId();
+  const deviceId = await getBackupDeviceId();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
   const filename = `vision_backup_${deviceId}_${timestamp}.sql`;
   const sqlFile = path.join(destDir, filename);
 
-  fs.mkdirSync(destDir, { recursive: true });
+  await fs.promises.mkdir(destDir, { recursive: true });
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
   const args = [
@@ -1180,7 +1223,7 @@ async function runRestore(sqlFilePath) {
 
   let restoreSource = sqlFilePath;
   let cleanupRestoreSource = () => {};
-  if (isEncryptedBackupFile(sqlFilePath)) {
+  if (await isEncryptedBackupFile(sqlFilePath)) {
     restoreSource = await decryptBackupFileToTemp(sqlFilePath);
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
@@ -1357,7 +1400,7 @@ ipcMain.handle('backup:save-settings', async (_event, { backupDir, backupOnQuit 
   // Also mirror to local settings.json as a fallback for the will-quit handler
   // in case the backend is already shutting down.
   const payload = { backupDir: backupDir || '', backupOnQuit: !!backupOnQuit };
-  saveSettings({ ...loadSettings(), backupDir: payload.backupDir, backupOnQuit: payload.backupOnQuit });
+  await saveSettings({ ...(await loadSettings()), backupDir: payload.backupDir, backupOnQuit: payload.backupOnQuit });
   try {
     await httpPut(`http://localhost:${appPort}/api/settings/backup_settings`, { value: payload });
   } catch (err) {
@@ -1367,12 +1410,12 @@ ipcMain.handle('backup:save-settings', async (_event, { backupDir, backupOnQuit 
 });
 
 ipcMain.handle('backup:get-encryption-status', async () => {
-  return { success: true, ...getBackupPassphraseStatus() };
+  return { success: true, ...(await getBackupPassphraseStatus()) };
 });
 
 ipcMain.handle('backup:set-passphrase', async (_event, passphrase) => {
   const value = typeof passphrase === 'string' ? passphrase : '';
-  return setBackupPassphrase(value.trim());
+  return await setBackupPassphrase(value.trim());
 });
 
 ipcMain.handle('backup:load-settings', async () => {
@@ -1383,13 +1426,13 @@ ipcMain.handle('backup:load-settings', async () => {
     if (data && data.value) {
       const v = resolveBackupSettingsWithDefaults(data.value);
       // Mirror back to local settings.json so will-quit always has a fresh copy.
-      saveSettings({ ...loadSettings(), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
+      await saveSettings({ ...(await loadSettings()), backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true });
       return { backupDir: v.backupDir || '', backupOnQuit: v.backupOnQuit === true };
     }
   } catch (err) {
     console.warn('backup:load-settings: could not read from DB, falling back to settings.json', err.message);
   }
-  const s = resolveBackupSettingsWithDefaults(loadSettings());
+  const s = resolveBackupSettingsWithDefaults(await loadSettings());
   return { backupDir: s.backupDir || '', backupOnQuit: s.backupOnQuit === true };
 });
 
@@ -1428,7 +1471,14 @@ let workDir = null;
 let overrideFiles = [];
 
 async function launch() {
-  // 0. Open the loading window IMMEDIATELY so the user sees something straight
+  // 0. Register prod CSP + security headers before any window loads.
+  registerSecurityHeaders();
+
+  // 0a. Load i18n asynchronously so dialog strings resolve. If this fails,
+  //     t() falls back to the key itself — survivable for startup paths.
+  await initI18n();
+
+  // 0b. Open the loading window IMMEDIATELY so the user sees something straight
   //    away — before any Docker I/O, which can take seconds or even minutes on
   //    a cold start. The window will navigate to APP_URL once the backend is ready.
   createWindow();
@@ -1456,8 +1506,8 @@ async function launch() {
       HEALTH_URL = `http://localhost:${appPort}/health`;
     }),
 
-    // First run: generate .env if missing (synchronous file I/O, wrapped to fit Promise.all)
-    Promise.resolve(ensureEnv(workDir)),
+    // First run: generate .env if missing
+    ensureEnv(workDir),
 
     // Check Docker is installed and running — overlaps with port scan and env init
     checkDocker(workDir).then(status => { dockerStatus = status; }),
@@ -1561,27 +1611,52 @@ async function launch() {
   if (!app.isPackaged && overrideFiles.length > 0) {
     try {
       let fileChangeTimer = null;
-      let isBuildingOnChange = false;
+      let activeBuildChild = null;
       const watchTargets = ['apps/frontend', 'apps/node-backend', 'package.json', 'bun.lock', 'bun.lockb'];
+
+      const runCancellableBuild = () => new Promise((resolve, reject) => {
+        const args = ['compose', ...composeArgs(workDir, overrideFiles), 'build', 'app'];
+        const child = spawn('docker', args, { cwd: workDir, env: dockerEnv });
+        activeBuildChild = child;
+        let stderrBuf = '';
+        if (child.stderr) child.stderr.on('data', (d) => { stderrBuf += d.toString(); });
+        child.on('error', (err) => {
+          if (activeBuildChild === child) activeBuildChild = null;
+          reject(err);
+        });
+        child.on('exit', (code, signal) => {
+          if (activeBuildChild === child) activeBuildChild = null;
+          if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+            const cancelErr = new Error('build_cancelled');
+            cancelErr.cancelled = true;
+            return reject(cancelErr);
+          }
+          if (code === 0) return resolve();
+          const err = new Error(stderrBuf.trim() || `docker build exited ${code}`);
+          reject(err);
+        });
+      });
+
       const scheduleRebuild = () => {
-        if (isBuildingOnChange) return;
         if (fileChangeTimer) clearTimeout(fileChangeTimer);
+        if (activeBuildChild) {
+          try { activeBuildChild.kill('SIGTERM'); } catch (_) {}
+        }
         fileChangeTimer = setTimeout(async () => {
           fileChangeTimer = null;
-          if (isBuildingOnChange) return;
-          isBuildingOnChange = true;
           notify('Rebuilding app image (dev)...');
           try {
-            // Build only the app service image, then restart that container
-            await run('docker', ['compose', ...composeArgs(workDir, overrideFiles), 'build', 'app'], workDir, { timeout: 0 });
+            await runCancellableBuild();
             await restartAppContainer(workDir, overrideFiles);
             await pollHealth().catch(() => {});
             notify('Rebuild complete');
           } catch (err) {
+            if (err && err.cancelled) {
+              // Expected cancellation — a newer edit superseded this build.
+              return;
+            }
             console.warn('Dev rebuild failed:', err);
             notify('Rebuild failed — check logs');
-          } finally {
-            isBuildingOnChange = false;
           }
         }, 1500);
       };
