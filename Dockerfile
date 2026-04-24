@@ -32,8 +32,13 @@ FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-# Install Python and Alembic for database migrations
-RUN apk add --no-cache python3 py3-pip && \
+# Install system dependencies:
+#   - Python/Alembic for DB migrations
+#   - Chromium (Alpine-native, musl-linked) for Puppeteer PDF rendering
+#     Puppeteer's bundled Chrome is a glibc x86_64 binary and cannot run on
+#     Alpine (musl) or ARM64 hosts. We skip the bundled download and use the
+#     distro package instead.
+RUN apk add --no-cache python3 py3-pip chromium && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
@@ -48,6 +53,8 @@ COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY apps/node-backend/package.json ./apps/node-backend/
 COPY packages ./packages
+# Skip Puppeteer's bundled Chromium download — we use the Alpine system package.
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 RUN bun install --frozen-lockfile --production
 
 # Copy backend source and built frontend
@@ -60,6 +67,8 @@ COPY alembic/ ./alembic/
 
 ENV NODE_ENV=production
 ENV ENVIRONMENT=production
+# Path to the Alpine-installed Chromium binary used by Puppeteer.
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 # Alembic installed in /venv by the Python layer above; backend's in-process
 # runMigrations() shells out via this path instead of relying on $PATH.
 ENV ALEMBIC_BIN=/venv/bin/alembic

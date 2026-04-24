@@ -2,9 +2,9 @@
 title: Localization Documentation Index
 type: i18n-index
 status: active
-date: 2026-04-04
-tags: [i18n, index, localization, translations]
-description: Internationalization system including supported languages, translation workflow, and usage patterns
+date: 2026-04-24
+tags: [i18n, index, localization, translations, phase-6]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog.
 aliases: [i18n, localization, translations, languages]
 ---
 
@@ -79,9 +79,21 @@ function Component() {
 3. Build to generate `.ts` files
 4. Use in components via `useLanguage()` hook
 
-## Recent Key Additions (Portfolio/Metals + News)
+## Recent Key Additions
 
-Added in source JSON and regenerated locale bundles (`apps/frontend/src/locales/en.ts`, `apps/frontend/src/locales/nl.ts`):
+### Phase 6 (2026-04-24) — PDF Report Export i18n
+
+Added 32 new keys for the PDF export dialog and report feature (Phase 6):
+
+- Export dialog: `export.title`, `export.description`, `export.openDialog`
+- Report type selection: `export.reportType`, `export.reportType.{financial,portfolio,tax}`
+- Period selection: `export.period`, `export.period.{ytd,rolling3,rolling12,year,custom}`, `export.period.{from,to,year.label}`
+- Section toggles: `export.sections`, `export.sections.all`, `export.section.{executiveSummary,cashflowTrend,categoryBreakdown,topRecipients,bankBalances,rollingAverages,plannedOutlook,portfolioAllocation,topHoldings,taxBreakdown}`
+- Currency & actions: `export.{currency,download,downloading,comingSoon}`
+
+All keys added to `i18n/source/en.json` and `i18n/source/nl.json`; generated into `apps/frontend/src/locales/en.ts` and `nl.ts`.
+
+### Portfolio/Metals + News (Earlier phases)
 
 - `addInv.desc.metals`
 - `addWatchlist.metals`
@@ -95,7 +107,7 @@ Added in source JSON and regenerated locale bundles (`apps/frontend/src/locales/
 
 Source-of-truth reminder: translation keys are maintained in `i18n/source/*.json`; generated frontend locale bundles are derived artifacts and should be regenerated after key changes.
 
-Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/pages/PlannedPaymentsPage.tsx]]
+Code links: [[i18n/source/en.json]], [[i18n/source/nl.json]], [[apps/frontend/src/locales/en.ts]], [[apps/frontend/src/locales/nl.ts]], [[apps/frontend/src/components/reports/ExportDialog.tsx]]
 
 ## Key Naming Convention
 

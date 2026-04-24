@@ -31,6 +31,7 @@ import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDial
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ExportDialog } from "@/components/reports/ExportDialog";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -236,6 +237,7 @@ export default function TaxOverviewPage() {
           icon={Landmark}
           actions={(
             <>
+              <ExportDialog defaultType="tax" />
               <TaxProfileDialog
                 trigger={
                   <Button variant="default" size="sm" className="gap-2">

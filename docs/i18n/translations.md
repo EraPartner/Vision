@@ -2,9 +2,9 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-19
-tags: [i18n, translations, localization, internationalization, phase-9]
-description: Internationalization system including supported languages, translation workflow, and usage patterns
+date: 2026-04-24
+tags: [i18n, translations, localization, internationalization, phase-6, phase-9]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization (en/nl).
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
 ---
@@ -155,6 +155,40 @@ bun run build
 ```
 
 ### Recent keys added
+
+**Phase 6 (2026-04-24):**
+- `export.title` — "Export PDF Report"
+- `export.description` — "Configure your report, then download it as a PDF."
+- `export.openDialog` — "Export PDF"
+- `export.reportType` — "Report Type"
+- `export.reportType.financial` — "Financial"
+- `export.reportType.portfolio` — "Portfolio"
+- `export.reportType.tax` — "Tax"
+- `export.period` — "Period"
+- `export.period.ytd` — "Year to Date"
+- `export.period.rolling3` — "Last 3 Months"
+- `export.period.rolling12` — "Last 12 Months"
+- `export.period.year` — "Full Year"
+- `export.period.year.label` — "Year"
+- `export.period.custom` — "Custom Range"
+- `export.period.from` — "From"
+- `export.period.to` — "To"
+- `export.sections` — "Sections"
+- `export.sections.all` — "All"
+- `export.section.executiveSummary` — "Executive Summary"
+- `export.section.cashflowTrend` — "Cashflow Trend"
+- `export.section.categoryBreakdown` — "Category Breakdown"
+- `export.section.topRecipients` — "Top Recipients"
+- `export.section.bankBalances` — "Bank Balances"
+- `export.section.rollingAverages` — "Rolling Averages"
+- `export.section.plannedOutlook` — "Planned Outlook"
+- `export.section.portfolioAllocation` — "Portfolio Allocation"
+- `export.section.topHoldings` — "Top Holdings"
+- `export.section.taxBreakdown` — "Tax Breakdown"
+- `export.currency` — "Currency"
+- `export.download` — "Download PDF"
+- `export.downloading` — "Generating…"
+- `export.comingSoon` — "This report type is not yet available — a placeholder PDF will be generated."
 
 **Phase 9 (2026-04-20):**
 - `settings.tab.appearance` — Appearance settings tab label

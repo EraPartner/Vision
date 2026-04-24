@@ -18,6 +18,7 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ExportDialog } from "@/components/reports/ExportDialog";
 
 function fmtPct(val: number) {
   return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
@@ -186,7 +187,7 @@ export default function StocksPage({
         <PageHeader
           title={t(titleKey)}
           icon={TrendingUp}
-          actions={<AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
+          actions={<><ExportDialog defaultType="portfolio" /><AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} /></>}
         />
         <Card className="group relative overflow-hidden surface-elevated premium-frame bg-card backdrop-blur-sm">
           <CardContent className="pt-0">

@@ -3,7 +3,8 @@ title: Components Documentation Index
 type: components-index
 status: active
 date: 2026-04-23
-tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3]
+updated: 2026-04-25
+tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3, phase-4, export-dialog]
 description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens
 aliases: [components, UI, frontend components, chart components, visx charts]
 ---
@@ -11,7 +12,7 @@ aliases: [components, UI, frontend components, chart components, visx charts]
 # Components Documentation
 
 > [!abstract] Overview
-> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation. Updated 2026-04-23 with DashboardSettingsDialog Phase 3 refactor (thin orchestrator + 6 focused tab components).
+> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation. Updated 2026-04-25 with ExportDialog component documentation (Phase 4 PDF report export UI).
 
 ## Component Categories
 
@@ -23,6 +24,7 @@ aliases: [components, UI, frontend components, chart components, visx charts]
 | [[docs/components/statistics\|Statistics]] | Analytics page sub-components | ChartCard, SummaryCards, CategoryPieChart, CategoryPivotTable |
 | [[docs/components/form-dialogs\|Form Dialogs]] | Add/edit data dialogs with optimized glass surfaces | Transaction, Category, Recipient, Investment, Settings |
 | [[docs/components/dashboard-settings-dialog\|Settings Dialog]] | Multi-tab settings with thin orchestrator pattern (Phase 3) | General, Dashboard, App, Backup, Appearance tabs |
+| [[docs/components/export-dialog\|Export Dialog]] | PDF report export configuration (Phase 4) | Report type, period, sections, currency selection |
 | [[docs/components/layout\|Layout]] | App shell and navigation (M1-optimized) | AppLayout, AppSidebar |
 | [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist, PerformanceChart |
 | [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio, useChartCurrencyFormatter |

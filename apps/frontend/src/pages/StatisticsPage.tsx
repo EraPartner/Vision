@@ -1,14 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useStatistics } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Download, Import, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { downloadFinancialReport } from "@/lib/api/reports";
+import { BarChart3, Import } from "lucide-react";
+import { ExportDialog } from "@/components/reports/ExportDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
@@ -34,25 +32,8 @@ export default function StatisticsPage() {
     getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply,
   } = useStatistics();
   const { t } = useLanguage();
-  const { appSettings } = useAppSettings();
-  const [isDownloading, setIsDownloading] = useState(false);
-
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
     useWidgetVisibility("statistics", STATISTICS_WIDGETS);
-
-  async function handleDownloadReport() {
-    setIsDownloading(true);
-    try {
-      await downloadFinancialReport({ currency: appSettings.defaultCurrency || "EUR" });
-      toast.success(t("statsPage.report.downloadSuccess"));
-    } catch (err: unknown) {
-      toast.error(t("statsPage.report.downloadError"), {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setIsDownloading(false);
-    }
-  }
 
   const widgets = useMemo(
     () =>
@@ -133,20 +114,7 @@ export default function StatisticsPage() {
       <div className="flex items-center justify-between">
         <PageHeader title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} icon={BarChart3} />
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadReport}
-            disabled={isDownloading}
-            className="gap-1.5"
-          >
-            {isDownloading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            {t("statsPage.report.download")}
-          </Button>
+          <ExportDialog />
           <WidgetVisibilityDialog
             widgets={widgets}
             isVisible={isVisible}

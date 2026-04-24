@@ -1,26 +1,53 @@
 /**
- * Report API — file download helpers.
+ * Report API — PDF download helpers.
  *
- * These functions trigger a browser download by fetching the report as a Blob
- * and creating a temporary anchor element. No `apiRequest` wrapper is used
- * because the response is a binary stream, not a JSON envelope.
+ * All three report types use POST so the frontend can forward resolved CSS
+ * theme tokens, period selection, and section flags in the request body.
+ * The response is a binary PDF stream; no JSON envelope wrapper is used.
  */
 
-function buildUrl(path: string, params: Record<string, string | number | undefined>): string {
-  const url = new URL(path, window.location.origin);
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      url.searchParams.set(key, String(value));
-    }
-  }
-  return url.toString();
+import { resolveActiveThemeTokens, type ReportThemeTokens } from '@/lib/themeTokens';
+
+export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
+
+export type ReportPeriod =
+  | { kind: 'ytd' }
+  | { kind: 'rolling'; months: number }
+  | { kind: 'custom'; from: string; to: string }
+  | { kind: 'year'; year: number };
+
+export interface ReportOptions {
+  currency?: string;
+  period?: ReportPeriod;
+  sections?: string[];
+  theme?: ReportThemeTokens;
 }
 
-async function downloadBlob(url: string, filename: string): Promise<void> {
-  const response = await fetch(url, { credentials: 'same-origin' });
+async function postReportDownload(
+  path: string,
+  options: ReportOptions,
+  filename: string,
+): Promise<void> {
+  const theme = options.theme ?? resolveActiveThemeTokens();
+
+  const body: Record<string, unknown> = {
+    currency: options.currency ?? 'EUR',
+    period: options.period ?? { kind: 'rolling', months: 12 },
+    sections: options.sections ?? [],
+    theme,
+  };
+
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+
   if (!response.ok) {
     throw new Error(`Report download failed: ${response.status} ${response.statusText}`);
   }
+
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   try {
@@ -35,10 +62,18 @@ async function downloadBlob(url: string, filename: string): Promise<void> {
   }
 }
 
-export async function downloadFinancialReport(params?: {
-  currency?: string;
-}): Promise<void> {
-  const url = buildUrl('/api/reports/financial', { currency: params?.currency });
-  const filename = `financial-report-${new Date().toISOString().slice(0, 10)}.pdf`;
-  await downloadBlob(url, filename);
+function reportFilename(type: string): string {
+  return `vision-${type}-${new Date().toISOString().slice(0, 10)}.pdf`;
+}
+
+export async function downloadFinancialReport(options: ReportOptions = {}): Promise<void> {
+  await postReportDownload('/api/reports/financial', options, reportFilename('financial'));
+}
+
+export async function downloadPortfolioReport(options: ReportOptions = {}): Promise<void> {
+  await postReportDownload('/api/reports/portfolio', options, reportFilename('portfolio'));
+}
+
+export async function downloadTaxReport(options: ReportOptions = {}): Promise<void> {
+  await postReportDownload('/api/reports/tax', options, reportFilename('tax'));
 }
