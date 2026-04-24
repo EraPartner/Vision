@@ -2,15 +2,16 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-04-23
-tags: [endpoint, api, aggregations, backend, phase-2, phase-9, decimal, money]
-description: Server-computed transaction aggregations with materialized-view source distinction, behind AGGREGATIONS_V2_ENABLED feature flag
-aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints]
+date: 2026-04-24
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, decimal, money, cashflow-forecast]
+description: Server-computed transaction aggregations with materialized-view source distinction, behind AGGREGATIONS_V2_ENABLED feature flag; includes cash flow forecast from planned transactions
+aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
   - apps/node-backend/src/services/calculations/aggregation/
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
+  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
 ---
 
 # Aggregations API
@@ -32,24 +33,41 @@ related_code:
 
 ## Response Envelope
 
-All endpoints return a standard envelope:
+All endpoints follow the unified response envelope (ADR-026) with a nested aggregation domain envelope:
 
 ```json
 {
-  "data": { /* endpoint-specific data */ },
+  "ok": true,
+  "data": {
+    "data": { /* endpoint-specific aggregation result */ },
+    "meta": {
+      "source": "mv" | "live",
+      "computedAt": "2026-04-16T12:34:56.789Z"
+    }
+  },
   "meta": {
-    "source": "mv" | "live",
+    "requestId": "...",
     "computedAt": "2026-04-16T12:34:56.789Z"
   }
 }
 ```
 
-**Metadata fields:**
+**Transport envelope** (outer `ok`, outer `meta`):
+
+| Field | Meaning |
+|-------|---------|
+| `ok` | Always `true` on success |
+| `meta.requestId` | Correlation ID for request tracing |
+
+**Aggregation envelope** (inner `data`, inner `meta`):
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `source` | `'mv' \| 'live'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions) |
-| `computedAt` | ISO 8601 timestamp | When the computation was performed |
+| `data.data` | object | Endpoint-specific aggregation result (see endpoint sections) |
+| `data.meta.source` | `'mv' \| 'live'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions) |
+| `data.meta.computedAt` | ISO 8601 timestamp | When the aggregation was computed |
+
+**Frontend unwrapping:** After `unwrapEnvelope()` strips the outer `ok/meta` layer, consumers receive `{ data, meta: { source, computedAt } }` (the aggregation envelope).
 
 ## Monetary Precision (Phase 9)
 
@@ -295,6 +313,150 @@ Account balances and historical balance data.
 
 ---
 
+### Cash Flow Forecast
+
+N-month forward projection of income and expenses from active, unexecuted planned transactions (Phase 6).
+
+**Path:** `GET /api/aggregations/cashflow-forecast`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `months` | integer | 3 | 24 | Number of months to forecast |
+
+**Response (data field):**
+
+```json
+{
+  "forecast": [
+    {
+      "month": "2026-05",
+      "income": 3500.00,
+      "expenses": -2150.75,
+      "net": 1349.25,
+      "items": [
+        {
+          "id": 42,
+          "planned_date": "2026-05-01",
+          "currency": "EUR",
+          "amount": 3500.00,
+          "memo": "Salary",
+          "recipient_name": "Employer Inc.",
+          "category_name": "INCOME:SALARY",
+          "is_recurring": false,
+          "recurrence_pattern": null
+        }
+      ]
+    },
+    {
+      "month": "2026-06",
+      "income": 3500.00,
+      "expenses": -2150.75,
+      "net": 1349.25,
+      "items": []
+    }
+  ]
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `month` | string | `YYYY-MM` format |
+| `income` | number | Sum of positive (incoming) amounts |
+| `expenses` | number | Sum of negative (outgoing) amounts (negative value) |
+| `net` | number | `income + expenses` |
+| `items` | array | Forecast line items in this month |
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getAggregationCashflowForecast({
+  months: 6
+});
+// envelope.data.forecast[n].month → "2026-05"
+// envelope.data.forecast[n].net → projected cash position
+// envelope.meta.source → always "live" (computed on-demand)
+```
+
+See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] for details.
+
+---
+
+### Sankey Flow (Phase 7)
+
+Directed income-to-category flow graph for d3-sankey visualization with support for category/recipient exclusions.
+
+**Path:** `GET /api/aggregations/sankey`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `year` | integer | current year | Year to analyze (YYYY format) |
+| `currency` | string | EUR | Target currency |
+| `excluded_category_ids[]` | integer[] | [] | Categories to exclude from the flow calculation |
+| `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude from the flow calculation |
+
+**Response (data field):**
+
+```json
+{
+  "nodes": [
+    { "id": "__income__", "label": "Income", "value": 9550.50 },
+    { "id": "cat:Groceries", "label": "Groceries", "value": 4200.50 },
+    { "id": "cat:Transport", "label": "Transport", "value": 1850.00 },
+    { "id": "__savings__", "label": "Savings / Unspent", "value": 2900.00 }
+  ],
+  "links": [
+    {
+      "source": "__income__",
+      "target": "cat:Groceries",
+      "value": 4200.50
+    },
+    {
+      "source": "__income__",
+      "target": "cat:Transport",
+      "value": 1850.00
+    },
+    {
+      "source": "__income__",
+      "target": "__savings__",
+      "value": 2900.00
+    }
+  ],
+  "year": 2026
+}
+```
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getSankeyFlow({
+  year: 2026,
+  currency: 'EUR',
+  excluded_category_ids: [5, 10],
+  excluded_recipient_ids: [3]
+});
+// envelope.data.nodes → [Income, ...topCategories, Savings]
+// envelope.data.links → flows from Income to categories (excluding specified filters)
+// envelope.meta.source → 'live' (always computed with exclusions)
+```
+
+**Exclusion Logic:**
+
+When `excluded_category_ids[]` or `excluded_recipient_ids[]` are provided:
+- Transactions matching those filters are excluded from the calculation
+- Income and category flows are recomputed based on remaining transactions
+- Savings node recalculates as: `remaining_income - remaining_spending`
+- Backend always returns `meta.source === 'live'` (computed on-demand due to exclusions)
+
+See [[docs/features/sankey-flow|Sankey Flow Feature]] for visualization details.
+
+---
+
 ## Source Heuristic
 
 The `meta.source` field distinguishes between two computation modes:
@@ -357,6 +519,7 @@ await apiClient.getAggregationRecipientInsights({ currency: 'EUR' });
 await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });
+await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
 ```
 
 See [[apps/frontend/src/lib/api.ts|api.ts]] (lines ~1019–1107) for type definitions.

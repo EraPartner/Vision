@@ -164,6 +164,31 @@ If envelope adoption destabilizes production:
 
 ## Implementation Notes
 
+**List response envelope consolidation (Phase 1, 2026-04-24):**
+
+All 15 list endpoints across routes (transactions, categories, recipients, planned-transactions, splits, watchlist, investments, attachments, market-lookup, etc.) now emit a uniform **list payload** wrapped inside the unified envelope:
+
+```ts
+// Canonical list response shape
+{
+  ok: true,
+  data: {
+    items: T[],        // The array of items
+    total: number,     // Total count matching filters
+    limit?: number,    // Pagination limit (if used)
+    offset?: number,   // Pagination offset (if used)
+    links?: Array      // HATEOAS links (optional)
+  },
+  meta: {
+    requestId: string,
+    computedAt?: string,
+    source?: 'mv' | 'live'
+  }
+}
+```
+
+**Key clarification:** The payload `{items, total, ...}` wraps **inside `data`**, not split between `data` (bare array) and `meta.pagination`. This prevents the frontend crash `TypeError: undefined is not an object (evaluating 'B.items.filter')` that occurred when consumers expected `data.items` but received `data[0]` (bare array). All backends routes now enforce this structure consistently.
+
 **Envelope audit complete (Phase 1, 2026-04-21):**
 
 All 15 route files (`apps/node-backend/src/routes/*.js`) plus investment controller have been audited for envelope adoption:
@@ -185,6 +210,15 @@ The envelope unwrapping logic (`unwrapEnvelope`, `parseEnvelopeError`, backoff, 
 4. **Incremental domain split** — Phase 2 will extract methods by domain into separate modules
 
 See [[docs/reference/frontend-api-client|Frontend API Client Architecture]] for details.
+
+**Aggregation route envelope nesting (Phase 1, 2026-04-24):**
+
+Aggregation route handlers in `apps/node-backend/src/routes/aggregations.js` now use the unified envelope pattern `res.ok({ data, meta })` to nest the aggregation domain envelope inside the transport envelope. This differs from list routes, which emit `res.ok({ items, total })`:
+
+- **List routes** → `res.ok({ items: T[], total: number, ... })` → frontend unwraps to bare `{ items, total }`
+- **Aggregation routes** → `res.ok({ data: T, meta: { source, computedAt } })` → frontend unwraps to `{ data: T, meta: { source, computedAt } }`
+
+The double-nesting allows aggregation calc modules to return their own domain envelope (carrying `source` and `computedAt` freshness) while staying compatible with the unified transport envelope. The frontend type `AggregationEnvelope<T>` expects this shape after transport unwrap, and freshness indicators (materialized view staleness, live computation) are now always available in `envelope.meta.source`. See [[apps/node-backend/src/routes/aggregations.js|aggregations.js]] and [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]].
 
 ## Related
 

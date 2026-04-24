@@ -99,3 +99,40 @@ export function getAggregationBankBalances(params?: {
 }>> {
     return requestWithQuery('/api/aggregations/bank-balances', params);
 }
+
+export interface SankeyNode {
+    readonly id: string;
+    readonly label: string;
+    readonly value: number;
+}
+
+export interface SankeyLink {
+    readonly source: string;
+    readonly target: string;
+    readonly value: number;
+}
+
+export interface SankeyFlowData {
+    readonly nodes: SankeyNode[];
+    readonly links: SankeyLink[];
+    readonly year: number;
+}
+
+export function getSankeyFlow(params?: {
+    currency?: string;
+    year?: number;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
+}): Promise<AggregationEnvelope<SankeyFlowData>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.year != null) qp.set('year', String(params.year));
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+    }
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ''}`);
+}

@@ -3,9 +3,12 @@
  *
  * Single source of truth for Dashboard + Statistics widgets. Each endpoint
  * delegates to a pure calc module in services/calculations/aggregation/.
- * Calc modules return `{ data, meta: { computedAt, source } }`; the route layer
- * forwards both into the unified envelope via `res.ok(data, meta)`
- * (see docs/adr/026-unified-api-response-envelope.md).
+ * Calc modules return `{ data, meta: { computedAt, source } }`. The route layer
+ * nests that full aggregation envelope inside the unified transport envelope
+ * via `res.ok({ data, meta })` so the frontend (typed as AggregationEnvelope<T>)
+ * can read both `envelope.data.<payload>` and `envelope.meta.source` after
+ * unwrapEnvelope strips the outer `{ok, data}` layer.
+ * See docs/adr/026-unified-api-response-envelope.md.
  *
  * Mounted in parallel with legacy /api/info/* behind the AGGREGATIONS_V2_ENABLED
  * feature flag during Phase 2–8; legacy routes are removed in Phase 9 after
@@ -19,6 +22,8 @@ import { computeRecipientInsights } from '../services/calculations/aggregation/r
 import { computeCashflowComparison } from '../services/calculations/aggregation/cashflow.js';
 import { computeAverageVsCurrent } from '../services/calculations/aggregation/averageVsCurrent.js';
 import { computeBankBalances } from '../services/calculations/aggregation/bankBalances.js';
+import { computeCashflowForecast } from '../services/calculations/aggregation/cashflowForecast.js';
+import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.js';
 
 const router = Router();
 
@@ -43,21 +48,21 @@ router.get('/monthly-summary', async (req, res) => {
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
 });
 
 router.get('/category-breakdown', async (req, res) => {
   const { data, meta } = await computeCategoryBreakdown({
     targetCurrency: getTargetCurrency(req),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
 });
 
 router.get('/recipient-insights', async (req, res) => {
   const { data, meta } = await computeRecipientInsights({
     targetCurrency: getTargetCurrency(req),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
 });
 
 router.get('/cashflow-comparison', async (req, res) => {
@@ -66,21 +71,41 @@ router.get('/cashflow-comparison', async (req, res) => {
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
 });
 
 router.get('/average-vs-current', async (req, res) => {
   const { data, meta } = await computeAverageVsCurrent({
     targetCurrency: getTargetCurrency(req),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
 });
 
 router.get('/bank-balances', async (req, res) => {
   const { data, meta } = await computeBankBalances({
     targetCurrency: getTargetCurrency(req),
   });
-  res.ok(data, meta);
+  res.ok({ data, meta });
+});
+
+router.get('/cashflow-forecast', async (req, res) => {
+  const rawMonths = parseInt(req.query.months, 10);
+  const months = Number.isFinite(rawMonths) && rawMonths > 0 ? Math.min(rawMonths, 24) : 3;
+  const { data, meta } = await computeCashflowForecast({ months });
+  res.ok({ data, meta: { ...meta, months } });
+});
+
+router.get('/sankey', async (req, res) => {
+  const targetCurrency = getTargetCurrency(req);
+  const rawYear = parseInt(req.query.year, 10);
+  const year = Number.isFinite(rawYear) && rawYear > 2000 ? rawYear : undefined;
+  const { data, meta } = await computeSankeyFlow({
+    targetCurrency,
+    year,
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  res.ok({ data, meta });
 });
 
 export default router;
