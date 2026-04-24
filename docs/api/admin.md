@@ -8,6 +8,9 @@ tags:
   - admin
   - system
   - updates
+  - shadow-divergences
+  - observability
+  - phase-f
 description: API endpoints for system administration, database management, and
   application updates
 aliases:
@@ -19,6 +22,8 @@ related_code:
   - apps/node-backend/src/routes/admin.js
   - apps/node-backend/src/main.js
   - apps/node-backend/src/config/config.js
+  - apps/frontend/src/lib/api/admin.ts
+  - apps/frontend/src/pages/ShadowDivergencesPage.tsx
 ---
 
 # Admin API
@@ -31,7 +36,7 @@ System administration endpoints for database management, health checks, and appl
 /api/admin
 ```
 
-## Endpoints
+## Endpoints (12 total)
 
 ### GET /api/admin
 
@@ -326,6 +331,89 @@ Apply update and restart the application (backwards compatibility endpoint).
 {
   "success": true,
   "note": "Updates are managed by the Vision desktop app via Docker image pulls and the desktop shell updater. No manual action is required."
+}
+```
+
+---
+
+### GET /api/admin/shadow-divergences/summary (Phase F)
+
+Get a per-endpoint summary of aggregation shadow divergences. Returns divergence counts, maximum divergence count per endpoint, and the most recent timestamp.
+
+**Response:** `200 OK`
+
+```json
+{
+  "endpoints": [
+    {
+      "endpoint": "/api/aggregations/monthly-summary",
+      "count": 3,
+      "last_seen": "2026-04-25T14:32:10.123Z",
+      "max_divergence_count": 2
+    },
+    {
+      "endpoint": "/api/aggregations/category-breakdown",
+      "count": 1,
+      "last_seen": "2026-04-24T09:15:00.000Z",
+      "max_divergence_count": 1
+    }
+  ],
+  "total": 4
+}
+```
+
+**Implementation notes:**
+- Queries `agg_shadow_divergences` table grouped by endpoint
+- Returns results ordered by divergence count (descending)
+- Used by frontend admin dashboard to display summary card and endpoint filter options
+
+---
+
+### GET /api/admin/shadow-divergences (Phase F)
+
+Retrieve a paginated list of aggregation shadow divergences from the `agg_shadow_divergences` materialized log.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 50 | Results per page (capped at 200) |
+| `offset` | integer | 0 | Pagination offset |
+| `endpoint` | string | null | Filter by endpoint path; omit for all |
+
+**Response:** `200 OK`
+
+```json
+{
+  "rows": [
+    {
+      "id": 1,
+      "endpoint": "/api/aggregations/monthly-summary",
+      "request_params": { "start_date": "2026-04-01", "end_date": "2026-04-30" },
+      "divergences": [
+        { "path": "data.total_income", "next": "5000.00", "legacy": "4999.99", "delta": 0.01 }
+      ],
+      "divergence_count": 1,
+      "created_at": "2026-04-25T14:32:10.123Z"
+    }
+  ],
+  "total": 42,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Implementation notes:**
+- Returns rows ordered by `created_at DESC` (most recent first)
+- Each row includes up to 20 divergences (capped to manage log volume)
+- Request parameters stored as JSONB for filter reconstruction
+- See [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] for divergence detection behavior
+
+**Response:** `500 Internal Server Error`
+
+```json
+{
+  "detail": "Failed to retrieve shadow divergences"
 }
 ```
 

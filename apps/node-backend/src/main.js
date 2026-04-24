@@ -178,6 +178,7 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
+import { setupAggregationShadow } from './middleware/aggregationShadowWiring.js';
 
 const settings = getSettings();
 const app = express();
@@ -286,6 +287,9 @@ app.use('/api/recipients', recipientsRouter);
 app.use('/api/recipients', recipientBankAccountsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
+if (settings.features?.aggregationShadowEnabled) {
+  setupAggregationShadow(app, { logger });
+}
 if (settings.features?.aggregationsV2Enabled) {
   app.use('/api/aggregations', aggregationsRouter);
   logger.info('Aggregations V2 routes enabled (/api/aggregations)');

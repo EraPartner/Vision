@@ -81,6 +81,7 @@ const settings = deepFreeze({
 
   features: {
     aggregationsV2Enabled: env.AGGREGATIONS_V2_ENABLED,
+    aggregationShadowEnabled: env.AGGREGATION_SHADOW_ENABLED,
   },
 
   ollama: {
