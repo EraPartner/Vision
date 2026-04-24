@@ -48,7 +48,7 @@ function scanStack(stack, prefix) {
         routes.push({ method, path: fullPath });
       }
     } else if (layer.handle?.stack) {
-      const routePrefix = extractPrefix(layer) ?? prefix;
+      const routePrefix = layer.handle._mountPath ?? extractPrefix(layer) ?? prefix;
       routes.push(...scanStack(layer.handle.stack, routePrefix));
     }
   }
@@ -62,7 +62,22 @@ function scanStack(stack, prefix) {
  * @param {import('express').Application} app
  */
 export function buildRouteManifest(app) {
-  manifest = scanStack(app._router?.stack ?? [], '');
+  const router = app.router ?? app._router;
+  manifest = scanStack(router?.stack ?? [], '');
+}
+
+/**
+ * Mount a router at a path and tag it with _mountPath so scanStack can resolve
+ * the prefix in Express v5 (which no longer exposes layer.regexp).
+ * @param {import('express').Application} app
+ * @param {string} path
+ * @param {...any} fns
+ */
+export function mountRouter(app, path, ...fns) {
+  for (const fn of fns) {
+    if (fn?.stack) fn._mountPath = path;
+  }
+  app.use(path, ...fns);
 }
 
 /**

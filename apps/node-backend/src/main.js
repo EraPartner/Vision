@@ -180,7 +180,7 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
-import { buildRouteManifest } from './services/routeManifest.js';
+import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
 
 const settings = getSettings();
 const app = express();
@@ -286,24 +286,24 @@ app.get('/api/', (req, res) => {
 // This limiter is used only for the SPA fallback below.
 const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10000, keyPrefix: 'global' });
 
-app.use('/api/transactions', transactionsRouter);
-app.use('/api/categories', categoriesRouter);
-app.use('/api/recipients', recipientsRouter);
-app.use('/api/recipients', recipientBankAccountsRouter);
-app.use('/api/planned-transactions', plannedTransactionsRouter);
-app.use('/api/info', infoRouter);
-app.use('/api/aggregations', aggregationsRouter);
-app.use('/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
-app.use('/api/import', importRateLimiter, importRouter);
-app.use('/api/investments', investmentsRouter);
-app.use('/api/settings', settingsRouter);
-app.use('/api/market', marketLookupRouter);
-app.use('/api/watchlist', watchlistRouter);
-app.use('/api/splits', splitsRouter);
-app.use('/api/reconciliation', reconciliationRouter);
-app.use('/api/saved-charts', savedChartsRouter);
-app.use('/api/attachments', attachmentsRouter);
-app.use('/api/reports', reportsRouter);
+mountRouter(app, '/api/transactions', transactionsRouter);
+mountRouter(app, '/api/categories', categoriesRouter);
+mountRouter(app, '/api/recipients', recipientsRouter);
+mountRouter(app, '/api/recipients', recipientBankAccountsRouter);
+mountRouter(app, '/api/planned-transactions', plannedTransactionsRouter);
+mountRouter(app, '/api/info', infoRouter);
+mountRouter(app, '/api/aggregations', aggregationsRouter);
+mountRouter(app, '/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
+mountRouter(app, '/api/import', importRateLimiter, importRouter);
+mountRouter(app, '/api/investments', investmentsRouter);
+mountRouter(app, '/api/settings', settingsRouter);
+mountRouter(app, '/api/market', marketLookupRouter);
+mountRouter(app, '/api/watchlist', watchlistRouter);
+mountRouter(app, '/api/splits', splitsRouter);
+mountRouter(app, '/api/reconciliation', reconciliationRouter);
+mountRouter(app, '/api/saved-charts', savedChartsRouter);
+mountRouter(app, '/api/attachments', attachmentsRouter);
+mountRouter(app, '/api/reports', reportsRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
 // other /api/ai/* endpoints fall back to the global limiter.
@@ -314,7 +314,7 @@ if (settings.aiChat?.enabled) {
     keyPrefix: 'ai-chat',
   });
   app.use('/api/ai/chat', aiChatLimiter);
-  app.use('/api/ai', aiRouter);
+  mountRouter(app, '/api/ai', aiRouter);
   logger.info(`AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`);
 } else {
   logger.info('AI chat routes disabled (settings.aiChat.enabled = false)');

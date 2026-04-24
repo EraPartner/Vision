@@ -43,7 +43,6 @@ const DbMaintenancePage = lazy(() => import("./pages/DbMaintenancePage"));
 const AdminOverviewPage = lazy(() => import("./pages/admin/AdminOverviewPage"));
 const ProviderHealthPage = lazy(() => import("./pages/admin/ProviderHealthPage"));
 const EndpointLivenessPage = lazy(() => import("./pages/admin/EndpointLivenessPage"));
-const AdminFeatureFlagsPage = lazy(() => import("./pages/admin/AdminFeatureFlagsPage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -131,7 +130,6 @@ const App = () => {
                                     <Route path="/admin/db" element={<DbMaintenancePage />} />
                                     <Route path="/admin/providers" element={<ProviderHealthPage />} />
                                     <Route path="/admin/endpoints" element={<EndpointLivenessPage />} />
-                                    <Route path="/admin/feature-flags" element={<AdminFeatureFlagsPage />} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                     <Route path="/portfolio/market" element={<MarketLookupPage />} />

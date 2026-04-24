@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Database, Flag, Globe } from 'lucide-react';
+import { Activity, Database, Globe } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getDbStats, getProviderHealth, getRequestMetrics, listFeatureFlags } from '@/lib/api/admin';
+import { getDbStats, getProviderHealth, getRequestMetrics } from '@/lib/api/admin';
 
 function OverviewCard({
     label,
@@ -68,12 +68,6 @@ export default function AdminOverviewPage() {
         staleTime: 15_000,
     });
 
-    const { data: flags, isLoading: flagsLoading } = useQuery({
-        queryKey: ['admin', 'feature-flags'],
-        queryFn: listFeatureFlags,
-        staleTime: 60_000,
-    });
-
     const failingProviders = providers?.filter((p) => p.consecutive_failures > 0).length ?? 0;
     const okProviders = (providers?.length ?? 0) - failingProviders;
     const providerStatus = failingProviders >= 3 ? 'error' : failingProviders > 0 ? 'warn' : 'ok';
@@ -83,8 +77,6 @@ export default function AdminOverviewPage() {
     const overallErrorRate = totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(1) : '0';
     const metricsStatus = Number(overallErrorRate) >= 10 ? 'error' : Number(overallErrorRate) > 2 ? 'warn' : 'ok';
 
-    const enabledFlags = flags?.filter((f) => f.enabled).length ?? 0;
-
     return (
         <div className="flex flex-col gap-6 p-6">
             <PageHeader
@@ -92,9 +84,9 @@ export default function AdminOverviewPage() {
                 description={t('admin.overview.description')}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {dbLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
+                    Array.from({ length: 3 }).map((_, i) => (
                         <Card key={i} className="glass-chrome">
                             <CardContent className="pt-6">
                                 <div className="flex items-center gap-4">
@@ -131,13 +123,6 @@ export default function AdminOverviewPage() {
                             icon={Activity}
                             to="/admin/endpoints"
                             status={metricsStatus}
-                        />
-                        <OverviewCard
-                            label={t('admin.overview.featureFlags')}
-                            value={flagsLoading ? '…' : `${enabledFlags} / ${flags?.length ?? 0}`}
-                            sub={t('admin.overview.flagsEnabled')}
-                            icon={Flag}
-                            to="/admin/feature-flags"
                         />
                     </>
                 )}

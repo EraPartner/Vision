@@ -43,16 +43,9 @@ vi.mock('../../src/services/priceProviderService.js', () => ({
   sanitizePersistedKinesisHistory: vi.fn(),
 }));
 
-vi.mock('../../src/services/featureFlagService.js', () => ({
-  listFeatureFlags: vi.fn(),
-  getFeatureFlag: vi.fn(),
-  setFeatureFlag: vi.fn(),
-}));
-
 import { checkConnection, getTableCount } from '../../src/database/connection.js';
 import { getSettings } from '../../src/config/config.js';
 import { sanitizePersistedKinesisHistory } from '../../src/services/priceProviderService.js';
-import { listFeatureFlags, getFeatureFlag, setFeatureFlag } from '../../src/services/featureFlagService.js';
 import https from 'https';
 await import('../../src/routes/admin.js');
 
@@ -313,67 +306,6 @@ describe('Admin Routes', () => {
     });
   });
 
-  describe('GET /feature-flags', () => {
-    it('returns list of all feature flags', async () => {
-      const flags = [
-        { id: 1, key: 'ai_chat', enabled: false, description: 'AI chat' },
-        { id: 2, key: 'aggregations_v2', enabled: true, description: 'Agg v2' },
-      ];
-      listFeatureFlags.mockResolvedValue(flags);
-
-      const req = {};
-      const res = mockResponse();
-      await routeHandlers['get:/feature-flags'](req, res);
-
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: flags });
-    });
-  });
-
-  describe('GET /feature-flags/:key', () => {
-    it('returns single flag by key', async () => {
-      const flag = { id: 1, key: 'ai_chat', enabled: false, description: 'AI chat' };
-      getFeatureFlag.mockResolvedValue(flag);
-
-      const req = { params: { key: 'ai_chat' } };
-      const res = mockResponse();
-      await routeHandlers['get:/feature-flags/:key'](req, res);
-
-      expect(getFeatureFlag).toHaveBeenCalledWith('ai_chat');
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: flag });
-    });
-
-    it('propagates NotFoundError for unknown flag', async () => {
-      const { NotFoundError } = await import('../../src/middleware/errorHandler.js');
-      getFeatureFlag.mockRejectedValue(new NotFoundError("Feature flag 'ghost' not found"));
-
-      const req = { params: { key: 'ghost' } };
-      const res = mockResponse();
-      await expect(routeHandlers['get:/feature-flags/:key'](req, res)).rejects.toBeInstanceOf(NotFoundError);
-    });
-  });
-
-  describe('PATCH /feature-flags/:key', () => {
-    it('enables a flag and returns updated row', async () => {
-      const updated = { id: 1, key: 'ai_chat', enabled: true, description: 'AI chat' };
-      setFeatureFlag.mockResolvedValue(updated);
-
-      const req = { params: { key: 'ai_chat' }, body: { enabled: true } };
-      const res = mockResponse();
-      await routeHandlers['patch:/feature-flags/:key'](req, res);
-
-      expect(setFeatureFlag).toHaveBeenCalledWith('ai_chat', true);
-      expect(res.json).toHaveBeenCalledWith({ ok: true, data: updated });
-    });
-
-    it('throws ValidationError when enabled is missing from body', async () => {
-      const { ValidationError } = await import('../../src/middleware/errorHandler.js');
-
-      const req = { params: { key: 'ai_chat' }, body: {} };
-      const res = mockResponse();
-      await expect(routeHandlers['patch:/feature-flags/:key'](req, res)).rejects.toBeInstanceOf(ValidationError);
-      expect(setFeatureFlag).not.toHaveBeenCalled();
-    });
-  });
 });
 
 function mockGitHubReleaseBody(body) {

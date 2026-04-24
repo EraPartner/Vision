@@ -210,6 +210,44 @@ function normalizeRatesFromPayload(payload) {
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
+function parseStatbelMonthString(value) {
+  if (!value) return undefined;
+  const parts = String(value).trim().split(/\s+/);
+  if (parts.length < 2) return undefined;
+  const monthNum = MONTH_NAME_TO_NUMBER[parts[0].toLowerCase()];
+  const year = parseNumeric(parts[parts.length - 1]);
+  if (!monthNum || !Number.isFinite(year) || year < 1900 || year > 2100) return undefined;
+  return `${Math.trunc(year)}-${String(monthNum).padStart(2, '0')}`;
+}
+
+function normalizeRatesFromStatbelPayload(payload) {
+  const facts = payload?.facts;
+  if (!Array.isArray(facts) || facts.length === 0) return [];
+
+  const globalRows = facts.filter((row) => row['Level 1'] === null || row['Level 1'] === undefined);
+  const indexed = globalRows
+    .map((row) => {
+      const month = parseStatbelMonthString(row['Month']);
+      const cpi = parseNumeric(row['Consumer price index']);
+      return month && Number.isFinite(cpi) && cpi > 0 ? { month, cpi } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  if (indexed.length < 2) return [];
+
+  const rates = [];
+  for (let i = 1; i < indexed.length; i += 1) {
+    const prev = indexed[i - 1];
+    const curr = indexed[i];
+    const monthlyRate = (curr.cpi / prev.cpi) - 1;
+    if (!Number.isFinite(monthlyRate) || Math.abs(monthlyRate) > 1) continue;
+    rates.push({ month: curr.month, monthly_rate: Math.round(monthlyRate * 1_000_000) / 1_000_000 });
+  }
+
+  return rates;
+}
+
 function normalizeRatesFromEurostatIndexPayload(payload) {
   const timeIndex = payload?.dimension?.time?.category?.index;
   const values = payload?.value;
@@ -264,7 +302,8 @@ async function fetchFromStatbel() {
           lastError = new Error(`HTTP ${response.status} from ${url}`);
         } else {
           const payload = await response.json();
-          const rates = normalizeRatesFromPayload(payload);
+          const statbelRates = normalizeRatesFromStatbelPayload(payload);
+          const rates = statbelRates.length > 0 ? statbelRates : normalizeRatesFromPayload(payload);
           if (rates.length > 0) {
             logger.info('Fetched Belgian inflation rates from Statbel', { url, count: rates.length, attempt: attempt + 1 });
             return rates;

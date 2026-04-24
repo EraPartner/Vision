@@ -20,11 +20,6 @@ import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { sanitizePersistedKinesisHistory } from '../services/priceProviderService.js';
 import { AppError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
-import {
-  listFeatureFlags,
-  getFeatureFlag,
-  setFeatureFlag,
-} from '../services/featureFlagService.js';
 import { listProviderHealth, probeProvider } from '../services/providerHealthService.js';
 import { getMetrics } from '../middleware/requestMetrics.js';
 import { getRouteManifest } from '../services/routeManifest.js';
@@ -251,31 +246,6 @@ router.get('/metrics/requests', (_req, res) => {
 
 router.get('/endpoints', (_req, res) => {
   res.ok(getRouteManifest());
-});
-
-// ── Feature Flags ─────────────────────────────────────────────────────────────
-
-router.get('/feature-flags', async (_req, res) => {
-  const flags = await listFeatureFlags();
-  res.ok(flags);
-});
-
-router.get('/feature-flags/:key', async (req, res) => {
-  const { key } = req.params;
-  const flag = await getFeatureFlag(key);
-  res.ok(flag);
-});
-
-router.patch('/feature-flags/:key', async (req, res) => {
-  const { key } = req.params;
-  const { enabled } = req.body;
-
-  if (enabled === undefined) {
-    throw new ValidationError('Request body must include "enabled" (boolean)');
-  }
-
-  const updated = await setFeatureFlag(key, enabled);
-  res.ok(updated);
 });
 
 export default router;

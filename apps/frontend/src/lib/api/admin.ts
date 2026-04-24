@@ -1,7 +1,7 @@
 /**
  * Admin API client.
  *
- * Wraps /api/admin/* routes for database maintenance, feature flags, etc.
+ * Wraps /api/admin/* routes for database maintenance, provider health, etc.
  */
 
 import { apiRequest } from '@/lib/api/client';
@@ -22,14 +22,6 @@ export interface DbTableStat {
 export interface DbStats {
     tables: DbTableStat[];
     db_size: string | null;
-}
-
-export interface FeatureFlag {
-    key: string;
-    enabled: boolean;
-    description: string | null;
-    created_at: string;
-    updated_at: string | null;
 }
 
 export type ProviderKind = 'price' | 'fx' | 'inflation';
@@ -105,15 +97,3 @@ export function getEndpointManifest(): Promise<EndpointEntry[]> {
     return apiRequest<EndpointEntry[]>('/api/admin/endpoints');
 }
 
-// ── Feature Flags ─────────────────────────────────────────────────────────────
-
-export function listFeatureFlags(): Promise<FeatureFlag[]> {
-    return apiRequest<FeatureFlag[]>('/api/admin/feature-flags');
-}
-
-export function setFeatureFlag(key: string, enabled: boolean): Promise<FeatureFlag> {
-    return apiRequest<FeatureFlag>(`/api/admin/feature-flags/${encodeURIComponent(key)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ enabled }),
-    });
-}

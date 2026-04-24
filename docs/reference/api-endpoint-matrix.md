@@ -210,9 +210,6 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | POST | `/api/admin/update/apply` | Acknowledge update | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/update/apply-and-restart` | Apply and restart | — | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/investments/kinesis/sanitize-history` | Sanitize Kinesis spikes | — | [[docs/api/admin\|Admin]] |
-| GET | `/api/admin/feature-flags` | List all feature flags (Phase 4) | — | [[docs/api/admin\|Admin]] |
-| GET | `/api/admin/feature-flags/:key` | Get single feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
-| PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/providers/health` | List all provider health records | — | [[docs/api/admin\|Admin]] |

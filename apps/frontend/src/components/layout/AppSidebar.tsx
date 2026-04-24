@@ -38,7 +38,6 @@ import {
   GitMerge,
   ShieldCheck,
   Activity,
-  Flag,
   Globe,
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -105,7 +104,6 @@ export function AppSidebar() {
     { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
     { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
     { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
-    { title: t('nav.adminFeatureFlags'), url: "/admin/feature-flags", icon: Flag },
   ];
 
   const portfolioGroups = [
