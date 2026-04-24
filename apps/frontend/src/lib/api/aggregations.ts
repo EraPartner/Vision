@@ -172,6 +172,131 @@ export interface SankeyFlowData {
     readonly year: number;
 }
 
+// ==================== Cash Flow Forecast Methods ====================
+
+export interface ForecastDailyPoint {
+    readonly date: string;
+    readonly value: number;
+}
+
+/** Dynamic-percentile bands: keys are "p{N}" for each requested percentile. */
+export type ForecastBands = Record<string, ForecastDailyPoint[]>;
+
+export interface ForecastMethod {
+    readonly id: string;
+    readonly label: string;
+    readonly daily: ForecastDailyPoint[];
+    readonly cumulative: ForecastDailyPoint[];
+    readonly bands: ForecastBands | null;
+    readonly error: string | null;
+}
+
+export interface ForecastActualPoint {
+    readonly date: string;
+    readonly net: number | null;
+    readonly cumulative: number | null;
+}
+
+export interface ForecastPlannedPoint {
+    readonly date: string;
+    readonly net: number;
+}
+
+export interface ForecastBacktestEntry {
+    readonly method_id: string;
+    readonly label: string;
+    readonly mae: number;
+    readonly rmse: number;
+    readonly mape: number;
+    readonly months: number;
+    readonly per_month: ReadonlyArray<{
+        readonly month: string;
+        readonly mae: number;
+        readonly rmse: number;
+        readonly mape: number;
+        readonly sample_days: number;
+    }>;
+}
+
+export interface ForecastDiagnostics {
+    readonly history_months: number;
+    readonly backtest: ForecastBacktestEntry[];
+}
+
+export interface CashflowForecastMethodsData {
+    readonly month: string;
+    readonly currency: string;
+    readonly days_in_month: number;
+    readonly current_day: number;
+    readonly actual: ForecastActualPoint[];
+    readonly methods: ForecastMethod[];
+    readonly planned: ForecastPlannedPoint[];
+    readonly diagnostics: ForecastDiagnostics | null;
+    readonly history_months: number;
+    readonly include_planned: boolean;
+}
+
+export function getCashflowForecastMethods(params?: {
+    currency?: string;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
+    history_months?: number;
+    mc_paths?: number;
+    mc_percentiles?: number[];
+    include_planned?: boolean;
+    include_backtest?: boolean;
+}): Promise<AggregationEnvelope<CashflowForecastMethodsData>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.history_months != null) qp.set('history_months', String(params.history_months));
+    if (params?.mc_paths != null) qp.set('mc_paths', String(params.mc_paths));
+    if (params?.mc_percentiles?.length) {
+        params.mc_percentiles.forEach((p) => qp.append('mc_percentiles', String(p)));
+    }
+    if (params?.include_planned != null) qp.set('include_planned', params.include_planned ? 'true' : 'false');
+    if (params?.include_backtest != null) qp.set('include_backtest', params.include_backtest ? 'true' : 'false');
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+    }
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ''}`);
+}
+
+export interface AccuracyHistoryPoint {
+    readonly month: string;
+    readonly mae: number;
+    readonly rmse: number;
+    readonly mape: number;
+    readonly sample_days: number;
+}
+
+export interface AccuracyMethodEntry {
+    readonly method_id: string;
+    readonly as_of_month: string;
+    readonly mae: number;
+    readonly rmse: number;
+    readonly mape: number;
+    readonly sample_days: number;
+    readonly history: AccuracyHistoryPoint[];
+}
+
+export interface CashflowForecastAccuracyData {
+    readonly methods: AccuracyMethodEntry[];
+    readonly limit_months: number;
+}
+
+export function getCashflowForecastAccuracy(params?: {
+    limit_months?: number;
+}): Promise<AggregationEnvelope<CashflowForecastAccuracyData>> {
+    const qp = new URLSearchParams();
+    if (params?.limit_months != null) qp.set('limit_months', String(params.limit_months));
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ''}`);
+}
+
 export function getSankeyFlow(params?: {
     currency?: string;
     year?: number;

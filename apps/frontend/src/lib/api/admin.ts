@@ -39,7 +39,7 @@ export interface ProviderHealth {
 
 export interface ProbeResult {
     ok: boolean;
-    provider: string;
+    provider: ProviderHealth;
     error?: string;
 }
 

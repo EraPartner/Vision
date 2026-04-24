@@ -104,6 +104,10 @@ export const apiClient = {
     getTransactionCount: info.getTransactionCount,
     getCashflowComparison: (params?: Parameters<typeof agg.getAggregationCashflowComparison>[0]) =>
         agg.getAggregationCashflowComparison(params).then(r => r.data),
+    getCashflowForecastMethods: (params?: Parameters<typeof agg.getCashflowForecastMethods>[0]) =>
+        agg.getCashflowForecastMethods(params).then(r => r.data),
+    getCashflowForecastAccuracy: (params?: Parameters<typeof agg.getCashflowForecastAccuracy>[0]) =>
+        agg.getCashflowForecastAccuracy(params).then(r => r.data),
     getMonthlyFinancialSummary: (params?: Parameters<typeof agg.getAggregationMonthlySummary>[0]) =>
         agg.getAggregationMonthlySummary(params).then(r => r.data),
     getBankBalances: (params?: Parameters<typeof agg.getAggregationBankBalances>[0]) =>
