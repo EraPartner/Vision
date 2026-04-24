@@ -24,6 +24,7 @@ import { listProviderHealth, probeProvider } from '../services/providerHealthSer
 import { getMetrics } from '../middleware/requestMetrics.js';
 import { getRouteManifest } from '../services/routeManifest.js';
 import { adminMutateLimiter } from '../middleware/rateLimiter.js';
+import { isAccuracyTableHealthy } from '../services/calculations/forecast/accuracyStore.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
@@ -83,6 +84,7 @@ function formatAdminStatusPayload(isConnected, tableCount) {
   return {
     is_initialised: isConnected && tableCount > 0,
     table_count: tableCount,
+    accuracy_table_healthy: isAccuracyTableHealthy(),
     timestamp: new Date().toISOString(),
     links: [],
   };

@@ -23,6 +23,8 @@ import { computeCashflowComparison } from '../services/calculations/aggregation/
 import { computeAverageVsCurrent } from '../services/calculations/aggregation/averageVsCurrent.js';
 import { computeBankBalances } from '../services/calculations/aggregation/bankBalances.js';
 import { computeCashflowForecast } from '../services/calculations/aggregation/cashflowForecast.js';
+import { computeCashflowForecast as computeCashflowForecastMethods } from '../services/calculations/forecast/index.js';
+import { getAllAccuracyHistory } from '../services/calculations/forecast/accuracyStore.js';
 import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.js';
 import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
@@ -97,6 +99,66 @@ router.get('/cashflow-forecast', async (req, res) => {
   const months = Number.isFinite(rawMonths) && rawMonths > 0 ? Math.min(rawMonths, 24) : 3;
   const { data, meta } = await computeCashflowForecast({ months });
   res.ok({ data, meta: { ...meta, months } });
+});
+
+router.get('/cashflow-forecast-methods', async (req, res) => {
+  const rawMcPaths = parseInt(req.query.mc_paths, 10);
+  const mcPaths = Number.isFinite(rawMcPaths) && rawMcPaths > 0 ? Math.min(rawMcPaths, 5000) : 1000;
+  const rawHistory = parseInt(req.query.history_months, 10);
+  const historyMonths =
+    Number.isFinite(rawHistory) && rawHistory > 0 ? Math.min(rawHistory, 120) : 36;
+  const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
+  const mcPercentiles = percentiles.length > 0 ? percentiles : [10, 50, 90];
+  const includePlanned =
+    req.query.include_planned === 'true' || req.query.include_planned === '1';
+  const includeBacktest = req.query.include_backtest !== 'false' && req.query.include_backtest !== '0';
+  const includeBreakdown =
+    req.query.include_breakdown === 'true' || req.query.include_breakdown === '1';
+
+  const { data, meta } = await computeCashflowForecastMethods({
+    targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    includePlanned,
+    historyMonths,
+    mcPaths,
+    mcPercentiles,
+    includeBacktest,
+    includeBreakdown,
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/cashflow-forecast-accuracy', async (req, res) => {
+  const userId = req.get('x-actor') || 'anonymous';
+  const rawLimit = parseInt(req.query.limit_months, 10);
+  const limitMonths = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 48) : 24;
+
+  const rows = await getAllAccuracyHistory({ userId, limitMonths });
+
+  const byMethod = new Map();
+  for (const row of rows) {
+    if (!byMethod.has(row.method_id)) byMethod.set(row.method_id, []);
+    byMethod.get(row.method_id).push(row);
+  }
+
+  const methods = Array.from(byMethod.entries()).map(([methodId, history]) => {
+    const sorted = [...history].sort((a, b) => b.as_of_month.localeCompare(a.as_of_month));
+    const latest = sorted[0];
+    return {
+      method_id: methodId,
+      as_of_month: latest.as_of_month,
+      mae: latest.mae,
+      rmse: latest.rmse,
+      mape: latest.mape,
+      sample_days: latest.sample_days,
+      history: sorted.map(({ as_of_month, mae, rmse, mape, sample_days }) => ({
+        month: as_of_month, mae, rmse, mape, sample_days,
+      })),
+    };
+  });
+
+  res.ok({ data: { methods, limit_months: limitMonths }, meta: { source: 'db', userId } });
 });
 
 router.get('/sankey', async (req, res) => {
