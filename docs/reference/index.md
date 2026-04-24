@@ -2,9 +2,9 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-04-21
-tags: [reference, index, code-patterns, types, algorithms, phase-1]
-description: Index of all reference documentation — code patterns, types, algorithms, environment variables, and more
+date: 2026-04-25
+tags: [reference, index, code-patterns, types, algorithms, phase-1, phase-g-aggregations]
+description: Index of all reference documentation — code patterns, types, algorithms, environment variables, and API client methods (updated Phase G)
 aliases: [reference docs, reference index, code reference]
 ---
 
@@ -36,6 +36,7 @@ SORT title ASC
 | [[docs/reference/typescript-types\|TypeScript Types]] | All frontend type definitions |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]] | File navigation map organized by feature, layer, and task |
 | [[docs/reference/frontend-api-client\|Frontend API Client Architecture]] | Transport, types, and facade layers of the HTTP client (Phase 1 refactor) |
+| [[docs/reference/api-client-methods\|API Client Methods Reference]] | All frontend `apiClient` methods organized by resource (Phase G updated with aggregation proxies) |
 | [[docs/reference/schema-initialization\|Schema Initialization (Archived)]] | Legacy schema initialization reference — replaced by Alembic |
 
 ## Algorithms & Computer Science
@@ -57,7 +58,7 @@ SORT title ASC
 |----------|-------------|
 | [[docs/reference/environment-variables|Environment Variables]] | All env vars for frontend and backend |
 | [[docs/reference/scripts|Scripts Reference]] | All bun/npm commands |
-| [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] | Complete matrix of all 108 API endpoints |
+| [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] | Complete matrix of all 146 API endpoints (Phase G removed 6 info endpoints in favor of aggregations) |
 
 ## Error Handling
 

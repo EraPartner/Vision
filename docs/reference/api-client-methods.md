@@ -135,23 +135,28 @@ The legacy `apiClient` singleton (`[[apps/frontend/src/lib/api.ts]]`, 1243 lines
 | `saveSetting(key, value)` | PUT /api/settings/:key | `{ key, value }` |
 | `saveSettingsBulk(settings)` | PUT /api/settings | `{ saved }` |
 
-### Info / Statistics
+### Info / Statistics (Phase G: Aggregation Migration)
 
-| Method | Endpoint | Return Type |
-|--------|----------|-------------|
-| `getStatistics(params?)` | GET /api/info | Statistics summary |
-| `getSupportedParsers()` | GET /api/info/supported-adapters | `{ adapters, total_count }` |
-| `getTransactionSummary(params?)` | GET /api/info/transaction-summary | Summary stats |
-| `getTransactionCount()` | GET /api/info/transaction-count | `{ total_transactions }` |
-| `getMonthlyFinancialSummary(params?)` | GET /api/info/monthly-summary | Monthly data |
-| `getCashflowComparison(params?)` | GET /api/info/cashflow-comparison | Daily cashflow |
-| `getBankBalances(params?)` | GET /api/info/bank-balances | Bank balances |
-| `getBelgianInflationRates(params?)` | GET /api/info/inflation-rates | Inflation rates |
-| `getRecurringPatterns()` | GET /api/info/recurring-patterns | Recurring patterns |
-| `getNetWorth(params?)` | GET /api/info/net-worth | `NetWorthResponse` |
-| `getPortfolioPerformance(params?)` | GET /api/info/portfolio-performance | Performance snapshots |
-| `getRecipientInsights(params?)` | GET /api/info/recipient-insights | Recipient insights |
-| `refreshMaterializedViews()` | POST /api/info/refresh-views | `{ message, duration_ms }` |
+> [!warning] Phase G Migration (April 2026)
+> Four methods now proxy through `/api/aggregations/*` endpoints with envelope unwrapping. See [[docs/api/aggregations|Aggregations API]].
+
+| Method | Backend Route | Return Type | Notes |
+|--------|----------|-------------|-------|
+| `getStatistics(params?)` | GET /api/info | Statistics summary | Direct |
+| `getSupportedParsers()` | GET /api/info/supported-adapters | `{ adapters, total_count }` | Direct |
+| `getTransactionSummary(params?)` | GET /api/info/transaction-summary | Summary stats | Direct |
+| `getTransactionCount()` | GET /api/info/transaction-count | `{ total_transactions }` | Direct |
+| `getMonthlyFinancialSummary(params?)` | GET /api/aggregations/monthly-summary | Monthly data | Phase G: Envelope unwrapped |
+| `getCashflowComparison(params?)` | GET /api/aggregations/cashflow-comparison | Daily cashflow | Phase G: Envelope unwrapped |
+| `getBankBalances(params?)` | GET /api/aggregations/bank-balances | Bank balances | Phase G: Envelope unwrapped |
+| `getBelgianInflationRates(params?)` | GET /api/info/inflation-rates | Inflation rates | Direct |
+| `getRecurringPatterns()` | GET /api/info/recurring-patterns | Recurring patterns | Direct |
+| `getNetWorth(params?)` | GET /api/info/net-worth | `NetWorthResponse` | Direct |
+| `getPortfolioPerformance(params?)` | GET /api/info/portfolio-performance | Performance snapshots | Direct |
+| `getRecipientInsights(params?)` | GET /api/aggregations/recipient-insights | Recipient insights | Phase G: Envelope unwrapped |
+| `refreshMaterializedViews()` | POST /api/info/refresh-views | `{ message, duration_ms }` | Direct |
+
+**Implementation detail (Phase G):** Four legacy endpoints were removed from `/api/info/*`. The corresponding `apiClient` methods now wrap calls to the aggregation equivalents, unwrapping the [[docs/adr/026-unified-api-response-envelope|unified response envelope]] to maintain backward-compatible signatures for call sites.
 
 ### Splits / Owes
 

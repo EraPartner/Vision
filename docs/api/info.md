@@ -2,9 +2,9 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-04-23
-tags: [api, analytics, statistics, dashboard]
-description: API endpoints for statistics, analytics, and dashboard data
+date: 2026-04-25
+tags: [api, analytics, statistics, dashboard, phase-g-deprecation]
+description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements.
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
 related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/utils/downsample.js"]
 ---
@@ -13,8 +13,8 @@ related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/re
 
 Comprehensive analytics and statistics endpoints for dashboards and financial insights.
 
-> [!warning] Deprecation Status (Phase 9)
-> These endpoints are live and currently the production API surface. Phase 2-8 migrated new logic to `/api/aggregations/*` endpoints (see [[docs/adr/010-phase1-aggregation-strategy]], [[docs/adr/011-phase2-aggregation-envelope-standard]]). Removal of `/api/info/*` is **blocked on shadow-mode parity**: the [[docs/adr/016-aggregation-shadow-mode|aggregation shadow middleware]] (Phase 8) must be wired into production, verified for zero divergence over one full release cycle, and collect proof that `/api/aggregations/*` has full production traffic coverage. See TODO.md Phase 9 section for unblocking steps.
+> [!warning] Phase G Consolidation (April 2026)
+> Six endpoints were removed and migrated to `/api/aggregations/*` (see [[#removed-endpoints-phase-g|Removed Endpoints]] below). Remaining endpoints continue as the production API surface. Earlier phases (2-8) migrated new logic to aggregations (see [[docs/adr/010-phase1-aggregation-strategy]], [[docs/adr/011-phase2-aggregation-envelope-standard]], [[docs/adr/016-aggregation-shadow-mode]]). See [[docs/reference/api-endpoint-matrix#phase-g-endpoint-consolidation|API Endpoint Matrix Phase G]] for consolidation summary.
 
 ## Base URL
 
@@ -138,7 +138,9 @@ Get transaction summary with optional filters.
 
 ---
 
-### GET /api/info/monthly-summary
+### ~~GET /api/info/monthly-summary~~ *(removed — use `/api/aggregations/monthly-summary`)*
+
+> **Removed in Phase G.** Route deleted. Use [[docs/api/aggregations|`GET /api/aggregations/monthly-summary`]] instead.
 
 Get monthly financial summary for the last 12 months.
 
@@ -208,7 +210,9 @@ Get planned expenses for next month.
 
 ---
 
-### GET /api/info/average-vs-current-spending
+### ~~GET /api/info/average-vs-current-spending~~ *(removed — use `/api/aggregations/average-vs-current`)*
+
+> **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/average-vs-current`]] instead.
 
 Compare current month spending to historical average.
 
@@ -233,7 +237,9 @@ Compare current month spending to historical average.
 
 ---
 
-### GET /api/info/cashflow-comparison
+### ~~GET /api/info/cashflow-comparison~~ *(removed — use `/api/aggregations/cashflow-comparison`)*
+
+> **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/cashflow-comparison`]] instead.
 
 Compare cashflow between periods.
 
@@ -271,7 +277,9 @@ Notes:
 
 ---
 
-### GET /api/info/category-breakdown
+### ~~GET /api/info/category-breakdown~~ *(removed — use `/api/aggregations/category-breakdown`)*
+
+> **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/category-breakdown`]] instead.
 
 Get spending breakdown by category.
 
@@ -304,7 +312,9 @@ Implementation notes:
 
 ---
 
-### GET /api/info/bank-balances
+### ~~GET /api/info/bank-balances~~ *(removed — use `/api/aggregations/bank-balances`)*
+
+> **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/bank-balances`]] instead.
 
 Get current and historical balances per bank account.
 
@@ -417,7 +427,9 @@ Notes:
 
 ---
 
-### GET /api/info/recipient-insights
+### ~~GET /api/info/recipient-insights~~ *(removed — use `/api/aggregations/recipient-insights`)*
+
+> **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/recipient-insights`]] instead.
 
 Get spending insights per recipient/merchant.
 
@@ -670,6 +682,23 @@ Security/performance notes:
 - Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.js]].
 
 Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/middleware/rateLimiter.js]]
+
+---
+
+## Removed Endpoints (Phase G)
+
+The following endpoints were removed in Phase G (April 2026) as they are now handled by `/api/aggregations/*` equivalents:
+
+1. **`GET /api/info/monthly-summary`** → Use [[docs/api/aggregations#monthly-summary|`GET /api/aggregations/monthly-summary`]]
+2. **`GET /api/info/average-vs-current-spending`** → Use [[docs/api/aggregations#average-vs-current|`GET /api/aggregations/average-vs-current`]]
+3. **`GET /api/info/cashflow-comparison`** → Use [[docs/api/aggregations#cashflow-comparison|`GET /api/aggregations/cashflow-comparison`]]
+4. **`GET /api/info/category-breakdown`** → Use [[docs/api/aggregations#category-breakdown|`GET /api/aggregations/category-breakdown`]]
+5. **`GET /api/info/bank-balances`** → Use [[docs/api/aggregations#bank-balances|`GET /api/aggregations/bank-balances`]]
+6. **`GET /api/info/recipient-insights`** → Use [[docs/api/aggregations#recipient-insights|`GET /api/aggregations/recipient-insights`]]
+
+**Frontend impact:** Four of these have `apiClient` method equivalents (`getMonthlyFinancialSummary()`, `getCashflowComparison()`, `getBankBalances()`, `getRecipientInsights()`) which now proxy to aggregations and unwrap the response envelope transparently. See [[docs/reference/api-client-methods#info--statistics-phase-g-aggregation-migration|API Client Methods]] for details.
+
+**Historical note:** Earlier sections still document the deprecated endpoints with their response schema for reference. These routes return 404 in production after Phase G.
 
 ---
 

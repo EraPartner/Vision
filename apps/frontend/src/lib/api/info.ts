@@ -1,6 +1,6 @@
 import logger from '@/lib/logger';
 import { apiRequest } from '@/lib/api/client';
-import { requestWithQuery, buildExclusionQuery } from '@/lib/api/helpers';
+import { requestWithQuery } from '@/lib/api/helpers';
 import type { NetWorthResponse } from '@/lib/api/types';
 
 export async function getStatistics(params?: { currency?: string }): Promise<{
@@ -41,65 +41,6 @@ export function getTransactionSummary(params?: {
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
     return apiRequest('/api/info/transaction-count');
-}
-
-export function getCashflowComparison(params?: {
-    excluded_category_ids?: number[];
-    excluded_recipient_ids?: number[];
-    currency?: string;
-}): Promise<{
-    days_in_month: number;
-    current_day: number;
-    month: number;
-    year: number;
-    without_planned: Array<{ day: number; average: number; current: number | null }>;
-    with_planned: Array<{ day: number; average: number; current: number | null }>;
-}> {
-    const q = buildExclusionQuery(params);
-    return apiRequest(`/api/info/cashflow-comparison${q ? `?${q}` : ''}`);
-}
-
-export function getMonthlyFinancialSummary(params?: {
-    excluded_category_ids?: number[];
-    excluded_recipient_ids?: number[];
-    currency?: string;
-}): Promise<{
-    months: Array<{
-        month: number;
-        year: number;
-        period_start: string;
-        period_end: string;
-        total_spending: number;
-        total_income: number;
-        net_amount: number;
-        transaction_count: number;
-    }>;
-    summary: {
-        total_spending: number;
-        total_income: number;
-        net_amount: number;
-        transaction_count: number;
-        period_start: string;
-        period_end: string;
-    };
-}> {
-    const q = buildExclusionQuery(params);
-    return apiRequest(`/api/info/monthly-summary${q ? `?${q}` : ''}`);
-}
-
-export function getBankBalances(params?: { currency?: string }): Promise<{
-    accounts: Array<{
-        bank_account: string;
-        balance: number;
-        transaction_count: number;
-        first_transaction: string;
-        last_transaction: string;
-    }>;
-    total_net_position: number;
-    history: Record<string, Array<{ month: string; balance: number }>>;
-    total_history: Array<{ month: string; balance: number }>;
-}> {
-    return requestWithQuery('/api/info/bank-balances', params);
 }
 
 export function getBelgianInflationRates(params?: {
@@ -150,27 +91,6 @@ export async function getRecurringPatterns(): Promise<{
         logger.warn('Recurring patterns unavailable; using empty result', err);
         return { patterns: [], total: 0 };
     }
-}
-
-export function getRecipientInsights(params?: { currency?: string }): Promise<{
-    topMerchants: Array<{
-        recipientId: number;
-        name: string;
-        totalSpend: number;
-        transactionCount: number;
-        avgAmount: number;
-        firstSeen: string;
-        lastSeen: string;
-    }>;
-    monthOverMonth: Array<{
-        recipientId: number;
-        name: string;
-        currentSpend: number;
-        previousSpend: number;
-        changePercent: number;
-    }>;
-}> {
-    return requestWithQuery('/api/info/recipient-insights', params);
 }
 
 export function getPortfolioPerformance(params?: {

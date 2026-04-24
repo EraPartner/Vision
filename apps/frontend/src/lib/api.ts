@@ -102,12 +102,16 @@ export const apiClient = {
     getBanks: info.getBanks,
     getTransactionSummary: info.getTransactionSummary,
     getTransactionCount: info.getTransactionCount,
-    getCashflowComparison: info.getCashflowComparison,
-    getMonthlyFinancialSummary: info.getMonthlyFinancialSummary,
-    getBankBalances: info.getBankBalances,
+    getCashflowComparison: (params?: Parameters<typeof agg.getAggregationCashflowComparison>[0]) =>
+        agg.getAggregationCashflowComparison(params).then(r => r.data),
+    getMonthlyFinancialSummary: (params?: Parameters<typeof agg.getAggregationMonthlySummary>[0]) =>
+        agg.getAggregationMonthlySummary(params).then(r => r.data),
+    getBankBalances: (params?: Parameters<typeof agg.getAggregationBankBalances>[0]) =>
+        agg.getAggregationBankBalances(params).then(r => r.data),
     getBelgianInflationRates: info.getBelgianInflationRates,
     getRecurringPatterns: info.getRecurringPatterns,
-    getRecipientInsights: info.getRecipientInsights,
+    getRecipientInsights: (params?: Parameters<typeof agg.getAggregationRecipientInsights>[0]) =>
+        agg.getAggregationRecipientInsights(params).then(r => r.data),
     getPortfolioPerformance: info.getPortfolioPerformance,
     getNetWorth: info.getNetWorth,
     refreshMaterializedViews: info.refreshMaterializedViews,

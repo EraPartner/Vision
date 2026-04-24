@@ -111,16 +111,26 @@ useQuery({
 
 ## Backend Implementation
 
-The backend endpoint `GET /api/info/recipient-insights` in `[[apps/node-backend/src/routes/info.js]]` delegates to `infoRepository.getRecipientInsights(currency)`, which performs SQL aggregations to compute:
+> [!info] Phase G Migration (April 2026)
+> The legacy `/api/info/recipient-insights` endpoint was removed. This feature now uses `GET /api/aggregations/recipient-insights` via [[docs/api/aggregations|Aggregations API]].
+
+The endpoint `GET /api/aggregations/recipient-insights` in `[[apps/node-backend/src/routes/aggregations.js]]` delegates to `infoRepository.getRecipientInsights(currency)`, which performs SQL aggregations to compute:
 
 1. **Top merchants**: SUM of expenses grouped by recipient, ordered by total spend descending
 2. **Month-over-month changes**: Compares current month vs previous month spending per recipient
+
+**Response envelope (Phase 2):** All aggregation endpoints return a [[docs/adr/026-unified-api-response-envelope|unified envelope]] with:
+- Outer `ok` and `meta.requestId` transport layer
+- Inner `data.data` containing the aggregation result
+- Inner `data.meta.source` indicating `'mv'` (materialized view) or `'live'` (computed with exclusions)
+
+**Frontend usage (Phase G):** `apiClient.getRecipientInsights(params)` now proxies to the aggregations endpoint and unwraps the envelope transparently, maintaining backward-compatible signatures.
 
 Implementation notes:
 - Recipient repository `getById` now uses lateral/pre-aggregated joins (matching list-query enrichment strategy) instead of correlated subqueries, preserving response fields while improving scalability characteristics.
 - Recipient repository `update` now returns enriched recipient fields via a single CTE update-and-select query (instead of update + follow-up read), preserving payload semantics while reducing one round-trip.
 
-Code link: [[apps/node-backend/src/repositories/recipientRepository.js]]
+Code links: [[apps/node-backend/src/routes/aggregations.js]], [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]]
 
 ## Related Features
 

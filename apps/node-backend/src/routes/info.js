@@ -277,52 +277,11 @@ router.get('/transaction-summary', async (req, res) => {
   res.ok(summary);
 });
 
-// GET /api/info/monthly-summary
-router.get('/monthly-summary', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
-
-  logger.debug('Monthly summary request', { excludedCategoryIds });
-  const data = await infoRepository.getMonthlyFinancialSummary(excludedCategoryIds, targetCurrency);
-  logger.debug('Monthly summary response', { monthCount: data.months?.length, summary: data.summary });
-  res.ok({ ...data, links: [] });
-});
-
 // GET /api/info/planned-expenses-next-month
 router.get('/planned-expenses-next-month', async (req, res) => {
   const targetCurrency = getTargetCurrency(req);
   const data = await infoRepository.getPlannedExpensesNextMonth(targetCurrency);
   res.ok({ ...data, links: [] });
-});
-
-// GET /api/info/average-vs-current-spending
-router.get('/average-vs-current-spending', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const data = await infoRepository.getAverageVsCurrentSpending(targetCurrency);
-  res.ok({ ...data, links: [] });
-});
-
-// GET /api/info/cashflow-comparison
-router.get('/cashflow-comparison', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const excludedCategoryIds = parseNumericArrayQueryParam(req.query.excluded_category_ids);
-  const excludedRecipientIds = parseNumericArrayQueryParam(req.query.excluded_recipient_ids);
-  const data = await infoRepository.getCashflowComparison(excludedCategoryIds, excludedRecipientIds, targetCurrency);
-  res.ok(data);
-});
-
-// GET /api/info/category-breakdown - Detailed category breakdown with amounts
-router.get('/category-breakdown', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
-  res.ok({ categories, links: [] });
-});
-
-// GET /api/info/bank-balances - Current and historical balance per bank account
-router.get('/bank-balances', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const data = await infoRepository.getBankBalances(targetCurrency);
-  res.ok(data);
 });
 
 // GET /api/info/recurring-patterns - Detect recurring transaction patterns
@@ -379,13 +338,6 @@ router.get(
       { pagination: { total: allSnapshots.length, limit, offset } },
     );
   });
-
-// GET /api/info/recipient-insights - Merchant/recipient spending insights
-router.get('/recipient-insights', async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
-  const data = await infoRepository.getRecipientInsights(targetCurrency);
-  res.ok(data);
-});
 
 // GET /api/info/exchange-rates - View cached exchange rates from database
 router.get(

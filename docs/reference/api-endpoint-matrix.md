@@ -3,19 +3,21 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-04-24
+updated: 2026-04-25
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, phase-5a, phase-6, phase-7, feature-flags, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance]
-description: Complete matrix of all 150 API endpoints organized by resource for quick lookup; includes Phase 4 feature flags; JSON export and attachments in Phase 5A; bank reconciliation, cash flow forecast, and bill reminders in Phase 6; Sankey flow, DB maintenance, PDF reports in Phase 7; see openapi.yaml for authoritative spec
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, phase-5a, phase-6, phase-7, phase-g, feature-flags, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance]
+description: Complete matrix of all 146 API endpoints organized by resource for quick lookup; includes Phase 4 feature flags; JSON export and attachments in Phase 5A; bank reconciliation, cash flow forecast, and bill reminders in Phase 6; Sankey flow, DB maintenance, PDF reports in Phase 7; Phase G removed 6 overlapping info endpoints in favor of aggregations; see openapi.yaml for authoritative spec
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 150 API endpoints across 20 route files (updated Phase 7). Use this as a quick reference to find any endpoint.
+> All 146 API endpoints across 20 route files (updated Phase G). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
+>
+> **Phase G Update (April 2026):** Six legacy `/api/info/*` endpoints removed in favor of `/api/aggregations/*` alternatives. See [[#phase-g-endpoint-consolidation|Phase G Endpoint Consolidation]] below.
 
 ## Transactions (7 endpoints)
 
@@ -193,7 +195,7 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (10 endpoints)
+## Admin (12 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -209,6 +211,8 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/shadow-divergences/summary` | Aggregation shadow divergence per-endpoint summary (Phase F) | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/shadow-divergences` | Paginated aggregation shadow divergence log (Phase F) | — | [[docs/api/admin\|Admin]] |
 
 ## Reports (1 endpoint) — Phase 7
 
@@ -244,15 +248,9 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | GET | `/api/info/supported-adapters` | List supported banks | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/transaction-count` | Total count | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/transaction-summary` | Summary with filters | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/monthly-summary` | Monthly summary | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/planned-expenses-next-month` | Next month expenses | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/average-vs-current-spending` | Spending comparison | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/cashflow-comparison` | Cashflow over time | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/category-breakdown` | Category breakdown | — | [[docs/api/info\|Info]] |
-| GET | `/api/info/bank-balances` | Bank balances | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/recurring-patterns` | Recurring detection | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/net-worth` | Net worth (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history) | 30 req/min | [[docs/api/info\|Info]] |
-| GET | `/api/info/recipient-insights` | Recipient insights | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/exchange-rates` | Exchange rates | 30 req/min | [[docs/api/info\|Info]] |
 | POST | `/api/info/exchange-rates/refresh` | Refresh exchange rates | admin | [[docs/api/info\|Info]] |
 | GET | `/api/info/inflation-rates` | Inflation rates | 30 req/min | [[docs/api/info\|Info]] |
@@ -293,13 +291,32 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
 | Reconciliation (Phase 6) | 10 | 0 |
-| Admin | 10 | 0 |
+| Admin | 12 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
 | Aggregations (Phase 2/6) | 7 | 0 |
 | Info/Statistics | 20 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **144** | **10** |
+| **Total** | **146** | **10** |
+
+## Phase G Endpoint Consolidation (April 2026)
+
+Six `/api/info/*` endpoints were removed as they are now superseded by `/api/aggregations/*` equivalents. The backend routes no longer handle these paths. Frontend method signatures are preserved through proxy wrappers in `apiClient`.
+
+| Removed Endpoint | Replacement | Frontend Method | Status |
+|------------------|------------|-----------------|--------|
+| `GET /api/info/monthly-summary` | `GET /api/aggregations/monthly-summary` | `apiClient.getMonthlyFinancialSummary()` | Unwrapped |
+| `GET /api/info/average-vs-current-spending` | `GET /api/aggregations/average-vs-current` | _(internal)_ | Aggregations only |
+| `GET /api/info/cashflow-comparison` | `GET /api/aggregations/cashflow-comparison` | `apiClient.getCashflowComparison()` | Unwrapped |
+| `GET /api/info/category-breakdown` | `GET /api/aggregations/category-breakdown` | _(internal)_ | Aggregations only |
+| `GET /api/info/bank-balances` | `GET /api/aggregations/bank-balances` | `apiClient.getBankBalances()` | Unwrapped |
+| `GET /api/info/recipient-insights` | `GET /api/aggregations/recipient-insights` | `apiClient.getRecipientInsights()` | Unwrapped |
+
+**Unwrapped methods:** Frontend methods proxy to aggregations and unwrap the [[docs/adr/026-unified-api-response-envelope|unified response envelope]] to preserve backward-compatible signatures for call sites. See [[docs/reference/api-client-methods#info--statistics-phase-g-aggregation-migration|API Client Methods]] for details.
+
+**Aggregations-only:** Some removed endpoints have no direct frontend method and are consumed only via aggregation API internals (e.g., `average-vs-current`, `category-breakdown`).
+
+See [[docs/api/info.md|Info & Analytics API]] for deprecation notes on the removed routes.
 
 ## Related
 

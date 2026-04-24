@@ -225,15 +225,17 @@ Users can create custom category charts via the Saved Charts feature. These rend
 
 ## Backend Dependencies
 
-The statistics feature relies on these backend endpoints via `[[apps/node-backend/src/routes/info.js]]`:
+The statistics feature relies on these backend endpoints:
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/transactions` | Fetch all transactions (paginated, with currency conversion) |
-| `GET /api/categories` | Fetch all categories |
-| `GET /api/info/recurring-patterns` | Recurring pattern detection (used in Planned Payments) |
-| `GET /api/info/recipient-insights` | Merchant spending insights |
-| `GET /api/info/exchange-rates` | Exchange rates for currency normalization |
+| Endpoint | Purpose | Location |
+|----------|---------|----------|
+| `GET /api/transactions` | Fetch all transactions (paginated, with currency conversion) | [[apps/node-backend/src/routes/transactions.js]] |
+| `GET /api/categories` | Fetch all categories | [[apps/node-backend/src/routes/categories.js]] |
+| `GET /api/info/recurring-patterns` | Recurring pattern detection (used in Planned Payments) | [[apps/node-backend/src/routes/info.js]] |
+| `GET /api/aggregations/recipient-insights` | Merchant spending insights (Phase G: aggregations) | [[apps/node-backend/src/routes/aggregations.js]] |
+| `GET /api/info/exchange-rates` | Exchange rates for currency normalization | [[apps/node-backend/src/routes/info.js]] |
+
+**Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
 
 ## Phase 7 Additions (April 2026)
 
