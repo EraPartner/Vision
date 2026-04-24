@@ -144,6 +144,7 @@ Charts use `useWindowSize()` or container-query approach:
 
 ## Related
 
+- [[docs/adr/028-reaffirm-visx-over-recharts|ADR-028: Reaffirm visx/d3 over recharts]] — reaffirms this decision; TODO proposal to swap back to recharts rejected
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]]
 - [[docs/performance/chart-downsampling|Chart Downsampling (LTTB)]]
