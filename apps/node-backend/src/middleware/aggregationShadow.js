@@ -85,6 +85,21 @@ function unwrapEnvelope(payload) {
 }
 
 /**
+ * Unwrap up to two levels of `{ data, meta }` envelope. Needed because
+ * aggregation route bodies are double-wrapped: the outer `res.ok` envelope
+ * (`{ ok, data: <inner>, meta: requestId }`) wraps the inner aggregation
+ * envelope (`{ data: <payload>, meta: { computedAt, source } }`). Legacy info
+ * responses only have the outer layer.
+ *
+ * @param {unknown} payload
+ * @returns {unknown}
+ */
+function fullyUnwrap(payload) {
+  const once = unwrapEnvelope(payload);
+  return once !== payload ? unwrapEnvelope(once) : once;
+}
+
+/**
  * Compare two payloads, returning every leaf delta that exceeds the threshold.
  *
  * @param {unknown} nextPayload
@@ -95,8 +110,8 @@ function unwrapEnvelope(payload) {
 export function diffPayloads(nextPayload, legacyPayload, thresholdUnits) {
   const nextLeaves = new Map();
   const legacyLeaves = new Map();
-  collectNumericLeaves(unwrapEnvelope(nextPayload), '', nextLeaves);
-  collectNumericLeaves(unwrapEnvelope(legacyPayload), '', legacyLeaves);
+  collectNumericLeaves(fullyUnwrap(nextPayload), '', nextLeaves);
+  collectNumericLeaves(fullyUnwrap(legacyPayload), '', legacyLeaves);
 
   /** @type {Array<{ path: string, next: number | null, legacy: number | null, delta: number }>} */
   const divergences = [];
@@ -151,6 +166,7 @@ export function createAggregationShadow({
   logger,
   thresholdCents = DEFAULT_THRESHOLD_CENTS,
   timeoutMs = 5000,
+  persistDivergence,
 }) {
   if (typeof fetchLegacy !== 'function') {
     throw new TypeError('createAggregationShadow: fetchLegacy must be a function');
@@ -193,6 +209,14 @@ export function createAggregationShadow({
               divergences: divergences.slice(0, 20), // cap log volume
               thresholdCents,
             });
+            if (typeof persistDivergence === 'function') {
+              persistDivergence(req.path, req.query, divergences).catch((err) => {
+                logger.warn('aggregation-shadow: persistDivergence failed', {
+                  path: req.path,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              });
+            }
           })
           .catch((err) => {
             // Shadow failures must never surface — log at warn, swallow.

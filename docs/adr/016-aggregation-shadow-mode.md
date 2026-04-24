@@ -3,6 +3,7 @@ title: ADR-016 Aggregation Shadow Mode
 type: adr
 status: Accepted
 date: 2026-04-17
+updated: 2026-04-25
 tags: [adr, aggregation, migration, observability, phase-8]
 description: Shadow middleware that cross-checks new /api/aggregations/* responses against legacy /api/info/* during the Phase 2 → Phase 9 migration window.
 aliases: [adr-016, aggregation shadow, shadow mode]
@@ -79,6 +80,23 @@ Default `thresholdCents = 1`. Chosen to ignore the final-cent noise introduced b
 ### Neutral
 
 - Adds one middleware layer per shadowed route. Non-invasive — mount at router boundary, remove without touching route handlers.
+
+## Admin Observability (Phase F)
+
+Added admin dashboard endpoints to monitor shadow divergences in production:
+
+- `GET /api/admin/shadow-divergences/summary` — Per-endpoint divergence counts, maximum divergence count, last seen timestamp
+- `GET /api/admin/shadow-divergences` — Paginated divergence log with endpoint filtering
+
+Frontend page `/admin/shadow-divergences` (ShadowDivergencesPage.tsx) displays:
+- Total divergence count card
+- Per-endpoint summary table (sortable by count)
+- Paginated recent divergence log with live endpoint filter dropdown
+
+This enables operators to:
+1. Spot divergence patterns across endpoints
+2. Investigate high-drift endpoints with detailed logs
+3. Validate parity in production before the Phase 9 cutover
 
 ## Removal Criteria (Phase 9)
 

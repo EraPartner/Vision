@@ -6,6 +6,7 @@ export function getAggregationMonthlySummary(params?: {
     excluded_category_ids?: number[];
     excluded_recipient_ids?: number[];
     currency?: string;
+    all_time?: boolean;
 }): Promise<AggregationEnvelope<{
     months: Array<{
         month: number;
@@ -26,7 +27,16 @@ export function getAggregationMonthlySummary(params?: {
         period_end: string;
     };
 }>> {
-    const q = buildExclusionQuery(params);
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.all_time) qp.set('all_time', 'true');
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+    }
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
     return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ''}`);
 }
 
@@ -98,6 +108,50 @@ export function getAggregationBankBalances(params?: {
     total_history: Array<{ month: string; balance: number }>;
 }>> {
     return requestWithQuery('/api/aggregations/bank-balances', params);
+}
+
+export interface CategoryPivotItem {
+    categoryId: number | null;
+    categoryName: string;
+    total: number;
+    transactionCount: number;
+}
+
+export interface RecipientYearlySpending {
+    recipientId: number;
+    name: string;
+    totalSpend: number;
+    transactionCount: number;
+}
+
+export function getAggregationCategoryPivot(params?: {
+    currency?: string;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
+}): Promise<AggregationEnvelope<{ categoryPivot: Record<string, CategoryPivotItem[]> }>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+    }
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ''}`);
+}
+
+export function getAggregationRecipientByYear(params?: {
+    currency?: string;
+    excluded_recipient_ids?: number[];
+}): Promise<AggregationEnvelope<{ recipientsByYear: Record<string, RecipientYearlySpending[]> }>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ''}`);
 }
 
 export interface SankeyNode {

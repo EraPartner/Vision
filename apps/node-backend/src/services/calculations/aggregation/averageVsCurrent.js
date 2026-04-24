@@ -7,11 +7,13 @@
 
 import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeAverageVsCurrent({
   targetCurrency = 'EUR',
 } = {}) {
   const data = await infoRepository.getAverageVsCurrentSpending(targetCurrency);
+  assertNoNaN(data, 'computeAverageVsCurrent');
   return buildEnvelope(data, { source: 'live' });
 }
 

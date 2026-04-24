@@ -140,6 +140,68 @@ export const statisticsRepository = {
     return parseInt(result.rows[0].count, 10);
   },
 
+  async getCategoryPivot(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
+    const validCatIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    const params = [];
+    const catExclude = validCatIds.length > 0
+      ? `AND COALESCE(t.category_id, r.default_category_id) NOT IN (${validCatIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+    const recExclude = validRecIds.length > 0
+      ? `AND t.recipient_id NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+
+    const sql = `
+      SELECT
+        COALESCE(t.category_id, r.default_category_id) AS category_id,
+        CONCAT(c.general, ': ', c.detail) AS category_name,
+        TO_CHAR(t.date, 'YYYY-MM') AS period,
+        t.amount, t.currency, t.date
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id) = c.id
+      WHERE t.is_active = true
+        AND COALESCE(t.category_id, r.default_category_id) IS NOT NULL
+        ${catExclude}
+        ${recExclude}
+      ORDER BY t.date
+    `;
+
+    const result = await query(sql, params);
+
+    const converted = await convertRowsToEur(
+      mapRowsForAmountConversion(result.rows, 'amount', false),
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' }
+    );
+
+    const periodCatMap = {};
+    for (const row of converted) {
+      const period = row.period;
+      const catId = row.category_id ? parseInt(row.category_id, 10) : null;
+      const catName = row.category_name || 'Uncategorised';
+      const eur = row.amount_eur;
+      const catKey = catId ?? 'null';
+
+      if (!periodCatMap[period]) periodCatMap[period] = {};
+      if (!periodCatMap[period][catKey]) {
+        periodCatMap[period][catKey] = { categoryId: catId, categoryName: catName, total: 0, transactionCount: 0 };
+      }
+      periodCatMap[period][catKey].total += eur;
+      periodCatMap[period][catKey].transactionCount++;
+    }
+
+    const categoryPivot = {};
+    for (const [period, cats] of Object.entries(periodCatMap)) {
+      categoryPivot[period] = Object.values(cats)
+        .map(c => ({ ...c, total: roundToCents(c.total) }))
+        .sort((a, b) => a.total - b.total);
+    }
+
+    return { categoryPivot };
+  },
+
   async getTransactionSummary({ bankAccount = null, startDate = null, endDate = null, targetCurrency = 'EUR' } = {}) {
     let sql = `
       SELECT t.amount, t.currency, t.date

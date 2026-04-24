@@ -8,11 +8,13 @@
 
 import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertCategoryInvariants } from './_invariants.js';
 
 export async function computeCategoryBreakdown({
   targetCurrency = 'EUR',
 } = {}) {
   const categories = await infoRepository.getCategoryBreakdown(targetCurrency);
+  assertCategoryInvariants(categories);
   return buildEnvelope({ categories }, { source: 'mv' });
 }
 

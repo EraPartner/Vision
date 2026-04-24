@@ -121,4 +121,60 @@ export const recipientInsightsRepository = {
 
     return { topMerchants, monthOverMonth };
   },
+
+  async getRecipientByYear(targetCurrency = 'EUR', excludedRecipientIds = []) {
+    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    const params = [];
+    const recExclude = validRecIds.length > 0
+      ? `AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+
+    const sql = `
+      SELECT
+        EXTRACT(YEAR FROM t.date)::int AS year,
+        COALESCE(pr.id, r.id) AS recipient_id,
+        COALESCE(pr.name, r.name) AS name,
+        t.amount, t.currency, t.date
+      FROM transactions t
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      WHERE t.is_active = true
+        AND t.amount < 0
+        ${recExclude}
+      ORDER BY t.date
+    `;
+
+    const result = await query(sql, params);
+
+    const converted = await convertRowsToEur(
+      mapRowsForAmountConversion(result.rows, 'amount', false),
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' }
+    );
+
+    const yearRecMap = {};
+    for (const row of converted) {
+      const year = String(row.year);
+      const rid = row.recipient_id;
+      const absEur = Math.abs(row.amount_eur);
+
+      if (!yearRecMap[year]) yearRecMap[year] = {};
+      if (!yearRecMap[year][rid]) {
+        yearRecMap[year][rid] = { recipientId: rid, name: row.name, totalSpend: 0, transactionCount: 0 };
+      }
+      yearRecMap[year][rid].totalSpend += absEur;
+      yearRecMap[year][rid].transactionCount++;
+    }
+
+    const recipientsByYear = {};
+    for (const [year, recs] of Object.entries(yearRecMap)) {
+      recipientsByYear[year] = Object.values(recs)
+        .sort((a, b) => b.totalSpend - a.totalSpend)
+        .slice(0, 20)
+        .map(r => ({ ...r, totalSpend: roundToCents(r.totalSpend) }));
+    }
+
+    return { recipientsByYear };
+  },
 };

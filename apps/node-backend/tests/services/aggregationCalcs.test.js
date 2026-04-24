@@ -66,7 +66,7 @@ describe('computeMonthlySummary', () => {
   it('forwards currency + exclusions to the repository and tags source=mv when unfiltered', async () => {
     infoRepository.getMonthlyFinancialSummary.mockResolvedValue({ monthly_data: [] });
     const env = await computeMonthlySummary({ targetCurrency: 'EUR', excludedCategoryIds: [] });
-    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', []);
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', [], false);
     expectEnvelope(env, { source: 'mv' });
     expect(env.data).toEqual({ monthly_data: [] });
   });
@@ -74,7 +74,7 @@ describe('computeMonthlySummary', () => {
   it('tags source=live when category exclusions are present', async () => {
     infoRepository.getMonthlyFinancialSummary.mockResolvedValue({ monthly_data: [] });
     const env = await computeMonthlySummary({ targetCurrency: 'USD', excludedCategoryIds: [1, 2] });
-    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([1, 2], 'USD', []);
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([1, 2], 'USD', [], false);
     expectEnvelope(env, { source: 'live' });
   });
 
@@ -85,14 +85,14 @@ describe('computeMonthlySummary', () => {
       excludedCategoryIds: [],
       excludedRecipientIds: [42],
     });
-    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', [42]);
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', [42], false);
     expectEnvelope(env, { source: 'live' });
   });
 
   it('defaults to EUR + empty exclusions when called with no args', async () => {
     infoRepository.getMonthlyFinancialSummary.mockResolvedValue({});
     await computeMonthlySummary();
-    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', []);
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith([], 'EUR', [], false);
   });
 });
 

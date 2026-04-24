@@ -24,6 +24,8 @@ import { computeAverageVsCurrent } from '../services/calculations/aggregation/av
 import { computeBankBalances } from '../services/calculations/aggregation/bankBalances.js';
 import { computeCashflowForecast } from '../services/calculations/aggregation/cashflowForecast.js';
 import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.js';
+import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
+import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
 
 const router = Router();
 
@@ -43,10 +45,12 @@ function parseNumericArrayQueryParam(raw) {
 }
 
 router.get('/monthly-summary', async (req, res) => {
+  const allTime = req.query.all_time === 'true' || req.query.all_time === '1';
   const { data, meta } = await computeMonthlySummary({
     targetCurrency: getTargetCurrency(req),
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    allTime,
   });
   res.ok({ data, meta });
 });
@@ -103,6 +107,23 @@ router.get('/sankey', async (req, res) => {
     targetCurrency,
     year,
     excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/category-pivot', async (req, res) => {
+  const { data, meta } = await computeCategoryPivot({
+    targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/recipient-by-year', async (req, res) => {
+  const { data, meta } = await computeRecipientByYear({
+    targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
   });
   res.ok({ data, meta });

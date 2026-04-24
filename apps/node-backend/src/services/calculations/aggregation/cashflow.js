@@ -8,6 +8,7 @@
 
 import infoRepository from '../../../repositories/infoRepository.js';
 import { buildEnvelope } from './_envelope.js';
+import { assertNoNaN } from './_invariants.js';
 
 export async function computeCashflowComparison({
   targetCurrency = 'EUR',
@@ -20,6 +21,7 @@ export async function computeCashflowComparison({
     targetCurrency,
   );
 
+  assertNoNaN(data, 'computeCashflowComparison');
   const hasExclusions =
     excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
   const source = hasExclusions ? 'live' : 'mv';

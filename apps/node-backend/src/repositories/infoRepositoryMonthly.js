@@ -20,13 +20,14 @@ import {
 } from './infoRepositoryHelpers.js';
 
 export const monthlyRepository = {
-  async getMonthlyFinancialSummary(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = []) {
+  async getMonthlyFinancialSummary(excludedCategoryIds = [], targetCurrency = 'EUR', excludedRecipientIds = [], allTime = false) {
     const validIds = excludedCategoryIds.filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     const validRecipientIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
     logger.debug('getMonthlyFinancialSummary called', { excludedCategoryIds, validIds, validRecipientIds });
 
     // ── Fast path: read from mv_monthly_summary (only when no exclusions) ──
     if (validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary')) {
+      const dateFilterClause = allTime ? '' : `WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')`;
       const mvResult = await query(`
         SELECT month_start, month, year, currency,
                SUM(transaction_count) AS transaction_count,
@@ -34,7 +35,7 @@ export const monthlyRepository = {
                SUM(total_spending) AS total_spending,
                SUM(net_amount) AS net_amount
         FROM mv_monthly_summary
-        WHERE month_start >= date_trunc('month', CURRENT_DATE - interval '5 months')
+        ${dateFilterClause}
         GROUP BY month_start, month, year, currency
         ORDER BY month_start
       `);
@@ -94,10 +95,14 @@ export const monthlyRepository = {
       ? `AND t.recipient_id NOT IN (${validRecipientIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
       : '';
 
+    const allTimeStart = allTime
+      ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', CURRENT_DATE))`
+      : `date_trunc('month', CURRENT_DATE - interval '5 months')`;
+
     const sql = `
       WITH months AS (
         SELECT generate_series(
-          date_trunc('month', CURRENT_DATE - interval '5 months'),
+          ${allTimeStart},
           date_trunc('month', CURRENT_DATE),
           interval '1 month'
         )::date AS month_start
