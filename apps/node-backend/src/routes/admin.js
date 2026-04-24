@@ -14,7 +14,7 @@
 
 import { Router } from 'express';
 import https from 'https';
-import { checkConnection, getTableCount } from '../database/connection.js';
+import { checkConnection, getClient, getTableCount, query } from '../database/connection.js';
 import { getSettings } from '../config/config.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -164,6 +164,65 @@ router.post('/investments/kinesis/sanitize-history', async (req, res) => {
     message: 'Kinesis historical spikes sanitization completed',
     ...result,
   });
+});
+
+// ── Database Maintenance ───────────────────────────────────────────────────────
+
+router.get('/database/stats', async (_req, res) => {
+  const [tablesResult, sizeResult] = await Promise.all([
+    query(`
+      SELECT
+        schemaname,
+        relname AS table_name,
+        n_live_tup AS live_rows,
+        n_dead_tup AS dead_rows,
+        last_autovacuum::text,
+        last_autoanalyze::text,
+        pg_size_pretty(pg_total_relation_size(relid)) AS size,
+        pg_total_relation_size(relid) AS size_bytes
+      FROM pg_stat_user_tables
+      ORDER BY size_bytes DESC
+    `, []),
+    query(`SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size`, []),
+  ]);
+  res.ok({
+    tables: tablesResult.rows,
+    db_size: sizeResult.rows[0]?.db_size ?? null,
+  });
+});
+
+router.post('/database/vacuum', async (req, res) => {
+  const { table } = req.body ?? {};
+
+  // Validate table name against actual user tables to prevent injection
+  const allowed = await query(
+    `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
+    []
+  );
+  const allowedNames = new Set(allowed.rows.map((r) => r.relname));
+
+  if (table !== undefined && table !== null && !allowedNames.has(table)) {
+    throw new ValidationError(`Unknown table: ${table}`);
+  }
+
+  // VACUUM cannot run inside a transaction block — use raw client
+  const client = await getClient();
+  try {
+    await client.query('SET statement_timeout = 120000');
+    const sql = table ? `VACUUM ANALYZE "${table}"` : 'VACUUM ANALYZE';
+    await client.query(sql);
+  } catch (err) {
+    if (err.code === '42501') {
+      // insufficient_privilege
+      const target = table ?? 'all tables';
+      throw new AppError(`Insufficient database privileges to VACUUM ${target}`, 403);
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  res.ok({ vacuumed: table ?? 'all' });
 });
 
 // ── Feature Flags ─────────────────────────────────────────────────────────────
