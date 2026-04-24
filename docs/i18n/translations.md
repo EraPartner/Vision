@@ -3,8 +3,9 @@ title: Translations & i18n
 type: i18n
 status: active
 date: 2026-04-24
-tags: [i18n, translations, localization, internationalization, phase-6, phase-9]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization (en/nl).
+updated: 2026-04-25
+tags: [i18n, translations, localization, internationalization, phase-6, phase-f, phase-9, admin, observability]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase F adds 60 admin observability keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
 ---

@@ -3,8 +3,9 @@ title: Localization Documentation Index
 type: i18n-index
 status: active
 date: 2026-04-24
-tags: [i18n, index, localization, translations, phase-6]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog.
+updated: 2026-04-25
+tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys.
 aliases: [i18n, localization, translations, languages]
 ---
 
@@ -80,6 +81,19 @@ function Component() {
 4. Use in components via `useLanguage()` hook
 
 ## Recent Key Additions
+
+### Phase F (2026-04-24) — Admin Environment i18n
+
+Added ~60 new keys for the admin observability hub (Phase F):
+
+- Settings toggle: `settings.app.adminMode`, `settings.app.adminModeHint`, `settings.app.developer`
+- Navigation: `nav.admin`, `nav.adminOverview`, `nav.adminProviders`, `nav.adminEndpoints`, `nav.adminFeatureFlags`
+- Overview page: `admin.overview.{title,description,dbSize,tables,dataSources,failing,endpoints,errorRate,requests,featureFlags,flagsEnabled,allHealthy}`
+- Data Sources page: `admin.providers.{title,description,tableTitle,colProvider,colKind,colLastSuccess,colLastError,colFailures,never,checkNow,probeOk,probeFail,probeError}`
+- Endpoints page: `admin.endpoints.{title,description,tableTitle,colPath,colMethod,colRequests,colErrors,colErrorRate,colP50,colP95,filterPlaceholder}`
+- Feature Flags page: `admin.flags.{title,description,tableTitle,colKey,colEnabled,colDescription,colUpdated,toggle,enabled,disabled,toggleFailed,empty}`
+
+All keys added to `i18n/source/en.json` and `i18n/source/nl.json`; generated into frontend locale bundles.
 
 ### Phase 6 (2026-04-24) — PDF Report Export i18n
 

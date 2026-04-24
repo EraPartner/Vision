@@ -7,6 +7,7 @@
  */
 
 import { logger } from '../config/logger.js';
+import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 import {
   cacheGet,
   cacheSet,
@@ -90,8 +91,10 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
           cacheSet(`binance:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
         }
       }
+      recordProviderSuccess('binance');
     } catch (err) {
       logger.error('Binance batch fetch failed', { error: err.message });
+      recordProviderError('binance', err);
     }
   }
 
@@ -106,8 +109,10 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
           cacheSet(`yahoo:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
         }
       }
+      recordProviderSuccess('yahoo');
     } catch (err) {
       logger.error('Yahoo Finance batch fetch failed', { error: err.message });
+      recordProviderError('yahoo', err);
     }
   }
 
@@ -136,8 +141,10 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
           cacheSet(`kinesis:${inv.id}`, { price: data.price, source: 'live' });
         }
       }
+      recordProviderSuccess('kinesis');
     } catch (err) {
       logger.error('Kinesis price fetch failed', { error: err.message });
+      recordProviderError('kinesis', err);
     }
   }
 

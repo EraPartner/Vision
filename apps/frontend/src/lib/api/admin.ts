@@ -32,6 +32,42 @@ export interface FeatureFlag {
     updated_at: string | null;
 }
 
+export type ProviderKind = 'price' | 'fx' | 'inflation';
+
+export interface ProviderHealth {
+    provider: string;
+    kind: ProviderKind;
+    label: string;
+    last_success_at: string | null;
+    last_error_at: string | null;
+    last_error: string | null;
+    consecutive_failures: number;
+    updated_at: string | null;
+}
+
+export interface ProbeResult {
+    ok: boolean;
+    provider: string;
+    error?: string;
+}
+
+export interface RouteMetric {
+    route: string;
+    method: string;
+    path: string;
+    count: number;
+    errors: number;
+    error_rate: number;
+    p50_ms: number;
+    p95_ms: number;
+    window_minutes: number;
+}
+
+export interface EndpointEntry {
+    method: string;
+    path: string;
+}
+
 // ── Database Maintenance ──────────────────────────────────────────────────────
 
 export function getDbStats(): Promise<DbStats> {
@@ -43,6 +79,30 @@ export function vacuumTable(table: string | null): Promise<{ vacuumed: string }>
         method: 'POST',
         body: JSON.stringify({ table }),
     });
+}
+
+// ── Provider Health ───────────────────────────────────────────────────────────
+
+export function getProviderHealth(): Promise<ProviderHealth[]> {
+    return apiRequest<ProviderHealth[]>('/api/admin/providers/health');
+}
+
+export function probeProvider(provider: string): Promise<ProbeResult> {
+    return apiRequest<ProbeResult>(`/api/admin/providers/${encodeURIComponent(provider)}/probe`, {
+        method: 'POST',
+    });
+}
+
+// ── Request Metrics ───────────────────────────────────────────────────────────
+
+export function getRequestMetrics(): Promise<RouteMetric[]> {
+    return apiRequest<RouteMetric[]>('/api/admin/metrics/requests');
+}
+
+// ── Endpoint Manifest ─────────────────────────────────────────────────────────
+
+export function getEndpointManifest(): Promise<EndpointEntry[]> {
+    return apiRequest<EndpointEntry[]>('/api/admin/endpoints');
 }
 
 // ── Feature Flags ─────────────────────────────────────────────────────────────

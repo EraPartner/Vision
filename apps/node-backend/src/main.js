@@ -43,6 +43,7 @@ import { createErrorHandler, UnauthorizedError, NotFoundError } from './middlewa
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
+import { requestMetrics } from './middleware/requestMetrics.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -179,6 +180,7 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
+import { buildRouteManifest } from './services/routeManifest.js';
 
 const settings = getSettings();
 const app = express();
@@ -187,6 +189,9 @@ const app = express();
 
 // Request ID — must run first so every other middleware and logger sees `req.id`.
 app.use(requestId);
+
+// Request metrics — rolling in-memory window for /api/admin/metrics/requests.
+app.use(requestMetrics);
 
 // CORS
 app.use(cors({
@@ -316,6 +321,10 @@ if (settings.aiChat?.enabled) {
 }
 
 logger.info('All route modules registered successfully');
+
+// Build route manifest after all routes are registered so /api/admin/endpoints
+// reflects the full router stack.
+buildRouteManifest(app);
 
 // ==================== Static Frontend (Production) ====================
 // Serve the built React app when running in production (Docker/standalone)

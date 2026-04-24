@@ -6,14 +6,14 @@ date: 2026-04-24
 updated: 2026-04-25
 adr-reference: 026
 tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-6, phase-7, phase-g, phase-9, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports]
-description: Complete matrix of all 144 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover: legacy info aggregation routes removed from wiring, admin shadow divergence endpoints removed; see openapi.yaml for authoritative spec.
+description: Complete matrix of all 148 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 144 API endpoints across 20 route files (updated Phase 9 — aggregation shadow cutover complete). Use this as a quick reference to find any endpoint.
+> All 148 API endpoints across 20 route files (updated Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -199,7 +199,7 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (10 endpoints)
+## Admin (16 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -215,6 +215,10 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/providers/health` | List all provider health records | — | [[docs/api/admin\|Admin]] |
+| POST | `/api/admin/providers/:provider/probe` | Active on-demand probe for one provider | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/metrics/requests` | Rolling request metrics per route (in-memory, 15 min) | — | [[docs/api/admin\|Admin]] |
+| GET | `/api/admin/endpoints` | Static endpoint manifest from Express router | — | [[docs/api/admin\|Admin]] |
 
 ## Reports (4 endpoints) — Phase 3 / Phase 7
 
@@ -296,13 +300,13 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
 | Reconciliation (Phase 6) | 10 | 0 |
-| Admin | 10 | 0 |
+| Admin | 16 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
 | Aggregations (Phase 2/6) | 8 | 0 |
 | Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **144** | **10** |
+| **Total** | **148** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

@@ -1,5 +1,6 @@
 import { query } from '../database/connection.js';
 import { logger } from '../config/logger.js';
+import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 
 const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const STATBEL_REQUEST_TIMEOUT_MS = 10_000;
@@ -331,13 +332,21 @@ async function fetchFromEurostat() {
 async function fetchExternalInflationRates() {
   try {
     const rates = await fetchFromStatbel();
+    recordProviderSuccess('statbel');
     return { source: 'statbel', rates };
   } catch (statbelError) {
     logger.debug('Statbel inflation fetch failed; trying Eurostat fallback', { error: statbelError?.message });
+    recordProviderError('statbel', statbelError);
   }
 
-  const rates = await fetchFromEurostat();
-  return { source: 'eurostat', rates };
+  try {
+    const rates = await fetchFromEurostat();
+    recordProviderSuccess('eurostat');
+    return { source: 'eurostat', rates };
+  } catch (eurostatError) {
+    recordProviderError('eurostat', eurostatError);
+    throw eurostatError;
+  }
 }
 
 async function refreshFromExternalAndPersist() {

@@ -15,6 +15,7 @@
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
+import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from '../providerHealthService.js';
 import {
   CACHE_LIFETIME_MS,
   normalizeDateInput,
@@ -120,6 +121,18 @@ export function clearMemoryCache() {
 export async function warmCache() {
   try {
     const [ecbRates, erarRates] = await Promise.all([fetchFromEcb(), fetchFromErApi()]);
+
+    if (ecbRates) {
+      recordProviderSuccess('ecb');
+    } else {
+      recordProviderError('ecb', 'ECB fetch returned no rates');
+    }
+
+    if (erarRates) {
+      recordProviderSuccess('open.er-api');
+    } else {
+      recordProviderError('open.er-api', 'open.er-api fetch returned no rates');
+    }
 
     if (!ecbRates && !erarRates) {
       const rates = await getRates();

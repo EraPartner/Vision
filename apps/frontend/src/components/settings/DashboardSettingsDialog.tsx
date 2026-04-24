@@ -155,6 +155,8 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                             onReset={handleReset}
                             onOpenChange={onOpenChange}
                             dateFormat={localAppSettings.dateFormat}
+                            adminMode={localAppSettings.adminMode ?? false}
+                            onAdminModeChange={(enabled) => setLocalAppSettings({ ...localAppSettings, adminMode: enabled })}
                         />
                     </TabsContent>
 

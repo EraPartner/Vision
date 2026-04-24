@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
     AlertCircle, CheckCircle2, Download, ExternalLink, Loader2,
-    RefreshCw, RotateCcw, Sparkles,
+    RefreshCw, RotateCcw, Sparkles, ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
@@ -31,6 +32,8 @@ interface AppTabProps {
     onReset: () => void;
     onOpenChange: (open: boolean) => void;
     dateFormat: string;
+    adminMode: boolean;
+    onAdminModeChange: (enabled: boolean) => void;
 }
 
 export function AppTab({
@@ -39,6 +42,8 @@ export function AppTab({
     onReset,
     onOpenChange,
     dateFormat,
+    adminMode,
+    onAdminModeChange,
 }: AppTabProps) {
     const { t } = useLanguage();
     const { reset: resetOnboarding } = useOnboarding();
@@ -266,6 +271,29 @@ export function AppTab({
                     value={aiDefaultModel}
                     onChange={onAiModelChange}
                 />
+
+                <Separator />
+
+                {/* Developer */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">{t('settings.app.developer')}</h3>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                <ShieldCheck className="h-4 w-4 text-primary" />
+                                {t('settings.app.adminMode')}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {t('settings.app.adminModeHint')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={adminMode}
+                            onCheckedChange={onAdminModeChange}
+                            className="ml-4 shrink-0"
+                        />
+                    </div>
+                </div>
 
                 <Separator />
 

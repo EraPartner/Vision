@@ -1,0 +1,198 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getProviderHealth, probeProvider } from '@/lib/api/admin';
+import type { ProviderHealth } from '@/lib/api/admin';
+
+function StatusIcon({ failures }: { failures: number }) {
+    if (failures === 0) return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+    if (failures <= 2) return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+    return <XCircle className="h-4 w-4 text-destructive" />;
+}
+
+function statusBadgeClass(failures: number) {
+    if (failures === 0) return 'bg-green-500/10 text-green-700 dark:text-green-400';
+    if (failures <= 2) return 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
+    return 'bg-destructive/10 text-destructive';
+}
+
+function formatTs(ts: string | null, t: (key: string) => string) {
+    if (!ts) return t('admin.providers.never');
+    return new Date(ts).toLocaleString();
+}
+
+function ProviderRow({
+    provider,
+    onProbe,
+    isProbing,
+    t,
+}: {
+    provider: ProviderHealth;
+    onProbe: (name: string) => void;
+    isProbing: boolean;
+    t: (key: string) => string;
+}) {
+    const [expanded, setExpanded] = useState(false);
+
+    return (
+        <>
+            <TableRow>
+                <TableCell>
+                    <div className="flex items-center gap-2">
+                        <StatusIcon failures={provider.consecutive_failures} />
+                        <span className="font-medium">{provider.label}</span>
+                    </div>
+                </TableCell>
+                <TableCell>
+                    <span className="text-xs rounded-full px-2 py-0.5 bg-muted text-muted-foreground">
+                        {provider.kind}
+                    </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                    {formatTs(provider.last_success_at, t)}
+                </TableCell>
+                <TableCell>
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(provider.consecutive_failures)}`}>
+                        {provider.consecutive_failures}
+                    </span>
+                </TableCell>
+                <TableCell>
+                    {provider.last_error ? (
+                        <button
+                            onClick={() => setExpanded((v) => !v)}
+                            className="text-xs text-destructive hover:underline text-left max-w-[200px] truncate block"
+                        >
+                            {provider.last_error}
+                        </button>
+                    ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                </TableCell>
+                <TableCell>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onProbe(provider.provider)}
+                        disabled={isProbing}
+                    >
+                        {isProbing
+                            ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            : <Activity className="h-3.5 w-3.5" />
+                        }
+                        <span className="ml-1.5">{t('admin.providers.checkNow')}</span>
+                    </Button>
+                </TableCell>
+            </TableRow>
+            {expanded && provider.last_error && (
+                <TableRow>
+                    <TableCell colSpan={6} className="bg-destructive/5 text-xs text-destructive font-mono py-2 px-4">
+                        {provider.last_error}
+                        {provider.last_error_at && (
+                            <span className="ml-2 text-muted-foreground">
+                                ({formatTs(provider.last_error_at, t)})
+                            </span>
+                        )}
+                    </TableCell>
+                </TableRow>
+            )}
+        </>
+    );
+}
+
+export default function ProviderHealthPage() {
+    const { t } = useLanguage();
+    const qc = useQueryClient();
+    const [probingSet, setProbingSet] = useState<Set<string>>(new Set());
+
+    const { data: providers, isLoading } = useQuery({
+        queryKey: ['admin', 'provider-health'],
+        queryFn: getProviderHealth,
+        staleTime: 30_000,
+    });
+
+    const probeMutation = useMutation({
+        mutationFn: probeProvider,
+        onMutate: (name) => {
+            setProbingSet((s) => new Set(s).add(name));
+        },
+        onSuccess: (result) => {
+            if (result.ok) {
+                toast.success(t('admin.providers.probeOk').replace('{provider}', result.provider));
+            } else {
+                toast.error(t('admin.providers.probeFail').replace('{provider}', result.provider), {
+                    description: result.error,
+                });
+            }
+            void qc.invalidateQueries({ queryKey: ['admin', 'provider-health'] });
+        },
+        onError: (_err, name) => {
+            toast.error(t('admin.providers.probeError').replace('{provider}', name));
+        },
+        onSettled: (_data, _err, name) => {
+            setProbingSet((s) => {
+                const next = new Set(s);
+                next.delete(name);
+                return next;
+            });
+        },
+    });
+
+    return (
+        <div className="flex flex-col gap-6 p-6">
+            <PageHeader
+                title={t('admin.providers.title')}
+                description={t('admin.providers.description')}
+            />
+
+            <Card className="glass-chrome">
+                <CardHeader>
+                    <CardTitle className="text-base">{t('admin.providers.tableTitle')}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>{t('admin.providers.colProvider')}</TableHead>
+                                <TableHead>{t('admin.providers.colKind')}</TableHead>
+                                <TableHead>{t('admin.providers.colLastSuccess')}</TableHead>
+                                <TableHead>{t('admin.providers.colFailures')}</TableHead>
+                                <TableHead>{t('admin.providers.colLastError')}</TableHead>
+                                <TableHead />
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                Array.from({ length: 7 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        {Array.from({ length: 6 }).map((__, j) => (
+                                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            ) : (
+                                providers?.map((p) => (
+                                    <ProviderRow
+                                        key={p.provider}
+                                        provider={p}
+                                        onProbe={(name) => probeMutation.mutate(name)}
+                                        isProbing={probingSet.has(p.provider)}
+                                        t={t}
+                                    />
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}

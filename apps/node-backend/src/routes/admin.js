@@ -25,6 +25,9 @@ import {
   getFeatureFlag,
   setFeatureFlag,
 } from '../services/featureFlagService.js';
+import { listProviderHealth, probeProvider } from '../services/providerHealthService.js';
+import { getMetrics } from '../middleware/requestMetrics.js';
+import { getRouteManifest } from '../services/routeManifest.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
@@ -223,6 +226,31 @@ router.post('/database/vacuum', async (req, res) => {
   }
 
   res.ok({ vacuumed: table ?? 'all' });
+});
+
+// ── Provider Health ───────────────────────────────────────────────────────────
+
+router.get('/providers/health', async (_req, res) => {
+  const providers = await listProviderHealth();
+  res.ok(providers);
+});
+
+router.post('/providers/:provider/probe', async (req, res) => {
+  const { provider } = req.params;
+  const result = await probeProvider(provider);
+  res.ok(result);
+});
+
+// ── Request Metrics ───────────────────────────────────────────────────────────
+
+router.get('/metrics/requests', (_req, res) => {
+  res.ok(getMetrics());
+});
+
+// ── Endpoint Manifest ─────────────────────────────────────────────────────────
+
+router.get('/endpoints', (_req, res) => {
+  res.ok(getRouteManifest());
 });
 
 // ── Feature Flags ─────────────────────────────────────────────────────────────

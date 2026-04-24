@@ -4,8 +4,8 @@ type: components-index
 status: active
 date: 2026-04-23
 updated: 2026-04-25
-tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3, phase-4, export-dialog]
-description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens
+tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, phase-f]
+description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards.
 aliases: [components, UI, frontend components, chart components, visx charts]
 ---
 
@@ -26,6 +26,7 @@ aliases: [components, UI, frontend components, chart components, visx charts]
 | [[docs/components/dashboard-settings-dialog\|Settings Dialog]] | Multi-tab settings with thin orchestrator pattern (Phase 3) | General, Dashboard, App, Backup, Appearance tabs |
 | [[docs/components/export-dialog\|Export Dialog]] | PDF report export configuration (Phase 4) | Report type, period, sections, currency selection |
 | [[docs/components/layout\|Layout]] | App shell and navigation (M1-optimized) | AppLayout, AppSidebar |
+| [[docs/components/admin\|Admin Pages]] | System observability dashboards (Phase F) | AdminOverview, ProviderHealth, EndpointLiveness, FeatureFlags |
 | [[docs/components/portfolio\|Portfolio]] | Investment components | AddInvestment, Watchlist, PerformanceChart |
 | [[docs/components/hooks\|Hooks]] | Custom React hooks | useTransactions, usePortfolio, useChartCurrencyFormatter |
 | [[docs/components/shared-components\|Shared Components]] | Cross-cutting utilities | VirtualDataTable, PageHeader, EmptyState, ErrorBoundary |

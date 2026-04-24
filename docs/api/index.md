@@ -4,8 +4,8 @@ type: api-index
 status: active
 date: 2026-04-24
 updated: 2026-04-25
-tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase 9 aggregation shadow cutover complete
+tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9, phase-f, admin, observability]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 9 aggregation shadow cutover complete
 aliases: [API, endpoints, REST]
 ---
 

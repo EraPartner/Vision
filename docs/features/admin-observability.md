@@ -3,28 +3,41 @@ title: Admin Observability Dashboard
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-tags: [feature, admin, observability, shadow-divergences, aggregation, migration, phase-f, phase-9-complete]
-description: Administrative dashboards for monitoring system health and database maintenance. Shadow divergence monitoring (Phase F) removed in Phase 9 after validation confirmed parity.
-aliases: [admin dashboard, system observability, admin monitoring]
+updated: 2026-04-24
+tags: [feature, admin, observability, provider-health, endpoint-liveness, feature-flags, shadow-divergences, aggregation, migration, phase-f, phase-9-complete]
+description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and feature flag controls — gated via Settings toggle.
+aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
   - apps/node-backend/src/routes/admin.js
-  - apps/frontend/src/pages/DbMaintenancePage.tsx
+  - apps/node-backend/src/services/providerHealth/providerHealthService.js
+  - apps/node-backend/src/middleware/requestMetrics.js
+  - apps/frontend/src/pages/admin/AdminOverviewPage.tsx
+  - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
+  - apps/frontend/src/pages/admin/EndpointLivenessPage.tsx
+  - apps/frontend/src/pages/admin/AdminFeatureFlagsPage.tsx
   - apps/frontend/src/lib/api/admin.ts
   - apps/frontend/src/components/layout/AppSidebar.tsx
+  - apps/frontend/src/stores/settingsStore.ts
 ---
 
 # Admin Observability Dashboard
 
 > [!abstract] Overview
-> A suite of administrative dashboards providing real-time system observability, including database maintenance and feature flag management. (Shadow divergence monitoring was removed in Phase 9 after aggregation migration validation confirmed parity.)
+> A cohesive admin hub gated by a Settings toggle. Surfaces DB maintenance, data-source health (7 providers), endpoint liveness metrics, and feature flag controls in one place. Admin failures appear only inside admin pages — no global toasts or badges.
 
 ## Overview
 
-The admin dashboard provides operational visibility into Vision's health and performance through multiple focused pages:
+The admin section provides operational visibility through five focused pages, accessible only when **Admin Mode** is enabled in Settings → App → Developer:
 
-1. **Database Maintenance** (`/admin/db`) — Monitor table statistics and run VACUUM operations
-2. **Feature Flags** (in-dashboard toggles) — Enable/disable experimental features
+1. **Overview** (`/admin`) — Four summary tiles linking to each detail page
+2. **Database Maintenance** (`/admin/db`) — Table stats and VACUUM operations
+3. **Data Sources** (`/admin/providers`) — Provider health with passive tracking + active probes
+4. **Endpoints** (`/admin/endpoints`) — Route liveness matrix with rolling metrics
+5. **Feature Flags** (`/admin/feature-flags`) — Toggle experimental features per-row
+
+## Enabling Admin Mode
+
+Settings → App tab → Developer section → "Admin Mode" toggle. Persisted via `AppSettings` Zustand store (same persistence channel as all other app settings). Routes remain URL-accessible regardless of toggle state — the toggle only shows/hides the sidebar group.
 
 > [!note] Shadow Divergences (Phase F → Removed Phase 9)
 > The Shadow Divergences page (`/admin/shadow-divergences`) was used to track aggregation endpoint parity during the Phase 2→9 migration. It has been removed as of Phase 9, along with the underlying `agg_shadow_divergences` table (dropped via migration 0009). All validation criteria were met and aggregation parity confirmed.
@@ -153,16 +166,50 @@ Removal completed (2026-04-25):
 
 See [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for historical context and removal criteria.
 
+## Admin Hub Architecture
+
+### Settings Gating
+
+`adminMode: boolean` in `AppSettings` (ADR-032 Zustand store). Toggled in `DashboardSettingsDialog` → AppTab → Developer section. Persisted automatically via existing `apiClient.saveSetting('app_settings', ...)` debounced flow.
+
+### Sidebar
+
+`AppSidebar.tsx` renders the Admin `SidebarGroup` conditionally:
+```tsx
+{appSettings.adminMode && <SidebarGroup>…</SidebarGroup>}
+```
+Five entries: Overview, Database, Data Sources, Endpoints, Feature Flags.
+
+### Backend Modules
+
+| Module | Purpose |
+|--------|---------|
+| `services/providerHealth/` | `recordSuccess`, `recordError`, `listHealth`, `probe` |
+| `middleware/requestMetrics.js` | In-memory rolling window (15 min / 1 min buckets), p50/p95 |
+| `services/routeManifest.js` | Express router stack scan → static endpoint list |
+
+### API Endpoints (4 new in this phase)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/admin/providers/health` | List all provider health rows |
+| POST | `/api/admin/providers/:provider/probe` | Active probe for one provider |
+| GET | `/api/admin/metrics/requests` | Rolling request metrics per route |
+| GET | `/api/admin/endpoints` | Static endpoint manifest |
+
 ## Related
 
+- [[docs/adr/034-admin-environment|ADR-034: Admin Environment]] — Architecture decision
 - [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] — Historical context; now retired
 - [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011: Aggregation Envelope Standard]] — Now production path
+- [[docs/features/provider-health|Provider Health Tracking]] — Provider health spec
 - [[docs/features/database-maintenance|Database Maintenance UI]] — Table stats and VACUUM operations
-- [[docs/api/admin|Admin API]] — Full endpoint documentation (shadow endpoints removed)
+- [[docs/api/admin|Admin API]] — Full endpoint documentation
 - [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] — Current endpoint count
 
 ## See Also
 
-- Feature flags are managed via the Admin UI callout in [[docs/features/settings|Settings Feature]]
+- Feature flags backend: [[docs/adr/033-runtime-toggleable-feature-flags|ADR-033]]
+- Settings persistence: [[docs/adr/032-zustand-unified-settings-store|ADR-032]]
 - For database health diagnostics, see [[docs/features/database-maintenance|Database Maintenance]]
 - For aggregation API details, see [[docs/api/aggregations|Aggregations API]]

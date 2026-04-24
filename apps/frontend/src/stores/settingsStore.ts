@@ -33,6 +33,7 @@ export interface AppSettings {
     language: Language;
     aiDefaultModel?: string;
     costBasisMethod: CostBasisMethod;
+    adminMode: boolean;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -66,6 +67,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     showDecimalPlaces: 2,
     language: 'en',
     costBasisMethod: 'weighted_avg',
+    adminMode: false,
 };
 
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {

@@ -36,10 +36,15 @@ import {
   ArrowLeftRight,
   Database,
   GitMerge,
+  ShieldCheck,
+  Activity,
+  Flag,
+  Globe,
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePortfolioPrefetch } from "@/hooks/usePortfolioPrefetch";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 
 function isActiveRoute(itemUrl: string, pathname: string) {
   if (itemUrl === "/" && pathname === "/") return true;
@@ -55,6 +60,7 @@ export function AppSidebar() {
   const { workspace, setWorkspace } = useWorkspace();
   const { t } = useLanguage();
   const { prefetchNetWorth, prefetchPerformance } = usePortfolioPrefetch(workspace);
+  const { appSettings } = useAppSettings();
 
   const handleNavHover = useCallback((url: string) => {
     if (url === "/portfolio/net-worth") prefetchNetWorth();
@@ -90,9 +96,16 @@ export function AppSidebar() {
       label: t('nav.data'),
       items: [
         { title: t('nav.importExport'), url: "/import", icon: Import },
-        { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
       ],
     },
+  ];
+
+  const adminItems = [
+    { title: t('nav.adminOverview'), url: "/admin", icon: ShieldCheck },
+    { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
+    { title: t('nav.adminProviders'), url: "/admin/providers", icon: Globe },
+    { title: t('nav.adminEndpoints'), url: "/admin/endpoints", icon: Activity },
+    { title: t('nav.adminFeatureFlags'), url: "/admin/feature-flags", icon: Flag },
   ];
 
   const portfolioGroups = [
@@ -235,6 +248,34 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+
+        {appSettings.adminMode && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{t('nav.admin')}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminItems.map((item) => {
+                  const isActive = item.url === "/admin"
+                    ? location.pathname === "/admin"
+                    : isActiveRoute(item.url, location.pathname);
+                  return (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                        <NavLink
+                          to={item.url}
+                          className={isActive ? "accent-rail" : ""}
+                        >
+                          <item.icon className={`h-4 w-4 transition-colors duration-[var(--duration-normal)] ${isActive ? "text-primary" : ""}`} />
+                          <span className={isActive ? "font-semibold tracking-tight" : "tracking-tight"}>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/50 p-3">

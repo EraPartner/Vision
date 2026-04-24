@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-24: Admin Environment — Unified Observability Hub
+
+[[docs/adr/034-admin-environment|ADR-034]] — Consolidate admin tooling into a gated sidebar section with `/admin` overview, `/admin/db` database maintenance, `/admin/providers` data-source health, `/admin/endpoints` endpoint liveness metrics, and `/admin/feature-flags` feature flag controls. Gating via `adminMode` toggle in Settings (not a security boundary for single-user self-hosted app). Provider health uses passive tracking (success/error calls + table) + on-demand probes. Endpoint metrics via in-memory rolling window (15 min / 1 min buckets). Alert surface limited to admin pages only.
+
 ### 2026-04-24: Reaffirm visx/d3 over recharts
 
 [[docs/adr/028-reaffirm-visx-over-recharts|ADR-028]] — Reaffirm visx + d3 as the chart primitive stack; reject TODO proposal to swap back to recharts. ADR-018 justified migration as a bundle reduction (~35kb), not an increase. Unused visx sub-packages (`@visx/hierarchy`, `@visx/text`, `@visx/tooltip`) removed as hygiene win. No visual-regression safety net exists for a port; future swaps require measured bundle evidence and visual-regression testing. Removes "Viz library dedupe" TODO block.
