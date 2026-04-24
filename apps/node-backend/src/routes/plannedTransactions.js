@@ -9,8 +9,8 @@ import { query as dbQuery } from '../database/connection.js';
 import plannedTransactionRepository from '../repositories/plannedTransactionRepository.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
-import { generateLoanRepaymentSchedule } from '../services/loanRepaymentService.js';
-import { calculateNextDate } from '../services/recurrenceService.js';
+import { generateLoanRepaymentSchedule } from '../services/calculations/loanSchedule.js';
+import { calculateNextDate } from '../services/calculations/recurrence.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 

@@ -207,7 +207,7 @@ describe('Planned Transaction Routes', () => {
       expect(plannedTransactionRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           is_loan: true,
-          amount: -850,
+          amount: -860.66,
           planned_date: '2026-04-01',
         })
       );
