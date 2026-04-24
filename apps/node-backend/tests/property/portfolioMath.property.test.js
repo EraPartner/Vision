@@ -51,7 +51,7 @@ function genDates(rng, count) {
 // ── calculateCostBasis ────────────────────────────────────────────────────────
 
 describe('property: calculateCostBasis', () => {
-  const rng = seeded(0xC05TB451);
+  const rng = seeded(0xC057B451);
 
   it('totalUnits is never negative after any sequence of buys and sells', () => {
     for (let trial = 0; trial < 300; trial++) {
@@ -203,7 +203,7 @@ describe('property: annualizedReturn', () => {
 // ── contributionAdjustedMonthlyReturn ────────────────────────────────────────
 
 describe('property: contributionAdjustedMonthlyReturn', () => {
-  const rng = seeded(0xHEAT1234 | 0);
+  const rng = seeded(0xEAA71234 | 0);
 
   it('returns 0 when the value/invested ratio is unchanged month-over-month', () => {
     for (let trial = 0; trial < 200; trial++) {
@@ -293,7 +293,7 @@ describe('property: calculateAccruedInterest', () => {
 // ── sanitizeSnapshotSpikes ────────────────────────────────────────────────────
 
 describe('property: sanitizeSnapshotSpikes', () => {
-  const rng = seeded(0x5P1KE123);
+  const rng = seeded(0x5F1CE123);
 
   it('output length equals input length for any array size', () => {
     for (let trial = 0; trial < 200; trial++) {
