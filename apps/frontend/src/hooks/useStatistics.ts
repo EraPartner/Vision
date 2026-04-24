@@ -1,55 +1,210 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
 import { useMemo, useState, useCallback } from 'react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
-import { processTransactions, type StatisticsData } from './statisticsProcessing';
+import { apiClient } from '@/lib/api';
+import {
+  getAggregationMonthlySummary,
+  getAggregationCategoryPivot,
+  getAggregationRecipientInsights,
+  getAggregationRecipientByYear,
+  type CategoryPivotItem,
+  type RecipientYearlySpending,
+} from '@/lib/api/aggregations';
 
-/**
- * Per-graph exclusion override state.
- * Each graph can independently toggle exclusions on/off.
- */
-export type GraphExclusions = Record<string, boolean>; // graphKey -> useExclusions (true = apply exclusions)
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface MonthlyData {
+  period: string;
+  year: number;
+  month: number;
+  income: number;
+  spending: number;
+  net: number;
+  transactionCount: number;
+}
+
+interface CategoryMonthlyData {
+  categoryName: string;
+  categoryId: number | null;
+  months: Record<string, number>;
+  incomeMonths: Record<string, number>;
+  expenseMonths: Record<string, number>;
+  netMonths: Record<string, number>;
+  total: number;
+  incomeTotal: number;
+  expenseTotal: number;
+  netTotal: number;
+}
+
+interface RecipientSpending {
+  name: string;
+  total: number;
+  count: number;
+}
+
+interface YearlyComparison {
+  year: number;
+  totalIncome: number;
+  totalSpending: number;
+  net: number;
+  transactionCount: number;
+}
+
+export interface StatisticsData {
+  monthlyData: MonthlyData[];
+  categoryPivot: CategoryMonthlyData[];
+  topRecipients: RecipientSpending[];
+  topRecipientsByYear: Record<string, RecipientSpending[]>;
+  yearlyComparison: YearlyComparison[];
+  allPeriods: string[];
+  allYears: number[];
+  totalIncome: number;
+  totalSpending: number;
+  averageMonthlySpending: number;
+  averageMonthlyIncome: number;
+}
+
+export type GraphExclusions = Record<string, boolean>;
+
+// ── Payload aliases ───────────────────────────────────────────────────────────
+
+type MonthlySummaryPayload = Awaited<ReturnType<typeof getAggregationMonthlySummary>>['data'];
+type CategoryPivotPayload = Awaited<ReturnType<typeof getAggregationCategoryPivot>>['data'];
+type RecipientInsightsPayload = Awaited<ReturnType<typeof getAggregationRecipientInsights>>['data'];
+type RecipientByYearPayload = Awaited<ReturnType<typeof getAggregationRecipientByYear>>['data'];
+
+// ── Pure mapping function ─────────────────────────────────────────────────────
+
+export function mapToStatisticsData(
+  monthlySummary: MonthlySummaryPayload,
+  categoryPivotPayload: CategoryPivotPayload,
+  recipientInsights: RecipientInsightsPayload,
+  recipientByYear: RecipientByYearPayload,
+): StatisticsData {
+  const monthlyData: MonthlyData[] = (monthlySummary.months ?? [])
+    .map((m) => ({
+      period: `${m.year}-${String(m.month).padStart(2, '0')}`,
+      year: m.year,
+      month: m.month,
+      income: m.total_income,
+      spending: Math.abs(m.total_spending),
+      net: m.net_amount,
+      transactionCount: m.transaction_count,
+    }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+
+  const yearMap = new Map<number, YearlyComparison>();
+  for (const m of monthlyData) {
+    if (!yearMap.has(m.year)) {
+      yearMap.set(m.year, { year: m.year, totalIncome: 0, totalSpending: 0, net: 0, transactionCount: 0 });
+    }
+    const yd = yearMap.get(m.year)!;
+    yd.totalIncome += m.income;
+    yd.totalSpending += m.spending;
+    yd.net += m.net;
+    yd.transactionCount += m.transactionCount;
+  }
+  const yearlyComparison = Array.from(yearMap.values()).sort((a, b) => a.year - b.year);
+
+  const catMap = new Map<string | number, CategoryMonthlyData>();
+  for (const [period, items] of Object.entries(categoryPivotPayload.categoryPivot ?? {})) {
+    for (const item of items as CategoryPivotItem[]) {
+      const key = item.categoryId ?? 'null';
+      if (!catMap.has(key)) {
+        catMap.set(key, {
+          categoryName: item.categoryName,
+          categoryId: item.categoryId,
+          months: {},
+          incomeMonths: {},
+          expenseMonths: {},
+          netMonths: {},
+          total: 0,
+          incomeTotal: 0,
+          expenseTotal: 0,
+          netTotal: 0,
+        });
+      }
+      const cd = catMap.get(key)!;
+      const absTotal = Math.abs(item.total);
+      const expenseAmount = item.total < 0 ? absTotal : 0;
+      const incomeAmount = item.total > 0 ? item.total : 0;
+      cd.months[period] = (cd.months[period] ?? 0) + absTotal;
+      cd.expenseMonths[period] = (cd.expenseMonths[period] ?? 0) + expenseAmount;
+      cd.incomeMonths[period] = (cd.incomeMonths[period] ?? 0) + incomeAmount;
+      cd.netMonths[period] = (cd.netMonths[period] ?? 0) + item.total;
+      cd.total += absTotal;
+      cd.expenseTotal += expenseAmount;
+      cd.incomeTotal += incomeAmount;
+      cd.netTotal += item.total;
+    }
+  }
+  const categoryPivot = Array.from(catMap.values()).sort((a, b) => b.total - a.total);
+
+  const topRecipients: RecipientSpending[] = (recipientInsights.topMerchants ?? [])
+    .slice(0, 20)
+    .map((m) => ({ name: m.name, total: m.totalSpend, count: m.transactionCount }));
+
+  const topRecipientsByYear: Record<string, RecipientSpending[]> = Object.fromEntries(
+    Object.entries(recipientByYear.recipientsByYear ?? {}).map(([year, recs]) => [
+      year,
+      (recs as RecipientYearlySpending[]).map((r) => ({
+        name: r.name,
+        total: r.totalSpend,
+        count: r.transactionCount,
+      })),
+    ]),
+  );
+
+  const allPeriods = monthlyData.map((m) => m.period);
+  const allYears = yearlyComparison.map((y) => y.year);
+  const totalIncome = monthlyData.reduce((s, m) => s + m.income, 0);
+  const totalSpending = monthlyData.reduce((s, m) => s + m.spending, 0);
+  const monthCount = monthlyData.length || 1;
+
+  return {
+    monthlyData,
+    categoryPivot,
+    topRecipients,
+    topRecipientsByYear,
+    yearlyComparison,
+    allPeriods,
+    allYears,
+    totalIncome,
+    totalSpending,
+    averageMonthlySpending: totalSpending / monthCount,
+    averageMonthlyIncome: totalIncome / monthCount,
+  };
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useStatistics() {
   const { settings } = useSettings();
   const { appSettings } = useAppSettings();
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
 
-  // Per-graph override state: defaults to true (apply exclusions) for all graphs
   const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
 
   const toggleGraphExclusion = useCallback((graphKey: string) => {
-    setGraphExclusions(prev => ({
+    setGraphExclusions((prev) => ({
       ...prev,
       [graphKey]: !(prev[graphKey] ?? true),
     }));
   }, []);
 
-  const transactionsQuery = useQuery({
-    queryKey: ['transactions', 'all-for-stats', targetCurrency],
-    queryFn: async () => {
-      const allItems: Awaited<ReturnType<typeof apiClient.getTransactions>>['items'] = [];
-      let offset = 0;
-      const limit = 1000;
-      let total = Infinity;
+  const exclusionsApply =
+    settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
 
-      while (offset < total) {
-        const res = await apiClient.getTransactions({
-          limit,
-          offset,
-          active: true,
-          normalize_to_eur: true,
-          target_currency: targetCurrency,
-        });
-        allItems.push(...res.items);
-        total = res.total;
-        offset += limit;
-      }
-      return allItems;
-    },
-    staleTime: 60000,
-  });
+  const settingsExcludedCatIds = useMemo(
+    () => [...settings.excludedCategoryIds].sort((a, b) => a - b),
+    [settings.excludedCategoryIds],
+  );
+
+  const settingsExcludedRecIds = useMemo(
+    () => [...settings.excludedRecipientIds].sort((a, b) => a - b),
+    [settings.excludedRecipientIds],
+  );
 
   const categoriesQuery = useQuery({
     queryKey: ['categories', 'all-for-stats'],
@@ -57,48 +212,165 @@ export function useStatistics() {
       const res = await apiClient.getCategories({ limit: 500 });
       return res.items;
     },
-    staleTime: 60000,
+    staleTime: 60_000,
   });
 
-  // Check if exclusions should apply to statistics
-  const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
+  const hiddenCategoryIds = useMemo(() => {
+    if (!settings.excludeHiddenCategories || !categoriesQuery.data) return [] as number[];
+    return categoriesQuery.data.filter((c) => !c.is_active).map((c) => c.id);
+  }, [settings.excludeHiddenCategories, categoriesQuery.data]);
 
-  // Compute full (with exclusions) and unfiltered stats
+  const effectiveExcludedCategoryIds = useMemo(
+    () => [...new Set([...settingsExcludedCatIds, ...hiddenCategoryIds])].sort((a, b) => a - b),
+    [settingsExcludedCatIds, hiddenCategoryIds],
+  );
+
+  const hasExclusions =
+    effectiveExcludedCategoryIds.length > 0 || settingsExcludedRecIds.length > 0;
+
+  const filteredEnabled = exclusionsApply && hasExclusions;
+
+  // ── Unfiltered queries ────────────────────────────────────────────────────
+
+  const monthlySummaryUnfilteredQuery = useQuery({
+    queryKey: ['aggregations', 'monthly-summary', 'unfiltered', targetCurrency],
+    queryFn: () => getAggregationMonthlySummary({ currency: targetCurrency, all_time: true }),
+    staleTime: 60_000,
+  });
+
+  const categoryPivotUnfilteredQuery = useQuery({
+    queryKey: ['aggregations', 'category-pivot', 'unfiltered', targetCurrency],
+    queryFn: () => getAggregationCategoryPivot({ currency: targetCurrency }),
+    staleTime: 60_000,
+  });
+
+  const recipientInsightsQuery = useQuery({
+    queryKey: ['aggregations', 'recipient-insights', targetCurrency],
+    queryFn: () => getAggregationRecipientInsights({ currency: targetCurrency }),
+    staleTime: 60_000,
+  });
+
+  const recipientByYearUnfilteredQuery = useQuery({
+    queryKey: ['aggregations', 'recipient-by-year', 'unfiltered', targetCurrency],
+    queryFn: () => getAggregationRecipientByYear({ currency: targetCurrency }),
+    staleTime: 60_000,
+  });
+
+  // ── Filtered queries (only when exclusions are active) ────────────────────
+
+  const monthlySummaryFilteredQuery = useQuery({
+    queryKey: [
+      'aggregations', 'monthly-summary', 'filtered',
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
+    ],
+    queryFn: () =>
+      getAggregationMonthlySummary({
+        currency: targetCurrency,
+        all_time: true,
+        excluded_category_ids: effectiveExcludedCategoryIds,
+        excluded_recipient_ids: settingsExcludedRecIds,
+      }),
+    enabled: filteredEnabled,
+    staleTime: 60_000,
+  });
+
+  const categoryPivotFilteredQuery = useQuery({
+    queryKey: [
+      'aggregations', 'category-pivot', 'filtered',
+      targetCurrency, effectiveExcludedCategoryIds, settingsExcludedRecIds,
+    ],
+    queryFn: () =>
+      getAggregationCategoryPivot({
+        currency: targetCurrency,
+        excluded_category_ids: effectiveExcludedCategoryIds,
+        excluded_recipient_ids: settingsExcludedRecIds,
+      }),
+    enabled: filteredEnabled,
+    staleTime: 60_000,
+  });
+
+  const recipientByYearFilteredQuery = useQuery({
+    queryKey: [
+      'aggregations', 'recipient-by-year', 'filtered',
+      targetCurrency, settingsExcludedRecIds,
+    ],
+    queryFn: () =>
+      getAggregationRecipientByYear({
+        currency: targetCurrency,
+        excluded_recipient_ids: settingsExcludedRecIds,
+      }),
+    enabled: filteredEnabled && settingsExcludedRecIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  // ── Map to StatisticsData ─────────────────────────────────────────────────
+
+  const unfilteredReady =
+    monthlySummaryUnfilteredQuery.data != null &&
+    categoryPivotUnfilteredQuery.data != null &&
+    recipientInsightsQuery.data != null &&
+    recipientByYearUnfilteredQuery.data != null;
+
   const stats = useMemo(() => {
-    if (!transactionsQuery.data || !categoriesQuery.data) return null;
+    if (!unfilteredReady) return null;
 
-    let hiddenCategoryIds: number[] = [];
-    if (settings.excludeHiddenCategories) {
-      hiddenCategoryIds = categoriesQuery.data
-        .filter((cat) => !cat.is_active)
-        .map((cat) => cat.id);
+    const unfilteredData = mapToStatisticsData(
+      monthlySummaryUnfilteredQuery.data!.data,
+      categoryPivotUnfilteredQuery.data!.data,
+      recipientInsightsQuery.data!.data,
+      recipientByYearUnfilteredQuery.data!.data,
+    );
+
+    if (!filteredEnabled || !monthlySummaryFilteredQuery.data || !categoryPivotFilteredQuery.data) {
+      return { filtered: unfilteredData, unfiltered: unfilteredData };
     }
 
-    const excludedCategoryIds = new Set([
-      ...settings.excludedCategoryIds,
-      ...hiddenCategoryIds,
-    ]);
-    const excludedRecipientIds = new Set(settings.excludedRecipientIds);
+    const filteredData = mapToStatisticsData(
+      monthlySummaryFilteredQuery.data.data,
+      categoryPivotFilteredQuery.data.data,
+      recipientInsightsQuery.data!.data,
+      (recipientByYearFilteredQuery.data ?? recipientByYearUnfilteredQuery.data!).data,
+    );
 
-    // Filtered stats (with exclusions)
-    const filtered = exclusionsApply
-      ? processTransactions(transactionsQuery.data, categoriesQuery.data, excludedCategoryIds, excludedRecipientIds)
-      : processTransactions(transactionsQuery.data, categoriesQuery.data, new Set(), new Set());
+    return { filtered: filteredData, unfiltered: unfilteredData };
+  }, [
+    unfilteredReady,
+    monthlySummaryUnfilteredQuery.data,
+    categoryPivotUnfilteredQuery.data,
+    recipientInsightsQuery.data,
+    recipientByYearUnfilteredQuery.data,
+    filteredEnabled,
+    monthlySummaryFilteredQuery.data,
+    categoryPivotFilteredQuery.data,
+    recipientByYearFilteredQuery.data,
+  ]);
 
-    // Unfiltered stats (no exclusions) - needed for per-graph toggle
-    const unfiltered = exclusionsApply
-      ? processTransactions(transactionsQuery.data, categoriesQuery.data, new Set(), new Set())
-      : filtered;
+  const getGraphData = useCallback(
+    (graphKey: string): StatisticsData | null => {
+      if (!stats) return null;
+      const useExclusions = graphExclusions[graphKey] ?? true;
+      return useExclusions ? stats.filtered : stats.unfiltered;
+    },
+    [stats, graphExclusions],
+  );
 
-    return { filtered, unfiltered };
-  }, [transactionsQuery.data, categoriesQuery.data, settings, exclusionsApply]);
+  const isLoading =
+    monthlySummaryUnfilteredQuery.isLoading ||
+    categoryPivotUnfilteredQuery.isLoading ||
+    recipientInsightsQuery.isLoading ||
+    recipientByYearUnfilteredQuery.isLoading;
 
-  // Helper to get data for a specific graph
-  const getGraphData = useCallback((graphKey: string): StatisticsData | null => {
-    if (!stats) return null;
-    const useExclusions = graphExclusions[graphKey] ?? true;
-    return useExclusions ? stats.filtered : stats.unfiltered;
-  }, [stats, graphExclusions]);
+  const isError =
+    monthlySummaryUnfilteredQuery.isError ||
+    categoryPivotUnfilteredQuery.isError ||
+    recipientInsightsQuery.isError ||
+    recipientByYearUnfilteredQuery.isError;
+
+  const error =
+    monthlySummaryUnfilteredQuery.error ??
+    categoryPivotUnfilteredQuery.error ??
+    recipientInsightsQuery.error ??
+    recipientByYearUnfilteredQuery.error;
 
   return {
     data: stats?.filtered ?? null,
@@ -107,8 +379,8 @@ export function useStatistics() {
     graphExclusions,
     toggleGraphExclusion,
     exclusionsApply,
-    isLoading: transactionsQuery.isLoading || categoriesQuery.isLoading,
-    isError: transactionsQuery.isError || categoriesQuery.isError,
-    error: transactionsQuery.error || categoriesQuery.error,
+    isLoading,
+    isError,
+    error,
   };
 }
