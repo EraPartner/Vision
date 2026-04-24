@@ -32,53 +32,6 @@ export interface FeatureFlag {
     updated_at: string | null;
 }
 
-// ── Shadow Divergences ────────────────────────────────────────────────────────
-
-export interface ShadowDivergence {
-    id: number;
-    endpoint: string;
-    request_params: Record<string, unknown>;
-    divergences: Record<string, unknown>;
-    divergence_count: number;
-    created_at: string;
-}
-
-export interface ShadowDivergenceEndpointSummary {
-    endpoint: string;
-    count: number;
-    last_seen: string;
-    max_divergence_count: number;
-}
-
-export interface ShadowDivergencesSummary {
-    endpoints: ShadowDivergenceEndpointSummary[];
-    total: number;
-}
-
-export interface ShadowDivergencesPage {
-    rows: ShadowDivergence[];
-    total: number;
-    limit: number;
-    offset: number;
-}
-
-export function getShadowDivergencesSummary(): Promise<ShadowDivergencesSummary> {
-    return apiRequest<ShadowDivergencesSummary>('/api/admin/shadow-divergences/summary');
-}
-
-export function getShadowDivergences(params?: {
-    endpoint?: string;
-    limit?: number;
-    offset?: number;
-}): Promise<ShadowDivergencesPage> {
-    const qp = new URLSearchParams();
-    if (params?.endpoint) qp.set('endpoint', params.endpoint);
-    if (params?.limit != null) qp.set('limit', String(params.limit));
-    if (params?.offset != null) qp.set('offset', String(params.offset));
-    const qs = qp.toString();
-    return apiRequest<ShadowDivergencesPage>(`/api/admin/shadow-divergences${qs ? `?${qs}` : ''}`);
-}
-
 // ── Database Maintenance ──────────────────────────────────────────────────────
 
 export function getDbStats(): Promise<DbStats> {

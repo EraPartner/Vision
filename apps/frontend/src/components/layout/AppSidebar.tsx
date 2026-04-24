@@ -36,7 +36,6 @@ import {
   ArrowLeftRight,
   Database,
   GitMerge,
-  Activity,
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -92,7 +91,6 @@ export function AppSidebar() {
       items: [
         { title: t('nav.importExport'), url: "/import", icon: Import },
         { title: t('nav.dbMaintenance'), url: "/admin/db", icon: Database },
-        { title: t('nav.shadowDivergences'), url: "/admin/shadow-divergences", icon: Activity },
       ],
     },
   ];

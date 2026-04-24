@@ -5,19 +5,23 @@ status: active
 date: 2026-04-24
 updated: 2026-04-25
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, phase-5a, phase-6, phase-7, phase-g, feature-flags, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance]
-description: Complete matrix of all 146 API endpoints organized by resource for quick lookup; includes Phase 4 feature flags; JSON export and attachments in Phase 5A; bank reconciliation, cash flow forecast, and bill reminders in Phase 6; Sankey flow, DB maintenance, PDF reports in Phase 7; Phase G removed 6 overlapping info endpoints in favor of aggregations; see openapi.yaml for authoritative spec
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-6, phase-7, phase-g, phase-9, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports]
+description: Complete matrix of all 144 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover: legacy info aggregation routes removed from wiring, admin shadow divergence endpoints removed; see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 146 API endpoints across 20 route files (updated Phase G). Use this as a quick reference to find any endpoint.
+> All 144 API endpoints across 20 route files (updated Phase 9 — aggregation shadow cutover complete). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
+> **Phase 3 Update (April 2026):** PDF report generation redesigned with Puppeteer rendering, modular section renderers, and theme-aware styling. Three new POST endpoints: `/api/reports/financial`, `/api/reports/portfolio`, `/api/reports/tax`. Legacy GET endpoint kept for backward compatibility.
+>
 > **Phase G Update (April 2026):** Six legacy `/api/info/*` endpoints removed in favor of `/api/aggregations/*` alternatives. See [[#phase-g-endpoint-consolidation|Phase G Endpoint Consolidation]] below.
+>
+> **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. Shadow divergence admin endpoints (`GET /api/admin/shadow-divergences/summary`, `GET /api/admin/shadow-divergences`) removed. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes removed from wiring (see [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]]), though `info.js` persists for unrelated endpoints (portfolio-performance, net-worth, exchange-rates, inflation-rates).
 
 ## Transactions (7 endpoints)
 
@@ -195,7 +199,7 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (12 endpoints)
+## Admin (10 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -211,20 +215,21 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | PATCH | `/api/admin/feature-flags/:key` | Toggle feature flag (Phase 4) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/db/stats` | Per-table live/dead row counts and size (Phase 7) | admin | [[docs/api/admin\|Admin]] |
 | POST | `/api/admin/db/vacuum` | Run VACUUM ANALYZE on one or all tables (Phase 7) | admin | [[docs/api/admin\|Admin]] |
-| GET | `/api/admin/shadow-divergences/summary` | Aggregation shadow divergence per-endpoint summary (Phase F) | — | [[docs/api/admin\|Admin]] |
-| GET | `/api/admin/shadow-divergences` | Paginated aggregation shadow divergence log (Phase F) | — | [[docs/api/admin\|Admin]] |
 
-## Reports (1 endpoint) — Phase 7
+## Reports (4 endpoints) — Phase 3 / Phase 7
 
-Server-side PDF generation via PDFKit. Returns binary stream (`application/pdf`).
+Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Returns binary stream (`application/pdf`).
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| GET | `/api/reports/financial` | Export full financial PDF report (monthly + categories) | — | — |
+| POST | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST | `/api/reports/portfolio` | Generate portfolio PDF (placeholder; coming soon) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST | `/api/reports/tax` | Generate tax PDF (placeholder; coming soon) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| GET | `/api/reports/financial` | Legacy PDFKit endpoint (kept for one release cycle; use POST instead) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
-## Aggregations (8 endpoints) — Phase 2 / Phase 6 / Phase 7
+## Aggregations (8 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 9
 
-Server-computed aggregations with materialized-view/live distinction. Behind `AGGREGATIONS_V2_ENABLED` feature flag. Cash flow forecast added in Phase 6. Sankey flow added in Phase 7.
+Server-computed aggregations with materialized-view/live distinction. Production path as of Phase 9 (shadow mode validation complete). Cash flow forecast added in Phase 6. Sankey flow added in Phase 7.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -237,9 +242,9 @@ Server-computed aggregations with materialized-view/live distinction. Behind `AG
 | GET | `/api/aggregations/cashflow-forecast` | N-month forward cash flow from planned transactions (Phase 6) | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/sankey` | Directed income→category flow graph for d3-sankey (Phase 7) | — | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (20 endpoints)
+## Info/Statistics (14 endpoints — Phase 9 Aggregation Cutover)
 
-Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in Phase 9.
+Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -291,13 +296,13 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
 | Reconciliation (Phase 6) | 10 | 0 |
-| Admin | 12 | 0 |
+| Admin | 10 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
-| Aggregations (Phase 2/6) | 7 | 0 |
-| Info/Statistics | 20 | 5 |
+| Aggregations (Phase 2/6) | 8 | 0 |
+| Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **146** | **10** |
+| **Total** | **144** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

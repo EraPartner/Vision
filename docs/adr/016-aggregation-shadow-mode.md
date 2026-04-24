@@ -1,21 +1,25 @@
 ---
 title: ADR-016 Aggregation Shadow Mode
 type: adr
-status: Accepted
+status: Retired
 date: 2026-04-17
 updated: 2026-04-25
-tags: [adr, aggregation, migration, observability, phase-8]
-description: Shadow middleware that cross-checks new /api/aggregations/* responses against legacy /api/info/* during the Phase 2 → Phase 9 migration window.
+tags: [adr, aggregation, migration, observability, phase-8, phase-9-complete]
+description: Shadow middleware that cross-checks new /api/aggregations/* responses against legacy /api/info/* during the Phase 2 → Phase 9 migration window. RETIRED: Phase 9 cutover complete; shadow middleware deleted, agg_shadow_divergences table dropped.
 aliases: [adr-016, aggregation shadow, shadow mode]
 ---
 
 # ADR-016: Aggregation Shadow Mode
 
 ## Status
-Accepted
+Retired (Phase 9 Cutover Complete)
 
 ## Date
 2026-04-17
+
+## Completion Note (Phase 9 — 2026-04-25)
+
+Shadow mode validation complete. The shadow middleware stack (`aggregationShadow.js`, `aggregationShadowWiring.js`) has been deleted. The `agg_shadow_divergences` table was dropped via migration 0009. Feature flags `AGGREGATION_SHADOW_ENABLED` and `AGGREGATIONS_V2_ENABLED` were removed from env/config. `/api/aggregations/*` is now the sole production aggregation path.
 
 ## Context
 

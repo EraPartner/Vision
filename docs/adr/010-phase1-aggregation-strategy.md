@@ -11,10 +11,13 @@ aliases: [adr-010, aggregation-strategy, aggregation-layer]
 # ADR-010: Phase 1 Aggregation Strategy
 
 ## Status
-Accepted
+Accepted (Phase 9 Cutover Complete)
 
 ## Date
 2026-04-16
+
+## Updated
+2026-04-25 — Phase 9 cutover complete; shadow mode validation done, legacy infoRepository fallback removed from wiring.
 
 ## Context
 

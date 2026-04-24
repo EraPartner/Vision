@@ -3,8 +3,9 @@ title: API Documentation Index
 type: api-index
 status: active
 date: 2026-04-24
-tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A
+updated: 2026-04-25
+tags: [api, index, rest, endpoints, openapi, phase-5a, attachments, phase-2, phase-9]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export and attachments added in Phase 5A; Phase 9 aggregation shadow cutover complete
 aliases: [API, endpoints, REST]
 ---
 
@@ -16,6 +17,8 @@ aliases: [API, endpoints, REST]
 > **Phase 1 Update (ADR-026):** All endpoints use a unified response envelope with `{ ok: true/false, data, error?, meta? }` structure. See [[docs/adr/026-unified-api-response-envelope|ADR-026]].
 >
 > **Phase 2.4 Update:** OpenAPI 3.0.3 specification now available at `openapi.yaml` (project root) — the authoritative source for all API contracts, request/response schemas, and type generation.
+>
+> **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes and shadow divergence admin endpoints removed. See [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]] and [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for details.
 
 > [!tip] Quick Navigation
 > - **OpenAPI Spec:** See `openapi.yaml` for formal specifications
@@ -53,7 +56,7 @@ SORT path ASC
 | Recipient Bank Accounts | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |
 | Splits | `/api/splits` | GET, POST, PATCH, DELETE | [[docs/api/splits\|Splits API]] |
 | Admin | `/api/admin` | GET, POST | [[docs/api/admin\|Admin API]] |
-| Reports (Phase 7) | `/api/reports` | GET | [[docs/api/reports\|Reports API]] |
+| Reports (Phase 3) | `/api/reports` | POST, GET (legacy) | [[docs/api/reports\|Reports API]] |
 | Aggregations (Phase 2) | `/api/aggregations` | GET | [[docs/api/aggregations\|Aggregations API]] |
 | Info & Analytics | `/api/info` | GET | [[docs/api/info\|Info & Analytics API]] |
 | AI Chat | `/api/ai` | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]] |

@@ -40,7 +40,6 @@ const ExchangeRatesPage = lazy(() => import("./pages/portfolio/ExchangeRatesPage
 const WatchlistPage = lazy(() => import("./pages/portfolio/WatchlistPage"));
 const ReconciliationPage = lazy(() => import("./pages/ReconciliationPage"));
 const DbMaintenancePage = lazy(() => import("./pages/DbMaintenancePage"));
-const ShadowDivergencesPage = lazy(() => import("./pages/ShadowDivergencesPage"));
 const AIChatPage = lazy(() => import("./pages/AIChatPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -125,7 +124,6 @@ const App = () => {
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
                                                     <Route path="/reconciliation" element={<ReconciliationPage />} />
                                                     <Route path="/admin/db" element={<DbMaintenancePage />} />
-                                                    <Route path="/admin/shadow-divergences" element={<ShadowDivergencesPage />} />
                                                     {/* Portfolio */}
                                                     <Route path="/portfolio" element={<PortfolioOverviewPage />} />
                                                     <Route path="/portfolio/market" element={<MarketLookupPage />} />

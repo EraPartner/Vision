@@ -225,46 +225,6 @@ router.post('/database/vacuum', async (req, res) => {
   res.ok({ vacuumed: table ?? 'all' });
 });
 
-// ── Shadow Divergences ────────────────────────────────────────────────────────
-
-router.get('/shadow-divergences/summary', async (_req, res) => {
-  const result = await query(`
-    SELECT
-      endpoint,
-      COUNT(*)::int AS count,
-      MAX(created_at) AS last_seen,
-      MAX(divergence_count) AS max_divergence_count
-    FROM agg_shadow_divergences
-    GROUP BY endpoint
-    ORDER BY count DESC
-  `, []);
-  const total = result.rows.reduce((acc, r) => acc + r.count, 0);
-  res.ok({ endpoints: result.rows, total });
-});
-
-router.get('/shadow-divergences', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit ?? '50', 10) || 50, 200);
-  const offset = parseInt(req.query.offset ?? '0', 10) || 0;
-  const endpoint = req.query.endpoint ?? null;
-
-  const [rowsResult, countResult] = await Promise.all([
-    endpoint
-      ? query(
-          `SELECT * FROM agg_shadow_divergences WHERE endpoint = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-          [limit, offset, endpoint]
-        )
-      : query(
-          `SELECT * FROM agg_shadow_divergences ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-          [limit, offset]
-        ),
-    endpoint
-      ? query(`SELECT COUNT(*)::int AS total FROM agg_shadow_divergences WHERE endpoint = $1`, [endpoint])
-      : query(`SELECT COUNT(*)::int AS total FROM agg_shadow_divergences`, []),
-  ]);
-
-  res.ok({ rows: rowsResult.rows, total: countResult.rows[0].total, limit, offset });
-});
-
 // ── Feature Flags ─────────────────────────────────────────────────────────────
 
 router.get('/feature-flags', async (_req, res) => {

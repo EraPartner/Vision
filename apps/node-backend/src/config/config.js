@@ -79,11 +79,6 @@ const settings = deepFreeze({
     authToken: env.ADMIN_AUTH_TOKEN,
   },
 
-  features: {
-    aggregationsV2Enabled: env.AGGREGATIONS_V2_ENABLED,
-    aggregationShadowEnabled: env.AGGREGATION_SHADOW_ENABLED,
-  },
-
   ollama: {
     url: (env.OLLAMA_URL || defaultOllamaUrl()).replace(/\/+$/, ''),
     defaultModel: env.OLLAMA_DEFAULT_MODEL,

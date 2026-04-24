@@ -3,8 +3,9 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-24
-tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 7 complete with database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export.
+updated: 2026-04-25
+tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -155,6 +156,21 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-24 Phase 5 & 6 — PDF Polish & Localization Complete
+
+**PDF Report Export Phase 5 (Polish):**
+- **Paginated Footer**: Puppeteer footer template with "Vision | Confidential | page X / Y" on all content pages; theme colors interpolated as HSL literals
+- **Footer Space Management**: CSS variable `--footer-h: 28px` reserves footer area; cover page height adjusted to `calc(297mm - var(--footer-h))`
+- **Print Break Control**: `break-inside: avoid` on `.kpi-card`, `.account-card`, `.stat-row`, `.planned-day` prevents orphaning; `display: table-header-group` on `.data-table thead` repeats headers across pages
+- **Improved Layout**: Top border on `.page` (4px primary color), `break-after: avoid` on section titles/subtitles for visual separation
+
+**PDF Report Export Phase 6 (i18n):**
+- **32 New Translation Keys**: Added `export.*` keys to `i18n/source/en.json` and `nl.ts` for dialog, period selection, section toggles, currency, and actions
+- **Full Localization**: Both English and Dutch translations for Report Type, Period (YTD/rolling/custom/year), Sections (7 financial + 3 placeholders), Currency, and Download actions
+- **Validation Pass**: `bun run validate-locales` confirms parity, placeholders, types, and no drift
+
+See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 5 & 6), [[docs/i18n/translations|i18n Translations]] (32 new export keys)
 
 ### 2026-04-24 TypeScript & Error Handling Standards (Phase 5+ Linting Fixes)
 

@@ -40,6 +40,7 @@ import {
 } from './services/quoteBackfillService.js';
 import { warmInfoCaches } from './routes/info.js';
 import { createErrorHandler, UnauthorizedError, NotFoundError } from './middleware/errorHandler.js';
+import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
 
@@ -178,7 +179,6 @@ import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
 import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
-import { setupAggregationShadow } from './middleware/aggregationShadowWiring.js';
 
 const settings = getSettings();
 const app = express();
@@ -287,13 +287,7 @@ app.use('/api/recipients', recipientsRouter);
 app.use('/api/recipients', recipientBankAccountsRouter);
 app.use('/api/planned-transactions', plannedTransactionsRouter);
 app.use('/api/info', infoRouter);
-if (settings.features?.aggregationShadowEnabled) {
-  setupAggregationShadow(app, { logger });
-}
-if (settings.features?.aggregationsV2Enabled) {
-  app.use('/api/aggregations', aggregationsRouter);
-  logger.info('Aggregations V2 routes enabled (/api/aggregations)');
-}
+app.use('/api/aggregations', aggregationsRouter);
 app.use('/api/admin', adminRateLimiter, adminAuthMiddleware, adminRouter);
 app.use('/api/import', importRateLimiter, importRouter);
 app.use('/api/investments', investmentsRouter);
@@ -484,19 +478,15 @@ async function start() {
 }
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
+async function shutdown() {
   logger.info('Shutting down...');
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
-  await closePool();
+  await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down...');
-  if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
-  await closePool();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });

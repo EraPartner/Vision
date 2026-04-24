@@ -11,10 +11,13 @@ aliases: [adr-011, aggregation-envelope, source-metadata]
 # ADR-011: Phase 2 Aggregation Envelope Standard
 
 ## Status
-Accepted
+Accepted (Phase 9 Cutover Complete)
 
 ## Date
 2026-04-16
+
+## Updated
+2026-04-25 — Phase 9 cutover complete; `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` fallback removed from wiring (note: info.js itself stays for unrelated endpoints like portfolio-performance, net-worth, exchange-rates, etc.)
 
 ## Context
 

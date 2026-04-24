@@ -3,45 +3,50 @@ title: Admin Observability Dashboard
 type: feature
 status: active
 date: 2026-04-25
-tags: [feature, admin, observability, shadow-divergences, aggregation, migration, phase-f]
-description: Administrative dashboards for monitoring system health, database maintenance, feature flags, and aggregation shadow divergences during the Phase 2→9 migration window.
-aliases: [admin dashboard, system observability, shadow divergences, admin monitoring]
+updated: 2026-04-25
+tags: [feature, admin, observability, shadow-divergences, aggregation, migration, phase-f, phase-9-complete]
+description: Administrative dashboards for monitoring system health and database maintenance. Shadow divergence monitoring (Phase F) removed in Phase 9 after validation confirmed parity.
+aliases: [admin dashboard, system observability, admin monitoring]
 related_code:
   - apps/node-backend/src/routes/admin.js
   - apps/frontend/src/pages/DbMaintenancePage.tsx
-  - apps/frontend/src/pages/ShadowDivergencesPage.tsx
   - apps/frontend/src/lib/api/admin.ts
   - apps/frontend/src/components/layout/AppSidebar.tsx
 ---
 
-# Admin Observability Dashboard (Phase F)
+# Admin Observability Dashboard
 
 > [!abstract] Overview
-> A suite of administrative dashboards providing real-time system observability, including shadow divergence monitoring during the aggregation migration, database maintenance, and feature flag management.
+> A suite of administrative dashboards providing real-time system observability, including database maintenance and feature flag management. (Shadow divergence monitoring was removed in Phase 9 after aggregation migration validation confirmed parity.)
 
 ## Overview
 
 The admin dashboard provides operational visibility into Vision's health and performance through multiple focused pages:
 
 1. **Database Maintenance** (`/admin/db`) — Monitor table statistics and run VACUUM operations
-2. **Shadow Divergences** (`/admin/shadow-divergences`) — Track aggregation endpoint parity during Phase 2→9 migration
-3. **Feature Flags** (in-dashboard toggles) — Enable/disable experimental features
+2. **Feature Flags** (in-dashboard toggles) — Enable/disable experimental features
 
-## Shadow Divergences Monitoring (Phase F)
+> [!note] Shadow Divergences (Phase F → Removed Phase 9)
+> The Shadow Divergences page (`/admin/shadow-divergences`) was used to track aggregation endpoint parity during the Phase 2→9 migration. It has been removed as of Phase 9, along with the underlying `agg_shadow_divergences` table (dropped via migration 0009). All validation criteria were met and aggregation parity confirmed.
 
-### Purpose
+## Shadow Divergences Monitoring (Phase F → Removed Phase 9)
 
-During the migration from legacy `/api/info/*` to new `/api/aggregations/*` endpoints, the shadow middleware logs divergences between the two surfaces. This page lets operators validate parity in production without waiting for the Phase 9 cutover.
+> [!warning] Archived
+> This section documents the Shadow Divergences feature, which was active during Phase F→8 and removed in Phase 9. Kept for historical reference and to understand the migration strategy used.
 
-**Use Cases:**
+### Purpose (Historical)
+
+During the migration from legacy `/api/info/*` to new `/api/aggregations/*` endpoints, the shadow middleware logged divergences between the two surfaces. The `/admin/shadow-divergences` page allowed operators to validate parity in production without waiting for the Phase 9 cutover.
+
+**Original Use Cases:**
 - Spot which endpoints have drift above the tolerance threshold (1¢)
 - Investigate high-drift periods with detailed divergence logs
 - Validate that fixes have resolved a previously-drifting endpoint
 - Schedule the Phase 9 cutover once all endpoints show zero divergences
 
-### Data Model
+### Data Model (Removed)
 
-The `agg_shadow_divergences` table stores:
+The `agg_shadow_divergences` table was created in Phase F to store shadow divergence logs:
 - `id` — Unique row ID
 - `endpoint` — Path of the diverged endpoint (e.g., `/api/aggregations/monthly-summary`)
 - `request_params` — JSONB snapshot of the request query parameters
@@ -49,7 +54,9 @@ The `agg_shadow_divergences` table stores:
 - `divergence_count` — Total count of divergences found in that request
 - `created_at` — Timestamp when the divergence was detected
 
-### Dashboard Features
+**Removal:** This table was dropped in Phase 9 via migration 0009 after parity validation was complete.
+
+### Dashboard Features (Historical)
 
 #### Summary Card
 - **Total Divergence Count** — Grand total across all endpoints
@@ -73,12 +80,17 @@ The `agg_shadow_divergences` table stores:
 
 **Pagination:** 50 rows per page, filterable by endpoint via dropdown
 
-### Endpoints
+**Removal:** The ShadowDivergencesPage.tsx component was deleted in Phase 9; the feature is no longer available in the admin UI.
 
-#### GET /api/admin/shadow-divergences/summary
+### Endpoints (Removed in Phase 9)
 
-Per-endpoint summary with counts and timing.
+The following endpoints were removed in Phase 9 after successful parity validation:
 
+#### GET /api/admin/shadow-divergences/summary (Removed)
+
+Per-endpoint summary with counts and timing. **No longer available.**
+
+Example response (historical):
 ```json
 {
   "endpoints": [
@@ -93,15 +105,11 @@ Per-endpoint summary with counts and timing.
 }
 ```
 
-#### GET /api/admin/shadow-divergences
+#### GET /api/admin/shadow-divergences (Removed)
 
-Paginated detailed divergence log with optional endpoint filter.
+Paginated detailed divergence log with optional endpoint filter. **No longer available.**
 
-**Query Parameters:**
-- `endpoint` — Filter to single endpoint (omit for all)
-- `limit` — Results per page (default 50, max 200)
-- `offset` — Pagination offset (default 0)
-
+Example response (historical):
 ```json
 {
   "rows": [
@@ -122,7 +130,7 @@ Paginated detailed divergence log with optional endpoint filter.
 }
 ```
 
-### Workflow
+### Workflow (Historical)
 
 **Phase F→Phase 8 (Shadow Window)**
 
@@ -134,23 +142,27 @@ Paginated detailed divergence log with optional endpoint filter.
 3. Fixes are deployed and validated by checking dashboard
 4. Once zero divergences for 1+ release cycles, proceed to Phase 9
 
-**Phase 9 (Cutover)**
+**Phase 9 (Cutover) — COMPLETE**
 
-When all removal criteria are met:
-1. Remove `createAggregationShadow` middleware
-2. Remove `/api/info/*` fallback routes
-3. Decommission `agg_shadow_divergences` table (can be archived or dropped)
+Removal completed (2026-04-25):
+1. Removed `createAggregationShadow` middleware (`aggregationShadow.js`, `aggregationShadowWiring.js`)
+2. Removed `/api/info/*` aggregation fallback routes from wiring
+3. Decommissioned `agg_shadow_divergences` table (dropped via migration 0009)
+4. Removed `/api/admin/shadow-divergences*` endpoints
+5. Deleted ShadowDivergencesPage.tsx frontend component
 
-See [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for removal criteria and tracking.
+See [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for historical context and removal criteria.
 
 ## Related
 
-- [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] — Decision and removal criteria
+- [[docs/adr/016-aggregation-shadow-mode|ADR-016: Aggregation Shadow Mode]] — Historical context; now retired
+- [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011: Aggregation Envelope Standard]] — Now production path
 - [[docs/features/database-maintenance|Database Maintenance UI]] — Table stats and VACUUM operations
-- [[docs/api/admin|Admin API]] — Full endpoint documentation
-- [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] — All 146+ endpoints
+- [[docs/api/admin|Admin API]] — Full endpoint documentation (shadow endpoints removed)
+- [[docs/reference/api-endpoint-matrix|API Endpoint Matrix]] — Current endpoint count
 
 ## See Also
 
 - Feature flags are managed via the Admin UI callout in [[docs/features/settings|Settings Feature]]
 - For database health diagnostics, see [[docs/features/database-maintenance|Database Maintenance]]
+- For aggregation API details, see [[docs/api/aggregations|Aggregations API]]
