@@ -3,27 +3,53 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 export type Workspace = "budgeting" | "portfolio";
 
+const WORKSPACE_KEY = "vision_workspace";
+
+function readStoredWorkspace(): Workspace {
+  try {
+    const v = sessionStorage.getItem(WORKSPACE_KEY);
+    if (v === "portfolio" || v === "budgeting") return v;
+  } catch {}
+  return "budgeting";
+}
+
+function writeWorkspace(ws: Workspace) {
+  try {
+    sessionStorage.setItem(WORKSPACE_KEY, ws);
+  } catch {}
+}
+
 /**
  * Derives the active workspace from the current route and provides a
- * navigate-based setter. No Context or Provider needed — all state lives
- * in the router, which is already a context.
+ * navigate-based setter. Admin routes (/admin/*) are workspace-agnostic —
+ * they preserve whichever workspace was active before entering admin.
  */
 export function useWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isPortfolio = location.pathname.startsWith("/portfolio");
-  const workspace: Workspace = isPortfolio ? "portfolio" : "budgeting";
+  const path = location.pathname;
+  const isPortfolio = path.startsWith("/portfolio");
+  const isAdmin = path.startsWith("/admin");
+
+  let workspace: Workspace;
+  if (isAdmin) {
+    workspace = readStoredWorkspace();
+  } else {
+    workspace = isPortfolio ? "portfolio" : "budgeting";
+    writeWorkspace(workspace);
+  }
 
   const setWorkspace = useCallback(
     (ws: Workspace) => {
-      if (ws === "portfolio" && !location.pathname.startsWith("/portfolio")) {
+      writeWorkspace(ws);
+      if (ws === "portfolio" && !path.startsWith("/portfolio")) {
         navigate("/portfolio");
-      } else if (ws === "budgeting" && location.pathname.startsWith("/portfolio")) {
+      } else if (ws === "budgeting" && (path.startsWith("/portfolio") || path.startsWith("/admin"))) {
         navigate("/");
       }
     },
-    [navigate, location.pathname]
+    [navigate, path]
   );
 
   return { workspace, setWorkspace };
