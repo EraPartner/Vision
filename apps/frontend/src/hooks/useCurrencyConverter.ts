@@ -10,24 +10,19 @@ import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 
-interface ExchangeRate {
-  currency: string;
-  rate_to_eur: number;
-}
-
 export const EXCHANGE_RATES_QUERY_KEY_PREFIX = 'exchange-rates';
 
 export function useCurrencyConverter(targetCurrency: string) {
   const { data: exchangeData, isLoading, error } = useQuery({
     queryKey: [EXCHANGE_RATES_QUERY_KEY_PREFIX, targetCurrency],
-    queryFn: () => apiClient.request('/api/info/exchange-rates'),
+    queryFn: () => apiClient.getExchangeRates(),
     staleTime: 60_000,
   });
 
   const ratesToEur: Record<string, number> = useMemo(() => ({
     EUR: 1,
     ...Object.fromEntries(
-      (exchangeData?.rates ?? []).map((r: ExchangeRate) => [
+      (exchangeData?.rates ?? []).map((r) => [
         r.currency,
         Number(r.rate_to_eur),
       ])

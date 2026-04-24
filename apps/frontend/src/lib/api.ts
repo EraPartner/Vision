@@ -111,6 +111,8 @@ export const apiClient = {
     getPortfolioPerformance: info.getPortfolioPerformance,
     getNetWorth: info.getNetWorth,
     refreshMaterializedViews: info.refreshMaterializedViews,
+    getExchangeRates: info.getExchangeRates,
+    refreshExchangeRates: info.refreshExchangeRates,
 
     // Splits / owes
     getOwedSummary: splits.getOwedSummary,
@@ -191,4 +193,5 @@ export type {
     ToolResultPayload,
 } from '@/types/aiChat';
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
+export type { ExchangeRate, ExchangeRatesData } from '@/lib/api/info';
 export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';

@@ -234,3 +234,24 @@ export function getNetWorth(params?: {
 export function refreshMaterializedViews(): Promise<{ message: string; duration_ms: number }> {
     return apiRequest('/api/info/refresh-views', { method: 'POST' });
 }
+
+export interface ExchangeRate {
+    currency: string;
+    rate_to_eur: number;
+    rate_date: string;
+    fetched_at: string;
+}
+
+export interface ExchangeRatesData {
+    total_rates: number;
+    rates: ExchangeRate[];
+    fallback_rates: Record<string, number>;
+}
+
+export function getExchangeRates(): Promise<ExchangeRatesData> {
+    return apiRequest('/api/info/exchange-rates');
+}
+
+export function refreshExchangeRates(): Promise<{ message: string }> {
+    return apiRequest('/api/info/exchange-rates/refresh', { method: 'POST' });
+}

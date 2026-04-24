@@ -4,25 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Database, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
+import type { ExchangeRatesData } from "@/lib/api/info";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { formatDateTimeStringWithAppSettings } from "@/components/shared/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
-
-interface ExchangeRate {
-    currency: string;
-    rate_to_eur: number;
-    rate_date: string;
-    fetched_at: string;
-}
-
-interface ExchangeRatesData {
-    total_rates: number;
-    rates: ExchangeRate[];
-    fallback_rates: Record<string, number>;
-}
 
 export default function ExchangeRatesPage() {
     const { t } = useLanguage();
@@ -33,12 +21,12 @@ export default function ExchangeRatesPage() {
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
         queryKey: ["exchangeRates"],
-        queryFn: () => apiClient.request("/api/info/exchange-rates"),
+        queryFn: () => apiClient.getExchangeRates(),
         staleTime: 60_000,
     });
 
     const refreshMutation = useMutation({
-        mutationFn: () => apiClient.request("/api/info/exchange-rates/refresh", { method: "POST" }),
+        mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["exchangeRates"] });
             toast.success(t('exchangeRates.refreshSuccess'));
