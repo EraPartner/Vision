@@ -19,7 +19,7 @@ router.get('/:id/bank-accounts', validateIdParam, async (req, res) => {
   const recipientId = parseInt(req.params.id, 10);
   const activeOnly = req.query.active !== 'false';
   const accounts = await recipientBankAccountRepository.getByRecipientId(recipientId, activeOnly);
-  res.ok(accounts, { pagination: { total: accounts.length, limit: accounts.length, offset: 0 } });
+  res.ok({ items: accounts, total: accounts.length });
 });
 
 router.post('/:id/bank-accounts', validateIdParam, async (req, res) => {
