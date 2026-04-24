@@ -8,6 +8,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import type { TransactionUpdate } from "@/types/api";
 import type { TableTransaction, InfoEditableField } from "../types";
 
@@ -232,6 +233,9 @@ export function TransactionInfoDialog({
                                     </div>
                                 ) : null
                             ))}
+                            <div className="pt-3">
+                                <AttachmentPanel transactionId={txn.id} />
+                            </div>
                         </div>
                     );
                 })()}
