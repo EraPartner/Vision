@@ -161,8 +161,9 @@ export default function MarketLookupPage() {
     queryKey: ["market-search", debouncedSearch],
     queryFn: async () => {
       const res = await fetch(`${API_BASE_URL}/api/market/search?q=${encodeURIComponent(debouncedSearch)}`);
-      if (!res.ok) return { items: [] };
-      return res.json() as Promise<{ items: SearchResult[] }>;
+      if (!res.ok) return { items: [] as SearchResult[] };
+      const envelope = await res.json() as { data: { items: SearchResult[] } };
+      return envelope.data;
     },
     enabled: debouncedSearch.length >= 1,
     staleTime: 60_000,
@@ -174,8 +175,8 @@ export default function MarketLookupPage() {
     queryFn: async () => {
       const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}`);
       if (!res.ok) throw new Error("Quote fetch failed");
-      const data = await res.json() as { quotes: Quote[] };
-      return data.quotes[0] || null;
+      const envelope = await res.json() as { data: { quotes: Quote[] } };
+      return envelope.data.quotes[0] || null;
     },
     enabled: !!effectiveSelectedSymbol,
     staleTime: 30_000,
@@ -190,7 +191,8 @@ export default function MarketLookupPage() {
         `${API_BASE_URL}/api/market/chart?symbol=${encodeURIComponent(effectiveSelectedSymbol!)}&range=${selectedRange.range}&interval=${selectedRange.interval}`
       );
       if (!res.ok) throw new Error("Chart fetch failed");
-      return res.json() as Promise<{ symbol: string; currency: string; points: ChartPoint[] }>;
+      const envelope = await res.json() as { data: { symbol: string; currency: string; points: ChartPoint[] } };
+      return envelope.data;
     },
     enabled: !!effectiveSelectedSymbol,
     staleTime: 60_000,
@@ -202,7 +204,8 @@ export default function MarketLookupPage() {
     queryFn: async () => {
       const res = await fetch(`${API_BASE_URL}/api/market/news?symbols=${encodeURIComponent(effectiveSelectedSymbol!)}&count=10`);
       if (!res.ok) throw new Error("News fetch failed");
-      return res.json() as Promise<{ articles: NewsArticle[] }>;
+      const envelope = await res.json() as { data: { articles: NewsArticle[] } };
+      return envelope.data;
     },
     enabled: !!effectiveSelectedSymbol,
     staleTime: 120_000,

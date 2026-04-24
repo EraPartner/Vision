@@ -9,6 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { useSettings } from "@/contexts/SettingsContext";
 import { getSankeyFlow } from "@/lib/api/aggregations";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { SankeyChart } from "./SankeyChart";
 
@@ -76,24 +77,21 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
               onToggle={onToggleExclusion}
               exclusionsApply={exclusionsApply}
             />
-            <label
-              htmlFor="sankey-year-select"
-              className="text-sm text-muted-foreground whitespace-nowrap"
+            <Select
+              value={String(selectedYear)}
+              onValueChange={(v) => setSelectedYear(Number(v))}
             >
-              {t("statsPage.sankey.year")}
-            </label>
-            <select
-              id="sankey-year-select"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="text-sm border border-border rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-[110px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>

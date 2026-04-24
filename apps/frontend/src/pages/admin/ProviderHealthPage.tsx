@@ -10,6 +10,9 @@ import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { formatDateTimeStringWithAppSettings } from '@/components/shared/dateUtils';
+import { numberFormatToLocale } from '@/utils/currency';
 import { getProviderHealth, probeProvider } from '@/lib/api/admin';
 import type { ProviderHealth } from '@/lib/api/admin';
 
@@ -25,22 +28,28 @@ function statusBadgeClass(failures: number) {
     return 'bg-destructive/10 text-destructive';
 }
 
-function formatTs(ts: string | null, t: (key: string) => string) {
-    if (!ts) return t('admin.providers.never');
-    return new Date(ts).toLocaleString();
+function formatTs(
+    ts: string | null,
+    neverLabel: string,
+    dateFormat: string,
+    locale: string,
+) {
+    if (!ts) return neverLabel;
+    return formatDateTimeStringWithAppSettings(ts, dateFormat, locale);
 }
 
-function ProviderRow({
-    provider,
-    onProbe,
-    isProbing,
-    t,
-}: {
+interface ProviderRowProps {
     provider: ProviderHealth;
     onProbe: (name: string) => void;
     isProbing: boolean;
-    t: (key: string) => string;
-}) {
+}
+
+function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
+    const { t } = useLanguage();
+    const { appSettings } = useAppSettings();
+    const locale = numberFormatToLocale(appSettings.numberFormat);
+    const dateFormat = appSettings.dateFormat;
+    const neverLabel = t('admin.providers.never');
     const [expanded, setExpanded] = useState(false);
 
     return (
@@ -58,7 +67,7 @@ function ProviderRow({
                     </span>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                    {formatTs(provider.last_success_at, t)}
+                    {formatTs(provider.last_success_at, neverLabel, dateFormat, locale)}
                 </TableCell>
                 <TableCell>
                     <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(provider.consecutive_failures)}`}>
@@ -66,7 +75,7 @@ function ProviderRow({
                     </span>
                 </TableCell>
                 <TableCell>
-                    {provider.last_error ? (
+                    {provider.last_error && provider.consecutive_failures > 0 ? (
                         <button
                             onClick={() => setExpanded((v) => !v)}
                             className="text-xs text-destructive hover:underline text-left max-w-[200px] truncate block"
@@ -92,13 +101,13 @@ function ProviderRow({
                     </Button>
                 </TableCell>
             </TableRow>
-            {expanded && provider.last_error && (
+            {expanded && provider.last_error && provider.consecutive_failures > 0 && (
                 <TableRow>
                     <TableCell colSpan={6} className="bg-destructive/5 text-xs text-destructive font-mono py-2 px-4">
                         {provider.last_error}
                         {provider.last_error_at && (
                             <span className="ml-2 text-muted-foreground">
-                                ({formatTs(provider.last_error_at, t)})
+                                ({formatTs(provider.last_error_at, neverLabel, dateFormat, locale)})
                             </span>
                         )}
                     </TableCell>
@@ -125,17 +134,18 @@ export default function ProviderHealthPage() {
             setProbingSet((s) => new Set(s).add(name));
         },
         onSuccess: (result) => {
+            const label = result.provider.label ?? result.provider.provider ?? String(result.provider);
             if (result.ok) {
-                toast.success(t('admin.providers.probeOk').replace('{provider}', result.provider));
+                toast.success(t('admin.providers.probeOk', { provider: label }));
             } else {
-                toast.error(t('admin.providers.probeFail').replace('{provider}', result.provider), {
+                toast.error(t('admin.providers.probeFail', { provider: label }), {
                     description: result.error,
                 });
             }
             void qc.invalidateQueries({ queryKey: ['admin', 'provider-health'] });
         },
         onError: (_err, name) => {
-            toast.error(t('admin.providers.probeError').replace('{provider}', name));
+            toast.error(t('admin.providers.probeError', { provider: name }));
         },
         onSettled: (_data, _err, name) => {
             setProbingSet((s) => {
@@ -172,9 +182,9 @@ export default function ProviderHealthPage() {
                         <TableBody>
                             {isLoading ? (
                                 Array.from({ length: 7 }).map((_, i) => (
-                                    <TableRow key={i}>
+                                    <TableRow key={`skeleton-row-${i}`}>
                                         {Array.from({ length: 6 }).map((__, j) => (
-                                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                                            <TableCell key={`skeleton-cell-${i}-${j}`}><Skeleton className="h-4 w-full" /></TableCell>
                                         ))}
                                     </TableRow>
                                 ))
@@ -185,7 +195,6 @@ export default function ProviderHealthPage() {
                                         provider={p}
                                         onProbe={(name) => probeMutation.mutate(name)}
                                         isProbing={probingSet.has(p.provider)}
-                                        t={t}
                                     />
                                 ))
                             )}

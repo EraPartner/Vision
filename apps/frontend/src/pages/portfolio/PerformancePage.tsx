@@ -61,10 +61,22 @@ export default function PerformancePage() {
 
     const monthLabelLocale = useMemo(() => (language === "nl" ? "nl-NL" : "en-US"), [language]);
 
-    const monthTickFormatter = useMemo(
-        () => new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" }),
-        [monthLabelLocale],
-    );
+    const xTickFormatter = useMemo(() => {
+        if (selectedPeriod === "1m" || selectedPeriod === "3m" || selectedPeriod === "6m") {
+            return new Intl.DateTimeFormat(monthLabelLocale, { day: "numeric", month: "short" });
+        }
+        return new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" });
+    }, [monthLabelLocale, selectedPeriod]);
+
+    // For short periods, use function-based lower bound to zoom into data range.
+    // String 'auto' alone still includes baseValue=0 for AreaChart fills.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const yDomain = useMemo((): [any, any] => {
+        if (selectedPeriod === "1m" || selectedPeriod === "3m") {
+            return [(dataMin: number) => Math.max(0, dataMin * 0.97), "auto"];
+        }
+        return [0, "auto"];
+    }, [selectedPeriod]);
 
     const snapshots = portfolioPerformanceData?.snapshots ?? [];
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
@@ -236,13 +248,14 @@ export default function PerformancePage() {
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
                                     interval="preserveStartEnd"
-                                    minTickGap={20}
-                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
+                                    minTickGap={40}
+                                    tickFormatter={(value) => xTickFormatter.format(parseISO(String(value)))}
                                 />
                                 <YAxis
                                     width={110}
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
+                                    domain={yDomain}
                                     tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
                                 />
                                 <Tooltip
@@ -344,8 +357,8 @@ export default function PerformancePage() {
                                     tick={{ fontSize: 12 }}
                                     className="fill-muted-foreground"
                                     interval="preserveStartEnd"
-                                    minTickGap={20}
-                                    tickFormatter={(value) => monthTickFormatter.format(parseISO(String(value)))}
+                                    minTickGap={40}
+                                    tickFormatter={(value) => xTickFormatter.format(parseISO(String(value)))}
                                 />
                                 <YAxis
                                     tick={{ fontSize: 12 }}

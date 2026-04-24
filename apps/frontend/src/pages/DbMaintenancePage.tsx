@@ -73,22 +73,16 @@ function TableStatRow({
         }
     }
 
-    const statsStale = !row.last_autovacuum && !row.last_autoanalyze;
-
     return (
         <TableRow>
             <TableCell className="font-mono text-xs">{row.table_name}</TableCell>
-            <TableCell className={`text-right tabular-nums ${statsStale ? 'text-muted-foreground' : ''}`}>
-                {statsStale ? '—' : Number(row.live_rows).toLocaleString()}
+            <TableCell className="text-right tabular-nums">
+                {Number(row.live_rows).toLocaleString()}
             </TableCell>
             <TableCell className="text-right tabular-nums">
-                {statsStale ? (
-                    <span className="text-muted-foreground">—</span>
-                ) : (
-                    <span className={Number(row.dead_rows) > 1000 ? 'text-yellow-600' : ''}>
-                        {Number(row.dead_rows).toLocaleString()}
-                    </span>
-                )}
+                <span className={Number(row.dead_rows) > 1000 ? 'text-yellow-600' : ''}>
+                    {Number(row.dead_rows).toLocaleString()}
+                </span>
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">{fmt(row.last_autovacuum)}</TableCell>
             <TableCell className="text-xs text-muted-foreground">{fmt(row.last_autoanalyze)}</TableCell>
