@@ -12,6 +12,7 @@ export const METHOD_COLORS: Record<string, string> = {
     prophet_lite: getChartColor(4),
     monte_carlo_parametric: getChartColor(5),
     monte_carlo_block_bootstrap: getChartColor(6),
+    ensemble_imse: getChartColor(7),
 };
 
 export const MC_METHOD_IDS: ReadonlySet<string> = new Set([

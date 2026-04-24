@@ -42,8 +42,18 @@ const ALL_METHOD_IDS: readonly string[] = [
     "ewma",
     "holt_winters",
     "prophet_lite",
+    "ensemble_imse",
     "monte_carlo_parametric",
     "monte_carlo_block_bootstrap",
+];
+
+const DEFAULT_VISIBLE_METHOD_IDS: readonly string[] = [
+    "simple_avg",
+    "weighted_avg",
+    "ewma",
+    "holt_winters",
+    "prophet_lite",
+    "ensemble_imse",
 ];
 
 const BORDER_COLOR = "hsl(var(--border))";
@@ -81,7 +91,7 @@ export function CashFlowForecastChart({
     const [showDiagnostics, setShowDiagnostics] = useState(false);
 
     const [visibleMethodIds, setVisibleMethodIds] = useState<Set<string>>(
-        () => new Set(ALL_METHOD_IDS),
+        () => new Set(DEFAULT_VISIBLE_METHOD_IDS),
     );
 
     const queryKey = [
