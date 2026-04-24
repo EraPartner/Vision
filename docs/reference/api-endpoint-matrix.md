@@ -3,17 +3,18 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-24
-updated: 2026-04-25
+updated: 2026-04-24
+last_modified: 2026-04-24
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-6, phase-7, phase-g, phase-9, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports]
-description: Complete matrix of all 148 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-6, phase-7, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods]
+description: Complete matrix of all 150 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase 10 adds multi-method cash flow forecast endpoint. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 148 API endpoints across 20 route files (updated Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics). Use this as a quick reference to find any endpoint.
+> All 150 API endpoints across 20 route files (updated Phase E — adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -228,9 +229,9 @@ Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular sect
 | POST | `/api/reports/tax` | Generate tax PDF (placeholder; coming soon) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 | GET | `/api/reports/financial` | Legacy PDFKit endpoint (kept for one release cycle; use POST instead) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
-## Aggregations (8 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 9
+## Aggregations (10 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
-Server-computed aggregations with materialized-view/live distinction. Production path as of Phase 9 (shadow mode validation complete). Cash flow forecast added in Phase 6. Sankey flow added in Phase 7.
+Server-computed aggregations with materialized-view/live/cache distinction. Production path as of Phase 9 (shadow mode validation complete). Cash flow forecast added in Phase 6. Sankey flow added in Phase 7. Multi-method forecast added in Phase 10. Phase C adds dashboard frontend visualization with controls and diagnostics panel. Phase D adds persisted accuracy metrics and trend analysis. Phase E adds 6-hour TTL cache materialization with nightly job precompute. Phase G adds per-category breakdown with hierarchical reconciliation.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -242,6 +243,8 @@ Server-computed aggregations with materialized-view/live distinction. Production
 | GET | `/api/aggregations/bank-balances` | Account balances and history | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/cashflow-forecast` | N-month forward cash flow from planned transactions (Phase 6) | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/sankey` | Directed income→category flow graph for d3-sankey (Phase 7) | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/cashflow-forecast-methods` | Multi-method cash flow forecast for current month (Phase 10 + F, 8 forecasting methods: 7 base + inverse-MSE ensemble + walk-forward backtest; Phase G adds `include_breakdown` param for per-category breakdown) | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D) | — | [[docs/api/aggregations\|Aggregations]] |
 
 ## Info/Statistics (14 endpoints — Phase 9 Aggregation Cutover)
 
@@ -300,10 +303,10 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | Admin | 16 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
-| Aggregations (Phase 2/6) | 8 | 0 |
+| Aggregations (Phase 2/6/10/D) | 10 | 0 |
 | Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **148** | **10** |
+| **Total** | **150** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

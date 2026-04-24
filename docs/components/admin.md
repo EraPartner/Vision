@@ -128,28 +128,30 @@ export interface ProviderHealth {
   last_error_at: string | null;
   last_error: string | null;
   consecutive_failures: number;
+  updated_at: string | null;
 }
 
 export interface ProbeResult {
-  provider: string;
-  status: 'ok' | 'error';
-  message: string;
-  timestamp: string;
+  ok: boolean;
+  provider: ProviderHealth;
+  error?: string;
 }
 
 export interface RouteMetric {
-  path: string;
+  route: string;
   method: string;
+  path: string;
   count: number;
   errors: number;
+  error_rate: number;
   p50_ms: number;
   p95_ms: number;
+  window_minutes: number;
 }
 
 export interface EndpointEntry {
   method: string;
   path: string;
-  description: string;
 }
 ```
 

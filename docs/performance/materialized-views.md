@@ -2,7 +2,7 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-04-16
+date: 2026-04-25
 tags: [performance, database, materialized-views, aggregations, optimization, phase-1]
 description: PostgreSQL materialized views and trigger-maintained tables for pre-computing dashboard aggregations. Phase 1 aggregation refactor.
 aliases: [materialized views, pre-computed queries, dashboard optimization, aggregation tables, trigger-maintained tables]
@@ -47,6 +47,18 @@ LEFT JOIN categories c ON ...
 WHERE t.date >= date_trunc('month', CURRENT_DATE) - interval '12 months'
 GROUP BY month_start, month, year, t.currency, c.id
 ```
+
+**Fast Path (Recent Months Only):**
+
+`getMonthlyFinancialSummary()` in `infoRepositoryMonthly.js` uses a fast-path optimization to read from `mv_monthly_summary` when all of the following conditions are met:
+- `allTime=false` (default; requesting recent months only, not full history)
+- No category exclusions (`excluded_category_ids` is empty)
+- No recipient exclusions (`excluded_recipient_ids` is empty)
+- MV is available (has been refreshed)
+
+When all conditions are true, the query skips live SQL and returns aggregated data directly from the MV (~5–10ms). **When `allTime=true`, the fast path is always bypassed** — the method executes live SQL against full transaction history to ensure complete all-time data, since MVs only retain recent months (12–24 months).
+
+See [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] line 30 for the condition: `if (!allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary'))`.
 
 ---
 
@@ -304,6 +316,7 @@ setInterval(async () => {
 3. **Use unique indexes** — Required for concurrent refresh; prevents duplicate rows
 4. **Monitor refresh times** — Long refreshes may indicate need for indexing on source tables
 5. **Set scope appropriately** — e.g., `mv_recipient_monthly` covers 24 months to keep refreshes fast
+6. **Understand scope limitations** — MVs retain recent months only, not all-time history. Queries requesting `allTime=true` (full transaction history) must always use live SQL, not MVs. Fast-path optimizations check this condition and fall back to live SQL when needed (see `mv_monthly_summary` fast path in [[#mv-monthly-summary]])
 
 ### For Trigger-Maintained Tables
 1. **Never call refresh from app code** — Triggers maintain these automatically

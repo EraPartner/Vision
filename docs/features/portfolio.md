@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-21
+date: 2026-04-25
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
@@ -311,7 +311,7 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 The Performance page architecture was significantly refactored to move heavy computations from the client to the server:
 
 **Backend enhancements (`/api/info/portfolio-performance`):**
-- New `period` query parameter: `1m|3m|6m|1y|3y|all` (default `all`) for period-filtered chart data
+- New `period` query parameter: `5d|1m|3m|6m|1y|3y|all` (default `all`) for period-filtered chart data
 - Response now includes **pre-computed metrics, heatmap, and per-investment breakdown** — not just snapshots
 - `metrics` object: `currentValue`, `totalInvested`, `totalGainLoss`, `totalReturnPct`, `annualizedReturn`, `realReturnPct`, `cumulativeInflation`
 - `heatmap` object: contribution-adjusted monthly returns per year-month (fixed formula: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`)
@@ -335,6 +335,10 @@ The Performance page architecture was significantly refactored to move heavy com
 - Payload for 1-month view: ~1000 snapshot rows → ~30 rows + metrics + heatmap + breakdown
 - Client-side memo chains: 6 heavy → 2 lightweight
 - **Heatmap accuracy fix**: Contribution-adjusted returns now correctly account for cash flows; old formula conflated deposits/withdrawals with investment performance
+
+**Short-period chart formatting:**
+- **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks display day + month (e.g., "15 Jan"). For periods > 6 months (1y, 3y, all), ticks display month + year (e.g., "Jan 26"). Locale-aware formatting follows app language (en-US/nl-NL) for month names.
+- **Y-axis adaptive domain**: For short periods (5d, 1m, 3m), the Y-axis uses `auto/auto` domain to zoom into the data range and highlight price fluctuations. For longer periods (≥ 6m), Y-axis uses `0/auto` domain to anchor at zero, showing full historical context.
 
 Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 

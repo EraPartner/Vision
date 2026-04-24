@@ -2,10 +2,10 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-24
+date: 2026-04-25
 updated: 2026-04-25
-tags: [i18n, translations, localization, internationalization, phase-6, phase-f, phase-9, admin, observability]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase F adds 60 admin observability keys.
+tags: [i18n, translations, localization, internationalization, phase-6, phase-f, phase-9, phase-c, admin, observability, cash-flow-forecast]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
 ---
@@ -191,6 +191,20 @@ bun run build
 - `export.downloading` — "Generating…"
 - `export.comingSoon` — "This report type is not yet available — a placeholder PDF will be generated."
 
+**Phase C (2026-04-25):**
+- `cashflow.forecastTitle` — "Cash Flow Forecast" (chart title)
+- `cashflow.forecastDesc` — "7-method statistical forecast with confidence bands" (subtitle)
+- `cashflow.cumulative` — "Cumulative Balance" (view toggle tab)
+- `cashflow.dailyNet` — "Daily Net" (view toggle tab)
+- `cashflow.diagnostics` — "Diagnostics" (diagnostics panel button)
+- `cashflow.loadError` — "Failed to load forecast data" (error message)
+- `cashflow.diagnostics.title` — "Accuracy Metrics"
+- `cashflow.diagnostics.mae` — "Mean Absolute Error"
+- `cashflow.diagnostics.rmse` — "Root Mean Squared Error"
+- `cashflow.diagnostics.mape` — "Mean Absolute % Error"
+- `cashflow.diagnostics.rank` — "Rank"
+- `cashflow.diagnostics.ensembleWeights` — "Suggested Ensemble Weights"
+
 **Phase 9 (2026-04-20):**
 - `settings.tab.appearance` — Appearance settings tab label
 - `settings.appearance.variant` — Theme variant label
@@ -216,6 +230,9 @@ bun run build
 
 **Phase 9 (2026-04-19):**
 - `onboarding.persist.failed` — Error toast shown when onboarding state fails to persist
+
+**Portfolio Performance Period (2026-04-25):**
+- `performance.period.5d` — "5 Days" (short-period chart view for daily data inspection)
 
 **Earlier phases:**
 - `addInv.desc.metals`

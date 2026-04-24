@@ -2,16 +2,28 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-04-24
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, decimal, money, cashflow-forecast]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes cash flow forecast from planned transactions
-aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast]
+date: 2026-04-25
+updated: 2026-04-25
+last_modified: 2026-04-25
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-g, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics (Phase D), nightly cache materialization (Phase E), and per-category breakdown with reconciliation (Phase G)
+aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
   - apps/node-backend/src/services/calculations/aggregation/
+  - apps/node-backend/src/services/calculations/forecast/
+  - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
+  - apps/node-backend/src/repositories/infoRepositoryMonthly.js
+  - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
+  - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
+  - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
   - apps/frontend/src/lib/api.ts
+  - apps/frontend/src/lib/api/aggregations.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
+  - apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
+  - alembic/versions/0012_cashflow_forecast_accuracy.py
+  - alembic/versions/0013_cashflow_forecast_mc.py
 ---
 
 # Aggregations API
@@ -64,8 +76,8 @@ All endpoints follow the unified response envelope (ADR-026) with a nested aggre
 | Field | Type | Meaning |
 |-------|------|---------|
 | `data.data` | object | Endpoint-specific aggregation result (see endpoint sections) |
-| `data.meta.source` | `'mv' \| 'live'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions) |
-| `data.meta.computedAt` | ISO 8601 timestamp | When the aggregation was computed |
+| `data.meta.source` | `'mv' \| 'live' \| 'cache'` | `'mv'` = served from materialized view (no exclusions); `'live'` = dynamically computed (due to category or recipient exclusions or custom params); `'cache'` = served from 6-hour TTL cache (Phase E cash flow forecast only) |
+| `data.meta.computedAt` | ISO 8601 timestamp | When the aggregation was computed or cached |
 
 **Frontend unwrapping:** After `unwrapEnvelope()` strips the outer `ok/meta` layer, consumers receive `{ data, meta: { source, computedAt } }` (the aggregation envelope).
 
@@ -88,6 +100,7 @@ Summary of financial totals per month.
 | `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
 | `excluded_category_ids[]` | integer[] | [] | Categories to exclude from totals |
 | `excluded_recipient_ids[]` | integer[] | [] | Recipients to exclude from totals |
+| `all_time` | boolean | false | When `true`, return full all-time history; when `false`, return recent months only. Always bypasses MV fast-path and uses live SQL for complete accuracy |
 
 **Response (data field):**
 
@@ -127,6 +140,12 @@ const envelope = await apiClient.getAggregationMonthlySummary({
 // envelope.data.months[n] → latest month with transaction_count > 0
 // envelope.meta.source → 'mv' or 'live'
 ```
+
+**Implementation Notes:**
+
+- **MV Fast-Path Optimization**: When `all_time=false` and no category/recipient exclusions are present, the backend reads from `mv_monthly_summary` (recent months only, ~5–10ms response). Otherwise, live SQL executes against full transaction history.
+- **All-Time Bypass**: When `all_time=true`, the fast path is unconditionally bypassed—live SQL always executes to guarantee complete all-time history. MVs retain only the last 12 months, insufficient for full history queries. See [[docs/performance/materialized-views#mv-monthly-summary]] for details.
+- **Historical FX Conversion**: Each month's transactions are converted using date-specific FX rates (not latest rates), preserving month-over-month stability across restarts and rate cache refreshes.
 
 ---
 
@@ -454,6 +473,347 @@ When `excluded_category_ids[]` or `excluded_recipient_ids[]` are provided:
 - Backend always returns `meta.source === 'live'` (computed on-demand due to exclusions)
 
 See [[docs/features/sankey-flow|Sankey Flow Feature]] for visualization details.
+
+### Multi-Method Cash Flow Forecast (Phase 10 + F)
+
+Real-time cash flow forecast for the current month using eight forecasting methods (7 base + inverse-MSE ensemble) with ensemble diagnostics via walk-forward backtesting.
+
+**Path:** `GET /api/aggregations/cashflow-forecast-methods`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `currency` | string | EUR | — | Target currency (3-letter code, case-insensitive) |
+| `excluded_category_ids[]` | integer[] | [] | — | Categories to exclude |
+| `excluded_recipient_ids[]` | integer[] | [] | — | Recipients to exclude |
+| `history_months` | integer | 36 | 120 | Historical window for training (days = history_months × 30) |
+| `mc_paths` | integer | 1000 | 5000 | Monte Carlo simulation paths per method |
+| `mc_percentiles[]` | integer[] | [10,50,90] | — | Percentiles for MC confidence bands (e.g., `[5,25,75,95]`) |
+| `include_planned` | boolean | false | — | Include pending planned transactions in cumulative overlay? |
+| `include_backtest` | boolean | true | — | Include walk-forward backtest diagnostics (MAE/RMSE/MAPE)? |
+| `include_breakdown` | boolean | false | — | Include per-category breakdown with reconciliation to aggregate (Phase G)? |
+
+**Response (data field):**
+
+```json
+{
+  "month": "2026-04",
+  "currency": "EUR",
+  "days_in_month": 30,
+  "current_day": 24,
+  "actual": [
+    { "date": "2026-04-01", "net": 150.50, "cumulative": 150.50 },
+    { "date": "2026-04-02", "net": -25.00, "cumulative": 125.50 },
+    { "date": "2026-04-03", "net": null, "cumulative": null }
+  ],
+  "planned": [
+    { "date": "2026-04-25", "net": -1200.00 },
+    { "date": "2026-04-30", "net": 3500.00 }
+  ],
+  "methods": [
+    {
+      "id": "simple_avg",
+      "label": "Simple Average",
+      "daily": [
+        { "date": "2026-04-25", "value": 45.30 },
+        { "date": "2026-04-26", "value": 40.15 },
+        { "date": "2026-04-27", "value": 48.90 }
+      ],
+      "cumulative": [
+        { "date": "2026-04-01", "value": 150.50 },
+        { "date": "2026-04-24", "value": 1245.70 },
+        { "date": "2026-04-25", "value": 1291.00 }
+      ],
+      "bands": null,
+      "error": null
+    },
+    {
+      "id": "monte_carlo_parametric",
+      "label": "Monte Carlo (Parametric)",
+      "daily": [
+        { "date": "2026-04-25", "value": 42.80 },
+        { "date": "2026-04-26", "value": 38.60 },
+        { "date": "2026-04-27", "value": 51.20 }
+      ],
+      "cumulative": [
+        { "date": "2026-04-24", "value": 1245.70 },
+        { "date": "2026-04-25", "value": 1288.50 }
+      ],
+      "bands": {
+        "p10": [
+          { "date": "2026-04-25", "value": 30.50 },
+          { "date": "2026-04-26", "value": 28.20 }
+        ],
+        "p50": [
+          { "date": "2026-04-25", "value": 42.80 },
+          { "date": "2026-04-26", "value": 38.60 }
+        ],
+        "p90": [
+          { "date": "2026-04-25", "value": 55.10 },
+          { "date": "2026-04-26", "value": 49.00 }
+        ]
+      },
+      "error": null
+    }
+  ],
+  "diagnostics": {
+    "history_months": 36,
+    "backtest": [
+      {
+        "method_id": "simple_avg",
+        "label": "Simple Average",
+        "mae": 125.45,
+        "rmse": 165.30,
+        "mape": 8.2,
+        "months": 36,
+        "per_month": [
+          {
+            "month": "2025-12",
+            "mae": 115.20,
+            "rmse": 155.80,
+            "mape": 7.8,
+            "sample_days": 28
+          }
+        ]
+      }
+    ]
+  },
+  "history_months": 36,
+  "category_breakdown": [
+    {
+      "category_id": 5,
+      "general": "Groceries",
+      "detail": "Supermarket",
+      "actual": [
+        { "date": "2026-04-01", "net": 45.50, "cumulative": 45.50 },
+        { "date": "2026-04-02", "net": -10.00, "cumulative": 35.50 }
+      ],
+      "forecast": [
+        { "date": "2026-04-25", "value": 42.15 },
+        { "date": "2026-04-26", "value": 48.30 }
+      ],
+      "cumulative": [
+        { "date": "2026-04-01", "value": 45.50 },
+        { "date": "2026-04-25", "value": 1234.65 }
+      ]
+    }
+  ]
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `month` | string | `YYYY-MM` current month |
+| `currency` | string | Target currency |
+| `days_in_month` | integer | Total days in current month (28-31) |
+| `current_day` | integer | Today's day-of-month (1-31) |
+| `actual[]` | array | Realized daily net cash flow (past and today) |
+| `actual[].date` | string | ISO date (YYYY-MM-DD) |
+| `actual[].net` | number \| null | Daily net (null for future dates) |
+| `actual[].cumulative` | number \| null | Cumulative through date (null for future) |
+| `planned[]` | array | Pending planned transaction dates (if `include_planned=true`) |
+| `planned[].date` | string | Planned date |
+| `planned[].net` | number | Planned net amount |
+| `methods[].id` | string | Method identifier: `simple_avg`, `weighted_avg`, `ewma`, `holt_winters`, `prophet_lite`, `monte_carlo_parametric`, `monte_carlo_block_bootstrap` |
+| `methods[].label` | string | Human-readable method name |
+| `methods[].daily[]` | array | Daily forecast values (null for past, forecast for future) |
+| `methods[].cumulative[]` | array | Cumulative sum including actual-to-date and method's forecast |
+| `methods[].bands` | object \| null | Confidence bands (only for MC methods); `{ p10: [], p50: [], p90: [], ... }` per requested percentile |
+| `methods[].error` | string \| null | Error code if method failed (e.g., `"forecast_failed"`) |
+| `diagnostics` | object \| null | Walk-forward backtest results (null if `include_backtest=false`) |
+| `diagnostics.backtest[].mae` | number | Mean Absolute Error (EUR) across all historical months |
+| `diagnostics.backtest[].rmse` | number | Root Mean Squared Error (EUR) |
+| `diagnostics.backtest[].mape` | number | Mean Absolute Percentage Error (%) |
+| `diagnostics.backtest[].months` | integer | Number of months in backtest window |
+| `diagnostics.backtest[].per_month[]` | array | Per-month accuracy breakdown |
+| `category_breakdown[]` | array | Per-category breakdown with reconciliation (only if `include_breakdown=true`, Phase G) |
+| `category_breakdown[].category_id` | number \| null | Category ID; null for uncategorized |
+| `category_breakdown[].general` | string | General category name (e.g., "Groceries") |
+| `category_breakdown[].detail` | string | Detail category name (e.g., "Supermarket") |
+| `category_breakdown[].actual[]` | array | Per-category realized daily net (past and today) with cumulative |
+| `category_breakdown[].forecast[]` | array | Per-category simple-average forecast (reconciled) |
+| `category_breakdown[].cumulative[]` | array | Per-category cumulative series (actual + forecast) |
+
+**Eight Forecasting Methods:**
+
+| Method ID | Label | Type | Description |
+|-----------|-------|------|-------------|
+| `simple_avg` | Simple Average | Point | Per-day-of-month mean across history |
+| `weighted_avg` | Weighted Average | Point | Linear recency weights (newer days matter more) |
+| `ewma` | Exponential Moving Average | Point | Exponential smoothing (α=0.15) on daily flow |
+| `holt_winters` | Holt-Winters | Point | Double exponential smoothing with weekly + monthly seasonality (M1=7, M2=30); 3⁴ grid search |
+| `prophet_lite` | Prophet Lite | Point | Piecewise-linear trend + Fourier (K=3 weekly, K=10 yearly) + Belgian holiday dummies; needs ≥60 days or returns zeros |
+| `monte_carlo_parametric` | Monte Carlo (Parametric) | Distribution | Gaussian sampling per (day-of-week, day-of-month) bucket; includes confidence bands |
+| `monte_carlo_block_bootstrap` | Monte Carlo (Block Bootstrap) | Distribution | Stationary block bootstrap over detrended residuals (L=7 block length); includes confidence bands |
+| `ensemble_imse` | Ensemble (inv-MSE) | Combination | Weighted average of 5 point methods using inverse-MSE (1/RMSE²) weights from historical accuracy; falls back to equal weights when accuracy data unavailable |
+
+**Determinism & Reproducibility:**
+
+Each Monte Carlo method uses a seeded PRNG derived from `hash(userId | yyyymm | filterHash)` to ensure:
+- Same user, same month, same filters → identical samples across requests
+- Enables ensemble combination and cross-session caching
+- `filterHash` includes currency, excluded categories, excluded recipients, and `include_planned` flag
+
+See [[docs/services/calculations/forecast|Forecast Service]] for implementation details.
+
+**Caching (Phase E):**
+
+When using default parameters (mc_paths=1000, mc_percentiles=[10,50,90]), responses are served from a 6-hour TTL cache:
+- `meta.source === 'cache'` indicates cached result (likely within last 6 hours, from nightly pre-compute)
+- `meta.source === 'live'` indicates freshly computed result (custom parameters or cache miss/expiry)
+- Nightly job (`refreshCashflowForecastMc`) precomputes forecasts for all active users at ~02:00 UTC
+- Cache lookup is O(1) DB query (~5ms); live computation with 1000 paths ≈ 300-500ms
+
+**Ensemble Method (Phase F):**
+
+The 8th method (`ensemble_imse`) is a weighted combination of the 5 point-forecast methods:
+- Weights derived from inverse-MSE (1/RMSE²) of historical accuracy metrics in `cashflow_forecast_accuracy` table
+- Higher-performing methods (lower RMSE) receive higher weights; weights always sum to 1.0
+- Falls back to equal weights (0.2 per method) on first run or when accuracy data is unavailable (e.g., after migration)
+- Runs after all 7 base methods; excludes MC methods and any errored methods from the combination
+- Provides a data-driven forecast without requiring manual tuning
+- Ensemble diagnostics available in response: `diagnostics.ensemble_weights` shows per-method inverse-MSE weights
+
+**Frontend Integration (Phase C):**
+
+---
+
+### Cash Flow Forecast Accuracy (Phase D)
+
+Persisted monthly backtest accuracy metrics (MAE/RMSE/MAPE) per forecasting method. Enables trend analysis and sparkline visualization in the diagnostics panel.
+
+**Path:** `GET /api/aggregations/cashflow-forecast-accuracy`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `limit_months` | integer | 24 | 120 | Historical window to return (in months) |
+
+**Response (data field):**
+
+```json
+{
+  "methods": [
+    {
+      "method_id": "simple_avg",
+      "as_of_month": "2026-04",
+      "mae": 125.45,
+      "rmse": 165.30,
+      "mape": 8.2,
+      "sample_days": 28,
+      "history": [
+        {
+          "month": "2025-12",
+          "mae": 115.20,
+          "rmse": 155.80,
+          "mape": 7.8,
+          "sample_days": 28
+        },
+        {
+          "month": "2026-01",
+          "mae": 132.50,
+          "rmse": 175.20,
+          "mape": 8.5,
+          "sample_days": 31
+        },
+        {
+          "month": "2026-04",
+          "mae": 125.45,
+          "rmse": 165.30,
+          "mape": 8.2,
+          "sample_days": 24
+        }
+      ]
+    },
+    {
+      "method_id": "ewma",
+      "as_of_month": "2026-04",
+      "mae": 110.80,
+      "rmse": 150.20,
+      "mape": 7.1,
+      "sample_days": 28,
+      "history": [/* ... */]
+    }
+  ],
+  "limit_months": 24
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `methods[]` | array | Per-method accuracy records and historical trend |
+| `method_id` | string | Forecasting method identifier (same 7 methods as Phase 10) |
+| `as_of_month` | string | Latest month with accuracy data (YYYY-MM format) |
+| `mae` | number | Mean Absolute Error for latest month (EUR or currency) |
+| `rmse` | number | Root Mean Squared Error for latest month |
+| `mape` | number | Mean Absolute Percentage Error for latest month (%) |
+| `sample_days` | integer | Days included in latest month's backtest |
+| `history[]` | array | Time-series of accuracy metrics (newest first, up to `limit_months`) |
+| `history[].month` | string | Month in YYYY-MM format |
+| `history[].mae` | number | MAE for that month |
+| `history[].rmse` | number | RMSE for that month |
+| `history[].mape` | number | MAPE for that month (%) |
+| `history[].sample_days` | integer | Days in that month's backtest |
+| `limit_months` | integer | Historical window returned |
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getCashflowForecastAccuracy({
+  limit_months: 24
+});
+
+// Group by method for dashboard
+const methodAccuracy: Record<string, AccuracyMethodEntry> = {};
+envelope.data.methods.forEach((m) => {
+  methodAccuracy[m.method_id] = m;
+});
+
+// Render sparkline for each method using history array
+methodAccuracy.simple_avg.history.forEach((point) => {
+  console.log(`${point.month}: MAE=${point.mae}`);
+});
+```
+
+**Data Source & Persistence:**
+
+- Table: `cashflow_forecast_accuracy` (created by Alembic migration 0012_cashflow_forecast_accuracy)
+- UPSERT on (user_id, method_id, as_of_month) — idempotent
+- Populated by nightly batch job (Phase G) or manual updates from `/api/aggregations/cashflow-forecast-methods` backtest
+- Fallback: if table is missing, backend's `accuracyStore` falls back to in-memory Map for backward compatibility (error code 42P01)
+
+**Use Cases:**
+
+1. **Trend Analysis:** Visualize MAE improvement/degradation over time per method
+2. **Ensemble Weighting:** Inverse-MSE weights proportional to historical accuracy (Phase G)
+3. **Diagnostics Dashboard:** Sparklines in right-panel showing 24-month accuracy trends
+4. **Method Stability:** Identify which methods are consistently accurate vs. noisy
+
+---
+
+Dashboard visualization via `CashFlowForecastChart` component:
+- Multi-method chart with 8 forecasting methods rendered as line/area series (5 point + 2 MC + 1 ensemble)
+- View toggle (cumulative balance vs. daily net) via Tabs
+- Per-method visibility toggles via pill buttons
+- Monte Carlo confidence bands (P10/P90) as dashed LineSeries
+- Planned transaction overlay switch (refetches with `include_planned=true`)
+- Diagnostics panel showing backtest accuracy metrics and ensemble weight preview
+
+See [[docs/components/dashboard|Dashboard Components]] for component documentation.
+
+**Walk-Forward Backtest:**
+
+If `include_backtest=true` (default), the response includes accuracy metrics computed via walk-forward validation:
+- For each historical month, refit all 7 methods on prior `history_months` and forecast that month's actual
+- Compute MAE (mean absolute error), RMSE, and MAPE (mean absolute % error)
+- Aggregate across all historical windows; also return per-month breakdown
+- Helps identify which methods perform best on your data; ensemble Phase F will use these metrics
 
 ---
 

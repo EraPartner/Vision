@@ -2,9 +2,10 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths.
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job.
 date: 2026-04-23
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, decimal, money, precision]
+last_modified: 2026-04-24
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -1143,6 +1144,90 @@ MatViews --> DB : refreshed
 @enduml
 ```
 
+## Cash Flow Forecast Materialization (Phase E)
+
+How Monte Carlo forecast results are cached for daytime request efficiency.
+
+```plantuml
+@startuml
+!theme plain
+skinparam linetype ortho
+skinparam nodesep 30
+skinparam ranksep 40
+
+participant "Frontend" as FE
+participant "Forecast Router" as Router
+participant "Forecast Service" as Service
+participant "MC Cache Repo" as CacheRepo
+participant "Accuracy Repo" as AccuracyRepo
+database "PostgreSQL" as DB {
+  node "Cache Table" as CacheTable {
+    cashflow_forecast_mc
+  }
+  node "History Table" as HistoryTable {
+    cashflow_forecast_accuracy
+  }
+}
+
+activate FE
+FE -> Router : GET /api/aggregations/cashflow-forecast-methods\n(default params)
+activate Router
+Router -> Service : computeCashflowForecast({_forceCache: false})
+activate Service
+
+alt Cache Read (not nightly)
+  Service -> CacheRepo : get({userId, month, filterHash})
+  activate CacheRepo
+  CacheRepo -> DB : SELECT payload, computed_at
+  DB -> CacheRepo : cache row
+  deactivate CacheRepo
+  
+  alt Fresh cache (<6h) AND diagnostics OK
+    Service -> Service : return cached payload
+    Service -> Router : {source: 'cache'}
+  else Cache miss or stale
+    Service -> Service : compute live
+  end
+else Nightly Job (_forceCache: true)
+  Service -> Service : skip cache read
+  Service -> Service : compute live
+end
+
+Service -> Service : run 7 methods + backtest
+Service -> AccuracyRepo : recordAccuracy()
+activate AccuracyRepo
+AccuracyRepo -> DB : UPSERT to cashflow_forecast_accuracy
+deactivate AccuracyRepo
+
+alt Using default MC params
+  Service -> CacheRepo : upsert({userId, month, ..., payload})
+  activate CacheRepo
+  CacheRepo -> DB : INSERT ON CONFLICT UPDATE
+  DB -> CacheRepo : OK
+  deactivate CacheRepo
+end
+
+deactivate Service
+Router -> FE : {source: 'live' | 'cache', computedAt}
+deactivate Router
+deactivate FE
+
+note right of CacheRepo
+  Cache TTL: 6 hours
+  UNIQUE(user_id, month, filter_hash)
+  Index on (user_id, month)
+end note
+
+note right of Service
+  Nightly job (every 24h):
+  - Fetches active user IDs
+  - Computes for each user
+  - _forceCache=true skips read
+end note
+
+@enduml
+```
+
 ## Recipient Merge Sequence
 
 How recipients are merged and unmerged.
@@ -1236,10 +1321,12 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `price-provider-flow.puml` - Investment price updates
 - `recurring-detection-flow.puml` - Recurring transaction detection
 - `materialized-view-flow.puml` - Materialized view refresh
+- `cashflow-forecast-materialization.puml` - Phase E forecast cache with nightly job
 
 **Sequence & State Diagrams:**
 - `recipient-merge-sequence.puml` - Recipient merge workflow
 - `planned-transaction-state.puml` - PlannedTransaction lifecycle
+- `cashflow-forecast-cache-sequence.puml` - Phase E cache logic and nightly flow
 
 **System-Wide:**
 - `system-architecture.puml` - Full system overview

@@ -45,9 +45,12 @@ package "React Contexts" {
   }
 
   class WorkspaceHook {
-    +workspaceId: string
-    +workspaceName: string
-    +navigate: NavigateFunction
+    +workspace: "budgeting" | "portfolio"
+    +setWorkspace(ws): void
+    --
+    Note: Route-derived for /portfolio/*,
+    sessionStorage-persisted for /admin/*,
+    defaults to budgeting for all others
   }
 }
 

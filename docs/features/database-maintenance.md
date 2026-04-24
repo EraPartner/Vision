@@ -3,6 +3,7 @@ title: Database Maintenance UI
 type: feature
 status: active
 date: 2026-04-25
+updated: 2026-04-25
 tags: [feature, admin, database, maintenance, performance, phase-7, vacuum]
 description: Administrative interface for monitoring database statistics and running maintenance operations (VACUUM ANALYZE) on PostgreSQL tables; includes per-table and bulk operation modes.
 aliases: [db maintenance, database admin, VACUUM, table stats]
@@ -145,10 +146,10 @@ The page consists of:
    - Last vacuum timestamp
    - Last analyze timestamp
 
-2. **Row Count Staleness Caveat**:
-   - **Important:** Row counts (`live_rows`, `dead_rows`) are estimates from PostgreSQL statistics, not authoritative counts. They are only updated when VACUUM ANALYZE is run.
-   - Tables that have been inserted into but never analyzed will show `—` (dash) for both Live Rows and Dead Rows until the first VACUUM ANALYZE completes.
-   - A footnote below the statistics table explains this behavior: *"Row counts are estimates from PostgreSQL statistics. Tables never analyzed show — until VACUUM ANALYZE is run."*
+2. **Row Count Behavior**:
+   - **Important:** Row counts (`live_rows`, `dead_rows`) are estimates from PostgreSQL statistics (via `pg_stat_user_tables`), not authoritative counts. They are only updated when VACUUM ANALYZE is run.
+   - All tables display actual row counts from PostgreSQL statistics regardless of their vacuum/analyze history. Tables with no vacuum/analyze events show the last known statistics (which may be zero for newly created tables).
+   - Row count accuracy improves after running VACUUM ANALYZE, which updates the statistics.
 
 3. **Action Buttons**:
    - "Vacuum All Tables" (bulk operation)

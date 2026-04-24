@@ -204,8 +204,8 @@ Retrieve current database table statistics.
 
 **Important Note on Row Counts:**
 - `live_rows` and `dead_rows` are estimates from PostgreSQL's `pg_stat_user_tables` view, not authoritative counts
-- These estimates are only updated when VACUUM ANALYZE is executed
-- Tables inserted into but never analyzed will return `0` (represented as `—` in the frontend UI) until the first VACUUM ANALYZE run
+- These estimates are updated when VACUUM ANALYZE is executed; between runs, the values reflect the last known statistics
+- All tables display their current row count estimates regardless of vacuum/analyze history (newly created tables may show zero until their first VACUUM ANALYZE)
 - This is expected PostgreSQL behavior; see [[docs/features/database-maintenance|Database Maintenance Feature]] for context
 
 **Response:** `500 Internal Server Error`
@@ -471,16 +471,41 @@ Trigger an active on-demand health probe for a single provider.
 **Response:** `200 OK`
 
 ```json
-{ "ok": true, "provider": "binance" }
+{
+  "ok": true,
+  "provider": {
+    "provider": "binance",
+    "kind": "price",
+    "label": "Binance",
+    "last_success_at": "2026-04-24T10:30:00Z",
+    "last_error_at": null,
+    "last_error": null,
+    "consecutive_failures": 0,
+    "updated_at": "2026-04-24T10:30:00Z"
+  }
+}
 ```
 
 **Response:** `200 OK` (probe failed)
 
 ```json
-{ "ok": false, "provider": "ecb", "error": "Fetch timeout after 5000ms" }
+{
+  "ok": false,
+  "provider": {
+    "provider": "ecb",
+    "kind": "fx",
+    "label": "ECB",
+    "last_success_at": "2026-04-24T09:00:00Z",
+    "last_error_at": "2026-04-24T10:45:00Z",
+    "last_error": "Fetch timeout after 5000ms",
+    "consecutive_failures": 1,
+    "updated_at": "2026-04-24T10:45:00Z"
+  },
+  "error": "Fetch timeout after 5000ms"
+}
 ```
 
-The probe updates the `provider_health` row (calls `recordSuccess` or `recordError`). Returns `200` regardless of probe outcome — `ok: false` indicates a provider-level failure, not an API error.
+The probe updates the `provider_health` row (calls `recordSuccess` or `recordError`) and returns the full updated `ProviderHealth` object. Returns `200` regardless of probe outcome — `ok: false` indicates a provider-level failure, not an API error.
 
 **Response:** `400 Bad Request` (unknown provider)
 

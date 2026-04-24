@@ -3,9 +3,9 @@ title: Features Documentation Index
 type: features-index
 status: active
 date: 2026-04-24
-updated: 2026-04-25
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-f, phase-9, statistics-refactoring, bank-reconciliation, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability]
-description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with bank reconciliation, cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase F adds admin observability dashboards. Phase 9 completes aggregation shadow cutover.
+updated: 2026-04-24
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, bank-reconciliation, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job]
+description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with bank reconciliation, cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover.
 aliases: [features, capabilities]
 ---
 
@@ -38,7 +38,7 @@ SORT title ASC
 
 ### Planning & Scheduling
 - [[docs/features/plannedTransactions\|Planned Payments]] - Scheduled and recurring transactions, including loan support
-- [[docs/features/cash-flow-forecast\|Cash Flow Forecast]] - N-month forward projection from active planned transactions (Phase 6)
+- [[docs/features/cash-flow-forecast\|Cash Flow Forecast]] - N-month forward projection from planned transactions (Phase 6) + 8-method statistical forecast for current month (Phase 10 + F: 7 base methods + inverse-MSE ensemble) + dashboard visualization with controls and diagnostics (Phase C) + persisted accuracy metrics and trend history (Phase D) + nightly cache materialization (Phase E)
 
 ### Bank Reconciliation (Phase 6)
 - [[docs/features/bank-reconciliation\|Bank Reconciliation]] - Match bank statement entries to transactions with auto-match scoring

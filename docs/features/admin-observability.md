@@ -164,6 +164,10 @@ Removal completed (2026-04-25):
 
 See [[docs/adr/016-aggregation-shadow-mode|ADR-016]] for historical context and removal criteria.
 
+## Provider Probe Response
+
+The `POST /api/admin/providers/:provider/probe` endpoint returns a `ProbeResult` with a full `ProviderHealth` object (not a string provider name). The frontend toast accesses `result.provider.label` with fallback to `result.provider.provider` to display the provider's human-readable name. See [[docs/api/admin#post-apiadminprovidersproviderprobe]] for the full response contract.
+
 ## Admin Hub Architecture
 
 ### Settings Gating
@@ -191,7 +195,7 @@ Four entries: Overview, Database, Data Sources, Endpoints.
 | Method | Path | Description | Rate Limit |
 |--------|------|-------------|-----------|
 | GET | `/api/admin/providers/health` | List all provider health rows | 500/min |
-| POST | `/api/admin/providers/:provider/probe` | Active probe for one provider | 30/min |
+| POST | `/api/admin/providers/:provider/probe` | Active probe for one provider; returns full `ProviderHealth` object | 30/min |
 | GET | `/api/admin/metrics/requests` | Rolling request metrics per route | 500/min |
 | GET | `/api/admin/endpoints` | Static endpoint manifest | 500/min |
 | GET | `/api/admin/db/stats` | Database table statistics | 500/min |

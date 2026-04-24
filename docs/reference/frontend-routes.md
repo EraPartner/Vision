@@ -2,10 +2,10 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-03-31
-tags: [reference, frontend, routing, pages, react-router]
-description: Complete reference of all frontend routes and their page components
-aliases: [routes, pages, navigation, url paths, frontend routes]
+date: 2026-04-25
+tags: [reference, frontend, routing, pages, react-router, admin, workspace]
+description: Complete reference of all frontend routes and their page components, including admin routes and workspace-aware navigation
+aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 ---
 
 # Frontend Routes Reference
@@ -45,6 +45,17 @@ aliases: [routes, pages, navigation, url paths, frontend routes]
 | `/portfolio/market` | `MarketLookupPage` | AppLayout | Market data lookup | [[apps/frontend/src/pages/MarketLookupPage.tsx\|MarketLookupPage.tsx]] |
 | `/portfolio/tax` | `PortfolioTaxPage` | AppLayout | Portfolio tax calculations | [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]] |
 
+## Admin Routes
+
+Admin routes are workspace-agnostic and preserve the active workspace when navigating between them.
+
+| Route | Component | Layout | Description | Code |
+|-------|-----------|--------|-------------|------|
+| `/admin` | `AdminOverviewPage` | AppLayout | Admin overview with summary tiles | [[apps/frontend/src/pages/admin/AdminOverviewPage.tsx\|AdminOverviewPage.tsx]] |
+| `/admin/db` | `DbMaintenancePage` | AppLayout | Database table stats and VACUUM operations | [[apps/frontend/src/pages/DbMaintenancePage.tsx\|DbMaintenancePage.tsx]] |
+| `/admin/providers` | `ProviderHealthPage` | AppLayout | Data source health tracking (7 providers) | [[apps/frontend/src/pages/admin/ProviderHealthPage.tsx\|ProviderHealthPage.tsx]] |
+| `/admin/endpoints` | `EndpointLivenessPage` | AppLayout | Route liveness matrix with rolling metrics | [[apps/frontend/src/pages/admin/EndpointLivenessPage.tsx\|EndpointLivenessPage.tsx]] |
+
 ## Global Routes
 
 | Route | Component | Layout | Description | Code |
@@ -83,7 +94,10 @@ Routes are defined in [[apps/frontend/src/App.tsx\|App.tsx]] using React Router 
 
 Workspace switching is handled by the [[apps/frontend/src/contexts/WorkspaceContext.tsx\|useWorkspace]] hook, which derives the workspace from the current route path:
 - `/portfolio/*` → `"portfolio"` workspace
+- `/admin/*` → preserves the last active workspace from `sessionStorage` (workspace-agnostic routes)
 - Everything else → `"budgeting"` workspace
+
+**Admin Route Isolation:** When navigating to `/admin/*` pages from portfolio context, the sidebar retains the portfolio workspace and does not snap to "budgeting". The workspace switcher tabs remain functional — clicking a workspace tab navigates to the workspace root (`/portfolio` or `/`).
 
 ## Related
 

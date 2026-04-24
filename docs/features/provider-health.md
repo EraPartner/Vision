@@ -3,6 +3,7 @@ title: Provider Health Tracking
 type: feature
 status: active
 date: 2026-04-24
+updated: 2026-04-24
 tags: [feature, admin, provider-health, observability]
 description: Passive health tracking and active probing for all price, FX, and inflation data providers
 aliases: [provider health, data source health, provider monitoring]
@@ -87,7 +88,7 @@ Located at `/admin/providers` (visible only with admin mode enabled).
 | Kind | Type badge (`price` / `fx` / `inflation`) |
 | Last Success | Formatted timestamp or "Never" |
 | Failures | Consecutive failures badge |
-| Last Error | Truncated error, expandable on click |
+| Last Error | Truncated error, expandable on click (only shown when `consecutive_failures > 0`) |
 | — | "Check Now" button triggers active probe |
 
 ### Status Colors
@@ -97,6 +98,12 @@ Located at `/admin/providers` (visible only with admin mode enabled).
 | 0 | ✓ green | green |
 | 1–2 | △ amber | amber |
 | 3+ | ✗ red | red |
+
+### Error Display Behavior
+
+- The "Last Error" column and expanded error row only render when `consecutive_failures > 0`
+- This prevents stale DB error messages from appearing for providers that have recovered (failures=0)
+- Stale errors are preserved in the database but hidden from the UI until failures resume
 
 ## API Endpoints
 

@@ -3,6 +3,7 @@ title: Info & Analytics API
 type: endpoint
 status: active
 date: 2026-04-25
+updated: 2026-04-25
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements.
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -564,13 +565,14 @@ Get pre-computed portfolio performance snapshots with enriched metrics, heatmap,
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `period` | string | `all` | Period filter: `1m`, `3m`, `6m`, `1y`, `3y`, or `all` |
+| `period` | string | `all` | Period filter: `5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all` |
 | `currency` | string | EUR | Target 3-letter currency code |
 | `target_currency` | string | EUR | Alias for `currency` |
 
 Notes:
 - **Backend-computed response**: Metrics, heatmap, and per-investment breakdown are now computed server-side (no client-side computation). Client receives final aggregates ready to render.
-- **Period filtering**: `period` parameter controls which snapshots are returned for charting (1m/3m/6m/1y/3y/all). Metrics and heatmap always use full historical data.
+- **Period filtering**: `period` parameter controls which snapshots are returned for charting (5d/1m/3m/6m/1y/3y/all). Metrics and heatmap always use full historical data.
+- **Short-period (5d) support**: New 5d period enables daily data inspection. Frontend applies adaptive chart formatting for short periods (≤6m): x-axis shows day+month (e.g., "15 Jan"), y-axis uses `auto/auto` domain to zoom into data range.
 - **Downsampling**: Period-filtered snapshots are downsampled server-side to 400 points using LTTB algorithm for efficient charting.
 - **Heatmap correction**: Monthly heatmap now uses contribution-adjusted returns: `((curr.value / curr.invested) / (prev.value / prev.invested) - 1) * 100`. This fixes the old frontend formula which conflated cash deposits/withdrawals with investment performance.
 - **Pre-converted values**: Breakdown summary values are converted to target currency server-side; client receives final amounts.

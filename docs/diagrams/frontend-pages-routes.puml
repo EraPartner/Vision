@@ -138,6 +138,28 @@ package "Tax Pages" {
   }
 }
 
+package "Admin Pages (Workspace-Agnostic)" {
+  class AdminOverviewPage {
+    +Summary Tiles
+    +Links to Details
+  }
+
+  class DbMaintenancePage {
+    +Table Stats
+    +VACUUM Operations
+  }
+
+  class ProviderHealthPage {
+    +Provider Health
+    +Active Probes
+  }
+
+  class EndpointLivenessPage {
+    +Route Liveness Matrix
+    +Rolling Metrics
+  }
+}
+
 package "Error Pages" {
   class NotFound {
     +404 Page
@@ -179,6 +201,11 @@ PortfolioOverviewPage --> ExchangeRatesPage : "/portfolio/exchange-rates"
 PortfolioOverviewPage --> WatchlistPage : "/portfolio/watchlist"
 PortfolioOverviewPage --> PortfolioTaxPage : "/portfolio/tax"
 
+AppLayout --> AdminOverviewPage : "/admin"
+AdminOverviewPage --> DbMaintenancePage : "/admin/db"
+AdminOverviewPage --> ProviderHealthPage : "/admin/providers"
+AdminOverviewPage --> EndpointLivenessPage : "/admin/endpoints"
+
 note right of TaxOverviewPage
   Not lazy-loaded
   Imported directly
@@ -187,6 +214,11 @@ end note
 note right of PortfolioTaxPage
   Not lazy-loaded
   Imported directly
+end note
+
+note right of AdminOverviewPage
+  Workspace-agnostic routes
+  Preserve last active workspace
 end note
 
 @enduml

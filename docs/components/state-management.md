@@ -2,8 +2,8 @@
 title: State Management Deep Dive
 type: component
 status: active
-date: 2026-04-03
-tags: [state-management, react-query, context, frontend, patterns]
+date: 2026-04-25
+tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
 aliases: [state management, react query, context api, frontend state, data fetching]
 related_code: ["apps/frontend/src/hooks/", "apps/frontend/src/contexts/", "apps/frontend/src/lib/api.ts", "apps/frontend/src/App.tsx"]
@@ -175,7 +175,7 @@ Vision has **7 React contexts** providing global state across the application:
 | `ThemeContext` | [[apps/frontend/src/contexts/ThemeContext.tsx]] | Light/dark theme toggle | `useTheme()` |
 | `LanguageContext` | [[apps/frontend/src/contexts/LanguageContext.tsx]] | i18n language (en/nl) | `useLanguage()` |
 | `BelgianTaxProfileContext` | [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]] | Belgian tax profile data | `useBelgianTaxProfile()` |
-| `WorkspaceContext` | [[apps/frontend/src/contexts/WorkspaceContext.tsx]] | Workspace state | `useWorkspace()` |
+| `WorkspaceContext` | [[apps/frontend/src/contexts/WorkspaceContext.tsx]] | Workspace state; persists to `sessionStorage` for admin route isolation | `useWorkspace()` |
 
 ### AppSettingsContext — Detailed Analysis
 

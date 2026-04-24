@@ -3,7 +3,8 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, visx]
+updated: 2026-04-24
+tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, ensemble, visx]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
@@ -30,6 +31,8 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
 | CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
 | CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
+| CashFlowForecastChart | 8-method statistical forecast with controls, MC bands, and diagnostics (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
+| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
 | BankBalancesWidget | Bank account balance display | [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
 | MonthlySpendingChart | Monthly spending line chart (visx) | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
 
@@ -214,6 +217,152 @@ Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/c
 
 ---
 
+## CashFlowForecastChart (Phase C + F)
+
+Multi-method cash flow forecast visualization with 8 statistical forecasting methods (7 base + inverse-MSE ensemble), confidence bands, and interactive diagnostics (Phase 10 + Phase C + Phase F).
+
+### Props
+
+```typescript
+interface CashFlowForecastChartProps {
+  excludedCategoryIds?: number[];      // Categories to exclude from forecast
+  excludedRecipientIds?: number[];     // Recipients to exclude from forecast
+  currency?: string;                   // Target currency (default: EUR)
+}
+```
+
+### Features
+
+- **Multi-method ensemble** — Displays 8 forecasting methods: 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods (Parametric, Block Bootstrap) + 1 ensemble method (inverse-MSE weighted combination)
+- **View modes** — Tabs toggle between cumulative balance and daily net views
+- **Planned transaction overlay** — Switch to include pending planned transactions in cumulative forecast; triggers API refetch
+- **Per-method toggles** — Pill-button controls to show/hide individual methods on chart
+- **Monte Carlo confidence bands** — Dashed LineSeries rendering P10/P90 percentiles for MC methods
+- **Diagnostics panel** — Right-side sheet with:
+  - Backtest accuracy table (MAE, RMSE, MAPE per method, sorted by MAE)
+  - Method rank badge (1st/2nd/3rd place by accuracy)
+  - Per-method MAE sparkline for visual comparison
+  - Ensemble weights bar chart showing inverse-MSE normalized weights per method (Phase F)
+- **Diagnostics button** — Icon button to open/close sheet
+- **Self-contained data loading** — Internal `useQuery(getCashflowForecastMethods)` with params derived from props and local state
+
+### Usage
+
+```tsx
+<CashFlowForecastChart
+  currency="EUR"
+  excludedCategoryIds={[5, 10]}
+  excludedRecipientIds={[3]}
+/>
+```
+
+### Data Fetching
+
+Component calls `getCashflowForecastMethods()` from the API client with parameters:
+- `currency` (from props)
+- `excluded_category_ids[]`, `excluded_recipient_ids[]` (from props)
+- `history_months` (default 36)
+- `mc_paths` (default 1000)
+- `mc_percentiles` (default [10, 50, 90])
+- `include_planned` (from local Switch state)
+- `include_backtest` (true, always included for diagnostics)
+
+Query refetches when `includePlanned` toggle changes or props change.
+
+### Visual Design
+
+- Container: `surface-elevated premium-frame micro-lift` (glass surface)
+- Chart area: SVG with actual-to-date grey background, forecasts as colorful lines
+- MC bands: Dashed lines (P10 lower bound, P90 upper bound)
+- Legend: Colored dots with method labels below chart
+- Tooltips: Show date, method name, daily value, cumulative value on hover
+- Responsive: Mobile-friendly with stacked tabs, single-column legend
+
+### Related
+
+- [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]]
+- [[docs/components/dashboard|Dashboard Components]]
+- [[docs/api/aggregations|Aggregations API]]
+- [[docs/components/charts|Chart Primitives]]
+
+---
+
+## CashFlowForecastDiagnostics (Phase C + D + F)
+
+Right-side diagnostics sheet panel for forecast accuracy metrics, persisted accuracy history, and ensemble weight visualization.
+
+### Props
+
+```typescript
+interface CashFlowForecastDiagnosticsProps {
+  diagnostics: ForecastDiagnostics | null;  // Backtest results from API (Phase C)
+  open: boolean;                             // Sheet open state
+  onOpenChange: (open: boolean) => void;    // Callback when sheet open state changes
+}
+```
+
+### Features
+
+- **Accuracy table** — Shows MAE, RMSE, MAPE per method
+  - Sorted by MAE (ascending; lower is better)
+  - Rank badge: 🥇 1st, 🥈 2nd, 🥉 3rd place methods
+  - Per-method MAE sparkline (24-month trend from persisted accuracy history — Phase D)
+  - Helps identify best-performing forecasting method for your data
+
+- **Data loading (Phase D)** — Sheet-open triggered lazy loading
+  - Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` when open
+  - staleTime 10 minutes to avoid excessive refetch
+  - Falls back to current session backtest if Postgres table is missing (error code 42P01)
+
+- **Ensemble weights visualization (Phase F)** — Bar chart showing inverse-MSE normalized weights per method
+  - Heights represent relative weighting of each point method in ensemble combination
+  - Labeled with method name and weight percentage
+  - Updates dynamically as persisted accuracy metrics improve
+
+- **Sheet positioning** — Right side of screen, overlays chart; dismissible via close button or background click
+
+- **Informational note** — Distinguishes backtest results (current session) from persisted history (nightly updates, Phase D)
+
+### Usage
+
+```tsx
+const { diagnostics } = data; // from CashFlowForecastChart parent
+const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+
+<CashFlowForecastDiagnostics
+  diagnostics={diagnostics}
+  open={diagnosticsOpen}
+  onOpenChange={setDiagnosticsOpen}
+/>
+```
+
+### Data Sources
+
+**Phase C:** Receives `ForecastDiagnostics` object from parent chart's API response:
+- `history_months` — Training window (e.g., 36)
+- `backtest[]` — Per-method accuracy metrics (MAE, RMSE, MAPE) + per-month breakdown
+
+**Phase D:** Lazily fetches `getCashflowForecastAccuracy()` when sheet opens:
+- Per-method latest accuracy record with full history array (24 months)
+- Used to construct MAE sparklines for visual trend analysis
+- Persisted data allows tracking method stability across nightly batch updates
+
+### Visual Design
+
+- Sheet: Radix UI Sheet, right-aligned, semi-transparent overlay
+- Table: Compact rows, monospace numbers for alignment
+- Sparklines: Inline 24-point MAE trend per method (Phase D), sourced from persisted history
+- Weights chart: Horizontal stacked bar, color-coded per method
+- Typography: Tight spacing, hierarchical labels for readability
+
+### Related
+
+- [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]]
+- [[docs/components/dashboard|Dashboard Components]]
+- [[docs/api/aggregations|Aggregations API]]
+
+---
+
 ## BankBalancesWidget
 
 Displays current balances for all bank accounts.
@@ -370,8 +519,10 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 
 ## Related Documentation
 
-- [[docs/api/aggregations]] - Aggregations API (Phase 2)
+- [[docs/api/aggregations]] - Aggregations API (Phase 2, includes Phase 10 multi-method forecast and Phase D accuracy endpoint)
+- [[docs/features/cash-flow-forecast]] - Cash Flow Forecast Feature (Phase 6/10/C/D)
 - [[docs/components/index]] - Components Index
+- [[docs/components/charts]] - Chart Primitives (visx/d3)
 - [[docs/features/views]] - Dashboard view
 - [[docs/api/info]] - Legacy Info API (coexists through Phase 8)
 - [[docs/performance/materialized-views]] - Dashboard optimization

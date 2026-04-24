@@ -2,8 +2,8 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-04-17
-tags: [components, layout, navigation, design-system, phase-9, performance]
+date: 2026-04-25
+tags: [components, layout, navigation, design-system, phase-9, performance, workspace]
 description: Core layout components including sidebar, header, and app structure with emerald + gold aesthetic, optimized for Electron M1 performance
 aliases: [layout, app layout, sidebar, navigation]
 related_code: ["apps/frontend/src/components/layout"]
@@ -224,7 +224,7 @@ function App() {
 
 ## Workspace Hook
 
-The `useWorkspace()` hook provides workspace-aware navigation. It derives the active workspace from the current route path — no Context or Provider needed since all state lives in the router.
+The `useWorkspace()` hook provides workspace-aware navigation and persists the active workspace across admin routes.
 
 ### Type: Workspace
 
@@ -264,7 +264,8 @@ function WorkspaceSwitcher() {
 ### Design Notes
 
 - **No Context Provider**: Unlike other contexts in the app, `WorkspaceContext` does not export a React Context or Provider. It uses `useLocation` and `useNavigate` from React Router directly, treating the router as the state container.
-- **Route-derived**: The workspace is determined solely by whether the current path starts with `/portfolio`.
+- **Route-derived**: The workspace is determined by whether the current path starts with `/portfolio` (portfolio), or defaults to budgeting. For `/admin/*` routes, which are workspace-agnostic, the last active workspace is restored from `sessionStorage` (key: `vision_workspace`).
+- **Admin Routes**: When navigating to `/admin/*` pages from portfolio context, the sidebar retains the portfolio workspace instead of snapping to budgeting. Workspace switcher tabs still work — clicking "portfolio" navigates to `/portfolio`, clicking "budgeting" navigates to `/`.
 - **Used by**: `AppSidebar` (see [[docs/components/layout|Layout Components]]) for workspace switching in the navigation.
 
 **Code**: [[apps/frontend/src/contexts/WorkspaceContext.tsx]]
