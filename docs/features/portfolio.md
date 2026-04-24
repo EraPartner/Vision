@@ -357,6 +357,39 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[app
 
 Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]]
 
+## Cost Basis Methods (Phase 6)
+
+Portfolio tax calculations now support multiple cost basis accounting methods, configurable as a user preference in Settings.
+
+**Available methods:**
+
+1. **Weighted Average** (default) — Moving average cost per unit; commonly used for tax simplicity
+2. **FIFO** (First-In, First-Out) — Oldest lots sold first; often minimizes tax in rising markets
+3. **LIFO** (Last-In, First-Out) — Newest lots sold first; often maximizes deductions in falling markets
+
+**Selection:** User can set preferred cost basis method in Settings → General tab (`settings.general.costBasisMethod` in i18n).
+
+**Implementation:**
+
+- Backend calculation functions in `[[apps/node-backend/src/utils/portfolioMath.js]]`:
+  - `calculateCostBasis()` — Weighted average method
+  - `calculateCostBasisFIFO()` — FIFO method
+  - `calculateCostBasisLIFO()` — LIFO method
+  - All support `buy`, `sell`, `gift`, `split`, `return_of_capital`, `merger`, `spinoff` transaction types
+- Frontend types in `[[apps/frontend/src/stores/settingsStore.ts]]`: `type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo'`
+- Settings storage: persisted in user `AppSettings` via Zustand + backend sync
+- Tax page displays gains/losses using the selected method for accurate year-end reporting
+
+**Corporate Action Support:**
+
+All cost basis methods handle:
+- **Stock splits** — Unit count adjusts; cost basis per lot unchanged
+- **Spinoffs** — New units tracked separately
+- **Mergers** — Cost-basis-neutral treatment
+- **Return of Capital** — Reduces cost basis per unit across all lots
+
+Code links: [[apps/node-backend/src/utils/portfolioMath.js]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/components/settings/DashboardSettingsDialog.tsx]]
+
 ## Info Card Security Hardening (Phase 9)
 
 Portfolio info cards (Crypto, Savings, Real Estate, Stocks) previously rendered translations via `dangerouslySetInnerHTML`. This pattern was unnecessarily risky. Since translation strings are plain text with no embedded HTML, all info cards now render translations as plain text: `{t(...)}` instead of `dangerouslySetInnerHTML={{ __html: t(...) }}`. This eliminates the XSS surface while maintaining identical output.

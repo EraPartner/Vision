@@ -6,6 +6,7 @@ import {
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { AppSettings } from '@/contexts/AppSettingsContext';
+import type { CostBasisMethod } from '@/stores/settingsStore';
 
 const CURRENCIES = [
     'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK',
@@ -183,6 +184,29 @@ export function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
                     </Select>
                     <p className="text-xs text-muted-foreground">
                         {t('settings.general.languageHint')}
+                    </p>
+                </div>
+
+                <Separator />
+
+                {/* Cost Basis Method */}
+                <div className="space-y-2">
+                    <Label className="text-sm font-semibold">{t('settings.general.costBasisMethod')}</Label>
+                    <Select
+                        value={localAppSettings.costBasisMethod ?? 'weighted_avg'}
+                        onValueChange={(v) => onUpdate({ ...localAppSettings, costBasisMethod: v as CostBasisMethod })}
+                    >
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="weighted_avg">{t('settings.general.costBasisMethod.weighted_avg')}</SelectItem>
+                            <SelectItem value="fifo">{t('settings.general.costBasisMethod.fifo')}</SelectItem>
+                            <SelectItem value="lifo">{t('settings.general.costBasisMethod.lifo')}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                        {t('settings.general.costBasisMethodHint')}
                     </p>
                 </div>
             </div>

@@ -8,12 +8,56 @@
 
 import { toDecimal, toNumber } from '../lib/money.js';
 
+/** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
+
+/**
+ * Shared result shape returned by all cost-basis calculators.
+ * @typedef {{ totalUnits: number, totalCost: number, avgCostBasis: number, realizedGain: number, totalBuyCost: number, totalSellProceeds: number }} CostBasisResult
+ */
+
+/**
+ * Apply corporate-action events (split, merger, spinoff, return_of_capital) to
+ * a mutable lot array in-place.  Called by both FIFO and LIFO helpers.
+ *
+ * @param {{ units: number, costBasis: number }[]} lots - mutable array of open lots
+ * @param {string} type
+ * @param {number} units - new total units after split, or units received from spinoff
+ * @param {number} amount - proceeds for return_of_capital
+ * @param {number} totalUnits - current total units held
+ * @returns {{ totalUnits: number }} updated totalUnits
+ */
+function applyEventToLots(lots, type, units, amount, totalUnits) {
+  if (type === 'split' && totalUnits > 0 && units > 0) {
+    // `units` is the post-split total; scale every lot proportionally.
+    const ratio = units / totalUnits;
+    for (const lot of lots) {
+      lot.costBasis = lot.costBasis; // cost basis per lot unchanged
+      lot.units = lot.units * ratio;
+    }
+    return { totalUnits: units };
+  }
+
+  if (type === 'return_of_capital' && totalUnits > 0) {
+    // Reduces cost basis per unit for each open lot.
+    const reductionPerUnit = amount / totalUnits;
+    for (const lot of lots) {
+      lot.costBasis = Math.max(0, lot.costBasis - reductionPerUnit * lot.units);
+    }
+    return { totalUnits };
+  }
+
+  // merger / spinoff — treated as cost-basis-neutral events for now;
+  // the caller can still apply amount as additional cost if needed.
+  return { totalUnits };
+}
+
 /**
  * Calculate weighted average cost basis using the moving-average method.
  * Buys and gifts increase the position; sells reduce it at the current avg cost.
+ * Corporate actions (split, return_of_capital) adjust units / cost basis.
  *
  * @param {Array<{type: string, units: number|string, amount: number|string, fees: number|string, taxes: number|string, date: string}>} txns
- * @returns {{ totalUnits: number, totalCost: number, avgCostBasis: number, realizedGain: number, totalBuyCost: number, totalSellProceeds: number }}
+ * @returns {CostBasisResult}
  */
 export function calculateCostBasis(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
@@ -47,6 +91,11 @@ export function calculateCostBasis(txns) {
         totalCost -= costOfSoldUnits;
         totalSellProceeds += amount;
       }
+    } else if (txn.type === 'split' && totalUnits > 0 && units > 0) {
+      // units = new total post-split; cost basis is unchanged
+      totalUnits = units;
+    } else if (txn.type === 'return_of_capital' && totalUnits > 0) {
+      totalCost = Math.max(0, totalCost - amount);
     }
   }
 
@@ -58,6 +107,161 @@ export function calculateCostBasis(txns) {
     totalBuyCost,
     totalSellProceeds,
   };
+}
+
+/**
+ * Calculate FIFO (first-in, first-out) cost basis.
+ * Sells exhaust the oldest lots first.
+ *
+ * @param {Array<{type: string, units: number|string, amount: number|string, fees: number|string, taxes: number|string, date: string}>} txns
+ * @returns {CostBasisResult}
+ */
+export function calculateCostBasisFIFO(txns) {
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+
+  /** @type {{ units: number, costBasis: number }[]} */
+  const lots = [];
+  let totalUnits = 0;
+  let realizedGain = 0;
+  let totalBuyCost = 0;
+  let totalSellProceeds = 0;
+
+  for (const txn of sorted) {
+    const units = Number(txn.units) || 0;
+    const amount = Number(txn.amount) || 0;
+    const fees = Number(txn.fees) || 0;
+    const taxes = Number(txn.taxes) || 0;
+
+    if (txn.type === 'buy' || txn.type === 'gift') {
+      const buyCost = amount + fees + taxes;
+      lots.push({ units, costBasis: buyCost });
+      totalUnits += units;
+      totalBuyCost += buyCost;
+    } else if (txn.type === 'sell' && units > 0) {
+      let unitsToSell = Math.min(units, totalUnits);
+      const netProceeds = amount - fees - taxes;
+      let costOfSold = 0;
+
+      while (unitsToSell > 0 && lots.length > 0) {
+        const lot = lots[0];
+        if (lot.units <= unitsToSell) {
+          costOfSold += lot.costBasis;
+          unitsToSell -= lot.units;
+          totalUnits -= lot.units;
+          lots.shift();
+        } else {
+          const fraction = unitsToSell / lot.units;
+          const lotCostUsed = lot.costBasis * fraction;
+          costOfSold += lotCostUsed;
+          lot.costBasis -= lotCostUsed;
+          lot.units -= unitsToSell;
+          totalUnits -= unitsToSell;
+          unitsToSell = 0;
+        }
+      }
+
+      realizedGain += netProceeds - costOfSold;
+      totalSellProceeds += amount;
+    } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
+      const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
+      totalUnits = result.totalUnits;
+    }
+  }
+
+  const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
+
+  return {
+    totalUnits: Math.max(0, totalUnits),
+    totalCost: Math.max(0, totalCost),
+    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
+    realizedGain,
+    totalBuyCost,
+    totalSellProceeds,
+  };
+}
+
+/**
+ * Calculate LIFO (last-in, first-out) cost basis.
+ * Sells exhaust the most-recently-acquired lots first.
+ *
+ * @param {Array<{type: string, units: number|string, amount: number|string, fees: number|string, taxes: number|string, date: string}>} txns
+ * @returns {CostBasisResult}
+ */
+export function calculateCostBasisLIFO(txns) {
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+
+  /** @type {{ units: number, costBasis: number }[]} */
+  const lots = [];
+  let totalUnits = 0;
+  let realizedGain = 0;
+  let totalBuyCost = 0;
+  let totalSellProceeds = 0;
+
+  for (const txn of sorted) {
+    const units = Number(txn.units) || 0;
+    const amount = Number(txn.amount) || 0;
+    const fees = Number(txn.fees) || 0;
+    const taxes = Number(txn.taxes) || 0;
+
+    if (txn.type === 'buy' || txn.type === 'gift') {
+      const buyCost = amount + fees + taxes;
+      lots.push({ units, costBasis: buyCost });
+      totalUnits += units;
+      totalBuyCost += buyCost;
+    } else if (txn.type === 'sell' && units > 0) {
+      let unitsToSell = Math.min(units, totalUnits);
+      const netProceeds = amount - fees - taxes;
+      let costOfSold = 0;
+
+      while (unitsToSell > 0 && lots.length > 0) {
+        const lot = lots[lots.length - 1];
+        if (lot.units <= unitsToSell) {
+          costOfSold += lot.costBasis;
+          unitsToSell -= lot.units;
+          totalUnits -= lot.units;
+          lots.pop();
+        } else {
+          const fraction = unitsToSell / lot.units;
+          const lotCostUsed = lot.costBasis * fraction;
+          costOfSold += lotCostUsed;
+          lot.costBasis -= lotCostUsed;
+          lot.units -= unitsToSell;
+          totalUnits -= unitsToSell;
+          unitsToSell = 0;
+        }
+      }
+
+      realizedGain += netProceeds - costOfSold;
+      totalSellProceeds += amount;
+    } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
+      const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
+      totalUnits = result.totalUnits;
+    }
+  }
+
+  const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
+
+  return {
+    totalUnits: Math.max(0, totalUnits),
+    totalCost: Math.max(0, totalCost),
+    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
+    realizedGain,
+    totalBuyCost,
+    totalSellProceeds,
+  };
+}
+
+/**
+ * Dispatch to the correct cost-basis calculator based on `method`.
+ *
+ * @param {Array} txns
+ * @param {CostBasisMethod} method
+ * @returns {CostBasisResult}
+ */
+export function calculateCostBasisByMethod(txns, method) {
+  if (method === 'fifo') return calculateCostBasisFIFO(txns);
+  if (method === 'lifo') return calculateCostBasisLIFO(txns);
+  return calculateCostBasis(txns); // default: weighted_avg
 }
 
 /**

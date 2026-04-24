@@ -21,6 +21,8 @@ import type { ThemeVariant } from '@/styles/themes';
 
 // ─── App settings types ───────────────────────────────────────────────────────
 
+export type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo';
+
 export interface AppSettings {
     defaultCurrency: string;
     dateFormat: string;
@@ -30,6 +32,7 @@ export interface AppSettings {
     showDecimalPlaces: number;
     language: Language;
     aiDefaultModel?: string;
+    costBasisMethod: CostBasisMethod;
 }
 
 // ─── Dashboard settings types ─────────────────────────────────────────────────
@@ -62,6 +65,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     startOfWeek: 'monday',
     showDecimalPlaces: 2,
     language: 'en',
+    costBasisMethod: 'weighted_avg',
 };
 
 export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {

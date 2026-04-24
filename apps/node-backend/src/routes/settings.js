@@ -15,6 +15,7 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
 
+const ALLOWED_COST_BASIS_METHODS = ['weighted_avg', 'fifo', 'lifo'];
 const ALLOWED_THEME_VARIANTS = ['default', 'dracula', 'solarized', 'nord', 'high-contrast'];
 const ALLOWED_THEME_MODES = ['light', 'dark', 'system', 'schedule'];
 const ALLOWED_EXCLUSION_SCOPES = ['everywhere', 'dashboard', 'statistics'];
@@ -114,6 +115,7 @@ const SETTING_DEFAULTS = {
     backupOnQuit: false,
   },
   widget_visibility: {},
+  cost_basis_method: 'weighted_avg',
 };
 
 router.get('/:key', async (req, res) => {
@@ -143,6 +145,11 @@ router.put('/:key', async (req, res) => {
     });
   }
   if (key === 'theme_settings') assertThemeSettingsValue(value);
+  if (key === 'cost_basis_method') {
+    if (!ALLOWED_COST_BASIS_METHODS.includes(value)) {
+      throw new ValidationError(`Invalid cost_basis_method. Allowed: ${ALLOWED_COST_BASIS_METHODS.join(', ')}`);
+    }
+  }
 
   const result = await settingsRepository.set(key, value);
   res.ok(result);
