@@ -1,7 +1,7 @@
-import { API_BASE_URL, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
+import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress, ImportResult } from '@/lib/api/types';
+import type { ImportProgress, ImportResult, ImportBatch, BatchListResponse } from '@/lib/api/types';
 
 export function importCSV(
     file: File,
@@ -127,4 +127,19 @@ export function importCategories(
 ): Promise<{ total_processed: number; imported: number; skipped: number; errors: number; status: string }> {
     const queryParams = new URLSearchParams({ separator, encoding });
     return postMultipartImport('/api/import/categories', file, queryParams);
+}
+
+export function listImportBatches(
+    limit: number = 20,
+    offset: number = 0,
+): Promise<BatchListResponse> {
+    return apiRequest<BatchListResponse>(`/api/import/batches?limit=${limit}&offset=${offset}`);
+}
+
+export function getImportBatch(id: number): Promise<ImportBatch> {
+    return apiRequest<ImportBatch>(`/api/import/batches/${id}`);
+}
+
+export function rollbackImportBatch(id: number): Promise<{ deleted: number }> {
+    return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, { method: 'DELETE' });
 }

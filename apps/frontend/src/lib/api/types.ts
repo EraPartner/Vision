@@ -68,6 +68,29 @@ export interface SavedChartCreate {
     categoryIds: number[];
 }
 
+export interface ImportBatch {
+    id: number;
+    adapter_name: string;
+    source_filename: string | null;
+    source_size_bytes: number | null;
+    status: 'pending' | 'staging' | 'validating' | 'matching' | 'committing' | 'complete' | 'failed' | 'aborted';
+    rows_total: number | null;
+    rows_imported: number | null;
+    rows_duplicate: number | null;
+    rows_error: number | null;
+    error_summary: string | null;
+    started_at: string;
+    completed_at: string | null;
+    transactions_remaining: number;
+}
+
+export interface BatchListResponse {
+    batches: ImportBatch[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
 export interface MarketNewsArticle {
     title: string;
     link: string;

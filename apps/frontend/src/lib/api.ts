@@ -71,6 +71,9 @@ export const apiClient = {
     importCSVCustom: imp.importCSVCustom,
     importRecipients: imp.importRecipients,
     importCategories: imp.importCategories,
+    listImportBatches: imp.listImportBatches,
+    getImportBatch: imp.getImportBatch,
+    rollbackImportBatch: imp.rollbackImportBatch,
 
     // Settings
     getSettings: sett.getSettings,

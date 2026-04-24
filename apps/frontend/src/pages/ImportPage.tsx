@@ -39,6 +39,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ImportHistoryCard } from "@/components/import/ImportHistoryCard";
 
 interface ImportProgress {
   phase: string;
@@ -186,6 +187,7 @@ export default function ImportPage() {
       toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: data.total_processed }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
+      setHistoryKey((k) => k + 1);
       setFile(null);
       setBankSource("");
       setCustomBank("");
@@ -290,6 +292,7 @@ export default function ImportPage() {
   };
 
   const [exporting, setExporting] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const handleExport = async () => {
     setExporting(true);
@@ -1029,6 +1032,9 @@ export default function ImportPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Import History */}
+      <ImportHistoryCard refreshKey={historyKey} />
 
       {/* Supported banks info */}
       <Card className="bg-muted/30">
