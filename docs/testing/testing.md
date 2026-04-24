@@ -550,7 +550,7 @@ bun vitest --ui
 
 ## Test Additions (2026-04-10)
 
-- [[apps/node-backend/tests/rateLimiter.test.js]] adds middleware-factory coverage for allow-under-limit, `429` over-limit, window reset behavior, and client key fallback order (`req.ip` → `remoteAddress` → `unknown`). It also verifies stricter presets: `adminRateLimiter` (`10 req/min`) and `importRateLimiter` (`5 req/min`).
+- [[apps/node-backend/tests/rateLimiter.test.js]] adds middleware-factory coverage for allow-under-limit, `429` over-limit, window reset behavior, and client key fallback order (`req.ip` → `remoteAddress` → `unknown`). It also verifies presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), and `importRateLimiter` (`20 req/min`).
 - [[apps/node-backend/tests/routes/admin.test.js]] adds admin update endpoint coverage:
   - `GET /api/admin/update/check` for GitHub release payload handling, `APP_VERSION`/`APP_IMAGE_TAG` resolution, no-release fallback payload, and invalid JSON path returning sanitized `500`.
   - `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart` success responses.

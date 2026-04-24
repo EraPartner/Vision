@@ -44,9 +44,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-24: Remove Feature Flags
+
+[[docs/adr/035-remove-feature-flags|ADR-035]] — Supersedes ADR-033. Remove the entire runtime-toggleable feature flag system (DB table, backend service/repo/routes, frontend page, i18n keys). All features are always enabled unconditionally. Decision rationale: no flags were ever toggled off in production, the system added maintenance surface without delivering value, and the product direction is toward all functionality being always on. Alembic migration `0011_drop_feature_flags` drops the table while preserving history via `0002_feature_flags`.
+
 ### 2026-04-24: Admin Environment — Unified Observability Hub
 
-[[docs/adr/034-admin-environment|ADR-034]] — Consolidate admin tooling into a gated sidebar section with `/admin` overview, `/admin/db` database maintenance, `/admin/providers` data-source health, `/admin/endpoints` endpoint liveness metrics, and `/admin/feature-flags` feature flag controls. Gating via `adminMode` toggle in Settings (not a security boundary for single-user self-hosted app). Provider health uses passive tracking (success/error calls + table) + on-demand probes. Endpoint metrics via in-memory rolling window (15 min / 1 min buckets). Alert surface limited to admin pages only.
+[[docs/adr/034-admin-environment|ADR-034]] — Consolidate admin tooling into a gated sidebar section with `/admin` overview, `/admin/db` database maintenance, `/admin/providers` data-source health, and `/admin/endpoints` endpoint liveness metrics. Gating via `adminMode` toggle in Settings (not a security boundary for single-user self-hosted app). Provider health uses passive tracking (success/error calls + table) + on-demand probes. Endpoint metrics via in-memory rolling window (15 min / 1 min buckets). Alert surface limited to admin pages only.
 
 ### 2026-04-24: Reaffirm visx/d3 over recharts
 

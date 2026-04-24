@@ -278,13 +278,6 @@ app.get('/api/', (req, res) => {
 
 // ==================== Route Registration ====================
 
-// Global rate limiter — intentionally NOT applied to API routes.
-// Self-hosted single-user app: a global API rate limit only restricts the
-// legitimate user (SPA makes 20-50 parallel requests on page load).
-// Per-route limiters (adminRateLimiter, importRateLimiter) guard expensive
-// and destructive operations instead.
-// This limiter is used only for the SPA fallback below.
-const globalLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10000, keyPrefix: 'global' });
 
 mountRouter(app, '/api/transactions', transactionsRouter);
 mountRouter(app, '/api/categories', categoriesRouter);
@@ -334,7 +327,7 @@ if (settings.isProduction()) {
   // Hashed assets (JS/CSS) — long-lived cache
   app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
   // SPA fallback: serve index.html (no-cache) for all non-API paths
-  app.get(/^(?!\/api)/, globalLimiter, (req, res) => {
+  app.get(/^(?!\/api)/, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(resolve(distPath, 'index.html'));
   });

@@ -72,7 +72,7 @@ SORT title ASC
 
 ### Administration & Maintenance (Phase 7, Phase F, Phase 9)
 - [[docs/features/database-maintenance\|Database Maintenance]] - Table statistics monitoring and VACUUM operations
-- [[docs/features/admin-observability\|Admin Observability]] - System health dashboards and feature flags (Phase F); shadow divergence monitoring removed in Phase 9
+- [[docs/features/admin-observability\|Admin Observability]] - System health dashboards; shadow divergence monitoring removed in Phase 9, feature flags removed in Phase 9
 
 ### AI & Natural Language
 - [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)

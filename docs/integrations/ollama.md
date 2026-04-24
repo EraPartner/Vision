@@ -108,7 +108,7 @@ When Ollama is unreachable:
 - `POST /api/ai/chat` returns 502 with `code: OLLAMA_UNREACHABLE`.
 - `POST /api/ai/chat/stream` emits an `error` SSE frame then `res.end()`.
 
-The rest of Vision remains fully functional — AI chat is isolated behind a feature flag.
+The rest of Vision remains fully functional — the AI chat feature is always available when Ollama is configured (no runtime feature flag gates).
 
 ## No External Calls
 

@@ -5,6 +5,7 @@ vi.mock('../src/config/config.js', () => ({
 }));
 
 import {
+  adminMutateLimiter,
   adminRateLimiter,
   importRateLimiter,
   rateLimiter,
@@ -126,35 +127,50 @@ describe('rateLimiter middleware', () => {
     expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
   });
 
-  it('enforces stricter admin rate limit', () => {
+  it('adminRateLimiter allows high-volume read traffic (500/min)', () => {
     const now = 7_000_000;
     vi.spyOn(Date, 'now').mockReturnValue(now);
 
     const req = createRequest({ ip: '10.0.0.10' });
     const next = vi.fn();
 
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 50; i += 1) {
       adminRateLimiter(req, createResponse(), next);
+    }
+
+    expect(next).toHaveBeenCalledTimes(50);
+    expect(next.mock.calls.every(call => call[0] === undefined)).toBe(true);
+  });
+
+  it('adminMutateLimiter blocks destructive operations above 30/min', () => {
+    const now = 7_500_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    const req = createRequest({ ip: '10.0.0.13' });
+    const next = vi.fn();
+
+    for (let i = 0; i < 30; i += 1) {
+      adminMutateLimiter(req, createResponse(), next);
     }
 
     const blockedRes = createResponse();
     const blockedNext = vi.fn();
-    adminRateLimiter(req, blockedRes, blockedNext);
+    adminMutateLimiter(req, blockedRes, blockedNext);
 
-    expect(next).toHaveBeenCalledTimes(10);
+    expect(next).toHaveBeenCalledTimes(30);
     expect(blockedNext).toHaveBeenCalledTimes(1);
     expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
     expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
-  it('enforces import rate limit threshold', () => {
+  it('enforces import rate limit threshold (20/min)', () => {
     const now = 8_000_000;
     vi.spyOn(Date, 'now').mockReturnValue(now);
 
     const req = createRequest({ ip: '10.0.0.11' });
     const next = vi.fn();
 
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 20; i += 1) {
       importRateLimiter(req, createResponse(), next);
     }
 
@@ -162,7 +178,7 @@ describe('rateLimiter middleware', () => {
     const blockedNext = vi.fn();
     importRateLimiter(req, blockedRes, blockedNext);
 
-    expect(next).toHaveBeenCalledTimes(5);
+    expect(next).toHaveBeenCalledTimes(20);
     expect(blockedNext).toHaveBeenCalledTimes(1);
     expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
     expect(blockedRes.status).not.toHaveBeenCalled();

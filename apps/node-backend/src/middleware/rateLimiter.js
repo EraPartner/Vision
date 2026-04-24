@@ -59,11 +59,17 @@ export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 
 }
 
 /**
- * Stricter rate limiter for destructive/admin operations.
+ * Rate limiter for admin routes (read-heavy observability hub).
+ * Single-user self-hosted app: admin page makes 5-6 parallel GETs on load.
  */
-export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10, keyPrefix: 'admin' });
+export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 500, keyPrefix: 'admin' });
 
 /**
- * Rate limiter for import operations (expensive).
+ * Stricter limiter for destructive/expensive admin mutations (vacuum, reset, probe).
  */
-export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 5, keyPrefix: 'import' });
+export const adminMutateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'admin-mutate' });
+
+/**
+ * Rate limiter for import operations (expensive but single-user).
+ */
+export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'import' });

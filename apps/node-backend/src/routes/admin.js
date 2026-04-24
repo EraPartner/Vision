@@ -23,6 +23,7 @@ import { AppError, NotFoundError, ValidationError } from '../middleware/errorHan
 import { listProviderHealth, probeProvider } from '../services/providerHealthService.js';
 import { getMetrics } from '../middleware/requestMetrics.js';
 import { getRouteManifest } from '../services/routeManifest.js';
+import { adminMutateLimiter } from '../middleware/rateLimiter.js';
 
 const GITHUB_OWNER = 'EraPartner';
 const GITHUB_REPO = 'Vision';
@@ -107,7 +108,7 @@ router.post('/database/init', async (req, res) => {
   });
 });
 
-router.post('/database/reset', async (req, res) => {
+router.post('/database/reset', adminMutateLimiter, async (req, res) => {
   const settings = getSettings();
   if (!settings.admin.enableResetDb) {
     throw new NotFoundError('Database reset endpoint disabled');
@@ -156,7 +157,7 @@ router.post('/update/apply-and-restart', async (req, res) => {
   });
 });
 
-router.post('/investments/kinesis/sanitize-history', async (req, res) => {
+router.post('/investments/kinesis/sanitize-history', adminMutateLimiter, async (req, res) => {
   const result = await sanitizePersistedKinesisHistory();
   res.ok({
     message: 'Kinesis historical spikes sanitization completed',
@@ -189,7 +190,7 @@ router.get('/database/stats', async (_req, res) => {
   });
 });
 
-router.post('/database/vacuum', async (req, res) => {
+router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
   const { table } = req.body ?? {};
 
   // Validate table name against actual user tables to prevent injection
@@ -230,7 +231,7 @@ router.get('/providers/health', async (_req, res) => {
   res.ok(providers);
 });
 
-router.post('/providers/:provider/probe', async (req, res) => {
+router.post('/providers/:provider/probe', adminMutateLimiter, async (req, res) => {
   const { provider } = req.params;
   const result = await probeProvider(provider);
   res.ok(result);

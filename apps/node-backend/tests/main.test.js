@@ -30,6 +30,7 @@ vi.mock('../src/config/logger.js', () => ({
 vi.mock('../src/middleware/rateLimiter.js', () => ({
   rateLimiter: () => (req, res, next) => next(),
   adminRateLimiter: (req, res, next) => next(),
+  adminMutateLimiter: (req, res, next) => next(),
   importRateLimiter: (req, res, next) => next(),
 }));
 

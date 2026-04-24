@@ -138,7 +138,7 @@ bun vitest run --test-name-pattern="testName"
 
 | File | Area | Coverage Added |
 |------|------|----------------|
-| `apps/node-backend/tests/rateLimiter.test.js` | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (10/min), `importRateLimiter` (5/min) |
+| `apps/node-backend/tests/rateLimiter.test.js` | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (500/min), `adminMutateLimiter` (30/min), `importRateLimiter` (20/min) |
 | `apps/node-backend/tests/routes/admin.test.js` | Admin API | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
 | `apps/node-backend/tests/routes/marketLookup.test.js` | Market API | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance |
 

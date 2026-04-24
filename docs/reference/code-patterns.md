@@ -3,7 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-24
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, feature-flags, slice-selection, typescript, error-handling, type-safety]
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types]
 ---
@@ -1976,132 +1976,18 @@ const slice = useAppStore(
 
 ---
 
-## Feature Flag Pattern (Backend, Phase 4)
+## Feature Flag Pattern (Deprecated)
 
-**Source:** [[apps/node-backend/src/repositories/featureFlagRepository.js|featureFlagRepository.js]], [[apps/node-backend/src/services/featureFlagService.js|featureFlagService.js]], [[alembic/versions/0002_feature_flags.py|0002_feature_flags.py]]
+> [!warning] Deprecated
+> This pattern was removed via [[docs/adr/035-remove-feature-flags|ADR-035]]. The `feature_flags` table, backend service/repo, and admin UI were deleted in Phase 9. All features are now always enabled unconditionally.
 
-Runtime-toggleable feature flags allow features to be enabled/disabled without deployment. Vision stores flags in the `feature_flags` table and provides admin endpoints to toggle them.
+**Removal Date:** 2026-04-24
 
-### Database Migration
+**Historical Reference:** The pattern documented runtime-toggleable feature flags via a `feature_flags` PostgreSQL table with admin endpoints to toggle flags. In practice, no flags were ever toggled off in production; the system added maintenance surface without delivering value.
 
-```python
-# alembic/versions/0002_feature_flags.py
-def upgrade() -> None:
-    op.create_table(
-        'feature_flags',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('key', sa.String(length=100), nullable=False),  # Unique
-        sa.Column('enabled', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.Column('updated_at', sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('key', name='uq_feature_flags_key'),
-    )
+**Migration Path:** Alembic migration `0011_drop_feature_flags` drops the table while preserving the creation migration (`0002_feature_flags.py`) in the history for audit/compliance purposes.
 
-    # Seed defaults
-    op.execute("""
-        INSERT INTO feature_flags (key, enabled, description) VALUES
-            ('ai_chat', false, 'Enable AI chat / Ollama integration'),
-            ('aggregations_v2', false, 'Enable aggregations V2 pipeline')
-        ON CONFLICT (key) DO NOTHING;
-    """)
-```
-
-### Repository Layer
-
-```javascript
-// apps/node-backend/src/repositories/featureFlagRepository.js
-async function isEnabled(key) {
-  const flag = await featureFlagRepository.findByKey(key);
-  return flag?.enabled ?? false;  // Returns false for unknown keys
-}
-
-async function setEnabled(key, enabled) {
-  const result = await query(
-    `UPDATE feature_flags SET enabled = $2 WHERE key = $1 RETURNING *`,
-    [key, enabled]
-  );
-  return result.rows[0] ?? null;
-}
-```
-
-### Service Layer
-
-```javascript
-// apps/node-backend/src/services/featureFlagService.js
-async function isFeatureEnabled(key) {
-  return featureFlagRepository.isEnabled(key);  // Safe: returns false for unknown keys
-}
-
-async function setFeatureFlag(key, enabled) {
-  if (typeof enabled !== 'boolean') {
-    throw new ValidationError('enabled must be a boolean');
-  }
-  const existing = await featureFlagRepository.findByKey(key);
-  if (!existing) {
-    throw new NotFoundError(`Feature flag '${key}' not found`);
-  }
-  return featureFlagRepository.setEnabled(key, enabled);
-}
-```
-
-### API Endpoints
-
-Located at `POST /api/admin/feature-flags/:key`:
-
-```javascript
-router.patch('/feature-flags/:key', async (req, res) => {
-  const { key } = req.params;
-  const { enabled } = req.body;
-
-  if (enabled === undefined) {
-    throw new ValidationError('Request body must include "enabled" (boolean)');
-  }
-
-  const updated = await setFeatureFlag(key, enabled);
-  res.ok(updated);
-});
-```
-
-**Full matrix:** See [[docs/reference/api-endpoint-matrix#admin|Admin Endpoints]] for GET/PATCH/DELETE.
-
-### Usage in Routes
-
-```javascript
-// Check flag before executing feature code
-if (await isFeatureEnabled('ai_chat')) {
-  // AI chat routes
-}
-```
-
-### Key Rules
-
-| Rule | Rationale |
-|------|-----------|
-| `isEnabled()` returns false for unknown keys | Safe default; prevents crashes on typos |
-| Keys are seeded in migration | Admin API creates/patches existing keys only |
-| Always validate `enabled` is boolean | Prevent accidental type coercion |
-| Log when flag is toggled | Audit trail for debugging |
-| Use environment vars as initial defaults | DB value overrides env var once written |
-
-### When to Use
-
-- Gradual rollout of new features
-- A/B testing backends
-- Temporary feature disable without redeployment
-- Admin-controlled experimental features
-
-### Seeding New Flags
-
-1. Add to migration:
-   ```sql
-   INSERT INTO feature_flags (key, enabled, description) VALUES
-       ('my_feature', false, 'Description here')
-   ON CONFLICT (key) DO NOTHING;
-   ```
-2. Deploy
-3. Toggle via `PATCH /api/admin/feature-flags/:key` with `{ "enabled": true }`
+**For New Features:** If you need to control feature availability, use environment variables or configuration instead of database-backed toggles. See [[docs/adr/035-remove-feature-flags|ADR-035]] for rationale.
 
 ---
 

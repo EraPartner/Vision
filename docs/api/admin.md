@@ -3,6 +3,7 @@ title: Admin API
 type: endpoint
 status: active
 date: 2026-04-25
+updated: 2026-04-24
 tags:
   - api
   - admin
@@ -11,9 +12,8 @@ tags:
   - observability
   - provider-health
   - endpoint-liveness
-  - feature-flags
   - phase-f
-description: API endpoints for system administration, database management, provider health, endpoint liveness, and feature flags
+description: API endpoints for system administration, database management, provider health, and endpoint liveness
 aliases:
   - admin
   - system admin
@@ -30,7 +30,7 @@ related_code:
 
 # Admin API
 
-System administration endpoints for database management, health checks, provider health tracking, endpoint liveness metrics, and feature flags.
+System administration endpoints for database management, health checks, provider health tracking, and endpoint liveness metrics.
 
 ## Base URL
 
@@ -38,7 +38,7 @@ System administration endpoints for database management, health checks, provider
 /api/admin
 ```
 
-## Endpoints (16 total)
+## Endpoints (13 total)
 
 ### GET /api/admin
 
@@ -549,13 +549,24 @@ Return a static manifest of all registered Express routes.
 | `APP_IMAGE_TAG` | Docker image tag (fallback for version) |
 | `ADMIN_AUTH_TOKEN` | Optional Bearer token required for `/api/admin/*` routes when set |
 
-## Security
+## Security and Rate Limiting
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
 - Optional admin auth middleware is enforced for `/api/admin/*` when `ADMIN_AUTH_TOKEN` is configured; requests must send `Authorization: Bearer <token>`.
 - When `ADMIN_AUTH_TOKEN` is unset, admin behavior remains backward-compatible (no token required).
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
+
+### Rate Limits
+
+Admin endpoints are subject to specialized rate limiting:
+
+| Endpoint Type | Rate Limit | Limiter | Reason |
+|---------------|-----------|---------|--------|
+| **GET** (observability reads) | 500/min | `adminRateLimiter` | Admin hub makes 5-6 parallel reads on load |
+| **POST** (destructive mutations) | 30/min | `adminMutateLimiter` | Database reset, VACUUM, provider probes, Kinesis sanitization |
+
+See [[docs/security/rate-limiting|Rate Limiting]] for full details and response headers.
 
 ## See Also
 

@@ -4,7 +4,7 @@ type: endpoint
 status: active
 date: 2026-04-24
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, decimal, money, cashflow-forecast]
-description: Server-computed transaction aggregations with materialized-view source distinction, behind AGGREGATIONS_V2_ENABLED feature flag; includes cash flow forecast from planned transactions
+description: Server-computed transaction aggregations with materialized-view source distinction; includes cash flow forecast from planned transactions
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
@@ -19,8 +19,8 @@ related_code:
 > [!abstract] Overview
 > Phase 2 introduces `/api/aggregations/*` endpoints — server-computed financial aggregations with metadata indicating whether data was served from materialized views (`'mv'`) or computed live (`'live'`). These endpoints power dashboard stat cards and statistics widgets with support for category/recipient exclusions.
 
-> [!info] Feature Flag
-> All endpoints require `AGGREGATIONS_V2_ENABLED=true`. Legacy `/api/info/*` endpoints coexist through Phase 8; removed in Phase 9.
+> [!info] Phase 9 Migration Complete
+> Legacy `/api/info/*` endpoints were removed in Phase 9. All aggregation requests now route through `/api/aggregations/*`.
 
 ## Endpoint Details
 

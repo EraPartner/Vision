@@ -3,8 +3,8 @@ title: "ADR-034: Admin Environment — Unified Observability Hub"
 type: adr
 status: accepted
 date: 2026-04-24
-tags: [adr, admin, observability, feature-flags, provider-health, endpoint-liveness]
-description: Decision to consolidate admin tooling into a gated sidebar section with passive provider health, in-memory endpoint metrics, and feature flag UI
+tags: [adr, admin, observability, provider-health, endpoint-liveness]
+description: Decision to consolidate admin tooling into a gated sidebar section with passive provider health and in-memory endpoint metrics
 aliases: [adr-034, admin environment, admin hub]
 ---
 
@@ -20,10 +20,10 @@ Accepted
 
 ## Context
 
-Vision had scattered admin tooling: the DB Maintenance page lived under the "Data" sidebar group, feature-flag and provider-health backends had no UI, and endpoint liveness was invisible. There was no single place to confirm the platform is working correctly.
+Vision had scattered admin tooling: the DB Maintenance page lived under the "Data" sidebar group, provider-health backends had no UI, and endpoint liveness was invisible. There was no single place to confirm the platform is working correctly.
 
 The user wanted an admin section that:
-- Surfaces DB maintenance, data-source health, endpoint liveness, and feature-flag controls in one place
+- Surfaces DB maintenance, data-source health, and endpoint liveness in one place
 - Is hidden by default to avoid cluttering the sidebar for normal use
 - Works for a single-user self-hosted app, so gating is ergonomic (hide clutter), not a security boundary
 
@@ -39,12 +39,11 @@ The user wanted an admin section that:
 
 **Alert surface:** Admin pages only. No global toasts, badges, or notification dots for admin-level failures.
 
-**Scope (v1):**
-- `/admin` — Overview dashboard with 4 summary tiles
+**Scope:**
+- `/admin` — Overview dashboard with 3 summary tiles
 - `/admin/db` — Existing DB Maintenance page (moved)
 - `/admin/providers` — Data Sources health (7 providers: Binance, Yahoo, Kinesis, ECB, open.er-api, Statbel, Eurostat)
 - `/admin/endpoints` — Route liveness matrix (manifest + rolling metrics)
-- `/admin/feature-flags` — Feature flag table with per-row toggle
 
 ## Consequences
 
@@ -65,7 +64,7 @@ The user wanted an admin section that:
 
 ## Related
 
-- [[docs/adr/033-runtime-toggleable-feature-flags|ADR-033: Runtime-Toggleable Feature Flags]] — feature flags UI is built on this backend
+- [[docs/adr/035-remove-feature-flags|ADR-035: Remove Feature Flags]] — Feature flag UI was removed in this ADR
 - [[docs/adr/032-zustand-unified-settings-store|ADR-032: Zustand Unified Settings Store]] — `adminMode` piggybacks the existing settings persistence
 - [[docs/features/admin-observability|Admin Observability Dashboard]] — feature spec
 - [[docs/features/provider-health|Provider Health Tracking]] — provider health spec

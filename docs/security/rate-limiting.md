@@ -3,6 +3,7 @@ title: Rate Limiting
 type: security
 status: active
 date: 2026-04-23
+updated: 2026-04-24
 tags:
   - security
   - rate-limiting
@@ -58,22 +59,33 @@ This high limit is intentional — it protects against filesystem abuse (not API
 
 #### Admin Rate Limiter
 
-Stricter limits for administrative operations:
+Permissive limits for read-heavy admin observability operations. The admin observability hub loads 5-6 parallel GETs on page load:
 
 ```javascript
-// 10 requests per minute per IP
-export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10, keyPrefix: 'admin' });
+// 500 requests per minute per IP
+export const adminRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 500, keyPrefix: 'admin' });
 ```
 
-Applied to `POST /api/admin/*` endpoints.
+Applied to `GET /api/admin/*` endpoints (observability hub reads).
+
+#### Admin Mutate Limiter
+
+Stricter limits for destructive admin operations:
+
+```javascript
+// 30 requests per minute per IP
+export const adminMutateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'admin-mutate' });
+```
+
+Applied to `POST /api/admin/*` endpoints (database reset, VACUUM, provider probes, Kinesis sanitization).
 
 #### Import Rate Limiter
 
-Most restrictive for expensive import operations:
+Restrictive for expensive import operations:
 
 ```javascript
-// 5 requests per minute per IP
-export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 5, keyPrefix: 'import' });
+// 20 requests per minute per IP
+export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'import' });
 ```
 
 Applied to `POST /api/import/*` endpoints.
@@ -133,12 +145,12 @@ For production deployments:
 - [[docs/security/input-validation]] - Input Validation
 - [[docs/api/index]] - API Index
 
-## Test Coverage Notes (2026-04-10)
+## Test Coverage Notes (2026-04-10, Updated 2026-04-24)
 
 Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,
 - client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
-- stricter presets: `adminRateLimiter` (`10 req/min`) and `importRateLimiter` (`5 req/min`).
+- presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), and `importRateLimiter` (`20 req/min`).
 
 Related code: [[apps/node-backend/src/middleware/rateLimiter.js]]

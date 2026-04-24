@@ -157,17 +157,27 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-24 Feature Flags Removed
+
+**ADR-035 Acceptance:**
+- Remove entire runtime-toggleable feature flag system (DB table, backend service/repo/routes, frontend page, i18n keys)
+- All features always enabled unconditionally
+- Alembic migration `0011_drop_feature_flags` drops the table while preserving history
+- Rationale: No flags were ever toggled off in production; system added maintenance surface without delivering value
+
+See [[docs/adr/035-remove-feature-flags|ADR-035]]
+
 ### 2026-04-24 Admin Environment — Unified Observability Hub
 
 **ADR-034 Acceptance:**
 - **Settings Toggle**: `adminMode: boolean` in `AppSettings` Zustand store with toggle in Settings → App → Developer section
-- **Five Admin Pages**: Overview (`/admin`), Database Maintenance (`/admin/db`), Data Sources/Providers (`/admin/providers`), Endpoints Liveness (`/admin/endpoints`), Feature Flags (`/admin/feature-flags`)
+- **Four Admin Pages**: Overview (`/admin`), Database Maintenance (`/admin/db`), Data Sources/Providers (`/admin/providers`), Endpoints Liveness (`/admin/endpoints`)
 - **Provider Health Tracking**: Passive success/error recording from 7 data sources (Binance, Yahoo, Kinesis, ECB, open.er-api, Statbel, Eurostat) + on-demand probe endpoints
 - **Request Metrics**: In-memory rolling window (15 min / 1 min buckets) with p50/p95 per route via `requestMetrics` middleware
 - **Endpoint Manifest**: Static Express router scan returning all registered routes with methods + descriptions
 - **New Backend Modules**: `services/providerHealth/`, `middleware/requestMetrics.js`, `services/routeManifest.js`
 - **4 New API Endpoints**: `GET /api/admin/providers/health`, `POST /api/admin/providers/:provider/probe`, `GET /api/admin/metrics/requests`, `GET /api/admin/endpoints`
-- **API Total**: 148 endpoints across 20 routes (Admin: 16 endpoints)
+- **API Total**: 148 endpoints across 20 routes (Admin: 13 endpoints after feature flags removal)
 
 See [[docs/adr/034-admin-environment|ADR-034]], [[docs/features/admin-observability|Admin Observability Feature]], [[docs/api/admin|Admin API]]
 
