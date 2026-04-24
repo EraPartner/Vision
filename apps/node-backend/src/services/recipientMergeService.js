@@ -23,7 +23,7 @@
  * the reassignments above will cascade to the aggregation table without
  * manual intervention.
  */
-import { getClient } from '../database/connection.js';
+import { withTransaction } from '../database/connection.js';
 
 /**
  * Merge a set of alias recipients into a primary recipient.
@@ -47,10 +47,7 @@ export async function mergeRecipients(primaryId, aliasIds) {
     return { mergedAliasIds: [], reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 } };
   }
 
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
-
+  return withTransaction(async (client) => {
     // Sanity: the primary must exist. We lock it FOR UPDATE so concurrent
     // merges into the same primary serialize cleanly.
     const primaryCheck = await client.query(
@@ -133,8 +130,6 @@ export async function mergeRecipients(primaryId, aliasIds) {
       [primaryId, ids],
     );
 
-    await client.query('COMMIT');
-
     return {
       mergedAliasIds: aliasRes.rows.map((r) => r.id),
       reassigned: {
@@ -144,12 +139,7 @@ export async function mergeRecipients(primaryId, aliasIds) {
         bankAccounts: bankRes.rowCount ?? 0,
       },
     };
-  } catch (err) {
-    try { await client.query('ROLLBACK'); } catch { /* swallow */ }
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export default { mergeRecipients };

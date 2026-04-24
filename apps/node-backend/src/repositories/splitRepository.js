@@ -6,7 +6,7 @@
  * written via writeAudit; route/service layer owns when to emit them.
  */
 
-import { getClient, query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { computeOwedSummary } from '../services/calculations/splits.js';
 import { toDecimal, subtract, toNumber } from '../lib/money.js';
 
@@ -212,10 +212,7 @@ export const splitRepository = {
    * }} input
    */
   async addPayment({ split_id, amount, note, paid_at, actor = null }) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-
+    return withTransaction(async (client) => {
       const insertSql = `
         INSERT INTO split_payments (split_id, amount, note, paid_at)
         VALUES ($1, $2, $3, $4)
@@ -259,14 +256,8 @@ export const splitRepository = {
         ]
       );
 
-      await client.query('COMMIT');
       return result.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   },
 
   /**

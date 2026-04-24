@@ -8,7 +8,7 @@
  */
 
 import crypto from 'crypto';
-import { query, getClient } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 
 const VALIDATE_CHUNK = 500;
@@ -32,9 +32,7 @@ export async function validateBatch({ batchId, onProgress }) {
 
   for (let start = 0; start < total; start += VALIDATE_CHUNK) {
     const chunk = pending.slice(start, start + VALIDATE_CHUNK);
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
+    await withTransaction(async (client) => {
       for (const row of chunk) {
         const issue = validateRow(row);
         if (issue) {
@@ -51,13 +49,7 @@ export async function validateBatch({ batchId, onProgress }) {
           [row.id, txHash]
         );
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'validating', current: seen, total });
   }

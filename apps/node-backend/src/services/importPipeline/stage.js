@@ -7,7 +7,7 @@
  * next stage. No recipient resolution or dedup happens here.
  */
 
-import { query, getClient } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { getAdapter } from './adapters/index.js';
 
@@ -65,9 +65,7 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
 
 async function insertStagingChunk(batchId, rows, startIndex) {
   if (!rows.length) return;
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
+  await withTransaction(async (client) => {
     const values = [];
     const placeholders = [];
     rows.forEach((r, i) => {
@@ -105,11 +103,5 @@ async function insertStagingChunk(batchId, rows, startIndex) {
       VALUES ${placeholders.join(',')}`;
 
     await client.query(sql, values);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }

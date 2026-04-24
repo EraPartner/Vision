@@ -7,7 +7,7 @@
  * onto the staging row and marks it 'matched'.
  */
 
-import { query, getClient } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import {
   findBestRecipientMatches,
@@ -75,9 +75,7 @@ export async function matchBatch({ batchId, onProgress }) {
 
   for (let start = 0; start < staged.length; start += MATCH_UPDATE_CHUNK) {
     const chunk = staged.slice(start, start + MATCH_UPDATE_CHUNK);
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
+    await withTransaction(async (client) => {
       for (const row of chunk) {
         const recipientId = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
         if (recipientId) {
@@ -99,13 +97,7 @@ export async function matchBatch({ batchId, onProgress }) {
           );
         }
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }

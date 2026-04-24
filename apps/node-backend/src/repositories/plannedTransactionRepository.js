@@ -4,7 +4,7 @@
  * Mirrors: apps/backend/repositories/planned_transaction_repository.py
  */
 
-import { getClient, query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { sanitizeUpdateFields } from '../middleware/validation.js';
 
 function buildPlannedTransactionWhereClause({
@@ -297,24 +297,17 @@ export const plannedTransactionRepository = {
       loan_regular_payment_amount != null ? Number(loan_regular_payment_amount) : null,
       loan_first_payment_date || null,
     ];
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
+    const plannedId = await withTransaction(async (client) => {
       const result = await client.query(sql, params);
-      const plannedId = result.rows[0].id;
+      const newId = result.rows[0].id;
 
       if (is_loan && Array.isArray(loan_schedule) && loan_schedule.length > 0) {
-        await insertLoanScheduleBatch(client, plannedId, loan_schedule);
+        await insertLoanScheduleBatch(client, newId, loan_schedule);
       }
 
-      await client.query('COMMIT');
-      return this.getById(plannedId);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+      return newId;
+    });
+    return this.getById(plannedId);
   },
 
   async update(id, fields) {
@@ -475,24 +468,20 @@ export const plannedTransactionRepository = {
    * @returns {Promise<{ duplicate: boolean }>}
    */
   async executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(async (client) => {
+      // ON CONFLICT DO NOTHING → idempotent retry of the same execute call
+      // (unique_violation on (planned_transaction_id, executed_transaction_id)).
+      const insertResult = await client.query(
+        `INSERT INTO planned_transaction_executions
+           (planned_transaction_id, executed_transaction_id, execution_date)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (planned_transaction_id, executed_transaction_id) DO NOTHING
+         RETURNING id`,
+        [plannedTransactionId, executedTransactionId, executionDate]
+      );
 
-      try {
-        await client.query(
-          `INSERT INTO planned_transaction_executions
-             (planned_transaction_id, executed_transaction_id, execution_date)
-           VALUES ($1, $2, $3)`,
-          [plannedTransactionId, executedTransactionId, executionDate]
-        );
-      } catch (err) {
-        // 23505 = unique_violation → idempotent retry of the same execute call.
-        if (err && err.code === '23505') {
-          await client.query('ROLLBACK');
-          return { duplicate: true };
-        }
-        throw err;
+      if (insertResult.rowCount === 0) {
+        return { duplicate: true };
       }
 
       const sanitized = sanitizeUpdateFields('planned_transactions', updateFields);
@@ -514,34 +503,18 @@ export const plannedTransactionRepository = {
         );
       }
 
-      await client.query('COMMIT');
       return { duplicate: false };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   },
 
   async replaceLoanSchedule(plannedTransactionId, scheduleEntries = []) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
+    return withTransaction(async (client) => {
       await client.query(
         'DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1',
         [plannedTransactionId]
       );
-
       await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
-
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   },
 };
 

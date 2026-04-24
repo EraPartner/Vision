@@ -6,7 +6,7 @@
  * shared query helper — no raw pool references in this file.
  */
 
-import { query, getClient } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 
 /**
  * @param {{ limit?: number, offset?: number }} opts
@@ -84,10 +84,7 @@ export async function getBatch(id) {
  * @returns {Promise<{ deleted: number }>}
  */
 export async function rollbackBatch(id) {
-    const client = await getClient();
-    try {
-        await client.query('BEGIN');
-
+    return withTransaction(async (client) => {
         const { rowCount: deleted } = await client.query(
             `DELETE FROM transactions WHERE import_batch_id = $1`,
             [id]
@@ -102,12 +99,6 @@ export async function rollbackBatch(id) {
             [id]
         );
 
-        await client.query('COMMIT');
         return { deleted: deleted ?? 0 };
-    } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw err;
-    } finally {
-        client.release();
-    }
+    });
 }

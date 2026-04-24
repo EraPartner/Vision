@@ -10,7 +10,7 @@
  * `rows_duplicate`, `rows_error`).
  */
 
-import { query, getClient } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { refreshAggregations } from '../aggregationRefresh.js';
 
@@ -38,10 +38,7 @@ export async function commitBatch({ batchId, onProgress }) {
 
   for (let start = 0; start < total; start += COMMIT_CHUNK) {
     const chunk = matched.slice(start, start + COMMIT_CHUNK);
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-
+    await withTransaction(async (client) => {
       for (const row of chunk) {
         const dateStr = row.tx_date instanceof Date
           ? row.tx_date.toISOString().slice(0, 10)
@@ -102,14 +99,7 @@ export async function commitBatch({ batchId, onProgress }) {
           );
         }
       }
-
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
 
     seen += chunk.length;
     if (onProgress) {
