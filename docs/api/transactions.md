@@ -3,9 +3,9 @@ title: API - Transactions
 type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
-description: CRUD operations for financial transactions
-date: 2026-04-23
-tags: [api, transactions, finance, phase-9, decimal, money]
+description: CRUD operations for financial transactions, including CSV and NDJSON export
+date: 2026-04-24
+tags: [api, transactions, finance, phase-5a, phase-9, decimal, money, export]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
 related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
@@ -117,6 +117,32 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Runnin
 Implementation note:
 - CSV export row escaping/assembly and filename creation are handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
 - CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
+- Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
+
+### GET /api/transactions/export/json
+
+Export transactions to NDJSON (newline-delimited JSON) format using chunked streaming (Phase 5A).
+
+**Query Parameters:**
+- `start_date`, `end_date`, `bank_account`, `category_id`: Filter exported rows
+
+**Response:** NDJSON file download (one JSON object per line):
+```
+{"id":123,"date":"2026-01-15","bank_account":"BE12 3456...","recipient":"Supermarket","memo":"Weekly shopping","amount":-75.50,"currency":"EUR","balance":1500.00,"category":"FOOD:GROCERIES","comment":null}
+{"id":124,"date":"2026-01-16","bank_account":"BE12 3456...","recipient":"Gas Station","memo":"Fuel","amount":-45.00,"currency":"EUR","balance":1455.00,"category":"TRANSPORT:GAS","comment":null}
+```
+
+**Streaming Behavior (Phase 5A):**
+- NDJSON is streamed in chunks of 1000 rows via `res.write()` to support large exports without memory overhead.
+- Stable `ORDER BY (date ASC, id ASC)` ensures no gaps/duplicates across chunk boundaries.
+- Each row is serialized as a complete JSON object followed by a newline character.
+- 404 probe query runs before streaming starts; error responses return JSON if no rows match filters.
+- Content-Type is `application/x-ndjson` with standard `Content-Disposition: attachment` header.
+
+**Rate Limited:** 30 requests per minute
+
+Implementation note:
+- JSON export uses shared filter-building and chunk-SQL helpers (`buildExportFilters`, `buildExportChunkSql`, `buildTransactionExportJsonFilename`) for consistency with CSV export ([[apps/node-backend/src/routes/transactions.js]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id

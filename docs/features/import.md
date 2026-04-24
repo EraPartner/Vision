@@ -1,9 +1,9 @@
 ---
-title: Feature - CSV Import & Deduplication
+title: Feature - CSV Import, Export & Deduplication
 type: feature
 status: active
-date: 2026-04-23
-tags: [feature, import, csv, deduplication, phase-1, performance, concurrency]
+date: 2026-04-24
+tags: [feature, import, export, csv, json, deduplication, phase-5a, phase-1, performance, concurrency]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication
 related_code: ["apps/node-backend/src/services/importService.js", "apps/node-backend/src/services/streamingImportService.js", "apps/node-backend/src/services/rawTransactionImportService.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/repositories/rawTransactionRepository.js"]
@@ -240,6 +240,27 @@ This allows:
 - Re-import without duplicates
 - Audit trail of original data
 - Multiple bank account management
+
+## Export Formats
+
+Vision supports transaction export in two formats:
+
+### CSV Export
+- Streaming CSV with columns: Date, Bank Account, Recipient, Memo, Amount, Currency, Balance, Category, Comment
+- Optional running balance computation via JavaScript accumulator
+- Formula-injection protection (neutralizes `=`, `+`, `-`, `@` prefixes)
+- Endpoint: `GET /api/transactions/export/csv` (30 req/min rate limit)
+
+### JSON Export (Phase 5A)
+- Streaming NDJSON (newline-delimited JSON) format for programmatic processing
+- One complete JSON object per line with fields: id, date, bank_account, recipient, memo, amount, currency, balance, category, comment
+- No balance computation (direct field passthrough)
+- Endpoint: `GET /api/transactions/export/json` (30 req/min rate limit)
+- See [[docs/api/transactions#get-apitransactionsexportjson|Transactions API]] for full spec
+
+### Frontend Support
+- [[apps/frontend/src/pages/ImportPage.tsx]]: Dual export buttons (CSV + JSON) with `exportingFormat` state management
+- i18n: `importPage.exportBtn` ("Export CSV") and `importPage.exportJsonBtn` ("Export JSON")
 
 ## Related
 

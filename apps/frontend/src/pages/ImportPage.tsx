@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ImportHistoryCard } from "@/components/import/ImportHistoryCard";
+import { CsvColumnMapper } from "@/components/import/CsvColumnMapper";
 
 interface ImportProgress {
   phase: string;
@@ -422,106 +423,12 @@ export default function ImportPage() {
           {/* Custom CSV configuration fields */}
           {bankSource === "custom" && (
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                  <p className="text-sm font-semibold text-foreground"> 
-                 {t('importPage.customConfig')}
-               </p>
+              <p className="text-sm font-semibold text-foreground">
+                {t('importPage.customConfig')}
+              </p>
 
+              {/* Separator + date format — these affect how the file is parsed */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date-column">{t('importPage.dateCol')}</Label>
-                  <Input
-                    id="date-column"
-                    placeholder={t('importPage.dateColPlaceholder')}
-                    value={customConfig.dateColumn}
-                    onChange={(e) =>
-                      setCustomConfig({
-                        ...customConfig,
-                        dateColumn: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="date-format">{t('importPage.dateFormat')}</Label>
-                  <Select
-                    value={customConfig.dateFormat}
-                    onValueChange={(val) =>
-                      setCustomConfig({ ...customConfig, dateFormat: val })
-                    }
-                  >
-                    <SelectTrigger id="date-format">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="%Y-%m-%d">
-                        YYYY-MM-DD (2024-12-31)
-                      </SelectItem>
-                      <SelectItem value="%d/%m/%Y">
-                        DD/MM/YYYY (31/12/2024)
-                      </SelectItem>
-                      <SelectItem value="%m/%d/%Y">
-                        MM/DD/YYYY (12/31/2024)
-                      </SelectItem>
-                      <SelectItem value="%d-%m-%Y">
-                        DD-MM-YYYY (31-12-2024)
-                      </SelectItem>
-                      <SelectItem value="%Y-%m-%d %H:%M:%S">
-                        YYYY-MM-DD HH:MM:SS
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="recipient-column">{t('importPage.recipientCol')}</Label>
-                  <Input
-                    id="recipient-column"
-                    placeholder={t('importPage.recipientColPlaceholder')}
-                    value={customConfig.recipientColumn}
-                    onChange={(e) =>
-                      setCustomConfig({
-                        ...customConfig,
-                        recipientColumn: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="amount-column">{t('importPage.amountCol')}</Label>
-                  <Input
-                    id="amount-column"
-                    placeholder={t('importPage.amountColPlaceholder')}
-                    value={customConfig.amountColumn}
-                    onChange={(e) =>
-                      setCustomConfig({
-                        ...customConfig,
-                        amountColumn: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="memo-column">{t('importPage.memoCol')}</Label>
-                  <Input
-                    id="memo-column"
-                    placeholder={t('importPage.memoColPlaceholder')}
-                    value={customConfig.memoColumn}
-                    onChange={(e) =>
-                      setCustomConfig({
-                        ...customConfig,
-                        memoColumn: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="separator">{t('importPage.separator')}</Label>
                   <Select
@@ -541,8 +448,30 @@ export default function ImportPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="date-format">{t('importPage.dateFormat')}</Label>
+                  <Select
+                    value={customConfig.dateFormat}
+                    onValueChange={(val) =>
+                      setCustomConfig({ ...customConfig, dateFormat: val })
+                    }
+                  >
+                    <SelectTrigger id="date-format">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="%Y-%m-%d">YYYY-MM-DD (2024-12-31)</SelectItem>
+                      <SelectItem value="%d/%m/%Y">DD/MM/YYYY (31/12/2024)</SelectItem>
+                      <SelectItem value="%m/%d/%Y">MM/DD/YYYY (12/31/2024)</SelectItem>
+                      <SelectItem value="%d-%m-%Y">DD-MM-YYYY (31-12-2024)</SelectItem>
+                      <SelectItem value="%Y-%m-%d %H:%M:%S">YYYY-MM-DD HH:MM:SS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
+              {/* Encoding + skip rows */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="encoding">{t('importPage.encoding')}</Label>
@@ -582,8 +511,23 @@ export default function ImportPage() {
                 </div>
               </div>
 
+              {/* Column mapper — dropdowns when file loaded, text inputs otherwise */}
+              <CsvColumnMapper
+                file={file}
+                separator={customConfig.separator}
+                config={{
+                  dateColumn: customConfig.dateColumn,
+                  recipientColumn: customConfig.recipientColumn,
+                  amountColumn: customConfig.amountColumn,
+                  memoColumn: customConfig.memoColumn,
+                }}
+                onChange={(cols) =>
+                  setCustomConfig({ ...customConfig, ...cols })
+                }
+              />
+
               <p className="text-xs text-muted-foreground">
-                {t('importPage.requiredFieldsNote')}
+                {t('importPage.requiredNote')}
               </p>
             </div>
           )}

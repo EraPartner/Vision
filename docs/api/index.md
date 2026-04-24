@@ -2,9 +2,9 @@
 title: API Documentation Index
 type: api-index
 status: active
-date: 2026-04-22
-tags: [api, index, rest, endpoints, openapi, phase-2]
-description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4)
+date: 2026-04-24
+tags: [api, index, rest, endpoints, openapi, phase-5a, phase-2]
+description: Complete REST API documentation for the Vision backend; authoritative spec in openapi.yaml (Phase 2.4); JSON export added in Phase 5A
 aliases: [API, endpoints, REST]
 ---
 

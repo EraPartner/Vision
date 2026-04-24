@@ -2,10 +2,10 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-23
-updated: 2026-04-23
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-4, feature-flags]
-description: Complete matrix of all 131 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); includes Phase 4 feature flags; see openapi.yaml for authoritative spec (Phase 2.4)
+date: 2026-04-24
+updated: 2026-04-24
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-5a, phase-2, phase-4, feature-flags]
+description: Complete matrix of all 129 API endpoints organized by resource for quick lookup (AI Chat with 30 tools); includes Phase 4 feature flags; JSON export in Phase 5A; see openapi.yaml for authoritative spec (Phase 2.4)
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
@@ -16,12 +16,13 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 
-## Transactions (6 endpoints)
+## Transactions (7 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
 | GET | `/api/transactions` | List with filtering/pagination | — | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/export/csv` | Export as CSV (streaming, chunked) | 30 req/min | [[docs/api/transactions\|Transactions]] |
+| GET | `/api/transactions/export/json` | Export as NDJSON (streaming, chunked) | 30 req/min | [[docs/api/transactions\|Transactions]] |
 | GET | `/api/transactions/:id` | Get single | — | [[docs/api/transactions\|Transactions]] |
 | POST | `/api/transactions` | Create | — | [[docs/api/transactions\|Transactions]] |
 | PATCH | `/api/transactions/:id` | Update | 30 req/min | [[docs/api/transactions\|Transactions]] |
@@ -239,7 +240,7 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 
 | Resource | Endpoints | Rate-Limited |
 |----------|-----------|--------------|
-| Transactions | 6 | 1 |
+| Transactions | 7 | 2 |
 | Categories | 7 | 0 |
 | Recipients | 8 | 0 |
 | Planned Transactions | 6 | 1 |
@@ -257,7 +258,7 @@ Legacy endpoints. Coexist with `/api/aggregations/*` through Phase 8; removed in
 | Aggregations (Phase 2) | 6 | 0 |
 | Info/Statistics | 20 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **128** | **9** |
+| **Total** | **129** | **10** |
 
 ## Related
 
