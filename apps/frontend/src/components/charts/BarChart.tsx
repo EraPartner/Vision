@@ -21,10 +21,22 @@ export interface BarSeries<Datum> {
     readonly color?: string;
 }
 
+/** A line overlay drawn on top of the bars (e.g. rolling average). */
+export interface BarOverlay<Datum> {
+    readonly key: string;
+    readonly label?: string;
+    /** Return null to skip a point (gap in the line). */
+    readonly accessor: (datum: Datum) => number | null;
+    readonly color?: string;
+    readonly strokeWidth?: number;
+    readonly strokeDasharray?: string;
+}
+
 export interface BarChartProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
     readonly categoryAccessor: (datum: Datum) => string;
     readonly series: ReadonlyArray<BarSeries<Datum>>;
+    readonly overlays?: ReadonlyArray<BarOverlay<Datum>>;
     readonly height?: number;
     readonly layout?: "vertical" | "horizontal";
     readonly barRadius?: number;
@@ -54,10 +66,35 @@ export function BarChart<Datum>(props: BarChartProps<Datum>) {
     );
 }
 
+function buildOverlayPath<Datum>(
+    data: ReadonlyArray<Datum>,
+    accessor: (d: Datum) => number | null,
+    categoryAccessor: (d: Datum) => string,
+    categoryScale: ReturnType<typeof scaleBand>,
+    valueScale: ReturnType<typeof scaleLinear>,
+): string {
+    let path = "";
+    let inSegment = false;
+    for (const datum of data) {
+        const val = accessor(datum);
+        if (val === null) {
+            inSegment = false;
+            continue;
+        }
+        const cat = categoryAccessor(datum);
+        const x = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
+        const y = valueScale(val) ?? 0;
+        path += inSegment ? `L${x},${y}` : `M${x},${y}`;
+        inSegment = true;
+    }
+    return path;
+}
+
 function Inner<Datum>({
     data,
     categoryAccessor,
     series,
+    overlays,
     layout = "vertical",
     barRadius = 4,
     maxBarSize,
@@ -83,12 +120,20 @@ function Inner<Datum>({
     const valueDomain = useMemo(() => {
         if (yDomain) return yDomain;
         const values: number[] = [];
-        for (const d of data) for (const s of series) values.push(s.accessor(d));
+        for (const d of data) {
+            for (const s of series) values.push(s.accessor(d));
+            if (overlays) {
+                for (const ov of overlays) {
+                    const v = ov.accessor(d);
+                    if (v !== null) values.push(v);
+                }
+            }
+        }
         const lo = values.length ? Math.min(0, ...values) : 0;
         const hi = values.length ? Math.max(0, ...values) : 1;
         const pad = (hi - lo) * 0.08 || 1;
         return [lo, hi + pad] as const;
-    }, [data, series, yDomain]);
+    }, [data, series, overlays, yDomain]);
 
     const categoryScale = useMemo(
         () =>
@@ -134,7 +179,7 @@ function Inner<Datum>({
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
         if (!hover) return [];
-        return series.map((s, i) => {
+        const seriesItems = series.map((s, i) => {
             const v = s.accessor(hover.datum);
             return {
                 label: s.label ?? s.key,
@@ -142,7 +187,17 @@ function Inner<Datum>({
                 value: tooltipValueFormat ? tooltipValueFormat(v, s.key) : String(v),
             };
         });
-    }, [hover, series, tooltipValueFormat]);
+        const overlayItems: ChartTooltipDatum[] = (overlays ?? []).flatMap((ov, i) => {
+            const v = ov.accessor(hover.datum);
+            if (v === null) return [];
+            return [{
+                label: ov.label ?? ov.key,
+                color: ov.color ?? getChartColor(series.length + i),
+                value: tooltipValueFormat ? tooltipValueFormat(v, ov.key) : v.toFixed(0),
+            }];
+        });
+        return [...seriesItems, ...overlayItems];
+    }, [hover, series, overlays, tooltipValueFormat]);
 
     const baseline = layout === "vertical" ? valueScale(0) ?? innerHeight : valueScale(0) ?? 0;
 
@@ -258,6 +313,52 @@ function Inner<Datum>({
                                 />
                             );
                         });
+                    })}
+
+                    {/* Overlay lines (e.g. rolling averages) — vertical layout only */}
+                    {layout === "vertical" && overlays?.map((ov) => {
+                        const pathD = buildOverlayPath(
+                            data, ov.accessor, categoryAccessor, categoryScale, valueScale,
+                        );
+                        if (!pathD) return null;
+
+                        // Dot markers for each non-null point
+                        const dots = data.flatMap((datum) => {
+                            const val = ov.accessor(datum);
+                            if (val === null) return [];
+                            const cat = categoryAccessor(datum);
+                            const cx = (categoryScale(cat) ?? 0) + categoryScale.bandwidth() / 2;
+                            const cy = valueScale(val) ?? 0;
+                            return [{ cx, cy }];
+                        });
+
+                        const stroke = ov.color ?? "hsl(var(--accent))";
+                        return (
+                            <g key={`ov-${ov.key}`}>
+                                <path
+                                    d={pathD}
+                                    fill="none"
+                                    stroke={stroke}
+                                    strokeWidth={ov.strokeWidth ?? 2}
+                                    strokeDasharray={ov.strokeDasharray}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    style={{ pointerEvents: "none" }}
+                                />
+                                {dots.map(({ cx, cy }, i) => (
+                                    <circle
+                                        key={`dot-${ov.key}-${i}`}
+                                        cx={cx}
+                                        cy={cy}
+                                        r={3}
+                                        fill={stroke}
+                                        stroke="var(--background, #fff)"
+                                        strokeWidth={1.5}
+                                        style={{ pointerEvents: "none" }}
+                                    />
+                                ))}
+                            </g>
+                        );
                     })}
 
                     {layout === "vertical" ? (

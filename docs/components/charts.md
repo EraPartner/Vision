@@ -2,7 +2,7 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-04-17
+date: 2026-04-24
 tags: [components, charts, visx, d3, visualization, phase-9]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling
 aliases: [charts, chart-components, visx-charts, charting, visualization]
@@ -41,6 +41,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `Sparkline` | Mini inline sparkline | Micro-charts in stat cards or tables | StatCard, performance tables |
 | `Candlestick` | OHLC price action | Stock/crypto price visualization | StocksPage, CryptoPage |
 | `TreemapChart` | Hierarchical rectangles | Category spending breakdown | StatisticsPage |
+| `SankeyChart` | Flow diagram with d3-sankey | Income-to-category allocation | StatisticsPage Flow tab |
 
 ### Shared Components
 
@@ -260,6 +261,48 @@ Mobile breakpoints automatically adjust:
 - **375px–768px**: Standard margins, standard fonts
 - **768px+**: Enhanced margins, larger fonts, multi-column legend
 
+## SankeyChart (d3-sankey)
+
+**Purpose:** Directed flow diagram showing income allocation to spending categories.
+
+**Location:** `apps/frontend/src/components/statistics/SankeyChart.tsx`
+
+**Implementation:**
+
+- Uses `d3-sankey` library for layout computation
+- SVG rendering with curved links, rectangular nodes, and text labels
+- Deep-clones input data (d3-sankey mutates nodes/links in-place)
+- Interactive hover with opacity-based highlighting
+
+**Critical Detail:** Node IDs must be **strings** (not integers) for d3-sankey's `nodeId` accessor to resolve link source/target. Passing integers causes silent layout failure (graph = null).
+
+**Example:**
+
+```tsx
+import { SankeyChart } from '@/components/statistics/SankeyChart';
+
+function FlowTab() {
+  const flowData = {
+    nodes: [
+      { id: "__income__", label: "Income", value: 5000 },
+      { id: "cat:Groceries", label: "Groceries", value: 2000 },
+      { id: "__savings__", label: "Savings", value: 3000 }
+    ],
+    links: [
+      { source: "__income__", target: "cat:Groceries", value: 2000 },
+      { source: "__income__", target: "__savings__", value: 3000 }
+    ],
+    year: 2026
+  };
+
+  return <SankeyChart data={flowData} height={420} />;
+}
+```
+
+**Related:** [[docs/features/sankey-flow|Sankey Flow Feature]], [[docs/components/statistics|Statistics Components]]
+
+---
+
 ## Related Documentation
 
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
@@ -267,5 +310,6 @@ Mobile breakpoints automatically adjust:
 - [[docs/adr/008-performance-page-server-computed-response|ADR-008: Performance Page Server-Computed Response]]
 - [[docs/components/dashboard|Dashboard Components]]
 - [[docs/features/statistics|Statistics Feature]]
+- [[docs/features/sankey-flow|Sankey Flow Feature]]
 - [[docs/features/portfolio|Portfolio Feature]]
 - [[docs/performance/chart-downsampling|Chart Downsampling (LTTB)]]
