@@ -8,6 +8,7 @@ const routeHandlers = {};
 const mockRouter = {
   get: vi.fn((path, ...args) => { routeHandlers[`get:${path}`] = args[args.length - 1]; }),
   post: vi.fn((path, ...args) => { routeHandlers[`post:${path}`] = args[args.length - 1]; }),
+  delete: vi.fn((path, ...args) => { routeHandlers[`delete:${path}`] = args[args.length - 1]; }),
   use: vi.fn((...args) => {
     routeHandlers.use = routeHandlers.use || [];
     routeHandlers.use.push(args[args.length - 1]);
@@ -85,12 +86,23 @@ vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('../../src/repositories/importBatchRepository.js', () => ({
+  listBatches: vi.fn(),
+  getBatch: vi.fn(),
+  rollbackBatch: vi.fn(),
+}));
+
+vi.mock('../../src/services/aggregationRefresh.js', () => ({
+  refreshAggregations: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { importCSVWithRawStorage } from '../../src/services/rawTransactionImportService.js';
 import { getSupportedBanks } from '../../src/services/bankAdapters.js';
 import { importCSVStreaming } from '../../src/services/streamingImportService.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../../src/services/dataImportService.js';
+import { listBatches, getBatch, rollbackBatch } from '../../src/repositories/importBatchRepository.js';
 import multer from 'multer';
-import { ValidationError } from '../../src/middleware/errorHandler.js';
+import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/importRoutes.js');
 
 describe('Import Routes', () => {
@@ -490,6 +502,159 @@ describe('Import Routes', () => {
       const res = mockResponse();
 
       await expect(routeHandlers['post:/categories'](req, res)).rejects.toThrow('boom');
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // GET /api/import/batches
+  // ──────────────────────────────────────────
+  describe('GET /batches', () => {
+    it('returns paginated batch list with defaults', async () => {
+      listBatches.mockResolvedValue({
+        batches: [{ id: 1, adapter_name: 'belfius', status: 'complete', rows_imported: 10 }],
+        total: 1,
+      });
+
+      const req = { query: {} };
+      const res = mockResponse();
+      await routeHandlers['get:/batches'](req, res);
+
+      expect(listBatches).toHaveBeenCalledWith({ limit: 50, offset: 0 });
+      const body = res.json.mock.calls[0][0];
+      expect(body.ok).toBe(true);
+      expect(body.data.batches).toHaveLength(1);
+      expect(body.data.total).toBe(1);
+      expect(body.data.limit).toBe(50);
+      expect(body.data.offset).toBe(0);
+    });
+
+    it('clamps limit to 200', async () => {
+      listBatches.mockResolvedValue({ batches: [], total: 0 });
+
+      const req = { query: { limit: '999', offset: '0' } };
+      const res = mockResponse();
+      await routeHandlers['get:/batches'](req, res);
+
+      expect(listBatches).toHaveBeenCalledWith({ limit: 200, offset: 0 });
+    });
+
+    it('passes custom limit and offset', async () => {
+      listBatches.mockResolvedValue({ batches: [], total: 5 });
+
+      const req = { query: { limit: '10', offset: '20' } };
+      const res = mockResponse();
+      await routeHandlers['get:/batches'](req, res);
+
+      expect(listBatches).toHaveBeenCalledWith({ limit: 10, offset: 20 });
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // GET /api/import/batches/:id
+  // ──────────────────────────────────────────
+  describe('GET /batches/:id', () => {
+    it('returns batch for valid id', async () => {
+      getBatch.mockResolvedValue({
+        id: 7, adapter_name: 'kbc', status: 'complete', rows_imported: 20, transactions_remaining: 20,
+      });
+
+      const req = { params: { id: '7' } };
+      const res = mockResponse();
+      await routeHandlers['get:/batches/:id'](req, res);
+
+      expect(getBatch).toHaveBeenCalledWith(7);
+      const body = res.json.mock.calls[0][0];
+      expect(body.ok).toBe(true);
+      expect(body.data.id).toBe(7);
+    });
+
+    it('throws ValidationError for non-numeric id', async () => {
+      const req = { params: { id: 'abc' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['get:/batches/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(getBatch).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundError when batch does not exist', async () => {
+      getBatch.mockResolvedValue(null);
+
+      const req = { params: { id: '999' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['get:/batches/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // DELETE /api/import/batches/:id (rollback)
+  // ──────────────────────────────────────────
+  describe('DELETE /batches/:id', () => {
+    it('rolls back complete batch and returns deleted count', async () => {
+      getBatch.mockResolvedValue({ id: 3, status: 'complete' });
+      rollbackBatch.mockResolvedValue({ deleted: 15 });
+
+      const req = { params: { id: '3' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/batches/:id'](req, res);
+
+      expect(rollbackBatch).toHaveBeenCalledWith(3);
+      const body = res.json.mock.calls[0][0];
+      expect(body.ok).toBe(true);
+      expect(body.data.deleted).toBe(15);
+    });
+
+    it('throws ValidationError for non-numeric id', async () => {
+      const req = { params: { id: 'nope' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['delete:/batches/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(getBatch).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundError when batch does not exist', async () => {
+      getBatch.mockResolvedValue(null);
+
+      const req = { params: { id: '42' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['delete:/batches/:id'](req, res)).rejects.toBeInstanceOf(NotFoundError);
+      expect(rollbackBatch).not.toHaveBeenCalled();
+    });
+
+    it('throws ValidationError when batch already aborted', async () => {
+      getBatch.mockResolvedValue({ id: 5, status: 'aborted' });
+
+      const req = { params: { id: '5' } };
+      const res = mockResponse();
+
+      await expect(routeHandlers['delete:/batches/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+      expect(rollbackBatch).not.toHaveBeenCalled();
+    });
+
+    it.each(['staging', 'validating', 'matching', 'committing'])(
+      'throws ValidationError when batch is in-progress (%s)',
+      async (status) => {
+        getBatch.mockResolvedValue({ id: 6, status });
+
+        const req = { params: { id: '6' } };
+        const res = mockResponse();
+
+        await expect(routeHandlers['delete:/batches/:id'](req, res)).rejects.toBeInstanceOf(ValidationError);
+        expect(rollbackBatch).not.toHaveBeenCalled();
+      }
+    );
+
+    it('returns deleted:0 when no transactions linked to batch', async () => {
+      getBatch.mockResolvedValue({ id: 8, status: 'complete' });
+      rollbackBatch.mockResolvedValue({ deleted: 0 });
+
+      const req = { params: { id: '8' } };
+      const res = mockResponse();
+      await routeHandlers['delete:/batches/:id'](req, res);
+
+      const body = res.json.mock.calls[0][0];
+      expect(body.data.deleted).toBe(0);
     });
   });
 

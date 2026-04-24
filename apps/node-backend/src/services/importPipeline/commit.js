@@ -75,8 +75,8 @@ export async function commitBatch({ batchId, onProgress }) {
         try {
           await client.query(
             `INSERT INTO transactions
-                (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
+                (date, bank_account, recipient_id, amount, memo, currency, balance, comment, import_batch_id, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)`,
             [
               dateStr,
               row.bank_account || null,
@@ -86,6 +86,7 @@ export async function commitBatch({ batchId, onProgress }) {
               row.currency || null,
               row.balance != null ? row.balance : null,
               row.comment || null,
+              batchId,
             ]
           );
           imported++;

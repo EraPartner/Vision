@@ -15,8 +15,10 @@ import { logger } from '../config/logger.js';
 import { env } from '../config/env.js';
 import { scheduleRefresh } from '../services/materializedViewService.js';
 import { runImportPipeline } from '../services/importPipeline/index.js';
-import { ValidationError } from '../middleware/errorHandler.js';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
+import { listBatches, getBatch, rollbackBatch } from '../repositories/importBatchRepository.js';
+import { refreshAggregations } from '../services/aggregationRefresh.js';
 
 const router = Router();
 
@@ -312,6 +314,49 @@ router.post('/categories', upload.single('file'), async (req, res) => {
   } finally {
     cleanup(req.file.path);
   }
+});
+
+// ─── Batch history + rollback ─────────────────────────────────────────────────
+
+// GET /api/import/batches
+router.get('/batches', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit ?? '50', 10), 200);
+  const offset = parseInt(req.query.offset ?? '0', 10);
+  const { batches, total } = await listBatches({ limit, offset });
+  res.ok({ batches, total, limit, offset });
+});
+
+// GET /api/import/batches/:id
+router.get('/batches/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+  const batch = await getBatch(id);
+  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
+  res.ok(batch);
+});
+
+// DELETE /api/import/batches/:id — rollback: deletes transactions, marks batch aborted
+router.delete('/batches/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) throw new ValidationError('Invalid batch id');
+
+  const batch = await getBatch(id);
+  if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
+  if (batch.status === 'aborted') throw new ValidationError('Batch is already aborted');
+  if (['staging', 'validating', 'matching', 'committing'].includes(batch.status)) {
+    throw new ValidationError('Cannot rollback a batch that is still in progress');
+  }
+
+  const { deleted } = await rollbackBatch(id);
+  logger.info('[import] batch rolled back', { batchId: id, deleted });
+
+  if (deleted > 0) {
+    refreshAggregations().catch((err) => {
+      logger.warn('[import] post-rollback aggregation refresh failed', { batchId: id, error: err?.message });
+    });
+  }
+
+  res.ok({ deleted });
 });
 
 // Multer error translator — convert to typed errors so global handler emits envelope.
