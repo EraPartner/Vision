@@ -59,8 +59,7 @@ describe('Watchlist Routes', () => {
       });
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ id: 1 }],
-        meta: { pagination: { total: 1, limit: 5000, offset: 0 } },
+        data: { items: [{ id: 1 }], total: 1, limit: 5000, offset: 0 },
       });
     });
 

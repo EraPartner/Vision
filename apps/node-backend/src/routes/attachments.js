@@ -79,7 +79,7 @@ router.post(
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
   const transactionId = parseInt(req.params.id, 10);
   const attachments = await attachmentRepository.listByTransaction(transactionId);
-  res.ok(attachments, { total: attachments.length });
+  res.ok({ items: attachments, total: attachments.length });
 });
 
 // ── Download ───────────────────────────────────────────────────────────────────

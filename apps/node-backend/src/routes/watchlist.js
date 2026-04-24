@@ -26,8 +26,11 @@ router.get('/', async (req, res) => {
     assetClass: asset_class || null,
   };
   const result = await watchlistRepository.getAllWithCount(opts);
-  res.ok(result.rows, {
-    pagination: { total: result.total, limit: opts.limit, offset: opts.offset },
+  res.ok({
+    items: result.rows,
+    total: result.total,
+    limit: opts.limit,
+    offset: opts.offset,
   });
 });
 

@@ -215,10 +215,13 @@ router.get('/', async (req, res) => {
     items = await convertRowsToEur(items, target_currency || 'EUR');
   }
 
-  res.ok(
-    items.map(formatTransaction),
-    { pagination: { total, limit: opts.limit, offset: opts.offset } },
-  );
+  res.ok({
+    items: items.map(formatTransaction),
+    total,
+    limit: opts.limit,
+    offset: opts.offset,
+    links: [],
+  });
 });
 
 // GET /api/transactions/export/csv

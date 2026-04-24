@@ -59,8 +59,8 @@ describe('Recipient Routes', () => {
 
       const result = res.json.mock.calls[0][0];
       expect(result.ok).toBe(true);
-      expect(result.data).toEqual([]);
-      expect(result.meta.pagination.total).toBe(0);
+      expect(result.data.items).toEqual([]);
+      expect(result.data.total).toBe(0);
     });
 
     it('should return recipients with data', async () => {
@@ -74,7 +74,7 @@ describe('Recipient Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(2);
+      expect(res.json.mock.calls[0][0].data.total).toBe(2);
     });
   });
 
@@ -268,11 +268,13 @@ describe('Recipient Routes', () => {
       expect(recipientRepository.getAliases).toHaveBeenCalledWith(1);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [
-          { id: 10, name: 'Alias One', primary_recipient_id: 1, links: [] },
-          { id: 11, name: 'Alias Two', primary_recipient_id: 1, links: [] },
-        ],
-        meta: { pagination: { total: 2, limit: 2, offset: 0 } },
+        data: {
+          items: [
+            { id: 10, name: 'Alias One', primary_recipient_id: 1, links: [] },
+            { id: 11, name: 'Alias Two', primary_recipient_id: 1, links: [] },
+          ],
+          total: 2,
+        },
       });
     });
   });

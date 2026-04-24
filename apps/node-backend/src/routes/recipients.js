@@ -33,10 +33,13 @@ router.get('/', async (req, res) => {
     recipientRepository.getCount(opts),
   ]);
 
-  res.ok(
-    items.map((r) => ({ ...r, links: [] })),
-    { pagination: { total, limit: opts.limit, offset: opts.offset } },
-  );
+  res.ok({
+    items: items.map((r) => ({ ...r, links: [] })),
+    total,
+    limit: opts.limit,
+    offset: opts.offset,
+    links: [],
+  });
 });
 
 router.post('/', async (req, res) => {
@@ -113,10 +116,10 @@ router.post('/:id/unmerge', validateIdParam, async (req, res) => {
 router.get('/:id/aliases', validateIdParam, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const aliases = await recipientRepository.getAliases(id);
-  res.ok(
-    aliases.map((a) => ({ ...a, links: [] })),
-    { pagination: { total: aliases.length, limit: aliases.length, offset: 0 } },
-  );
+  res.ok({
+    items: aliases.map((a) => ({ ...a, links: [] })),
+    total: aliases.length,
+  });
 });
 
 export default router;

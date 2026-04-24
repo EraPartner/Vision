@@ -71,8 +71,8 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.data).toEqual([]);
-      expect(result.meta.pagination.total).toBe(0);
+      expect(result.data.items).toEqual([]);
+      expect(result.data.total).toBe(0);
     });
 
     it('should return transactions with data', async () => {
@@ -85,7 +85,7 @@ describe('Transaction Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/'](req, res);
 
-      expect(res.json.mock.calls[0][0].meta.pagination.total).toBe(1);
+      expect(res.json.mock.calls[0][0].data.total).toBe(1);
     });
 
     it('should respect pagination', async () => {
@@ -96,8 +96,8 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.meta.pagination.limit).toBe(2);
-      expect(result.meta.pagination.offset).toBe(3);
+      expect(result.data.limit).toBe(2);
+      expect(result.data.offset).toBe(3);
     });
 
     it('should handle uncategorised filter', async () => {
@@ -121,7 +121,7 @@ describe('Transaction Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 42 }));
-      expect(res.json.mock.calls[0][0].data).toHaveLength(1);
+      expect(res.json.mock.calls[0][0].data.items).toHaveLength(1);
     });
 
     it('should normalize rows when normalize_to_eur is true', async () => {

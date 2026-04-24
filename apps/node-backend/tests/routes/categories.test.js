@@ -58,8 +58,7 @@ describe('Category Routes', () => {
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         ok: true,
-        data: [],
-        meta: { pagination: { total: 0, limit: 50, offset: 0 } },
+        data: expect.objectContaining({ items: [], total: 0, limit: 50, offset: 0 }),
       }));
     });
 
@@ -76,8 +75,8 @@ describe('Category Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.meta.pagination.total).toBe(2);
-      expect(result.data.length).toBe(2);
+      expect(result.data.total).toBe(2);
+      expect(result.data.items.length).toBe(2);
     });
 
     it('should respect pagination parameters', async () => {
@@ -89,8 +88,8 @@ describe('Category Routes', () => {
       await routeHandlers['get:/'](req, res);
 
       const result = res.json.mock.calls[0][0];
-      expect(result.meta.pagination.limit).toBe(2);
-      expect(result.meta.pagination.offset).toBe(1);
+      expect(result.data.limit).toBe(2);
+      expect(result.data.offset).toBe(1);
     });
   });
 

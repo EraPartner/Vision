@@ -67,8 +67,8 @@ describe('Recipient Bank Account Routes', () => {
       await routeHandlers['get:/:id/bank-accounts'](req, res);
 
       const data = res.json.mock.calls[0][0];
-      expect(data.data).toHaveLength(1);
-      expect(data.data[0].account_number).toBe('BE61734041478017');
+      expect(data.data.items).toHaveLength(1);
+      expect(data.data.items[0].account_number).toBe('BE61734041478017');
     });
 
     it('should return empty list', async () => {
@@ -78,7 +78,7 @@ describe('Recipient Bank Account Routes', () => {
       const res = mockResponse();
       await routeHandlers['get:/:id/bank-accounts'](req, res);
 
-      expect(res.json.mock.calls[0][0].data).toEqual([]);
+      expect(res.json.mock.calls[0][0].data.items).toEqual([]);
     });
   });
 

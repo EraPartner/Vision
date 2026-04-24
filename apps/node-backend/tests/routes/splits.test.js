@@ -55,8 +55,7 @@ describe('Splits Routes', () => {
 
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ recipient_id: 2, amount: 12.5 }],
-        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+        data: { items: [{ recipient_id: 2, amount: 12.5 }], total: 1 },
       });
     });
 
@@ -80,8 +79,7 @@ describe('Splits Routes', () => {
       expect(splitRepository.getOwedByRecipient).toHaveBeenCalledWith(7);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ id: 1, split_id: 4 }],
-        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+        data: { items: [{ id: 1, split_id: 4 }], total: 1 },
       });
     });
 
@@ -207,8 +205,7 @@ describe('Splits Routes', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ id: 1 }],
-        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+        data: { items: [{ id: 1 }], total: 1 },
       });
     });
   });
@@ -260,8 +257,7 @@ describe('Splits Routes', () => {
       expect(splitRepository.getSplitsByTransaction).toHaveBeenCalledWith(2);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ id: 8, transaction_id: 2 }],
-        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+        data: { items: [{ id: 8, transaction_id: 2 }], total: 1 },
       });
     });
 
@@ -336,8 +332,7 @@ describe('Splits Routes', () => {
       expect(splitRepository.getPayments).toHaveBeenCalledWith(7);
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
-        data: [{ id: 3, split_id: 7, amount: 6 }],
-        meta: { pagination: { total: 1, limit: 1, offset: 0 } },
+        data: { items: [{ id: 3, split_id: 7, amount: 6 }], total: 1 },
       });
     });
 

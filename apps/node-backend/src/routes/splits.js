@@ -72,18 +72,14 @@ function resolveActor(req) {
   return req.get('x-actor') || req.user?.id || null;
 }
 
-function paginationAll(items) {
-  return { pagination: { total: items.length, limit: items.length, offset: 0 } };
-}
-
 router.get('/owed', async (req, res) => {
   const summary = await splitRepository.getOwedSummary();
-  res.ok(summary, paginationAll(summary));
+  res.ok({ items: summary, total: summary.length });
 });
 
 router.get('/owed/:id', validateIdParam, async (req, res) => {
   const splits = await splitRepository.getOwedByRecipient(parseRouteId(req));
-  res.ok(splits, paginationAll(splits));
+  res.ok({ items: splits, total: splits.length });
 });
 
 router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
@@ -103,7 +99,7 @@ router.get('/owed/:id/export/csv', validateIdParam, async (req, res) => {
 
 router.get('/transaction/:id', validateIdParam, async (req, res) => {
   const splits = await splitRepository.getSplitsByTransaction(parseRouteId(req));
-  res.ok(splits, paginationAll(splits));
+  res.ok({ items: splits, total: splits.length });
 });
 
 router.post('/', async (req, res) => {
@@ -166,7 +162,7 @@ router.post('/batch', async (req, res) => {
     });
   }
   res.status(201);
-  res.ok(created, paginationAll(created));
+  res.ok({ items: created, total: created.length });
 });
 
 router.post('/:id/pay', validateIdParam, async (req, res) => {
@@ -197,7 +193,7 @@ router.post('/:id/pay', validateIdParam, async (req, res) => {
 
 router.get('/:id/payments', validateIdParam, async (req, res) => {
   const payments = await splitRepository.getPayments(parseRouteId(req));
-  res.ok(payments, paginationAll(payments));
+  res.ok({ items: payments, total: payments.length });
 });
 
 router.post('/:id/settle', validateIdParam, async (req, res) => {

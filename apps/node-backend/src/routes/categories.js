@@ -25,10 +25,13 @@ router.get('/', async (req, res) => {
     categoryRepository.getCount(opts),
   ]);
 
-  res.ok(
-    items.map((c) => ({ ...c, links: [] })),
-    { pagination: { total, limit: opts.limit, offset: opts.offset } },
-  );
+  res.ok({
+    items: items.map((c) => ({ ...c, links: [] })),
+    total,
+    limit: opts.limit,
+    offset: opts.offset,
+    links: [],
+  });
 });
 
 router.post('/', async (req, res) => {
