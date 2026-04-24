@@ -10,6 +10,10 @@ WORKDIR /app
 # packages/ must be copied before install so workspace:* deps (@vision/types) resolve.
 COPY package.json bun.lock* ./
 COPY apps/frontend/package.json ./apps/frontend/
+# node-backend manifest is required here: bun workspaces resolve all members
+# at install time, so `bun install --frozen-lockfile` fails if any workspace
+# package.json declared in the root is missing — even though stage 1 only
+# builds the frontend.
 COPY apps/node-backend/package.json ./apps/node-backend/
 COPY packages ./packages
 COPY i18n/source ./i18n/source
