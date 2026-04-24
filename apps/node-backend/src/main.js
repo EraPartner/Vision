@@ -44,6 +44,7 @@ import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppet
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
 import { requestMetrics } from './middleware/requestMetrics.js';
+import { refreshCashflowForecastMc } from './jobs/refreshCashflowForecastMc.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -472,6 +473,14 @@ async function start() {
           logger.error('Periodic quote refresh failed', { error: err.message });
         });
       }, 60 * 60 * 1000); // every hour
+
+      // Nightly cashflow forecast MC cache pre-warm (runs 24h after startup,
+      // then every 24h so daytime requests hit cache instead of re-running MC).
+      setInterval(() => {
+        refreshCashflowForecastMc().catch((err) => {
+          logger.error('Nightly cashflow forecast MC refresh failed', { error: err.message });
+        });
+      }, 24 * 60 * 60 * 1000); // every 24 hours
     });
   } catch (err) {
     logger.error('Failed to start application', { error: err.message });

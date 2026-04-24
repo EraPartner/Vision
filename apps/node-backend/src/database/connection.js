@@ -103,6 +103,35 @@ export async function getClient() {
 }
 
 /**
+ * Run `fn` inside a database transaction.
+ *
+ * Acquires a pooled client, issues BEGIN, invokes `fn(client)`, then COMMITs
+ * on success or ROLLBACKs on throw. Always releases the client.
+ *
+ * @template T
+ * @param {(client: pg.PoolClient) => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export async function withTransaction(fn) {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      logger.error('Transaction rollback failed', rollbackErr);
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Check if the database is reachable.
  * @returns {Promise<boolean>}
  */
