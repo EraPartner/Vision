@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-04-21
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, phase-0, phase-1]
+date: 2026-04-24
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1]
 description: Electron desktop application architecture, IPC communication, sandbox hardening, and health monitoring
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog]
 related_code: ["packaging/electron/", "apps/frontend/src/", "apps/node-backend/src/main.js"]
@@ -89,9 +89,16 @@ Electron configuration is in `packaging/electron/`.
 1. **Electron Main** starts, calls `app.requestSingleInstanceLock()`
    - If lock unavailable (another instance running), quit immediately
    - Otherwise, register `second-instance` handler to focus existing window
-2. **Backend server** is spawned as a child process
-   - **Phase 0+**: Converted easy call-site `readFileSync`/`writeFileSync` to async `fs/promises`. `loadI18n`, `loadSettings`, `saveSettings` deferred due to module-load initialization coupling (logged in TODO.md)
-3. **Health Poll** — `pollHealth()` loops:
+2. **Security Headers Registration** via `registerSecurityHeaders()`
+   - Installs Content-Security-Policy and other security headers via `session.webRequest.onHeadersReceived`
+   - Gated by `app.isPackaged` (dev mode leaves HMR unrestricted)
+   - CSP: `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: https:`, etc.
+3. **Internationalization** loaded asynchronously via `await initI18n()`
+   - `loadI18nAsync()` reads locale from `app.getLocale()`, tries resource path then fallback dir
+   - Deferred from module-load init to support async `fs.promises` in preload/runtime (Phase 0)
+4. **Backend server** is spawned as a child process
+   - Settings, env, and work directory resolved via async functions
+5. **Health Poll** — `pollHealth()` loops:
    - Polls `GET /health` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`)
    - Max 200 attempts (`VISION_HEALTH_POLL_ATTEMPTS`)
    - On success: proceed to step 4
@@ -213,6 +220,29 @@ bun run electron:prod
 - **Main process:** `electron --inspect`
 - **Renderer process:** Chrome DevTools (Cmd+Option+I)
 - **Backend process:** Standard Node.js debugging
+
+### Dev Rebuild File Watcher
+
+In dev mode, a file watcher monitors source files and triggers automatic Docker rebuild+restart on code changes:
+
+```javascript
+// Watches frontend, backend, migrations directories
+fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
+  // Kill in-flight build with SIGTERM to signal cancellation
+  if (activeBuildChild) {
+    activeBuildChild.kill('SIGTERM');
+  }
+  // Queue new rebuild from updated sources
+});
+```
+
+**Behavior:**
+- File edit detected → signal SIGTERM to any in-flight build
+- In-flight build catches SIGTERM, marks error as `.cancelled = true`, rejects promise
+- Cancelled build swallows error (expected), does not log failure
+- New build is immediately queued with the latest source state
+
+**Rationale:** Eliminates stale builds when multiple edits occur in quick succession. Prevents cascading Docker builds while preserving the most recent change for execution.
 
 ---
 

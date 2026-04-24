@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-24: Reaffirm visx/d3 over recharts
+
+[[docs/adr/028-reaffirm-visx-over-recharts|ADR-028]] — Reaffirm visx + d3 as the chart primitive stack; reject TODO proposal to swap back to recharts. ADR-018 justified migration as a bundle reduction (~35kb), not an increase. Unused visx sub-packages (`@visx/hierarchy`, `@visx/text`, `@visx/tooltip`) removed as hygiene win. No visual-regression safety net exists for a port; future swaps require measured bundle evidence and visual-regression testing. Removes "Viz library dedupe" TODO block.
+
 ### 2026-04-23: Zustand Unified Settings Store
 
 [[docs/adr/032-zustand-unified-settings-store|ADR-032]] — Consolidate three separate React contexts (AppSettingsContext, SettingsContext, ThemeContext) into a single Zustand store (`useSettingsStore`). Context Providers remain as thin wrappers for hydration and persistence side-effects. All consumers use `useShallow()` for slice selection to prevent re-renders on unrelated state changes. Eliminates prop drilling, improves performance, and provides a single source of truth for all user settings (app settings, dashboard exclusions, theme).
@@ -54,7 +58,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-04-21: Express 5 Compatibility: path-to-regexp Override
 
-[[docs/adr/028-express5-path-to-regexp-override|ADR-028]] — Override `path-to-regexp` to `^8.2.0` in `package.json` `overrides` and `resolutions` blocks. Legacy v0.1.13 (from Express 4) lacks `.match()` method required by Express 5's router (@2.2.0), causing `TypeError` at first route registration. Explicit override ensures all transitive dependencies resolve to v8.2.0+ with `.match()` support. Unblocks Express 5 router initialization; no code changes required.
+[[docs/adr/029-express5-path-to-regexp-override|ADR-029]] — Override `path-to-regexp` to `^8.2.0` in `package.json` `overrides` and `resolutions` blocks. Legacy v0.1.13 (from Express 4) lacks `.match()` method required by Express 5's router (@2.2.0), causing `TypeError` at first route registration. Explicit override ensures all transitive dependencies resolve to v8.2.0+ with `.match()` support. Unblocks Express 5 router initialization; no code changes required.
 
 ### 2026-04-21: Alembic as Single Source of Schema Truth
 
