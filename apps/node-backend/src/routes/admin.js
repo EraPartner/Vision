@@ -19,7 +19,7 @@ import { getSettings } from '../config/config.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { sanitizePersistedKinesisHistory } from '../services/priceProviderService.js';
-import { AppError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { listProviderHealth, probeProvider } from '../services/providerHealthService.js';
 import { getMetrics } from '../middleware/requestMetrics.js';
 import { getRouteManifest } from '../services/routeManifest.js';
@@ -216,7 +216,7 @@ router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
     if (err.code === '42501') {
       // insufficient_privilege
       const target = table ?? 'all tables';
-      throw new AppError(`Insufficient database privileges to VACUUM ${target}`, 403);
+      throw new ForbiddenError(`Insufficient database privileges to VACUUM ${target}`);
     }
     throw err;
   } finally {

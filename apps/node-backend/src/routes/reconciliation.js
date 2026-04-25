@@ -76,7 +76,8 @@ router.post('/statements', async (req, res) => {
     closing_balance: body.closing_balance != null ? parseFloat(body.closing_balance) : null,
     notes: body.notes ?? null,
   });
-  res.status(201).json({ ok: true, data: statement });
+  res.status(201);
+  res.ok(statement);
 });
 
 router.get('/statements/:id', async (req, res) => {
@@ -157,10 +158,12 @@ router.post('/statements/:id/entries', async (req, res) => {
 
   if (isBulk || validated.length > 1) {
     const entries = await reconciliationRepository.bulkCreateEntries(statementId, validated);
-    res.status(201).json({ ok: true, data: entries, meta: { created: entries.length } });
+    res.status(201);
+    res.ok(entries, { created: entries.length });
   } else {
     const entry = await reconciliationRepository.createEntry({ bank_statement_id: statementId, ...validated[0] });
-    res.status(201).json({ ok: true, data: entry });
+    res.status(201);
+    res.ok(entry);
   }
 });
 
@@ -178,12 +181,14 @@ router.get('/statements/:id/entries/:entryId/candidates', async (req, res) => {
   const statementId = parseId(req.params.id);
   const entryId = parseId(req.params.entryId);
 
-  const statement = await reconciliationRepository.getStatement(statementId);
+  const [statement, entry] = await Promise.all([
+    reconciliationRepository.getStatement(statementId),
+    reconciliationRepository.getEntry(entryId),
+  ]);
   if (!statement) throw new NotFoundError(`Statement ${statementId} not found`);
-
-  const entries = await reconciliationRepository.listEntries(statementId);
-  const entry = entries.find((e) => Number(e.id) === entryId);
-  if (!entry) throw new NotFoundError(`Entry ${entryId} not found in statement ${statementId}`);
+  if (!entry || Number(entry.bank_statement_id) !== statementId) {
+    throw new NotFoundError(`Entry ${entryId} not found in statement ${statementId}`);
+  }
 
   const candidates = await reconciliationRepository.findMatchCandidates({
     statementBankAccount: statement.bank_account,

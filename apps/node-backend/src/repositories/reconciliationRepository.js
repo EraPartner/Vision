@@ -147,18 +147,10 @@ export const reconciliationRepository = {
     const sql = `
       INSERT INTO reconciliation_entries (bank_statement_id, entry_date, description, amount, currency)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING ${ENTRY_SELECT}
-      FROM reconciliation_entries re
-      WHERE re.id = lastval()
-    `;
-    // Use simpler returning approach
-    const insertSql = `
-      INSERT INTO reconciliation_entries (bank_statement_id, entry_date, description, amount, currency)
-      VALUES ($1, $2, $3, $4, $5)
       RETURNING id, bank_statement_id, entry_date::text, description, amount, currency,
                 transaction_id, match_status, match_score, created_at
     `;
-    const result = await query(insertSql, [
+    const result = await query(sql, [
       bank_statement_id,
       entry_date,
       description ?? null,
@@ -166,6 +158,16 @@ export const reconciliationRepository = {
       currency.toUpperCase(),
     ]);
     return result.rows[0];
+  },
+
+  async getEntry(entryId) {
+    const sql = `
+      SELECT ${ENTRY_SELECT}
+      FROM reconciliation_entries re
+      WHERE re.id = $1
+    `;
+    const result = await query(sql, [entryId]);
+    return result.rows[0] ?? null;
   },
 
   async bulkCreateEntries(statementId, entries) {

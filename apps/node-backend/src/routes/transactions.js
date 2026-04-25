@@ -20,6 +20,7 @@ import {
   ConflictError,
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
+import { escapeCsvValue } from '../lib/csv.js';
 
 const router = Router();
 
@@ -54,25 +55,6 @@ function parseTransactionListQuery(query) {
     sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     includeBalance: include_balance === 'true',
   };
-}
-
-const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(['=', '+', '-', '@']);
-
-function neutralizeCsvFormula(value) {
-  if (!value) return value;
-  const trimmedStart = value.trimStart();
-  if (!trimmedStart) return value;
-  const firstChar = trimmedStart.charAt(0);
-  if (!DANGEROUS_CSV_FORMULA_PREFIXES.has(firstChar)) return value;
-  return `'${value}`;
-}
-
-function escapeCsvValue(value) {
-  if (value == null) return '';
-  const stringValue = neutralizeCsvFormula(String(value));
-  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
-    ? `"${stringValue.replace(/"/g, '""')}"`
-    : stringValue;
 }
 
 function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
@@ -399,8 +381,11 @@ router.patch(
     const id = parseRouteId(req);
     const fields = normalizeTransactionPatchFields(req.body);
 
-    await resolveRecipientNameToId(fields);
-    await resolveCategoryNameToId(fields);
+    // Independent — touch disjoint fields, run in parallel.
+    await Promise.all([
+      resolveRecipientNameToId(fields),
+      resolveCategoryNameToId(fields),
+    ]);
 
     const updated = await transactionRepository.update(id, fields);
     if (!updated) {

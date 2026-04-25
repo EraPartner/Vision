@@ -11,6 +11,7 @@ import {
   validateBatchSplitAllocation,
   validatePaymentAmount,
 } from '../services/calculations/splits.js';
+import { escapeCsvValue } from '../lib/csv.js';
 
 const router = Router();
 
@@ -18,14 +19,6 @@ const OWED_EXPORT_HEADER = 'Date,Bank Account,Recipient,Memo,Amount,Currency,Bal
 
 function parseRouteId(req) {
   return parseInt(req.params.id, 10);
-}
-
-function escapeCsvValue(value) {
-  if (value == null) return '';
-  const stringValue = String(value);
-  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
-    ? `"${stringValue.replace(/"/g, '""')}"`
-    : stringValue;
 }
 
 function buildOwedExportCsvRow(row) {
@@ -147,20 +140,19 @@ router.post('/batch', async (req, res) => {
     splits: preparedSplits,
   });
   const actor = resolveActor(req);
-  for (const split of created) {
-    await splitRepository.writeAudit({
-      split_id: split.id,
-      action: 'create',
-      actor,
-      payload: {
-        transaction_id,
-        recipient_id: split.recipient_id,
-        amount: Number(split.amount),
-        note: split.note || null,
-        batch: true,
-      },
-    });
-  }
+  // Independent rows — write audits in parallel.
+  await Promise.all(created.map((split) => splitRepository.writeAudit({
+    split_id: split.id,
+    action: 'create',
+    actor,
+    payload: {
+      transaction_id,
+      recipient_id: split.recipient_id,
+      amount: Number(split.amount),
+      note: split.note || null,
+      batch: true,
+    },
+  })));
   res.status(201);
   res.ok({ items: created, total: created.length });
 });
