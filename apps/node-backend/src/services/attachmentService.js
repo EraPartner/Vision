@@ -15,6 +15,7 @@ import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { env } from '../config/env.js';
+import { sniffMime, extensionMime } from '../lib/fileSniff.js';
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf'];
 const MAX_SIZE_BYTES = env.ATTACHMENT_MAX_SIZE_MB * 1024 * 1024;
@@ -31,6 +32,29 @@ export function getTransactionDir(transactionId) {
 
 function isAllowedMime(mimeType) {
   return ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
+}
+
+/**
+ * Verify uploaded buffer matches the claimed extension via magic bytes.
+ *
+ * Returns the canonical sniffed MIME type when valid; throws otherwise.
+ * The sniffed value should be persisted to the DB instead of the
+ * client-supplied req.file.mimetype.
+ */
+export function verifyAttachmentContent(file) {
+  const sniffed = sniffMime(file.buffer);
+  if (!sniffed) {
+    throw new Error('Unsupported or unrecognised file content. Allowed: PNG, JPEG, GIF, WEBP, PDF.');
+  }
+  if (!isAllowedMime(sniffed)) {
+    throw new Error(`Unsupported file type: ${sniffed}. Allowed: images and PDF.`);
+  }
+  const ext = extname(file.originalname).toLowerCase();
+  const expected = extensionMime(ext);
+  if (expected && expected !== sniffed) {
+    throw new Error(`File extension ${ext} does not match content (${sniffed}).`);
+  }
+  return sniffed;
 }
 
 /** Multer instance configured with in-memory storage + MIME / size guards. */

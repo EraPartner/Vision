@@ -178,7 +178,11 @@ Result when opened: Arbitrary code execution
 
 ### Prevention
 
-All CSV exports use a centralized utility that prefixes dangerous leading characters (`=`, `+`, `-`, `@`) with a single quote, rendering them as literal text:
+All CSV exports use a centralized utility that prefixes dangerous leading characters (`=`, `+`, `-`, `@`, `\t` (tab), `\r` (carriage return)) with a single quote, rendering them as literal text. The check strips surrounding whitespace first to catch cases like `  = formula`:
+
+```
+Example: "  =formula" → trimmed to "=formula" → prefixed to "'=formula" (rendered as literal text)
+```
 
 **Implementation:** [[apps/node-backend/src/lib/csv.js|lib/csv.js]]
 

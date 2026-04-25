@@ -15,6 +15,7 @@ import {
   storeAttachment,
   resolveAbsolutePath,
   removeAttachmentFile,
+  verifyAttachmentContent,
 } from '../services/attachmentService.js';
 import { validateIdParam } from '../middleware/validation.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
@@ -49,7 +50,13 @@ router.post(
       throw new ValidationError('No file uploaded. Send a file as multipart/form-data with field name "file".');
     }
 
-    // Verify the transaction exists.
+    let sniffedMime;
+    try {
+      sniffedMime = verifyAttachmentContent(req.file);
+    } catch (err) {
+      throw new ValidationError(err.message);
+    }
+
     const txResult = await query('SELECT id FROM transactions WHERE id = $1', [transactionId]);
     if (txResult.rows.length === 0) {
       throw new NotFoundError('Transaction not found');
@@ -61,7 +68,7 @@ router.post(
       transaction_id: transactionId,
       filename: req.file.originalname,
       stored_path: storedPath,
-      mime_type: req.file.mimetype,
+      mime_type: sniffedMime,
       size_bytes: req.file.size,
     });
 
