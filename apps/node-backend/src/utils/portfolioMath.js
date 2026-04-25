@@ -29,27 +29,26 @@ import Decimal from 'decimal.js';
  */
 function applyEventToLots(lots, type, units, amount, totalUnits) {
   if (type === 'split' && totalUnits > 0 && units > 0) {
-    // `units` is the post-split total; scale every lot proportionally.
     const ratio = units / totalUnits;
-    for (const lot of lots) {
-      lot.costBasis = lot.costBasis; // cost basis per lot unchanged
-      lot.units = lot.units * ratio;
-    }
-    return { totalUnits: units };
+    return {
+      totalUnits: units,
+      lots: lots.map((lot) => ({ ...lot, units: lot.units * ratio })),
+    };
   }
 
   if (type === 'return_of_capital' && totalUnits > 0) {
-    // Reduces cost basis per unit for each open lot.
     const reductionPerUnit = amount / totalUnits;
-    for (const lot of lots) {
-      lot.costBasis = Math.max(0, lot.costBasis - reductionPerUnit * lot.units);
-    }
-    return { totalUnits };
+    return {
+      totalUnits,
+      lots: lots.map((lot) => ({
+        ...lot,
+        costBasis: Math.max(0, lot.costBasis - reductionPerUnit * lot.units),
+      })),
+    };
   }
 
-  // merger / spinoff — treated as cost-basis-neutral events for now;
-  // the caller can still apply amount as additional cost if needed.
-  return { totalUnits };
+  // merger / spinoff — treated as cost-basis-neutral events for now
+  return { totalUnits, lots };
 }
 
 /**
@@ -126,7 +125,7 @@ export function calculateCostBasisFIFO(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
   /** @type {{ units: number, costBasis: number }[]} */
-  const lots = [];
+  let lots = [];
   let totalUnits = 0;
   let realizedGain = 0;
   let totalBuyCost = 0;
@@ -140,7 +139,7 @@ export function calculateCostBasisFIFO(txns) {
 
     if (txn.type === 'buy' || txn.type === 'gift') {
       const buyCost = amount + fees + taxes;
-      lots.push({ units, costBasis: buyCost });
+      lots = [...lots, { units, costBasis: buyCost }];
       totalUnits += units;
       totalBuyCost += buyCost;
     } else if (txn.type === 'sell' && units > 0) {
@@ -154,13 +153,12 @@ export function calculateCostBasisFIFO(txns) {
           costOfSold += lot.costBasis;
           unitsToSell -= lot.units;
           totalUnits -= lot.units;
-          lots.shift();
+          lots = lots.slice(1);
         } else {
           const fraction = unitsToSell / lot.units;
           const lotCostUsed = lot.costBasis * fraction;
           costOfSold += lotCostUsed;
-          lot.costBasis -= lotCostUsed;
-          lot.units -= unitsToSell;
+          lots = [{ units: lot.units - unitsToSell, costBasis: lot.costBasis - lotCostUsed }, ...lots.slice(1)];
           totalUnits -= unitsToSell;
           unitsToSell = 0;
         }
@@ -171,6 +169,7 @@ export function calculateCostBasisFIFO(txns) {
     } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
       const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
       totalUnits = result.totalUnits;
+      lots = result.lots;
     }
   }
 
@@ -197,7 +196,7 @@ export function calculateCostBasisLIFO(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
   /** @type {{ units: number, costBasis: number }[]} */
-  const lots = [];
+  let lots = [];
   let totalUnits = 0;
   let realizedGain = 0;
   let totalBuyCost = 0;
@@ -211,7 +210,7 @@ export function calculateCostBasisLIFO(txns) {
 
     if (txn.type === 'buy' || txn.type === 'gift') {
       const buyCost = amount + fees + taxes;
-      lots.push({ units, costBasis: buyCost });
+      lots = [...lots, { units, costBasis: buyCost }];
       totalUnits += units;
       totalBuyCost += buyCost;
     } else if (txn.type === 'sell' && units > 0) {
@@ -225,13 +224,12 @@ export function calculateCostBasisLIFO(txns) {
           costOfSold += lot.costBasis;
           unitsToSell -= lot.units;
           totalUnits -= lot.units;
-          lots.pop();
+          lots = lots.slice(0, -1);
         } else {
           const fraction = unitsToSell / lot.units;
           const lotCostUsed = lot.costBasis * fraction;
           costOfSold += lotCostUsed;
-          lot.costBasis -= lotCostUsed;
-          lot.units -= unitsToSell;
+          lots = [...lots.slice(0, -1), { units: lot.units - unitsToSell, costBasis: lot.costBasis - lotCostUsed }];
           totalUnits -= unitsToSell;
           unitsToSell = 0;
         }
@@ -242,6 +240,7 @@ export function calculateCostBasisLIFO(txns) {
     } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
       const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
       totalUnits = result.totalUnits;
+      lots = result.lots;
     }
   }
 

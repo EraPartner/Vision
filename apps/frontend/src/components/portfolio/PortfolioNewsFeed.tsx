@@ -14,7 +14,7 @@ interface PortfolioNewsFeedProps {
 }
 
 export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { data, isLoading, error } = useQuery({
     queryKey: ["market-news", symbols],
     queryFn: () => apiClient.getMarketNews(symbols.length > 0 ? symbols : undefined, 25),
@@ -64,7 +64,7 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
                 )}
 
             {articles.map((article, idx) => (
-              <NewsItem key={`${article.title}-${idx}`} article={article} />
+              <NewsItem key={`${article.title}-${idx}`} article={article} locale={language} />
             ))}
           </div>
         </ScrollArea>
@@ -73,9 +73,9 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
   );
 }
 
-function NewsItem({ article }: { article: MarketNewsArticle }) {
+function NewsItem({ article, locale }: { article: MarketNewsArticle; locale: string }) {
   const timeAgo = article.publishedAt
-    ? formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true })
+    ? formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true, locale })
     : null;
 
   return (

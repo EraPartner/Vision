@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -195,7 +195,7 @@ export default function PlannedPaymentsPage() {
     return payments.filter((p) => p.is_active && !p.is_executed).length;
   }, [payments]);
 
-  const loadExecutionHistory = async () => {
+  const loadExecutionHistory = useCallback(async () => {
     const links = payments.flatMap((payment) => {
       if (payment.executions && payment.executions.length > 0) {
         return payment.executions.map((execution) => ({
@@ -259,7 +259,7 @@ export default function PlannedPaymentsPage() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [payments]);
 
   const columns = [
     {
@@ -585,9 +585,9 @@ export default function PlannedPaymentsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={async () => {
+                onClick={() => {
                   setHistoryOpen(true);
-                  await loadExecutionHistory();
+                  void loadExecutionHistory();
                 }}
                 className="gap-1.5"
               >
