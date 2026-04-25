@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { memo, useState, useMemo } from "react";
 import { DonutChart, type PieDatum } from "@/components/charts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -9,7 +9,7 @@ interface CategoryPieChartProps {
   data: StatisticsData;
 }
 
-export function CategoryPieChart({ data }: CategoryPieChartProps) {
+export const CategoryPieChart = memo(function CategoryPieChart({ data }: CategoryPieChartProps) {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const { t } = useLanguage();
   const { formatCurrency } = useChartCurrencyFormatter();
@@ -61,4 +61,4 @@ export function CategoryPieChart({ data }: CategoryPieChartProps) {
       />
     </div>
   );
-}
+});

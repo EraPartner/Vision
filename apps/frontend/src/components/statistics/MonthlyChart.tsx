@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { BarChart, type BarSeries, type BarOverlay } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -20,7 +20,7 @@ interface MonthlyChartProps {
   data: StatisticsData;
 }
 
-export function MonthlyChart({ data }: MonthlyChartProps) {
+export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartProps) {
   const { t } = useLanguage();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
   const [showOverlay, setShowOverlay] = useState(false);
@@ -94,4 +94,4 @@ export function MonthlyChart({ data }: MonthlyChartProps) {
       />
     </div>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { BarChart, type BarSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -13,7 +14,7 @@ interface YearlyComparisonChartProps {
   data: StatisticsData;
 }
 
-export function YearlyComparisonChart({ data }: YearlyComparisonChartProps) {
+export const YearlyComparisonChart = memo(function YearlyComparisonChart({ data }: YearlyComparisonChartProps) {
   const { t } = useLanguage();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
@@ -38,4 +39,4 @@ export function YearlyComparisonChart({ data }: YearlyComparisonChartProps) {
       tooltipValueFormat={(v) => formatCurrency(v)}
     />
   );
-}
+});

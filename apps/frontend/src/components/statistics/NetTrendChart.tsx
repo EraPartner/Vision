@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { AreaChart, type AreaSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
@@ -15,7 +16,7 @@ interface NetTrendChartProps {
   data: StatisticsData;
 }
 
-export function NetTrendChart({ data }: NetTrendChartProps) {
+export const NetTrendChart = memo(function NetTrendChart({ data }: NetTrendChartProps) {
   const { t } = useLanguage();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
@@ -41,4 +42,4 @@ export function NetTrendChart({ data }: NetTrendChartProps) {
       tooltipValueFormat={(v) => formatCurrency(v)}
     />
   );
-}
+});

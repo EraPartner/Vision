@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { BarChart, type BarSeries } from "@/components/charts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -16,7 +16,7 @@ interface TopRecipientsChartProps {
   data: StatisticsData;
 }
 
-export function TopRecipientsChart({ data }: TopRecipientsChartProps) {
+export const TopRecipientsChart = memo(function TopRecipientsChart({ data }: TopRecipientsChartProps) {
   const { t } = useLanguage();
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
   const [yearFilter, setYearFilter] = useState<string>("all");
@@ -64,4 +64,4 @@ export function TopRecipientsChart({ data }: TopRecipientsChartProps) {
       />
     </div>
   );
-}
+});

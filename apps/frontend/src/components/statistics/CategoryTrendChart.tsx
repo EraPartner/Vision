@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
@@ -14,7 +15,7 @@ interface CategoryTrendChartProps {
   data: StatisticsData;
 }
 
-export function CategoryTrendChart({ data }: CategoryTrendChartProps) {
+export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: CategoryTrendChartProps) {
   const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
 
   const topCategories = data.categoryPivot.slice(0, 5);
@@ -47,4 +48,4 @@ export function CategoryTrendChart({ data }: CategoryTrendChartProps) {
       tooltipValueFormat={(v) => formatCurrency(v)}
     />
   );
-}
+});
