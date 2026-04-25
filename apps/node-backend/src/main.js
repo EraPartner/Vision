@@ -286,6 +286,7 @@ const warmupStatus = {
   inflation: false,
   portfolioSnapshots: false,
   infoCaches: false,
+  materializedViews: false,
 };
 
 app.get('/health', (req, res) => {
@@ -396,6 +397,28 @@ const HOST = settings.server.host;
 // Exchange rate refresh interval handle
 let exchangeRateRefreshInterval = null;
 
+// ── Boot instrumentation ───────────────────────────────────────────────────
+const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
+const _bootT0 = Date.now();
+const _bootMarks = [];
+function bootMark(phase) {
+  const t0 = Date.now();
+  return () => {
+    const ms = Date.now() - t0;
+    _bootMarks.push({ phase, ms });
+    if (BOOT_TRACE_ENABLED) {
+      process.stderr.write(`[startup] ${JSON.stringify({ phase, ms })}\n`);
+    }
+    return ms;
+  };
+}
+function bootSummary(extraPhase = 'backend_total') {
+  const total = Date.now() - _bootT0;
+  if (BOOT_TRACE_ENABLED) {
+    process.stderr.write(`[startup] ${JSON.stringify({ phase: extraPhase, ms: total, marks: _bootMarks })}\n`);
+  }
+}
+
 async function start() {
   try {
     // Wait for PostgreSQL to be fully ready.
@@ -409,19 +432,29 @@ async function start() {
     const baseDelay = 50; // Start with 50ms
     const maxDelay = 1000;
 
+    const endDbPoll = bootMark('db_poll');
     while (!dbReady && attemptCount < maxAttempts) {
       const isConnected = await checkConnection();
       if (isConnected) {
         dbReady = true;
+        endDbPoll();
         logger.info('Database connection verified successfully');
         // Run alembic migrations (fail-fast on non-zero exit).
         // Alembic is the single source of schema DDL (ADR-027).
+        const endMig = bootMark('run_migrations');
         await runMigrations();
+        endMig();
         // Materialized views are runtime artifacts, not schema — create/index/refresh
         // after the underlying tables exist.
+        const endCreateMv = bootMark('create_mat_views');
         await createMaterializedViews();
+        endCreateMv();
+        const endIdxMv = bootMark('ensure_mv_indexes');
         await ensureMaterializedViewIndexes();
-        await refreshMaterializedViews();
+        endIdxMv();
+        // refreshMaterializedViews moved to post-listen warmup so /health
+        // goes green sooner. Stale MV data is acceptable for the first few
+        // seconds of warm boot.
       } else {
         attemptCount++;
         // Exponential backoff: 50ms, 100ms, 200ms... capped at 1000ms
@@ -438,7 +471,10 @@ async function start() {
     }
 
     // Start Express server immediately after DB is ready
+    const endListen = bootMark('app_listen');
     app.listen(PORT, HOST, () => {
+      endListen();
+      bootSummary('backend_total');
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
         host: HOST,
         port: PORT,
@@ -446,6 +482,16 @@ async function start() {
         version: settings.api.version,
       });
       logger.info(`API documentation: http://${HOST}:${PORT}/api/`);
+
+      // Refresh materialized views off the boot critical path. Stale data
+      // is acceptable for the first few seconds; /health/detailed reflects
+      // readiness via warmupStatus.materializedViews.
+      refreshMaterializedViews()
+        .then(() => { warmupStatus.materializedViews = true; })
+        .catch((err) => {
+          warmupStatus.materializedViews = true;
+          logger.error('Failed to refresh materialized views on startup', { error: err.message });
+        });
 
       // Warm exchange rate cache AFTER server is accepting connections.
       // This avoids blocking startup while waiting for external API calls.

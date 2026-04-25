@@ -32,7 +32,10 @@ services:
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
       # Expose version to the backend so /api/admin/update/check can report it
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
+    volumes:
+      - vision_cache_data:/app/.vision-cache
     # depends_on removed — see docker-compose.yml for explanation.
 
 volumes:
   postgres_data:
+  vision_cache_data:

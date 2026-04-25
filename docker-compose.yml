@@ -42,6 +42,8 @@ services:
     volumes:
       # Persist attachments across container recreate / image rebuild.
       - attachments_data:/app/data/attachments
+      # Alembic skip-at-head cache — survives container restarts for warm-boot savings.
+      - vision_cache_data:/app/.vision-cache
     # Map host.docker.internal to the host gateway so the backend can reach
     # Ollama running on the host machine. Docker Desktop (macOS/Windows)
     # provides this automatically; on Linux the mapping must be explicit.
@@ -73,3 +75,4 @@ services:
 volumes:
   postgres_data:
   attachments_data:
+  vision_cache_data:

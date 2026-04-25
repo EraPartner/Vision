@@ -65,6 +65,40 @@ const HEALTH_POLL_ATTEMPTS = Number(process.env.VISION_HEALTH_POLL_ATTEMPTS) || 
 const HEALTH_POLL_INTERVAL_MS = Number(process.env.VISION_HEALTH_POLL_INTERVAL_MS) || 300;
 const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
+
+// Repo paths that affect the Docker image. Changes to these trigger a rebuild;
+// changes to everything else (docs, packaging/electron, etc.) do not.
+const DOCKER_PATHS = [
+  'Dockerfile', 'package.json', 'bun.lock',
+  'apps/node-backend/src/', 'apps/frontend/src/',
+  'apps/frontend/public/', 'apps/frontend/index.html',
+  'packages/', 'i18n/', 'scripts/generate-locales.js',
+];
+
+// ── Startup instrumentation ───────────────────────────────────────────────────
+// Phase 1 of startup-speedup plan. Emits structured JSON marks to stderr so
+// boot timings are easy to grep/chart. Cheap (<1ms per mark); leave on by
+// default. Disable with VISION_BOOT_TRACE=0.
+const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
+const _bootT0 = Date.now();
+const _bootMarks = [];
+function bootMark(phase) {
+  const t0 = Date.now();
+  return () => {
+    const ms = Date.now() - t0;
+    _bootMarks.push({ phase, ms });
+    if (BOOT_TRACE_ENABLED) {
+      console.error(`[startup] ${JSON.stringify({ phase, ms })}`);
+    }
+    return ms;
+  };
+}
+function bootSummary(extraPhase = 'launch_total') {
+  const total = Date.now() - _bootT0;
+  if (BOOT_TRACE_ENABLED) {
+    console.error(`[startup] ${JSON.stringify({ phase: extraPhase, ms: total, marks: _bootMarks })}`);
+  }
+}
 const MANUAL_UPDATE_CHECK_DELAY_MS = 30_000;
 const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
 const BACKUP_ENC_IV_BYTES = 16;
@@ -503,10 +537,14 @@ async function decryptBackupFileToTemp(encryptedFilePath) {
   return tempSqlPath;
 }
 
+// Reused keep-alive agent so successive /health probes share a TCP socket
+// instead of paying handshake cost per attempt.
+const healthAgent = new http.Agent({ keepAlive: true, maxSockets: 1, keepAliveMsecs: 1000 });
+
 // Single /health request — resolves true when 2xx/3xx, false otherwise.
 function pingHealth(timeoutMs = 1500) {
   return new Promise((resolve) => {
-    const req = http.get(HEALTH_URL, (res) => {
+    const req = http.get(HEALTH_URL, { agent: healthAgent }, (res) => {
       const ok = res.statusCode >= 200 && res.statusCode < 400;
       res.resume();
       resolve(ok);
@@ -516,14 +554,22 @@ function pingHealth(timeoutMs = 1500) {
   });
 }
 
-// Poll /health until success or timeout
+// Poll /health until success or timeout. Tight cadence for the first ~2s
+// (when the backend usually comes up on warm boots), then back off to the
+// standard interval. Total budget unchanged.
+const HEALTH_POLL_FAST_INTERVAL_MS = 100;
+const HEALTH_POLL_FAST_ATTEMPTS = 20;
 function pollHealth() {
   return new Promise((resolve, reject) => {
     let tries = 0;
     const attempt = async () => {
       if (await pingHealth()) return resolve();
-      if (++tries >= HEALTH_POLL_ATTEMPTS) return reject(new Error('timeout'));
-      setTimeout(attempt, HEALTH_POLL_INTERVAL_MS);
+      tries += 1;
+      if (tries >= HEALTH_POLL_ATTEMPTS) return reject(new Error('timeout'));
+      const interval = tries < HEALTH_POLL_FAST_ATTEMPTS
+        ? HEALTH_POLL_FAST_INTERVAL_MS
+        : HEALTH_POLL_INTERVAL_MS;
+      setTimeout(attempt, interval);
     };
     attempt();
   });
@@ -584,13 +630,17 @@ function startHealthWatchdog() {
 }
 
 function pollAndLoad() {
+  const endPollHealth = bootMark('poll_health');
   pollHealth()
     .then(() => {
+      endPollHealth();
       if (mainWindow) mainWindow.loadURL(APP_URL);
       notify(t('app.running'));
       startHealthWatchdog();
+      bootSummary('launch_total');
     })
     .catch(() => {
+      endPollHealth();
       loadErrorPage();
       dialog.showMessageBox({
         type: 'warning',
@@ -606,12 +656,50 @@ function pollAndLoad() {
 // A single `docker info` call tells us both: if docker isn't on PATH it throws
 // ENOENT (not installed); if Docker Desktop isn't running it exits non-zero.
 // Returns 'ok' | 'not-installed' | 'not-running'
+// Ping the Docker daemon via its Unix socket /_ping endpoint — much faster
+// than `docker info` (no CLI spawn overhead, no daemon serialization of full
+// engine state). Returns a promise that resolves on HTTP 200 or rejects.
+function pingDockerSocket(socketPath) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(
+      { socketPath, path: '/_ping', timeout: 2000 },
+      (res) => {
+        res.resume();
+        if (res.statusCode === 200) resolve();
+        else reject(new Error(`/_ping status ${res.statusCode}`));
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('socket timeout')); });
+  });
+}
+
 async function checkDocker(cwd) {
+  // Fast path: hit the Docker socket directly — avoids spawning docker CLI
+  // and serialising `docker info` output (~6s → <50ms on warm macOS).
+  const homeDir = process.env.HOME || '';
+  const socketCandidates = [
+    process.env.DOCKER_HOST?.replace(/^unix:\/\//, ''),
+    path.join(homeDir, '.docker', 'run', 'docker.sock'),
+    path.join(homeDir, '.docker', 'desktop', 'docker.sock'),
+    '/var/run/docker.sock',
+  ].filter(Boolean);
+
+  for (const socketPath of socketCandidates) {
+    try {
+      if (!fs.existsSync(socketPath)) continue;
+      await pingDockerSocket(socketPath);
+      return 'ok';
+    } catch {
+      // socket exists but daemon not responding — try next candidate
+    }
+  }
+
+  // Fallback: docker info (distinguishes "not installed" from "not running")
   try {
-    await run('docker', ['info'], cwd, { timeout: 8000 });
+    await run('docker', ['info'], cwd, { timeout: 5000 });
     return 'ok';
   } catch (err) {
-    // ENOENT / "command not found" → binary missing
     if (/ENOENT|not found|no such file/i.test(String(err))) return 'not-installed';
     return 'not-running';
   }
@@ -637,6 +725,64 @@ function startContainers(cwd, extraFiles = [], skipBuild = false) {
   // maps the correct host port → container 3002.
   const env = { ...dockerEnv, PORT: String(appPort) };
   return run('docker', args, cwd, { timeout: 300000, env });
+}
+
+// `docker compose ps --format json` emits NDJSON in newer compose versions
+// and a JSON array in older ones — handle both.
+function parseComposePsOutput(out) {
+  if (!out) return [];
+  const trimmed = out.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith('[')) {
+    try { return JSON.parse(trimmed); } catch { return []; }
+  }
+  return trimmed.split('\n')
+    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+}
+
+// Warm-boot fast path: skip or minimise compose invocation when containers
+// already exist. Priority order:
+//   1. All running → return immediately (works in all modes)
+//   2. All stopped (exited/created) + not a dev rebuild → `compose start`
+//   3. Fallback → `compose up [-d [--build]]`
+//
+// Returns { built: true } when `up --build` actually ran, { built: false } otherwise.
+async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
+  try {
+    const psOut = await run(
+      'docker',
+      ['compose', ...composeArgs(cwd, extraFiles), 'ps', '--all', '--format', 'json'],
+      cwd,
+      { timeout: 15000 }
+    );
+    const services = parseComposePsOutput(psOut);
+    if (services.length > 0) {
+      const getState = s => String(s?.State || s?.state || '').toLowerCase();
+      // All already running — skip if packaged (no build possible) or if the
+      // skip-build cache confirmed the running image matches the current source.
+      // In dev mode without a cache hit, fall through so `compose up --build`
+      // can detect whether the running containers have stale code.
+      if (services.every(s => getState(s) === 'running') && (app.isPackaged || skipBuild)) return { built: false };
+      // All in a known stopped state + not a forced dev rebuild → compose start.
+      const knownStates = new Set(['running', 'exited', 'created', 'paused']);
+      const canUseStart = app.isPackaged || skipBuild;
+      if (canUseStart && services.every(s => knownStates.has(getState(s)))) {
+        const env = { ...dockerEnv, PORT: String(appPort) };
+        await run(
+          'docker',
+          ['compose', ...composeArgs(cwd, extraFiles), 'start'],
+          cwd,
+          { timeout: 60000, env }
+        );
+        return { built: false };
+      }
+    }
+  } catch (err) {
+    console.warn('composeStartOrUp probe failed; falling back to up:', err);
+  }
+  await startContainers(cwd, extraFiles, skipBuild);
+  return { built: !skipBuild && !app.isPackaged };
 }
 
 function stopContainers(cwd, extraFiles = []) {
@@ -1471,24 +1617,32 @@ let workDir = null;
 let overrideFiles = [];
 
 async function launch() {
+  const endLaunch = bootMark('launch');
+
   // 0. Register prod CSP + security headers before any window loads.
   registerSecurityHeaders();
 
   // 0a. Load i18n asynchronously so dialog strings resolve. If this fails,
   //     t() falls back to the key itself — survivable for startup paths.
+  const endI18n = bootMark('init_i18n');
   await initI18n();
+  endI18n();
 
   // 0b. Open the loading window IMMEDIATELY so the user sees something straight
   //    away — before any Docker I/O, which can take seconds or even minutes on
   //    a cold start. The window will navigate to APP_URL once the backend is ready.
+  const endWindow = bootMark('create_window');
   createWindow();
   mainWindow.loadURL(
     'data:text/html,<html><body style="margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh">' +
     '<p style="color:#94a3b8;font-family:system-ui,sans-serif;font-size:1rem">Starting Vision\u2026</p></body></html>'
   );
+  endWindow();
 
   // 1. Resolve project folder
+  const endWorkDir = bootMark('resolve_work_dir');
   workDir = await resolveWorkDir();
+  endWorkDir();
   if (!workDir) return;
 
   // 1b. Resolve any compose override requested via env var (dev flows only)
@@ -1498,54 +1652,75 @@ async function launch() {
   //        if the app image already exists — all are independent so run in parallel.
   let skipBuild = false;
   let dockerStatus = 'ok';
+  const endParallelInit = bootMark('parallel_init');
   await Promise.all([
     // Find a free host port for the backend (default 3002, auto-increment if taken)
-    findFreePort(DEFAULT_APP_PORT).then(port => {
-      appPort = port;
-      APP_URL = `http://localhost:${appPort}`;
-      HEALTH_URL = `http://localhost:${appPort}/health`;
-    }),
+    (() => {
+      const end = bootMark('find_free_port');
+      return findFreePort(DEFAULT_APP_PORT).then(port => {
+        appPort = port;
+        APP_URL = `http://localhost:${appPort}`;
+        HEALTH_URL = `http://localhost:${appPort}/health`;
+        end();
+      });
+    })(),
 
     // First run: generate .env if missing
-    ensureEnv(workDir),
+    (() => {
+      const end = bootMark('ensure_env');
+      return ensureEnv(workDir).then(end);
+    })(),
 
     // Check Docker is installed and running — overlaps with port scan and env init
-    checkDocker(workDir).then(status => { dockerStatus = status; }),
+    (() => {
+      const end = bootMark('check_docker');
+      return checkDocker(workDir).then(status => { dockerStatus = status; end(); });
+    })(),
 
-    // In dev, decide whether to skip --build. We prefer to skip when an image
-    // already exists and the source hasn't changed since it was built. To do
-    // that we inspect the composed app image and compare its creation time to
-    // the latest git commit time — and also respect uncommitted local changes.
+    // In dev, decide whether to skip --build. Strategy:
+    //   1. Get current image ID from compose.
+    //   2. Load .vision-cache/docker-build.json written after the last build.
+    //   3. If imageId matches AND git status of Docker-relevant paths matches
+    //      the cached snapshot AND no new commits touched those paths since the
+    //      cache was written → skip. Otherwise rebuild and write a fresh cache.
+    //
+    // Checking only Docker-relevant paths (not the whole repo) means edits to
+    // packaging/electron/, docs/, etc. never trigger a needless image rebuild.
     !app.isPackaged
       ? (async () => {
+          const end = bootMark('decide_skip_build');
+          const dockerSkipCacheFile = path.join(workDir, '.vision-cache', 'docker-build.json');
           try {
-            const imageIds = (await run('docker', [
-              'compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app',
-            ], workDir, { timeout: 10000 })).trim();
+            // Phase A: image ID + cache read + docker-path porcelain — all independent.
+            const [imageIds, cacheRaw, porcelain] = await Promise.all([
+              run('docker', ['compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app'], workDir, { timeout: 10000 }).then(r => r.trim()).catch(() => ''),
+              fs.promises.readFile(dockerSkipCacheFile, 'utf8').catch(() => null),
+              run('git', ['status', '--porcelain', '--', ...DOCKER_PATHS], workDir).then(r => r.trim()).catch(() => null),
+            ]);
             if (!imageIds) { skipBuild = false; return; }
-            // Use first image id returned (compose may list multiple lines)
+            if (porcelain === null) { skipBuild = false; return; }
             const imageId = imageIds.split(/\s+/)[0];
-            // If there are local uncommitted changes, force rebuild so dev sees them
-            const por = (await run('git', ['status', '--porcelain'], workDir).catch(() => '')).trim();
-            if (por.length > 0) { skipBuild = false; return; }
-            // Get last commit time (unix seconds)
-            const commitTsStr = (await run('git', ['log', '-1', '--format=%ct'], workDir).catch(() => '')).trim();
-            if (!commitTsStr) { skipBuild = false; return; }
-            const commitTs = parseInt(commitTsStr, 10) * 1000;
-            // Inspect image creation time
-            const createdStr = (await run('docker', ['image', 'inspect', imageId, '--format', '{{.Created}}'], workDir).catch(() => '')).trim();
-            if (!createdStr) { skipBuild = false; return; }
-            const createdTs = Date.parse(createdStr);
-            if (isNaN(createdTs) || isNaN(commitTs)) { skipBuild = false; return; }
-            // If the latest commit is newer than the image creation, rebuild.
-            skipBuild = commitTs <= createdTs;
-          } catch (e) {
-            // Any failure here means we conservatively do not skip the build.
+            if (cacheRaw) {
+              const cache = JSON.parse(cacheRaw);
+              if (cache.imageId === imageId && cache.porcelain === porcelain) {
+                // Cache hit on image + worktree state. Also verify no new commits
+                // touched docker paths since the cache was written.
+                const newCommits = (await run('git', [
+                  'log', `--since=${cache.writtenAt}`, '--oneline', '--', ...DOCKER_PATHS,
+                ], workDir).catch(() => 'x')).trim();
+                if (!newCommits) { skipBuild = true; return; }
+              }
+            }
             skipBuild = false;
+          } catch {
+            skipBuild = false;
+          } finally {
+            end();
           }
         })()
       : Promise.resolve(),
   ]);
+  endParallelInit();
 
   // 3. Handle Docker not being available
   if (dockerStatus === 'not-installed') {
@@ -1584,10 +1759,15 @@ async function launch() {
       workDir, { timeout: 60000 }).catch(() => {});
   }
 
-  // 7. docker compose up
+  // 7. docker compose start (fast path) or up (cold/dev rebuild)
+  const endComposeUp = bootMark('compose_up');
+  let composeDidBuild = false;
   try {
-    await startContainers(workDir, overrideFiles, skipBuild);
+    const { built } = await composeStartOrUp(workDir, overrideFiles, skipBuild);
+    composeDidBuild = built;
+    endComposeUp();
   } catch (err) {
+    endComposeUp();
     await dialog.showMessageBox({
       type: 'error',
       buttons: [t('common.ok')],
@@ -1597,6 +1777,28 @@ async function launch() {
     });
     app.quit();
     return;
+  }
+
+  // After a dev build, snapshot the image ID + docker-path porcelain so the
+  // NEXT launch can skip the rebuild if nothing relevant has changed.
+  if (composeDidBuild) {
+    const dockerSkipCacheFile = path.join(workDir, '.vision-cache', 'docker-build.json');
+    (async () => {
+      try {
+        const [imageIds, porcelain] = await Promise.all([
+          run('docker', ['compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app'], workDir, { timeout: 10000 }).then(r => r.trim()).catch(() => ''),
+          run('git', ['status', '--porcelain', '--', ...DOCKER_PATHS], workDir).then(r => r.trim()).catch(() => null),
+        ]);
+        if (!imageIds || porcelain === null) return;
+        const imageId = imageIds.split(/\s+/)[0];
+        await fs.promises.mkdir(path.dirname(dockerSkipCacheFile), { recursive: true });
+        await fs.promises.writeFile(dockerSkipCacheFile, JSON.stringify({
+          imageId, porcelain, writtenAt: new Date().toISOString(),
+        }) + '\n');
+      } catch (e) {
+        console.warn('docker-build cache write failed (non-fatal):', e.message);
+      }
+    })();
   }
 
   // 8. Backend is being polled — poll /health in the background; navigate once ready.

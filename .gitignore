@@ -9,6 +9,7 @@ node_modules/
 dist/
 .npm/
 .yarn/
+.vision-cache/
 
 # Environment
 .env.local

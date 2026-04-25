@@ -38,7 +38,7 @@ WORKDIR /app
 #     Puppeteer's bundled Chrome is a glibc x86_64 binary and cannot run on
 #     Alpine (musl) or ARM64 hosts. We skip the bundled download and use the
 #     distro package instead.
-RUN apk add --no-cache python3 py3-pip chromium && \
+RUN apk add --no-cache python3 py3-pip chromium postgresql-client && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils
@@ -78,7 +78,7 @@ ENV ALEMBIC_BIN=/venv/bin/alembic
 # without root. Compose sets `user: "1000:1000"` to match.
 # Pre-create the attachments dir so the named volume inherits bun ownership
 # on first mount (Docker copies the image dir's perms onto an empty volume).
-RUN mkdir -p /app/data/attachments && chown -R bun:bun /app /venv
+RUN mkdir -p /app/data/attachments /app/.vision-cache && chown -R bun:bun /app /venv
 
 EXPOSE 3002
 

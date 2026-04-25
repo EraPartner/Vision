@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { logger } from '../config/logger.js'
@@ -21,6 +22,58 @@ const ALEMBIC_BIN = process.env.ALEMBIC_BIN || 'alembic'
 
 // alembic.ini lives at config/alembic.ini relative to repo root.
 const ALEMBIC_CONFIG = process.env.ALEMBIC_CONFIG || 'config/alembic.ini'
+
+// Skip-at-head cache. After a successful `alembic upgrade head`, we record the
+// applied revision + a fingerprint of alembic/versions/. On subsequent boots,
+// if the DB is still at that revision and the versions directory hasn't
+// changed, we skip the alembic invocation entirely (~1-3s warm-boot win).
+const HEAD_CACHE_DIR = process.env.VISION_CACHE_DIR || path.join(REPO_ROOT, '.vision-cache')
+const HEAD_CACHE_FILE = path.join(HEAD_CACHE_DIR, 'alembic-head.json')
+const VERSIONS_DIR = path.join(REPO_ROOT, 'alembic', 'versions')
+
+function fingerprintVersionsDir() {
+  try {
+    const files = readdirSync(VERSIONS_DIR)
+      .filter(f => f.endsWith('.py') && !f.startsWith('_'))
+      .sort()
+    return files.join(',')
+  } catch {
+    return ''
+  }
+}
+
+async function isAtHeadCached() {
+  if (!existsSync(HEAD_CACHE_FILE)) return false
+  try {
+    const cached = JSON.parse(readFileSync(HEAD_CACHE_FILE, 'utf8'))
+    if (!cached?.head || !cached?.fingerprint) return false
+    const fp = fingerprintVersionsDir()
+    if (!fp || fp !== cached.fingerprint) return false
+    const res = await query('SELECT version_num FROM alembic_version LIMIT 1')
+    const dbRev = res.rows[0]?.version_num
+    return dbRev === cached.head
+  } catch (err) {
+    logger.warn({ err: err.message }, 'isAtHeadCached check failed; will run alembic')
+    return false
+  }
+}
+
+async function writeHeadCache() {
+  try {
+    mkdirSync(HEAD_CACHE_DIR, { recursive: true })
+    const res = await query('SELECT version_num FROM alembic_version LIMIT 1')
+    const head = res.rows[0]?.version_num
+    if (!head) return
+    const payload = {
+      head,
+      fingerprint: fingerprintVersionsDir(),
+      appliedAt: new Date().toISOString(),
+    }
+    writeFileSync(HEAD_CACHE_FILE, JSON.stringify(payload) + '\n')
+  } catch (err) {
+    logger.warn({ err }, 'writeHeadCache failed; non-fatal')
+  }
+}
 
 // Consolidated baseline revision — replaces the 0002..0032 chain that was
 // previously overlaid on top of a schemaInit.js-seeded DB. Kept in sync with
@@ -85,6 +138,20 @@ export async function stampBaselineIfLegacy() {
       return { skipped: true, reason: 'alembic_version table not present' }
     }
 
+    // Expand version_num to VARCHAR(64) if narrower — older DBs created by
+    // alembic at a time when revision IDs were short still have VARCHAR(32),
+    // which truncates the longer named revisions we use today.
+    const colRes = await query(
+      `SELECT character_maximum_length AS len
+       FROM information_schema.columns
+       WHERE table_name = 'alembic_version' AND column_name = 'version_num'`
+    )
+    const colLen = colRes.rows[0]?.len
+    if (typeof colLen === 'number' && colLen < 64) {
+      logger.warn({ from: colLen, to: 64 }, 'expanding alembic_version.version_num')
+      await query('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)')
+    }
+
     const versionRes = await query('SELECT version_num FROM alembic_version LIMIT 1')
     const current = versionRes.rows[0]?.version_num
     if (!current) {
@@ -125,6 +192,11 @@ export async function runMigrations(options = {}) {
 
   await stampBaselineIfLegacy()
 
+  if (target === 'head' && (await isAtHeadCached())) {
+    logger.info('alembic skip: cached head matches DB and versions/ unchanged')
+    return
+  }
+
   try {
     const { stdout, stderr } = await execFileAsync(
       ALEMBIC_BIN,
@@ -146,6 +218,10 @@ export async function runMigrations(options = {}) {
     }
 
     logger.info('alembic migrate ok')
+
+    if (target === 'head') {
+      await writeHeadCache()
+    }
   } catch (error) {
     logger.error(
       {
