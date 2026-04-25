@@ -36,6 +36,7 @@ function addMonthsClampedInAppTz(dateLike, monthDelta) {
   const zoned = toAppTz(source);
   const targetMonthIndex = zoned.month - 1 + monthDelta;
   const targetYear = zoned.year + Math.floor(targetMonthIndex / 12);
+  // Double-modulo normalizes negative indices: e.g. -1 → 11 (December).
   const targetMonth0 = ((targetMonthIndex % 12) + 12) % 12;
   // Last day of target month (UTC-safe arithmetic for "0th of next month").
   const lastDay = new Date(Date.UTC(targetYear, targetMonth0 + 1, 0)).getUTCDate();
