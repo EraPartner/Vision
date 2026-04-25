@@ -31,7 +31,11 @@ function detectInterval(intervals) {
   if (intervals.length === 0) return null;
 
   const avgInterval = intervals.reduce((s, v) => s + v, 0) / intervals.length;
-  const medianInterval = [...intervals].sort((a, b) => a - b)[Math.floor(intervals.length / 2)];
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const medianInterval = sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
 
   // Try to match against known patterns using median (more robust to outliers)
   for (const pattern of INTERVAL_PATTERNS) {
