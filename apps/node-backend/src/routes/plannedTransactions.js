@@ -20,12 +20,16 @@ function parseRouteId(req) {
   return parseInt(req.params.id, 10);
 }
 
-function removePatchOnlyReadOnlyFields(fields) {
-  delete fields.links;
-  delete fields.id;
-  delete fields.executions;
-  delete fields.execution_count;
-  delete fields.executed_transaction_id;
+function withoutPatchOnlyReadOnlyFields(fields) {
+  const {
+    links: _links,
+    id: _id,
+    executions: _executions,
+    execution_count: _executionCount,
+    executed_transaction_id: _executedTxId,
+    ...rest
+  } = fields;
+  return rest;
 }
 
 async function resolveRecipientIdFromName(fields) {
@@ -233,8 +237,7 @@ router.patch(
     const existing = await plannedTransactionRepository.getById(id);
     if (!existing) throw new NotFoundError(`Planned transaction ${id} not found`);
 
-    const fields = { ...req.body };
-    removePatchOnlyReadOnlyFields(fields);
+    const fields = withoutPatchOnlyReadOnlyFields(req.body);
     await Promise.all([
       resolveRecipientIdFromName(fields),
       resolveCategoryIdFromName(fields),
