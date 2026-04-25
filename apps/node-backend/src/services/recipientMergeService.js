@@ -75,29 +75,21 @@ export async function mergeRecipients(primaryId, aliasIds) {
     );
 
     // 3. planned_transactions — guarded: older schemas may not have the column.
-    const plannedRes = await client.query(
-      `DO $$
-       DECLARE
-         c int := 0;
-       BEGIN
-         IF EXISTS (
-           SELECT 1 FROM information_schema.columns
-           WHERE table_name = 'planned_transactions'
-             AND column_name = 'recipient_id'
-         ) THEN
-           UPDATE planned_transactions
-              SET recipient_id = ${primaryId}
-            WHERE recipient_id = ANY(ARRAY[${ids.join(',')}]::int[]);
-           GET DIAGNOSTICS c = ROW_COUNT;
-         END IF;
-         PERFORM set_config('vision.last_planned_merge_rowcount', c::text, true);
-       END$$;`,
+    const colCheck = await client.query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
+       LIMIT 1`,
     );
-    // DO blocks can't return values; rely on the set_config/SHOW pair below.
-    void plannedRes;
-    const plannedCount = await client.query(
-      `SELECT current_setting('vision.last_planned_merge_rowcount', true) AS c`,
-    );
+    let plannedRowCount = 0;
+    if (colCheck.rows.length > 0) {
+      const plannedRes = await client.query(
+        `UPDATE planned_transactions
+            SET recipient_id = $1
+          WHERE recipient_id = ANY($2::int[])`,
+        [primaryId, ids],
+      );
+      plannedRowCount = plannedRes.rowCount ?? 0;
+    }
 
     // 4. recipient_bank_accounts — guard against collisions on
     // uq_rba_account_number (added in migration 0029). If the primary
@@ -135,7 +127,7 @@ export async function mergeRecipients(primaryId, aliasIds) {
       reassigned: {
         transactions: txRes.rowCount ?? 0,
         splits: splitRes.rowCount ?? 0,
-        planned: parseInt(plannedCount.rows[0]?.c ?? '0', 10) || 0,
+        planned: plannedRowCount,
         bankAccounts: bankRes.rowCount ?? 0,
       },
     };

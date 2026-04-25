@@ -93,7 +93,12 @@ function buildExportFilters(query) {
   if (start_date) { filterClauses.push(`t.date >= $${paramIdx++}`); params.push(start_date); }
   if (end_date) { filterClauses.push(`t.date <= $${paramIdx++}`); params.push(end_date); }
   if (bank_account) { filterClauses.push(`t.bank_account ILIKE $${paramIdx++}`); params.push(`%${bank_account}%`); }
-  if (category_id) { filterClauses.push(`t.category_id = $${paramIdx++}`); params.push(parseInt(category_id, 10)); }
+  if (category_id) {
+    const catId = parseInt(category_id, 10);
+    if (!Number.isFinite(catId)) throw new ValidationError('category_id must be an integer');
+    filterClauses.push(`t.category_id = $${paramIdx++}`);
+    params.push(catId);
+  }
 
   return { whereSql: filterClauses.join(' AND '), params, nextParamIdx: paramIdx };
 }

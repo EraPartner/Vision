@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { query } from '../database/connection.js';
+import { logger } from '../config/logger.js';
 
 export function createTransactionHash(transactionData) {
   let raw = transactionData.rawData;
@@ -66,7 +67,10 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
     if (result.rows.length > 0) {
       return { isDuplicate: true, existingTransactionId: result.rows[0].transaction_id };
     }
-  } catch {
+  } catch (err) {
+    if (err.code !== '42P01') {
+      logger.warn('Unexpected error in manual dedup hash check', { error: err.message, code: err.code });
+    }
     // Table may not exist yet — fall through to field-based check
   }
 
@@ -97,7 +101,10 @@ export async function recordManualRawTransaction({ date, amount, recipientId, me
        ON CONFLICT (deduplication_hash) DO NOTHING`,
       [hash, transactionId, date, bankAccount, recipientId, amount, memo, categoryId, comment]
     );
-  } catch {
+  } catch (err) {
+    if (err.code !== '42P01') {
+      logger.warn('Unexpected error recording manual raw transaction', { error: err.message, code: err.code });
+    }
     // Table may not exist yet — silently skip
   }
 }

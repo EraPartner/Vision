@@ -34,6 +34,8 @@ const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITH
  * Fetch the latest GitHub Release metadata.
  * Returns a plain object — callers handle errors.
  */
+const GITHUB_FETCH_TIMEOUT_MS = 5000;
+
 function fetchLatestRelease() {
   return new Promise((resolve, reject) => {
     const options = {
@@ -41,8 +43,9 @@ function fetchLatestRelease() {
         'User-Agent': `${GITHUB_REPO}-backend`,
         'Accept': 'application/vnd.github+json',
       },
+      timeout: GITHUB_FETCH_TIMEOUT_MS,
     };
-    https.get(GITHUB_RELEASES_URL, options, (res) => {
+    const req = https.get(GITHUB_RELEASES_URL, options, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -50,7 +53,12 @@ function fetchLatestRelease() {
         catch (e) { reject(new Error(`Failed to parse GitHub response: ${e.message}`)); }
       });
       res.on('error', reject);
-    }).on('error', reject);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`GitHub API request timed out after ${GITHUB_FETCH_TIMEOUT_MS}ms`));
+    });
+    req.on('error', reject);
   });
 }
 
