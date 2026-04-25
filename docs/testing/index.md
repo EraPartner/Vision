@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-04-21
+date: 2026-04-25
 tags:
   - testing
   - index
@@ -35,6 +35,7 @@ SORT title ASC
 | Topic | Description |
 |-------|-------------|
 | [[docs/testing/testing\|Testing Guide]] | Comprehensive testing guide with patterns and best practices |
+| [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical\|Mock Isolation Gotcha]] | Bun/Vitest v1.3.13 mock bleed issue — CRITICAL |
 | [[docs/testing/testing#property-test-pattern-phase-8\|Property Test Pattern]] | Deterministic seeded-PRNG invariant testing (Phase 8) |
 | [[docs/testing/test-inventory\|Test Inventory]] | Current test coverage status and gaps |
 | [[apps/node-backend/tests/golden/INVENTORY\|Calculation Inventory]] | G/P/S coverage matrix — merge-gate source-of-truth |
@@ -142,3 +143,14 @@ bun vitest run src/path/to/test.test.js
 - Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
 - Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
+
+## Mock Isolation Fix (2026-04-25)
+
+Fixed critical Bun/Vitest v1.3.13 mock bleed issue in [[apps/node-backend/tests/aiChatTools.test.js]]:
+
+- **Issue:** `vi.resetAllMocks()` does NOT clear `mockResolvedValueOnce` queues, causing unconsumed mock stubs to persist across tests and corrupt subsequent test execution.
+- **Root Cause:** Vitest v1.3.13 queue clearing bug under Bun's context model.
+- **Fix:** Removed unconsumed `mockResolvedValueOnce` from test 2 ("passes assetClass filter through to repository").
+- **Impact:** All 46 tests in aiChatTools suite now pass cleanly.
+
+See [[docs/testing/testing#mock-isolation-gotcha-bun--vitest-v1313-critical|Mock Isolation Gotcha (CRITICAL)]] for full mitigation strategy and detection patterns.
