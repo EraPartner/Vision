@@ -224,7 +224,8 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
       logger.warn('Historical FX missing, falling back to current rate', { currency: code, date: rowDate });
       return { rate: fallback, fellBack: true };
     }
-    return { rate: undefined, fellBack: false };
+    // No rate found anywhere — flag as fellBack so the frontend shows the indicator.
+    return { rate: undefined, fellBack: true };
   }
 
   let historicalIndex = null;
