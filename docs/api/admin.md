@@ -578,9 +578,23 @@ Return a static manifest of all registered Express routes.
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
-- Optional admin auth middleware is enforced for `/api/admin/*` when `ADMIN_AUTH_TOKEN` is configured; requests must send `Authorization: Bearer <token>`.
-- When `ADMIN_AUTH_TOKEN` is unset, admin behavior remains backward-compatible (no token required).
+- Admin auth middleware enforces per [[docs/adr/037-admin-auth-localhost-fallback|ADR-036]]:
+  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>`
+  - **When `ADMIN_AUTH_TOKEN` is unset:** Requests must originate from a local network address — loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) or RFC 1918 private ranges (`10.x.x.x`, `172.16–31.x.x`, `192.168.x.x`) including IPv4-mapped and IPv6 ULA (`fc00::/7`). All other origins receive `401 Unauthorized`.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
+
+### Docker Deployment — LAN Isolation and Admin Access
+
+The `docker-compose.yml` binds the host port to `127.0.0.1` only:
+
+```yaml
+ports:
+  - "127.0.0.1:${PORT:-3002}:3002"
+```
+
+This means only the host machine can reach the backend — devices on the same Wi-Fi or LAN cannot. Inside the container, the host browser's request arrives via docker-proxy with a Docker bridge source IP (e.g. `172.17.0.1`). The admin middleware trusts RFC 1918 ranges, so admin endpoints work without a token.
+
+> **Warning:** If you change the port mapping back to `"${PORT:-3002}:3002"` (binding `0.0.0.0`), LAN devices will also pass the private-IP check because their source IPs fall in RFC 1918 ranges. Set `ADMIN_AUTH_TOKEN` and consider adding auth to non-admin routes in that case.
 
 ### Rate Limits
 
