@@ -407,7 +407,11 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
           `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
            VALUES ($1, $2, $3, false, true) ON CONFLICT DO NOTHING`,
           [recipientId, accountNumber, bankName || null]
-        ).catch(() => { });
+        ).catch((err) => {
+          logger.warn('Recipient bank account insert failed (matched path)', {
+            recipientId, accountNumber, error: err.message,
+          });
+        });
       }
     }
     return recipientId;
@@ -427,10 +431,20 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
   if (upsert.rows.length > 0) {
     newId = upsert.rows[0].id;
   } else {
-    const existing = await query(
+    // Conflicting caller's row may not yet be visible; retry briefly.
+    let existing = await query(
       `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
       [normalizedName]
     );
+    let attempts = 0;
+    while (!existing.rows.length && attempts < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 25 * (attempts + 1)));
+      existing = await query(
+        `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
+        [normalizedName]
+      );
+      attempts += 1;
+    }
     if (!existing.rows.length) {
       throw new Error(`Recipient upsert produced no row for ${normalizedName}`);
     }
@@ -442,11 +456,20 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
       `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
        VALUES ($1, $2, $3, true, true) ON CONFLICT DO NOTHING`,
       [newId, accountNumber, bankName || null]
-    ).catch(() => { });
+    ).catch((err) => {
+      logger.warn('Recipient bank account insert failed (new recipient path)', {
+        recipientId: newId, accountNumber, error: err.message,
+      });
+    });
   }
 
   if (address) {
-    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId]).catch(() => { });
+    await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [address, newId])
+      .catch((err) => {
+        logger.warn('Recipient notes update failed', {
+          recipientId: newId, error: err.message,
+        });
+      });
   }
 
   return newId;

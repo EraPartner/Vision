@@ -11,7 +11,7 @@
 
 import { query } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
-import { scheduleRefresh } from '../materializedViewService.js';
+import { scheduleRefresh, refreshMaterializedViews } from '../materializedViewService.js';
 
 import { createBatch, stageBatch } from './stage.js';
 import { validateBatch } from './validate.js';
@@ -67,11 +67,14 @@ export async function runImportPipeline({
       [batchId, totalErrors]
     );
 
-    // Refresh aggregates that depend on canonical transactions.
-    try {
+    // Refresh aggregates. Large imports get an immediate awaited refresh so the
+    // next read reflects the new data; small imports use the debounced path.
+    if (imported > 100) {
+      await refreshMaterializedViews().catch(err => {
+        logger.warn('[pipeline] MV refresh failed (non-fatal)', { err: err?.message });
+      });
+    } else {
       scheduleRefresh();
-    } catch (err) {
-      logger.warn('[pipeline] scheduleRefresh failed (non-fatal)', { err: err?.message });
     }
 
     logger.info('[pipeline] complete', {
@@ -91,7 +94,9 @@ export async function runImportPipeline({
               error_summary = $2
         WHERE id = $1`,
       [batchId, String(err?.message || err).slice(0, 2000)]
-    ).catch(() => {});
+    ).catch((updateErr) => {
+      logger.error('[pipeline] failed to mark batch as failed', { batchId, error: updateErr?.message });
+    });
     logger.error('[pipeline] failed', { batchId, error: err?.message });
     throw err;
   }

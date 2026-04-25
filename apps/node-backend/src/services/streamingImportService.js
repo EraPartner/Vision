@@ -125,7 +125,9 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
        VALUES ($1, $2, $3, false, true)
        ON CONFLICT DO NOTHING`,
       [recipientId, accountNumber, bankName || null]
-    ).catch(() => {});
+    ).catch((err) => {
+      logger.warn('Recipient bank account insert failed', { recipientId, accountNumber, error: err.message });
+    });
   }
 
   // Optionally store address as notes (fire-and-forget)
@@ -133,7 +135,9 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
     query(
       `UPDATE recipients SET notes = $1 WHERE id = $2 AND (notes IS NULL OR notes = '')`,
       [address, recipientId]
-    ).catch(() => {});
+    ).catch((err) => {
+      logger.warn('Recipient notes update failed', { recipientId, error: err.message });
+    });
   }
 
   return recipientId;
@@ -180,12 +184,13 @@ async function processRow(txData, bankType) {
       );
 
       if (rawTxn && txResult.rows[0]) {
-        // Fire-and-forget: raw reference linking is non-critical for import outcome
         rawReferenceRepo.create({
           transactionId: txResult.rows[0].id,
           rawSourceType: bankType,
           rawSourceId: rawTxn.id,
-        }).catch(() => {});
+        }).catch((err) => {
+          logger.warn('Raw reference creation failed', { txId: txResult.rows[0].id, error: err.message });
+        });
       }
 
       return 'imported';
