@@ -11,12 +11,12 @@ const BANK_LABEL = 'Generic';
 
 function parseDate(dateStr, fmt) {
   if (fmt.includes('%d/%m/%Y') || fmt === '%d/%m/%Y') {
-    const p = dateStr.split('/');
-    return new Date(`${p[2]}-${p[1]}-${p[0]}`);
+    const [d, m, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
   }
   if (fmt.includes('%m/%d/%Y') || fmt === '%m/%d/%Y') {
-    const p = dateStr.split('/');
-    return new Date(`${p[2]}-${p[0]}-${p[1]}`);
+    const [m, d, y] = dateStr.split('/').map((s) => parseInt(s, 10));
+    return new Date(Date.UTC(y, m - 1, d));
   }
   return new Date(dateStr);
 }
@@ -75,8 +75,8 @@ function rowToTransaction(row, config) {
   };
 }
 
-export function parseWithConfig(filePath, config) {
-  const records = parseCsvFile(
+export async function parseWithConfig(filePath, config) {
+  const records = await parseCsvFile(
     filePath,
     {
       columns: true,
@@ -107,7 +107,7 @@ export function detect() {
   return false;
 }
 
-export function parse(filePath, config) {
+export async function parse(filePath, config) {
   if (!config) {
     throw new Error('Generic adapter requires a customConfig');
   }
