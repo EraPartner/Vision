@@ -126,16 +126,15 @@ export const banksRepository = {
       historyMap[key].sort((a, b) => a.month.localeCompare(b.month));
     }
 
-    const totalHistory = [];
-    const allMonths = [...new Set(Object.values(historyMap).flat().map(h => h.month))].sort();
-    for (const month of allMonths) {
-      let total = 0;
-      for (const acct of Object.values(historyMap)) {
-        const entry = acct.find(h => h.month === month);
-        if (entry) total += entry.balance;
+    const totalsByMonth = new Map();
+    for (const entries of Object.values(historyMap)) {
+      for (const { month, balance } of entries) {
+        totalsByMonth.set(month, (totalsByMonth.get(month) ?? 0) + balance);
       }
-      totalHistory.push({ month, balance: roundToCents(total) });
     }
+    const totalHistory = [...totalsByMonth.keys()]
+      .sort()
+      .map((month) => ({ month, balance: roundToCents(totalsByMonth.get(month)) }));
 
     return {
       accounts,
