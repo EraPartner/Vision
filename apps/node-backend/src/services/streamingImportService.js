@@ -233,7 +233,11 @@ async function processRow(txData, bankType) {
 export async function importCSVStreaming(filePath, bankName, customConfig = null, onProgress = null) {
   const emitProgress = (data) => {
     if (onProgress) {
-      try { onProgress(data); } catch { }
+      try {
+        onProgress(data);
+      } catch (err) {
+        logger.warn('onProgress callback failed', { error: err?.message });
+      }
     }
   };
 
