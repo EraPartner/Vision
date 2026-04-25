@@ -56,6 +56,9 @@ export function formatDistanceToNow(date: Date, _options?: { addSuffix?: boolean
 }
 
 export function parseLocalDateFromYmd(dateStr: string): Date {
+  if (typeof dateStr !== "string" || dateStr.length === 0) {
+    return new Date(NaN);
+  }
   const [year, month, day] = dateStr.split("-").map(Number);
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
