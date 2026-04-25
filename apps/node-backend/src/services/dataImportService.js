@@ -32,7 +32,7 @@ import { recipientBankAccountRepository } from '../repositories/recipientBankAcc
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = fs.readFileSync(filePath, encoding);
+    const content = await fs.promises.readFile(filePath, encoding);
 
     let records;
     try {
@@ -134,7 +134,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = fs.readFileSync(filePath, encoding);
+    const content = await fs.promises.readFile(filePath, encoding);
 
     let records;
     try {

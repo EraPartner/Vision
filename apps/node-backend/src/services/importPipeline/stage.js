@@ -39,9 +39,9 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
   const adapter = getAdapter(adapterName);
   if (!adapter) throw new Error(`Unknown adapter: ${adapterName}`);
 
-  const rows = customConfig && typeof adapter.parseWithConfig === 'function'
+  const rows = await (customConfig && typeof adapter.parseWithConfig === 'function'
     ? adapter.parseWithConfig(filePath, customConfig)
-    : adapter.parse(filePath);
+    : adapter.parse(filePath));
 
   const total = rows.length;
   logger.info('[pipeline:stage] parsed rows', { batchId, adapterName, total });

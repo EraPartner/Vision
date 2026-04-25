@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('fs', () => ({
-  default: { readFileSync: vi.fn() },
-  readFileSync: vi.fn(),
+  default: { promises: { readFile: vi.fn() } },
+  promises: { readFile: vi.fn() },
 }));
 
 vi.mock('csv-parse/sync', () => ({
@@ -47,7 +47,7 @@ import { importRecipientsCSV, importCategoriesCSV } from '../src/services/dataIm
 describe('Data Import Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    fs.readFileSync.mockReturnValue('csv-content');
+    fs.promises.readFile.mockResolvedValue('csv-content');
   });
 
   describe('importRecipientsCSV', () => {
@@ -56,7 +56,7 @@ describe('Data Import Service', () => {
 
       const result = await importRecipientsCSV('/tmp/recipients.csv');
 
-      expect(result).toEqual({ total_processed: 0, imported: 0, skipped: 0, errors: 0 });
+      expect(result).toEqual({ total_processed: 0, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0 });
     });
 
     it('should increment errors when recipient name is missing', async () => {

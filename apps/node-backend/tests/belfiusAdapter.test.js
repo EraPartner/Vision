@@ -41,21 +41,21 @@ describe('BelfiusAdapter', () => {
     if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
   });
 
-  it('parses correct number of transactions', () => {
+  it('parses correct number of transactions', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(3);
   });
 
-  it('extracts balance from header and calculates running balances', () => {
+  it('extracts balance from header and calculates running balances', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].balance).toBe(1234.56);
   });
 
-  it('parses transaction fields correctly', () => {
+  it('parses transaction fields correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     const txn1 = txns[0];
     expect(txn1.bankAccount).toBe('BELFIUS');
     expect(txn1.amount).toBe(-67.90);
@@ -63,18 +63,18 @@ describe('BelfiusAdapter', () => {
     expect(txn1.recipient).toContain('BANCONTACT PAYCONIQ CO');
   });
 
-  it('extracts recipient account and address', () => {
+  it('extracts recipient account and address', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     const txn2 = txns[1];
     expect(txn2.recipientAccount).toBe('BE12 3456 7890 1234');
     expect(txn2.recipientAddress).toContain('Rue de la Paix 123');
     expect(txn2.recipientAddress).toContain('1000 Brussels');
   });
 
-  it('builds structured comment', () => {
+  it('builds structured comment', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     const txn2 = txns[1];
     expect(txn2.comment).toContain('Statement: 00010');
     expect(txn2.comment).toContain('Transaction: 51');
@@ -82,9 +82,9 @@ describe('BelfiusAdapter', () => {
     expect(txn2.comment).toContain('Country: BE');
   });
 
-  it('normalizes text to uppercase', () => {
+  it('normalizes text to uppercase', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     for (const txn of txns) {
       if (txn.recipient) expect(txn.recipient).toBe(txn.recipient.toUpperCase());
       if (txn.memo) expect(txn.memo).toBe(txn.memo.toUpperCase());
@@ -92,47 +92,47 @@ describe('BelfiusAdapter', () => {
     }
   });
 
-  it('preserves raw data for deduplication', () => {
+  it('preserves raw data for deduplication', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     for (const txn of txns) {
       expect(txn.rawData).toBeTruthy();
       expect(txn.rawData).toContain(';');
     }
   });
 
-  it('parses amounts with comma decimal separator', () => {
+  it('parses amounts with comma decimal separator', async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].amount).toBe(-67.90);
     expect(txns[1].amount).toBe(-150.00);
     expect(txns[2].amount).toBe(2500.00);
   });
 
-  it('skips malformed dates', () => {
+  it('skips malformed dates', async () => {
     const csv = SAMPLE_BELFIUS_CSV.replace('24/11/2025', 'INVALID_DATE');
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(2);
   });
 
-  it('skips malformed amounts', () => {
+  it('skips malformed amounts', async () => {
     const csv = SAMPLE_BELFIUS_CSV.replace('-67,90', 'INVALID');
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(2);
   });
 
-  it('handles empty file', () => {
+  it('handles empty file', async () => {
     tmpPath = writeTempCSV('');
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(0);
   });
 
-  it('handles missing balance metadata', () => {
+  it('handles missing balance metadata', async () => {
     const csv = SAMPLE_BELFIUS_CSV.replace('Laatste saldo;1234,56 EUR', '');
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     // Should still parse (may have null balances)
     expect(txns.length).toBeGreaterThanOrEqual(0);
   });

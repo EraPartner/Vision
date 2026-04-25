@@ -253,7 +253,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
 
     emitProgress({ phase: 'parsing', current: 0, total: lineCount, imported: 0, duplicates: 0, errors: 0, percent: 5 });
     const parser = createAdapter(bankName, customConfig);
-    const transactionDataList = parser(filePath);
+    const transactionDataList = await parser(filePath);
     const bankType = determineBankType(bankName);
     const total = transactionDataList.length;
 

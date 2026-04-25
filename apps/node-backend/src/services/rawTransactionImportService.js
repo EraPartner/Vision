@@ -279,7 +279,7 @@ export async function importCSVWithRawStorage(filePath, bankName, customConfig =
 
   try {
     const parser = createAdapter(bankName, customConfig);
-    const transactionDataList = parser(filePath);
+    const transactionDataList = await parser(filePath);
     const bankType = determineBankType(bankName);
 
     logger.info(`Parsed ${transactionDataList.length} transactions, bank type: ${bankType}`);

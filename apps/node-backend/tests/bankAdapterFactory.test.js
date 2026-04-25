@@ -22,32 +22,32 @@ describe('BankAdapterFactory', () => {
     if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
   });
 
-  it('creates belfius adapter', () => {
+  it('creates belfius adapter', async () => {
     const parser = createAdapter('belfius');
     expect(typeof parser).toBe('function');
   });
 
-  it('creates revolut adapter', () => {
+  it('creates revolut adapter', async () => {
     const parser = createAdapter('revolut');
     expect(typeof parser).toBe('function');
   });
 
-  it('creates kbc adapter', () => {
+  it('creates kbc adapter', async () => {
     const parser = createAdapter('kbc');
     expect(typeof parser).toBe('function');
   });
 
-  it('is case-insensitive', () => {
+  it('is case-insensitive', async () => {
     expect(() => createAdapter('BELFIUS')).not.toThrow();
     expect(() => createAdapter('Revolut')).not.toThrow();
     expect(() => createAdapter('KBC')).not.toThrow();
   });
 
-  it('throws for unsupported bank', () => {
+  it('throws for unsupported bank', async () => {
     expect(() => createAdapter('UnknownBank')).toThrow('No configuration found');
   });
 
-  it('creates generic adapter with custom config', () => {
+  it('creates generic adapter with custom config', async () => {
     const config = {
       bank_name: 'TestBank',
       date_format: '%Y-%m-%d',
@@ -65,7 +65,7 @@ describe('BankAdapterFactory', () => {
     expect(typeof parser).toBe('function');
   });
 
-  it('generic adapter parses CSV correctly', () => {
+  it('generic adapter parses CSV correctly', async () => {
     const config = {
       bank_name: 'TestBank',
       date_format: '%Y-%m-%d',
@@ -85,7 +85,7 @@ describe('BankAdapterFactory', () => {
 `;
     tmpPath = writeTempCSV(csv);
     const parser = createAdapter('TestBank', config);
-    const txns = parser(tmpPath);
+    const txns = await parser(tmpPath);
     expect(txns).toHaveLength(2);
     expect(txns[0].recipient).toBe('Grocery Store');
     expect(txns[0].amount).toBe(-50.00);
@@ -94,7 +94,7 @@ describe('BankAdapterFactory', () => {
   });
 
   describe('getSupportedBanks', () => {
-    it('returns supported banks', () => {
+    it('returns supported banks', async () => {
       const banks = getSupportedBanks();
       expect(banks).toContain('belfius');
       expect(banks).toContain('revolut');

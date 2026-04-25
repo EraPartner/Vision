@@ -59,8 +59,8 @@ export function detect(csvSample) {
     && firstLine.includes('recipient');
 }
 
-export function parse(filePath) {
-  const records = parseCsvFile(filePath, {
+export async function parse(filePath) {
+  const records = await parseCsvFile(filePath, {
     columns: true,
     skip_empty_lines: true,
     relax_column_count: true,

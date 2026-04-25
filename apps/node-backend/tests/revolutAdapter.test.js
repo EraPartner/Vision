@@ -31,29 +31,29 @@ describe('RevolutAdapter', () => {
     if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
   });
 
-  it('filters out PENDING transactions', () => {
+  it('filters out PENDING transactions', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(4);
   });
 
-  it('detects Current account type', () => {
+  it('detects Current account type', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].bankAccount).toBe('REVOLUT CURRENT');
     expect(txns[1].bankAccount).toBe('REVOLUT CURRENT');
     expect(txns[2].bankAccount).toBe('REVOLUT CURRENT');
   });
 
-  it('detects Savings account type', () => {
+  it('detects Savings account type', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[3].bankAccount).toBe('REVOLUT SAVINGS');
   });
 
-  it('parses transaction fields correctly', () => {
+  it('parses transaction fields correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     const txn1 = txns[0];
     expect(txn1.recipient).toContain('SARDINHA RABINA');
     expect(txn1.amount).toBe(-39.50);
@@ -62,51 +62,51 @@ describe('RevolutAdapter', () => {
     expect(txn1.recipientAccount).toBeNull();
   });
 
-  it('extracts transaction types in comment', () => {
+  it('extracts transaction types in comment', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].comment).toContain('Type: Card Payment');
     expect(txns[1].comment).toContain('Type: Transfer');
     expect(txns[2].comment).toContain('Type: ATM');
     expect(txns[3].comment).toContain('Type: Exchange');
   });
 
-  it('includes fee in comment when non-zero', () => {
+  it('includes fee in comment when non-zero', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].comment).not.toContain('Fee:');
     expect(txns[2].comment).toContain('Fee: 2.50 EUR');
   });
 
-  it('builds memo as Type - Product', () => {
+  it('builds memo as Type - Product', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].memo).toBe('CARD PAYMENT - CURRENT');
     expect(txns[1].memo).toBe('TRANSFER - CURRENT');
     expect(txns[3].memo).toBe('EXCHANGE - SAVINGS');
   });
 
-  it('parses amounts correctly', () => {
+  it('parses amounts correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].amount).toBe(-39.50);
     expect(txns[1].amount).toBe(50.00);
     expect(txns[2].amount).toBe(-100.00);
     expect(txns[3].amount).toBe(500.00);
   });
 
-  it('parses balances correctly', () => {
+  it('parses balances correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].balance).toBe(113.74);
     expect(txns[1].balance).toBe(153.24);
     expect(txns[2].balance).toBe(103.24);
     expect(txns[3].balance).toBe(600.00);
   });
 
-  it('normalizes text to uppercase', () => {
+  it('normalizes text to uppercase', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     for (const txn of txns) {
       if (txn.recipient) expect(txn.recipient).toBe(txn.recipient.toUpperCase());
       if (txn.memo) expect(txn.memo).toBe(txn.memo.toUpperCase());
@@ -114,57 +114,57 @@ describe('RevolutAdapter', () => {
     }
   });
 
-  it('preserves raw data', () => {
+  it('preserves raw data', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     for (const txn of txns) {
       expect(txn.rawData).toBeTruthy();
       expect(txn.rawData).toContain(',');
     }
   });
 
-  it('extracts currency correctly', () => {
+  it('extracts currency correctly', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns[0].currency).toBe('EUR');
     expect(txns[3].currency).toBe('USD');
   });
 
-  it('has no recipient account or address', () => {
+  it('has no recipient account or address', async () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     for (const txn of txns) {
       expect(txn.recipientAccount).toBeNull();
       expect(txn.recipientAddress).toBeNull();
     }
   });
 
-  it('skips malformed dates', () => {
+  it('skips malformed dates', async () => {
     const csv = SAMPLE_REVOLUT_CSV.replace('2026-02-02 11:28:17', 'INVALID_DATE');
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(3);
   });
 
-  it('skips malformed amounts', () => {
+  it('skips malformed amounts', async () => {
     const csv = SAMPLE_REVOLUT_CSV.replace('-39.50', 'INVALID');
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(3);
   });
 
-  it('handles empty file', () => {
+  it('handles empty file', async () => {
     tmpPath = writeTempCSV('');
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(0);
   });
 
-  it('handles zero balance', () => {
+  it('handles zero balance', async () => {
     const csv = `Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance
 Transfer,Current,2026-02-01 10:00:00,2026-02-01 10:05:30,Test,-50.00,0.00,EUR,COMPLETED,0.00
 `;
     tmpPath = writeTempCSV(csv);
-    const txns = parse(tmpPath);
+    const txns = await parse(tmpPath);
     expect(txns).toHaveLength(1);
     expect(txns[0].balance).toBe(0.00);
   });

@@ -98,8 +98,8 @@ export function detect(csvSample) {
   return lower.startsWith('type,') && lower.includes('completed date') && lower.includes('state');
 }
 
-export function parse(filePath) {
-  const records = parseCsvFile(filePath, {
+export async function parse(filePath) {
+  const records = await parseCsvFile(filePath, {
     columns: false,
     skip_empty_lines: true,
     relax_column_count: true,
