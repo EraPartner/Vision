@@ -34,16 +34,16 @@ export default function DashboardPage() {
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || 'EUR';
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const integerLocaleFormatter = new Intl.NumberFormat(locale);
+    const integerLocaleFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
-    const DASHBOARD_WIDGETS: WidgetDefinition[] = [
+    const DASHBOARD_WIDGETS: WidgetDefinition[] = useMemo(() => [
         { id: 'statCards', label: t('dashboard.statCards'), description: t('dashboard.widgetDescriptions.statCards') },
         { id: 'bankBalances', label: t('dashboard.bankBalances'), description: t('dashboard.widgetDescriptions.bankBalances') },
         { id: 'monthlyTrends', label: t('dashboard.monthlyTrends'), description: t('dashboard.widgetDescriptions.monthlyTrends') },
         { id: 'categoryPie', label: t('dashboard.categoryDistribution'), description: t('dashboard.widgetDescriptions.categoryPie') },
         { id: 'cashflowComparison', label: t('dashboard.cashFlowComparison'), description: t('dashboard.widgetDescriptions.cashflowComparison') },
         { id: 'recentTransactions', label: t('dashboard.recentTransactions'), description: t('dashboard.widgetDescriptions.recentTransactions') },
-    ];
+    ], [t]);
 
     const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('dashboard', DASHBOARD_WIDGETS);
     const { settings } = useSettings();
@@ -91,15 +91,18 @@ export default function DashboardPage() {
     }, [settings.exclusionScope, settings.excludedCategoryIds, settings.excludeHiddenCategories, categoriesData]);
 
     // Recipient exclusions
-    const excludedRecipientIds = (settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
-        ? settings.excludedRecipientIds
-        : [];
+    const excludedRecipientIds = useMemo(
+        () => ((settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'dashboard')
+            ? settings.excludedRecipientIds
+            : []),
+        [settings.exclusionScope, settings.excludedRecipientIds],
+    );
 
     // Stable exclusion params (don't change with toggle)
-    const filteredExclusionParams = {
+    const filteredExclusionParams = useMemo(() => ({
         excluded_category_ids: allExcludedCategoryIds.length > 0 ? allExcludedCategoryIds : undefined,
         excluded_recipient_ids: excludedRecipientIds.length > 0 ? excludedRecipientIds : undefined,
-    };
+    }), [allExcludedCategoryIds, excludedRecipientIds]);
 
     // Fetch monthly summary — FILTERED version (stable query key)
     const { data: monthlySummaryFiltered, isLoading: monthlyFilteredLoading } = useQuery({
@@ -180,12 +183,11 @@ export default function DashboardPage() {
     const allTransactions = transactionsData?.items || [];
 
     // Apply settings filters to transactions
-    const transactions = (() => {
+    const transactions = useMemo(() => {
         if (settings.exclusionScope !== 'everywhere' && settings.exclusionScope !== 'dashboard') {
             return allTransactions;
         }
 
-        // Build hidden category IDs list if needed
         let hiddenCategoryIds: number[] = [];
         if (settings.excludeHiddenCategories && categoriesData) {
             hiddenCategoryIds = categoriesData.items
@@ -193,7 +195,6 @@ export default function DashboardPage() {
                 .map((cat) => cat.id);
         }
 
-        // Build complete exclusion list
         const excludedCategoryIdSet = new Set([
             ...settings.excludedCategoryIds,
             ...hiddenCategoryIds,
@@ -201,21 +202,19 @@ export default function DashboardPage() {
 
         const excludedRecipientIdSet = new Set(settings.excludedRecipientIds);
 
-        // Filter transactions
-        return allTransactions.filter((t) => {
-            // Exclude if category is in exclusion list
-            if (t.category_id && excludedCategoryIdSet.has(t.category_id)) {
-                return false;
-            }
-
-            // Exclude if recipient is in exclusion list
-            if (t.recipient_id && excludedRecipientIdSet.has(t.recipient_id)) {
-                return false;
-            }
-
+        return allTransactions.filter((tx) => {
+            if (tx.category_id && excludedCategoryIdSet.has(tx.category_id)) return false;
+            if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id)) return false;
             return true;
         });
-    })();
+    }, [
+        allTransactions,
+        settings.exclusionScope,
+        settings.excludedCategoryIds,
+        settings.excludedRecipientIds,
+        settings.excludeHiddenCategories,
+        categoriesData,
+    ]);
 
     // Use real-time statistics from API (last month with data)
     const totalTransactions = statsData?.totalTransactions ?? 0;
@@ -225,18 +224,16 @@ export default function DashboardPage() {
     const netHistory = statsData?.netHistory ?? [];
 
     // Get chart data based on per-graph toggle state
-    const getMonthlyData = () => {
+    const monthlyData = useMemo(() => {
         const useExclusions = graphExclusions['monthlyTrends'] ?? true;
         if (useExclusions && exclusionsApply && monthlySummaryFiltered) {
             return monthlySummaryFiltered.months || [];
         }
         return monthlySummaryUnfiltered?.months || [];
-    };
-
-    const monthlyData = getMonthlyData();
+    }, [graphExclusions, exclusionsApply, monthlySummaryFiltered, monthlySummaryUnfiltered]);
 
     // Calculate category breakdown from transactions (with per-graph toggle)
-    const categoryBreakdown = (() => {
+    const categoryBreakdown = useMemo(() => {
         const useExclusions = graphExclusions['categoryPie'] ?? true;
         const txToUse = (useExclusions && exclusionsApply) ? transactions : allTransactions;
 
@@ -246,38 +243,29 @@ export default function DashboardPage() {
             const key = tx.category_name || t('txPage.field.uncategorized');
             const name = tx.category_name || t('txPage.field.uncategorized');
 
-                if (categoryMap.has(key)) {
-                    categoryMap.get(key)!.count++;
-                } else {
-                    categoryMap.set(key, { name, count: 1 });
-                }
-            });
+            if (categoryMap.has(key)) {
+                categoryMap.get(key)!.count++;
+            } else {
+                categoryMap.set(key, { name, count: 1 });
+            }
+        });
 
         return Array.from(categoryMap.values());
-    })();
+    }, [graphExclusions, exclusionsApply, transactions, allTransactions, t]);
 
     // Extract detail part from category names (after the colon) and show only top categories
-    const categoryData = (() => {
-        // Sort by count descending
+    const categoryData = useMemo(() => {
         const sorted = [...categoryBreakdown].sort((a, b) => b.count - a.count);
-
-        // Take top 5 categories
         const topCategories = sorted.slice(0, 5);
-
-        // Sum up the rest as "Other"
         const otherCount = sorted.slice(5).reduce((sum, cat) => sum + cat.count, 0);
 
-        // Extract detail part from category name (e.g., "FOOD:GROCERIES" -> "Groceries")
         const extractDetail = (categoryName: string): string => {
             if (categoryName === t('txPage.field.uncategorized')) return categoryName;
-
             const parts = categoryName.split(':');
             if (parts.length > 1) {
-                // Get the detail part and format it nicely
                 const detail = parts[1].trim();
                 return detail.charAt(0) + detail.slice(1).toLowerCase();
             }
-            // If no colon, just format the whole name nicely
             return categoryName.charAt(0) + categoryName.slice(1).toLowerCase();
         };
 
@@ -286,24 +274,20 @@ export default function DashboardPage() {
             value: cat.count
         }));
 
-        // Add "Other" if there are more categories
         if (otherCount > 0) {
-            result.push({
-                name: t('dashboard.other'),
-                value: otherCount
-            });
+            result.push({ name: t('dashboard.other'), value: otherCount });
         }
 
         return result;
-    })();
+    }, [categoryBreakdown, t]);
 
     // Recent transactions data (with per-graph toggle)
-    const recentTransactionsSource = (() => {
+    const recentTransactionsSource = useMemo(() => {
         const useExclusions = graphExclusions['recentTransactions'] ?? true;
         return (useExclusions && exclusionsApply)
             ? (recentFilteredTransactions ?? [])
             : allTransactions;
-    })();
+    }, [graphExclusions, exclusionsApply, recentFilteredTransactions, allTransactions]);
 
     const recentTransactions = recentTransactionsSource.slice(0, 5).map((txn) => ({
         id: txn.id,

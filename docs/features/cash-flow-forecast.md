@@ -5,7 +5,7 @@ status: active
 date: 2026-04-25
 updated: 2026-04-25
 last_modified: 2026-04-25
-tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown]
+tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
 related_code:
@@ -603,7 +603,10 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **Rewrote accuracyStore:**  `apps/node-backend/src/services/calculations/forecast/accuracyStore.js`
 - Now delegates to Postgres via repository
-- Fallback: when table is missing (error code 42P01), reverts to in-memory Map for backward compatibility
+- **Fallback (April 2026):** when table is missing or Postgres is unreachable, reverts to in-memory Map for backward compatibility
+  - Triggers on error codes: `42P01` (undefined_table), `ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`
+  - Enables dev/test environments without a running PostgreSQL instance
+  - Fallback is silent; forecast endpoints remain usable
 - Enables nightly batch persistence without requiring restart
 
 **New Endpoint:** `GET /api/aggregations/cashflow-forecast-accuracy`
@@ -784,7 +787,7 @@ Additionally, the diagnostics section includes ensemble weights:
 - Data loading:
   - Enabled only when sheet is open (lazy)
   - Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` with staleTime 10 minutes
-  - Falls back to current backtest data if table is missing (error code 42P01)
+  - Falls back to current backtest data if table is missing or Postgres is unreachable (error codes: 42P01, ECONNREFUSED, ENOTFOUND, ETIMEDOUT)
 - Renders:
   - Accuracy table (MAE/RMSE/MAPE, sorted by MAE ascending) — displays latest DB history per method
   - Rank badge per method (1st, 2nd, 3rd place)

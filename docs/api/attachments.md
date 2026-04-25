@@ -5,7 +5,8 @@ method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
 date: 2026-04-24
-tags: [api, attachments, receipts, files, storage, phase-5a]
+updated: 2026-04-25
+tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
 related_code: ["apps/node-backend/src/routes/attachments.js", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.js", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
@@ -106,7 +107,14 @@ Download (stream) an attachment file by its ID.
 
 **Response (200 OK):**
 - Raw file content with appropriate `Content-Type` header
-- `Content-Disposition: attachment` with original filename if available
+- `Content-Disposition` header using RFC 5987 dual-encoding for filename:
+  - ASCII fallback: `filename="sanitized_ascii_name"` (non-printable, quotes, and backslashes replaced with `_`)
+  - UTF-8 with encoding: `filename*=UTF-8''percent%2Dencoded%20name`
+  - Clients supporting RFC 5987 use the UTF-8 form; others fall back to ASCII
+  - Example: `Content-Disposition: inline; filename="receipt.pdf"; filename*=UTF-8''re%C3%A7u.pdf`
+
+> [!info] RFC 5987 Compliance (April 2026)
+> Non-ASCII filenames are transmitted safely to all clients via dual encoding. This prevents issues with filename corruption in older browsers while providing proper UTF-8 handling in modern ones.
 
 **Error Responses:**
 - `404` Not Found — Attachment or file does not exist
@@ -142,6 +150,19 @@ ATTACHMENTS_DIR/
 └── {other_transaction_id}/
     └── {uuid}.docx
 ```
+
+### Path Traversal Protection
+
+The attachment service validates all file paths before reading or writing:
+
+```javascript
+// In resolveAbsolutePath(storedPath):
+// Throws 'Invalid attachment path: outside attachments root' if:
+// - resolved path does not equal root, AND
+// - resolved path does not start with root + path separator
+```
+
+This prevents directory traversal attacks (e.g., stored paths like `../../../etc/passwd`). The `sep` is imported from `node:path` to handle OS-specific separators correctly (Windows vs. POSIX).
 
 ### Metadata Schema
 ```sql

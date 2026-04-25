@@ -161,6 +161,7 @@ export async function ensureMaterializedViewIndexes() {
     )
   );
 }
+
 let refreshInFlight = false;
 let refreshQueued = false;
 
@@ -203,8 +204,12 @@ export async function refreshMaterializedViews() {
     refreshInFlight = false;
     if (refreshQueued) {
       refreshQueued = false;
-      // Schedule deferred refresh
-      setTimeout(() => refreshMaterializedViews(), 500);
+      // Schedule deferred refresh; swallow rejection so unhandled promises do not crash the process.
+      setTimeout(() => {
+        refreshMaterializedViews().catch(err => {
+          logger.warn('Deferred materialized view refresh failed', { error: err.message });
+        });
+      }, 500);
     }
   }
 }
@@ -219,7 +224,9 @@ export function scheduleRefresh() {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    refreshMaterializedViews();
+    refreshMaterializedViews().catch(err => {
+      logger.warn('Debounced materialized view refresh failed', { error: err.message });
+    });
   }, 1000);
 }
 

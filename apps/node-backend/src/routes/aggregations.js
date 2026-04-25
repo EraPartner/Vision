@@ -46,6 +46,12 @@ function parseNumericArrayQueryParam(raw) {
     .filter((n) => Number.isFinite(n));
 }
 
+function parseIntClamped(raw, { min = 1, max, fallback }) {
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < min) return fallback;
+  return max != null ? Math.min(parsed, max) : parsed;
+}
+
 router.get('/monthly-summary', async (req, res) => {
   const allTime = req.query.all_time === 'true' || req.query.all_time === '1';
   const { data, meta } = await computeMonthlySummary({
@@ -95,18 +101,14 @@ router.get('/bank-balances', async (req, res) => {
 });
 
 router.get('/cashflow-forecast', async (req, res) => {
-  const rawMonths = parseInt(req.query.months, 10);
-  const months = Number.isFinite(rawMonths) && rawMonths > 0 ? Math.min(rawMonths, 24) : 3;
+  const months = parseIntClamped(req.query.months, { max: 24, fallback: 3 });
   const { data, meta } = await computeCashflowForecast({ months });
   res.ok({ data, meta: { ...meta, months } });
 });
 
 router.get('/cashflow-forecast-methods', async (req, res) => {
-  const rawMcPaths = parseInt(req.query.mc_paths, 10);
-  const mcPaths = Number.isFinite(rawMcPaths) && rawMcPaths > 0 ? Math.min(rawMcPaths, 5000) : 1000;
-  const rawHistory = parseInt(req.query.history_months, 10);
-  const historyMonths =
-    Number.isFinite(rawHistory) && rawHistory > 0 ? Math.min(rawHistory, 120) : 36;
+  const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
+  const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
   const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
   const mcPercentiles = percentiles.length > 0 ? percentiles : [10, 50, 90];
   const includePlanned =
@@ -131,8 +133,7 @@ router.get('/cashflow-forecast-methods', async (req, res) => {
 
 router.get('/cashflow-forecast-accuracy', async (req, res) => {
   const userId = req.get('x-actor') || 'anonymous';
-  const rawLimit = parseInt(req.query.limit_months, 10);
-  const limitMonths = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 48) : 24;
+  const limitMonths = parseIntClamped(req.query.limit_months, { max: 48, fallback: 24 });
 
   const rows = await getAllAccuracyHistory({ userId, limitMonths });
 

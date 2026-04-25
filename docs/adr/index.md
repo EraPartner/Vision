@@ -3,8 +3,8 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-04-23
-tags: [adr, index, architecture, decisions, phase-1, phase-4]
+updated: 2026-04-25
+tags: [adr, index, architecture, decisions, phase-1, phase-4, security]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -43,6 +43,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-25: Secure File Download with Path Traversal Guard and RFC 5987
+
+[[docs/adr/036-secure-file-download-with-path-traversal-and-rfc5987|ADR-036]] — Path traversal protection for file downloads via explicit path validation in `resolveAbsolutePath()`: reject any stored path that escapes the attachments root. RFC 5987 dual-encoding in `Content-Disposition` headers: ASCII fallback for legacy clients + UTF-8 encoding for modern ones. Enables safe serving of attachments with non-ASCII filenames (French, Chinese, etc.) without risk of directory traversal attacks. Zero performance impact; backward compatible.
 
 ### 2026-04-24: Remove Feature Flags
 

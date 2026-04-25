@@ -42,11 +42,7 @@ router.use('/', ratesRouter);
 router.use('/', performanceRouter);
 router.use('/', maintenanceRouter);
 
-/**
- * Pre-warm the net-worth and portfolio-performance caches so the first
- * request after startup is served instantly from memory.
- */
-export async function warmInfoCaches(targetCurrency = 'EUR') {
+async function warmNetWorthCache(targetCurrency) {
   try {
     logger.info('Warming net-worth cache...', { targetCurrency });
     const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency);
@@ -55,7 +51,9 @@ export async function warmInfoCaches(targetCurrency = 'EUR') {
   } catch (err) {
     logger.error('Failed to warm net-worth cache', { error: err.message });
   }
+}
 
+async function warmPortfolioPerformanceCache(targetCurrency) {
   try {
     logger.info('Warming portfolio-performance cache...', { targetCurrency });
     const startDate = '2000-01-01';
@@ -68,6 +66,18 @@ export async function warmInfoCaches(targetCurrency = 'EUR') {
   } catch (err) {
     logger.error('Failed to warm portfolio-performance cache', { error: err.message });
   }
+}
+
+/**
+ * Pre-warm the net-worth and portfolio-performance caches so the first
+ * request after startup is served instantly from memory.
+ * Both warmers run in parallel; failures are isolated per cache.
+ */
+export async function warmInfoCaches(targetCurrency = 'EUR') {
+  await Promise.allSettled([
+    warmNetWorthCache(targetCurrency),
+    warmPortfolioPerformanceCache(targetCurrency),
+  ]);
 }
 
 export default router;

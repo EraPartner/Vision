@@ -5,10 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const routeHandlers = {};
+const lastHandler = (handlers) => handlers[handlers.length - 1];
 const mockRouter = {
-  get: vi.fn((path, handler) => { routeHandlers[`get:${path}`] = handler; }),
-  post: vi.fn((path, handler) => { routeHandlers[`post:${path}`] = handler; }),
-  patch: vi.fn((path, handler) => { routeHandlers[`patch:${path}`] = handler; }),
+  get: vi.fn((path, ...handlers) => { routeHandlers[`get:${path}`] = lastHandler(handlers); }),
+  post: vi.fn((path, ...handlers) => { routeHandlers[`post:${path}`] = lastHandler(handlers); }),
+  patch: vi.fn((path, ...handlers) => { routeHandlers[`patch:${path}`] = lastHandler(handlers); }),
   use: vi.fn(),
 };
 
@@ -32,6 +33,7 @@ vi.mock('../../src/database/connection.js', () => ({
 vi.mock('../../src/config/config.js', () => ({
   getSettings: vi.fn(() => ({
     admin: { enableResetDb: false },
+    isDevelopment: () => true,
   })),
 }));
 
@@ -152,7 +154,7 @@ describe('Admin Routes', () => {
   describe('POST /database/reset', () => {
     it('should throw NotFoundError when reset disabled', async () => {
       const { NotFoundError } = await import('../../src/middleware/errorHandler.js');
-      getSettings.mockReturnValue({ admin: { enableResetDb: false } });
+      getSettings.mockReturnValue({ admin: { enableResetDb: false }, isDevelopment: () => true });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -161,7 +163,7 @@ describe('Admin Routes', () => {
 
     it('should throw ValidationError without force parameter', async () => {
       const { ValidationError } = await import('../../src/middleware/errorHandler.js');
-      getSettings.mockReturnValue({ admin: { enableResetDb: true } });
+      getSettings.mockReturnValue({ admin: { enableResetDb: true }, isDevelopment: () => true });
 
       const req = { query: {} };
       const res = mockResponse();
@@ -169,7 +171,7 @@ describe('Admin Routes', () => {
     });
 
     it('should accept force=true', async () => {
-      getSettings.mockReturnValue({ admin: { enableResetDb: true } });
+      getSettings.mockReturnValue({ admin: { enableResetDb: true }, isDevelopment: () => true });
 
       const req = { query: { force: 'true' } };
       const res = mockResponse();

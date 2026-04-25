@@ -290,17 +290,15 @@ export async function computeCashflowForecast({
         })),
       })),
     };
-    for (const b of backtest) {
-      await recordAccuracy({
-        userId,
-        methodId: b.id,
-        asOfMonth: yyyymm,
-        mae: b.aggregate.mae,
-        rmse: b.aggregate.rmse,
-        mape: b.aggregate.mape,
-        sampleDays: b.perMonth.reduce((s, r) => s + r.sampleDays, 0),
-      });
-    }
+    await Promise.all(backtest.map((b) => recordAccuracy({
+      userId,
+      methodId: b.id,
+      asOfMonth: yyyymm,
+      mae: b.aggregate.mae,
+      rmse: b.aggregate.rmse,
+      mape: b.aggregate.mape,
+      sampleDays: b.perMonth.reduce((s, r) => s + r.sampleDays, 0),
+    })));
   }
 
   const basePayload = {

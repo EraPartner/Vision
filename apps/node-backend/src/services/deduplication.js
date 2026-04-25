@@ -23,9 +23,8 @@ export function createManualTransactionHash({ date, amount, recipientId, memo, b
 }
 
 export async function isDuplicate(transactionData) {
-  const hash = createTransactionHash(transactionData);
-  // Check if a transaction with this hash exists in the DB
-  // We check by matching date + amount + recipient as fallback
+  // Field-based dedup: matches on date + amount + recipient.
+  // Hash-based dedup is performed separately by callers using the raw_transactions tables.
   const result = await query(
     `SELECT id FROM transactions
      WHERE date = $1 AND amount = $2 AND recipient_id = (

@@ -4,8 +4,9 @@
  * by Alembic migration 0012_cashflow_forecast_accuracy).
  *
  * Falls back to an in-memory stub when the DB table does not yet exist
- * (e.g. during development before running migrations). Fallback is silent
- * so the forecast endpoint remains usable without the migration applied.
+ * (e.g. during development before running migrations) or when Postgres
+ * is unreachable (dev/test environments without a running DB). Fallback
+ * is silent so the forecast endpoint remains usable in either case.
  */
 
 import accuracyRepo from '../../../repositories/cashflowForecastAccuracyRepository.js';
@@ -41,11 +42,16 @@ export function isAccuracyTableHealthy() {
   return accuracyTableHealthy;
 }
 
+const FALLBACK_PG_CODES = new Set([
+  '42P01',           // undefined_table — migration not yet applied
+  'ECONNREFUSED',    // DB unreachable (dev/test env without Postgres)
+  'ENOTFOUND',       // DB host unresolved
+  'ETIMEDOUT',       // connection attempt timed out
+]);
+
 function isTableMissingError(err) {
-  return (
-    err?.code === '42P01' ||
-    (typeof err?.message === 'string' && err.message.includes('cashflow_forecast_accuracy'))
-  );
+  if (FALLBACK_PG_CODES.has(err?.code)) return true;
+  return typeof err?.message === 'string' && err.message.includes('cashflow_forecast_accuracy');
 }
 
 export async function recordAccuracy({ userId, methodId, asOfMonth, mae, rmse, mape, sampleDays }) {

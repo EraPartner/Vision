@@ -8,7 +8,8 @@ import { getSettings } from '../config/config.js';
 
 const requestCounts = new Map();
 
-// Clean up old entries every 60 seconds
+// Clean up old entries every 60 seconds.
+// .unref() so the timer does not keep test/CLI processes alive.
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of requestCounts) {
@@ -16,7 +17,7 @@ setInterval(() => {
       requestCounts.delete(key);
     }
   }
-}, 60_000);
+}, 60_000).unref();
 
 /**
  * Rate limiter middleware factory.

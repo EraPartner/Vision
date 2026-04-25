@@ -9,6 +9,7 @@
 
 const WINDOW_MINUTES = 15;
 const BUCKET_MS = 60_000; // 1-minute buckets
+const MAX_LATENCY_SAMPLES_PER_BUCKET = 1000; // cap memory; reservoir-sample beyond
 
 // Map<routeKey, BucketStore>
 // routeKey = "METHOD /path/pattern"
@@ -32,9 +33,23 @@ function bucketKey(now) {
 
 function getOrCreateBucket(store, key) {
   if (!store.buckets.has(key)) {
-    store.buckets.set(key, { count: 0, errors: 0, latencies: [] });
+    store.buckets.set(key, { count: 0, errors: 0, latencies: [], sampled: 0 });
   }
   return store.buckets.get(key);
+}
+
+// Reservoir sample so unbounded traffic does not balloon memory while keeping
+// percentile estimates statistically representative.
+function recordLatency(bucket, durationMs) {
+  bucket.sampled += 1;
+  if (bucket.latencies.length < MAX_LATENCY_SAMPLES_PER_BUCKET) {
+    bucket.latencies.push(durationMs);
+    return;
+  }
+  const idx = Math.floor(Math.random() * bucket.sampled);
+  if (idx < MAX_LATENCY_SAMPLES_PER_BUCKET) {
+    bucket.latencies[idx] = durationMs;
+  }
 }
 
 function evictOldBuckets(store, now) {
@@ -81,7 +96,7 @@ export function requestMetrics(req, res, next) {
 
     const bucket = getOrCreateBucket(store, bucketKey(now));
     bucket.count += 1;
-    bucket.latencies.push(durationMs);
+    recordLatency(bucket, durationMs);
     if (res.statusCode >= 400) bucket.errors += 1;
   });
 

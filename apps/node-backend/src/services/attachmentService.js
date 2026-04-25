@@ -11,7 +11,7 @@
  */
 
 import { mkdirSync, promises as fsPromises } from 'fs';
-import { join, extname, resolve } from 'path';
+import { join, extname, resolve, sep } from 'path';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
 import { env } from '../config/env.js';
@@ -70,9 +70,15 @@ export async function storeAttachment(transactionId, file) {
 
 /**
  * Resolve a DB-stored relative path back to an absolute filesystem path.
+ * Throws if the resolved path escapes the attachments root (path traversal guard).
  */
 export function resolveAbsolutePath(storedPath) {
-  return join(getAttachmentsRoot(), storedPath);
+  const root = getAttachmentsRoot();
+  const absolute = resolve(root, storedPath);
+  if (absolute !== root && !absolute.startsWith(root + sep)) {
+    throw new Error('Invalid attachment path: outside attachments root');
+  }
+  return absolute;
 }
 
 /**

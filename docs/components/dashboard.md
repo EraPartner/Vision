@@ -3,7 +3,7 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-04-24
+updated: 2026-04-25
 tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, ensemble, visx]
 description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
@@ -219,7 +219,7 @@ Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/c
 
 ## CashFlowForecastChart (Phase C + F)
 
-Multi-method cash flow forecast visualization with 8 statistical forecasting methods (7 base + inverse-MSE ensemble), confidence bands, and interactive diagnostics (Phase 10 + Phase C + Phase F).
+Multi-method cash flow forecast visualization with 8 statistical forecasting methods (7 base + inverse-MSE ensemble), confidence bands, and interactive diagnostics (Phase 10 + Phase C + Phase F). By default displays 6 methods (5 point methods + ensemble); Monte Carlo methods are hidden by default but toggleable.
 
 ### Props
 
@@ -233,11 +233,12 @@ interface CashFlowForecastChartProps {
 
 ### Features
 
-- **Multi-method ensemble** — Displays 8 forecasting methods: 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods (Parametric, Block Bootstrap) + 1 ensemble method (inverse-MSE weighted combination)
+- **Multi-method ensemble** — Displays all 8 forecasting methods: 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods (Parametric, Block Bootstrap) + 1 ensemble method (inverse-MSE weighted combination)
+- **Default visibility** — Shows 6 methods by default: 5 point methods + ensemble inv-MSE. Monte Carlo methods hidden by default but can be toggled on via pill controls
 - **View modes** — Tabs toggle between cumulative balance and daily net views
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative forecast; triggers API refetch
 - **Per-method toggles** — Pill-button controls to show/hide individual methods on chart
-- **Monte Carlo confidence bands** — Dashed LineSeries rendering P10/P90 percentiles for MC methods
+- **Monte Carlo confidence bands** — Dashed LineSeries rendering P10/P90 percentiles for MC methods (visible when MC methods are toggled on)
 - **Diagnostics panel** — Right-side sheet with:
   - Backtest accuracy table (MAE, RMSE, MAPE per method, sorted by MAE)
   - Method rank badge (1st/2nd/3rd place by accuracy)
@@ -262,12 +263,20 @@ Component calls `getCashflowForecastMethods()` from the API client with paramete
 - `currency` (from props)
 - `excluded_category_ids[]`, `excluded_recipient_ids[]` (from props)
 - `history_months` (default 36)
-- `mc_paths` (default 1000)
-- `mc_percentiles` (default [10, 50, 90])
+- `mc_paths` (default 500)
+- `mc_percentiles` (default [25, 75])
 - `include_planned` (from local Switch state)
 - `include_backtest` (true, always included for diagnostics)
 
 Query refetches when `includePlanned` toggle changes or props change.
+
+### Default Visibility
+
+Component maintains two method ID constants:
+- `ALL_METHOD_IDS`: All 8 methods (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap)
+- `DEFAULT_VISIBLE_METHOD_IDS`: 6 methods (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse) — excludes Monte Carlo methods
+
+The `visibleMethodIds` state is initialized to `DEFAULT_VISIBLE_METHOD_IDS`. Users can toggle any method on/off via pill controls, but Monte Carlo methods start hidden to keep the default view less cluttered.
 
 ### Visual Design
 
@@ -492,6 +501,30 @@ function Dashboard() {
   widgets: WidgetDefinition[];
 }
 ```
+
+---
+
+## Performance Optimizations (April 2026)
+
+Dashboard Page (`DashboardPage.tsx`) uses `useMemo` to stabilize frequently-recomputed values and prevent unnecessary child re-renders:
+
+| Value | Dependencies | Purpose |
+|-------|--------------|---------|
+| `integerLocaleFormatter` | `locale` | Reusable `Intl.NumberFormat` for transaction count formatting |
+| `DASHBOARD_WIDGETS` | `t` (translation function) | Widget definition array with i18n labels |
+| `allExcludedCategoryIds` | `settings`, `categoriesData` | Combined category exclusion list (user-selected + hidden categories) |
+| `excludedRecipientIds` | `settings` | Recipient exclusion list derived from settings scope |
+| `filteredExclusionParams` | `allExcludedCategoryIds`, `excludedRecipientIds` | Stable query params object for API calls |
+| `transactions` | Transaction query key | Memoized transaction list result |
+| `monthlyData` | Monthly summary query keys | Memoized filtered/unfiltered monthly summaries |
+| `categoryBreakdown` | Category query key | Memoized category spending breakdown |
+| `categoryData` | `categoryBreakdown` | Processed category data for chart rendering |
+| `recentTransactionsSource` | `recentFilteredTransactions` | Memoized recent transaction array |
+
+> [!info] Memoization Strategy
+> These `useMemo` wraps replace previous inline-IIFE patterns and unstable object/array literals. By memoizing derived data and stable references, child components (charts, stat cards) remain stable across exclusion toggling and settings changes, reducing unnecessary chart re-renders and improving perceived responsiveness.
+
+Code: [[apps/frontend/src/pages/DashboardPage.tsx]]
 
 ---
 

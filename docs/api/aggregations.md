@@ -5,8 +5,8 @@ status: active
 date: 2026-04-25
 updated: 2026-04-25
 last_modified: 2026-04-25
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-g, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics (Phase D), nightly cache materialization (Phase E), and per-category breakdown with reconciliation (Phase G)
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-g, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), and per-category breakdown with reconciliation (Phase G)
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
@@ -786,7 +786,10 @@ methodAccuracy.simple_avg.history.forEach((point) => {
 - Table: `cashflow_forecast_accuracy` (created by Alembic migration 0012_cashflow_forecast_accuracy)
 - UPSERT on (user_id, method_id, as_of_month) — idempotent
 - Populated by nightly batch job (Phase G) or manual updates from `/api/aggregations/cashflow-forecast-methods` backtest
-- Fallback: if table is missing, backend's `accuracyStore` falls back to in-memory Map for backward compatibility (error code 42P01)
+- **Fallback (April 2026):** If the database is unreachable or the table is missing, backend's `accuracyStore` falls back to an in-memory Map for backward compatibility:
+  - Triggers on error codes: `42P01` (undefined_table), `ECONNREFUSED` (DB unreachable), `ENOTFOUND` (host unresolved), `ETIMEDOUT` (connection timeout)
+  - Supports dev/test environments without a running PostgreSQL instance
+  - Fallback is silent; forecast endpoints remain usable with or without accuracy persistence
 
 **Use Cases:**
 
@@ -798,10 +801,11 @@ methodAccuracy.simple_avg.history.forEach((point) => {
 ---
 
 Dashboard visualization via `CashFlowForecastChart` component:
-- Multi-method chart with 8 forecasting methods rendered as line/area series (5 point + 2 MC + 1 ensemble)
+- Multi-method chart with all 8 forecasting methods available (5 point + 2 MC + 1 ensemble)
+- **Default visibility:** Displays 6 methods by default — 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + Ensemble inv-MSE. Monte Carlo methods are hidden by default but can be toggled on via pill controls to reduce clutter in the default view.
 - View toggle (cumulative balance vs. daily net) via Tabs
 - Per-method visibility toggles via pill buttons
-- Monte Carlo confidence bands (P10/P90) as dashed LineSeries
+- Monte Carlo confidence bands (P10/P90) as dashed LineSeries (visible when MC methods are toggled on)
 - Planned transaction overlay switch (refetches with `include_planned=true`)
 - Diagnostics panel showing backtest accuracy metrics and ensemble weight preview
 

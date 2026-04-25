@@ -3,10 +3,11 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML]
-description: Content Security Policy, data protection, and privacy considerations for Vision
-aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention]
-related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts"]
+updated: 2026-04-25
+tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987]
+description: Content Security Policy, data protection, path traversal prevention, and privacy considerations for Vision
+aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
+related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
 ---
 
 # Security: Data Protection & CSP
@@ -109,6 +110,28 @@ All use of React's `dangerouslySetInnerHTML` has been removed from the frontend.
 1. Content is explicitly sanitized via DOMPurify or similar
 2. Content source is fully trusted and controlled
 3. No reasonable alternative exists
+
+---
+
+## Path Traversal Prevention
+
+The attachment service protects against directory traversal attacks via explicit path validation:
+
+```javascript
+// In attachmentService.js resolveAbsolutePath()
+const root = getAttachmentsRoot();
+const absolute = resolve(root, storedPath);
+if (absolute !== root && !absolute.startsWith(root + sep)) {
+  throw new Error('Invalid attachment path: outside attachments root');
+}
+return absolute;
+```
+
+Key protections:
+- All file paths resolved relative to `ATTACHMENTS_DIR`
+- Path separator (`sep`) imported from `node:path` for OS compatibility
+- Rejection of paths escaping the root (e.g., `../../../etc/passwd`)
+- See [[docs/api/attachments|Attachments API]] for details
 
 ---
 
