@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import logger from "@/lib/logger";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       handleClose();
     } catch (err) {
       logger.error("Failed to link/execute planned payment:", err);
-      alert(t('plannedPage.link.executeFailed'));
+      toast.error(t('plannedPage.link.executeFailed'));
     } finally {
       setActionLoading(false);
     }
