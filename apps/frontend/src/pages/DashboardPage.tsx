@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { parseISO } from "date-fns";
+import { parseISO } from "@/components/shared/dateUtils";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { NetSummaryCard } from "@/components/dashboard/NetSummaryCard";
 import { MonthlyTrendsChart } from "@/components/dashboard/MonthlyTrendsChart";

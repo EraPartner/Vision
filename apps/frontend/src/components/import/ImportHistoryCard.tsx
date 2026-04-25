@@ -6,7 +6,7 @@ import { useState, useCallback, useEffect } from "react";
 import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
+import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import {
   Card,
   CardContent,
@@ -134,7 +134,7 @@ function BatchRow({
   batch: ImportBatch;
   onRolledBack: () => void;
 }) {
-  const started = format(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
+  const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
   return (
     <div className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
       <div className="min-w-0 flex-1 space-y-0.5">

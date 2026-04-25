@@ -14,7 +14,7 @@ import {
   AreaChart, type AreaSeries,
   ChartLegend, type ChartLegendItem,
 } from "@/components/charts";
-import { format, parseISO } from "date-fns";
+import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { useCreateSavedChart, useUpdateSavedChart, useDeleteSavedChart, useSavedCharts, type SavedChart } from "@/hooks/useSavedCharts";
@@ -39,7 +39,7 @@ interface CustomChartDatum {
 
 function formatPeriodShort(period: string) {
   try {
-    return format(parseISO(`${period}-01`), "MMM yy");
+    return formatDate(parseISO(`${period}-01`), "MMM yy");
   } catch {
     return period;
   }
@@ -464,7 +464,7 @@ export function CustomCategoryChart({
                   strokeWidth: 2,
                 }))}
                 height={350}
-                xTickFormat={(v) => format(v as Date, "MMM yy")}
+                xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                 yTickFormat={yTick}
                 tooltipTitle={(d) => d.periodLabel}
                 tooltipValueFormat={(v) => formatCurrency(v)}
@@ -484,7 +484,7 @@ export function CustomCategoryChart({
                   strokeWidth: 2,
                 }))}
                 height={350}
-                xTickFormat={(v) => format(v as Date, "MMM yy")}
+                xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                 yTickFormat={yTick}
                 tooltipTitle={(d) => d.periodLabel}
                 tooltipValueFormat={(v) => formatCurrency(v)}

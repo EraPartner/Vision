@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { format, differenceInDays } from "date-fns";
 import logger from "@/lib/logger";
 import { Plus, CalendarClock, Repeat, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, History, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -12,7 +11,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PlannedPaymentForm from "@/components/planned/PlannedPaymentForm";
 import { DatePicker } from "@/components/shared/DatePicker";
-import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { differenceInDays, formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { usePlannedPayments, type PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -122,7 +121,7 @@ export default function PlannedPaymentsPage() {
   const [candidateTxs, setCandidateTxs] = useState<Transaction[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
-  const [executionDate, setExecutionDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
+  const [executionDate, setExecutionDate] = useState<string>(() => toYmd(new Date()));
   const [txFilters, setTxFilters] = useState({
     start_date: "",
     end_date: "",
@@ -282,7 +281,7 @@ export default function PlannedPaymentsPage() {
               // reset dialog state
               setSelectedTxId(null);
               setTxSearchQuery("");
-              setExecutionDate(format(new Date(), 'yyyy-MM-dd'));
+              setExecutionDate(toYmd(new Date()));
               setCandidateTxs([]);
               setLinkDialogOpen(true);
             }

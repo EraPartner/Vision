@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Newspaper, ExternalLink, Clock } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "@/components/shared/dateUtils";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
 
 interface PortfolioNewsFeedProps {

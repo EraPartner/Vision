@@ -4,15 +4,12 @@ import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/contexts/LanguageContext";
-import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, Legend,
-} from "recharts";
+import { AreaChart as VisxAreaChart, ChartLegend, Sparkline } from "@/components/charts";
 import {
     TrendingUp, TrendingDown, BarChart3, Loader2, Percent,
     DollarSign, Activity,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
@@ -67,16 +64,6 @@ export default function PerformancePage() {
         }
         return new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" });
     }, [monthLabelLocale, selectedPeriod]);
-
-    // For short periods, use function-based lower bound to zoom into data range.
-    // String 'auto' alone still includes baseValue=0 for AreaChart fills.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const yDomain = useMemo((): [any, any] => {
-        if (selectedPeriod === "1m" || selectedPeriod === "3m") {
-            return [(dataMin: number) => Math.max(0, dataMin * 0.97), "auto"];
-        }
-        return [0, "auto"];
-    }, [selectedPeriod]);
 
     const snapshots = portfolioPerformanceData?.snapshots ?? [];
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
@@ -226,106 +213,36 @@ export default function PerformancePage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={360}>
-                            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gradInvested" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.15} />
-                                        <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="gradInflAdj" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(30, 80%, 55%)" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="hsl(30, 80%, 55%)" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis
-                                    dataKey="day"
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    interval="preserveStartEnd"
-                                    minTickGap={40}
-                                    tickFormatter={(value) => xTickFormatter.format(parseISO(String(value)))}
-                                />
-                                <YAxis
-                                    width={110}
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    domain={yDomain}
-                                    tickFormatter={(v) => formatCurrency(v, defaultCurrency, locale)}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
-                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
-                                    formatter={(value: number) => [formatCurrency(value, defaultCurrency, locale)]}
-                                />
-                                <Legend />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.invested}
-                                    name={t('portfolio.totalInvested')}
-                                    stroke="hsl(var(--muted-foreground))"
-                                    fill="url(#gradInvested)"
-                                    strokeWidth={1.5}
-                                    strokeDasharray="4 4"
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.inflationAdjusted}
-                                    name={t('performance.inflationAdjusted')}
-                                    stroke="hsl(30, 80%, 55%)"
-                                    fill="url(#gradInflAdj)"
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.stocksEtfs}
-                                    name={t('performance.relativeStocksEtfs') || t('nav.stocksEtfs')}
-                                    stroke="hsl(0, 72%, 51%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.crypto}
-                                    name={t('performance.crypto')}
-                                    stroke="hsl(142, 76%, 36%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.metals}
-                                    name={t('performance.metals')}
-                                    stroke="hsl(45, 93%, 47%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.value}
-                                    name={t('portfolio.portfolioValue')}
-                                    stroke="hsl(var(--primary))"
-                                    fill="url(#gradValue)"
-                                    strokeWidth={2.5}
-                                    isAnimationActive={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <VisxAreaChart
+                            data={chartData}
+                            xAccessor={(d) => parseISO(d.day)}
+                            series={[
+                                { key: CHART_KEYS.invested, label: t('portfolio.totalInvested'), accessor: (d) => d.invested, color: 'hsl(var(--muted-foreground))', dashed: true, strokeWidth: 1.5 },
+                                { key: CHART_KEYS.inflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.inflationAdjusted, color: 'hsl(30, 80%, 55%)', strokeWidth: 2 },
+                                { key: CHART_KEYS.stocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.stocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.crypto, label: t('performance.crypto'), accessor: (d) => d.crypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.metals, label: t('performance.metals'), accessor: (d) => d.metals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.value, label: t('portfolio.portfolioValue'), accessor: (d) => d.value, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                            ]}
+                            xIsDate={true}
+                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                            yTickFormat={(v) => formatCurrency(v as number, defaultCurrency, locale)}
+                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                            tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
+                            height={360}
+                            margin={{ top: 16, right: 24, bottom: 28, left: 110 }}
+                        />
+                        <ChartLegend
+                            className="mt-3"
+                            items={[
+                                { label: t('portfolio.totalInvested'), color: 'hsl(var(--muted-foreground))', dashed: true },
+                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)' },
+                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                                { label: t('portfolio.portfolioValue'), color: 'hsl(var(--primary))' },
+                            ]}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -343,87 +260,34 @@ export default function PerformancePage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={relativePerformanceData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="gradRelPortfolio" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                                <XAxis
-                                    dataKey="day"
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    interval="preserveStartEnd"
-                                    minTickGap={40}
-                                    tickFormatter={(value) => xTickFormatter.format(parseISO(String(value)))}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 12 }}
-                                    className="fill-muted-foreground"
-                                    tickFormatter={(v) => `${v > 0 ? '+' : ''}${Number(v).toFixed(0)}%`}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "hsl(var(--card))",
-                                        border: "1px solid hsl(var(--border))",
-                                        borderRadius: "8px",
-                                        fontSize: "12px",
-                                    }}
-                                    labelFormatter={(label) => format(parseISO(String(label)), "dd MMM yyyy")}
-                                    formatter={(value: number) => [`${value > 0 ? '+' : ''}${value.toFixed(2)}%`]}
-                                />
-                                <Legend />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativePortfolio}
-                                    name={t('performance.relativePortfolio')}
-                                    stroke="hsl(var(--primary))"
-                                    fill="url(#gradRelPortfolio)"
-                                    strokeWidth={2.5}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeStocksEtfs}
-                                    name={t('performance.relativeStocksEtfs')}
-                                    stroke="hsl(0, 72%, 51%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeCrypto}
-                                    name={t('performance.crypto')}
-                                    stroke="hsl(142, 76%, 36%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeMetals}
-                                    name={t('performance.metals')}
-                                    stroke="hsl(45, 93%, 47%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    isAnimationActive={false}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey={CHART_KEYS.relativeInflationAdjusted}
-                                    name={t('performance.inflationAdjusted')}
-                                    stroke="hsl(30, 80%, 55%)"
-                                    fillOpacity={0}
-                                    strokeWidth={2}
-                                    strokeDasharray="4 4"
-                                    isAnimationActive={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <VisxAreaChart
+                            data={relativePerformanceData}
+                            xAccessor={(d) => parseISO(d.day)}
+                            series={[
+                                { key: CHART_KEYS.relativePortfolio, label: t('performance.relativePortfolio'), accessor: (d) => d.relativePortfolio, color: 'hsl(var(--primary))', strokeWidth: 2.5 },
+                                { key: CHART_KEYS.relativeStocksEtfs, label: t('performance.relativeStocksEtfs'), accessor: (d) => d.relativeStocksEtfs, color: 'hsl(0, 72%, 51%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.relativeCrypto, label: t('performance.crypto'), accessor: (d) => d.relativeCrypto, color: 'hsl(142, 76%, 36%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.relativeMetals, label: t('performance.metals'), accessor: (d) => d.relativeMetals, color: 'hsl(45, 93%, 47%)', fillOpacity: 0, strokeWidth: 2 },
+                                { key: CHART_KEYS.relativeInflationAdjusted, label: t('performance.inflationAdjusted'), accessor: (d) => d.relativeInflationAdjusted, color: 'hsl(30, 80%, 55%)', fillOpacity: 0, dashed: true, strokeWidth: 2 },
+                            ]}
+                            xIsDate={true}
+                            xTickFormat={(v) => xTickFormatter.format(v as Date)}
+                            yTickFormat={(v) => `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(0)}%`}
+                            tooltipTitle={(d) => formatDate(parseISO(d.day), "dd MMM yyyy")}
+                            tooltipValueFormat={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}%`}
+                            height={320}
+                            margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
+                        />
+                        <ChartLegend
+                            className="mt-3"
+                            items={[
+                                { label: t('performance.relativePortfolio'), color: 'hsl(var(--primary))' },
+                                { label: t('performance.relativeStocksEtfs'), color: 'hsl(0, 72%, 51%)' },
+                                { label: t('performance.crypto'), color: 'hsl(142, 76%, 36%)' },
+                                { label: t('performance.metals'), color: 'hsl(45, 93%, 47%)' },
+                                { label: t('performance.inflationAdjusted'), color: 'hsl(30, 80%, 55%)', dashed: true },
+                            ]}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -536,25 +400,8 @@ function TotalValueCard({
                 {sparklineData.length > 1 && (
                     <div>
                         <p className="text-[11px] font-medium text-muted-foreground mb-1">{labels.last30Days}</p>
-                        <div className="h-16 -mx-1">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={sparklineData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-                                    <defs>
-                                        <linearGradient id="gradSparkValue" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                                            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <Area
-                                        type="monotone"
-                                        dataKey="value"
-                                        stroke="hsl(var(--primary))"
-                                        strokeWidth={2}
-                                        fill="url(#gradSparkValue)"
-                                        isAnimationActive={false}
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                        <div className="-mx-1">
+                            <Sparkline data={sparklineData.map((p) => p.value)} height={64} color="hsl(var(--primary))" fillArea strokeWidth={2} />
                         </div>
                     </div>
                 )}

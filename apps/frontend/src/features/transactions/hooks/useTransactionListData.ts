@@ -50,6 +50,9 @@ export function useTransactionListData({
     const loadingRef = useRef(false);
     const isEditingRef = useRef(false);
     const cancelTableEditingRef = useRef<(() => void) | null>(null);
+    // Monotonic id stamped on each loadMore. Sort/filter changes bump this so
+    // in-flight responses from a prior query are discarded on resolve.
+    const requestIdRef = useRef(0);
 
     const setEditing = useCallback((editing: boolean) => {
         isEditingRef.current = editing;
@@ -95,6 +98,7 @@ export function useTransactionListData({
     const loadMore = useCallback(async () => {
         if (loadingRef.current || !hasMoreRef.current) return;
         loadingRef.current = true;
+        const myRequestId = ++requestIdRef.current;
         setIsFetchingMore(true);
         try {
             const result = await apiClient.getTransactions({
@@ -108,6 +112,9 @@ export function useTransactionListData({
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
+            // Sort/filter change bumped requestIdRef while we awaited — drop
+            // this stale page so it cannot append rows from a prior query.
+            if (myRequestId !== requestIdRef.current) return;
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((t) => t.id));
                 const newItems = (result.items as RawApiTransaction[]).filter((t) => !existingIds.has(t.id));
@@ -117,9 +124,12 @@ export function useTransactionListData({
             hasMoreRef.current = offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
         } catch (err) {
+            if (myRequestId !== requestIdRef.current) return;
             logger.error('Failed to load more transactions:', err);
         } finally {
-            setIsFetchingMore(false);
+            if (myRequestId === requestIdRef.current) {
+                setIsFetchingMore(false);
+            }
             loadingRef.current = false;
         }
     }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, sortKey, sortDir, pageSize]);
@@ -131,6 +141,9 @@ export function useTransactionListData({
         setTotalItems(0);
         offsetRef.current = 0;
         hasMoreRef.current = true;
+        // Invalidate any in-flight loadMore so its response cannot append
+        // rows from the previous sort/filter into the cleared list.
+        requestIdRef.current += 1;
     }, []);
 
     return {

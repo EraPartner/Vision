@@ -1,11 +1,9 @@
 import React, { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
-} from "recharts";
-import { DAY_WIDTH_OPTIONS, NetWorthSeries, NetWorthSnapshot, formatMonthTickLabel } from "./netWorthChartUtils";
+import { AreaChart as VisxAreaChart, type AreaSeries } from "@/components/charts";
+import { parseLocalDateFromYmd } from "@/components/shared/dateUtils";
+import { DAY_WIDTH_OPTIONS, NetWorthSeries, NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
 
 interface NetWorthChartProps {
   chartScrollRef: React.RefObject<HTMLDivElement | null>;
@@ -29,11 +27,16 @@ interface NetWorthChartProps {
   t: (key: string) => string;
 }
 
-const TOOLTIP_CONTENT_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "var(--radius)",
-  color: "hsl(var(--card-foreground))",
+const SERIES_COLORS: Record<NetWorthSeries, string> = {
+  netWorth: 'hsl(var(--chart-1))',
+  liquid: 'hsl(var(--chart-2))',
+  investments: 'hsl(var(--chart-4))',
+};
+
+const SERIES_STROKE_WIDTHS: Record<NetWorthSeries, number> = {
+  netWorth: 2.25,
+  liquid: 2,
+  investments: 2,
 };
 
 export function NetWorthChart({
@@ -57,31 +60,23 @@ export function NetWorthChart({
   tooltipValueFormatter,
   t,
 }: NetWorthChartProps) {
-  const seriesConfig = useMemo(() => ({
-    netWorth: {
-      label: t('networth.title'),
-      stroke: 'url(#strokeNetWorth)',
-      strokeWidth: 2.25,
-      fill: 'url(#gradNetWorth)',
-      dash: undefined as string | undefined,
-    },
-    liquid: {
-      label: t('networth.liquid'),
-      stroke: 'hsl(var(--chart-2))',
-      strokeWidth: 2,
-      fill: 'url(#gradLiquid)',
-      dash: undefined as string | undefined,
-    },
-    investments: {
-      label: t('networth.investments'),
-      stroke: 'hsl(var(--chart-4))',
-      strokeWidth: 2,
-      fill: 'url(#gradInvest)',
-      dash: undefined as string | undefined,
-    },
-  }), [t]);
+  const series = useMemo((): AreaSeries<NetWorthSnapshot>[] => [{
+    key: selectedSeries,
+    accessor: (d) => d[selectedSeries],
+    color: SERIES_COLORS[selectedSeries],
+    strokeWidth: SERIES_STROKE_WIDTHS[selectedSeries],
+  }], [selectedSeries]);
 
-  const config = seriesConfig[selectedSeries];
+  const tickDates = useMemo(
+    () => monthlyTicks.map((tick) => parseLocalDateFromYmd(normalizeYmd(tick))),
+    [monthlyTicks],
+  );
+
+  const seriesLabel = useMemo(() => {
+    if (selectedSeries === 'netWorth') return t('networth.title');
+    if (selectedSeries === 'liquid') return t('networth.liquid');
+    return t('networth.investments');
+  }, [selectedSeries, t]);
 
   return (
     <Card>
@@ -148,76 +143,28 @@ export function NetWorthChart({
       <CardContent>
         <div ref={chartScrollRef} className="overflow-x-auto pb-2">
           <div className="min-w-full" style={{ width: chartWidth }}>
-            <ResponsiveContainer width="100%" height={420}>
-              <AreaChart data={displaySnapshots} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="strokeNetWorth" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="hsl(var(--chart-1))" />
-                    <stop offset="100%" stopColor="hsl(var(--chart-4))" />
-                  </linearGradient>
-                  <linearGradient id="gradNetWorth" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gradLiquid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--chart-4))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--chart-4))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="2 6"
-                  stroke="hsl(var(--border))"
-                  strokeOpacity={0.4}
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="date"
-                  ticks={monthlyTicks}
-                  tickFormatter={(v: string) => formatMonthTickLabel(v, monthTickFormatter)}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                  axisLine={{ stroke: "hsl(var(--border))" }}
-                  height={36}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={yDomain ?? fallbackYDomain}
-                  allowDataOverflow
-                  tickFormatter={(v) => fmt(v)}
-                  tickCount={7}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                  axisLine={{ stroke: "hsl(var(--border))" }}
-                  width={90}
-                  orientation="right"
-                />
-                <ReferenceLine
-                  y={current[selectedSeries]}
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeDasharray="2 4"
-                  strokeOpacity={0.5}
-                />
-                <Tooltip
-                  contentStyle={TOOLTIP_CONTENT_STYLE}
-                  labelFormatter={tooltipLabelFormatter}
-                  formatter={tooltipValueFormatter}
-                />
-                <Area
-                  type="natural"
-                  dataKey={selectedSeries}
-                  name={config.label}
-                  stroke={config.stroke}
-                  strokeWidth={config.strokeWidth}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill={config.fill}
-                  strokeDasharray={config.dash}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <VisxAreaChart
+              data={displaySnapshots}
+              xAccessor={(d) => parseLocalDateFromYmd(normalizeYmd(d.date))}
+              series={series}
+              xIsDate={true}
+              xTickValues={tickDates}
+              xTickFormat={(v) => monthTickFormatter.format(v as Date)}
+              yTickFormat={(v) => fmt(v as number)}
+              yDomain={yDomain ?? fallbackYDomain}
+              numYTicks={7}
+              yAxisSide="right"
+              referenceLines={[{
+                y: current[selectedSeries],
+                color: 'hsl(var(--muted-foreground))',
+                dashed: true,
+              }]}
+              tooltipTitle={(d) => tooltipLabelFormatter(d.date)}
+              tooltipValueFormat={(v) => tooltipValueFormatter(v, seriesLabel)[0]}
+              height={420}
+              width={chartWidth}
+              margin={{ top: 10, right: 90, bottom: 28, left: 10 }}
+            />
           </div>
         </div>
       </CardContent>

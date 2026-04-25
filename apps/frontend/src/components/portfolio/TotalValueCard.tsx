@@ -9,7 +9,7 @@
  * All data is supplied by the parent; no hooks, no side effects.
  */
 
-import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
+import { Sparkline as ChartSparkline } from '@/components/charts';
 import { ArrowDownRight, ArrowUpRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -170,12 +170,6 @@ function Sparkline({ points, label }: { points: SparklinePoint[]; label: string 
     delta > 0 ? SPARK_COLOR_POSITIVE : delta < 0 ? SPARK_COLOR_NEGATIVE : SPARK_COLOR_NEUTRAL;
   const Trend = delta >= 0 ? TrendingUp : TrendingDown;
   const pct = first > 0 ? (delta / first) * 100 : 0;
-  const values = points.map((p) => p.v);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const range = maxV - minV;
-  const pad = range > 0 ? range * 0.15 : Math.max(Math.abs(maxV) * 0.01, 1);
-  const yDomain: [number, number] = [minV - pad, maxV + pad];
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -190,28 +184,7 @@ function Sparkline({ points, label }: { points: SparklinePoint[]; label: string 
           {formatPercent(pct)}
         </span>
       </div>
-      <div className="h-16">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={points} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="tvc-spark-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <YAxis domain={yDomain} hide />
-            <Area
-              type="monotone"
-              dataKey="v"
-              stroke={color}
-              strokeWidth={2}
-              fill="url(#tvc-spark-grad)"
-              isAnimationActive={false}
-              dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartSparkline data={points.map((p) => p.v)} height={64} color={color} fillArea strokeWidth={2} />
     </div>
   );
 }

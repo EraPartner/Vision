@@ -210,7 +210,7 @@ export default function NetWorthPage() {
             formatValue={fmt}
             icon={Landmark}
             trend="neutral"
-            subtitle={`${liquidPct}% ${t('networth.ofNetWorth')}`}
+            subtitle={`${liquidPct} ${t('networth.ofNetWorth')}`}
           />
         </div>
         <div className="lg:col-span-3">
@@ -221,7 +221,7 @@ export default function NetWorthPage() {
             formatValue={fmt}
             icon={PiggyBank}
             trend="neutral"
-            subtitle={`${investmentsPct}% ${t('networth.ofNetWorth')}`}
+            subtitle={`${investmentsPct} ${t('networth.ofNetWorth')}`}
           />
         </div>
       </div>

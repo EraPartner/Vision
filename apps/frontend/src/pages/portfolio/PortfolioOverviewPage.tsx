@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { DonutChart, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
@@ -323,15 +323,18 @@ export default function PortfolioOverviewPage() {
               <Card>
                 <CardHeader><CardTitle>{t('portfolio.widget.allocation')}</CardTitle><CardDescription>{t('portfolio.allocationByClass')}</CardDescription></CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie data={allocationData} cx="50%" cy="50%" outerRadius={100} innerRadius={50} dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1 }} isAnimationActive={false}>
-                        {allocationData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "var(--radius)", color: "hsl(var(--card-foreground))" }} formatter={(v: number) => fmt(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DonutChart
+                    data={allocationData.map((d, i) => ({ ...d, color: COLORS[i % COLORS.length] }))}
+                    height={240}
+                    tooltipValueFormat={(v) => fmt(v)}
+                  />
+                  <ChartLegend
+                    className="mt-2 justify-center"
+                    items={allocationData.map((d, i): ChartLegendItem => ({
+                      label: `${d.name} ${allocationData.reduce((s, x) => s + x.value, 0) > 0 ? ((d.value / allocationData.reduce((s, x) => s + x.value, 0)) * 100).toFixed(0) : 0}%`,
+                      color: COLORS[i % COLORS.length],
+                    }))}
+                  />
                 </CardContent>
               </Card>
             )}

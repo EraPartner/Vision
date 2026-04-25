@@ -2,7 +2,7 @@ import { AreaChart, type AreaSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatPeriodShort } from "./statisticsUtils";
-import { format, parseISO } from "date-fns";
+import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
 
 interface NetDatum {
@@ -35,7 +35,7 @@ export function NetTrendChart({ data }: NetTrendChartProps) {
       xAccessor={(d) => d.date}
       series={series}
       height={300}
-      xTickFormat={(v) => format(v as Date, "MMM yy")}
+      xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
       yTickFormat={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
       tooltipTitle={(d) => formatPeriodShort(d.period)}
       tooltipValueFormat={(v) => formatCurrency(v)}

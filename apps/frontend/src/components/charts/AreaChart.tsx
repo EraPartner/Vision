@@ -31,6 +31,7 @@ export interface AreaSeries<Datum> {
     readonly color?: string;
     readonly dashed?: boolean;
     readonly strokeWidth?: number;
+    readonly fillOpacity?: number;
 }
 
 export interface AreaReferenceLine {
@@ -299,14 +300,17 @@ function AreaChartInner<Datum>({
                                             delay: i * 0.04,
                                         }}
                                     >
-                                        <AreaClosed<Datum>
-                                            data={data as Datum[]}
-                                            x={(d) => xScale(xAccessor(d) as never) ?? 0}
-                                            y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
-                                            yScale={yScale}
-                                            curve={curveMonotoneX}
-                                            fill={`url(#${gradId}-${s.key})`}
-                                        />
+                                        {s.fillOpacity !== 0 && (
+                                            <AreaClosed<Datum>
+                                                data={data as Datum[]}
+                                                x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                                                y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
+                                                yScale={yScale}
+                                                curve={curveMonotoneX}
+                                                fill={`url(#${gradId}-${s.key})`}
+                                                fillOpacity={s.fillOpacity ?? 1}
+                                            />
+                                        )}
                                         <LinePath<Datum>
                                             data={data as Datum[]}
                                             x={(d) => xScale(xAccessor(d) as never) ?? 0}

@@ -5,7 +5,7 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
-import { format, parseISO } from "date-fns";
+import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 
@@ -194,9 +194,9 @@ export function BankBalancesWidget() {
                             series={accountSeries}
                             stacked
                             height={320}
-                            xTickFormat={(v) => format(v as Date, "MMM yy")}
+                            xTickFormat={(v) => formatDate(v as Date, "MMM yy")}
                             yTickFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
-                            tooltipTitle={(d) => format(d.date, "MMM yy")}
+                            tooltipTitle={(d) => formatDate(d.date, "MMM yy")}
                             tooltipValueFormat={(v) => formatCurrency(v, defaultCurrency, locale)}
                         />
                         <ChartLegend items={legendItems} align="center" />

@@ -1,13 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
+import { Sparkline as ChartSparkline } from "@/components/charts";
 import { ArrowUpRight, DollarSign, TrendingDown } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
-import { chartTooltipLabelStyle, chartTooltipStyle } from "@/components/shared/chartStyles";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
 
 interface NetSummaryCardProps {
@@ -107,32 +106,7 @@ export function NetSummaryCard({ netBalance, income, spending, history, formatCu
             <p className="text-xs text-muted-foreground mb-1">
               {t('dashboard.stat.netTrend', { n: chartData.length })}
             </p>
-            <div className="h-20 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id="netSparkFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={areaStroke} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={areaStroke} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <YAxis hide domain={["dataMin", "dataMax"]} />
-                  <Tooltip
-                    contentStyle={chartTooltipStyle}
-                    labelStyle={chartTooltipLabelStyle}
-                    formatter={(value: number) => [formatCurrency(value), t('dashboard.stat.lastMonthNet')]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="net"
-                    stroke={areaStroke}
-                    strokeWidth={2}
-                    fill="url(#netSparkFill)"
-                    isAnimationActive
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartSparkline data={chartData.map((d) => d.net)} height={80} color={areaStroke} fillArea strokeWidth={2} />
           </div>
         )}
       </CardContent>
