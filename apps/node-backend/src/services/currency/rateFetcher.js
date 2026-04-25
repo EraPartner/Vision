@@ -44,7 +44,9 @@ function parseEcbXml(xmlText) {
   while ((match = currencyPattern.exec(xmlText)) !== null) {
     const [, currency, rateStr] = match;
     const eurToX = parseFloat(rateStr);
-    if (eurToX > 0) rates[currency] = 1.0 / eurToX;
+    if (Number.isFinite(eurToX) && eurToX > 0.0001 && eurToX < 100000) {
+      rates[currency] = 1.0 / eurToX;
+    }
   }
   return Object.keys(rates).length > 1 ? rates : null;
 }
@@ -105,7 +107,14 @@ export async function fetchFromErApi() {
     }
     const rates = { EUR: 1.0 };
     for (const [currency, eurToX] of Object.entries(data.rates)) {
-      if (currency !== 'EUR' && eurToX > 0) rates[currency] = 1.0 / eurToX;
+      if (
+        currency !== 'EUR' &&
+        Number.isFinite(eurToX) &&
+        eurToX > 0.0001 &&
+        eurToX < 100000
+      ) {
+        rates[currency] = 1.0 / eurToX;
+      }
     }
     logger.info(`Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`);
     return rates;
