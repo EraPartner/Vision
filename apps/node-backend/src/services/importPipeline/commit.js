@@ -33,6 +33,9 @@ export async function commitBatch({ batchId, onProgress }) {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  let lastFlushedImported = 0;
+  let lastFlushedDuplicates = 0;
+  let lastFlushedErrors = 0;
 
   if (onProgress) onProgress({ phase: 'committing', current: 0, total });
 
@@ -102,29 +105,41 @@ export async function commitBatch({ batchId, onProgress }) {
     });
 
     seen += chunk.length;
+
+    // Checkpoint counters per chunk so a crash mid-import leaves recoverable
+    // state in import_batches. Increment by chunk-local delta to preserve
+    // any rows_error already set by earlier pipeline phases (validate).
+    const dImported = imported - lastFlushedImported;
+    const dDuplicates = duplicates - lastFlushedDuplicates;
+    const dErrors = errors - lastFlushedErrors;
+    await query(
+      `UPDATE import_batches
+          SET rows_imported = COALESCE(rows_imported, 0) + $2,
+              rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
+              rows_error = COALESCE(rows_error, 0) + $4
+        WHERE id = $1`,
+      [batchId, dImported, dDuplicates, dErrors]
+    );
+    lastFlushedImported = imported;
+    lastFlushedDuplicates = duplicates;
+    lastFlushedErrors = errors;
+
     if (onProgress) {
       onProgress({ phase: 'committing', current: seen, total, imported, duplicates, errors });
     }
   }
 
-  await query(
-    `UPDATE import_batches
-        SET rows_imported = $2,
-            rows_duplicate = $3,
-            rows_error = COALESCE(rows_error, 0) + $4
-      WHERE id = $1`,
-    [batchId, imported, duplicates, errors]
-  );
-
   logger.info('[pipeline:commit] done', { batchId, total, imported, duplicates, errors });
 
   if (imported > 0) {
-    refreshAggregations().catch((err) => {
+    try {
+      await refreshAggregations();
+    } catch (err) {
       logger.warn('[pipeline:commit] post-import aggregation refresh failed', {
         batchId,
         error: err?.message,
       });
-    });
+    }
   }
 
   return { imported, duplicates, errors };

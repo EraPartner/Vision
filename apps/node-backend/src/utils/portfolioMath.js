@@ -6,7 +6,8 @@
  * implementations in frontend hooks.
  */
 
-import { toDecimal, toNumber } from '../lib/money.js';
+import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
+import Decimal from 'decimal.js';
 
 /** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
 
@@ -62,50 +63,55 @@ function applyEventToLots(lots, type, units, amount, totalUnits) {
 export function calculateCostBasis(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
-  let totalUnits = 0;
-  let totalCost = 0;
-  let realizedGain = 0;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
+  const ZERO = toDecimal(0);
+  let totalUnits = ZERO;
+  let totalCost = ZERO;
+  let realizedGain = ZERO;
+  let totalBuyCost = ZERO;
+  let totalSellProceeds = ZERO;
 
   for (const txn of sorted) {
-    const units = Number(txn.units) || 0;
-    const amount = Number(txn.amount) || 0;
-    const fees = Number(txn.fees) || 0;
-    const taxes = Number(txn.taxes) || 0;
+    const units = toDecimal(txn.units || 0);
+    const amount = toDecimal(txn.amount || 0);
+    const fees = toDecimal(txn.fees || 0);
+    const taxes = toDecimal(txn.taxes || 0);
 
     if (txn.type === 'buy' || txn.type === 'gift') {
-      const buyCost = amount + fees + taxes;
-      totalUnits += units;
-      totalCost += buyCost;
-      totalBuyCost += buyCost;
+      const buyCost = amount.plus(fees).plus(taxes);
+      totalUnits = totalUnits.plus(units);
+      totalCost = totalCost.plus(buyCost);
+      totalBuyCost = totalBuyCost.plus(buyCost);
     } else if (txn.type === 'sell') {
-      if (totalUnits > 0 && units > 0) {
-        const sellUnits = Math.min(units, totalUnits);
-        const sellRatio = units > 0 ? sellUnits / units : 0;
-        const avgCost = totalCost / totalUnits;
-        const costOfSoldUnits = avgCost * sellUnits;
-        const netProceeds = (amount - fees - taxes) * sellRatio;
-        realizedGain += netProceeds - costOfSoldUnits;
-        totalUnits -= sellUnits;
-        totalCost -= costOfSoldUnits;
-        totalSellProceeds += amount;
+      if (totalUnits.gt(0) && units.gt(0)) {
+        const sellUnits = Decimal.min(units, totalUnits);
+        const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
+        const avgCost = totalCost.dividedBy(totalUnits);
+        const costOfSoldUnits = avgCost.times(sellUnits);
+        const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
+        realizedGain = realizedGain.plus(netProceeds.minus(costOfSoldUnits));
+        totalUnits = totalUnits.minus(sellUnits);
+        totalCost = totalCost.minus(costOfSoldUnits);
+        totalSellProceeds = totalSellProceeds.plus(amount);
       }
-    } else if (txn.type === 'split' && totalUnits > 0 && units > 0) {
+    } else if (txn.type === 'split' && totalUnits.gt(0) && units.gt(0)) {
       // units = new total post-split; cost basis is unchanged
       totalUnits = units;
-    } else if (txn.type === 'return_of_capital' && totalUnits > 0) {
-      totalCost = Math.max(0, totalCost - amount);
+    } else if (txn.type === 'return_of_capital' && totalUnits.gt(0)) {
+      totalCost = Decimal.max(ZERO, totalCost.minus(amount));
     }
   }
 
+  const finalUnits = Decimal.max(ZERO, totalUnits);
+  const finalCost = Decimal.max(ZERO, totalCost);
+  const avgCostBasis = finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO;
+
   return {
-    totalUnits: Math.max(0, totalUnits),
-    totalCost: Math.max(0, totalCost),
-    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
-    realizedGain,
-    totalBuyCost,
-    totalSellProceeds,
+    totalUnits: toNumber(finalUnits),
+    totalCost: toNumber(roundToCents(finalCost)),
+    avgCostBasis: toNumber(avgCostBasis),
+    realizedGain: toNumber(roundToCents(realizedGain)),
+    totalBuyCost: toNumber(roundToCents(totalBuyCost)),
+    totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
   };
 }
 

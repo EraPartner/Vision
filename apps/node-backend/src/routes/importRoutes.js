@@ -315,9 +315,11 @@ router.delete('/batches/:id', async (req, res) => {
   logger.info('[import] batch rolled back', { batchId: id, deleted });
 
   if (deleted > 0) {
-    refreshAggregations().catch((err) => {
+    try {
+      await refreshAggregations();
+    } catch (err) {
       logger.warn('[import] post-rollback aggregation refresh failed', { batchId: id, error: err?.message });
-    });
+    }
   }
 
   res.ok({ deleted });

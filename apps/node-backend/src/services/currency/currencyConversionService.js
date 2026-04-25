@@ -200,6 +200,33 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
     return value;
   }
 
+  // Resolve a rate for one side of the conversion. Returns the rate plus a
+  // boolean flagging whether we fell back to current rates because the
+  // requested historical rate was missing. Callers surface this so the
+  // frontend can label affected rows.
+  async function resolveRateWithFallback(code, rowDate) {
+    if (code === 'EUR') return { rate: 1, fellBack: false };
+
+    if (!useHistoricalRatesByDate || !rowDate) {
+      return { rate: rates[code], fellBack: false };
+    }
+
+    const historical = historicalIndex
+      ? findNearestRateInIndex(historicalIndex, code, rowDate)
+      : undefined;
+    if (historical !== undefined) return { rate: historical, fellBack: false };
+
+    const fetched = await getRate(code, rowDate);
+    if (fetched !== undefined) return { rate: fetched, fellBack: false };
+
+    const fallback = rates[code];
+    if (fallback !== undefined) {
+      logger.warn('Historical FX missing, falling back to current rate', { currency: code, date: rowDate });
+      return { rate: fallback, fellBack: true };
+    }
+    return { rate: undefined, fellBack: false };
+  }
+
   let historicalIndex = null;
   if (useHistoricalRatesByDate) {
     const relevantCurrencies = [...new Set([
@@ -230,35 +257,25 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
       continue;
     }
 
-    const historicalFrom = (historicalIndex && rowDate)
-      ? findNearestRateInIndex(historicalIndex, currency, rowDate)
-      : undefined;
-    const historicalTo = (historicalIndex && rowDate)
-      ? findNearestRateInIndex(historicalIndex, toCur, rowDate)
-      : undefined;
+    const fromResolved = await resolveRateWithFallback(currency, rowDate);
+    const toResolved = await resolveRateWithFallback(toCur, rowDate);
+    const fellBack = fromResolved.fellBack || toResolved.fellBack;
+    const fallbackFields = fellBack
+      ? { used_fallback_rate: true, fallback_reason: 'historical_rate_missing' }
+      : {};
 
-    const rateFrom = historicalFrom
-      ?? (historicalIndex && !historicalIndex.has(currency) ? rates[currency] : undefined)
-      ?? await getRate(currency, rowDate)
-      ?? rates[currency];
-
-    const rateTo = historicalTo
-      ?? (historicalIndex && !historicalIndex.has(toCur) ? rates[toCur] : undefined)
-      ?? await getRate(toCur, rowDate)
-      ?? rates[toCur];
-
-    if (!rateFrom) {
+    if (!fromResolved.rate) {
       logger.warn(`Unsupported source currency ${currency}, using 1:1 conversion`);
-      converted.push({ ...row, amount_eur: amount });
+      converted.push({ ...row, amount_eur: amount, ...fallbackFields });
       continue;
     }
-    if (!rateTo) {
+    if (!toResolved.rate) {
       logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
-      converted.push({ ...row, amount_eur: amount * rateFrom });
+      converted.push({ ...row, amount_eur: amount * fromResolved.rate, ...fallbackFields });
       continue;
     }
 
-    converted.push({ ...row, amount_eur: (amount * rateFrom) / rateTo });
+    converted.push({ ...row, amount_eur: (amount * fromResolved.rate) / toResolved.rate, ...fallbackFields });
   }
 
   return converted;
@@ -335,6 +352,11 @@ export async function backfillPortfolioHistoricalRates() {
 
   if (inserted > 0 || unresolved > 0) {
     logger.info('Portfolio historical FX backfill complete', { inserted, unresolved });
+  }
+
+  if (inserted > 0) {
+    clearHistoricalCache();
+    logger.debug('Historical FX cache invalidated after backfill', { inserted });
   }
 
   return { inserted, missing: unresolved };

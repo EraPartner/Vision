@@ -5,8 +5,6 @@
  * POST /api/reports/portfolio  — Puppeteer-rendered portfolio report.
  * POST /api/reports/tax        — Puppeteer-rendered tax report.
  *
- * GET  /api/reports/financial  — Legacy PDFKit shim; kept for one release cycle.
- *
  * All POST bodies are validated with Zod. Theme tokens (HSL component strings)
  * are forwarded by the frontend so the PDF matches the active app theme.
  */
@@ -14,7 +12,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { generateReport } from '../services/reports/index.js';
-import { streamFinancialReport } from '../services/pdfReportService.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -85,14 +82,5 @@ router.post('/tax', async (req, res) => {
   await generateReport({ type: 'tax', currency, period, sections, theme, res });
 });
 
-/* ── Legacy GET shim ─────────────────────────────────────────────────────── */
-
-router.get('/financial', async (req, res) => {
-  const raw = req.query.currency ?? req.query.target_currency;
-  const currency = raw && /^[A-Z]{3}$/.test(String(raw).toUpperCase().trim())
-    ? String(raw).toUpperCase().trim()
-    : 'EUR';
-  await streamFinancialReport({ targetCurrency: currency, res });
-});
 
 export default router;

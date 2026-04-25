@@ -58,11 +58,21 @@ export function resolveCustomHistoryConfig(inv) {
   return { historyUrl, historyPath, timestampPath, pricePath };
 }
 
+// Kinesis API only provides USD-denominated symbols. Map EUR variants to USD.
+const KINESIS_EUR_TO_USD = {
+  'KAU_EUR': 'KAU_USD',
+  'KAG_EUR': 'KAG_USD',
+  'XAU_EUR': 'XAU_USD',
+  'XAG_EUR': 'XAG_USD',
+  'XPT_EUR': 'XPT_USD',
+  'XPD_EUR': 'XPD_USD',
+};
+
 export function resolveKinesisConfig(inv) {
   const providerId = (inv?.price_provider_id || '').trim();
   const assetName = (inv?.name || inv?.symbol || '').toLowerCase().trim();
 
-  let symbol = providerId;
+  let symbol = KINESIS_EUR_TO_USD[providerId] || providerId;
   let timeframe = KINESIS_DEFAULT_TIMEFRAME;
   let fromDate = KINESIS_DEFAULT_FROM_DATE;
 
