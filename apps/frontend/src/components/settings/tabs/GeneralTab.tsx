@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,7 +35,7 @@ interface GeneralTabProps {
     onUpdate: (s: AppSettings) => void;
 }
 
-export function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
+export const GeneralTab = memo(function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
     const { t } = useLanguage();
 
     return (
@@ -212,4 +213,4 @@ export function GeneralTab({ localAppSettings, onUpdate }: GeneralTabProps) {
             </div>
         </ScrollArea>
     );
-}
+});

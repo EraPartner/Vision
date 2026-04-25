@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
     AlertCircle, CheckCircle2, Download, ExternalLink, Loader2,
     RefreshCw, RotateCcw, Sparkles, ShieldCheck,
@@ -36,7 +36,7 @@ interface AppTabProps {
     onAdminModeChange: (enabled: boolean) => void;
 }
 
-export function AppTab({
+export const AppTab = memo(function AppTab({
     aiDefaultModel,
     onAiModelChange,
     onReset,
@@ -320,4 +320,4 @@ export function AppTab({
             </div>
         </ScrollArea>
     );
-}
+});

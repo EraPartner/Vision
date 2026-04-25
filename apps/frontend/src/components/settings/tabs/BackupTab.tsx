@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { AlertCircle, CheckCircle2, Database, FolderOpen, Loader2, UploadCloud } from 'lucide-react';
 import {
     AlertDialog,
@@ -34,7 +34,7 @@ interface BackupTabProps {
     setBackupOnQuit: (v: boolean) => void;
 }
 
-export function BackupTab({
+export const BackupTab = memo(function BackupTab({
     open,
     backupDir,
     setBackupDir,
@@ -477,4 +477,4 @@ export function BackupTab({
             </AlertDialog>
         </>
     );
-}
+});

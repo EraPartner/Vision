@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,7 +27,7 @@ interface DashboardTabProps {
     setExclusionScope: (scope: ExclusionScope) => void;
 }
 
-export function DashboardTab({
+export const DashboardTab = memo(function DashboardTab({
     categories,
     recipients,
     isLoading,
@@ -296,4 +296,4 @@ export function DashboardTab({
             </div>
         </ScrollArea>
     );
-}
+});

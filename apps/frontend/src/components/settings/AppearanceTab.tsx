@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Label } from '@/components/ui/label';
@@ -52,7 +53,7 @@ function VariantSwatch({ variant, mode }: SwatchProps) {
     );
 }
 
-export function AppearanceTab() {
+export const AppearanceTab = memo(function AppearanceTab() {
     const { t } = useLanguage();
     const { theme, mode, schedule, variant, setMode, setSchedule, setVariant } = useTheme();
 
@@ -138,6 +139,6 @@ export function AppearanceTab() {
             )}
         </div>
     );
-}
+});
 
 export { THEME_VARIANTS };
