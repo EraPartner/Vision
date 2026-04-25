@@ -11,11 +11,7 @@
  * All functions are pure: no I/O, no mutation of inputs.
  */
 
-import { addAll, toNumber } from '../../lib/money.js';
-
-// Currency amounts in this app are stored as NUMERIC(15, 2). Use 1 cent as
-// the tolerance for float-rounding artifacts after JSON round-tripping.
-const CENT_TOLERANCE = 0.005;
+import { addAll, toNumber, toDecimal, roundToCents as roundToCentsDecimal } from '../../lib/money.js';
 
 /**
  * @typedef {Object} ValidationResult
@@ -24,12 +20,12 @@ const CENT_TOLERANCE = 0.005;
  */
 
 /**
- * Round to cents to avoid binary-float drift when summing many payments.
- * @param {number} value
+ * Round to cents using Decimal-backed banker's rounding.
+ * @param {number|string} value
  * @returns {number}
  */
 export function roundToCents(value) {
-  return Math.round(value * 100) / 100;
+  return toNumber(roundToCentsDecimal(value));
 }
 
 /**
@@ -52,8 +48,9 @@ export function validateSplitAllocation({
   if (!Number.isFinite(newSplitAmount) || newSplitAmount <= 0) {
     return { ok: false, error: 'Split amount must be a positive number' };
   }
-  const projected = roundToCents(currentSplitTotal + newSplitAmount);
-  if (projected > roundToCents(transactionTotal) + CENT_TOLERANCE) {
+  const projected = roundToCentsDecimal(toDecimal(currentSplitTotal).plus(newSplitAmount));
+  const limit = roundToCentsDecimal(transactionTotal);
+  if (projected.gt(limit)) {
     return { ok: false, error: 'Split amount exceeds transaction total' };
   }
   return { ok: true, error: null };
@@ -113,8 +110,9 @@ export function validatePaymentAmount({
   if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
     return { ok: false, error: 'Payment amount must be a positive number' };
   }
-  const projected = roundToCents(alreadyPaid + paymentAmount);
-  if (projected > roundToCents(splitAmount) + CENT_TOLERANCE) {
+  const projected = roundToCentsDecimal(toDecimal(alreadyPaid).plus(paymentAmount));
+  const limit = roundToCentsDecimal(splitAmount);
+  if (projected.gt(limit)) {
     return { ok: false, error: 'Payment would exceed split outstanding balance' };
   }
   return { ok: true, error: null };
@@ -160,7 +158,7 @@ export function computeOwedSummary(rows) {
         split_count: parseInt(row.split_count, 10) || 0,
       };
     })
-    .filter((row) => row.remaining > CENT_TOLERANCE)
+    .filter((row) => row.remaining > 0)
     .sort((a, b) => b.remaining - a.remaining);
 }
 

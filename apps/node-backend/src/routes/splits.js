@@ -9,7 +9,6 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import {
   validateSplitAllocation,
   validateBatchSplitAllocation,
-  validatePaymentAmount,
 } from '../services/calculations/splits.js';
 import { escapeCsvValue } from '../lib/csv.js';
 
@@ -160,18 +159,11 @@ router.post('/batch', async (req, res) => {
 router.post('/:id/pay', validateIdParam, async (req, res) => {
   const splitId = parseRouteId(req);
   const { amount, note, paid_at } = req.body;
-
-  const split = await splitRepository.getSplitById(splitId);
-  if (!split) throw new NotFoundError('Split not found');
-
-  const alreadyPaid = await splitRepository.getAlreadyPaid(splitId);
-  const paymentCheck = validatePaymentAmount({
-    paymentAmount: Number(amount),
-    splitAmount: split.amount,
-    alreadyPaid,
-  });
-  if (!paymentCheck.ok) throw new ValidationError(paymentCheck.error);
-
+  if (amount == null || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+    throw new ValidationError('Payment amount must be a positive number');
+  }
+  // Repo serializes existence + overpayment check + insert under
+  // SELECT … FOR UPDATE; routes no longer precheck (race window).
   const payment = await splitRepository.addPayment({
     split_id: splitId,
     amount,

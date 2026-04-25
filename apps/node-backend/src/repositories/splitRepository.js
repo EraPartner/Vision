@@ -8,7 +8,8 @@
 
 import { query, withTransaction } from '../database/connection.js';
 import { computeOwedSummary } from '../services/calculations/splits.js';
-import { toDecimal, subtract, toNumber } from '../lib/money.js';
+import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 export const splitRepository = {
   /**
@@ -198,10 +199,16 @@ export const splitRepository = {
   /**
    * Record a payment against a split.
    *
-   * Wraps the INSERT, auto-settle UPDATE, and split_audit rows in a
-   * single transaction. DB-level trigger
-   * (fn_split_payment_overpayment_guard) rejects overpayment even if
-   * the route layer forgot to call validatePaymentAmount first.
+   * Atomicity: locks the split row with SELECT … FOR UPDATE, sums existing
+   * payments, validates against overpayment, then INSERTs / auto-settles /
+   * audits — all in one transaction. The lock serializes concurrent /pay
+   * requests so the validate→insert window cannot interleave (without it,
+   * five parallel payments could each pass the precheck and collectively
+   * overpay). DB-level trigger fn_split_payment_overpayment_guard remains
+   * as defense-in-depth.
+   *
+   * Throws NotFoundError if the split does not exist; ValidationError if
+   * the payment would overpay.
    *
    * @param {{
    *   split_id: number,
@@ -213,6 +220,28 @@ export const splitRepository = {
    */
   async addPayment({ split_id, amount, note, paid_at, actor = null }) {
     return withTransaction(async (client) => {
+      const lockResult = await client.query(
+        `SELECT id, amount FROM transaction_splits WHERE id = $1 FOR UPDATE`,
+        [split_id]
+      );
+      if (lockResult.rows.length === 0) {
+        throw new NotFoundError('Split not found');
+      }
+      const splitAmount = lockResult.rows[0].amount;
+
+      const paidResult = await client.query(
+        `SELECT COALESCE(SUM(amount), 0) AS paid
+         FROM split_payments WHERE split_id = $1`,
+        [split_id]
+      );
+      const alreadyPaid = paidResult.rows[0].paid;
+
+      const projected = roundToCents(toDecimal(alreadyPaid).plus(amount));
+      const limit = roundToCents(splitAmount);
+      if (projected.gt(limit)) {
+        throw new ValidationError('Payment would exceed split outstanding balance');
+      }
+
       const insertSql = `
         INSERT INTO split_payments (split_id, amount, note, paid_at)
         VALUES ($1, $2, $3, $4)
