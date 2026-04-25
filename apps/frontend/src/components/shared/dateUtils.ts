@@ -42,10 +42,10 @@ export function differenceInDays(dateLeft: Date, dateRight: Date): number {
   return Math.floor((dateLeft.getTime() - dateRight.getTime()) / 86400000);
 }
 
-export function formatDistanceToNow(date: Date, _options?: { addSuffix?: boolean }): string {
+export function formatDistanceToNow(date: Date, _options?: { addSuffix?: boolean; locale?: string }): string {
   const diffMs = date.getTime() - Date.now();
   const absMs = Math.abs(diffMs);
-  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat(_options?.locale ?? "en", { numeric: "auto" });
 
   if (absMs < 60_000) return rtf.format(Math.round(diffMs / 1000), "second");
   if (absMs < 3_600_000) return rtf.format(Math.round(diffMs / 60_000), "minute");
