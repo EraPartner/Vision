@@ -32,7 +32,8 @@ package "Middleware" {
   }
 
   class Security {
-    +cors: cors middleware
+    +cors: custom inline middleware (Phase 5, replaces cors package)
+    +compression: custom inline middleware via node:zlib (Phase 5, replaces compression package)
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
     +adminAuth middleware (optional bearer token)

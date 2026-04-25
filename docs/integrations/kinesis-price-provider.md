@@ -3,10 +3,11 @@ title: Integration - Kinesis Price Provider
 type: integration
 status: active
 date: 2026-04-02
-tags: [integration, kinesis, price-provider, metals, commodities]
-description: Kinesis market data provider for metals and commodity price feeds
+last_modified: 2026-04-25
+tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping]
+description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping
 aliases: [kinesis, kinesis price provider, metals prices, commodity data]
-related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js"]
+related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js"]
 ---
 
 # Integration: Kinesis Price Provider
@@ -43,6 +44,23 @@ Contains:
 - Asset symbol mappings
 - Timeframe configurations
 - Request rate limits
+
+### EUR-to-USD Symbol Remapping
+
+The Kinesis API only provides USD-denominated symbols. When an investment has a EUR-denominated symbol in `price_provider_id`, it is silently remapped to the USD equivalent before the API request. This prevents "Kinesis: no data returned" warnings during startup.
+
+**Mapping Table:**
+
+| EUR Symbol | USD Equivalent |
+|------------|----------------|
+| `KAU_EUR` | `KAU_USD` |
+| `KAG_EUR` | `KAG_USD` |
+| `XAU_EUR` | `XAU_USD` |
+| `XAG_EUR` | `XAG_USD` |
+| `XPT_EUR` | `XPT_USD` |
+| `XPD_EUR` | `XPD_USD` |
+
+**Implementation:** Defined as `KINESIS_EUR_TO_USD` constant in `resolveKinesisConfig()` ([[apps/node-backend/src/services/prices/priceProviderRegistry.js#L61-L69]]). The symbol lookup happens before any asset config fallback, ensuring EUR variants are always normalized to their USD counterparts.
 
 ---
 

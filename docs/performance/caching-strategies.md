@@ -3,7 +3,8 @@ title: Caching Strategies
 type: performance
 status: active
 date: 2026-04-25
-tags: [performance, caching, optimization]
+last_modified: 2026-04-25
+tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
 related_code: ["apps/node-backend/src/services/currencyConversionService.js", "apps/node-backend/src/services/priceProviderService.js"]
@@ -93,7 +94,12 @@ const mvCache = new Map();
 - **Pre-warmed on backend startup** via `warmInfoCaches()` which runs net-worth and portfolio-performance warmers in parallel via `Promise.allSettled()` so the first request is instant; failures in one warmer do not block the other
 - Route-level throttling (`30 req / 60s`) to protect expensive compute path
 
-Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]
+**Startup dependency ordering (2026-04-25):**
+- `warmExchangeRateCache()` and `backfillPortfolioHistoricalRates()` are now awaited via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before `computeAndStoreSnapshots()` and `warmInfoCaches()` run
+- This ensures exchange rates are written to the database before info caches query them, preventing spurious "Historical FX missing" warnings
+- The `computeAndStoreSnapshots()` service depends on today's FX rates being available in `exchange_rates` table before computing portfolio snapshots
+
+Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/main.js]]
 
 ---
 

@@ -3,10 +3,11 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1]
+last_modified: 2026-04-25
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
-related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js]]
+related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js]]
 ---
 
 # Integration: Price Providers
@@ -41,6 +42,7 @@ Price providers fetch live and historical market prices for investments, support
   - Live/latest price from trendline points
   - Historical points from same symbol stream
   - Symbol resolution from either explicit `price_provider_id` or configured asset-name mapping
+  - **EUR-to-USD remapping (2026-04-25):** When `price_provider_id` is set to a EUR-denominated symbol (e.g., `KAU_EUR`, `XAU_EUR`), it is silently remapped to its USD equivalent (`KAU_USD`, `XAU_USD`) before API requests, since Kinesis only provides USD symbols
   - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`) ([[apps/node-backend/src/services/priceProviderService.js]])
 
 ### Yahoo Finance

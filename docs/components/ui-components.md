@@ -3,15 +3,16 @@ title: UI Components
 type: component
 status: active
 date: 2026-04-17
-tags: [components, ui, radix, shadcn, design-system, phase-9, performance, glass-downgrade]
-description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens
+updated: 2026-04-25
+tags: [components, ui, radix, shadcn, design-system, phase-9, phase-5, performance, glass-downgrade, dependency-slim-down]
+description: Reusable UI components built on Radix UI primitives with Tailwind CSS, styled with emerald + champagne-gold palette and optimized design tokens. Phase 5 removes unused Carousel, Resizable, and Drawer wrappers.
 aliases: [ui-components, radix-components, shadcn-components, primitive-components]
 related_code: ["apps/frontend/src/components/ui"]
 ---
 
 # UI Components
 
-Vision uses a comprehensive set of UI components (48 total) built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS and design tokens, and using [class-variance-authority](https://cva.style) for variant management.
+Vision uses a comprehensive set of UI components (45 total, Phase 5 slim-down removed 3 unused wrappers) built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS and design tokens, and using [class-variance-authority](https://cva.style) for variant management.
 
 ## Overview
 
@@ -40,9 +41,14 @@ Dense components now use `bg-card/95` + single subtle border + ≤8px shadow:
 - `Button` variants (removed `.liquid-glass-soft`)
 - Input, Textarea, Checkbox, RadioGroup, Switch, Slider, Label
 - Tabs, Select, DropdownMenu, ContextMenu, MenuBar
-- Accordion, Collapsible, Toggle, ToggleGroup, Resizable
-- Alert, HoverCard, Carousel
+- Accordion, Collapsible, Toggle, ToggleGroup
+- Alert, HoverCard
 - Sonner toast notifications
+
+**Removed UI wrappers (Phase 5 slim-down)**:
+- `Carousel` — unused wrapper around embla-carousel-react; removed with package
+- `Resizable` — unused wrapper around react-resizable-panels; removed with package
+- `Drawer` — unused wrapper around vaul; removed with package (using Sheet instead)
 
 **Rationale**: Electron M1 GPU regression from blur + saturation filtering on frequently-occluded surfaces. Solid opacity-based layering (95% color + transparency) achieves visual depth with zero GPU blur cost. See [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020]] for details.
 
@@ -168,12 +174,10 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | Component | Description | File |
 |-----------|-------------|------|
 | Card | Content container | [[apps/frontend/src/components/ui/card.tsx\|card.tsx]] |
-| Sheet | Side drawer panel | [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]] |
-| Drawer | Bottom/side drawer | [[apps/frontend/src/components/ui/drawer.tsx\|drawer.tsx]] |
+| Sheet | Side/modal drawer panel | [[apps/frontend/src/components/ui/sheet.tsx\|sheet.tsx]] |
 | Separator | Visual divider | [[apps/frontend/src/components/ui/separator.tsx\|separator.tsx]] |
 | Accordion | Collapsible sections | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]] |
 | Collapsible | Collapsible content | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]] |
-| Resizable | Resizable panel | [[apps/frontend/src/components/ui/resizable.tsx\|resizable.tsx]] |
 | AspectRatio | Fixed aspect ratio | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
 
 ### Navigation
@@ -215,7 +219,6 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | Toggle | Binary toggle | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]] |
 | ToggleGroup | Toggle button group | [[apps/frontend/src/components/ui/toggle-group.tsx\|toggle-group.tsx]] |
 | InputOTP | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]] |
-| Carousel | Carousel/slider | [[apps/frontend/src/components/ui/carousel.tsx\|carousel.tsx]] |
 
 ---
 

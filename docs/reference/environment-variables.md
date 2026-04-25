@@ -3,8 +3,8 @@ title: Environment Variables Reference
 type: reference
 status: active
 date: 2026-04-11
-updated: 2026-04-24
-tags: [reference, environment, configuration, deployment]
+updated: 2026-04-25
+tags: [reference, environment, configuration, deployment, docker, admin-auth]
 description: Complete reference of all environment variables used by the Vision application
 aliases: [env vars, environment variables, .env, configuration, env]
 ---
@@ -37,7 +37,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `ENABLE_RESET_DB` | `false` | No | Enable database reset endpoint | [[apps/node-backend/src/config/config.js\|config.js]] |
 | `APP_VERSION` | `unknown` | No | Application version string | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
 | `APP_IMAGE_TAG` | _(fallback for APP_VERSION)_ | No | Docker image tag as version | [[apps/node-backend/src/routes/admin.js\|admin.js]] |
-| `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`; when unset, admin routes remain open for backward compatibility | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]] |
+| `ADMIN_AUTH_TOKEN` | _(unset)_ | No | Optional Bearer token for protecting `/api/admin/*`. When set, all admin requests must include `Authorization: Bearer <token>`. When unset, requests are allowed only from loopback (127.0.0.1, ::1, ::ffff:127.0.0.1) and private networks (RFC 1918 + IPv6 ULA); all others receive 401. This is safe because `docker-compose.yml` binds the host port to `127.0.0.1` only, preventing LAN access. Requires `trust proxy` enabled in containerized deployments. WARNING: If port binding changes to `0.0.0.0`, set `ADMIN_AUTH_TOKEN`. See [[docs/adr/037-admin-auth-localhost-fallback\|ADR-037]] for details. | [[apps/node-backend/src/config/config.js\|config.js]], [[apps/node-backend/src/main.js\|main.js]], [[apps/node-backend/src/middleware/adminAuth.js\|adminAuth.js]], [[docker-compose.yml]] |
 | `ALEMBIC_BIN` | `alembic` | No | Path to alembic binary; override in containers where alembic is installed to a venv (e.g. `/venv/bin/alembic`). Used by `runMigrations()` on startup | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `ALEMBIC_CONFIG` | `config/alembic.ini` | No | Path to alembic config file relative to repo root, passed to alembic via `-c` flag | [[apps/node-backend/src/database/migrate.js\|migrate.js]] |
 | `APP_TIMEZONE` | `Europe/Brussels` | No | Default timezone for business math (ADR-009) | [[apps/node-backend/src/config/env.js\|env.js]] |

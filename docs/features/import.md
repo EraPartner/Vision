@@ -134,8 +134,10 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
 - Emit progress events: `{ phase: 'committing', current, total, imported, duplicates, errors }`
 
 #### 5. **Aggregation Refresh** (post-pipeline)
-- Schedule non-blocking refresh of materialized views
-- Ensures `/api/aggregations/*` endpoints see new data
+- Synchronously refresh materialized views (as of Phase 12 Bugfix Sweep)
+- Awaits aggregation refresh before import response is sent
+- Ensures `/api/aggregations/*` endpoints see new data immediately in the response
+- Previously fire-and-forget; now blocking to guarantee consistency
 
 ### Legacy Services (Deprecated)
 

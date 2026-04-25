@@ -367,12 +367,18 @@ new Intl.NumberFormat(locale, {
 
 ### Date Formatting
 
-```tsx
-import { format } from "date-fns";
-import { nl, enUS } from 'date-fns/locale';
+Vision uses native `Intl.DateTimeFormat` for date formatting (Phase 5 slim-down removed date-fns). The `dateUtils.ts` helper module provides thin wrappers for common patterns:
 
-const locale = language === 'nl' ? nl : enUS;
-format(new Date(), 'PPP', { locale });
+```tsx
+import { formatDate, formatDateTime } from '@/lib/dateUtils';
+
+// Format a date in the current locale
+formatDate(new Date()); 
+// English: "3/18/2025"
+// Dutch: "18-3-2025"
+
+// Format with day name
+formatDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
 // English: "March 18, 2025"
 // Dutch: "18 maart 2025"
 ```
@@ -435,4 +441,4 @@ When adding new UI, verify both English and Dutch displays correctly.
 
 - [[docs/i18n/index]] - i18n Index
 - [[docs/components/index]] - Components using translations
-- [date-fns locale docs](https://date-fns.org/docs/Locale)
+- [MDN Intl.DateTimeFormat docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat)

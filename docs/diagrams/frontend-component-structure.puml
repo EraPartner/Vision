@@ -29,7 +29,6 @@ package "UI Components (Radix + Tailwind)" {
   class DropdownMenu
   class Command
   class Sidebar
-  class Carousel
   class Skeleton
   class Badge
   class Avatar
@@ -47,13 +46,11 @@ package "UI Components (Radix + Tailwind)" {
   class Popover
   class ContextMenu
   class NavigationMenu
-  class Resizable
   class Pagination
   class AspectRatio
   class Alert
   class HoverCard
   class InputOTP
-  class Drawer
   class Menubar
   class ToggleGroup
   class ScrollArea

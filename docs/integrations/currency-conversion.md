@@ -239,6 +239,48 @@ const historyConverted = converted.filter(r => r._batchGroup === 'history');
 - `getCashflowComparison`: Saved 3 redundant `exchange_rates` queries
 - `getBankBalances`: Saved 1 redundant `exchange_rates` query
 
+### Historical Rate Fallback Flag
+
+When `useHistoricalRatesByDate: true` and the exact (or nearest) historical rate is unavailable for a row's date, the service falls back to the current in-memory rate and surfaces this in the conversion result:
+
+```json
+{
+  "amount_eur": 92.15,
+  "used_fallback_rate": true,
+  "fallback_reason": "historical_rate_missing"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `used_fallback_rate` | `boolean` | `true` when a fallback to current rates occurred |
+| `fallback_reason` | `string` | Always `"historical_rate_missing"` when set |
+
+A `WARN`-level log entry is also emitted: `Historical FX missing, falling back to current rate` with `{ currency, date }` metadata.
+
+Callers (e.g. portfolio history aggregator) can expose these fields to the frontend so affected rows are clearly labeled. Rows where the rate resolved normally carry neither field.
+
+**Cache invalidation after backfill:** `backfillPortfolioHistoricalRates()` calls `clearHistoricalCache()` after inserting new rates, ensuring the in-memory historical index reflects the newly stored rows on the next conversion.
+
+#### Fallback Behavior (Fixed 2026-04-25)
+
+`resolveRateWithFallback()` now correctly implements the fallback chain:
+
+1. **EUR currency**: Always returns `{ rate: 1, fellBack: false }` (EUR has no FX rate)
+2. **Current-rate mode** (`useHistoricalRatesByDate=false` or `rowDate` is null): Returns in-memory rate without warning
+3. **Historical mode** with date present:
+   - Try in-memory historical index (fastest)
+   - Try ECB 90-day fetch + nearest-DB lookup via `getRate()`
+   - Fall back to current rate only if historical source is unavailable
+   - Emit `WARN` log + set `fellBack: true` only when fallback occurs
+
+**Previous bugs (fixed):**
+- EUR rows incorrectly warned because EUR is filtered from `exchange_rates` saves
+- Rows with `rowDate=null` always triggered warning path
+- Short-circuit before ECB/DB fallback when historical index lacked currency
+
+---
+
 ### Sparse Historical Backfill (Portfolio)
 
 - `backfillPortfolioHistoricalRates()` backfills only missing `(portfolio_transactions.currency, portfolio_transactions.date)` pairs (excluding EUR)

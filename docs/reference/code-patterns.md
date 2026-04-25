@@ -19,6 +19,11 @@ aliases: [code patterns, coding patterns, conventions, patterns, how to write co
 
 All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision uses banker's rounding (HALF_EVEN) to match PostgreSQL NUMERIC semantics.
 
+> [!note] Hot-Path Enforcement (Phase 12 Bugfix Sweep)
+> ESLint custom rule `no-raw-money-arithmetic` now warns on raw `+`, `-`, `*`, `÷` operators on identifiers matching money-like names (e.g., `amount`, `balance`, `cost`). This helps prevent drift in hot paths like split allocation and portfolio math. Not all warnings are errors — context matters — but all should be reviewed before merge.
+
+
+
 ### Pattern
 
 ```js
@@ -811,10 +816,10 @@ router.get('/monthly-summary', async (req, res) => {
 
 ### Middleware Stack (in order)
 
-1. **CORS** — `settings.api.corsOrigins`, credentials enabled
+1. **CORS** — custom inline middleware; checks `Origin` header against `settings.api.corsOrigins` allowlist, sets `Access-Control-*` headers, handles OPTIONS preflight with 204 response (Phase 5 slim-down)
 2. **JSON parsing** — `express.json({ limit: '1mb' })`
 3. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
-4. **Compression** — dynamic import of `compression`
+4. **Compression** — custom inline middleware using `node:zlib` createGzip(); compresses for `Accept-Encoding: gzip` + compressible types + ≥1 KB responses (Phase 5 slim-down)
 5. **Request logging** — `logger.debug('[REQ] METHOD PATH')`
 6. **Global rate limiter** — applied before routes
 7. **Routes** — registered with per-route limiters where needed
@@ -1765,9 +1770,9 @@ test('createSseWriter tracks client close', (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]]
+**Source:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
-For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
+For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
 
 ### Pattern
 

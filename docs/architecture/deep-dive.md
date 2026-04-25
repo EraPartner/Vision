@@ -3,8 +3,9 @@ title: Architecture Deep Dive
 type: architecture-doc
 status: active
 date: 2026-04-02
-tags: [architecture, design-patterns, system-design, deep-dive]
-description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization
+updated: 2026-04-25
+tags: [architecture, design-patterns, system-design, deep-dive, phase-5, dependency-slim-down]
+description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. Updated Phase 5 to reflect inlined CORS and compression middleware.
 aliases: [architecture deep dive, system design, design patterns, architectural patterns]
 ---
 
@@ -219,8 +220,8 @@ Backend Dependencies:
 ├── Bun (runtime/package manager)
 ├── yahoo-finance2 (market data)
 ├── binance-api (crypto data)
-├── compression (response compression)
 └── express-rate-limit (rate limiting)
+(compression and CORS inlined as custom middleware in Phase 5)
 
 Shared:
 ├── Zod (validation — frontend)
