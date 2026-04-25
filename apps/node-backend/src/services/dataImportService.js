@@ -47,7 +47,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
         throw new Error(`CSV parse error: ${parseErr.message}`);
     }
 
-    const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0 };
+    const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0 };
     if (records.length === 0) return results;
 
     for (const record of records) {
@@ -84,6 +84,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
                     setAsPrimary: false,
                 }).catch((err) => {
                     logger.warn(`Recipient import: could not add bank account for "${name}": ${err.message}`);
+                    results.bank_account_errors++;
                 });
             }
 
