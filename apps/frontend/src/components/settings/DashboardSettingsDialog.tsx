@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSettings, type ExclusionScope } from '@/contexts/SettingsContext';
 import { useAppSettings, defaultAppSettings } from '@/contexts/AppSettingsContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -76,6 +76,15 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
         // BackupTab handles its own initialization via the open prop
     }, [open, settings, appSettings]);
 
+    const handleAiModelChange = useCallback(
+        (v: string) => setLocalAppSettings((prev) => ({ ...prev, aiDefaultModel: v })),
+        [],
+    );
+    const handleAdminModeChange = useCallback(
+        (enabled: boolean) => setLocalAppSettings((prev) => ({ ...prev, adminMode: enabled })),
+        [],
+    );
+
     const handleSave = () => {
         updateSettings({
             excludedCategoryIds: localExcludedCategories,
@@ -151,12 +160,12 @@ export function DashboardSettingsDialog({ open, onOpenChange, defaultTab = 'gene
                     <TabsContent value="app" className="flex-1 min-h-0">
                         <AppTab
                             aiDefaultModel={localAppSettings.aiDefaultModel}
-                            onAiModelChange={(v) => setLocalAppSettings({ ...localAppSettings, aiDefaultModel: v })}
+                            onAiModelChange={handleAiModelChange}
                             onReset={handleReset}
                             onOpenChange={onOpenChange}
                             dateFormat={localAppSettings.dateFormat}
                             adminMode={localAppSettings.adminMode ?? false}
-                            onAdminModeChange={(enabled) => setLocalAppSettings({ ...localAppSettings, adminMode: enabled })}
+                            onAdminModeChange={handleAdminModeChange}
                         />
                     </TabsContent>
 
