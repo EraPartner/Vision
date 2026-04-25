@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useStatistics } from "@/hooks/useStatistics";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,20 +11,45 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { RecipientInsightsTab } from "@/components/statistics/RecipientInsightsTab";
 import { ChartCard } from "@/components/statistics/ChartCard";
 import { SummaryCards } from "@/components/statistics/SummaryCards";
-import { MonthlyChart } from "@/components/statistics/MonthlyChart";
-import { NetTrendChart } from "@/components/statistics/NetTrendChart";
-import { YearlyComparisonChart } from "@/components/statistics/YearlyComparisonChart";
-import { TopRecipientsChart } from "@/components/statistics/TopRecipientsChart";
-import { CategoryPieChart } from "@/components/statistics/CategoryPieChart";
-import { CategoryTrendChart } from "@/components/statistics/CategoryTrendChart";
-import { CategoryPivotTable } from "@/components/statistics/CategoryPivotTable";
-import { YearlySummaryTable } from "@/components/statistics/YearlySummaryTable";
-import { SavedChartsSection } from "@/components/statistics/SavedChartsSection";
-import { SankeyTab } from "@/components/statistics/SankeyTab";
 import { STATISTICS_WIDGETS } from "@/components/statistics/statisticsUtils";
+
+const RecipientInsightsTab = lazy(() =>
+  import("@/components/statistics/RecipientInsightsTab").then((m) => ({ default: m.RecipientInsightsTab }))
+);
+const MonthlyChart = lazy(() =>
+  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+);
+const NetTrendChart = lazy(() =>
+  import("@/components/statistics/NetTrendChart").then((m) => ({ default: m.NetTrendChart }))
+);
+const YearlyComparisonChart = lazy(() =>
+  import("@/components/statistics/YearlyComparisonChart").then((m) => ({ default: m.YearlyComparisonChart }))
+);
+const TopRecipientsChart = lazy(() =>
+  import("@/components/statistics/TopRecipientsChart").then((m) => ({ default: m.TopRecipientsChart }))
+);
+const CategoryPieChart = lazy(() =>
+  import("@/components/statistics/CategoryPieChart").then((m) => ({ default: m.CategoryPieChart }))
+);
+const CategoryTrendChart = lazy(() =>
+  import("@/components/statistics/CategoryTrendChart").then((m) => ({ default: m.CategoryTrendChart }))
+);
+const CategoryPivotTable = lazy(() =>
+  import("@/components/statistics/CategoryPivotTable").then((m) => ({ default: m.CategoryPivotTable }))
+);
+const YearlySummaryTable = lazy(() =>
+  import("@/components/statistics/YearlySummaryTable").then((m) => ({ default: m.YearlySummaryTable }))
+);
+const SavedChartsSection = lazy(() =>
+  import("@/components/statistics/SavedChartsSection").then((m) => ({ default: m.SavedChartsSection }))
+);
+const SankeyTab = lazy(() =>
+  import("@/components/statistics/SankeyTab").then((m) => ({ default: m.SankeyTab }))
+);
+
+const ChartSkeleton = () => <Skeleton className="h-[400px] w-full" />;
 
 export default function StatisticsPage() {
   const {
@@ -44,6 +69,11 @@ export default function StatisticsPage() {
           : (w.label ?? w.id),
       })),
     [widgetDefs, t],
+  );
+
+  const chartCardProps = useMemo(
+    () => ({ getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply }),
+    [getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply],
   );
 
   if (isLoading) {
@@ -107,8 +137,6 @@ export default function StatisticsPage() {
     );
   }
 
-  const chartCardProps = { getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply };
-
   return (
     <div className="space-y-6 animate-in">
       <div className="flex items-center justify-between">
@@ -127,13 +155,15 @@ export default function StatisticsPage() {
 
       {isVisible("summaryCards") && <SummaryCards data={data} />}
 
-      <SavedChartsSection
-        data={data}
-        getGraphData={getGraphData}
-        graphExclusions={graphExclusions}
-        toggleGraphExclusion={toggleGraphExclusion}
-        exclusionsApply={exclusionsApply}
-      />
+      <Suspense fallback={<ChartSkeleton />}>
+        <SavedChartsSection
+          data={data}
+          getGraphData={getGraphData}
+          graphExclusions={graphExclusions}
+          toggleGraphExclusion={toggleGraphExclusion}
+          exclusionsApply={exclusionsApply}
+        />
+      </Suspense>
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
@@ -145,100 +175,110 @@ export default function StatisticsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {isVisible("monthly") && (
-            <ChartCard
-              title={t("statsPage.chart.monthlyTitle")}
-              description={t("statsPage.chart.monthlyDesc")}
-              graphKey="monthly"
-              {...chartCardProps}
-            >
-              {(d) => <MonthlyChart data={d} />}
-            </ChartCard>
-          )}
-          {isVisible("netTrend") && (
-            <ChartCard
-              title={t("statsPage.chart.netTitle")}
-              description={t("statsPage.chart.netDesc")}
-              graphKey="netTrend"
-              {...chartCardProps}
-            >
-              {(d) => <NetTrendChart data={d} />}
-            </ChartCard>
-          )}
+          <Suspense fallback={<ChartSkeleton />}>
+            {isVisible("monthly") && (
+              <ChartCard
+                title={t("statsPage.chart.monthlyTitle")}
+                description={t("statsPage.chart.monthlyDesc")}
+                graphKey="monthly"
+                {...chartCardProps}
+              >
+                {(d) => <MonthlyChart data={d} />}
+              </ChartCard>
+            )}
+            {isVisible("netTrend") && (
+              <ChartCard
+                title={t("statsPage.chart.netTitle")}
+                description={t("statsPage.chart.netDesc")}
+                graphKey="netTrend"
+                {...chartCardProps}
+              >
+                {(d) => <NetTrendChart data={d} />}
+              </ChartCard>
+            )}
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {isVisible("categoryPie") && (
-              <ChartCard
-                title={t("statsPage.chart.categoryPieTitle")}
-                description={t("statsPage.chart.categoryPieDesc")}
-                graphKey="categoryPie"
-                {...chartCardProps}
-              >
-                {(d) => <CategoryPieChart data={d} />}
-              </ChartCard>
+          <Suspense fallback={<ChartSkeleton />}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {isVisible("categoryPie") && (
+                <ChartCard
+                  title={t("statsPage.chart.categoryPieTitle")}
+                  description={t("statsPage.chart.categoryPieDesc")}
+                  graphKey="categoryPie"
+                  {...chartCardProps}
+                >
+                  {(d) => <CategoryPieChart data={d} />}
+                </ChartCard>
+              )}
+              {isVisible("categoryTrend") && (
+                <ChartCard
+                  title={t("statsPage.chart.categoryTrendTitle")}
+                  description={t("statsPage.chart.categoryTrendDesc")}
+                  graphKey="categoryTrend"
+                  {...chartCardProps}
+                >
+                  {(d) => <CategoryTrendChart data={d} />}
+                </ChartCard>
+              )}
+            </div>
+            {isVisible("pivotTable") && (
+              <CategoryPivotTable
+                data={getGraphData("pivotTable") || data}
+                graphKey="pivotTable"
+                isFiltered={graphExclusions["pivotTable"] ?? true}
+                onToggle={toggleGraphExclusion}
+                exclusionsApply={exclusionsApply}
+              />
             )}
-            {isVisible("categoryTrend") && (
-              <ChartCard
-                title={t("statsPage.chart.categoryTrendTitle")}
-                description={t("statsPage.chart.categoryTrendDesc")}
-                graphKey="categoryTrend"
-                {...chartCardProps}
-              >
-                {(d) => <CategoryTrendChart data={d} />}
-              </ChartCard>
-            )}
-          </div>
-          {isVisible("pivotTable") && (
-            <CategoryPivotTable
-              data={getGraphData("pivotTable") || data}
-              graphKey="pivotTable"
-              isFiltered={graphExclusions["pivotTable"] ?? true}
-              onToggle={toggleGraphExclusion}
-              exclusionsApply={exclusionsApply}
-            />
-          )}
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-6">
-          {isVisible("topRecipients") && (
-            <RecipientInsightsTab
-              statisticsTopRecipientsChart={
-                <ChartCard
-                  title={t("statsPage.chart.topRecipientsTitle")}
-                  description={t("statsPage.chart.topRecipientsDesc")}
-                  graphKey="topRecipients"
-                  {...chartCardProps}
-                >
-                  {(d) => <TopRecipientsChart data={d} />}
-                </ChartCard>
-              }
-            />
-          )}
+          <Suspense fallback={<ChartSkeleton />}>
+            {isVisible("topRecipients") && (
+              <RecipientInsightsTab
+                statisticsTopRecipientsChart={
+                  <ChartCard
+                    title={t("statsPage.chart.topRecipientsTitle")}
+                    description={t("statsPage.chart.topRecipientsDesc")}
+                    graphKey="topRecipients"
+                    {...chartCardProps}
+                  >
+                    {(d) => <TopRecipientsChart data={d} />}
+                  </ChartCard>
+                }
+              />
+            )}
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="yearly" className="space-y-6">
-          {isVisible("yearlyComparison") && (
-            <ChartCard
-              title={t("statsPage.chart.yearlyTitle")}
-              description={t("statsPage.chart.yearlyDesc")}
-              graphKey="yearlyComparison"
-              {...chartCardProps}
-            >
-              {(d) => <YearlyComparisonChart data={d} />}
-            </ChartCard>
-          )}
-          {isVisible("yearlySummary") && <YearlySummaryTable data={data} />}
+          <Suspense fallback={<ChartSkeleton />}>
+            {isVisible("yearlyComparison") && (
+              <ChartCard
+                title={t("statsPage.chart.yearlyTitle")}
+                description={t("statsPage.chart.yearlyDesc")}
+                graphKey="yearlyComparison"
+                {...chartCardProps}
+              >
+                {(d) => <YearlyComparisonChart data={d} />}
+              </ChartCard>
+            )}
+            {isVisible("yearlySummary") && <YearlySummaryTable data={data} />}
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="flow" className="space-y-6">
-          <SankeyTab
-            graphExclusions={graphExclusions}
-            onToggleExclusion={toggleGraphExclusion}
-            exclusionsApply={exclusionsApply}
-            availableYears={data?.allYears}
-          />
+          <Suspense fallback={<ChartSkeleton />}>
+            <SankeyTab
+              graphExclusions={graphExclusions}
+              onToggleExclusion={toggleGraphExclusion}
+              exclusionsApply={exclusionsApply}
+              availableYears={data?.allYears}
+            />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>
