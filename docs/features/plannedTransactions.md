@@ -3,6 +3,7 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
+updated: 2026-04-26
 tags: [feature, planned, recurring, bills, loans, phase-3, calculations]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
@@ -377,6 +378,57 @@ Dialog form for creating and editing planned transactions. Supports both one-tim
 
 **Code**: [[apps/frontend/src/components/planned/PlannedPaymentForm.tsx]]
 
+### LinkTransactionDialog (2026-04-26)
+
+Extracted dialog component that manages linking a transaction execution to a planned payment. Owns all state for transaction search, filtering, and linking UI.
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `open` | `boolean` | Dialog open state |
+| `onOpenChange` | `(open: boolean) => void` | Open state change handler |
+| `payment` | `PlannedPayment \| null` | Planned payment to link transaction to |
+| `onExecute` | `(paymentId: number, txId: number, executionDate?: string) => Promise<void>` | Called when user confirms link |
+
+**Internal State:**
+- `txSearchQuery` — Transaction search input
+- `candidateTxs` — Matching transactions from API
+- `txLoading` — Search in progress
+- `actionLoading` — Execution in progress
+- `selectedTxId` — Selected transaction ID
+- `executionDate` — Date to record execution for
+- `txFilters` — Filter object with recipient, dates, bank account, amount matching
+
+**Behavior:**
+- Initializes filters from planned payment's recipient/due_date/bank_account
+- Debounced transaction fetch on filter changes
+- Shows matching transactions with amount, date, recipient
+- Allows optional execution date adjustment
+
+**Code**: [[apps/frontend/src/components/planned/LinkTransactionDialog.tsx]]
+
+### ExecutionHistoryDialog (2026-04-26)
+
+Extracted dialog component that displays the execution history for selected planned payments. Fetches linked transaction details on dialog open.
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `open` | `boolean` | Dialog open state |
+| `onOpenChange` | `(open: boolean) => void` | Open state change handler |
+| `payments` | `PlannedPayment[]` | Planned payments to load history for |
+
+**Internal State:**
+- `historyLoading` — History fetch in progress
+- `executionHistory` — Array of `ExecutionHistoryItem` (internally defined type with plannedPaymentId, name, executionDate, transactionId, transactionDate, recipient, category, amount, currency, memo)
+
+**Behavior:**
+- `loadExecutionHistory` callback wrapped in `useCallback([payments])` to avoid unnecessary function recreation
+- Loads when dialog opens
+- Batches transaction fetches for all planned payments' executions
+
+**Code**: [[apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx]]
+
 ### RecurringDetectionPanel
 
 Panel that displays detected recurring payment patterns from the backend. Allows users to review patterns, dismiss false positives, and convert patterns into planned transactions.
@@ -398,6 +450,13 @@ Panel that displays detected recurring payment patterns from the backend. Allows
 **Dismissal Storage:** Uses dual storage — localStorage for immediate persistence and backend settings API for cross-device sync. Storage key: `dismissed_recurring_patterns`.
 
 **Code**: [[apps/frontend/src/components/planned/RecurringDetectionPanel.tsx]]
+
+### PlannedPaymentsPage Refactoring (2026-04-26)
+
+The `PlannedPaymentsPage` was refactored from 914 lines to 503 lines by extracting two dialog components:
+- Dialog state management and logic moved to respective dialog components
+- Main page now focuses on list display, form submission, and deletions
+- Performance improvement: `loadExecutionHistory` wrapped in `useCallback` to prevent function recreation
 
 ---
 

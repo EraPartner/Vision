@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-04-25
+date: 2026-04-26
 updated: 2026-04-24
 tags:
   - api
@@ -271,6 +271,11 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 Check for application updates via GitHub Releases API.
 
+**Network Timeout (2026-04-26):**
+- GitHub fetch timeout: **5000ms** (5 seconds)
+- If GitHub is unreachable, endpoint returns a generic "No published releases found" response rather than failing with a network error
+- Uses `https.get()` with `timeout` option and `req.on('timeout', ...)` handler that calls `req.destroy()`
+
 **Response:** `200 OK`
 
 ```json
@@ -284,7 +289,7 @@ Check for application updates via GitHub Releases API.
 }
 ```
 
-**Response:** `200 OK` (no releases found)
+**Response:** `200 OK` (no releases found or timeout)
 
 ```json
 {

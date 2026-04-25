@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET
 path: /api/import
 description: CSV import for transactions, recipients, and categories
-date: 2026-04-23
+date: 2026-04-26
 tags: [api, import, csv, bank]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -149,6 +149,29 @@ name,default_category
 "Supermarket ABC","FOOD:GROCERIES"
 "Gas Station","TRANSPORT:GAS"
 ```
+
+**Response:**
+```json
+{
+  "total_processed": 25,
+  "imported": 23,
+  "skipped": 1,
+  "errors": 0,
+  "bank_account_errors": 1,
+  "status": "completed"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_processed` | integer | Total rows in CSV file |
+| `imported` | integer | Recipients successfully created |
+| `skipped` | integer | Recipients already existing |
+| `errors` | integer | Rows with validation errors |
+| `bank_account_errors` | integer | (2026-04-26) Recipients created but bank account creation failed |
+| `status` | string | `"completed"` or `"completed_with_errors"` |
+
+**Note:** `bank_account_errors` tracks failures when adding bank account information to recipients. The recipient is still created; only the optional bank account link fails.
 
 ### POST /api/import/categories
 

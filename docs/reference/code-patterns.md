@@ -3,6 +3,7 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
+updated: 2026-04-25
 tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236]
@@ -845,9 +846,37 @@ process.on('SIGTERM', async () => { await closePool(); process.exit(0); });
 
 ## Error Handling Pattern
 
-**Source:** [[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]
+**Source:** [[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
 
 Centralized error-handling middleware with typed error classes. Routes throw typed errors; middleware maps to HTTP responses.
+
+### Handling Missing Tables (Schema Evolution, 2026-04-26)
+
+When a table or column may not exist in older schema versions, use PostgreSQL error code `42P01` (undefined_table) to gracefully handle the missing table:
+
+```js
+try {
+  const result = await query(
+    `SELECT transaction_id FROM manual_raw_transactions WHERE deduplication_hash = $1 LIMIT 1`,
+    [hash]
+  );
+  if (result.rows.length > 0) {
+    return { isDuplicate: true, existingTransactionId: result.rows[0].transaction_id };
+  }
+} catch (err) {
+  // Only suppress table-not-exist errors (42P01); log other unexpected errors
+  if (err.code !== '42P01') {
+    logger.warn('Unexpected error in manual dedup hash check', { error: err.message, code: err.code });
+  }
+  // Fall through to field-based check — table may not exist yet
+}
+```
+
+**Rationale:**
+- Services must work across multiple schema versions during gradual migrations
+- PostgreSQL error code 42P01 = "undefined table"
+- Only this error is expected and silenced; other errors are logged for visibility
+- Fallback logic is executed when table is missing
 
 ### Typed Error Classes
 

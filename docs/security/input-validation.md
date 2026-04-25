@@ -2,7 +2,8 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-04-25
+date: 2026-04-26
+updated: 2026-04-25
 tags: [security, validation, sanitization, csv, formula-injection, cwe-1236]
 description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, and malformed data
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236]
@@ -69,6 +70,28 @@ validateNumber(value, { min = -Infinity, max = Infinity, fieldName = 'value' })
 
 ---
 
+### Integer ID Validation in Query Parameters (2026-04-26)
+
+Dynamic query parameters that reference IDs (e.g., `category_id`) are validated using `Number.isFinite()` after `parseInt()` to ensure they convert to valid integers. This prevents NaN from being passed to the database layer.
+
+**Example:** Transaction export filter
+```javascript
+if (category_id) {
+  const catId = parseInt(category_id, 10);
+  if (!Number.isFinite(catId)) throw new ValidationError('category_id must be an integer');
+  filterClauses.push(`t.category_id = $${paramIdx++}`);
+  params.push(catId);
+}
+```
+
+**Rules:**
+- `parseInt()` converts string to number
+- `Number.isFinite()` rejects NaN and non-finite values
+- Raises `ValidationError` if conversion fails
+- Query parameter is rejected before being passed to database
+
+---
+
 ### Date Validation
 
 Validates date strings in ISO format (YYYY-MM-DD).
@@ -108,6 +131,41 @@ validatePagination(limit, offset)
 **Rules:**
 - Limit: defaults to 50, max 5000
 - Offset: defaults to 0, min 0
+
+---
+
+### Parameterized Queries with Schema Checking (2026-04-26)
+
+For operations on columns that may not exist in all schema versions (e.g., `planned_transactions.recipient_id`), Vision uses a two-step approach:
+
+1. **Schema Validation:** Query `information_schema.columns` to check column existence before attempting to update it
+2. **Parameterized Update:** If column exists, run a fully parameterized UPDATE using `ANY($2::int[])` for ID arrays
+
+**Example:** Recipient merge service
+
+```javascript
+// Step 1: Check if column exists (safe, no data modification)
+const colCheck = await client.query(
+  `SELECT 1 FROM information_schema.columns
+   WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
+   LIMIT 1`,
+);
+
+// Step 2: Only run UPDATE if column exists (fully parameterized)
+if (colCheck.rows.length > 0) {
+  const plannedRes = await client.query(
+    `UPDATE planned_transactions
+        SET recipient_id = $1
+      WHERE recipient_id = ANY($2::int[])`,
+    [primaryId, ids],  // Fully parameterized — no string interpolation
+  );
+}
+```
+
+**Rationale:**
+- Avoids string interpolation or dynamic SQL construction
+- Safely handles missing columns in older schema versions without error
+- All ID values passed as parameters, not interpolated into SQL string
 
 ---
 
