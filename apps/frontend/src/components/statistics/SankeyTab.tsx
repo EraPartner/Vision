@@ -1,7 +1,7 @@
 /**
  * SankeyTab — year-selector + SankeyChart wrapper for the Statistics Flow tab.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,8 +12,6 @@ import { getSankeyFlow } from "@/lib/api/aggregations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { SankeyChart } from "./SankeyChart";
-
-const CURRENT_YEAR = new Date().getFullYear();
 
 interface SankeyTabProps {
   readonly graphExclusions: Record<string, boolean>;
@@ -28,10 +26,11 @@ export function SankeyTab({ graphExclusions, onToggleExclusion, exclusionsApply,
   const { t } = useLanguage();
   const { currency } = useChartCurrencyFormatter();
   const { settings } = useSettings();
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
   const yearOptions = availableYears?.length
     ? [...availableYears].sort((a, b) => b - a)
-    : [CURRENT_YEAR];
-  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
+    : [currentYear];
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const isFiltered = graphExclusions[GRAPH_KEY] ?? true;
   const applyExclusions = exclusionsApply && isFiltered;
