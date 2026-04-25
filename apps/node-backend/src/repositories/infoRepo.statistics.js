@@ -18,6 +18,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE) - interval '6 months'
       AND t.date < date_trunc('month', CURRENT_DATE)
+    LIMIT 10000
   `;
   const sqlCurrent = `
     SELECT t.amount, t.currency, t.date
@@ -25,6 +26,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     WHERE t.is_active = true
       AND t.date >= date_trunc('month', CURRENT_DATE)
       AND t.date <= CURRENT_DATE
+    LIMIT 5000
   `;
 
   const [past6Result, currentResult] = await Promise.all([
