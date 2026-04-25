@@ -72,6 +72,9 @@ export function resolveKinesisConfig(inv) {
   const providerId = (inv?.price_provider_id || '').trim();
   const assetName = (inv?.name || inv?.symbol || '').toLowerCase().trim();
 
+  if (providerId.endsWith('_EUR') && !KINESIS_EUR_TO_USD[providerId]) {
+    logger.warn(`Kinesis: unmapped EUR symbol "${providerId}" — add it to KINESIS_EUR_TO_USD or the API call will fail`);
+  }
   let symbol = KINESIS_EUR_TO_USD[providerId] || providerId;
   let timeframe = KINESIS_DEFAULT_TIMEFRAME;
   let fromDate = KINESIS_DEFAULT_FROM_DATE;
