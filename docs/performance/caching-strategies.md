@@ -2,7 +2,7 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-04-10
+date: 2026-04-25
 tags: [performance, caching, optimization]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -90,7 +90,7 @@ const mvCache = new Map();
 **Features:**
 - Per-currency response caching for repeated dashboard refreshes
 - In-flight request deduplication (same-currency concurrent requests share one repository promise)
-- **Pre-warmed on backend startup** via `warmInfoCaches()` so the first request is instant
+- **Pre-warmed on backend startup** via `warmInfoCaches()` which runs net-worth and portfolio-performance warmers in parallel via `Promise.allSettled()` so the first request is instant; failures in one warmer do not block the other
 - Route-level throttling (`30 req / 60s`) to protect expensive compute path
 
 Code links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]

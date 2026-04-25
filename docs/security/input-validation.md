@@ -2,11 +2,11 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-04-02
-tags: [security, validation, sanitization]
-description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, and malformed data
-aliases: [input validation, sanitization, sql injection, xss, validation middleware]
-related_code: ["apps/node-backend/src/middleware/validation.js"]
+date: 2026-04-25
+tags: [security, validation, sanitization, csv, formula-injection, cwe-1236]
+description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, and malformed data
+aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236]
+related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/csv.js"]
 ---
 
 # Input Validation
@@ -167,10 +167,60 @@ router.get('/:id', validateIdParam, async (req, res) => {
 
 ---
 
+## CSV Formula Injection Prevention (CWE-1236)
+
+CSV exports are vulnerable to formula injection when user-controllable data (recipient name, memo, comments) is written without sanitization. Attackers can craft malicious data that auto-executes in Excel or Google Sheets:
+
+```
+Malicious cell value: =cmd|'/c powershell ...'
+Result when opened: Arbitrary code execution
+```
+
+### Prevention
+
+All CSV exports use a centralized utility that prefixes dangerous leading characters (`=`, `+`, `-`, `@`) with a single quote, rendering them as literal text:
+
+**Implementation:** [[apps/node-backend/src/lib/csv.js|lib/csv.js]]
+
+```js
+export function escapeCsvValue(value) {
+  if (value == null) return '';
+  const stringValue = neutralizeCsvFormula(String(value));
+  // Escape quotes and wrap if needed
+  return stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')
+    ? `"${stringValue.replace(/"/g, '""')}"`
+    : stringValue;
+}
+```
+
+### Usage Rule
+
+Every CSV export route **must** pass all user-controllable fields through `escapeCsvValue()`:
+
+```js
+import { escapeCsvValue } from '../lib/csv.js';
+
+// Transaction export
+const cols = [row.date, row.recipient_name, row.memo, row.comment];
+const csv = cols.map(escapeCsvValue).join(',');
+
+// Splits/owed transactions export
+const cols = [row.recipient_name, row.memo, row.amount];
+const csv = cols.map(escapeCsvValue).join(',');
+```
+
+### Compliance
+
+- [[apps/node-backend/src/routes/transactions.js]] — `GET /api/transactions/export/csv` ✓
+- [[apps/node-backend/src/routes/splits.js]] — `GET /api/splits/owed/:id/export/csv` ✓
+
+---
+
 ## Related Security Topics
 
 - [[docs/security/rate-limiting]] - Rate limiting to prevent abuse
 - [[docs/adr/002-database-schema]] - Database schema design
+- [[docs/reference/code-patterns#safe-csv-export-pattern-phase-5]] - Safe CSV Export Pattern
 
 ## See Also
 

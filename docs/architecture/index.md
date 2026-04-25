@@ -2,9 +2,9 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-04-24
-tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, and Phase E component decomposition
+date: 2026-04-25
+tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, and April 25 CSV security & parallelization improvements
 aliases: [architecture, diagrams, UML, system design]
 ---
 
@@ -197,11 +197,48 @@ ImportPage component refactored from monolithic 1019 lines to modular architectu
 - High cohesion: each component has single responsibility
 - Low coupling: no prop-drilling; state stays with owner
 - Testability: each card independently testable
-- Reusability: components can be imported elsewhere
+
+## Backend Refactoring & Bug Fixes (April 25, 2026)
+
+### CSV Export Security & Utility Consolidation
+
+**Issue:** CSV exports in different routes had inconsistent or missing formula injection protection.
+
+**Resolution:**
+- New shared utility: [[apps/node-backend/src/lib/csv.js|csv.js]] with `escapeCsvValue()` and `neutralizeCsvFormula()`
+- Centralizes CWE-1236 protection: prefixes dangerous leading chars (`=`, `+`, `-`, `@`) with `'`
+- Updated routes: `transactions.js` (GET `/api/transactions/export/csv`) and `splits.js` (GET `/api/splits/owed/:id/export/csv`)
+- All exports now use the shared utility, eliminating duplication and ensuring consistent security
 
 Documentation:
-- [[docs/features/import#phase-e--frontend-component-decomposition-april-2026|Feature: Phase E Import Decomposition]]
-- [[docs/reference/agent-navigation-map#import-phase-e--component-decomposition|Agent Navigation Map: Import Components]]
+- [[docs/reference/code-patterns#safe-csv-export-pattern-phase-5|Safe CSV Export Pattern]]
+- [[docs/security/input-validation#csv-formula-injection-prevention-cwe-1236|CSV Formula Injection Prevention]]
+
+### Query Parallelization & Performance
+
+**Changes:**
+- `transactions.js` (PATCH): Recipient/category resolution now uses `Promise.all` instead of sequential awaits
+- `splits.js`: Batch audit-trail writes parallelized via `Promise.all`
+- `reconciliation.js` (GET `/statements/:id/entries/:entryId/candidates`): Statement + entry fetches now parallel
+
+### Bug Fixes
+
+**admin.js:** Fixed VACUUM error handler returning 500 instead of 403
+- Error: `throw new AppError(msg, 403)` was dropping the status code because `AppError` constructor expects `(msg, opts)` shape
+- Fix: Changed to `throw new ForbiddenError(msg)` for proper 403 response
+
+**reconciliationRepository.js:** Improvements
+- Dead code removal: Removed unused initial SQL block in `createEntry()` that was immediately overwritten
+- New method: `getEntry(entryId)` for direct entry-by-id lookup (enables optimized candidates route)
+
+### Response Envelope Harmonization
+
+Reconciliation routes now consistently use the ADR-026 envelope via `res.ok()`:
+- POST `/statements` and POST `/statements/:id/entries` — both single and bulk paths
+- All reconciliation responses follow the unified envelope standard
+
+Documentation:
+- [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]]
 
 ## Frontend Design System (Phase 9)
 

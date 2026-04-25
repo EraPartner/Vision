@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-04-23
+date: 2026-04-25
 tags: [performance, index, optimization]
 description: Performance optimization strategies including caching, materialized views, and chart downsampling
 aliases: [performance, optimization, speed]
@@ -23,6 +23,8 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-04-25: Parallelized Cache Warming & Forecast Accuracy Persistence (Phase 10)** — Refactored `warmInfoCaches()` in `[[apps/node-backend/src/routes/info.js|info.js]]` to run net-worth and portfolio-performance cache warmers in parallel via `Promise.allSettled()` instead of sequentially. Reduces startup overhead when both caches are pre-warmed. Additionally, replaced sequential `for await` loop in forecast accuracy persistence (`[[apps/node-backend/src/services/calculations/forecast/index.js|index.js]]` lines ~293-303) with `await Promise.all(backtest.map(...))` to persist per-method accuracy records in parallel. Extracted `parseIntClamped()` helper in `[[apps/node-backend/src/routes/aggregations.js|aggregations.js]]` to consolidate repeated parseInt-with-clamp validation logic across 4 query parameters (months, mc_paths, history_months, limit_months). See [[docs/reference/code-patterns#HTTP Request Parameter Parsing Pattern|HTTP Request Parameter Parsing Pattern]].
 
 **2026-04-23: SSE Backpressure for Streaming Endpoints (Phase 3.2)** — New `[[apps/node-backend/src/lib/sse.js|sse.js]]` utility provides backpressure-aware streaming for `POST /api/import/csv/stream` and `POST /api/ai/chat/stream`. When a client consumes events slower than they are produced, the server's write buffer becomes full. Previously, the server would keep writing to an unbounded Node.js TCP buffer, eventually exhausting memory. Now, `createSseWriter()` and `drainIfNeeded()` pause the server loop whenever `res.writableNeedDrain` signals a full buffer, giving the kernel time to drain. Import and AI services now use async callbacks that await the SSE writer's `write()` promise, propagating backpressure all the way into the batch/token loop. See [[docs/reference/code-patterns#SSE Backpressure Pattern|SSE Backpressure Pattern]].
 
