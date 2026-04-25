@@ -3,8 +3,9 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-tags: [components, statistics, charts, frontend, refactoring]
-description: Statistics page sub-components and shared utilities for composable analytics widgets
+updated: 2026-04-25
+tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance]
+description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
   - apps/frontend/src/components/statistics/
@@ -21,22 +22,43 @@ Vision's Statistics page is composed of 11 specialized sub-components plus share
 **Page:** `[[apps/frontend/src/pages/StatisticsPage.tsx]]` (232 lines)  
 **Components:** `[[apps/frontend/src/components/statistics/]]`
 
-The page acts as a thin orchestrator:
+The page acts as a thin orchestrator with lazy-loading and memoization:
 
 ```tsx
+import { lazy, Suspense, useMemo } from "react";
+
+const MonthlyChart = lazy(() =>
+  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+);
+
 function StatisticsPage() {
   const { data, getGraphData, toggleGraphExclusion } = useStatistics();
   const { isVisible } = useWidgetVisibility("statistics", STATISTICS_WIDGETS);
   
+  // Memoize props to prevent unnecessary child re-renders
+  const chartCardProps = useMemo(
+    () => ({ getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply }),
+    [getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply],
+  );
+  
   return (
     <Tabs>
       {isVisible("summaryCards") && <SummaryCards ... />}
-      {isVisible("monthly") && <ChartCard><MonthlyChart /></ChartCard>}
-      {/* ... 9 more widgets across 4 tabs ... */}
+      {isVisible("monthly") && (
+        <Suspense fallback={<ChartSkeleton />}>
+          <ChartCard {...chartCardProps}><MonthlyChart /></ChartCard>
+        </Suspense>
+      )}
+      {/* ... 9 more widgets across 4 tabs, each lazy-loaded ... */}
     </Tabs>
   );
 }
 ```
+
+**Performance Features:**
+- **Lazy-loading**: 8 chart components deferred until tab is opened (reduces initial bundle)
+- **Memoization**: All charts wrapped with `React.memo()` to prevent unnecessary re-renders
+- **Prop memoization**: `chartCardProps` memoized to stabilize `ChartCard` children
 
 ## Component Catalog
 
@@ -115,26 +137,32 @@ interface SummaryCardsProps {
 ### MonthlyChart
 
 **File:** `MonthlyChart.tsx` (42 lines)  
-**Purpose:** Monthly income vs spending bar chart
+**Purpose:** Monthly income vs spending bar chart with optional 3-month rolling average overlay
 
 **Props:**
 
 ```typescript
 interface MonthlyChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;  // Non-null; parent handles loading/error states
 }
 ```
 
-**Chart Type:** Grouped bar chart (Recharts `BarChart`)  
+**Chart Type:** Grouped bar chart with optional line overlay  
 **Dimensions:** Income (emerald) vs Spending (red) by month  
+**Overlay:** 3-month rolling average (toggle button)  
 **Interaction:** Hover tooltip shows currency values
+
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change. Uses `useMemo()` internally to compute rolling averages only when `data.monthlyData` changes.
 
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="monthly" ...>
-  <MonthlyChart data={data} isLoading={isLoading} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <MonthlyChart data={getGraphData("monthly")} />
+  </Suspense>
 </ChartCard>
 ```
 
@@ -149,20 +177,25 @@ interface MonthlyChartProps {
 
 ```typescript
 interface NetTrendChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;  // Non-null; parent handles loading/error states
 }
 ```
 
-**Chart Type:** Area chart (Recharts `AreaChart`)  
+**Chart Type:** Area chart  
 **Dimension:** Net balance (income - spending) by month  
 **Styling:** Emerald fill with gradient, respects reduced-motion
+
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="netTrend" ...>
-  <NetTrendChart data={data} isLoading={isLoading} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <NetTrendChart data={getGraphData("netTrend")} />
+  </Suspense>
 </ChartCard>
 ```
 
@@ -177,8 +210,7 @@ interface NetTrendChartProps {
 
 ```typescript
 interface CategoryPieChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;
   allYears: number[];
 }
 ```
@@ -189,11 +221,17 @@ interface CategoryPieChartProps {
 - Year filter: "All Years" or specific year
 - Shows category name + percentage on hover
 
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change.
+
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="categoryPie" ...>
-  <CategoryPieChart data={data} allYears={data?.allYears || []} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <CategoryPieChart data={data} allYears={data.allYears} />
+  </Suspense>
 </ChartCard>
 ```
 
@@ -208,20 +246,25 @@ interface CategoryPieChartProps {
 
 ```typescript
 interface CategoryTrendChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;
 }
 ```
 
-**Chart Type:** Multi-line chart (Recharts `LineChart`)  
+**Chart Type:** Multi-line chart  
 **Dimensions:** Top 5 categories by spending, tracked over all months  
 **Interaction:** Click legend to toggle category visibility
+
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="categoryTrend" ...>
-  <CategoryTrendChart data={data} isLoading={isLoading} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <CategoryTrendChart data={data} />
+  </Suspense>
 </ChartCard>
 ```
 
@@ -270,8 +313,7 @@ interface CategoryPivotTableProps {
 
 ```typescript
 interface TopRecipientsChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;
   allYears: number[];
 }
 ```
@@ -282,11 +324,17 @@ interface TopRecipientsChartProps {
 - Year filter: "All Years" or specific year
 - Recipient name + currency amount on hover
 
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change.
+
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="topRecipients" ...>
-  <TopRecipientsChart data={data} allYears={data?.allYears || []} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <TopRecipientsChart data={data} allYears={data.allYears} />
+  </Suspense>
 </ChartCard>
 ```
 
@@ -301,19 +349,24 @@ interface TopRecipientsChartProps {
 
 ```typescript
 interface YearlyComparisonChartProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;
 }
 ```
 
-**Chart Type:** Grouped bar chart (Recharts `BarChart`)  
+**Chart Type:** Grouped bar chart  
 **Dimensions:** Income (emerald) vs Spending (red) by year
+
+**Performance:**
+
+Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="yearlyComparison" ...>
-  <YearlyComparisonChart data={data} isLoading={isLoading} />
+  <Suspense fallback={<ChartSkeleton />}>
+    <YearlyComparisonChart data={data} />
+  </Suspense>
 </ChartCard>
 ```
 

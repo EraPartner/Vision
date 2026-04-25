@@ -3,7 +3,7 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-26
+updated: 2026-04-25
 tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-12, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo]
 description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
@@ -24,9 +24,11 @@ related_code:
 
 The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 4 tabbed sections.
 
-## Refactoring (April 2026)
+## Refactoring and Performance Optimization (April 2026)
 
-The Statistics page was refactored from a 920-line monolith into a thin 232-line orchestrator that composes sub-components from `apps/frontend/src/components/statistics/`. This improves testability, reusability, and maintainability while preserving all functionality.
+**Component Refactoring:** The Statistics page was refactored from a 920-line monolith into a thin 232-line orchestrator that composes sub-components from `apps/frontend/src/components/statistics/`. This improves testability, reusability, and maintainability while preserving all functionality.
+
+**Performance Optimization (April 25):** All 8 chart components are now lazy-loaded via `React.lazy()` and `Suspense` per tab. The `chartCardProps` is memoized with `useMemo()` to prevent unnecessary child re-renders. The 6 statistics chart components (MonthlyChart, NetTrendChart, YearlyComparisonChart, TopRecipientsChart, CategoryPieChart, CategoryTrendChart) are wrapped with `React.memo()`, along with the 5 settings tab components (GeneralTab, AppearanceTab, AppTab, DashboardTab, BackupTab). This reduces bundle size for initial page load and improves rendering performance when switching tabs.
 
 ## Current Status (Phase 2, April 2026)
 
@@ -212,6 +214,52 @@ The most complex widget — a hierarchical table showing categories × months:
 Users can create custom category charts via the Saved Charts feature. These render as additional `CustomCategoryChart` components below the built-in widgets, each with its own per-graph exclusion toggle.
 
 ## Performance Considerations
+
+### Lazy-Loading and Code Splitting (April 25)
+
+All non-critical chart components are lazy-loaded per tab via `React.lazy()` and `Suspense`:
+
+```tsx
+const MonthlyChart = lazy(() =>
+  import("@/components/statistics/MonthlyChart").then((m) => ({ default: m.MonthlyChart }))
+);
+
+<Suspense fallback={<ChartSkeleton />}>
+  <MonthlyChart data={getGraphData("monthly")} />
+</Suspense>
+```
+
+This pattern:
+- **Reduces initial bundle**: Defers loading chart logic until the tab is opened
+- **Improves TTI**: Initial page render shows only SummaryCards (inline), other tabs load on-demand
+- **Maintains UX**: Skeleton fallbacks provide loading feedback
+- **8 components lazy-loaded**: MonthlyChart, NetTrendChart, CategoryPieChart, CategoryTrendChart, TopRecipientsChart, YearlyComparisonChart, RecipientInsightsTab, SankeyTab, SavedChartsSection
+
+### Component Memoization (April 25)
+
+6 statistics chart components are wrapped with `React.memo()` to prevent re-renders when parent props change:
+
+```tsx
+export const MonthlyChart = memo(function MonthlyChart({ data }: MonthlyChartProps) {
+  // Component implementation
+});
+```
+
+This prevents unnecessary re-renders when:
+- Parent switches between graph exclusion states (per-graph toggle)
+- Other charts on the same tab are re-computed
+- Parent re-renders but data props haven't changed
+
+Additionally, `chartCardProps` is memoized in the parent:
+
+```tsx
+const chartCardProps = useMemo(
+  () => ({ getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply }),
+  [getGraphData, graphExclusions, toggleGraphExclusion, exclusionsApply],
+);
+```
+
+This prevents `ChartCard` children from re-rendering when parent scope functions are re-created.
 
 ### Data Fetching Strategy
 - **Pagination**: Transactions are fetched in pages of 1000 until all are retrieved

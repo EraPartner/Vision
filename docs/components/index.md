@@ -4,15 +4,21 @@ type: components-index
 status: active
 date: 2026-04-23
 updated: 2026-04-25
-tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, phase-f]
-description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards.
+tags: [components, index, frontend, react, design-system, phase-9, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, phase-f, lazy-loading, memoization, useCallback]
+description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards. April 25 adds lazy-loading + memoization patterns for Statistics and Settings.
 aliases: [components, UI, frontend components, chart components, visx charts]
 ---
 
 # Components Documentation
 
 > [!abstract] Overview
-> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation. Updated 2026-04-25 with ExportDialog component documentation (Phase 4 PDF report export UI).
+> Documentation for Vision's frontend React components, custom hooks, and utility modules. Organized by category for easy navigation. 
+
+**Latest Updates (2026-04-25):**
+- **Statistics Page**: Lazy-loaded chart components (8 total, deferred per tab) with `React.lazy()` + `Suspense`
+- **Statistics Components**: All 6 chart components + SavedChartsSection wrapped with `React.memo()` to prevent re-renders
+- **Settings Dialog**: All 6 tab components memoized; stable callbacks via `useCallback` + functional updater pattern
+- See [[docs/features/statistics|Statistics Feature]] and [[docs/components/statistics|Statistics Components]] for details.
 
 ## Component Categories
 

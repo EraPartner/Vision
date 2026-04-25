@@ -3,8 +3,9 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-tags: [components, forms, dialogs, settings, refactor, phase-3]
-description: Multi-tab settings dialog split into 6 focused components for better maintainability and testing
+updated: 2026-04-25
+tags: [components, forms, dialogs, settings, refactor, phase-3, memoization, useCallback, performance]
+description: Multi-tab settings dialog split into 6 focused components with stable callbacks via useCallback and component memoization
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
   - apps/frontend/src/components/settings/DashboardSettingsDialog.tsx
@@ -24,6 +25,10 @@ Multi-tab settings dialog for configuring user preferences, display settings, da
 > **Date**: 2026-04-23
 > **Reason**: Code cohesion, file size compliance (<800 lines), independent testability
 > **Pattern**: Thin orchestrator owns state and save logic; tab components are pure presenters
+
+> [!info] April 25 Performance Optimization
+> **Changes**: Stable callbacks via `useCallback` with functional updater pattern; `React.memo()` wraps all 6 tab components to prevent unnecessary re-renders
+> **Rationale**: When aiDefaultModel or adminMode changes in AppTab, callbacks remain stable via functional updaters (e.g., `setLocalAppSettings(prev => ({ ...prev, aiDefaultModel: v }))`) instead of capturing dependencies. All tabs wrapped with `memo()` to prevent re-renders when sibling tabs change state.
 
 ## Architecture
 
@@ -76,6 +81,63 @@ interface DashboardSettingsDialogProps {
 - **Reset logic**: Resets all settings to defaults
 - **Categories/Recipients fetching**: Uses React Query to fetch all categories and recipients (staleTime: 60s, limit: 1000)
 - **Controlled sync**: When `open` changes, reinitializes all local state from context to avoid stale data
+
+### Stable Callbacks (April 25)
+
+Two critical callbacks use `useCallback` with functional updater pattern to prevent stale closures:
+
+```typescript
+const handleAiModelChange = useCallback(
+  (v: string) => setLocalAppSettings((prev) => ({ ...prev, aiDefaultModel: v })),
+  [],  // No dependencies — functional updater captures no stale values
+);
+
+const handleAdminModeChange = useCallback(
+  (enabled: boolean) => setLocalAppSettings((prev) => ({ ...prev, adminMode: enabled })),
+  [],  // No dependencies
+);
+```
+
+**Why this pattern:**
+
+- **Functional updater pattern**: `setLocalAppSettings(prev => ...)` removes the need to pass `localAppSettings` as a dependency
+- **Empty dependency array**: Callbacks are created once and never recreated
+- **Prevents child re-renders**: When callbacks are passed to memoized tabs, they never change, so `React.memo()` prevents re-renders
+- **Avoids stale closures**: Since we don't capture `localAppSettings` directly, there's no risk of stale values
+
+Without this, the callback dependency would be:
+
+```typescript
+// WRONG: stale closure risk
+const handleAiModelChange = useCallback(
+  (v: string) => setLocalAppSettings({ ...localAppSettings, aiDefaultModel: v }),
+  [localAppSettings],  // Dependency causes callback to recreate on every state change
+);
+```
+
+### Component Memoization (April 25)
+
+All 6 tab components are wrapped with `React.memo()`:
+
+```tsx
+<Tabs>
+  <TabsContent value="general">
+    <GeneralTab {...props} />
+  </TabsContent>
+  {/* Other tabs... */}
+</Tabs>
+```
+
+Each tab component internally wraps with memo:
+
+```typescript
+// In GeneralTab.tsx
+export const GeneralTab = memo(function GeneralTab(props: GeneralTabProps) {
+  // Implementation
+});
+```
+
+This prevents re-renders of other tabs when one tab's state changes (e.g., when AppTab's aiDefaultModel changes).
 
 ### Key Methods
 
@@ -166,6 +228,8 @@ Tab component for general application settings: currency, date format, number fo
 
 `[[apps/frontend/src/components/settings/tabs/GeneralTab.tsx]]`
 
+**Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25).
+
 ### Props
 
 ```typescript
@@ -219,6 +283,8 @@ Tab component for theme and visual preferences: theme variant, color mode, and s
 
 `[[apps/frontend/src/components/settings/AppearanceTab.tsx]]`
 
+**Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25).
+
 ### Features
 
 - **Theme Variant**: light, dark, custom (configurable via `theme_settings`)
@@ -235,6 +301,8 @@ Tab component for configuring dashboard exclusions: which categories and recipie
 ### File
 
 `[[apps/frontend/src/components/settings/tabs/DashboardTab.tsx]]`
+
+**Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25).
 
 ### Props
 
@@ -311,6 +379,8 @@ Tab component for application maintenance and advanced settings: onboarding rest
 ### File
 
 `[[apps/frontend/src/components/settings/tabs/AppTab.tsx]]`
+
+**Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25). Receives stable callbacks (`handleAiModelChange`) via `useCallback` with functional updater pattern to prevent re-renders of memoized component.
 
 ### Props
 
@@ -408,6 +478,8 @@ Tab component for managing application backups: directory selection, passphrase 
 ### File
 
 `[[apps/frontend/src/components/settings/tabs/BackupTab.tsx]]`
+
+**Performance:** Wrapped with `React.memo()` to prevent re-renders when sibling tabs change state (April 25).
 
 ### Props
 
