@@ -3,8 +3,10 @@ title: Deployment Guide
 type: guide
 status: active
 date: 2026-04-21
-tags: [guide, deployment, production, docker, electron, phase-1]
-description: Production deployment instructions
+updated: 2026-04-25
+tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening]
+tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding]
+description: Production deployment instructions including port binding and admin endpoints security
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
 ---
@@ -109,6 +111,43 @@ server {
     }
 }
 ```
+
+### 6. Admin Endpoints Security
+
+The backend's admin API (`/api/admin/*`) is protected by:
+
+1. **Port binding to localhost only**: `docker-compose.yml` binds the host port to `127.0.0.1`, ensuring only the host machine can reach the container directly:
+   ```yaml
+   ports:
+     - "127.0.0.1:${PORT:-3002}:3002"  # Loopback bind (recommended)
+   ```
+
+2. **Private network allowlist fallback**: When `ADMIN_AUTH_TOKEN` is unset, admin endpoints allow requests from:
+   - Loopback (127.0.0.1, ::1, ::ffff:127.0.0.1)
+   - Private networks (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+   - IPv6 ULA (fc00::/7)
+
+3. **Bearer token (optional)**: Set `ADMIN_AUTH_TOKEN` for explicit token-based protection. This is recommended if:
+   - You change the port binding to `0.0.0.0`
+   - You expose the backend to untrusted networks
+   - You want defense-in-depth beyond network isolation
+
+**Important:** If you modify `docker-compose.yml` to change the port binding from `127.0.0.1` to `0.0.0.0`, you **must** set `ADMIN_AUTH_TOKEN` to prevent LAN access to dangerous admin operations. See [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]] for details.
+
+### 7. Container Hardening
+
+Vision's `docker-compose.yml` includes defense-in-depth hardening:
+
+| Control | Status | Details |
+|---------|--------|---------|
+| Non-root user | Enabled | `USER bun` (UID 1000) in Dockerfile; `user: "1000:1000"` in compose |
+| Dropped capabilities | Enabled | `cap_drop: [ALL]` prevents privilege escalation |
+| No-new-privileges | Enabled | `security_opt: [no-new-privileges:true]` |
+| Read-only filesystem | Enabled | `read_only: true` with selective writable surfaces (`/tmp`, named volumes) |
+| Resource limits | Enabled | `mem_limit: 4g`, `cpus: 4.0` |
+| Healthcheck | Enabled | Automatic health probe on `HEALTHCHECK` interval |
+
+For complete details, rationale, and path-to-production hardening checklist, see [[docs/adr/039-docker-container-hardening|ADR-039]] and [[docs/security/container-hardening|Container Hardening Policy]].
 
 ## Database Migrations in Production
 
@@ -268,6 +307,8 @@ docker stats
 
 ## Related
 
+- [[docs/adr/039-docker-container-hardening|ADR-039: Docker Container Hardening]] - Container security decisions
+- [[docs/security/container-hardening|Container Hardening Policy]] - Defense-in-depth controls and verification
 - [[docs/guides/setup|Setup Guide]] - Local development setup
 - [[docs/guides/migrations|Migration Guide]] - Database schema management with Alembic
 - [[docs/guides/contributing|Contributing Guide]] - Development contributions

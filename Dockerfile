@@ -73,7 +73,19 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 # runMigrations() shells out via this path instead of relying on $PATH.
 ENV ALEMBIC_BIN=/venv/bin/alembic
 
+# Hand /app and /venv to the built-in `bun` user (UID 1000) so the runtime
+# can read code, write the attachments volume, and exec the Python venv
+# without root. Compose sets `user: "1000:1000"` to match.
+# Pre-create the attachments dir so the named volume inherits bun ownership
+# on first mount (Docker copies the image dir's perms onto an empty volume).
+RUN mkdir -p /app/data/attachments && chown -R bun:bun /app /venv
+
 EXPOSE 3002
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3002/health || exit 1
+
+USER bun
 
 # Run entrypoint (which runs migrations then starts the backend)
 ENTRYPOINT ["/entrypoint.sh"]

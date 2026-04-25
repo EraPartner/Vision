@@ -23,7 +23,25 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "${PORT:-3002}:3002"
+      - "127.0.0.1:${PORT:-3002}:3002"
+    # Container hardening — defense-in-depth for hypothetical RCE.
+    # Run as built-in bun user (UID 1000), drop all Linux capabilities,
+    # lock filesystem read-only with explicit writable mounts, and prevent
+    # privilege escalation via setuid binaries.
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Generous resource ceilings — protection without throttling local dev.
+    mem_limit: 4g
+    cpus: 4.0
+    volumes:
+      # Persist attachments across container recreate / image rebuild.
+      - attachments_data:/app/data/attachments
     # Map host.docker.internal to the host gateway so the backend can reach
     # Ollama running on the host machine. Docker Desktop (macOS/Windows)
     # provides this automatically; on Linux the mapping must be explicit.
@@ -54,3 +72,4 @@ services:
 
 volumes:
   postgres_data:
+  attachments_data:

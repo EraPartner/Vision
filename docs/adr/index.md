@@ -4,7 +4,7 @@ type: adr-index
 status: active
 date: 2026-04-23
 updated: 2026-04-25
-tags: [adr, index, architecture, decisions, phase-1, phase-4, security]
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -43,6 +43,29 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-25: Docker Container Hardening
+
+[[docs/adr/039-docker-container-hardening|ADR-039]] — Defense-in-depth at the container layer for the `app` service: non-root user (UID 1000), dropped Linux capabilities (CAP_DROP ALL), no-new-privileges flag, read-only root filesystem with selective writable carve-outs (`/tmp` tmpfs, `attachments_data` named volume), resource ceilings (4GB memory, 4 CPUs), and HEALTHCHECK via `/health` endpoint. CI image scanning via Trivy on every push and PR (CRITICAL,HIGH severity, exit-code 1, ignore-unfixed). Container compromise no longer implies host root; surfaces accidental writes immediately; attachments survive rebuilds. Justifies `--no-sandbox` for Puppeteer/Chromium (container itself is the boundary).
+
+### 2026-04-25: FX Cache Startup Ordering & Kinesis EUR-to-USD Mapping
+
+Fixed two critical startup and price-provider issues:
+
+1. **Startup Sequence Ordering** — `warmExchangeRateCache()` and `backfillPortfolioHistoricalRates()` are now awaited via `Promise.all()` before `computeAndStoreSnapshots` proceeds. Prior fire-and-forget behavior caused snapshot/cache jobs to run before historical FX was populated, producing false "Historical FX missing" warnings during startup.
+
+2. **Kinesis EUR Symbol Normalization** — Kinesis API only exposes USD-quoted symbols. Investments with EUR-denominated internal IDs (KAU_EUR/KAG_EUR/XAU_EUR/XAG_EUR/XPT_EUR/XPD_EUR) are now silently remapped to USD equivalents in `resolveKinesisConfig()` before the API fetch, eliminating "Kinesis: no data returned" startup warnings.
+
+3. **`resolveRateWithFallback` Bug Fixes** — Fixed three bugs in historical FX fallback logic:
+   - EUR rows always warned (EUR is filtered from `exchange_rates` saves, so check is now immediate)
+   - Rows with `rowDate=null` incorrectly triggered fallback path (now return current rate without warning)
+   - Short-circuit before ECB 90d + DB lookup when historical index lacked currency (now tries full fallback chain before warning)
+
+See [[docs/integrations/currency-conversion|Currency Conversion]], [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]], and [[docs/architecture/backend-architecture|Backend Architecture]].
+
+### 2026-04-25: Dependency Slim-Down — Supply Chain Risk Reduction
+
+[[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038]] — Remove 9 packages (next-themes, pdfkit, react-resizable-panels, embla-carousel-react, vaul, date-fns, recharts, cors, compression) and replace with native/already-present alternatives. 5-phase approach: dead code removal, dead UI wrapper deletion, date-fns→Intl, recharts→visx consolidation, inline CORS + zlib middleware. Reduces transitive package count by ~80–120 and eliminates ~80 MB+ on disk.
 
 ### 2026-04-25: Secure File Download with Path Traversal Guard and RFC 5987
 

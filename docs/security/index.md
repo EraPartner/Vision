@@ -27,5 +27,6 @@ SORT title ASC
 - [[docs/security/rate-limiting|Rate Limiting]] - Request rate controls
 - [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, path traversal prevention, data protection, privacy
 - [[docs/security/ai-data-access|AI Data Access Policy]] - Tool allowlist, rate limits, no-external-calls guarantee, audit logging
+- [[docs/security/container-hardening|Container Hardening]] - Docker defense-in-depth: non-root user, dropped capabilities, read-only filesystem, resource limits, healthcheck, CI image scanning
 - [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] - Workspace dependency hardening and validation outcomes
 - Admin auth token middleware (`ADMIN_AUTH_TOKEN`) is documented in [[docs/api/admin|Admin API]] and [[docs/reference/environment-variables|Environment Variables]].

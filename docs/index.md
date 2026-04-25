@@ -2,7 +2,7 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-24
+date: 2026-04-25
 updated: 2026-04-25
 tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
 description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`.
@@ -156,6 +156,21 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-25 Docker Container Hardening
+
+**ADR-039 Acceptance:**
+- Non-root user (`USER bun`, UID 1000)
+- Dropped Linux capabilities (`cap_drop: [ALL]`)
+- No-new-privileges flag (`security_opt: [no-new-privileges:true]`)
+- Read-only root filesystem with selective writable surfaces (`/tmp` tmpfs, `attachments_data` named volume)
+- Resource ceilings (`mem_limit: 4g`, `cpus: 4.0`)
+- Container healthcheck via `/health` endpoint
+- CI image scanning via Trivy on every push/PR (CRITICAL/HIGH, exit-code 1, ignore-unfixed)
+
+Surfaces accidental writes; prevents RCE-to-root escalation; attachments persist across rebuilds; CI blocks releases on critical CVEs.
+
+See [[docs/adr/039-docker-container-hardening|ADR-039]], [[docs/security/container-hardening|Container Hardening]]
 
 ### 2026-04-24 Feature Flags Removed
 
