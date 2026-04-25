@@ -2,10 +2,10 @@
 title: Integration - Kinesis Price Provider
 type: integration
 status: active
-date: 2026-04-02
+date: 2026-04-25
 last_modified: 2026-04-25
 tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping]
-description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping
+description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping and misconfiguration detection
 aliases: [kinesis, kinesis price provider, metals prices, commodity data]
 related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js"]
 ---
@@ -47,7 +47,7 @@ Contains:
 
 ### EUR-to-USD Symbol Remapping
 
-The Kinesis API only provides USD-denominated symbols. When an investment has a EUR-denominated symbol in `price_provider_id`, it is silently remapped to the USD equivalent before the API request. This prevents "Kinesis: no data returned" warnings during startup.
+The Kinesis API only provides USD-denominated symbols. When an investment has a EUR-denominated symbol in `price_provider_id`, it is remapped to the USD equivalent before the API request.
 
 **Mapping Table:**
 
@@ -61,6 +61,8 @@ The Kinesis API only provides USD-denominated symbols. When an investment has a 
 | `XPD_EUR` | `XPD_USD` |
 
 **Implementation:** Defined as `KINESIS_EUR_TO_USD` constant in `resolveKinesisConfig()` ([[apps/node-backend/src/services/prices/priceProviderRegistry.js#L61-L69]]). The symbol lookup happens before any asset config fallback, ensuring EUR variants are always normalized to their USD counterparts.
+
+**Misconfiguration Detection (Added 2026-04-25):** When a `price_provider_id` ends with `_EUR` but is not found in the `KINESIS_EUR_TO_USD` mapping, the system logs a `WARN`-level message: `Kinesis: unmapped EUR symbol "{providerId}" — add it to KINESIS_EUR_TO_USD or the API call will fail`. This early warning prevents silent API failures for newly added EUR-denominated assets.
 
 ---
 

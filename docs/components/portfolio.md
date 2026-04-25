@@ -2,7 +2,7 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-04-21
+date: 2026-04-26
 tags: [components, portfolio, investments, phase-1, phase-3.6]
 description: Components for investment portfolio management
 aliases: [portfolio-components, investment-components, holdings-components]
@@ -220,6 +220,7 @@ const symbols = ["AAPL", "BTC", "ETH"];
 - Renders thumbnails via shared `RemoteNewsImage` with URL sanitization
 - Uses hidden fallback styling on image load failure to avoid placeholder icon boxes in card grids
 - Links to full articles
+- **Locale-aware timestamps (2026-04-25):** Relative date formatting respects the user's configured language (en/nl) via `useLanguage()` context, eliminating hardcoded English in news item timestamps
 
 Code links: [[apps/frontend/src/components/portfolio/PortfolioNewsFeed.tsx]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/pages/MarketLookupPage.tsx]]
 

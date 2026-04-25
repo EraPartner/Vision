@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-25
+date: 2026-04-26
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
@@ -377,9 +377,10 @@ Portfolio tax calculations now support multiple cost basis accounting methods, c
 
 - Backend calculation functions in `[[apps/node-backend/src/utils/portfolioMath.js]]`:
   - `calculateCostBasis()` — Weighted average method
-  - `calculateCostBasisFIFO()` — FIFO method
-  - `calculateCostBasisLIFO()` — LIFO method
+  - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
+  - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - All support `buy`, `sell`, `gift`, `split`, `return_of_capital`, `merger`, `spinoff` transaction types
+  - `applyEventToLots()` helper handles corporate actions (splits, return_of_capital) with immutable lot transformations
 - Frontend types in `[[apps/frontend/src/stores/settingsStore.ts]]`: `type CostBasisMethod = 'weighted_avg' | 'fifo' | 'lifo'`
 - Settings storage: persisted in user `AppSettings` via Zustand + backend sync
 - Tax page displays gains/losses using the selected method for accurate year-end reporting

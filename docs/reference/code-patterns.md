@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-04-25
+date: 2026-04-26
 tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236]
@@ -1022,9 +1022,9 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 
 ## Pure Calculation Services (Phase 3)
 
-**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]]
+**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/utils/portfolioMath.js|portfolioMath.js]]
 
-As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. These are hosted in `services/calculations/` and are suitable for golden-fixture testing and migration to shared utility libraries.
+As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. These are hosted in `services/calculations/` and `utils/` and are suitable for golden-fixture testing and migration to shared utility libraries.
 
 **Modules:**
 
@@ -1032,6 +1032,12 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 |--------|---------|
 | `services/calculations/loanSchedule.js` | Loan amortization schedule generation (amortizing, fixed_principal, interest_only) |
 | `services/calculations/recurrence.js` | Recurring payment date calculation (daily, weekly, monthly, yearly, custom) |
+| `utils/portfolioMath.js` | Cost basis calculations (weighted average, FIFO, LIFO) with immutable lot handling |
+
+**Immutability in portfolioMath (2026-04-25):**
+- `calculateCostBasisFIFO()` and `calculateCostBasisLIFO()` now use immutable patterns throughout: spread operators for array construction, immutable object creation for lot updates, and immutable transformations via `.map()` in helper functions.
+- `applyEventToLots()` returns an object with mapped lot arrays (never mutations), supporting corporate actions (splits, return_of_capital) with immutable lot transformations.
+- All portfolio math calculations avoid in-place mutations, enabling safe concurrent processing and eliminating hidden side effects.
 
 **Migration Status (Phase 9):** Old paths (`services/loanRepaymentService.js`, `services/recurrenceService.js`) are still the live implementation and are directly imported by `routes/plannedTransactions.js`. Migration to the canonical `services/calculations/` paths is blocked on Phase 3 completion. Once routes migrate, the old shims can be removed in Phase 9.
 

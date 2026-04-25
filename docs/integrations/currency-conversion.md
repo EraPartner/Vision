@@ -2,7 +2,7 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-04-23
+date: 2026-04-25
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+).
 related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js"]
@@ -273,11 +273,13 @@ Callers (e.g. portfolio history aggregator) can expose these fields to the front
    - Try ECB 90-day fetch + nearest-DB lookup via `getRate()`
    - Fall back to current rate only if historical source is unavailable
    - Emit `WARN` log + set `fellBack: true` only when fallback occurs
+4. **No rate found anywhere** (historical and current rates both missing): Sets `fellBack: true` so the frontend fallback indicator displays correctly
 
 **Previous bugs (fixed):**
 - EUR rows incorrectly warned because EUR is filtered from `exchange_rates` saves
 - Rows with `rowDate=null` always triggered warning path
 - Short-circuit before ECB/DB fallback when historical index lacked currency
+- When no rate was found in any source, `fellBack` was incorrectly set to `false` instead of `true`, preventing frontend fallback indicator display
 
 ---
 

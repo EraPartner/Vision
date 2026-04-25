@@ -2,7 +2,7 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-04-16
+date: 2026-04-26
 tags: [feature, planned, recurring, bills, loans, phase-3, calculations]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
@@ -88,8 +88,10 @@ Planned payment forms now use shared input components for consistency across dia
 - `RecipientCombobox` for recipient selection
 - `CategoryCombobox` for category selection
 - Shared local-date helpers in `dateUtils` (`parseLocalDateFromYmd`, `toYmd`) to avoid timezone shifts when reading/writing `YYYY-MM-DD`
+- `formatDistanceToNow` now accepts a `locale` option in its options parameter and passes it to `Intl.RelativeTimeFormat`, ensuring relative date labels respect the user's locale setting (en or nl) instead of hardcoding English
+- **Locale-aware date formatting (2026-04-25):** Portfolio news feed (`PortfolioNewsFeed.tsx`) now explicitly passes the `language` prop from `useLanguage()` context to all `NewsItem` components; `NewsItem` receives `locale` and forwards it to `formatDistanceToNow` options, ensuring relative timestamps display in the correct language rather than defaulting to hardcoded English
 
-This keeps planned-payment date selection aligned with other forms and avoids native date-input overlay/stacking issues in modal contexts.
+This keeps planned-payment date selection aligned with other forms and avoids native date-input overlay/stacking issues in modal contexts. Relative date labels now correctly display in the user's configured language.
 
 Planned payment form currency defaults are now sourced from app settings consistently:
 
@@ -185,6 +187,7 @@ Performance/efficiency follow-ups (behavior-preserving):
 - Update repository path now returns enriched updated row via single CTE query (`WITH updated ... SELECT ...`) before attaching executions/schedule.
 - Route-level recipient/category name resolution and recurring execute-date calculation now use module-scoped imports (`dbQuery`, `calculateNextDate`) instead of per-request dynamic imports.
 - PATCH recipient/category name-resolution now executes in parallel via `Promise.all`, preserving unresolved-name behavior while reducing sequential lookup latency when both fields are present.
+- **Execution history loading optimization (2026-04-25):** `PlannedPaymentsPage.tsx` now wraps `loadExecutionHistory` in `useCallback([payments])` to prevent function recreation on every render, reducing unnecessary dependency array churn and improving efficiency when the history modal is opened.
 
 These changes preserve API payloads/status semantics while reducing hot-path overhead.
 
@@ -206,6 +209,8 @@ Calculates next occurrence dates for recurring planned transactions. Pure calcul
 | `calculateNextDate(currentDate, pattern)` | Returns next date based on recurrence pattern |
 | `isValidPattern(pattern)` | Validates pattern string |
 | `getSupportedPatterns()` | Returns array of supported pattern names |
+
+**Implementation Details (2026-04-25):** Month-end clamping uses a double-modulo pattern `((targetMonthIndex % 12) + 12) % 12` to normalize negative month indices to their zero-based month equivalents (e.g., `-1` → `11` for December). This ensures that month arithmetic in TZ-aware contexts correctly handles month overflow/underflow before converting back to UTC.
 
 ### `services/calculations/loanSchedule.js`
 **File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]
