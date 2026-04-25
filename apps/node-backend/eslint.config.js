@@ -52,6 +52,47 @@ const noRepoDirectFromRoute = {
   },
 };
 
+/**
+ * no-raw-money-arithmetic
+ *
+ * Warns when monetary identifiers (amount, price, fee, balance, cost, gain,
+ * loss, total, sum, cents) appear on either side of a `+ - * /` BinaryExpression.
+ * Encourages migration to Decimal helpers in `lib/money.js`. Allowed in
+ * `lib/money.js` itself and in test files.
+ */
+const MONEY_NAME = /^(amount|price|fee|fees|balance|cost|gain|loss|total|sum|cents)$/i;
+const MATH_OPS = new Set(['+', '-', '*', '/']);
+
+const noRawMoneyArithmetic = {
+  meta: {
+    type: 'suggestion',
+    docs: {
+      description:
+        'Monetary identifiers should not use raw float arithmetic; use Decimal helpers from lib/money.js.',
+      url: null,
+    },
+    messages: {
+      rawMoney:
+        "Raw float arithmetic on monetary identifier '{{name}}'. " +
+        'Use Decimal helpers from lib/money.js (toDecimal, addAll, subtract, roundToCents).',
+    },
+    schema: [],
+  },
+  create(context) {
+    return {
+      BinaryExpression(node) {
+        if (!MATH_OPS.has(node.operator)) return;
+        for (const side of [node.left, node.right]) {
+          if (side?.type === 'Identifier' && MONEY_NAME.test(side.name)) {
+            context.report({ node, messageId: 'rawMoney', data: { name: side.name } });
+            return;
+          }
+        }
+      },
+    };
+  },
+};
+
 // ── config ────────────────────────────────────────────────────────────────────
 
 export default [
@@ -81,6 +122,18 @@ export default [
     rules: {
       // warn: existing violations surface without blocking; treat as tech-debt
       'vision-local/no-repo-direct-from-route': 'warn',
+    },
+  },
+
+  // Money-arithmetic guard — all backend source except money.js itself and tests.
+  {
+    files: ['src/**/*.js'],
+    ignores: ['src/lib/money.js', 'test/**', 'tests/**', '**/*.test.js'],
+    plugins: {
+      'vision-local-money': { rules: { 'no-raw-money-arithmetic': noRawMoneyArithmetic } },
+    },
+    rules: {
+      'vision-local-money/no-raw-money-arithmetic': 'warn',
     },
   },
 ];

@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import cors from 'cors';
+import { createGzip } from 'node:zlib';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getSettings } from './config/config.js';
@@ -39,7 +39,8 @@ import {
   refreshActiveHoldingQuotes,
 } from './services/quoteBackfillService.js';
 import { warmInfoCaches } from './routes/info.js';
-import { createErrorHandler, UnauthorizedError, NotFoundError } from './middleware/errorHandler.js';
+import { createErrorHandler, NotFoundError } from './middleware/errorHandler.js';
+import { createAdminAuthMiddleware } from './middleware/adminAuth.js';
 import { closeBrowser as closePuppeteerBrowser } from './services/reports/puppeteerRenderer.js';
 import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
@@ -76,25 +77,7 @@ function isValidStoredPrice(value) {
   return Number.isFinite(number) && number > 0;
 }
 
-function extractAdminBearerToken(authorizationHeader) {
-  if (typeof authorizationHeader !== 'string') return undefined;
-  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : undefined;
-}
-
-function adminAuthMiddleware(req, res, next) {
-  const configuredToken = settings.admin.authToken;
-  if (!configuredToken) {
-    return next();
-  }
-
-  const providedToken = extractAdminBearerToken(req.headers.authorization);
-  if (!providedToken || providedToken !== configuredToken) {
-    return next(new UnauthorizedError('Unauthorized'));
-  }
-
-  return next();
-}
+const adminAuthMiddleware = createAdminAuthMiddleware(() => settings.admin.authToken);
 
 async function persistRefreshedPrices(prices) {
   const updateResults = await Promise.all(
@@ -195,13 +178,33 @@ app.use(requestId);
 app.use(requestMetrics);
 
 // CORS
-app.use(cors({
-  origin: settings.api.corsOrigins,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-  exposedHeaders: ['X-Request-Id'],
-}));
+const CORS_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+const CORS_ALLOWED_HEADERS = 'Content-Type,Authorization,X-Request-Id';
+const CORS_EXPOSED_HEADERS = 'X-Request-Id';
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowed = settings.api.corsOrigins;
+  const originAllowed = Array.isArray(allowed)
+    ? allowed.includes(origin)
+    : allowed === origin || allowed === '*';
+
+  if (originAllowed && origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
+    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
+    res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Max-Age', '600');
+    res.writeHead(204).end();
+    return;
+  }
+
+  next();
+});
 
 // JSON body parser with size limit
 app.use(express.json({ limit: '1mb' }));
@@ -220,11 +223,51 @@ app.use((req, res, next) => {
   next();
 });
 
-// Response compression (gzip)
-import('compression').then(({ default: compression }) => {
-  app.use(compression());
-}).catch(() => {
-  logger.warn('compression package not installed, responses will not be compressed');
+// Response compression (gzip via node:zlib)
+const COMPRESSIBLE_RE = /json|text|javascript|xml|svg|x-www-form-urlencoded/;
+const NO_COMPRESS_BELOW = 1024;
+
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] ?? '';
+  if (!acceptEncoding.includes('gzip')) return next();
+
+  const _write = res.write.bind(res);
+  const _end = res.end.bind(res);
+  let gz = null;
+  let setupDone = false;
+
+  const setup = () => {
+    if (setupDone) return;
+    setupDone = true;
+    const contentType = String(res.getHeader('Content-Type') ?? '');
+    const contentLength = parseInt(String(res.getHeader('Content-Length') ?? '0'), 10);
+    if (!COMPRESSIBLE_RE.test(contentType)) return;
+    if (contentLength > 0 && contentLength < NO_COMPRESS_BELOW) return;
+    gz = createGzip();
+    res.removeHeader('Content-Length');
+    res.setHeader('Content-Encoding', 'gzip');
+    gz.on('data', (chunk) => _write(chunk));
+    gz.on('end', () => _end());
+  };
+
+  res.write = (chunk, encoding, cb) => {
+    setup();
+    if (gz) return gz.write(chunk, encoding, cb);
+    return _write(chunk, encoding, cb);
+  };
+
+  res.end = (chunk, encoding, cb) => {
+    setup();
+    if (gz) {
+      if (chunk != null && chunk !== '') gz.write(chunk, encoding);
+      gz.end();
+      if (typeof cb === 'function') gz.once('finish', cb);
+      return res;
+    }
+    return _end(chunk, encoding, cb);
+  };
+
+  next();
 });
 
 // Request logging
@@ -406,7 +449,8 @@ async function start() {
 
       // Warm exchange rate cache AFTER server is accepting connections.
       // This avoids blocking startup while waiting for external API calls.
-      warmExchangeRateCache()
+      // Captured as a promise so dependent tasks (info caches) can wait for it.
+      const exchangeRateWarmPromise = warmExchangeRateCache()
         .then(() => { warmupStatus.exchangeRates = true; })
         .catch((err) => {
           warmupStatus.exchangeRates = true;
@@ -420,7 +464,8 @@ async function start() {
           logger.error('Failed to warm Belgian inflation cache on startup', { error: err.message });
         });
 
-      backfillPortfolioHistoricalRates().catch((err) => {
+      // Run backfill concurrently but capture promise so snapshots can wait.
+      const fxBackfillPromise = backfillPortfolioHistoricalRates().catch((err) => {
         logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
       });
 
@@ -432,7 +477,10 @@ async function start() {
         logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
       });
 
-      computeAndStoreSnapshots()
+      // Wait for exchange rates and FX backfill before computing snapshots/info
+      // caches — both depend on exchange_rates rows being present in the DB.
+      Promise.all([exchangeRateWarmPromise, fxBackfillPromise])
+        .then(() => computeAndStoreSnapshots())
         .then(() => {
           warmupStatus.portfolioSnapshots = true;
           return warmInfoCaches()
