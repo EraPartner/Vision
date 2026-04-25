@@ -2,11 +2,11 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-04-21
+date: 2026-04-25
 tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
-description: Local AI chat page for natural-language queries over financial data, powered by Ollama with tool-calling (30 tools across 6 domains)
+description: Local AI chat page for natural-language queries over financial data, powered by Ollama with tool-calling (30 tools across 6 domains); now with CI guardrails for no-external-calls and read-only tools
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
-related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/frontend/src/pages/AIChatPage.tsx", "apps/frontend/src/features/ai-chat/", "apps/frontend/src/hooks/useAIChat.ts"]
+related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/frontend/src/pages/AIChatPage.tsx", "apps/frontend/src/features/ai-chat/", "apps/frontend/src/hooks/useAIChat.ts", "apps/node-backend/tests/aiChatService.test.js", "apps/node-backend/tests/aiChatTools.test.js"]
 ---
 
 # Feature: AI Chat
@@ -185,11 +185,13 @@ Tools are declared with JSON Schema params. Backend validates args via Zod befor
 
 ## Privacy & Security
 
-- **No external API calls** — enforced by service-layer conventions and CI test spying on outbound HTTP.
+- **No external API calls** — enforced by service-layer conventions and **CI test** (spies on `global.fetch` when Ollama client is injected) in `aiChatService.test.js`.
+- **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports the Postgres pool directly.
 - **Parameterized queries only** — tools go through existing repositories; no dynamic SQL built from LLM output.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.
 - **Input validation** — Zod on both chat message body and tool args.
 - **Rate limiting** — 30 req/min on `/api/ai/chat`.
+- **Message length limit** — 4000 characters enforced both in frontend (`ChatComposer.tsx`) and backend (`ai.js` line 52).
 
 See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security posture.
 

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/repositories/transactionRepository.js', () => ({
@@ -733,4 +736,43 @@ describe('dispatchTool', () => {
       'getPortfolioHoldings',
     ]));
   });
+});
+
+describe('tool write-method denylist', () => {
+  const toolsDir = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '../src/services/aiChat/tools',
+  );
+  const toolFiles = ['expenses.js', 'portfolio.js', 'planned.js', 'tax.js', 'insights.js'];
+
+  const BANNED_CALL_PATTERNS = [
+    /\bcreate\s*\(/,
+    /\bupdate\s*\(/,
+    /\bdelete\s*\(/,
+    /\bbulk\s*\(/,
+    /\bupsert\s*\(/,
+    /\binsert\s*\(/,
+  ];
+
+  const BANNED_IMPORT_PATTERN = /database\/connection/;
+
+  for (const file of toolFiles) {
+    it(`${file} contains no write-method calls`, () => {
+      const source = readFileSync(resolve(toolsDir, file), 'utf8');
+      for (const pattern of BANNED_CALL_PATTERNS) {
+        expect(
+          pattern.test(source),
+          `${file} matched banned pattern ${pattern}`,
+        ).toBe(false);
+      }
+    });
+
+    it(`${file} does not import pg pool directly`, () => {
+      const source = readFileSync(resolve(toolsDir, file), 'utf8');
+      expect(
+        BANNED_IMPORT_PATTERN.test(source),
+        `${file} imports directly from database/connection`,
+      ).toBe(false);
+    });
+  }
 });

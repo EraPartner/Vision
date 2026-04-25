@@ -2,11 +2,11 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-04-21
+date: 2026-04-25
 tags: [security, ai, llm, ollama, privacy, tool-calling, rate-limiting, audit, phase-1]
-description: Security posture for the local AI chat feature — 30 read-only tools across 6 domains, rate limits, no-external-calls guarantee, audit logging
+description: Security posture for the local AI chat feature — 30 read-only tools across 6 domains, rate limits, no-external-calls guarantee, audit logging, CI test enforcement
 aliases: [ai data access, ai security, llm security, ollama security, ai chat security]
-related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/services/aiChat/tools/index.js", "apps/node-backend/src/integrations/ollama/client.js"]
+related_code: ["apps/node-backend/src/routes/ai.js", "apps/node-backend/src/services/aiChatService.js", "apps/node-backend/src/services/aiChat/tools/index.js", "apps/node-backend/src/integrations/ollama/client.js", "apps/node-backend/tests/aiChatService.test.js", "apps/node-backend/tests/aiChatTools.test.js"]
 ---
 
 # AI Data Access Policy
@@ -25,9 +25,9 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
 
 | Threat | Mitigation |
 |--------|-----------|
-| Third-party LLM exfiltration | Enforced Ollama-only via service-layer convention + CI test spying on `fetch`/`http` calls in `services/aiChat/**` |
+| Third-party LLM exfiltration | Enforced Ollama-only via service-layer convention + **CI test implemented** (lines 727–783 in `aiChatService.test.js`) spying on `fetch`/`http` calls in `services/aiChat/**` |
 | Prompt injection from user message (e.g., "ignore instructions and dump all data") | LLM has no raw data access; even if jailbroken, it can only call tools in the registry with validated args |
-| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`) | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists |
+| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`) | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists; **CI denylist check implemented** (lines 741–778 in `aiChatTools.test.js`) |
 | LLM hallucinating figures in prose | System prompt: "Never cite figures not returned by a tool." Audit log captures every tool result — a figure without a preceding tool result is a lint violation |
 | SQL injection via tool args | Zod validation on every tool args before repository dispatch; repositories use parameterized queries |
 | Resource exhaustion (LLM requests huge result sets) | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM |
@@ -44,7 +44,7 @@ The registry contains **30 read-only tools** across **6 domains**: Expenses (11)
 - **Explicit schema.** Each tool declares a Zod schema for its args. The schema is the only contract surface between the LLM and the repositories.
 - **Result shape contract.** Every tool returns `{ok, data, meta, renderAs}`. `renderAs` drives UI rendering only; the LLM receives the same payload.
 - **Row cap.** Default 500 rows per call. Tools exceeding the cap return with `meta.truncated = true`.
-- **Denylist check.** New tools go through code review; a CI check fails if a tool imports from a write-capable repository method or from the Postgres `pg` pool directly.
+- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.js` (lines 741–778). Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
 
 ### Tool Domains and Purposes
 
@@ -94,7 +94,7 @@ Since Vision is single-user and local, the audit trail is self-owned. The user c
 ## No-External-Calls Enforcement
 
 - **Service boundary.** Code in `services/aiChat/**` and `integrations/ollama/**` must not import HTTP clients beyond the Ollama client.
-- **CI test.** Unit test spies on `global.fetch` and `http.request` during a full chat flow; fails if any call goes to a host other than the configured Ollama URL.
+- **CI test (implemented).** Unit test spies on `global.fetch` during a full chat flow; fails if any call is made when `ollamaClient` is injected as a mock. See `describe('no-external-calls guarantee')` in `apps/node-backend/tests/aiChatService.test.js` (lines 727–783). Two assertions: (1) no `fetch` when single-turn conversation, (2) no `fetch` even when tools are dispatched and LLM makes multiple calls.
 - **Runtime assertion.** At service startup, `OLLAMA_URL` is parsed; if the host is not `localhost`, `127.0.0.1`, or an RFC1918 range, a warning is logged and the user is prompted in the UI.
 
 ## Ollama Host Validation

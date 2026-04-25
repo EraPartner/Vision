@@ -723,3 +723,61 @@ describe('runChatTurn — streaming', () => {
     });
   });
 });
+
+describe('no-external-calls guarantee', () => {
+  let fetchSpy;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({})),
+    );
+
+    aiChatRepository.getConversation.mockResolvedValue(makeConversation());
+    aiChatRepository.getMessages.mockResolvedValue([]);
+    aiChatRepository.appendMessage.mockResolvedValue(undefined);
+    dispatchTool.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not call fetch when ollamaClient is injected', async () => {
+    const ollamaClient = {
+      chat: vi.fn().mockResolvedValue({
+        message: { role: 'assistant', content: 'All clear.' },
+        tool_calls: [],
+      }),
+    };
+
+    await runChatTurn({
+      conversationId: 'conv-1',
+      message: 'show me my expenses',
+      ollamaClient,
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not call fetch even when tools are dispatched', async () => {
+    const ollamaClient = {
+      chat: vi.fn()
+        .mockResolvedValueOnce({
+          message: { role: 'assistant', content: null },
+          tool_calls: [{ function: { name: 'getSpendByCategory', arguments: { from: '2025-01-01', to: '2025-01-31' } } }],
+        })
+        .mockResolvedValueOnce({
+          message: { role: 'assistant', content: 'Here are your expenses.' },
+          tool_calls: [],
+        }),
+    };
+
+    await runChatTurn({
+      conversationId: 'conv-1',
+      message: 'how much did I spend?',
+      ollamaClient,
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

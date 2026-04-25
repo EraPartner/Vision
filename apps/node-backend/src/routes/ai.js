@@ -49,7 +49,7 @@ import {
 } from '../middleware/errorHandler.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_MESSAGE_LENGTH = 8000;
+const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 200;
 
 function requireConversationId(req) {
