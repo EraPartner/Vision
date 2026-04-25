@@ -687,11 +687,11 @@ async function checkDocker(cwd) {
 
   for (const socketPath of socketCandidates) {
     try {
-      if (!fs.existsSync(socketPath)) continue;
+      await fs.promises.access(socketPath);
       await pingDockerSocket(socketPath);
       return 'ok';
     } catch {
-      // socket exists but daemon not responding — try next candidate
+      // socket missing or daemon not responding — try next candidate
     }
   }
 

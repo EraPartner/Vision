@@ -100,8 +100,8 @@ export function detect(csvSample) {
     || lines.some((line) => /^BE\d{2}/.test(line.trim()) && line.split(';').length >= MIN_FIELDS);
 }
 
-export function parse(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
+export async function parse(filePath) {
+  const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = content.split('\n');
   const transactions = [];
   const lastBalance = lines.length > BALANCE_LINE_INDEX

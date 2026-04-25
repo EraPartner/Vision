@@ -93,8 +93,8 @@ export function detect(csvSample) {
     || lines.some((line) => line.includes('Vrije Mededeling'));
 }
 
-export function parse(filePath) {
-  const content = fs.readFileSync(filePath, 'utf-8');
+export async function parse(filePath) {
+  const content = await fs.promises.readFile(filePath, 'utf-8');
   const lines = content.split('\n');
   const transactions = [];
 

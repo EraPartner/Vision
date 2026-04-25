@@ -9,6 +9,10 @@
 import fs from 'fs';
 import { parse } from 'csv-parse/sync';
 
+export async function readFileAsync(filePath, encoding = 'utf-8') {
+  return fs.promises.readFile(filePath, encoding);
+}
+
 export function parseDayMonthYear(dateStr) {
   const dateParts = dateStr.split('/');
   if (dateParts.length !== 3) return null;
@@ -25,8 +29,8 @@ export function buildOptionalComment(commentParts) {
   return commentParts.length ? commentParts.join(' | ') : null;
 }
 
-export function parseCsvFile(filePath, options, encoding = 'utf-8') {
-  const content = fs.readFileSync(filePath, encoding);
+export async function parseCsvFile(filePath, options, encoding = 'utf-8') {
+  const content = await fs.promises.readFile(filePath, encoding);
   return parse(content, options);
 }
 
