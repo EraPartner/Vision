@@ -2,7 +2,8 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-03-18
+date: 2026-04-25
+updated: 2026-04-25
 tags: [integration, bank, csv, import]
 status: active
 related_code: [[apps/node-backend/src/services/bankAdapters.js]]
@@ -59,6 +60,7 @@ Each bank adapter:
 ### Custom
 - **Purpose**: User-defined column mapping
 - **Configuration**: Date format, column names, separator
+- **Date Parsing (2026-04-25)**: Generic adapter now uses `Date.UTC()` with explicit numeric components for all date formats, eliminating timezone-dependent parsing of unpadded dates (e.g., `5/1/2025`). This ensures dates are parsed consistently regardless of the server's local timezone, preventing off-by-one date shifts during import.
 
 ## Adding New Banks
 

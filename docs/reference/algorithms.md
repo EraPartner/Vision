@@ -3,6 +3,7 @@ title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
 date: 2026-04-02
+updated: 2026-04-25
 tags: [algorithms, computer-science, performance, data-structures]
 description: Formal documentation of all algorithms used in Vision — LTTB downsampling, deduplication hashing, recurring pattern detection, currency conversion, and more
 aliases: [algorithms, data structures, CS, computational methods]
@@ -191,10 +192,11 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
    b. Compute inter-transaction intervals (days between consecutive transactions)
    c. Calculate interval statistics:
       - mean_interval = mean(intervals)
+      - median_interval = median(intervals) — for even-length arrays, average of two middle values
       - std_interval = stddev(intervals)
    d. If std_interval ≤ toleranceDays:
       - Pattern is consistent
-      - Classify as recurring with period = round(mean_interval)
+      - Classify as recurring with period = round(median_interval)
    e. Map interval to named pattern:
       - 7 ± toleranceDays → weekly
       - 14 ± toleranceDays → bi-weekly

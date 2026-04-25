@@ -3,6 +3,7 @@ title: Currency Conversion
 type: integration
 status: active
 date: 2026-04-25
+updated: 2026-04-25
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+).
 related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js"]
@@ -36,6 +37,16 @@ The currency conversion service handles all currency-related operations, includi
 - **Use case**: Currencies not covered by ECB (AED, SAR, KWD, etc.)
 
 **Priority**: ECB rates always take precedence over supplementary source
+
+### Sanity Bounds (2026-04-25)
+
+Both ECB XML and Open Exchange Rates API feed parsers now validate exchange rates before persisting:
+
+- **Range**: Rates must be in the open interval `(0.0001, 100000)` — allows realistic forex ranges while rejecting pathological values
+- **Finiteness**: Rate values must pass `Number.isFinite()` — rejects NaN, Infinity, and non-numeric values
+- **Impact**: Prevents corrupted feed values (e.g., rate of `0` or `999999`) from being persisted to the `exchange_rates` table, which would corrupt all downstream conversions until manually cleared
+
+Invalid rates are silently skipped during parsing; only valid rates are included in the response.
 
 ---
 

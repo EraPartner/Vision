@@ -3,7 +3,7 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-04-26
+updated: 2026-04-25
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
@@ -244,21 +244,25 @@ Analyzes transaction history to detect recurring payment patterns and suggests p
 **Detection Algorithm:**
 1. Groups transactions by recipient
 2. Calculates intervals between consecutive transactions
-3. Matches against known patterns (weekly, biweekly, monthly, quarterly, yearly) with tolerance
-4. Detects custom regular intervals using coefficient of variation (< 25%)
-5. Flags amount changes (> 5% from median)
-6. Computes confidence score (0-100) based on consistency, occurrence count, and amount stability
+3. Computes interval statistics: mean, **median (true median, averaging two middle values for even-length arrays)**, standard deviation
+4. Matches against known patterns (weekly, biweekly, monthly, quarterly, yearly) with tolerance
+5. Detects custom regular intervals using coefficient of variation (< 25%)
+6. Flags amount changes (> 5% from median)
+7. Computes confidence score (0-100) based on consistency, occurrence count, and amount stability
 
 **Minimum Requirements:** 3 occurrences to consider a pattern.
 
 **Output per Pattern:**
 - `detectedPattern` — Pattern name (weekly, monthly, custom, etc.)
-- `intervalDays` — Median interval in days
+- `medianDays` — True median interval in days (for even-length samples, average of two middle values)
+- `customIntervalDays` — Custom interval value (for non-standard patterns)
 - `consistency` — Percentage match (0-100)
 - `confidence` — Overall confidence score
 - `predictedNext` — Predicted next occurrence date
 - `amountChanges` — Recent amount deviations
 - `isAlreadyPlanned` — Whether recipient already has a planned transaction
+
+**Correctness Note (2026-04-25):** The median calculation now correctly computes the true median for even-length interval arrays by averaging the two middle values. This affects pattern classification for samples with even occurrence counts, especially near tolerance boundaries where the choice between two candidate patterns depends on precise median computation.
 
 ---
 
