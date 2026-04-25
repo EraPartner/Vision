@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-21
+date: 2026-04-25
 tags:
   - testing
   - vitest
@@ -208,6 +208,71 @@ vi.mock('yahoo-finance2', () => ({
 ```
 
 Reference: [[apps/node-backend/tests/priceProviderService.test.js]]
+
+### Mock Isolation Gotcha: Bun + Vitest v1.3.13 (Critical)
+
+> [!warning] Mock Bleed Issue
+> **Problem:** Vitest v1.3.13 running under Bun does NOT fully clear `mockResolvedValueOnce` queues when `vi.resetAllMocks()` is called between tests. Unconsumed mock value callbacks remain in the queue and may be consumed by subsequent tests, causing test pollution and false passes/failures.
+>
+> **Root Cause:** The `vi.resetAllMocks()` helper only resets the mock state but does not drain queued `...Once` call stubs. With Bun's context model, the queue persists across test boundaries.
+
+**Detection pattern:**
+- Test N passes all assertions
+- Test N+1 calls a mocked function that has `mockResolvedValueOnce` queued from Test N
+- Test N+1 unexpectedly receives the stale value from Test N instead of its own mock value
+
+**Mitigation (MANDATORY):**
+
+1. **Audit mock setup in `beforeEach()`:** Review all `beforeEach()` hooks in test files using `mockResolvedValueOnce` / `mockResolvedValue` chains. Ensure every mock is reset before use in each test.
+
+2. **Remove unconsumed `...Once` stubs:** If a test sets up `mockResolvedValueOnce` but the mock is not called (either by early return, skip, or parameter validation), the stub persists to the next test. **Delete unconsumed calls.**
+
+   Example (BAD):
+   ```javascript
+   describe('getPortfolioHoldings', () => {
+     it('test 1', async () => {
+       investmentRepository.getAll.mockResolvedValueOnce([...]);
+       // test consumes it ✓
+     });
+
+     it('test 2', async () => {
+       // leftover mockResolvedValueOnce from test 1 still queued!
+       investmentRepository.getAll.mockResolvedValueOnce([]);
+       await getPortfolioHoldings.run({ assetClass: 'stock' });
+       // getAll() is called and returns stale value from test 1, not []
+     });
+   });
+   ```
+
+   Example (GOOD):
+   ```javascript
+   it('test 2', async () => {
+     investmentRepository.getAll.mockResolvedValueOnce([]); // replaces stale queue
+     await getPortfolioHoldings.run({ assetClass: 'stock' });
+   });
+   ```
+
+3. **Use `mockResolvedValue` (permanent) for multiple calls:** If a test makes multiple calls to the same mock, prefer a permanent return value:
+   ```javascript
+   investmentRepository.getAll.mockResolvedValue([]); // used for all calls
+   ```
+
+4. **Explicit `beforeEach()` reset:** In test files with complex mock setups, explicitly reset each mock in `beforeEach()`:
+   ```javascript
+   beforeEach(() => {
+     investmentRepository.getAll.mockReset();
+     portfolioTransactionRepository.getAllByInvestmentIds.mockReset();
+   });
+   ```
+
+**Why this matters:**
+- Silent failures: A test consumes a stale mock and passes when it should fail.
+- Cross-test pollution: Fixes are localized to individual tests, not the root cause.
+- CI flakiness: Other tests may pass locally but fail in CI depending on test order.
+
+**Fix validation:** Run affected tests with `bun vitest run --reporter=verbose` and confirm no mock bleed in test output.
+
+Reference: [[apps/node-backend/tests/aiChatTools.test.js]] (fixed 2026-04-25: removed unconsumed `mockResolvedValueOnce` from "passes assetClass filter" test)
 
 ### Golden-Fixture Pattern (Phase 0+)
 

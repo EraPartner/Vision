@@ -205,7 +205,6 @@ describe('getPortfolioHoldings', () => {
 
   it('passes assetClass filter through to repository', async () => {
     investmentRepository.getAll.mockResolvedValueOnce([]);
-    portfolioTransactionRepository.getAllByInvestmentIds.mockResolvedValueOnce([]);
 
     await getPortfolioHoldings.run({ assetClass: 'stock' });
 
