@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-04-25
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, and feature flags with admin API
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236]
+updated: 2026-04-26
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, and aggregation query optimization with Map-based single-pass accumulation
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern]
 ---
 
 # Code Patterns Reference
@@ -273,6 +273,50 @@ const elapsed = daysBetween(startDate, endDate);  // → 5.5 (days)
 
 ---
 
+## Shared Date Utilities (Frontend, Phase 12 Bugfix Sweep)
+
+**Source:** [[apps/frontend/src/components/shared/dateUtils.ts|dateUtils.ts]]
+
+The `parseLocalDateFromYmd()` function safely parses ISO date strings with defensive input validation:
+
+```typescript
+import { parseLocalDateFromYmd, toYmd, formatDistanceToNow } from '@/components/shared/dateUtils';
+
+// Parse YYYY-MM-DD safely; returns new Date(NaN) for invalid input
+const date = parseLocalDateFromYmd('2026-04-22');  // → Date at 00:00:00 local time
+const invalid = parseLocalDateFromYmd(null);        // → new Date(NaN) (safe fallback)
+const empty = parseLocalDateFromYmd('');            // → new Date(NaN) (safe fallback)
+
+// Format relative dates with locale support
+const ago = formatDistanceToNow(new Date('2026-04-20'), { locale: 'nl' });  // → "2 days ago" (in Dutch)
+
+// Convert Date to YYYY-MM-DD
+const ymdString = toYmd(new Date());                // → "2026-04-22"
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Input validation | Guard against non-string/empty input in `parseLocalDateFromYmd()` by returning `new Date(NaN)` instead of throwing |
+| Locale support | `formatDistanceToNow()` accepts locale option to respect user language preferences (en or nl) instead of hardcoding English |
+| Immutability | All helpers return new values; no mutations of input dates |
+| Local time | Parse dates in browser local time (no UTC shifts) |
+
+### When to Use
+
+- **Form input parsing** — user selects date from date picker; parse with `parseLocalDateFromYmd()`
+- **Relative time labels** — "posted 2 days ago"; use `formatDistanceToNow()` with locale option
+- **Defensive parsing** — fallback to safe `new Date(NaN)` for invalid input instead of throwing
+
+### When NOT to Use
+
+- **Timestamp parsing** — ISO 8601 timestamps from API use `parseISO()`
+- **UTC operations** — use native `Date` for UTC math
+- **Date formatting** — use `formatDate()` or `formatDateWithAppSettings()` instead
+
+---
+
 ## Backend Repository Pattern
 
 **Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
@@ -405,9 +449,9 @@ Two new test cases in `timezone.test.js`:
 
 ## Backend Route Pattern
 
-**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/categories.js|categories.js]]
+**Source:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]], [[apps/node-backend/src/routes/categories.js|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.js|plannedTransactions.js]]
 
-Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware:
+Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. PATCH handlers must sanitize read-only fields immutably:
 
 ```js
 import { Router } from 'express';
@@ -455,7 +499,9 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/entities/:id
 router.patch('/:id', validateIdParam, async (req, res) => {
-  const updated = await entityRepository.update(parseInt(req.params.id, 10), req.body);
+  // Remove read-only fields immutably (via destructuring rest, not in-place delete)
+  const { id: _id, createdAt: _createdAt, ...sanitized } = req.body;
+  const updated = await entityRepository.update(parseInt(req.params.id, 10), sanitized);
   if (!updated) throw new NotFoundError('Entity not found');
   res.ok(updated);
 });
@@ -477,6 +523,7 @@ export default router;
 | **List envelope** | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope|ADR-026]] |
 | **Parallel fetch** | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1 |
 | **ID validation** | `validateIdParam` middleware on all `/:id` routes |
+| **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`) |
 | **Error handling** | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }` |
 | **Success response** | All success paths use `res.ok(data)` or `res.ok({items, total})` |
 | **Route ordering** | Static routes (e.g., `/providers`) BEFORE `/:id` routes |
@@ -1046,6 +1093,56 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 |----------|---------|
 | `validateInt4Ids(ids)` | Validate array of PostgreSQL INT4 IDs; returns filtered array |
 | `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters |
+
+---
+
+## Aggregation Query Optimization Pattern (Phase 12 Bugfix Sweep)
+
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryBanks.js|infoRepositoryBanks.js]]
+
+For aggregation queries that combine per-account and total monthly data, avoid nested `.find()` loops over account arrays (O(n²) or worse). Instead, build a single-pass `Map` to accumulate totals:
+
+```js
+// BEFORE (O(months × accounts²)):
+const totalsByMonth = {};
+for (const row of historyConverted) {
+  for (const account of accounts) {
+    if (account.bank_account === row.bank_account) {
+      // Found matching account; accumulate
+      totalsByMonth[month] = (totalsByMonth[month] ?? 0) + row.amount;
+    }
+  }
+}
+
+// AFTER (O(months)):
+const totalsByMonth = new Map();
+for (const { month, balance } of Object.values(historyMap)) {
+  totalsByMonth.set(month, (totalsByMonth.get(month) ?? 0) + balance);
+}
+const totalHistory = [...totalsByMonth.keys()]
+  .sort()
+  .map((month) => ({ month, balance: roundToCents(totalsByMonth.get(month)) }));
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Single-pass aggregation | Use `Map` to accumulate values in one loop, not nested searches |
+| Key-value lookup | `.get()` / `.set()` for O(1) aggregation; avoid `.find()` in loops |
+| Deferred sorting | Collect keys, sort once, then map to results (not sort during accumulation) |
+| Null coalescing | Use `?? 0` for safe defaults when key not yet in map |
+
+### When to Use
+
+- Monthly aggregations across multiple accounts or entities
+- Computing totals from per-item detail rows
+- Any aggregation where you iterate once and accumulate
+
+### When NOT to Use
+
+- Small datasets (< 100 rows) where O(n²) is negligible
+- When the order matters before aggregation (e.g., sorted per-account history)
 
 ---
 

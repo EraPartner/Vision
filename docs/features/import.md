@@ -3,7 +3,8 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, performance, concurrency, import-pipeline, component-split]
+updated: 2026-04-26
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, performance, concurrency, import-pipeline, component-split, error-handling]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components.
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx"]
@@ -336,6 +337,7 @@ The streaming endpoint uses `createSseWriter(req, res)` ([[apps/node-backend/src
 - **SSE Write Promises:** Progress callbacks in the pipeline are `async` and `await` the SSE writer's `write()` call
 - **Drain Pausing:** When client consumes events slower than the server produces them, `drainIfNeeded()` pauses the write buffer, preventing unbounded memory growth in Node.js TCP buffers
 - **Connection Monitoring:** Server detects client disconnection and stops processing to conserve resources
+- **Error Handling (2026-04-26):** `emitProgress` callback errors are caught and logged via `logger.warn('onProgress callback failed', { error: err?.message })` instead of being silently swallowed, ensuring visibility into callback failures while not blocking the import pipeline
 
 ### Frontend SSE Integration
 

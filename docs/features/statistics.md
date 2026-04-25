@@ -3,7 +3,8 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, sankey-flow, rolling-averages, pdf-export]
+updated: 2026-04-26
+tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-12, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo]
 description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
@@ -243,7 +244,7 @@ The statistics feature relies on these backend endpoints:
 
 A fourth tab showing income allocation flow to spending categories via d3-sankey visualization:
 
-- **Year selector**: Choose which year to analyze
+- **Year selector**: Choose which year to analyze. Defaults to current year via `useMemo(() => new Date().getFullYear(), [])` to handle year-boundary transitions for long-lived sessions without stale-state bugs.
 - **ExclusionToggle**: Per-graph toggle to show/hide category and recipient exclusion filters
 - **Nodes**: Income source, top 12 spending categories, "Savings/Unspent" node
 - **Links**: Weighted flows showing amount allocated to each category

@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-04-26
 updated: 2026-04-26
-tags: [feature, planned, recurring, bills, loans, phase-3, calculations]
+tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
 related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
@@ -174,7 +174,7 @@ See [[docs/adr/012-planned-execution-idempotency|ADR-012]] for design rationale.
 Recent backend route refactoring consolidated duplicated logic in [[apps/node-backend/src/routes/plannedTransactions.js]] while preserving endpoint behavior:
 
 - Shared route-id parsing via `parseRouteId(req)` across `GET /:id`, `PATCH /:id`, `POST /:id/execute`, and `DELETE /:id`
-- Shared PATCH sanitization via `removePatchOnlyReadOnlyFields(fields)`
+- Shared PATCH sanitization via `withoutPatchOnlyReadOnlyFields(fields)` — returns new object via destructured rest pattern, eliminating in-place mutations
 - Shared name→id resolution helpers for recipient/category updates (`resolveRecipientIdFromName`, `resolveCategoryIdFromName`)
 - Shared loan recalculation/defaulting helper for PATCH updates (`applyLoanPatchDefaults`)
 - Shared execution-date fallback helper (`getCurrentDateString`)
@@ -404,6 +404,7 @@ Extracted dialog component that manages linking a transaction execution to a pla
 - Debounced transaction fetch on filter changes
 - Shows matching transactions with amount, date, recipient
 - Allows optional execution date adjustment
+- **Error feedback (2026-04-26):** Uses `toast.error(...)` from sonner instead of native `alert()` for consistent project convention
 
 **Code**: [[apps/frontend/src/components/planned/LinkTransactionDialog.tsx]]
 
