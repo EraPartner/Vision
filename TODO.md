@@ -10,10 +10,9 @@ _None tracked._
 
 ### Missing translations
 
-_None tracked._
+importPage.progressSummary
 
 ---
 
 ## Features
 
-_None tracked._

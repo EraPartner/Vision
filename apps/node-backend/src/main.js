@@ -158,7 +158,6 @@ import settingsRouter from './routes/settings.js';
 import marketLookupRouter from './routes/marketLookup.js';
 import watchlistRouter from './routes/watchlist.js';
 import splitsRouter from './routes/splits.js';
-import reconciliationRouter from './routes/reconciliation.js';
 import savedChartsRouter from './routes/savedCharts.js';
 import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
@@ -239,6 +238,7 @@ app.use((req, res, next) => {
   const setup = () => {
     if (setupDone) return;
     setupDone = true;
+    if (res.headersSent) return;
     const contentType = String(res.getHeader('Content-Type') ?? '');
     const contentLength = parseInt(String(res.getHeader('Content-Length') ?? '0'), 10);
     if (!COMPRESSIBLE_RE.test(contentType)) return;
@@ -338,7 +338,6 @@ mountRouter(app, '/api/settings', settingsRouter);
 mountRouter(app, '/api/market', marketLookupRouter);
 mountRouter(app, '/api/watchlist', watchlistRouter);
 mountRouter(app, '/api/splits', splitsRouter);
-mountRouter(app, '/api/reconciliation', reconciliationRouter);
 mountRouter(app, '/api/saved-charts', savedChartsRouter);
 mountRouter(app, '/api/attachments', attachmentsRouter);
 mountRouter(app, '/api/reports', reportsRouter);

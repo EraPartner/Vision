@@ -50,7 +50,6 @@ SORT path ASC
 | Market Lookup | `/api/market-lookup` | GET | [[docs/api/marketLookup\|Market Lookup API]] |
 | Imports | `/api/import` | GET, POST | [[docs/api/imports\|Imports API]] |
 | Attachments (Phase 5A) | `/api/attachments` | GET, POST, DELETE | [[docs/api/attachments\|Attachments API]] |
-| Reconciliation (Phase 6) | `/api/reconciliation` | GET, POST, PATCH, DELETE | [[docs/api/reconciliation\|Reconciliation API]] |
 | Saved Charts | `/api/saved-charts` | GET, POST, PATCH, DELETE | [[docs/api/savedCharts\|Saved Charts API]] |
 | Settings | `/api/settings` | GET, PUT, DELETE | [[docs/api/settings\|Settings API]] |
 | Recipient Bank Accounts | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |

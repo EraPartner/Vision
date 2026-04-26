@@ -6,15 +6,15 @@ date: 2026-04-24
 updated: 2026-04-25
 last_modified: 2026-04-25
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, reconciliation, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down]
-description: Complete matrix of all 150 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds bank reconciliation and cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase 10 adds multi-method cash flow forecast endpoint. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down]
+description: Complete matrix of all 140 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase 10 adds multi-method cash flow forecast endpoint. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 149 API endpoints across 20 route files (updated Phase E — adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint). Use this as a quick reference to find any endpoint.
+> All 140 API endpoints across 20 route files (updated Phase E — adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -178,23 +178,6 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/splits/owed/:id/settle-all` | Settle all for recipient | — | [[docs/api/splits\|Splits]] |
 | DELETE | `/api/splits/:id` | Delete split | — | [[docs/api/splits\|Splits]] |
 
-## Reconciliation (10 endpoints) — Phase 6
-
-Bank statement import and transaction matching with auto-match candidate scoring.
-
-| Method | Path | Description | Rate Limit | Doc |
-|--------|------|-------------|------------|-----|
-| GET | `/api/reconciliation/statements` | List statements | — | [[docs/api/reconciliation\|Reconciliation]] |
-| POST | `/api/reconciliation/statements` | Create statement | — | [[docs/api/reconciliation\|Reconciliation]] |
-| GET | `/api/reconciliation/statements/:id` | Get statement with entry summary | — | [[docs/api/reconciliation\|Reconciliation]] |
-| PATCH | `/api/reconciliation/statements/:id` | Update statement header | — | [[docs/api/reconciliation\|Reconciliation]] |
-| DELETE | `/api/reconciliation/statements/:id` | Delete statement (cascades entries) | — | [[docs/api/reconciliation\|Reconciliation]] |
-| GET | `/api/reconciliation/statements/:id/entries` | List entries for statement | — | [[docs/api/reconciliation\|Reconciliation]] |
-| POST | `/api/reconciliation/statements/:id/entries` | Add entry or bulk entries | — | [[docs/api/reconciliation\|Reconciliation]] |
-| DELETE | `/api/reconciliation/statements/:id/entries/:entryId` | Delete entry | — | [[docs/api/reconciliation\|Reconciliation]] |
-| GET | `/api/reconciliation/statements/:id/entries/:entryId/candidates` | Auto-match candidates with scores | — | [[docs/api/reconciliation\|Reconciliation]] |
-| POST/DELETE | `/api/reconciliation/statements/:id/entries/:entryId/match` | Set/clear transaction match | — | [[docs/api/reconciliation\|Reconciliation]] |
-
 ## Health (2 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
@@ -202,7 +185,7 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | GET | `/health` | Health check (backend ready) | — | [[docs/api/health\|Health]] |
 | GET | `/health/detailed` | Detailed health with cache warmup status | — | [[docs/api/health\|Health]] |
 
-## Admin (16 endpoints)
+## Admin (13 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -220,7 +203,7 @@ Bank statement import and transaction matching with auto-match candidate scoring
 | GET | `/api/admin/metrics/requests` | Rolling request metrics per route (in-memory, 15 min) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/endpoints` | Static endpoint manifest from Express router | — | [[docs/api/admin\|Admin]] |
 
-## Reports (4 endpoints) — Phase 3 / Phase 7
+## Reports (3 endpoints) — Phase 3 / Phase 7
 
 Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Returns binary stream (`application/pdf`).
 
@@ -300,14 +283,14 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | Saved Charts | 4 | 0 |
 | Settings | 5 | 0 |
 | Recipient Bank Accounts | 5 | 0 |
-| Reconciliation (Phase 6) | 10 | 0 |
-| Admin | 16 | 0 |
+| Admin | 13 | 0 |
 | Splits | 11 | 0 |
 | Health | 2 | 0 |
 | Aggregations (Phase 2/6/10/D) | 10 | 0 |
+| Reports (Phase 3/7) | 3 | 0 |
 | Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **150** | **10** |
+| **Total** | **140** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

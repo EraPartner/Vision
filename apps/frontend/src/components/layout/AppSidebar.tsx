@@ -35,7 +35,6 @@ import {
   Wallet,
   ArrowLeftRight,
   Database,
-  GitMerge,
   ShieldCheck,
   Activity,
   Globe,
@@ -88,7 +87,6 @@ export function AppSidebar() {
         { title: t('nav.plannedPayments'), url: "/planned", icon: CalendarClock },
         { title: t('nav.whoOwesYou'), url: "/owes", icon: HandCoins },
         { title: t('nav.taxOverview'), url: "/tax", icon: Landmark },
-        { title: t('nav.reconciliation'), url: "/reconciliation", icon: GitMerge },
       ],
     },
     {

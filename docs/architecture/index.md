@@ -219,23 +219,13 @@ Documentation:
 **Changes:**
 - `transactions.js` (PATCH): Recipient/category resolution now uses `Promise.all` instead of sequential awaits
 - `splits.js`: Batch audit-trail writes parallelized via `Promise.all`
-- `reconciliation.js` (GET `/statements/:id/entries/:entryId/candidates`): Statement + entry fetches now parallel
-
 ### Bug Fixes
 
 **admin.js:** Fixed VACUUM error handler returning 500 instead of 403
 - Error: `throw new AppError(msg, 403)` was dropping the status code because `AppError` constructor expects `(msg, opts)` shape
 - Fix: Changed to `throw new ForbiddenError(msg)` for proper 403 response
 
-**reconciliationRepository.js:** Improvements
-- Dead code removal: Removed unused initial SQL block in `createEntry()` that was immediately overwritten
-- New method: `getEntry(entryId)` for direct entry-by-id lookup (enables optimized candidates route)
-
 ### Response Envelope Harmonization
-
-Reconciliation routes now consistently use the ADR-026 envelope via `res.ok()`:
-- POST `/statements` and POST `/statements/:id/entries` — both single and bulk paths
-- All reconciliation responses follow the unified envelope standard
 
 Documentation:
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]]
