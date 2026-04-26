@@ -2,7 +2,7 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-04-02
+date: 2026-04-26
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases: [debugging, error handling, troubleshooting, debugging guide, error codes]
@@ -305,8 +305,10 @@ curl -X POST http://localhost:3002/api/info/refresh-views
 |-------|-------|
 | `error` | Unrecoverable errors, API failures |
 | `warn` | Recoverable errors, fallback usage |
-| `info` | Significant operations (imports, refreshes) |
-| `debug` | Detailed operation tracing |
+| `info` | Significant operations (imports, refreshes, critical state changes) |
+| `debug` | Detailed diagnostic tracing, high-frequency operations, external API calls |
+
+**Note:** The logger supports both traditional `(message, extra)` and pino-style `(bindings, message)` calling conventions. The format is auto-detected based on argument types.
 
 ### Frontend Logging
 

@@ -19,24 +19,33 @@ function getLogLevel() {
   return env === 'production' ? LOG_LEVELS.info : LOG_LEVELS.debug;
 }
 
-function formatMessage(level, message, extra = {}) {
+function formatMessage(level, ...args) {
   const timestamp = new Date().toISOString();
+  let message, extra;
+  if (typeof args[0] === 'object' && args[0] !== null && typeof args[1] === 'string') {
+    // pino-style: logger.info({ key: val }, 'message')
+    extra = args[0];
+    message = args[1];
+  } else {
+    message = args[0];
+    extra = (typeof args[1] === 'object' && args[1] !== null) ? args[1] : {};
+  }
   const extraStr = Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : '';
   return `${timestamp} [${level}] ${message}${extraStr}`;
 }
 
 export const logger = {
-  debug(message, extra = {}) {
-    if (getLogLevel() <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', message, extra));
+  debug(...args) {
+    if (getLogLevel() <= LOG_LEVELS.debug) console.debug(formatMessage('DEBUG', ...args));
   },
-  info(message, extra = {}) {
-    if (getLogLevel() <= LOG_LEVELS.info) console.log(formatMessage('INFO', message, extra));
+  info(...args) {
+    if (getLogLevel() <= LOG_LEVELS.info) console.log(formatMessage('INFO', ...args));
   },
-  warn(message, extra = {}) {
-    if (getLogLevel() <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', message, extra));
+  warn(...args) {
+    if (getLogLevel() <= LOG_LEVELS.warn) console.warn(formatMessage('WARN', ...args));
   },
-  error(message, extra = {}) {
-    if (getLogLevel() <= LOG_LEVELS.error) console.error(formatMessage('ERROR', message, extra));
+  error(...args) {
+    if (getLogLevel() <= LOG_LEVELS.error) console.error(formatMessage('ERROR', ...args));
   },
 };
 

@@ -80,7 +80,7 @@ export async function fetchFromEcb() {
     const xmlText = await response.text();
     const rates = parseEcbXml(xmlText);
     if (rates) {
-      logger.info(`Fetched ${Object.keys(rates).length - 1} exchange rates from ECB`);
+      logger.debug(`Fetched ${Object.keys(rates).length - 1} exchange rates from ECB`);
     }
     return rates;
   } catch (err) {
@@ -116,7 +116,7 @@ export async function fetchFromErApi() {
         rates[currency] = 1.0 / eurToX;
       }
     }
-    logger.info(`Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`);
+    logger.debug(`Fetched ${Object.keys(rates).length - 1} exchange rates from open.er-api`);
     return rates;
   } catch (err) {
     logger.error('Failed to fetch exchange rates from open.er-api', { error: err.message });
@@ -201,7 +201,7 @@ export async function saveToDatabase(rates) {
       );
     }
     await query('COMMIT');
-    logger.info(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
+    logger.debug(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
   } catch (err) {
     await query('ROLLBACK').catch(() => {});
     logger.error('Failed to save exchange rates to database', { error: err.message });

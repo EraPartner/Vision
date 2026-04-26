@@ -103,6 +103,12 @@ Repository Layer (SQL queries)
 - **Background Refresh:** Non-blocking refresh scheduled after serving cached data
 - **Throttled Warnings:** Suppresses repeated fetch failure warnings within 30-minute window
 
+### Logging
+
+- **Statbel/Eurostat fetch logs:** `debug` level (set `LOG_LEVEL=debug` to monitor external API calls)
+- **Background refresh completion:** `debug` level; only logged when data is successfully fetched and persisted
+- **Cache warming:** Success logged at `info` level; fetch failures at `error` level
+
 ### Dependencies
 - `connection.js` (PostgreSQL)
 - `logger.js`

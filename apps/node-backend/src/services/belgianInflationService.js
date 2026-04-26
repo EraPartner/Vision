@@ -305,7 +305,7 @@ async function fetchFromStatbel() {
           const statbelRates = normalizeRatesFromStatbelPayload(payload);
           const rates = statbelRates.length > 0 ? statbelRates : normalizeRatesFromPayload(payload);
           if (rates.length > 0) {
-            logger.info('Fetched Belgian inflation rates from Statbel', { url, count: rates.length, attempt: attempt + 1 });
+            logger.debug('Fetched Belgian inflation rates from Statbel', { url, count: rates.length, attempt: attempt + 1 });
             return rates;
           }
           lastError = new Error(`No monthly rates parsed from ${url}`);
@@ -347,7 +347,7 @@ async function fetchFromEurostat() {
         const payload = await response.json();
         const rates = normalizeRatesFromEurostatIndexPayload(payload);
         if (rates.length > 0) {
-          logger.info('Fetched Belgian inflation rates from Eurostat HICP index', {
+          logger.debug('Fetched Belgian inflation rates from Eurostat HICP index', {
             count: rates.length,
             attempt: attempt + 1,
           });
@@ -405,7 +405,7 @@ function scheduleBackgroundInflationRefresh() {
   backgroundRefreshPromise = (async () => {
     try {
       const result = await refreshFromExternalAndPersist();
-      logger.info('Belgian inflation background refresh completed', {
+      logger.debug('Belgian inflation background refresh completed', {
         source: result.source,
         count: result.rates.length,
       });

@@ -44,7 +44,6 @@ router.use('/', maintenanceRouter);
 
 async function warmNetWorthCache(targetCurrency) {
   try {
-    logger.info('Warming net-worth cache...', { targetCurrency });
     const nwData = await infoRepository.getNetWorthFromSnapshots(targetCurrency);
     setCachedData(netWorthResponseCache, targetCurrency, nwData, NET_WORTH_CACHE_TTL_MS);
     logger.info('Net-worth cache warmed', { targetCurrency, snapshots: nwData?.snapshots?.length });
@@ -55,7 +54,6 @@ async function warmNetWorthCache(targetCurrency) {
 
 async function warmPortfolioPerformanceCache(targetCurrency) {
   try {
-    logger.info('Warming portfolio-performance cache...', { targetCurrency });
     const startDate = '2000-01-01';
     const endDate = getCurrentDateString();
     const cacheKey = `${targetCurrency}:all`;

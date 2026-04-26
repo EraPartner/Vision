@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-04-21
+date: 2026-04-26
 tags: [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
 description: Backend configuration management, logging, and database startup behavior
@@ -69,7 +69,7 @@ const isProd = settings.isProduction();
 
 **File:** [[apps/node-backend/src/config/logger.js]]
 
-Structured logger with configurable log levels and timestamp formatting.
+Structured logger with configurable log levels and timestamp formatting. Supports both traditional `(message, extra)` and pino-style `(bindings, message)` calling conventions.
 
 ### Log Levels
 
@@ -92,6 +92,9 @@ Controlled via environment variables:
 
 ### Usage
 
+The logger accepts arguments in two styles:
+
+**Traditional style (message, extra):**
 ```javascript
 import { logger } from './config/logger.js';
 
@@ -101,11 +104,28 @@ logger.warn('Rate limit approaching', { current: 180, max: 200 });
 logger.error('Database connection failed', { error: err.message });
 ```
 
+**Pino style (bindings, message):**
+```javascript
+logger.info({ port: 3002 }, 'Server started');
+logger.debug({ method: 'GET', path: '/api/transactions' }, 'Processing request');
+```
+
+The `formatMessage` function automatically detects which style is used based on argument types.
+
 ### Output Format
 
 ```
 2026-03-31T10:30:00.000Z [INFO] Server started {"port":3002}
 ```
+
+### Log Level Adjustments
+
+Several services have been optimized to use `debug` level for high-frequency or non-critical logs:
+
+- **Currency rate fetching** — Individual ECB/open.er-api fetch logs and DB save logs (use `LOG_LEVEL=debug` to see rate sync details)
+- **Belgian inflation fetching** — Statbel and Eurostat fetch logs and background refresh completion (use `LOG_LEVEL=debug` to monitor inflation data updates)
+- **Price provider sanitization** — Kinesis spike sanitization logs are INFO only when corrections > 0 or failures > 0; otherwise debug
+- **Cache warming** — Pre-warming messages removed from info/routes to reduce startup verbosity; progress still logged on successful completion
 
 ---
 

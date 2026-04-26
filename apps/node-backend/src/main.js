@@ -352,12 +352,11 @@ if (settings.aiChat?.enabled) {
   });
   app.use('/api/ai/chat', aiChatLimiter);
   mountRouter(app, '/api/ai', aiRouter);
-  logger.info(`AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`);
+  logger.debug(`AI chat routes enabled (/api/ai), chat rate limit: ${settings.aiChat.rateLimit}/min`);
 } else {
   logger.info('AI chat routes disabled (settings.aiChat.enabled = false)');
 }
 
-logger.info('All route modules registered successfully');
 
 // Build route manifest after all routes are registered so /api/admin/endpoints
 // reflects the full router stack.
@@ -480,8 +479,6 @@ async function start() {
         environment: settings.server.environment,
         version: settings.api.version,
       });
-      logger.info(`API documentation: http://${HOST}:${PORT}/api/`);
-
       // Refresh materialized views off the boot critical path. Stale data
       // is acceptable for the first few seconds; /health/detailed reflects
       // readiness via warmupStatus.materializedViews.

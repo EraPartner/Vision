@@ -394,12 +394,12 @@ export async function sanitizePersistedKinesisHistory() {
     }
   }
 
-  logger.info('Kinesis history sanitization complete', {
-    processed: investments.length,
-    updated,
-    correctedPoints,
-    failed,
-  });
+  const sanitizationStats = { processed: investments.length, updated, correctedPoints, failed };
+  if (correctedPoints > 0 || failed > 0) {
+    logger.info('Kinesis history sanitization complete', sanitizationStats);
+  } else {
+    logger.debug('Kinesis history sanitization complete', sanitizationStats);
+  }
 
   return { processed: investments.length, updated, correctedPoints, failed };
 }
