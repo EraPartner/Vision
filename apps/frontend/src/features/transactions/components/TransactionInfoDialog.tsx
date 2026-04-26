@@ -7,7 +7,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useUpdateTransaction } from "@/hooks/useTransactions";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
-import { formatDateStringWithAppSettings } from "@/components/shared/dateUtils";
+import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
 import type { TransactionUpdate } from "@/types/api";
 import type { TableTransaction, InfoEditableField } from "../types";
@@ -187,12 +188,20 @@ export function TransactionInfoDialog({
                                         <span className="text-sm text-muted-foreground shrink-0">{label}</span>
                                         {editable && editField && editingInfoField === editField ? (
                                             <div className="flex items-center gap-1.5 min-w-0">
-                                                <Input
-                                                    type={editType ?? 'text'}
-                                                    value={editingInfoValue}
-                                                    onChange={(e) => setEditingInfoValue(e.target.value)}
-                                                    className="h-8 w-40"
-                                                />
+                                                {editType === 'date' ? (
+                                                    <DatePicker
+                                                        value={editingInfoValue ? parseLocalDateFromYmd(editingInfoValue) : undefined}
+                                                        onChange={(d) => setEditingInfoValue(d ? toYmd(d) : '')}
+                                                        buttonClassName="h-8 w-40 text-sm"
+                                                    />
+                                                ) : (
+                                                    <Input
+                                                        type={editType ?? 'text'}
+                                                        value={editingInfoValue}
+                                                        onChange={(e) => setEditingInfoValue(e.target.value)}
+                                                        className="h-8 w-40"
+                                                    />
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
