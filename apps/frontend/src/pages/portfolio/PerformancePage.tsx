@@ -47,6 +47,13 @@ export default function PerformancePage() {
         placeholderData: keepPreviousData,
     });
 
+    const { data: sparkline1mData } = useQuery({
+        queryKey: ["portfolio-performance", defaultCurrency, "1m"],
+        queryFn: () => apiClient.getPortfolioPerformance({ currency: defaultCurrency, period: "1m" }),
+        staleTime: 300_000,
+        gcTime: 10 * 60_000,
+    });
+
     const PERIOD_LABELS: Record<Period, string> = {
         "1m": t('performance.period.1m'),
         "3m": t('performance.period.3m'),
@@ -94,8 +101,8 @@ export default function PerformancePage() {
     }, [snapshots]);
 
     const sparklineData = useMemo(
-        () => snapshots.slice(-30).map((s) => ({ day: s.date, value: s.value })),
-        [snapshots],
+        () => (sparkline1mData?.snapshots ?? []).map((s) => ({ day: s.date, value: s.value })),
+        [sparkline1mData],
     );
 
     // Relative performance (percentage-based) from already-downsampled snapshots
