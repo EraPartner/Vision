@@ -2,7 +2,7 @@
 title: ExportDialog Component
 type: component
 status: active
-date: 2026-04-25
+date: 2026-04-26
 tags: [component, export, dialog, reports, pdf, phase-4, ui, configuration]
 description: Unified PDF report export configuration dialog. Selects report type (financial/portfolio/tax), period (YTD/rolling/year/custom), sections, and currency before triggering backend PDF generation.
 related_code:
@@ -100,7 +100,7 @@ Radio group with five presets:
 | `rolling3` | `{ kind: 'rolling', months: 3 }` | Last 3 Months | None |
 | `rolling12` | `{ kind: 'rolling', months: 12 }` | Last 12 Months | None (default) |
 | `year` | `{ kind: 'year', year: YYYY }` | Specific Year | Number input (min: 2000, max: current year + 1) |
-| `custom` | `{ kind: 'custom', from, to }` | Custom Range | Two date inputs (from, to) |
+| `custom` | `{ kind: 'custom', from, to }` | Custom Range | Two `DatePicker` components (popover calendars) for from/to date selection |
 
 **Defaults:**
 - Period preset: `rolling12` (last 12 months)
@@ -293,7 +293,8 @@ Uses shadcn/Radix UI primitives:
 - `RadioGroup`, `RadioGroupItem` — Report type and period selection
 - `Checkbox` — Section toggles
 - `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` — Currency dropdown
-- `Input` — Year, from/to date inputs
+- `Input` — Year input field
+- `DatePicker` — Custom date picker component (popover calendar) for from/to custom date range inputs; uses `parseLocalDateFromYmd` and `toYmd` utilities for date serialization
 - `Button` — Submit/cancel buttons
 - `Separator` — Visual dividers between sections
 - `Label` — Form labels

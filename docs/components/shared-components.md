@@ -2,7 +2,7 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-04-10
+date: 2026-04-26
 tags: [component, shared, utility, frontend, reference]
 description: Reference documentation for shared utility components used across the application
 aliases: [shared components, utility components, common components]
@@ -38,6 +38,7 @@ The most complex shared component — a high-performance virtualized data table 
 - **Column filtering**: Per-column popover filters with unique value selection
 - **Stable source row mapping**: Filter/sort/search pipelines preserve row identity through `sourceIndex` mapping so row actions/edit handlers target original source rows
 - **Inline editing**: Double-click to edit editable columns (Enter to save, Escape to cancel)
+- **Dynamic edit column width**: Action column expands to 88px when in editing mode (default 40px) to prevent button overlap while editing
 - **Column resizing**: Drag column borders to resize
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search

@@ -2,10 +2,10 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-25
-updated: 2026-04-25
+date: 2026-04-26
+updated: 2026-04-26
 tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`.
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Recent fixes include ExportDialog date picker UI, VirtualDataTable edit column width, and bank reconciliation feature removal.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -156,6 +156,22 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-26 Minor Frontend Fixes & Bank Reconciliation Removal
+
+**Component Updates:**
+- **ExportDialog date picker** — Replaced native `<Input type="date">` with app's shared `<DatePicker>` component using `parseLocalDateFromYmd`/`toYmd` utilities for consistent date handling across report export dialogs.
+- **VirtualDataTable edit column width** — Action column now dynamically expands to 88px when editing (was fixed 40px), preventing button overlap during inline editing.
+- **EditInvestmentDialog TDZ fix** — Fixed temporal dead zone issue where `unitBased` was called as function instead of assigned from `isUnitBased(...)`.
+- **PerformancePage sparkline** — Sparkline "Last 30 days" now uses separate `useQuery` with fixed `period: "1m"` instead of deriving from period-specific downsampled snapshots.
+
+**CSV Import Accuracy:**
+- **CategoriesImportCard toast** — Fixed `total` param in import success toast to use `data.total_processed` instead of `data.imported` for correct count display.
+
+**Feature Removal (Complete):**
+- **Bank reconciliation feature removed** — Full stack removal including frontend page (`ReconciliationPage.tsx`), API client (`reconciliation.ts`), backend routes (`reconciliation.js`), repository (`reconciliationRepository.js`), all i18n keys, and Alembic migration `0014_drop_bank_reconciliation`. Feature docs (`docs/features/bank-reconciliation.md`, `docs/api/reconciliation.md`) already cleaned up.
+
+See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-components|Shared Components]], [[docs/features/index|Features Index]]
 
 ### 2026-04-25 Docker Container Hardening
 
