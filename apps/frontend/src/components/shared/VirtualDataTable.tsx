@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ColumnFilter } from "@/components/shared/ColumnFilter";
+import { DatePicker } from "@/components/shared/DatePicker";
+import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import type { Column } from "@/types/dataTable";
 
 export type { Column };
@@ -570,23 +572,31 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     style={width ? { width: `${width}px`, flex: "none" } : undefined}
                                                 >
                                                     {isEditing && col.editable ? (
-                                                        <Input
-                                                            type={col.type || "text"}
-                                                            value={editValues[col.key] ?? ""}
-                                                            onChange={(e) =>
-                                                                setEditValues((prev) => ({
-                                                                    ...prev,
-                                                                    [col.key]: col.type === "number"
-                                                                        ? parseDecimal(e.target.value)
-                                                                        : e.target.value,
-                                                                }))
-                                                            }
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === "Enter") { e.preventDefault(); saveEditing(sourceIndex, row); }
-                                                                else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
-                                                            }}
-                                                            className="h-8 text-sm"
-                                                        />
+                                                        col.type === "date" ? (
+                                                            <DatePicker
+                                                                value={editValues[col.key] ? parseLocalDateFromYmd(String(editValues[col.key])) : undefined}
+                                                                onChange={(d) => setEditValues((prev) => ({ ...prev, [col.key]: d ? toYmd(d) : "" }))}
+                                                                buttonClassName="h-8 text-sm w-full"
+                                                            />
+                                                        ) : (
+                                                            <Input
+                                                                type={col.type || "text"}
+                                                                value={editValues[col.key] ?? ""}
+                                                                onChange={(e) =>
+                                                                    setEditValues((prev) => ({
+                                                                        ...prev,
+                                                                        [col.key]: col.type === "number"
+                                                                            ? parseDecimal(e.target.value)
+                                                                            : e.target.value,
+                                                                    }))
+                                                                }
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === "Enter") { e.preventDefault(); saveEditing(sourceIndex, row); }
+                                                                    else if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
+                                                                }}
+                                                                className="h-8 text-sm"
+                                                            />
+                                                        )
                                                     ) : col.render ? (
                                                         col.render(row, isEditing, sourceIndex)
                                                     ) : (
