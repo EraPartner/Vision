@@ -24,6 +24,7 @@ interface CategoryResult {
   imported: number;
   skipped: number;
   errors: number;
+  total_processed: number;
 }
 
 export function CategoriesImportCard() {
@@ -49,8 +50,8 @@ export function CategoriesImportCard() {
     setResult(null);
     try {
       const data = await apiClient.importCategories(file, separator);
-      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
-      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.skipped, total: data.imported }), {
+      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors, total_processed: data.total_processed });
+      toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.skipped, total: data.total_processed }), {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
       setFile(null);
