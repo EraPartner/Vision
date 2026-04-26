@@ -30,6 +30,8 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import {
@@ -277,27 +279,25 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
             {periodPreset === 'custom' && (
               <div className="grid grid-cols-2 gap-3 pl-1 pt-1">
                 <div className="space-y-1">
-                  <Label htmlFor="export-from" className="text-xs text-muted-foreground">
+                  <Label className="text-xs text-muted-foreground">
                     {t('export.period.from')}
                   </Label>
-                  <Input
-                    id="export-from"
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
-                    className="h-8 text-sm"
+                  <DatePicker
+                    value={customFrom ? parseLocalDateFromYmd(customFrom) : undefined}
+                    onChange={(d) => setCustomFrom(d ? toYmd(d) : '')}
+                    placeholder={t('export.period.from')}
+                    buttonClassName="h-8 text-sm"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="export-to" className="text-xs text-muted-foreground">
+                  <Label className="text-xs text-muted-foreground">
                     {t('export.period.to')}
                   </Label>
-                  <Input
-                    id="export-to"
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
-                    className="h-8 text-sm"
+                  <DatePicker
+                    value={customTo ? parseLocalDateFromYmd(customTo) : undefined}
+                    onChange={(d) => setCustomTo(d ? toYmd(d) : '')}
+                    placeholder={t('export.period.to')}
+                    buttonClassName="h-8 text-sm"
                   />
                 </div>
               </div>
