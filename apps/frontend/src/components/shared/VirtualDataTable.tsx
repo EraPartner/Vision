@@ -341,7 +341,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         setEditingRow(sourceIndex);
         const values: Record<string, unknown> = {};
         columns.forEach((col) => {
-            if (col.editable) values[col.key] = row[col.key];
+            if (!col.editable) return;
+            const val = row[col.key];
+            values[col.key] = col.type === "date" && typeof val === "string" && val.includes("T")
+                ? val.split("T")[0]
+                : val;
         });
         setEditValues(values);
     };
