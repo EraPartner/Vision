@@ -171,11 +171,15 @@ function _fallbackHistoricalPoints(cachedDbPoints, fromMs, toMs) {
 
 async function _persistAndResolve(investmentId, points, source, cachedDbPoints, { fromMs, toMs } = {}) {
   const { saveHistoricalPointsToDatabase } = await import('./prices/priceCache.js');
-  await saveHistoricalPointsToDatabase(investmentId, points, source);
+  // Only persist points within the requested range — providers (Yahoo, Binance, Kinesis)
+  // return data beyond the window bounds, which would otherwise accumulate and be deleted
+  // by cleanupStaleQuotes on every restart.
+  const pointsInRange = _filterHistoricalPoints(points, fromMs, toMs);
+  await saveHistoricalPointsToDatabase(investmentId, pointsInRange, source);
   const persisted = await loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs });
   const resolved = persisted.length > 0
     ? persisted
-    : normalizeHistoryPoints([...(cachedDbPoints || []), ...(points || [])]);
+    : normalizeHistoryPoints([...(cachedDbPoints || []), ...(pointsInRange || [])]);
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
 

@@ -3,7 +3,7 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
-last_modified: 2026-04-25
+last_modified: 2026-04-26
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -80,6 +80,7 @@ Price providers fetch live and historical market prices for investments, support
 - `fetchHistoricalPrices` sanitizes Kinesis points and persists through `saveHistoricalPointsToDatabase()` before returning (moved from `_saveHistoricalPointsToDatabase`, now exported) ([[apps/node-backend/src/services/priceProviderService.js]]).
 - Persisted Kinesis history can be re-sanitized in place via `sanitizePersistedKinesisHistory()`: it scans `investments.price_provider='kinesis'`, loads persisted `asset_price_history` points, applies isolated spike sanitization, upserts corrected points with source `kinesis`, and returns `{ processed, updated, correctedPoints, failed }`.
 - Internal historical-fetch refactor in `fetchHistoricalPrices` extracts shared range-filter and persist+resolve helpers to reduce duplication while preserving provider-specific behavior, cache keys, and fallback semantics ([[apps/node-backend/src/services/priceProviderService.js]]).
+- **Range-filtering on persist (2026-04-26):** `_persistAndResolve()` now filters historical points to the requested `[fromMs, toMs]` window before saving to the database via `saveHistoricalPointsToDatabase()`. Providers (Yahoo, Binance, Kinesis) return data beyond the requested bounds; previously, all points were persisted unfiltered, causing `cleanupStaleQuotes` to delete thousands of out-of-window rows on every startup, which were then re-inserted on the next startup. The in-memory provider cache still retains the full response for reuse across multiple window calls, but only the relevant subset is persisted to the DB.
 
 ## Usage
 

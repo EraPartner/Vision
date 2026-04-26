@@ -3,6 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
+last_modified: 2026-04-26
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline]
 description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, and AI Chat service.
 aliases: [services, service layer, business logic, backend services]
@@ -430,6 +431,7 @@ createBatch → stageBatch → validateBatch → matchBatch → commitBatch → 
 - **Kinesis Spike Sanitization:** MAD-based (Median Absolute Deviation) outlier detection with 6-sigma threshold, 18% minimum move, geometric mean replacement
 - **Binary Search:** `getHistoricalPriceAt` finds most recent price at or before timestamp
 - **History Refresh Decision:** `_needsHistoryRefresh` checks if cached DB data covers requested range within 1-day tolerance
+- **Range-Filtered Persistence (2026-04-26):** `_persistAndResolve()` filters fetched points to the requested window range `[fromMs, toMs]` before saving to the database. Providers return data beyond requested bounds; only the relevant subset is persisted to avoid accumulation of out-of-window rows that would be deleted and re-inserted on every startup. The in-memory cache retains the full provider response for reuse.
 
 ### Dependencies
 - `yahoo-finance2` (npm package)
@@ -485,7 +487,7 @@ Uses **MAD-based statistical detection** (Median Absolute Deviation):
 
 - **Holding Window Computation:** Scans transactions chronologically, tracks cumulative units, marks windows where units transition 0↔positive
 - **Batch Persistence:** Upserts to `asset_price_history` with ON CONFLICT DO UPDATE (idempotent)
-- **Stale Cleanup:** Deletes quotes outside computed holding windows after backfill
+- **Stale Cleanup:** Deletes quotes outside computed holding windows after backfill. Since `fetchHistoricalPrices()` now filters points to the requested `[fromMs, toMs]` window before persistence (2026-04-26), the cleanup step is more efficient — only intentional out-of-window rows are removed, not accumulated spillover from provider-returned bounds
 
 ### Dependencies
 - `priceProviderService.js` — Delegates `fetchHistoricalPrices()` and `fetchLivePricesDetailed()`
