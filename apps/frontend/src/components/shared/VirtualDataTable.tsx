@@ -596,7 +596,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             );
                                         })}
                                         {hasEditableColumns && (
-                                            <div className="px-1 py-2 text-right" style={{ width: "40px", flex: "none" }}>
+                                            <div className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
                                                 {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
                                                         <Button variant="ghost" size="icon"
