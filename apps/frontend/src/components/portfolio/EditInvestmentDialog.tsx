@@ -42,7 +42,7 @@ export function EditInvestmentDialog({ investment, trigger }: Props) {
     priceProviderHistoryPricePath: investment.price_provider_history_price_path || 'price',
   });
 
-  const unitBased = unitBased(investment.assetClass);
+  const unitBased = isUnitBased(investment.assetClass);
 
   const PRICE_PROVIDERS: { key: PriceProvider; name: string; hint: string }[] = [
     { key: 'manual', name: t('addInv.provider.manual'), hint: t('addInv.provider.hint.manual') },
