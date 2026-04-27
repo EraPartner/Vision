@@ -2,10 +2,10 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25).
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27).
 date: 2026-04-23
-last_modified: 2026-04-25
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering]
+last_modified: 2026-04-27
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -15,18 +15,29 @@ This document contains UML diagrams for the Node.js backend application.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
 
-## Startup Sequence Ordering (Fixed 2026-04-25)
+## Startup Sequence Ordering (Fixed 2026-04-25; Backend DB Polling 2026-04-27)
 
-Initialization now respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
+### Database Connection (2026-04-27)
 
-1. **Database migrations** — Initialize schema
-2. **Exchange rate cache warmup** — `warmExchangeRateCache()` (captured as promise)
-3. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (captured as promise)
-4. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
-5. **Live price refresh** — Investment prices refreshed after snapshots
-6. **Info caches** — `warmInfoCaches` runs after snapshot completion
+Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node-backend/src/main.js`:
+- **40 attempts** with exponential backoff (50ms → 1s)
+- Non-blocking: Bun process starts immediately instead of blocking behind entrypoint
+- On cold boots, this allows Bun initialization to overlap with postgres data-dir creation (~1s saved)
+- Prior approach: entrypoint `pg_isready` loop (60 attempts × 0.2s = up to 12s serial wait)
 
-**Prior issue:** FX cache and backfill were fire-and-forget, causing snapshot/cache work to run before historical FX was available, producing "Historical FX missing" warnings during startup.
+### Initialization Dependency Chain
+
+Once DB is ready, initialization respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
+
+1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
+2. **Database migrations** — Alembic schema upgrade via JS runner
+3. **Exchange rate cache warmup** — `warmExchangeRateCache()` (captured as promise)
+4. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (captured as promise)
+5. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
+6. **Live price refresh** — Investment prices refreshed after snapshots
+7. **Info caches** — `warmInfoCaches` runs after snapshot completion
+
+**Prior issue (2026-04-25):** FX cache and backfill were fire-and-forget, causing snapshot/cache work to run before historical FX was available, producing "Historical FX missing" warnings during startup.
 
 ## Monetary Precision (Phase 9)
 

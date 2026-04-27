@@ -38,7 +38,7 @@ WORKDIR /app
 #     Puppeteer's bundled Chrome is a glibc x86_64 binary and cannot run on
 #     Alpine (musl) or ARM64 hosts. We skip the bundled download and use the
 #     distro package instead.
-RUN apk add --no-cache python3 py3-pip chromium postgresql-client && \
+RUN apk add --no-cache python3 py3-pip chromium && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --no-cache-dir alembic psycopg2-binary python-dotenv sqlalchemy-utils

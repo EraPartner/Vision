@@ -4,8 +4,8 @@ type: architecture-doc
 status: active
 date: 2026-04-27
 updated: 2026-04-27
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, troubleshooting]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, and backup/restore bundle system (Phase 1+2)
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, and backup/restore bundle system (Phase 1+2)
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js"]
 ---
@@ -87,30 +87,59 @@ Electron configuration is in `packaging/electron/`.
 
 ## Startup Sequence
 
+### Main Process Initialization
+
 1. **Electron Main** starts, calls `app.requestSingleInstanceLock()`
    - If lock unavailable (another instance running), quit immediately
    - Otherwise, register `second-instance` handler to focus existing window
+
 2. **Security Headers Registration** via `registerSecurityHeaders()`
    - Installs Content-Security-Policy and other security headers via `session.webRequest.onHeadersReceived`
    - Gated by `app.isPackaged` (dev mode leaves HMR unrestricted)
    - CSP: `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: https:`, etc.
+
 3. **Internationalization** loaded asynchronously via `await initI18n()`
    - `loadI18nAsync()` reads locale from `app.getLocale()`, tries resource path then fallback dir
    - Deferred from module-load init to support async `fs.promises` in preload/runtime (Phase 0)
-4. **Backend server** is spawned as a child process
-   - Settings, env, and work directory resolved via async functions
-5. **Health Poll** — `pollHealth()` loops:
+
+4. **Parallel Initialization** — All of the following run concurrently via `Promise.all()`:
+   - **Docker status check** — `check_docker()` pings Docker Unix socket `/_ping` (~30ms on macOS)
+   - **Port discovery** — Find open port for backend (default 3002)
+   - **Environment initialization** — Resolve workspace paths, detect dev mode
+   - **Docker image pre-pull** (packaged mode only, 2026-04-27) — Pull `ghcr.io/erapartner/vision:<tag>` if image missing locally; non-fatal, falls back to inline pull during `compose up`
+   - **Build decision** — Skip-build cache: compare Docker image ID + git working-tree state against `.vision-cache/docker-build.json`; skip `--build` if unchanged
+
+5. **Backend server** spawned as child process via `docker-compose up`
+   - If image was pulled in step 4, skip `--build` flag
+   - Emit boot mark: `pre_pull_image` (packaged mode)
+
+### Backend Startup
+
+6. **Backend startup** (inside container via `docker-entrypoint.sh` + `apps/node-backend/src/main.js`):
+   - **Database connection** — `checkConnection()` polls with exponential backoff (40 attempts, 50ms→1s)
+   - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at head
+   - **FX cache warmup** — Exchange rate and portfolio historical rate refresh (parallel promises)
+   - **Snapshot computation** — Portfolio snapshots computed after FX data is available
+   - **Info caches** — Net-worth and portfolio-performance caches warmed
+
+### Frontend Initialization
+
+7. **Health Poll** — `pollHealth()` loops:
    - Polls `GET /health` every 300ms (`VISION_HEALTH_POLL_INTERVAL_MS`)
    - Max 200 attempts (`VISION_HEALTH_POLL_ATTEMPTS`)
-   - On success: proceed to step 4
+   - On success: proceed to step 8
    - On timeout (~60s): load error page, enable Retry/OpenLogs buttons
-4. **Create BrowserWindow** with sandbox enabled + loading frontend
-5. **Watchdog Loop** starts (10s interval):
+
+8. **Create BrowserWindow** with sandbox enabled + loading frontend
+
+9. **Watchdog Loop** starts (10s interval):
    - Polls `GET /health` continuously
    - 3 consecutive failures → emit `backend:lost` IPC event to renderer
    - Recovery → emit `backend:restored` event
-6. **Frontend** connects to backend at `http://localhost:3002`
-7. **Renderer** subscribes to `backend:lost` and `backend:restored` events via `window.electronRecovery.onBackendLost/onBackendRestored()`
+
+10. **Frontend** connects to backend at `http://localhost:3002`
+
+11. **Renderer** subscribes to `backend:lost` and `backend:restored` events via `window.electronRecovery.onBackendLost/onBackendRestored()`
 
 ---
 
@@ -479,20 +508,30 @@ ls -la dist/mac-arm64/Vision.app/Contents/Resources/resources/docker-compose.yml
 
 **Cause:** Packaged app attempted to pull Docker image from private GHCR registry without credentials.
 
-**Fix:** Use local Docker image with `pull_policy: missing` in embedded compose:
+**Solution (2026-04-27):** Electron orchestrator (`packaging/electron/main.js`) now pre-pulls the image during `parallel_init()` if missing locally:
 
-1. Build locally: `docker compose build` (in project root, creates `vision-app:latest`)
+```javascript
+// Inside Promise.all() during main process startup:
+// Pulls ghcr.io/erapartner/vision:<tag> only if image missing
+// Non-fatal; falls back to inline pull during compose up
+await preLoadDockerImage();
+```
+
+**Additional safeguard:** Embedded `resources/docker-compose.yml` also uses `pull_policy: missing` to avoid re-pulling on subsequent launches:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/erapartner/vision:latest
+    pull_policy: missing  # Use local image if available; skip registry pull
+```
+
+**Manual pre-pull (if needed):**
+1. Build locally: `docker compose build` (creates `vision-app:latest`)
 2. Retag: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
-3. Verify `packaging/electron/resources/docker-compose.yml` has:
-   ```yaml
-   services:
-     app:
-       image: ghcr.io/erapartner/vision:latest
-       pull_policy: missing  # ← Use local image if available
-   ```
-4. Rebuild: `npm run dist`
+3. Rebuild packaged app: `npm run dist`
 
-With `pull_policy: missing`, Docker Compose finds the locally-tagged image without attempting registry auth.
+With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the locally-tagged image without attempting registry auth on first launch or subsequent boots.
 
 ## Related
 

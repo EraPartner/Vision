@@ -1958,6 +1958,39 @@ async function launch() {
       return checkDocker(workDir).then(status => { dockerStatus = status; end(); });
     })(),
 
+    // Packaged mode: pre-pull the app image ONLY if it's missing locally.
+    // Without this, compose's `pull_policy: missing` pulls inline during `up`,
+    // blocking the entire startup behind a ~2GB download on first launch.
+    // Pulling here moves that download into parallel_init so it overlaps with
+    // port/env/docker checks. We deliberately skip pull when the image is
+    // already present — the manual shell updater (setupManualShellUpdater)
+    // owns the upgrade path; we don't want silent :latest churn on every boot.
+    // Failures are non-fatal — `up` falls back to inline pull.
+    app.isPackaged
+      ? (async () => {
+          const end = bootMark('pre_pull_image');
+          try {
+            const ids = await run(
+              'docker',
+              ['compose', ...composeArgs(workDir, overrideFiles), 'images', '-q', 'app'],
+              workDir,
+              { timeout: 10000, env: dockerEnv }
+            ).then(r => r.trim()).catch(() => '');
+            if (ids) { end(); return; }
+            await run(
+              'docker',
+              ['compose', ...composeArgs(workDir, overrideFiles), 'pull', '--quiet', 'app'],
+              workDir,
+              { timeout: 600000, env: dockerEnv }
+            );
+          } catch (err) {
+            console.warn('pre-pull failed (non-fatal, compose up will retry):', err.message || err);
+          } finally {
+            end();
+          }
+        })()
+      : Promise.resolve(),
+
     // In dev, decide whether to skip --build. Strategy:
     //   1. Get current image ID from compose.
     //   2. Load .vision-cache/docker-build.json written after the last build.

@@ -3,8 +3,9 @@ title: Docker Container Hardening
 type: adr
 status: Accepted
 date: 2026-04-25
-tags: [adr, security, docker, containers, hardening]
-description: Defense-in-depth at the container layer — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning.
+last_modified: 2026-04-27
+tags: [adr, security, docker, containers, hardening, startup, entrypoint]
+description: Defense-in-depth at the container layer — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning. (Updated 2026-04-27: backend now owns DB readiness polling instead of entrypoint pg_isready)
 aliases: [adr-039, docker hardening]
 ---
 
@@ -71,6 +72,12 @@ Verified during implementation (all green):
 - `wget -qO- http://127.0.0.1:3002/health` → 200 from inside container and host
 - `docker inspect --format '{{.State.Health.Status}}'` → `healthy` within ~30s
 - Backend tests still green (no functional change).
+
+## Subsequent Changes (2026-04-27)
+
+**Entrypoint DB polling removed in favor of backend polling:**
+
+After ADR-039 was accepted, the `pg_isready` polling loop in `docker-entrypoint.sh` (introduced in commit 871fa36 as a performance optimization) was replaced with backend-native DB connection polling in `apps/node-backend/src/main.js` (lines ~checkConnection, 40 attempts with exponential backoff, 50ms→1s). This allows Bun to start immediately instead of blocking behind entrypoint polling, overlapping startup initialization and reducing cold-boot time. The entrypoint now handles only environment and trace-mark setup; all readiness polling is the backend's responsibility. The hardening controls (non-root, dropped capabilities, read-only fs, etc.) remain unchanged. See [[docs/architecture/backend-architecture#Startup Sequence Ordering|Startup Sequence Ordering]].
 
 ## Related
 - [[docs/adr/037-admin-auth-localhost-fallback|ADR-037 — admin auth localhost fallback]] (the prior network-exposure fix)
