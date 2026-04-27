@@ -200,6 +200,7 @@ function EmploymentStep({
         { value: 'employee', label: t('tax.profile.employment.employee.label'), desc: t('tax.profile.employment.employee.desc') },
         { value: 'civil_servant', label: t('tax.profile.employment.civil_servant.label'), desc: t('tax.profile.employment.civil_servant.desc') },
         { value: 'self_employed', label: t('tax.profile.employment.self_employed.label'), desc: t('tax.profile.employment.self_employed.desc') },
+        { value: 'director', label: t('tax.profile.employment.director.label'), desc: t('tax.profile.employment.director.desc') },
         { value: 'retired', label: t('tax.profile.employment.retired.label'), desc: t('tax.profile.employment.retired.desc') },
         { value: 'other', label: t('tax.profile.employment.other.label'), desc: t('tax.profile.employment.other.desc') },
     ];
@@ -577,6 +578,18 @@ function ExemptionsStep({
                         id="spouse-disabled"
                         checked={profile.isSpouseDisabled}
                         onCheckedChange={(v) => updateProfile({ isSpouseDisabled: v })}
+                    />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div className="flex-1">
+                        <Label htmlFor="isolated-parent" className="text-sm font-medium cursor-pointer">{t('tax.profile.field.isolatedParent.label')}</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">{t('tax.profile.field.isolatedParent.desc')}</p>
+                    </div>
+                    <Switch
+                        id="isolated-parent"
+                        checked={profile.isIsolatedParent ?? false}
+                        onCheckedChange={(v) => updateProfile({ isIsolatedParent: v })}
                     />
                 </div>
             </div>

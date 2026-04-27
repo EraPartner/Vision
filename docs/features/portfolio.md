@@ -3,6 +3,7 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-26
+last_modified: 2026-04-26
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
@@ -405,6 +406,8 @@ Code links: [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/fronten
 
 - [[docs/api/investments|API: Investments]]
 - [[docs/api/watchlist|API: Watchlist]]
+- [[docs/integrations/price-providers|Price Providers]] — Live and historical price data
+- [[docs/integrations/kinesis-price-provider|Kinesis Price Provider]] — Metals and commodities
 - [[docs/adr/002-database-schema|Database Schema]]
 
 ## Migrations

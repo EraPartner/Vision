@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { computeBelgianPIT } from "@/lib/belgianTax";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +52,7 @@ export default function TaxOverviewPage() {
   const { profile, calculation, isLoading: isProfileLoading } = useBelgianTaxProfile();
   const stats = useStatistics();
   const { summaries } = usePortfolio();
+  const { convertToTarget } = useCurrencyConverter(appSettings.defaultCurrency || "EUR");
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const WIDGETS = getBudgetTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } =
@@ -71,32 +74,38 @@ export default function TaxOverviewPage() {
   const portfolioTaxesForYear = useMemo(() => {
     const year = profile.taxYear;
     return summaries.reduce((sum, inv) => {
-      const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number }) => {
+      const yearlyInvestmentTaxes = inv.transactions.reduce((txnSum: number, txn: { date?: string; type?: string; amount?: number; taxes?: number; currency?: string }) => {
         const date = txn.date;
         if (!date) return txnSum;
 
         const txnYear = Number.parseInt(date.slice(0, 4), 10);
         if (Number.isNaN(txnYear) || txnYear !== year) return txnSum;
 
-        const explicitTaxTxn = txn.type === "tax" ? Number(txn.amount) || 0 : 0;
-        const taxField = Number(txn.taxes) || 0;
+        const explicitTaxTxn = txn.type === "tax" ? convertToTarget(Number(txn.amount) || 0, txn.currency) : 0;
+        const taxField = convertToTarget(Number(txn.taxes) || 0, txn.currency);
         return txnSum + explicitTaxTxn + taxField;
       }, 0);
 
       return sum + yearlyInvestmentTaxes;
     }, 0);
-  }, [summaries, profile.taxYear]);
+  }, [summaries, profile.taxYear, convertToTarget]);
 
   const totalTaxIncludingPortfolio = calculation.totalPIT + portfolioTaxesForYear;
   // include estimated property tax in an alternate total (informational)
   const totalTaxIncludingPropertyEstimate = totalTaxIncludingPortfolio + calculation.propertyTaxEstimate;
 
+  // Re-run the bracket calculation per year/month with the observed income to respect progressive
+  // brackets — linear scaling of `totalPIT` is wrong because each bracket has a different rate.
+  function pitForGross(gross: number): number {
+    if (gross <= 0) return 0;
+    return computeBelgianPIT({ ...profile, grossAnnualIncome: gross }).totalPIT;
+  }
+
   const yearlyIncome = useMemo(
     () =>
       (yearlyData ?? [])
         .map((y) => {
-          const ratio = profile.grossAnnualIncome > 0 ? y.totalIncome / profile.grossAnnualIncome : 1;
-          const estimatedPIT = calculation.totalPIT * Math.max(ratio, 0);
+          const estimatedPIT = pitForGross(y.totalIncome);
           return {
             year: y.year.toString(),
             income: y.totalIncome,
@@ -105,7 +114,7 @@ export default function TaxOverviewPage() {
           };
         })
         .filter((y) => y.income > 0),
-    [yearlyData, profile.grossAnnualIncome, calculation.totalPIT]
+    [yearlyData, profile]
   );
 
   const monthlyIncomeTax = useMemo(
@@ -115,16 +124,14 @@ export default function TaxOverviewPage() {
         .slice(-12)
         .map((m) => {
           const annualizedIncome = m.income * 12;
-          const profileBase = profile.grossAnnualIncome > 0 ? profile.grossAnnualIncome : annualizedIncome;
-          const ratio = profileBase > 0 ? annualizedIncome / profileBase : 1;
-          const monthlyPIT = (calculation.totalPIT * Math.max(ratio, 0)) / 12;
+          const monthlyPIT = pitForGross(annualizedIncome) / 12;
           return {
             period: m.period,
             income: m.income,
             estimatedTax: monthlyPIT,
           };
         }),
-    [monthlyData, calculation.totalPIT, profile.grossAnnualIncome]
+    [monthlyData, profile]
   );
 
   const cards = [

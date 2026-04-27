@@ -4,6 +4,7 @@ import { BarChart, type BarSeries } from "@/components/charts";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { getTaxTable } from "@/lib/belgianTax";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioTaxAdjustments } from "@/hooks/usePortfolioTaxAdjustments";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
@@ -30,8 +31,6 @@ type TxnLite = {
   fees?: number;
   currency?: string;
 };
-
-const BELGIAN_DIVIDEND_EXEMPT = 859;
 
 function getPortfolioTaxWidgets(t: (key: string, vars?: Record<string, string>) => string): WidgetDefinition[] {
   return [
@@ -62,6 +61,10 @@ export default function PortfolioTaxPage() {
   const txYear = profile.taxYear;
 
   const { convertToTarget } = useCurrencyConverter(targetCurrency);
+
+  const taxTable = getTaxTable(txYear);
+  const dividendExemption = taxTable.dividendExemption;
+  const dividendWhtRate = taxTable.dividendWHTRate;
 
   const WIDGETS = getPortfolioTaxWidgets(t);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility("portfolioTax", WIDGETS);
@@ -119,8 +122,8 @@ export default function PortfolioTaxPage() {
   const totalManualTaxes = enrichedInvestments.reduce((s, i) => s + i.manualTaxes, 0);
   const totalManualFees = enrichedInvestments.reduce((s, i) => s + i.manualFees, 0);
 
-  const totalRealizedGain = summaries.reduce((s, i) => s + i.realizedGain, 0);
-  const totalUnrealizedGain = summaries.reduce((s, i) => s + i.unrealizedGain, 0);
+  const totalRealizedGain = summaries.reduce((s, i) => s + convertToTarget(i.realizedGain || 0, i.currency), 0);
+  const totalUnrealizedGain = summaries.reduce((s, i) => s + convertToTarget(i.unrealizedGain || 0, i.currency), 0);
   const effectiveTaxRate = totalRealizedGain > 0 ? (totalTaxes / totalRealizedGain) * 100 : 0;
   const portfolioTaxesPlusPIT = calculation.totalPIT + totalTaxes;
 
@@ -153,7 +156,7 @@ export default function PortfolioTaxPage() {
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
       .filter((d) => d.value > 0);
-  }, [summaries, t, totalManualTaxes, txYear]);
+  }, [summaries, t, totalManualTaxes, txYear, convertToTarget]);
 
   const feeBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {
@@ -179,7 +182,7 @@ export default function PortfolioTaxPage() {
     return Object.entries(breakdown)
       .map(([name, value]) => ({ name, value }))
       .filter((d) => d.value > 0);
-  }, [summaries, t, totalManualFees, txYear]);
+  }, [summaries, t, totalManualFees, txYear, convertToTarget]);
 
   const taxByAssetClass = useMemo(() => {
     const map: Record<string, { taxes: number; fees: number }> = {};
@@ -225,14 +228,14 @@ export default function PortfolioTaxPage() {
         if (yearOf(txn.date) !== txYear || !txn.date) return;
         const month = txn.date.slice(0, 7);
         if (!map[month]) map[month] = { period: month, taxes: 0, fees: 0 };
-        if (txn.type === "tax") map[month].taxes += Number(txn.amount) || 0;
-        map[month].taxes += Number(txn.taxes) || 0;
-        if (txn.type === "fee") map[month].fees += Number(txn.amount) || 0;
-        map[month].fees += Number(txn.fees) || 0;
+        if (txn.type === "tax") map[month].taxes += convertToTarget(Number(txn.amount) || 0, txn.currency);
+        map[month].taxes += convertToTarget(Number(txn.taxes) || 0, txn.currency);
+        if (txn.type === "fee") map[month].fees += convertToTarget(Number(txn.amount) || 0, txn.currency);
+        map[month].fees += convertToTarget(Number(txn.fees) || 0, txn.currency);
       });
     });
     return Object.values(map).sort((a, b) => a.period.localeCompare(b.period));
-  }, [summaries, txYear]);
+  }, [summaries, txYear, convertToTarget]);
 
   const totalDividendIncome = useMemo(
     () =>
@@ -245,11 +248,15 @@ export default function PortfolioTaxPage() {
           }, 0),
         0,
       ),
-    [summaries, txYear],
+    [summaries, txYear, convertToTarget],
   );
 
-  const taxableDividendEstimate = Math.max(0, totalDividendIncome - BELGIAN_DIVIDEND_EXEMPT);
-  const dividendWhtEstimate = taxableDividendEstimate * 0.30;
+  // Belgian dividend WHT (Pr.M / RV) is withheld at source on the FULL gross dividend.
+  // The exemption (€859 IY 2025) is reclaimed via the personal income tax return — it is NOT
+  // a deduction at source. Show: total WHT paid, exemption reclaimable, net non-recoverable.
+  const grossDividendWht = totalDividendIncome * dividendWhtRate;
+  const dividendWhtReclaim = Math.min(totalDividendIncome, dividendExemption) * dividendWhtRate;
+  const dividendWhtNetCost = Math.max(grossDividendWht - dividendWhtReclaim, 0);
 
   const tobRecorded = useMemo(
     () =>
@@ -262,7 +269,7 @@ export default function PortfolioTaxPage() {
           }, 0),
         0,
       ),
-    [summaries, txYear],
+    [summaries, txYear, convertToTarget],
   );
 
   const isEmpty = summaries.length === 0;
@@ -558,21 +565,26 @@ export default function PortfolioTaxPage() {
                 <CardDescription>{t("tax.belgianRulesDesc")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendIncomeTracked")}</p>
                     <p className="text-lg font-bold tabular-nums">{fmt(totalDividendIncome)}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t("tax.fromDividendTransactions")}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendExemptionUsed")}</p>
-                    <p className="text-lg font-bold tabular-nums">{fmt(BELGIAN_DIVIDEND_EXEMPT)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t("tax.firstExemptBelgianDividends")}</p>
+                    <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtPaid")}</p>
+                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(grossDividendWht)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{(dividendWhtRate * 100).toFixed(0)}% {t("tax.witheldAtSource")}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
-                    <p className="text-xs text-muted-foreground mb-1">{t("tax.estimatedDividendWht")}</p>
-                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(dividendWhtEstimate)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t("tax.estimateBasedOnThreshold")}</p>
+                    <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtReclaim")}</p>
+                    <p className="text-lg font-bold tabular-nums text-accent">{fmt(dividendWhtReclaim)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("tax.firstExemptBelgianDividends")} ({fmt(dividendExemption)})</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtNetCost")}</p>
+                    <p className="text-lg font-bold tabular-nums text-destructive">{fmt(dividendWhtNetCost)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("tax.afterReclaim")}</p>
                   </div>
                 </div>
 

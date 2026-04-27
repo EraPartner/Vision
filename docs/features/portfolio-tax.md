@@ -108,11 +108,17 @@ The page integrates with the `BelgianTaxProfileContext` to:
 
 ### Belgian Rules Widget
 
-Shows:
-- Total dividend income tracked from dividend transactions
-- Belgian dividend exemption amount (€859)
-- Estimated dividend withholding tax
-- Total TOB recorded from buy transactions
+Shows the year-aware dividend WHT picture (using the active year's `dividendExemption` and `dividendWHTRate` from `getTaxTable`):
+
+| Field | Meaning |
+|-------|---------|
+| Dividend income tracked | Sum of all `dividend` transactions for the tax year, currency-converted |
+| WHT paid (gross) | `totalDividendIncome × WHT rate` — withheld at source |
+| WHT reclaimable | `min(totalDividendIncome, exemption) × WHT rate` — credited via tax return |
+| Net WHT cost | Gross WHT − reclaim |
+
+Plus:
+- Total TOB recorded from buy-transaction taxes (currency-converted).
 
 ## Tax Breakdown Categories
 
@@ -140,6 +146,8 @@ function convertToTarget(amount: number, fromCurrency?: string) {
   return (amount * rateFrom) / rateTo;
 }
 ```
+
+**Conversion coverage (2026-04-26 fix):** the per-investment summary, tax/fee type breakdown, monthly tax/fee trend, total realized & unrealized gain, total dividend income, and TOB total all run through `convertToTarget`. An earlier implementation skipped conversion in the monthly trend chart and on `realizedGain`, which mixed native transaction currencies into the displayed totals.
 
 ## Query Configuration
 
