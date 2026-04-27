@@ -1876,6 +1876,8 @@ const nl: Record<string, string> = {
   'splitDialog.total': 'Totaal: {amount}',
   'splits.created': 'Splits aangemaakt',
   'splits.removed': 'Splits verwijderd',
+  'splits.settled': 'Splits verrekend',
+  'splits.settledFailed': 'Splits verrekenen mislukt',
   'statistics.average': 'Gemiddelde',
   'statistics.avgMonthlyExpenses': 'Gem. maandelijkse uitgaven',
   'statistics.avgMonthlyIncome': 'Gem. maandelijkse inkomsten',

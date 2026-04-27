@@ -1876,6 +1876,8 @@ const en: Record<string, string> = {
   'splitDialog.total': 'Total: {amount}',
   'splits.created': 'Splits created',
   'splits.removed': 'Splits removed',
+  'splits.settled': 'Splits settled',
+  'splits.settledFailed': 'Failed to settle splits',
   'statistics.average': 'Average',
   'statistics.avgMonthlyExpenses': 'Avg Monthly Expenses',
   'statistics.avgMonthlyIncome': 'Avg Monthly Income',
