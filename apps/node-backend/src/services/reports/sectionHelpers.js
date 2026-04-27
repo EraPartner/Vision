@@ -386,6 +386,8 @@ export const SECTION_CSS = `
   .chart-wrap {
     margin-bottom: 28px;
     overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   /* ── Data table ─────────────────────────────── */

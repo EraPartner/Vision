@@ -261,6 +261,8 @@ function buildBaseCss() {
       border: none;
       border-top: 1px solid hsl(var(--border));
       margin-bottom: 32px;
+      break-after: avoid;
+      page-break-after: avoid;
     }
 
     /* ── Placeholder (phase 1) ─────────────────────── */
@@ -491,7 +493,7 @@ async function buildPortfolioBody({ currency, period, sections }) {
 
   return valid
     .map(id => PORTFOLIO_SECTION_RENDERERS[id](data, { currency, period }))
-    .join('\n');
+    .join('\n<div class="page-break"></div>\n');
 }
 
 /**
@@ -514,7 +516,7 @@ async function buildTaxBody({ currency, period, sections, taxProfile, precompute
 
   return valid
     .map(id => TAX_SECTION_RENDERERS[id](data, { currency, period }))
-    .join('\n');
+    .join('\n<div class="page-break"></div>\n');
 }
 
 /**
