@@ -3,6 +3,7 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-23
+last_modified: 2026-04-26
 tags:
   - testing
   - inventory
@@ -57,10 +58,11 @@ bun run test
 
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
 
-### Recently Updated Backend Coverage (2026-04-23)
+### Recently Updated Backend Coverage (2026-04-26)
 
 | File | Area | Coverage Added |
 |------|------|----------------|
+| `apps/node-backend/tests/priceProviderRegistry.test.js` | Price providers (Kinesis) | Stale-run removal (≥ 8 identical prices), edge-point anomalies (first/last point 1.8x deviation), combined scenarios, immutability |
 | `apps/node-backend/tests/sseWriter.test.js` | SSE backpressure (Phase 3.2) | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format |
 
 ### Earlier Backend Coverage (2026-04-10)
@@ -84,7 +86,6 @@ Backend tests are located in `apps/node-backend/src/` alongside source files as 
 | **Deduplication** | `deduplication.js` | SHA-256 hashing and field-based matching logic |
 | **Recurring detection** | `recurringDetectionService.js` | Complex interval detection algorithm |
 | **Currency conversion** | `currencyConversionService.js` | Multi-source rate resolution, historical rates |
-| **Price providers** | `priceProviderService.js` | Spike sanitization, provider fallbacks |
 | **Materialized views** | `materializedViewService.js` | Call coalescing, concurrent refresh |
 | **Loan repayment** | `loanRepaymentService.js` | Amortization calculations for 3 loan types |
 | **Text normalization** | `textNormalization.js` | Recipient name cleaning, European number parsing |

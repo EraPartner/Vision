@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-04-24
-updated: 2026-04-25
-last_modified: 2026-04-25
+date: 2026-04-26
+updated: 2026-04-26
+last_modified: 2026-04-26
 adr-reference: 026
 tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down]
 description: Complete matrix of all 140 API endpoints organized by resource for quick lookup; Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase F adds 4 admin endpoints (provider health, probe, metrics, endpoints manifest). Phase 10 adds multi-method cash flow forecast endpoint. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
@@ -14,7 +14,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 140 API endpoints across 20 route files (updated Phase E — adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
+> All 141 API endpoints across 20 route files (updated 2026-04-26 — Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -50,7 +50,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | DELETE | `/api/categories/:id` | Hard delete | — | [[docs/api/categories\|Categories]] |
 | POST | `/api/categories/:id/assign` | Assign to recipients by ID | — | [[docs/api/categories\|Categories]] |
 
-## Recipients (8 endpoints)
+## Recipients (9 endpoints)
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -62,6 +62,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | POST | `/api/recipients/:id/merge` | Merge aliases into primary | — | [[docs/api/recipients\|Recipients]] |
 | POST | `/api/recipients/:id/unmerge` | Unmerge from primary | — | [[docs/api/recipients\|Recipients]] |
 | GET | `/api/recipients/:id/aliases` | Get aliases | — | [[docs/api/recipients\|Recipients]] |
+| GET | `/api/recipients/clusters` | Identify merge-candidate clusters | — | [[docs/api/recipients\|Recipients]] |
 
 ## Planned Transactions (7 endpoints) — Phase 3 / Phase 6
 
@@ -203,15 +204,15 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/api/admin/metrics/requests` | Rolling request metrics per route (in-memory, 15 min) | — | [[docs/api/admin\|Admin]] |
 | GET | `/api/admin/endpoints` | Static endpoint manifest from Express router | — | [[docs/api/admin\|Admin]] |
 
-## Reports (3 endpoints) — Phase 3 / Phase 7
+## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
-Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Returns binary stream (`application/pdf`).
+Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| POST | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST | `/api/reports/portfolio` | Generate portfolio PDF (placeholder; coming soon) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST | `/api/reports/tax` | Generate tax PDF (placeholder; coming soon) | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST | `/api/reports/portfolio` | Generate portfolio PDF (placeholder; coming soon); accepts but ignores `excludedCategoryIds` and `excludedRecipientIds` | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST | `/api/reports/tax` | Generate tax PDF (placeholder; coming soon); accepts but ignores `excludedCategoryIds` and `excludedRecipientIds` | — | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
 ## Aggregations (10 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
@@ -273,7 +274,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 |----------|-----------|--------------|
 | Transactions | 7 | 2 |
 | Categories | 7 | 0 |
-| Recipients | 8 | 0 |
+| Recipients | 9 | 0 |
 | Planned Transactions | 7 | 1 |
 | Investments | 14 | 0 |
 | Watchlist | 5 | 0 |
@@ -290,7 +291,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | Reports (Phase 3/7) | 3 | 0 |
 | Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **140** | **10** |
+| **Total** | **141** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 
