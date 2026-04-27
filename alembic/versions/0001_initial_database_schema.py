@@ -591,6 +591,57 @@ CREATE TABLE IF NOT EXISTS ai_messages (
 );
 """
 
+# Import pipeline staging — referenced by transactions.import_batch_id (added
+# in 0003) and by 0015's recipient_match_patterns work that joins through
+# import_staging_rows. The original DDL lived in legacy_versions/0030 which is
+# excluded from the active sequence; folded into the baseline so fresh DBs
+# can apply 0003 and 0015 without missing-table failures.
+IMPORT_BATCHES_SQL = """
+CREATE TABLE IF NOT EXISTS import_batches (
+  id BIGSERIAL PRIMARY KEY,
+  adapter_name TEXT NOT NULL,
+  source_filename TEXT,
+  source_size_bytes BIGINT,
+  custom_config JSONB,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','staging','validating','matching','committing','complete','failed','aborted')),
+  rows_total INTEGER NOT NULL DEFAULT 0,
+  rows_imported INTEGER NOT NULL DEFAULT 0,
+  rows_duplicate INTEGER NOT NULL DEFAULT 0,
+  rows_error INTEGER NOT NULL DEFAULT 0,
+  error_summary TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+"""
+
+IMPORT_STAGING_ROWS_SQL = """
+CREATE TABLE IF NOT EXISTS import_staging_rows (
+  id BIGSERIAL PRIMARY KEY,
+  batch_id BIGINT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+  row_index INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','validated','matched','committed','duplicate','error')),
+  tx_date DATE,
+  bank_account TEXT,
+  recipient_raw TEXT,
+  memo TEXT,
+  amount NUMERIC(20, 4),
+  currency TEXT,
+  balance NUMERIC(20, 4),
+  recipient_account TEXT,
+  recipient_address TEXT,
+  recipient_bank_name TEXT,
+  comment TEXT,
+  raw_data TEXT,
+  tx_hash TEXT,
+  resolved_recipient_id INTEGER,
+  resolved_bank_account_id INTEGER,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
 # Ordered list of (label, sql) table DDLs. Dependency order honored.
 TABLE_DDL: list[tuple[str, str]] = [
     ('categories', CATEGORIES_SQL),
@@ -619,6 +670,8 @@ TABLE_DDL: list[tuple[str, str]] = [
     ('saved_charts', SAVED_CHARTS_SQL),
     ('ai_conversations', AI_CONVERSATIONS_SQL),
     ('ai_messages', AI_MESSAGES_SQL),
+    ('import_batches', IMPORT_BATCHES_SQL),
+    ('import_staging_rows', IMPORT_STAGING_ROWS_SQL),
 ]
 
 
@@ -747,6 +800,14 @@ INDEX_SQL: list[str] = [
 
     # ai_messages
     "CREATE INDEX IF NOT EXISTS idx_ai_messages_conv_created ON ai_messages (conversation_id, created_at);",
+
+    # import_batches
+    "CREATE INDEX IF NOT EXISTS idx_import_batches_status ON import_batches (status) WHERE status NOT IN ('complete','failed','aborted');",
+    "CREATE INDEX IF NOT EXISTS idx_import_batches_started_at ON import_batches (started_at DESC);",
+
+    # import_staging_rows
+    "CREATE INDEX IF NOT EXISTS idx_staging_batch_status ON import_staging_rows (batch_id, status);",
+    "CREATE INDEX IF NOT EXISTS idx_staging_tx_hash ON import_staging_rows (tx_hash) WHERE tx_hash IS NOT NULL;",
 ]
 
 

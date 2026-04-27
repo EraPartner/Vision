@@ -123,8 +123,11 @@ const LEGACY_REVISIONS = new Set([
  * moved to legacy_versions/, rewrite it to the current baseline so
  * `alembic upgrade head` does not fail with "Can't locate revision".
  *
- * Fresh DBs have no `alembic_version` table yet — alembic creates it on
- * first upgrade. We skip silently in that case.
+ * On a truly fresh DB the table does not exist yet. Alembic would otherwise
+ * create it itself with a default `version_num VARCHAR(32)`, which is too
+ * narrow for current revision names (e.g. `0003_import_batch_id_on_transactions`
+ * is 38 chars). We preflight-create it at VARCHAR(64) so the first revision
+ * insert does not blow up with a string-truncation error.
  */
 export async function stampBaselineIfLegacy() {
   try {
@@ -135,7 +138,14 @@ export async function stampBaselineIfLegacy() {
        ) AS present`
     )
     if (!tableExists.rows[0]?.present) {
-      return { skipped: true, reason: 'alembic_version table not present' }
+      await query(
+        `CREATE TABLE alembic_version (
+           version_num VARCHAR(64) NOT NULL,
+           CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+         )`
+      )
+      logger.info('alembic_version preflight-created with VARCHAR(64)')
+      return { skipped: true, reason: 'preflight-created empty alembic_version' }
     }
 
     // Expand version_num to VARCHAR(64) if narrower — older DBs created by

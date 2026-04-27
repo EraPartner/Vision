@@ -4,10 +4,10 @@ type: architecture-doc
 status: active
 date: 2026-04-27
 updated: 2026-04-27
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting]
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes]
 description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, and backup/restore bundle system (Phase 1+2)
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js"]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py"]
 ---
 
 # Electron Desktop Architecture
@@ -443,6 +443,22 @@ See [[docs/api/health|Health API]] for details.
 ---
 
 ## Packaging Troubleshooting
+
+### Fresh Database Installation Fails on Migration 0003
+
+**Symptom:** Packaged app boots, launches Docker container, but migration fails with FK constraint violation or string truncation error on revision `0003_import_batch_id_on_transactions`.
+
+**Root cause:** Two pre-ADR-027 squash oversights:
+1. Baseline migration 0001 was missing `import_batches` and `import_staging_rows` tables; migration 0003 tried to FK to non-existent tables.
+2. If DB is truly fresh (no `alembic_version` table), alembic auto-creates it at `VARCHAR(32)`, but revision name `0003_import_batch_id_on_transactions` (38 chars) causes string truncation.
+
+**Fix:** Implemented in 2026-04-27 release:
+1. Ported import staging tables from legacy 0030 into 0001 baseline.
+2. Preflight-created `alembic_version` table at `VARCHAR(64)` before alembic runs.
+
+See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-bugs-fixed-2026-04-27|ADR-027 follow-up: Migration Ordering Bugs Fixed]].
+
+**Verification:** Fresh packaged app with clean Docker volume should boot to head at migration `0015_recipient_match_patterns` with no FK or truncation errors.
 
 ### Cannot find module './backup/bundle'
 

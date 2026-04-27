@@ -3,6 +3,7 @@ title: ADR-027 - Alembic as Single Source of Schema Truth
 type: adr
 status: Accepted
 date: 2026-04-21
+updated: 2026-04-27
 tags: [adr, backend, database, migrations, alembic, phase-1, schema]
 description: Port node-backend schemaInit.js (1021 LOC, idempotent CREATE-IF-NOT-EXISTS suite) into Alembic revisions and make Alembic the sole owner of schema DDL; node startup shells out to `alembic upgrade head`
 aliases: [adr-027, alembic-port, schema-ownership, single-migration-system]
@@ -146,6 +147,41 @@ If Alembic-only startup destabilizes production:
 
 Verification: Fresh DB → `alembic upgrade head` → 27 tables + `alembic_version = 0001_initial` confirmed on ephemeral postgres.
 Verification: Pre-port DB (stamped at e.g., `0031_ai_chat_tables`) → docker-entrypoint reconciliation block rewrites `alembic_version` to `0001_initial` → `alembic upgrade head` succeeds with no DDL changes.
+
+## Follow-up: Migration Ordering Bugs Fixed (2026-04-27)
+
+Two pre-existing Alembic migration ordering bugs that blocked fresh DB installs were identified and fixed:
+
+### Bug 1: Missing Tables in 0001 Baseline
+
+**Symptom:** Migrations 0003 (`import_batch_id_on_transactions`) and 0015 (`recipient_match_patterns`) failed on fresh installs with FK constraint violations.
+
+**Root cause:** `import_batches` and `import_staging_rows` tables (from legacy migration 0030) were not included in the 0001 baseline. Migration 0003 tried to add an FK to a table that didn't exist.
+
+**Fix:** Ported DDL from `alembic/legacy_versions/0030_import_pipeline_staging.py` (lines 48–126) into 0001:
+- Added `IMPORT_BATCHES_SQL` and `IMPORT_STAGING_ROWS_SQL` constants (table definitions)
+- Added these to `TABLE_DDL` list after `ai_messages` (ordering matters for FK resolution)
+- Added 4 indexes: `idx_import_batches_status` (partial), `idx_import_batches_started_at`, `idx_staging_batch_status`, `idx_staging_tx_hash` (partial)
+
+See `/Users/computer/Documents/Personal/Scripts/Projects/Vision/alembic/versions/0001_initial_database_schema.py`.
+
+### Bug 2: alembic_version Column Too Narrow
+
+**Symptom:** Fresh DB install failed with `StringDataRightTruncation` on migration 0003 because the revision name `0003_import_batch_id_on_transactions` (38 chars) exceeded alembic's default `VARCHAR(32)`.
+
+**Root cause:** When a fresh DB has no `alembic_version` table, alembic auto-creates it with a default `VARCHAR(32)` column. Modern revision IDs (naming pattern `0NNN_description`) can exceed 32 characters.
+
+**Fix:** Preflight creation in `stampBaselineIfLegacy()` (`apps/node-backend/src/database/migrate.js`, lines 132–149):
+- Checks if `alembic_version` table exists; if not, creates it upfront at `VARCHAR(64)` before alembic runs
+- Also expands pre-existing narrow columns from `VARCHAR(32)` to `VARCHAR(64)` on legacy DBs
+
+This ensures the first revision insert does not fail on string truncation.
+
+**Verification:** Fresh-install test (docker volume drop + clean boot):
+- 34 tables created
+- `alembic_version` stamped at `0015_recipient_match_patterns` (current head)
+- Both `import_batches` and `import_staging_rows` present with correct FK constraints
+- Backend healthy on port 3002
 
 ## Related
 

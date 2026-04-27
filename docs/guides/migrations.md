@@ -3,6 +3,7 @@ title: Database Migration Guide
 type: guide
 status: active
 date: 2026-04-21
+updated: 2026-04-27
 tags: [guide, database, migrations, alembic, postgresql, phase-1]
 description: How to create, run, and manage database migrations using Alembic
 aliases: [migration-guide, alembic-guide, database-schema, schema-changes]
@@ -132,11 +133,29 @@ alembic downgrade base
 
 > **Warning:** Downgrading in production may cause data loss. Always backup before rolling back.
 
+## Baseline (0001) Schema Scope
+
+The `0001_initial_database_schema` baseline includes the complete foundational schema from the legacy monolithic initialization:
+
+- **Core transaction tables:** categories, recipients, transactions, planned_transactions, transaction_raw_references
+- **Planned transaction support:** planned_transaction_executions, planned_transaction_loan_schedule
+- **Raw bank import tables:** belfius, revolut, kbc, sabb, wise, vision, custom, manual (PostgreSQL table inheritance hierarchy)
+- **Portfolio & investment:** investments (base table with stock, etf, metals, crypto, real_estate, bond, savings child tables via inheritance), asset_price_history, portfolio_transactions, watchlist
+- **Financial data:** exchange_rates, belgian_inflation_rates
+- **User configuration:** user_settings, saved_charts
+- **AI conversation:** ai_conversations, ai_messages
+- **Import pipeline staging:** **import_batches, import_staging_rows** (ported from legacy 0030)
+- **Support:** All enums, indexes, triggers, helper functions, and extensions
+
+**Note:** As of 2026-04-27, the 0001 baseline includes import pipeline staging tables (`import_batches`, `import_staging_rows`) to fix migration ordering bugs. This ensures migrations 0003 and 0015+ have required FK targets on fresh DB installs.
+
+**Note on alembic_version column:** The `alembic_version` table is preflight-created at `VARCHAR(64)` to accommodate modern revision names (e.g., `0003_import_batch_id_on_transactions` = 38 chars). See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-bugs-fixed-2026-04-27|ADR-027 follow-up]].
+
 ## Migration Inventory
 
 | # | Migration | Description |
 |---|-----------|-------------|
-| 0001 | `initial_database_schema` | Foundation: categories, recipients, transactions, planned_transactions, exchange_rates, raw transaction tables |
+| 0001 | `initial_database_schema` | Foundation: 27 tables, 5 enums, 73 indexes, 13 triggers — see [[#baseline-0001-schema-scope|Baseline Scope]] above |
 | 0002 | `add_url_to_planned_transactions` | Adds `url` field to planned transactions |
 | 0003 | `make_recipient_nullable` | Makes recipient_id nullable on transactions |
 | 0004 | `portfolio_tables` | Introduces portfolio/investment tracking tables |
