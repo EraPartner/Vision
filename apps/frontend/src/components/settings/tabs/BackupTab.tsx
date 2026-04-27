@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { apiClient } from '@/lib/api';
+import { useRestoreBackup } from '@/hooks/useRestoreBackup';
 
 type EncryptionStatus = {
     secureStorageAvailable: boolean;
@@ -51,8 +52,8 @@ export const BackupTab = memo(function BackupTab({
     const [savingBackupPassphrase, setSavingBackupPassphrase] = useState(false);
     const [reminderDismissed, setReminderDismissed] = useState(false);
     const [restoreFile, setRestoreFile] = useState('');
-    const [restoreRunning, setRestoreRunning] = useState(false);
     const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+    const { start: startRestore, running: restoreRunning, passphraseDialog: restorePassphraseDialog } = useRestoreBackup();
 
     useEffect(() => {
         if (!open) return;
@@ -204,38 +205,7 @@ export const BackupTab = memo(function BackupTab({
     const handleRestoreConfirmed = async () => {
         setRestoreConfirmOpen(false);
         if (!restoreFile) return;
-        setRestoreRunning(true);
-        try {
-            const result = await apiClient.restoreBackup(restoreFile);
-            if (!result) return;
-            if (result.success) {
-                // Write frontend state from bundle back to localStorage before reload
-                if (result.frontendState?.keys) {
-                    try {
-                        for (const [key, value] of Object.entries(result.frontendState.keys)) {
-                            window.localStorage.setItem(key, String(value));
-                        }
-                    } catch { /* non-fatal */ }
-                }
-                toast.success(t('settings.restore.success'), {
-                    description: t('settings.restore.successDesc').replace('{file}', result.file ?? restoreFile),
-                    duration: 8000,
-                });
-                setTimeout(() => window.location.reload(), 3000);
-            } else {
-                // Surface schema version mismatch with a dedicated message
-                const errMsg = result.error ?? '';
-                if (errMsg.startsWith('BUNDLE_SCHEMA_NEWER:')) {
-                    toast.error(t('settings.restore.schemaMismatch'), { description: errMsg.replace('BUNDLE_SCHEMA_NEWER: ', ''), duration: 12000 });
-                } else {
-                    toast.error(t('settings.restore.failed'), { description: errMsg });
-                }
-            }
-        } catch (err: unknown) {
-            toast.error(t('settings.restore.failed'), { description: String(err) });
-        } finally {
-            setRestoreRunning(false);
-        }
+        await startRestore(restoreFile);
     };
 
     return (
@@ -501,6 +471,8 @@ export const BackupTab = memo(function BackupTab({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {restorePassphraseDialog}
         </>
     );
 });

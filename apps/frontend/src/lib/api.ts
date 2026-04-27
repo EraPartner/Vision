@@ -150,6 +150,7 @@ export const apiClient = {
     runBackup: electron.runBackup,
     selectBackupFile: electron.selectBackupFile,
     restoreBackup: electron.restoreBackup,
+    isBackupEncrypted: electron.isBackupEncrypted,
     selectBackupDir: electron.selectBackupDir,
     saveBackupSettings: electron.saveBackupSettings,
     loadBackupSettings: electron.loadBackupSettings,

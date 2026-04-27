@@ -11,9 +11,9 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { apiClient } from '@/lib/api';
+import { useRestoreBackup } from '@/hooks/useRestoreBackup';
 
 interface RestoreFromBackupCardProps {
     /** Called after successful restore (before page reload), or if the user dismisses. */
@@ -28,14 +28,16 @@ interface RestoreFromBackupCardProps {
  * Shows only in the Electron shell (returns null in web/Docker). Handles the
  * full restore lifecycle: file selection → confirmation → DB restore →
  * localStorage frontend-state write → page reload. Schema-version errors are
- * surfaced with a dedicated user-friendly message.
+ * surfaced with a dedicated user-friendly message. When the selected backup is
+ * encrypted, prompts the user for the passphrase via {@link useRestoreBackup}.
  */
 export function RestoreFromBackupCard({ onDismiss, compact = false }: RestoreFromBackupCardProps) {
     const { t } = useLanguage();
 
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [running, setRunning] = useState(false);
+
+    const { start, running, passphraseDialog } = useRestoreBackup({ onSuccess: onDismiss });
 
     if (!apiClient.isElectron()) return null;
 
@@ -49,47 +51,7 @@ export function RestoreFromBackupCard({ onDismiss, compact = false }: RestoreFro
     const handleConfirmed = async () => {
         if (!selectedFile) return;
         setConfirmOpen(false);
-        setRunning(true);
-        try {
-            const result = await apiClient.restoreBackup(selectedFile);
-            if (!result) return;
-
-            if (result.success) {
-                // Restore localStorage frontend state from bundle before reload.
-                if (result.frontendState?.keys) {
-                    try {
-                        for (const [key, value] of Object.entries(result.frontendState.keys)) {
-                            window.localStorage.setItem(key, String(value));
-                        }
-                    } catch {
-                        // Non-fatal: continue even if localStorage is restricted.
-                    }
-                }
-                toast.success(t('settings.restore.success'), {
-                    description: t('settings.restore.successDesc').replace(
-                        '{file}',
-                        result.file ?? selectedFile,
-                    ),
-                    duration: 8000,
-                });
-                onDismiss?.();
-                setTimeout(() => window.location.reload(), 3000);
-            } else {
-                const errMsg = result.error ?? '';
-                if (errMsg.startsWith('BUNDLE_SCHEMA_NEWER:')) {
-                    toast.error(t('settings.restore.schemaMismatch'), {
-                        description: errMsg.replace('BUNDLE_SCHEMA_NEWER: ', ''),
-                        duration: 12000,
-                    });
-                } else {
-                    toast.error(t('settings.restore.failed'), { description: errMsg });
-                }
-                setRunning(false);
-            }
-        } catch (err: unknown) {
-            toast.error(t('settings.restore.failed'), { description: String(err) });
-            setRunning(false);
-        }
+        await start(selectedFile);
     };
 
     const handleCancel = () => {
@@ -161,6 +123,8 @@ export function RestoreFromBackupCard({ onDismiss, compact = false }: RestoreFro
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {passphraseDialog}
         </>
     );
 }

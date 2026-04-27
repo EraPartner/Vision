@@ -373,11 +373,21 @@ async function getBackupPassphraseStatus() {
   };
 }
 
-async function getBackupEncryptionKey() {
-  const passphrase = await getBackupPassphrase();
-  if (!passphrase) return null;
+function deriveBackupKeyFromPassphrase(passphrase) {
+  if (!passphrase || typeof passphrase !== 'string') return null;
   return crypto.scryptSync(passphrase, `${APP_NAME.toLowerCase()}-backup-v1`, 32);
 }
+
+async function getBackupEncryptionKey() {
+  const passphrase = await getBackupPassphrase();
+  return deriveBackupKeyFromPassphrase(passphrase);
+}
+
+// Sentinel error messages used to drive UI passphrase prompts. The renderer
+// recognises these strings to (re-)open the passphrase modal rather than
+// surfacing a generic restore failure.
+const ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED';
+const ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE';
 
 async function cleanupOldBackups(destDir, deviceId, keep = BACKUP_RETENTION_KEEP, graceMs = BACKUP_RETENTION_GRACE_MS) {
   const prefix = `vision_backup_${deviceId}_`;
@@ -481,10 +491,9 @@ async function encryptBackupFile(sqlFilePath) {
   return { file: encPath, encrypted: true };
 }
 
-async function decryptBackupFileToTemp(encryptedFilePath) {
-  const key = await getBackupEncryptionKey();
+async function decryptBackupFileToTemp(encryptedFilePath, key) {
   if (!key) {
-    throw new Error('This backup is encrypted. Set VISION_BACKUP_PASSPHRASE to restore it.');
+    throw new Error(ERR_PASSPHRASE_REQUIRED);
   }
 
   const headerLen = BACKUP_ENC_MAGIC.length + BACKUP_ENC_IV_BYTES;
@@ -511,33 +520,43 @@ async function decryptBackupFileToTemp(encryptedFilePath) {
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
   const tempSqlPath = path.join(app.getPath('temp'), `vision_restore_${Date.now()}_${process.pid}.sql`);
 
-  await new Promise((resolve, reject) => {
-    const input = fs.createReadStream(encryptedFilePath, { start: headerLen });
-    const output = fs.createWriteStream(tempSqlPath);
+  try {
+    await new Promise((resolve, reject) => {
+      const input = fs.createReadStream(encryptedFilePath, { start: headerLen });
+      const output = fs.createWriteStream(tempSqlPath);
 
-    let settled = false;
-    const fail = (err) => {
-      if (settled) return;
-      settled = true;
-      input.destroy();
-      decipher.destroy();
-      output.destroy();
-      fs.unlink(tempSqlPath, () => {});
-      reject(err);
-    };
+      let settled = false;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        input.destroy();
+        decipher.destroy();
+        output.destroy();
+        fs.unlink(tempSqlPath, () => {});
+        reject(err);
+      };
 
-    input.on('error', fail);
-    decipher.on('error', fail);
-    output.on('error', fail);
+      input.on('error', fail);
+      decipher.on('error', fail);
+      output.on('error', fail);
 
-    input.pipe(decipher).pipe(output);
+      input.pipe(decipher).pipe(output);
 
-    output.on('finish', () => {
-      if (settled) return;
-      settled = true;
-      resolve();
+      output.on('finish', () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      });
     });
-  });
+  } catch (err) {
+    // Wrong key surfaces from OpenSSL as "bad decrypt" / EVP errors. Convert to
+    // a sentinel so the UI can prompt the user again.
+    const msg = err && err.message ? String(err.message) : '';
+    if (/bad decrypt/i.test(msg) || /wrong final block/i.test(msg) || (err && err.code === 'ERR_OSSL_BAD_DECRYPT')) {
+      throw new Error(ERR_INVALID_PASSPHRASE);
+    }
+    throw err;
+  }
 
   return tempSqlPath;
 }
@@ -1449,14 +1468,39 @@ async function runBundleBackup(destDir, frontendStateJson = null) {
  * Returns { success, file, frontendState } on success.
  * frontendState is the parsed { keys: { … } } object or null.
  */
-async function runBundleRestore(bundlePath) {
+async function runBundleRestore(bundlePath, { passphrase } = {}) {
   if (!bundlePath) throw new Error('No backup file specified');
   if (!fs.existsSync(bundlePath)) throw new Error(`File not found: ${bundlePath}`);
 
-  const key = await getBackupEncryptionKey();
+  const isEncrypted = await isBundleEncrypted(bundlePath);
+  let key = null;
+  if (isEncrypted) {
+    key = deriveBackupKeyFromPassphrase(passphrase) ?? await getBackupEncryptionKey();
+    if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
+  }
 
-  // Open bundle — decrypt + extract to temp dir
-  const { metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } = await openBundle(bundlePath, { key });
+  // Open bundle — decrypt + extract to temp dir. openBundle throws on bad
+  // decrypt; convert to a sentinel so the UI can re-prompt for the passphrase.
+  let metadata, dbSqlPath, attachmentsDir, frontendState, cleanup;
+  try {
+    ({ metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } = await openBundle(bundlePath, { key }));
+  } catch (err) {
+    if (isEncrypted) {
+      const msg = err && err.message ? String(err.message) : '';
+      if (
+        /bad decrypt/i.test(msg) ||
+        /wrong final block/i.test(msg) ||
+        /missing metadata\.json/i.test(msg) ||
+        /missing db\.sql/i.test(msg) ||
+        /end of central directory/i.test(msg) ||
+        /not a zip file/i.test(msg) ||
+        (err && err.code === 'ERR_OSSL_BAD_DECRYPT')
+      ) {
+        throw new Error(ERR_INVALID_PASSPHRASE);
+      }
+    }
+    throw err;
+  }
 
   let dbUser = 'ftm_user';
   let dbPass = '';
@@ -1636,14 +1680,16 @@ ipcMain.handle('update:install-shell', async () => {
 //   3. Restore via `docker run --rm -v <dir>:/restore <pg-image> psql -f /restore/<file>`
 //      — a temporary throwaway container that has direct access to the host file
 //   4. Restart the app container (backend reconnects + alembic upgrade head runs)
-async function runRestore(sqlFilePath) {
+async function runRestore(sqlFilePath, { passphrase } = {}) {
   if (!sqlFilePath) throw new Error('No backup file specified');
   if (!fs.existsSync(sqlFilePath)) throw new Error(`File not found: ${sqlFilePath}`);
 
   let restoreSource = sqlFilePath;
   let cleanupRestoreSource = () => {};
   if (await isEncryptedBackupFile(sqlFilePath)) {
-    restoreSource = await decryptBackupFileToTemp(sqlFilePath);
+    const key = deriveBackupKeyFromPassphrase(passphrase) ?? await getBackupEncryptionKey();
+    if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
+    restoreSource = await decryptBackupFileToTemp(sqlFilePath, key);
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
 
@@ -1774,15 +1820,28 @@ ipcMain.handle('backup:select-file', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:restore', async (_event, filePath) => {
+ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return false;
+    if (filePath.endsWith('.visionbak') || filePath.endsWith('.visionbak.enc')) {
+      return await isBundleEncrypted(filePath);
+    }
+    return await isEncryptedBackupFile(filePath);
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
+  const passphrase = opts && typeof opts === 'object' ? opts.passphrase : undefined;
   try {
     // Route .visionbak / .visionbak.enc through the new bundle restore path;
     // legacy .sql / .enc files fall through to the original runRestore.
     const isBundle = filePath.endsWith('.visionbak') || filePath.endsWith('.visionbak.enc');
     const result = isBundle
-      ? await runBundleRestore(filePath)
-      : await runRestore(filePath);
+      ? await runBundleRestore(filePath, { passphrase })
+      : await runRestore(filePath, { passphrase });
     return result;
   } catch (err) {
     // Ensure app container is back up even after an error

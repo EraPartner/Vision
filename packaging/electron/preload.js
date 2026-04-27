@@ -54,11 +54,20 @@ contextBridge.exposeInMainWorld('electronBackup', {
 
   /**
    * Restore from a backup file.  Accepts .visionbak, .visionbak.enc (new bundle
-   * format) or legacy .sql / .enc files.
+   * format) or legacy .sql / .enc files. When the file is encrypted, supply
+   * `opts.passphrase` to decrypt it.
    * @param {string} filePath  Absolute path to the backup file on the host.
+   * @param {{ passphrase?: string }} [opts]
    * @returns {Promise<{ success: boolean, file?: string, frontendState?: object|null, error?: string }>}
    */
-  restoreBackup: (filePath) => ipcRenderer.invoke('backup:restore', filePath),
+  restoreBackup: (filePath, opts) => ipcRenderer.invoke('backup:restore', filePath, opts),
+
+  /**
+   * Detect whether a backup file is encrypted.
+   * @param {string} filePath  Absolute path to the backup file on the host.
+   * @returns {Promise<boolean>}
+   */
+  isEncrypted: (filePath) => ipcRenderer.invoke('backup:is-encrypted', filePath),
 
   /**
    * Persist backup settings (backupDir, backupOnQuit) to Electron settings.json.

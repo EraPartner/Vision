@@ -22,7 +22,9 @@ type ElectronBackup = {
     runBackup: (destDir: string, frontendStateJson?: string | null) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
     selectFile: () => Promise<string | null>;
     /** Accepts .visionbak, .visionbak.enc, or legacy .sql / .enc files. */
-    restoreBackup: (filePath: string) => Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string }>;
+    restoreBackup: (filePath: string, opts?: { passphrase?: string }) => Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string }>;
+    /** Detect whether a backup file is encrypted (bundle or legacy). */
+    isEncrypted?: (filePath: string) => Promise<boolean>;
     selectDir: () => Promise<string | null>;
     saveSettings: (settings: { backupDir: string; backupOnQuit: boolean }) => Promise<void>;
     loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
@@ -87,10 +89,21 @@ export async function selectBackupFile(): Promise<string | null> {
 
 export async function restoreBackup(
     filePath: string,
+    opts?: { passphrase?: string },
 ): Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string } | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
-    return backup.restoreBackup(filePath);
+    return backup.restoreBackup(filePath, opts);
+}
+
+export async function isBackupEncrypted(filePath: string): Promise<boolean> {
+    const backup = getElectronBackup();
+    if (!backup?.isEncrypted) return false;
+    try {
+        return await backup.isEncrypted(filePath);
+    } catch {
+        return false;
+    }
 }
 
 export async function selectBackupDir(): Promise<string | null> {
