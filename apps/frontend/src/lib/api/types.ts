@@ -31,6 +31,46 @@ export interface ImportResult {
     errors: number;
     status?: string;
     error_message?: string;
+    batch_id?: number;
+    requires_review?: boolean;
+}
+
+export type MatchSource = 'exact' | 'fuzzy' | 'pattern' | 'new';
+
+export interface ImportStagingRow {
+    id: number;
+    row_index: number;
+    recipient_raw: string;
+    amount: string;
+    currency: string | null;
+    tx_date: string;
+    memo: string | null;
+    match_source: MatchSource | null;
+    match_similarity: number | null;
+    matched_pattern_id: number | null;
+    user_override_recipient_id: number | null;
+}
+
+export interface ImportPreviewGroup {
+    recipient_id: number | null;
+    recipient_name: string | null;
+    matched_pattern_id: number | null;
+    matched_pattern_text: string | null;
+    matched_pattern_kind: string | null;
+    row_count: number;
+    rows: ImportStagingRow[];
+}
+
+export interface ImportPreviewResponse {
+    batch_id: number;
+    groups: ImportPreviewGroup[];
+    totals: {
+        exact: number;
+        fuzzy: number;
+        pattern: number;
+        new: number;
+        unresolved: number;
+    };
 }
 
 export interface NetWorthSnapshot {

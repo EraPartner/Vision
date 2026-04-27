@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-04-24
 updated: 2026-04-26
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, performance, concurrency, import-pipeline, component-split, error-handling]
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
 description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components.
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx"]
@@ -66,6 +66,52 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 2. **Reusability:** Components can be imported independently in other contexts
 3. **Testability:** Each card can be tested in isolation without mocking the entire page
 4. **Scalability:** New import card types can be added without growing page size
+
+## Recipient Match Patterns and Cluster Analysis
+
+After merging recipients via the `POST /api/recipients/:id/merge` endpoint, the frontend may receive a `patternSuggestion` in the response. This suggestion identifies common prefixes and categorization patterns among related recipients.
+
+### Pattern Suggestion Toast (Frontend)
+
+When a merge response includes a `patternSuggestion`, the `useMergeRecipients` hook displays a second toast notification (duration 10 seconds with action button):
+- **Title:** `recipients.createRuleSuggestion` (i18n key)
+- **Action Button:** `recipients.createRule` (i18n key)
+- **Purpose:** Suggest pattern-based rules for automating future merges
+
+### Recipient Clusters Endpoint
+
+**Route:** `GET /api/recipients/clusters` (Phase H — April 2026)  
+**Backend Service:** [[apps/node-backend/src/services/recipientClusterService.js]]
+
+Analyzes active primary recipients and identifies clusters with:
+- Longest common prefix (LCP) of 8+ characters
+- Shared or similar categories
+- Confidence scoring (0.0–1.0)
+- Suggested pattern kind (`"prefix"` for `LCCPREFIX%` matching)
+
+**Response Example:**
+```json
+{
+  "items": [
+    {
+      "lcp": "SUPER",
+      "confidence": 0.95,
+      "recipientIds": [1, 5, 7],
+      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Super Convenience"],
+      "categoryId": 5,
+      "suggestedPattern": "super%",
+      "suggestedKind": "prefix"
+    }
+  ],
+  "total": 1
+}
+```
+
+### Use Cases
+
+1. **Post-Merge Suggestion:** After manually merging two similar recipients, the frontend offers to create a reusable pattern rule
+2. **Bulk Cleanup:** Shows a "Cleanup Card" that lists all identified clusters, allowing batch rule creation
+3. **Conflict Prevention:** Rules prevent future mistaken splits by auto-merging lookalike recipients
 
 ## Supported Banks
 
@@ -327,7 +373,7 @@ event: progress
 data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":2,"errors":0}
 
 event: complete
-data: {"batchId":42,"total":150,"imported":148,"duplicates":2,"errors":0}
+data: {"batchId":42,"total_processed":150,"imported":148,"duplicates":2,"errors":0}
 ```
 
 ### Backpressure & Resource Management (Phase C)

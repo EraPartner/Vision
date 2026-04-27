@@ -1,10 +1,19 @@
 /**
  * Import pipeline — MATCH
  *
- * Reads validated staging rows, batch-resolves `recipient_raw` to recipient
- * ids using pg_trgm via `findBestRecipientMatches`, and upserts unmatched
- * names into the canonical `recipients` table. Writes the resolved id back
- * onto the staging row and marks it 'matched'.
+ * Resolves each validated staging row's `recipient_raw` to a canonical
+ * recipient id in three ordered phases:
+ *
+ *   1. Pattern   — literal_prefix / glob / regex rules owned by the user.
+ *                  Fastest signal; first match wins.
+ *   2. Exact/Fuzzy — pg_trgm via `findBestRecipientMatches`.
+ *                  Exact normalized hit preferred; fuzzy fallback above 0.7.
+ *   3. New        — names not resolved by either phase are upserted as new
+ *                  recipients.
+ *
+ * Every staging row is stamped with `match_source`, `match_similarity`,
+ * and `matched_pattern_id` so the review UI can surface exactly how each
+ * row was resolved.
  */
 
 import { query, withTransaction } from '../../database/connection.js';
@@ -13,6 +22,7 @@ import {
   findBestRecipientMatches,
   normalizeForMatching,
 } from '../calculations/normalization.js';
+import { loadActivePatterns, applyPatterns } from '../recipientPatternService.js';
 
 const MATCH_UPDATE_CHUNK = 500;
 
@@ -30,16 +40,41 @@ export async function matchBatch({ batchId, onProgress }) {
   const total = staged.length;
   if (onProgress) onProgress({ phase: 'matching', current: 0, total });
 
-  // Collect distinct non-null raw names.
-  const distinctRaw = [...new Set(staged.map((r) => r.recipient_raw).filter((n) => n && String(n).trim().length))];
+  const distinctRaw = [
+    ...new Set(staged.map((r) => r.recipient_raw).filter((n) => n && String(n).trim().length)),
+  ];
 
-  // 1. Batch fuzzy/exact match against existing recipients.
-  const matches = await findBestRecipientMatches(distinctRaw);
+  // --- Phase 1: pattern match ---
+  const patternRows = await loadActivePatterns();
+  const patternMatches = await applyPatterns(distinctRaw, patternRows);
 
-  // 2. Upsert the un-matched names so every distinct recipient_raw resolves to an id.
-  const resolved = new Map(); // raw -> recipientId
-  for (const [raw, m] of matches) resolved.set(raw, m.recipientId);
+  // --- Phase 2: fuzzy/exact for rows not resolved by patterns ---
+  const unpatternedRaw = distinctRaw.filter((n) => !patternMatches.has(n));
+  const fuzzyMatches = await findBestRecipientMatches(unpatternedRaw);
 
+  // --- Build resolved map: raw → resolution info ---
+  /** @type {Map<string, { recipientId: number, matchSource: string, matchSimilarity: number|null, matchedPatternId: number|null }>} */
+  const resolved = new Map();
+
+  for (const [raw, { recipientId, patternId }] of patternMatches) {
+    resolved.set(raw, {
+      recipientId,
+      matchSource: 'pattern',
+      matchSimilarity: null,
+      matchedPatternId: patternId,
+    });
+  }
+
+  for (const [raw, m] of fuzzyMatches) {
+    resolved.set(raw, {
+      recipientId: m.recipientId,
+      matchSource: m.exact ? 'exact' : 'fuzzy',
+      matchSimilarity: m.exact ? null : m.similarity,
+      matchedPatternId: null,
+    });
+  }
+
+  // --- Phase 3: upsert new recipients for unresolved names ---
   const unmatched = distinctRaw.filter((n) => !resolved.has(n));
   for (const raw of unmatched) {
     const upperName = String(raw).toUpperCase().trim();
@@ -65,10 +100,10 @@ export async function matchBatch({ batchId, onProgress }) {
       if (!existing.rows.length) continue;
       id = existing.rows[0].id;
     }
-    resolved.set(raw, id);
+    resolved.set(raw, { recipientId: id, matchSource: 'new', matchSimilarity: null, matchedPatternId: null });
   }
 
-  // 3. Chunked UPDATE of staging rows.
+  // --- Chunked UPDATE of staging rows ---
   let matched = 0;
   let unresolved = 0;
   let seen = 0;
@@ -77,21 +112,28 @@ export async function matchBatch({ batchId, onProgress }) {
     const chunk = staged.slice(start, start + MATCH_UPDATE_CHUNK);
     await withTransaction(async (client) => {
       for (const row of chunk) {
-        const recipientId = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
-        if (recipientId) {
+        const info = row.recipient_raw ? resolved.get(row.recipient_raw) : null;
+        if (info) {
           matched++;
           await client.query(
             `UPDATE import_staging_rows
-                SET status = 'matched', resolved_recipient_id = $2
+                SET status             = 'matched',
+                    resolved_recipient_id = $2,
+                    match_source       = $3,
+                    match_similarity   = $4,
+                    matched_pattern_id = $5
               WHERE id = $1`,
-            [row.id, recipientId]
+            [row.id, info.recipientId, info.matchSource, info.matchSimilarity, info.matchedPatternId]
           );
         } else {
-          // No recipient (blank raw name) — still advance to 'matched' so commit sees it.
           unresolved++;
           await client.query(
             `UPDATE import_staging_rows
-                SET status = 'matched', resolved_recipient_id = NULL
+                SET status             = 'matched',
+                    resolved_recipient_id = NULL,
+                    match_source       = NULL,
+                    match_similarity   = NULL,
+                    matched_pattern_id = NULL
               WHERE id = $1`,
             [row.id]
           );
@@ -102,6 +144,9 @@ export async function matchBatch({ batchId, onProgress }) {
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }
 
-  logger.info('[pipeline:match] done', { batchId, total, matched, unresolved });
-  return { matched, unresolved };
+  const matchSourceCounts = { pattern: 0, exact: 0, fuzzy: 0, new: 0 };
+  for (const info of resolved.values()) matchSourceCounts[info.matchSource] = (matchSourceCounts[info.matchSource] || 0) + 1;
+
+  logger.info('[pipeline:match] done', { batchId, total, matched, unresolved, ...matchSourceCounts });
+  return { matched, unresolved, matchSourceCounts };
 }

@@ -24,6 +24,7 @@ const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
 const RecipientsPage = lazy(() => import("./pages/RecipientsPage"));
 const ImportPage = lazy(() => import("./pages/ImportPage"));
+const ImportReviewPage = lazy(() => import("./pages/ImportReviewPage"));
 const PlannedPaymentsPage = lazy(() => import("./pages/PlannedPaymentsPage"));
 const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
 const OwesPage = lazy(() => import("./pages/OwesPage"));
@@ -122,6 +123,7 @@ const App = () => {
                                                     <Route path="/planned" element={<PlannedPaymentsPage />} />
                                                     <Route path="/statistics" element={<StatisticsPage />} />
                                                     <Route path="/import" element={<ImportPage />} />
+                                                    <Route path="/import/:batchId/review" element={<ImportReviewPage />} />
                                                     <Route path="/owes" element={<OwesPage />} />
                                                     <Route path="/tax" element={<TaxOverviewPage />} />
                                                     <Route path="/admin" element={<AdminOverviewPage />} />

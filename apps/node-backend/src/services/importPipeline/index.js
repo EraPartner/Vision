@@ -1,12 +1,21 @@
 /**
  * Import pipeline — orchestrator.
  *
- * Runs the staged pipeline end-to-end:
- *   createBatch → stage → validate → match → commit → complete.
+ * Exposed surface:
  *
- * Each phase is idempotent at its boundary; on any phase throw, the batch
- * is marked `failed` and the error is propagated. Progress callbacks bubble
- * up so the SSE route can re-emit the standard event shape.
+ *   runImportPipeline(args)   — full one-shot flow (upload route).
+ *                               If any staged row is not 'exact', stops after
+ *                               match phase and sets status to 'awaiting_review'.
+ *                               Otherwise auto-commits and returns full stats.
+ *
+ *   prepareImport(args)       — stage → validate → match.
+ *                               Returns { batchId, requiresReview, matchSourceCounts }.
+ *
+ *   commitImport({ batchId, onProgress })
+ *                             — commit all matched rows, honouring
+ *                               user_override_recipient_id, refresh views.
+ *
+ * Phase primitives are also re-exported for direct use by route handlers.
  */
 
 import { query } from '../../database/connection.js';
@@ -21,71 +30,109 @@ import { commitBatch } from './commit.js';
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
 /**
- * Run the full pipeline for a single upload.
+ * Stage → validate → match a batch that already exists.
+ * Decides whether the batch needs user review or can be auto-committed.
  *
- * @param {object} args
- * @param {string} args.filePath
- * @param {string} args.adapterName
- * @param {object} [args.customConfig]
- * @param {string} [args.filename]
- * @param {number} [args.sizeBytes]
- * @param {(event: { phase: string, current: number, total: number, imported?: number, duplicates?: number, errors?: number }) => void} [args.onProgress]
- * @returns {Promise<{ batchId: number, total: number, imported: number, duplicates: number, errors: number }>}
+ * @param {{ batchId: number, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
+ * @returns {Promise<{ batchId: number, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object }>}
  */
-export async function runImportPipeline({
-  filePath,
-  adapterName,
-  customConfig,
-  filename,
-  sizeBytes,
-  onProgress,
-}) {
+export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
+  const { rowsTotal } = await stageBatch({ batchId, filePath, adapterName, customConfig, onProgress });
+
+  const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
+
+  const { matchSourceCounts } = await matchBatch({ batchId, onProgress });
+
+  // Review is required when any row was resolved by something other than an
+  // exact normalized match — fuzzy hits, pattern hits, and new recipients
+  // all warrant user confirmation before committing.
+  const requiresReview = (
+    (matchSourceCounts.fuzzy || 0) > 0 ||
+    (matchSourceCounts.pattern || 0) > 0 ||
+    (matchSourceCounts.new || 0) > 0
+  );
+
+  if (requiresReview) {
+    await query(
+      `UPDATE import_batches SET status = 'awaiting_review' WHERE id = $1`,
+      [batchId]
+    );
+    logger.info('[pipeline] awaiting review', { batchId, matchSourceCounts, validateErrors });
+  }
+
+  return { batchId, rowsTotal, requiresReview, matchSourceCounts, validateErrors };
+}
+
+/**
+ * Commit a prepared (or reviewed) batch.
+ * Applies user_override_recipient_id before writing transactions.
+ *
+ * @param {{ batchId: number, onProgress?: Function }} args
+ * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
+ */
+export async function commitImport({ batchId, onProgress }) {
+  const { imported, duplicates, errors } = await commitBatch({ batchId, onProgress });
+
+  await query(
+    `UPDATE import_batches
+        SET status = 'complete',
+            completed_at = NOW()
+      WHERE id = $1`,
+    [batchId]
+  );
+
+  if (imported > 100) {
+    await refreshMaterializedViews().catch((err) => {
+      logger.warn('[pipeline] MV refresh failed (non-fatal)', { err: err?.message });
+    });
+  } else {
+    scheduleRefresh();
+  }
+
+  logger.info('[pipeline] committed', { batchId, imported, duplicates, errors });
+  return { imported, duplicates, errors };
+}
+
+/**
+ * Full one-shot pipeline for the upload route.
+ *
+ * Creates the batch, prepares it (stage + validate + match), and either
+ * auto-commits (all rows exact) or leaves the batch in 'awaiting_review'
+ * for the frontend to present the ImportReviewPage.
+ *
+ * @param {{ filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
+ * @returns {Promise<{ batchId: number, total: number, requiresReview: boolean, imported?: number, duplicates?: number, errors?: number }>}
+ */
+export async function runImportPipeline({ filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
   const batchId = await createBatch({ adapterName, filename, sizeBytes, customConfig });
   logger.info('[pipeline] created batch', { batchId, adapterName });
 
   try {
-    const { rowsTotal } = await stageBatch({
+    const { rowsTotal, requiresReview, matchSourceCounts, validateErrors } = await prepareImport({
       batchId,
       filePath,
       adapterName,
       customConfig,
+      filename,
+      sizeBytes,
       onProgress,
     });
 
-    const { errors: validateErrors } = await validateBatch({ batchId, onProgress });
-    await matchBatch({ batchId, onProgress });
-    const { imported, duplicates, errors: commitErrors } = await commitBatch({ batchId, onProgress });
+    if (requiresReview) {
+      return { batchId, total: rowsTotal, requiresReview: true, matchSourceCounts };
+    }
+
+    // All rows resolved exactly — auto-commit without review.
+    const { imported, duplicates, errors: commitErrors } = await commitImport({ batchId, onProgress });
 
     const totalErrors = (validateErrors || 0) + (commitErrors || 0);
-
     await query(
-      `UPDATE import_batches
-          SET status = 'complete',
-              completed_at = NOW(),
-              rows_error = $2
-        WHERE id = $1`,
+      `UPDATE import_batches SET rows_error = $2 WHERE id = $1`,
       [batchId, totalErrors]
     );
 
-    // Refresh aggregates. Large imports get an immediate awaited refresh so the
-    // next read reflects the new data; small imports use the debounced path.
-    if (imported > 100) {
-      await refreshMaterializedViews().catch(err => {
-        logger.warn('[pipeline] MV refresh failed (non-fatal)', { err: err?.message });
-      });
-    } else {
-      scheduleRefresh();
-    }
-
-    logger.info('[pipeline] complete', {
-      batchId,
-      total: rowsTotal,
-      imported,
-      duplicates,
-      errors: totalErrors,
-    });
-
-    return { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors };
+    logger.info('[pipeline] complete', { batchId, total: rowsTotal, imported, duplicates, errors: totalErrors });
+    return { batchId, total: rowsTotal, requiresReview: false, imported, duplicates, errors: totalErrors };
   } catch (err) {
     await query(
       `UPDATE import_batches

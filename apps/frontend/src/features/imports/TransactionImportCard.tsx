@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Card,
@@ -63,6 +64,7 @@ interface TransactionImportCardProps {
 
 export function TransactionImportCard({ onImportSuccess }: TransactionImportCardProps) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { adapters, loading: adaptersLoading } = useAdapters();
   const [file, setFile] = useState<File | null>(null);
   const [bankSource, setBankSource] = useState("");
@@ -125,6 +127,11 @@ export function TransactionImportCard({ onImportSuccess }: TransactionImportCard
         abortRef.current = abort;
         data = await result;
         abortRef.current = null;
+      }
+
+      if (data.requires_review && data.batch_id != null) {
+        navigate(`/import/${data.batch_id}/review`);
+        return;
       }
 
       toast.success(t('importPage.toast.importSuccess', { n: data.imported, dups: data.duplicates, total: data.total_processed }), {

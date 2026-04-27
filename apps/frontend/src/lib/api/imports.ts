@@ -1,7 +1,7 @@
 import { API_BASE_URL, generateRequestId, parseEnvelopeError, apiRequest } from '@/lib/api/client';
 import { postMultipartImport } from '@/lib/api/helpers';
 import { readSseStream } from '@/lib/api/sse';
-import type { ImportProgress, ImportResult, ImportBatch, BatchListResponse } from '@/lib/api/types';
+import type { ImportProgress, ImportResult, ImportBatch, BatchListResponse, ImportPreviewResponse } from '@/lib/api/types';
 
 export function importCSV(
     file: File,
@@ -61,6 +61,20 @@ export function importCSVWithProgress(
                         phase: 'complete',
                         percent: 100,
                     } as ImportProgress);
+                    continue;
+                }
+                if (event === 'review_required') {
+                    const d = data as { batch_id: number; total: number };
+                    finalResult = {
+                        total_processed: d.total,
+                        imported: 0,
+                        duplicates: 0,
+                        errors: 0,
+                        status: 'review_required',
+                        batch_id: d.batch_id,
+                        requires_review: true,
+                    };
+                    onProgress({ phase: 'review_required', current: d.total, total: d.total, imported: 0, duplicates: 0, errors: 0, percent: 100 } as ImportProgress);
                     continue;
                 }
                 if (event === 'error') {
@@ -142,4 +156,19 @@ export function getImportBatch(id: number): Promise<ImportBatch> {
 
 export function rollbackImportBatch(id: number): Promise<{ deleted: number }> {
     return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, { method: 'DELETE' });
+}
+
+export function getImportPreview(batchId: number): Promise<ImportPreviewResponse> {
+    return apiRequest<ImportPreviewResponse>(`/api/import/batches/${batchId}/preview`);
+}
+
+export function overrideImportRow(batchId: number, rowId: number, recipientId: number | null): Promise<{ row_id: number; user_override_recipient_id: number | null }> {
+    return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
+        method: 'POST',
+        body: JSON.stringify({ recipient_id: recipientId }),
+    });
+}
+
+export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
+    return apiRequest(`/api/import/batches/${batchId}/commit`, { method: 'POST' });
 }

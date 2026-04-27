@@ -5,6 +5,7 @@ method: POST, GET
 path: /api/import
 description: CSV import for transactions, recipients, and categories
 date: 2026-04-26
+updated: 2026-04-26
 tags: [api, import, csv, bank]
 status: active
 aliases: [imports-api, csv-import, bank-import, bank-statement, deduplication]
@@ -101,7 +102,7 @@ data: {"phase":"committing","current":50,"total":150,"imported":48,"duplicates":
 
 // Complete event
 event: complete
-data: {"batchId":42,"total":150,"imported":148,"duplicates":2,"errors":0}
+data: {"batchId":42,"total_processed":150,"imported":148,"duplicates":2,"errors":0}
 ```
 
 **Backpressure & Resilience (Phase C):**
