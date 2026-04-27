@@ -11,7 +11,7 @@
 
 // Re-export shared primitives (call sites do `import { API_BASE_URL, ApiClientError } from '@/lib/api'`)
 export { API_BASE_URL, ApiClientError } from '@/lib/api/client';
-export type { AggregationEnvelope, ImportProgress, ImportResult, NetWorthSnapshot, NetWorthResponse, SavedChart, SavedChartCreate, MarketNewsArticle } from '@/lib/api/types';
+export type { AggregationEnvelope, ImportProgress, ImportResult, NetWorthSnapshot, NetWorthResponse, SavedChart, SavedChartCreate, MarketNewsArticle, ImportPreviewResponse, ImportPreviewGroup, ImportStagingRow, MatchSource } from '@/lib/api/types';
 
 // Domain modules
 import { cancelAllRequests } from '@/lib/api/client';
@@ -56,6 +56,12 @@ export const apiClient = {
     mergeRecipients: rec.mergeRecipients,
     unmergeRecipient: rec.unmergeRecipient,
     getRecipientAliases: rec.getRecipientAliases,
+    listRecipientPatterns: rec.listRecipientPatterns,
+    createRecipientPattern: rec.createRecipientPattern,
+    updateRecipientPattern: rec.updateRecipientPattern,
+    deleteRecipientPattern: rec.deleteRecipientPattern,
+    previewRecipientPattern: rec.previewRecipientPattern,
+    getRecipientClusters: rec.getRecipientClusters,
 
     // Planned transactions
     getPlannedTransactions: pln.getPlannedTransactions,
@@ -74,6 +80,9 @@ export const apiClient = {
     listImportBatches: imp.listImportBatches,
     getImportBatch: imp.getImportBatch,
     rollbackImportBatch: imp.rollbackImportBatch,
+    getImportPreview: imp.getImportPreview,
+    overrideImportRow: imp.overrideImportRow,
+    commitImportBatch: imp.commitImportBatch,
 
     // Settings
     getSettings: sett.getSettings,
@@ -201,5 +210,6 @@ export type {
     ToolResultPayload,
 } from '@/types/aiChat';
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
+export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, RecipientCluster, PatternSuggestion } from '@/lib/api/recipients';
 export type { ExchangeRate, ExchangeRatesData } from '@/lib/api/info';
 export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';
