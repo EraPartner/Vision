@@ -2,7 +2,7 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-04-26
+date: 2026-04-27
 tags:
   - api
   - reports
@@ -18,7 +18,12 @@ tags:
   - footer
   - i18n
   - filter-exclusions
-description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers and enhanced print breaks. Phase 6 adds i18n support. Phase 7 adds filter exclusions with impact comparison view. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
+  - dual-chart
+  - comparison
+  - white-bar-fix
+  - table-overflow-fix
+  - page-continuation
+description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers with CSS page margin fix and enhanced print breaks. Phase 5 fixes add white bar elimination in page margins and table overflow prevention via page-continuation layout. Phase 6 adds i18n support. Phase 7 adds filter exclusions with dual-chart comparison view and section-level filtering. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
 aliases:
   - reports
   - pdf export
@@ -55,14 +60,53 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 
 - **Paginated Footer**: Puppeteer `footerTemplate` option now used with theme-aware colors (primary, muted, border) interpolated as HSL literals. Footer displays on all content pages except cover.
 - **Footer Space Management**: CSS variable `--footer-h: 28px` reserves space; Puppeteer margin `{ bottom: '28px' }` aligns footer area with cover page
+- **CSS @page Margin Rule**: `@page { margin: 0 0 28px 0; }` ensures Chrome's layout engine respects the 28px footer margin, preventing table overflow into footer
 - **Print Break Control**: New CSS rules in `SECTION_CSS` block:
   - `.kpi-card { break-inside: avoid }` — prevents KPI card splits
   - `.account-card { break-inside: avoid }` — keeps account balance cards intact
   - `.stat-row { break-inside: avoid }` — preserves row alignment
   - `.planned-day { break-inside: avoid }` — keeps day groups intact
   - `.data-table thead { display: table-header-group }` — repeats headers on page overflow
+- **Table Row Pagination**: `.data-table tr { break-inside: avoid; page-break-inside: avoid; }` prevents rows from splitting; word-break and truncation prevent overflow
 - **Section Title Preservation**: `.section-title` and `.section-subtitle` use `break-after: avoid` to keep headers with content
 - **Visual Separation**: `.page` border-top changed to `4px solid hsl(var(--primary))`
+
+### Phase 5 Fixes — White Bar & Table Overflow (2026-04-27)
+
+**Fix 1: White Bar in Page Margin Area**
+- **Root Cause**: Chromium's footer iframe occupies less vertical space than the 28px bottom `@page` margin. The `html` element's background does not propagate to `@page` margin boxes, leaving a white gap at the bottom of every page in dark mode.
+- **Solution**: Two-part approach in `buildBaseCss()`:
+  1. **@page rule background (primary fix)**: Added `background: hsl(var(--surface))` to the `@page { margin: 0 0 28px 0; }` rule. This paints the entire page canvas, including margin boxes, eliminating the white strip.
+  2. **html and body background (supporting fix)**: Added `background: hsl(var(--surface))` with `print-color-adjust: exact` to both `html` and `body` to ensure surface color propagates through the document tree.
+- **Footer template update**: Comment block updated to note that page-bottom surface fill is now owned by `@page { background }`, not the footer template body. Template body remains intentionally minimal (margin:0; padding:0;) to avoid the html-rule leak that previously hid cover/section content. Footer div retains inline `background-color` for the visible footer band.
+- **Result**: Surface color now fills the entire page canvas, including margin boxes, eliminating the white bar and providing seamless visual continuity around the footer in both light and dark themes.
+
+**Fix 2: Table Overflow into Footer**
+- **Root Cause**: Large tables in `categoryBreakdown` and `topRecipients` sections would overflow rows into the Puppeteer footer zone when page breaks occurred near the table start.
+- **Solution**: Split both section renderers into two consecutive divs using new `.page-continuation` CSS class:
+  1. **Chart page** (`.page.page-break`): Title, subtitle, and all chart(s); explicit page break
+  2. **Table page** (`.page-continuation`): Filter notice, ranked table, and sub-tables (month-over-month); always starts on fresh page
+- **CSS Class Added**:
+  ```css
+  .page-continuation {
+    padding: 32px 52px 56px;
+    border-top: none;
+    page-break-before: always;
+  }
+  ```
+- **Result**: Tables always start at the top of a fresh physical page without row orphaning or overflow into the footer zone. Logical pagination improves readability and reliability.
+
+### Phase 7 — Dual-Chart Comparison Layout (2026-04-27)
+
+- **Dual-Chart CSS Classes**: New `.chart-pair` and `.chart-pair-label` classes enable side-by-side chart comparison when filter exclusions are active
+  - `.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; page-break-inside: avoid; }` — two-column layout with print-break protection
+  - `.chart-pair-label { break-after: avoid; page-break-after: avoid; }` — keeps labels with their charts
+- **Section-Level Filtering**: `categoryBreakdown` and `topRecipients` sections now support dual-chart rendering:
+  - **With exclusions**: Displays "With active filters" chart (filtered data) alongside "All data" chart (unfiltered) for impact visibility
+  - **Without exclusions**: Single chart rendered in standard `.chart-wrap` layout
+- **Filter Notice Banner**: `.filter-notice` div appears below dual charts when exclusions active, showing filtered row count and excluded item count
+- **Table Row Filtering**: Table shows only filtered rows when exclusions active; unfiltered rows available in the "All data" chart above
+- **Max Item Limits**: Charts limited to top 10 items; tables to top 15–20 rows depending on section
 
 ### Phase 6 — Localization (2026-04-24)
 

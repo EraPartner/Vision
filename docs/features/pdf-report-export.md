@@ -2,9 +2,9 @@
 title: PDF Financial Report Export
 type: feature
 status: active
-date: 2026-04-26
-tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions]
-description: Comprehensive PDF financial report export with cover page, theme-aware styling, and modular section renderers. Phase 4 adds ExportDialog UI component. Phase 5 adds pagination footer with page numbers, improved print break control, and theme-aware footer styling. Phase 6 adds 32 i18n keys for full localization (en/nl). Phase 7 adds filter exclusions with impact comparison view.
+date: 2026-04-27
+tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation]
+description: Comprehensive PDF financial report export with cover page, theme-aware styling, and modular section renderers. Phase 4 adds ExportDialog UI component. Phase 5 adds pagination footer with page numbers, improved print break control, and theme-aware footer styling. Phase 5 fixes add white bar elimination in page margins and table overflow prevention via page-continuation layout. Phase 6 adds 32 i18n keys for full localization (en/nl). Phase 7 adds filter exclusions with dual-chart comparison view and table pagination enhancements.
 aliases: [pdf export, financial report, report download, PDF generation, export dialog, report dialog, pagination, footer]
 related_code:
   - apps/node-backend/src/services/reports/
@@ -27,16 +27,18 @@ related_code:
 >
 > Phase 7 (April 2026): Filter exclusions with impact comparison view — when categories or recipients are excluded via the ExportDialog, the report now displays a "Filter Impact" comparison table on the cover page showing metrics with and without filters applied, plus delta badges for change visibility.
 
-## Phase 7: Filter Exclusions with Impact Comparison
+## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 
 ### Overview
 
-Phase 7 adds category and recipient filter exclusion support to PDF reports. When ExportDialog is configured with exclusions (via `exclusionScope: 'everywhere'` or `'statistics'`), the report:
+Phase 7 adds category and recipient filter exclusion support to PDF reports with dual-chart side-by-side comparison. When ExportDialog is configured with exclusions (via `exclusionScope: 'everywhere'` or `'statistics'`), the report:
 
 1. **Fetches parallel data**: Computes financial metrics both with filters applied (filtered view) and without filters (all data view)
 2. **Renders impact table**: Shows cover page comparison with columns for "With Filters" and "All Data", plus delta badges (↑/↓) for visibility
-3. **Section banners**: `categoryBreakdown` and `topRecipients` sections display a `.filter-notice` banner when relevant exclusions are active
-4. **CSS styling**: New `.filter-notice`, `.filter-impact`, `.filter-impact-title`, `.filter-impact-subtitle`, `.filter-impact-table` classes for filter UI elements
+3. **Dual-chart sections**: `categoryBreakdown` and `topRecipients` sections display side-by-side horizontal bar charts showing "With active filters" vs "All data" for impact visibility
+4. **Section banners**: `.filter-notice` banner appears below the dual charts with row count and filter summary
+5. **Filtered tables**: Table renders only the filtered rows when exclusions are active, with a note pointing to the "All data" chart for unfiltered context
+6. **CSS styling**: New `.chart-pair` and `.chart-pair-label` classes enable two-column chart layout with print-break preservation
 
 ### Implementation Details
 
@@ -45,14 +47,20 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports. Whe
 - `generateReport()` passes `excludedCategoryIds` and `excludedRecipientIds` through the pipeline
 - `index.js` (`buildCoverHtml`) renders exclusion metadata ("X categories excluded, Y recipients excluded") on cover
 - `executiveSummary.js` renders "Filter Impact" comparison table when `data.filteredMonthly` is present
+- `categoryBreakdown.js` and `topRecipients.js` now render dual charts using `.chart-pair` layout when exclusions are present
 
 **Frontend (React):**
 - `ExportDialog.tsx` reads active exclusions from `useSettings()` context when `exclusionScope` is `'everywhere'` or `'statistics'`
 - `postReportDownload()` forwards `excludedCategoryIds` and `excludedRecipientIds` in POST body
 
 **CSS:**
-- Table pagination support: `.data-table tr { break-inside: avoid }` + `word-break` + max-width truncation on second column
-- Filter UI: `.filter-impact-table` with header/data row styling and delta badge colors
+- `@page { margin: 0 0 28px 0 }` — Fixed CSS page rule (was `margin: 0`) to align Chrome layout engine with Puppeteer physical 28px footer margin, eliminating table overflow into footer
+- `.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; }` — Two-column side-by-side chart layout with print-break protection
+- `.chart-pair-label { ... break-after: avoid; }` — Keeps chart labels with their charts across page boundaries
+- `.data-table tr { break-inside: avoid; page-break-inside: avoid; }` — Prevents individual rows from splitting across pages (dual fallback for cross-browser support)
+- `.data-table thead { display: table-header-group; }` — Repeats table headers on overflow pages
+- `.data-table td { word-break: break-word; }` — Allows cell text to wrap rather than overflow layout
+- `.data-table td:nth-child(2) { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }` — Truncates long category/recipient names in second column
 
 ### Database Schema
 
@@ -131,6 +139,76 @@ Phase 5 adds professional pagination and layout enhancements to PDF reports:
 3. **Print Break Control** — CSS `break-inside: avoid` prevents orphaning of `.kpi-card`, `.account-card`, `.stat-row`, `.planned-day` elements across page boundaries
 4. **Repeating Table Headers** — `display: table-header-group` on `.data-table thead` ensures table headers repeat on overflow pages
 5. **Footer Space Reservation** — Bottom margin of 28px accounts for footer height; CSS variable `--footer-h: 28px` prevents overlap with page content
+
+### Phase 5 Fixes (April 2026): White Bar & Table Overflow
+
+#### Fix 1: White Bar in Page Margin Area
+
+**Problem:** In CSS paged media, the `html` root element's background does not propagate to the `@page` margin boxes. Chromium's footer iframe occupies less vertical space than the 28px bottom margin, leaving a white gap at the bottom of every page in dark mode.
+
+**Solution:** Two-part approach in `buildBaseCss()`:
+
+1. **@page rule background (primary fix):**
+   ```css
+   @page { 
+     size: A4 portrait; 
+     margin: 0 0 28px 0; 
+     background: hsl(var(--surface));  /* NEW: Paints entire canvas including margin boxes */
+   }
+   ```
+   This fills the complete page canvas, including the margin area where the Puppeteer footer renders, eliminating the white strip.
+
+2. **html and body background (supporting fix):**
+   ```css
+   html {
+     background: hsl(var(--surface));
+     -webkit-print-color-adjust: exact;
+     print-color-adjust: exact;
+   }
+   
+   body {
+     background: hsl(var(--surface));
+     -webkit-print-color-adjust: exact;
+     print-color-adjust: exact;
+   }
+   ```
+   These ensure the surface color propagates through the entire document tree.
+
+**Footer template comment:** The `buildFooterTemplate()` comment block was updated to note that page-bottom surface fill is now owned by `@page { background }`, not the footer template. The template body remains intentionally minimal (margin:0; padding:0;) to avoid the html-rule leak that previously hid cover/section content. The footer div retains inline `background-color: ${surface}` for the visible footer band itself.
+
+#### Fix 2: Table Overflow into Footer
+
+**Problem:** Large tables in `categoryBreakdown` and `topRecipients` sections would overflow rows into the Puppeteer footer zone when a page break occurred near the table. This caused rows to be cut off or rendered below the footer.
+
+**Solution:** Split both section renderers into two consecutive divs:
+
+1. **First div** (`.page.page-break`):
+   - Contains the section title, subtitle, and all chart(s)
+   - Ends with explicit page break (`page-break-after: always`)
+
+2. **Second div** (`.page-continuation`):
+   - New CSS class: `padding: 32px 52px 56px; border-top: none; page-break-before: always;`
+   - Contains filter notice (if active), ranked table, and month-over-month sub-tables
+   - Starts on a fresh physical page; tables begin at the top without orphaning rows
+
+**CSS Class Added:**
+```css
+.page-continuation {
+  padding: 32px 52px 56px;
+  border-top: none;
+  page-break-before: always;
+}
+```
+
+This ensures:
+- Charts render on their own page boundary
+- Tables always start at the top of a fresh physical page
+- No rows overflow into the footer zone
+- Visual continuity maintained (no green top border repeated on continuation pages)
+
+**Affected Sections:**
+- `apps/node-backend/src/services/reports/sections/categoryBreakdown.js` — Chart on page 1, table on page 2 (continuation)
+- `apps/node-backend/src/services/reports/sections/topRecipients.js` — Charts on page 1, table + month-over-month on page 2+ (continuation)
 
 ### Layout Changes
 
@@ -607,30 +685,43 @@ All sections inherit:
 - **Responsive sizing**: A4-fixed width; text scales for readability
 - **Footer spacing**: CSS variable `--footer-h: 28px` reserves bottom margin space for Puppeteer footer
 
-### Print CSS Enhancements (Phase 5)
+### Print CSS Enhancements (Phase 5 & Phase 7)
 
-**Section CSS module** (`apps/node-backend/src/services/reports/sectionHelpers.js`) now includes:
+**Base CSS** (`apps/node-backend/src/services/reports/index.js`):
+- `html { background: hsl(var(--surface)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }` — Ensures surface color fills the entire page canvas including `@page` margin boxes, eliminating the white bar above the Puppeteer footer (Phase 5 fix).
+- `@page { margin: 0 0 28px 0; }` — Fixed CSS page rule to align Chrome layout engine with Puppeteer physical 28px footer margin, reserving explicit space for footer without content overflow.
+- `.cover` height: `calc(297mm - var(--footer-h))` reserves footer space on cover
+- `.page` top border: `4px solid hsl(var(--primary))` for visual page separation
+- `.page-continuation` — New class for logical continuation pages: `padding: 32px 52px 56px; border-top: none; page-break-before: always;` used for tables following charts to ensure tables always start at the top of a fresh page
+- `.section-title` and `.section-subtitle`: `break-after: avoid` prevents orphaning section headers from their content
+
+**Section CSS module** (`apps/node-backend/src/services/reports/sectionHelpers.js`):
 
 ```css
-/* Print break control */
+/* Print break control — prevent orphaning across pages */
 .kpi-card     { break-inside: avoid; }
 .account-card { break-inside: avoid; }
 .stat-row     { break-inside: avoid; }
 .planned-day  { break-inside: avoid; }
 
-/* Repeat table header row when a table spans pages */
-.data-table thead { display: table-header-group; }
+/* Table pagination across pages */
+.data-table thead { display: table-header-group; }           /* Repeat headers on overflow pages */
+.data-table tr { break-inside: avoid; page-break-inside: avoid; }  /* Dual fallback: CSS and legacy */
+.data-table td { word-break: break-word; }                    /* Wrap text instead of overflow */
+.data-table td:nth-child(2) { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Dual-chart comparison pair (Phase 7) */
+.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; page-break-inside: avoid; }
+.chart-pair-label { break-after: avoid; page-break-after: avoid; }
 ```
 
 These rules ensure:
 - Cards and rows stay on the same page (no orphaning)
 - Tables repeat their header on every page when content overflows
+- Dual charts remain side-by-side across page boundaries (no orphaning of chart pairs)
 - Text readability is maintained across page boundaries
-
-**Base CSS enhancements** (`apps/node-backend/src/services/reports/index.js`):
-- `.cover` height: `calc(297mm - var(--footer-h))` reserves footer space on cover
-- `.page` top border: `4px solid hsl(var(--primary))` for visual page separation
-- `.section-title` and `.section-subtitle`: `break-after: avoid` prevents orphaning section headers from their content
+- Long category/recipient names truncate cleanly without breaking layout
+- Footer space is properly reserved and does not overlap with table content
 
 ### SVG Charts
 
@@ -675,14 +766,25 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 ### Category Breakdown
 
 - **Chart**: Horizontal bars showing top N categories
-- **Table**: Ranked categories with amounts and percentages
-- **Max rows**: Top 10 by default
+  - **Single chart (no filters)**: Standard layout showing top 10 categories (rendered on `.page.page-break`)
+  - **Dual-chart comparison (with exclusions)**: Side-by-side charts labeled "With active filters" and "All data" for impact visibility (rendered on `.page.page-break`)
+- **Table section** (rendered on `.page-continuation` — forced page break):
+  - **Filter notice** (when exclusions active): Banner showing filtered row count and excluded count, with reference to "All data" chart
+  - **Table**: Ranked categories; shows only filtered rows when exclusions active
+  - **Max rows**: Top 10 in chart, top 20 in table
+- **Benefit**: Charts and table are logically separated across page boundaries, ensuring tables always start at the top of a fresh physical page without row overflow into footer zone
 
 ### Top Recipients
 
 - **Chart**: Horizontal bars of top merchants/recipients
-- **Alerts**: Month-over-month change badges (↑ increase, ↓ decrease)
-- **Max rows**: Top 10
+  - **Single chart (no filters)**: Standard layout showing top 10 recipients (rendered on `.page.page-break`)
+  - **Dual-chart comparison (with exclusions)**: Side-by-side charts labeled "With active filters" and "All data" for impact visibility (rendered on `.page.page-break`)
+- **Table section** (rendered on `.page-continuation` — forced page break):
+  - **Filter notice** (when exclusions active): Banner showing filtered row count and excluded count, with reference to "All data" chart
+  - **Table**: Ranked recipients with spend, transaction count, average; shows only filtered rows when exclusions active
+  - **Month-over-month alerts**: Optional sub-section showing spending deltas (↑ increase, ↓ decrease); renders below main table
+  - **Max rows**: Top 10 in chart, top 15 in table
+- **Benefit**: Charts and tables are logically separated across page boundaries, ensuring tables always start at the top of a fresh physical page without row overflow into footer zone
 
 ### Bank Balances
 
