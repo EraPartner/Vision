@@ -2,10 +2,10 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-04-25
-tags: [architecture, index, uml, plantuml, diagrams, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening]
-description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, and container hardening
-aliases: [architecture, diagrams, UML, system design]
+date: 2026-04-27
+tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron]
+description: Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams; includes Phase 1+2 backup bundle format and IPC handlers, Phase 2 API client domain split, OpenAPI architecture, April 2026 Statistics page refactoring, Phase E component decomposition, April 25 CSV security & parallelization improvements, and container hardening
+aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
 ---
 
 # Architecture Diagrams
@@ -229,6 +229,40 @@ Documentation:
 
 Documentation:
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]]
+
+## Electron Desktop Backup Architecture (Phase 1+2)
+
+**Bundle Format:** New `.visionbak` format replaces legacy `.sql` backups:
+
+```
+vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
+├── metadata.json        # schema version, checksums, timestamps
+├── db.sql               # pg_dump output
+├── attachments/         # mirrors $ATTACHMENTS_DIR/
+└── frontend-state.json  # localStorage snapshot (theme, preferences)
+```
+
+**Optional Encryption:** AES-256-CBC per-bundle encryption with pbkdf2 key derivation → `.visionbak.enc`
+
+**IPC Handlers (8 total):** New handlers in `packaging/electron/main.js`:
+- `backup:run` — Create bundle with optional encryption
+- `backup:restore` — Restore bundle; schema-checks, drops DB, swaps attachments, hydrates localStorage
+- `backup:select-file` / `backup:select-dir` — Native file/folder dialogs
+- `backup:save-settings` / `backup:load-settings` — Persist backup config
+- `backup:get-encryption-status` / `backup:set-passphrase` — Manage encryption
+
+**Schema Safety:** On restore, compares bundle schema against current schema. If bundle is newer, blocks restore with `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
+
+**Frontend Integration:**
+- `apps/frontend/src/lib/api/electron.ts` — TypeScript wrapper types and functions
+- `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrase management, error handling
+
+**Coverage:** All 31 user-data tables + attachments + localStorage keys. CI test enforces coverage on every migration.
+
+Documentation:
+- [[docs/features/backup-coverage-audit|Backup Coverage Audit]] — Coverage matrix, bundle format, restore process
+- [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
+- [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
 
 ## Frontend Design System (Phase 9)
 

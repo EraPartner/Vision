@@ -9,7 +9,10 @@
     "dist": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64",
     "dist:arm64": "GENERATE_LOCALES_AST=1 node ../../scripts/generate-locales.js && electron-builder --mac --arm64"
   },
-  "dependencies": {},
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "yauzl": "^3.3.0"
+  },
   "devDependencies": {
     "electron": "^41.0.0",
     "electron-builder": "^25.0.0"

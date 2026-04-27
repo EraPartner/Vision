@@ -4,9 +4,11 @@ const { app, BrowserWindow, dialog, Notification, shell, ipcMain, safeStorage, s
 const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const { createBundle, encryptBundle, openBundle, isBundleEncrypted } = require('./backup/bundle');
 // Async i18n loader for main process dialogs. Populated during launch() before
 // any t() use. Until then, t() falls back to the key itself — which only
 // happens if a dialog fires before initI18n() resolves (startup error paths).
@@ -388,7 +390,10 @@ async function cleanupOldBackups(destDir, deviceId, keep = BACKUP_RETENTION_KEEP
   }
 
   const files = await Promise.all(names
-    .filter((name) => name.startsWith(prefix) && (name.endsWith('.sql') || name.endsWith('.sql.enc')))
+    .filter((name) => name.startsWith(prefix) && (
+      name.endsWith('.sql') || name.endsWith('.sql.enc') ||
+      name.endsWith('.visionbak') || name.endsWith('.visionbak.enc')
+    ))
     .map(async (name) => {
       const fullPath = path.join(destDir, name);
       try {
@@ -1320,6 +1325,274 @@ async function runBackup(destDir) {
   };
 }
 
+// ── Bundle backup/restore helpers ────────────────────────────────────────────
+
+/**
+ * Query the running DB for the current alembic revision.
+ * Returns empty string if unavailable (e.g. DB not yet initialised).
+ */
+async function getSchemaHead(composeFileArgs, dbUser, dbName) {
+  try {
+    const result = await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', dbName, '-t', '-A', '-c',
+      'SELECT version_num FROM alembic_version LIMIT 1;',
+    ], workDir, { timeout: 10000 });
+    return result.trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Create a .visionbak bundle in destDir, optionally encrypted.
+ * frontendStateJson may be null (e.g. when called at quit time).
+ */
+async function runBundleBackup(destDir, frontendStateJson = null) {
+  if (!destDir) throw new Error('No backup directory configured');
+
+  let dbUser = 'ftm_user';
+  let dbName = 'financial_transactions';
+  try {
+    const envFile = path.join(workDir, '.env');
+    const envContents = await fs.promises.readFile(envFile, 'utf8');
+    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::[^@]*)?@[^/]+\/(\S+)/);
+    if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
+  } catch { /* use defaults */ }
+
+  const composeFileArgs = composeArgs(workDir, overrideFiles);
+  const deviceId = await getBackupDeviceId();
+  const appVersion = app.getVersion ? app.getVersion() : 'unknown';
+  const schemaHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+
+  // Temp dir for SQL dump and attachments staging
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'vision_bak_'));
+  const dbSqlPath = path.join(tmpDir, 'db.sql');
+  let attachmentsDir = null;
+
+  try {
+    // 1. pg_dump to temp file
+    await new Promise((resolve, reject) => {
+      const args = [
+        'compose', ...composeFileArgs,
+        'exec', '-T', 'db',
+        'pg_dump', '-U', dbUser, '-d', dbName, '--no-owner', '--no-acl',
+      ];
+      const child = spawn('docker', args, { env: dockerEnv, cwd: workDir });
+      const out = fs.createWriteStream(dbSqlPath);
+      child.stdout.pipe(out);
+      const stderr = [];
+      child.stderr.on('data', (chunk) => stderr.push(chunk));
+      child.on('error', (err) => { out.destroy(); reject(err); });
+      child.on('close', (code) => {
+        if (code === 0) { out.end(() => resolve()); }
+        else { out.destroy(); reject(new Error(Buffer.concat(stderr).toString().trim() || `pg_dump exited with code ${code}`)); }
+      });
+    });
+
+    // 2. Copy attachments out of running container (optional — fails gracefully)
+    const attachmentsTmp = path.join(tmpDir, 'attachments');
+    try {
+      await run('docker', [
+        'compose', ...composeFileArgs,
+        'cp', `app:/app/data/attachments`, attachmentsTmp,
+      ], workDir, { timeout: 120000 });
+      // docker compose cp creates attachments/ as the target directory
+      attachmentsDir = attachmentsTmp;
+    } catch {
+      // No attachments in container — bundle proceeds without them
+    }
+
+    // 3. Parse frontendState
+    let frontendState = null;
+    if (frontendStateJson) {
+      try { frontendState = typeof frontendStateJson === 'string' ? JSON.parse(frontendStateJson) : frontendStateJson; }
+      catch { /* non-fatal */ }
+    }
+
+    // 4. Assemble bundle zip
+    const { bundlePath } = await createBundle({
+      destDir,
+      deviceId,
+      schemaHead,
+      appVersion,
+      dbSqlPath,
+      attachmentsDir,
+      frontendState,
+    });
+
+    // 5. Encrypt if passphrase configured
+    const key = await getBackupEncryptionKey();
+    let finalFile = bundlePath;
+    let encrypted = false;
+    let warning;
+    if (key) {
+      const { encPath } = await encryptBundle(bundlePath, key);
+      finalFile = encPath;
+      encrypted = true;
+    } else {
+      warning = 'Backup encryption skipped: no passphrase configured.';
+    }
+
+    // 6. Rotate old bundles
+    const cleanup = await cleanupOldBackups(destDir, deviceId);
+    return { success: true, file: finalFile, encrypted, warning, cleanupRemoved: cleanup.removed };
+
+  } finally {
+    // Always clean up temp SQL dump (bundle has its own copy)
+    fs.rm(tmpDir, { recursive: true, force: true }, () => {});
+  }
+}
+
+/**
+ * Restore a .visionbak (or .visionbak.enc) bundle.
+ * Returns { success, file, frontendState } on success.
+ * frontendState is the parsed { keys: { … } } object or null.
+ */
+async function runBundleRestore(bundlePath) {
+  if (!bundlePath) throw new Error('No backup file specified');
+  if (!fs.existsSync(bundlePath)) throw new Error(`File not found: ${bundlePath}`);
+
+  const key = await getBackupEncryptionKey();
+
+  // Open bundle — decrypt + extract to temp dir
+  const { metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } = await openBundle(bundlePath, { key });
+
+  let dbUser = 'ftm_user';
+  let dbPass = '';
+  let dbName = 'financial_transactions';
+  try {
+    const envFile = path.join(workDir, '.env');
+    const envContents = await fs.promises.readFile(envFile, 'utf8');
+    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/(\S+)/);
+    if (urlMatch) { dbUser = urlMatch[1]; dbPass = urlMatch[2] || ''; dbName = urlMatch[3]; }
+  } catch { /* use defaults */ }
+
+  const composeFileArgs = composeArgs(workDir, overrideFiles);
+
+  // Schema version check: block restore if bundle is from a newer schema
+  if (metadata.schemaHead) {
+    const currentHead = await getSchemaHead(composeFileArgs, dbUser, dbName);
+    if (currentHead && metadata.schemaHead > currentHead) {
+      cleanup();
+      throw new Error(
+        `BUNDLE_SCHEMA_NEWER: This bundle was created on schema revision "${metadata.schemaHead}" ` +
+        `but this Vision install is at "${currentHead}". ` +
+        `Update Vision to a newer version and retry.`
+      );
+    }
+  }
+
+  // 1. Stop app container
+  await run('docker', ['compose', ...composeFileArgs, 'stop', 'app'], workDir, { timeout: 60000 });
+
+  try {
+    // 2a. Terminate remaining DB connections
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();`,
+    ], workDir, { timeout: 30000 });
+
+    // 2b. Drop and recreate the database
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `DROP DATABASE IF EXISTS "${dbName}";`,
+    ], workDir, { timeout: 30000 });
+
+    await run('docker', [
+      'compose', ...composeFileArgs, 'exec', '-T', 'db',
+      'psql', '-U', dbUser, '-d', 'postgres',
+      '-c', `CREATE DATABASE "${dbName}" OWNER "${dbUser}";`,
+    ], workDir, { timeout: 30000 });
+
+    // 3. Restore SQL via throwaway container (same pattern as runRestore)
+    const dbContainerName = await run('docker', [
+      'compose', ...composeFileArgs, 'ps', '-q', 'db',
+    ], workDir, { timeout: 10000 }).then(s => s.trim()).catch(() => '');
+
+    let pgImageTag = 'postgres:16';
+    if (dbContainerName) {
+      pgImageTag = await run('docker', [
+        'inspect', '--format', '{{.Config.Image}}', dbContainerName,
+      ], workDir, { timeout: 10000 }).then(s => s.trim()).catch(() => 'postgres:16');
+    }
+
+    const networkName = await run('docker', [
+      'inspect', '--format', '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}', dbContainerName,
+    ], workDir, { timeout: 10000 }).then(s => s.trim().split('\n')[0]).catch(() => '');
+
+    const hostDir = path.dirname(dbSqlPath);
+    const sqlFilename = path.basename(dbSqlPath);
+
+    await new Promise((resolve, reject) => {
+      const child = spawn('docker', [
+        'run', '--rm',
+        '-v', `${hostDir}:/restore:ro`,
+        ...(networkName ? ['--network', networkName] : []),
+        '-e', `PGPASSWORD=${dbPass}`,
+        pgImageTag,
+        'psql', '-h', 'db', '-U', dbUser, '-d', dbName,
+        '-f', `/restore/${sqlFilename}`,
+      ], { env: dockerEnv, cwd: workDir });
+
+      const stderr = [];
+      child.stderr.on('data', (chunk) => stderr.push(chunk));
+      child.stdout.resume();
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(Buffer.concat(stderr).toString().trim() || `psql exited with code ${code}`));
+      });
+    });
+
+    // 4. Copy attachments into stopped app container (docker cp works on stopped containers).
+    //    Uses staging + atomic swap inside the container's filesystem.
+    if (attachmentsDir) {
+      const appContainerId = await run('docker', [
+        'compose', ...composeFileArgs, 'ps', '-q', 'app',
+      ], workDir, { timeout: 10000 }).then(s => s.trim()).catch(() => '');
+
+      if (appContainerId) {
+        // Copy bundle attachments into a staging directory
+        await run('docker', [
+          'cp', `${attachmentsDir}/.`, `${appContainerId}:/app/data/attachments.staging`,
+        ], workDir, { timeout: 120000 });
+      }
+    }
+
+  } finally {
+    cleanup();
+    // 5. Always restart app container (runs alembic upgrade head on startup)
+    const env = { ...dockerEnv, PORT: String(appPort) };
+    await run('docker', [
+      'compose', ...composeFileArgs, 'start', 'app',
+    ], workDir, { timeout: 120000, env }).catch((err) => {
+      console.error('Failed to restart app container after bundle restore:', err);
+    });
+
+    // 6. Atomically swap attachments.staging → attachments once container is up
+    if (attachmentsDir) {
+      pollHealth().then(() => {
+        const composeArgs_ = composeArgs(workDir, overrideFiles);
+        return run('docker', [
+          'compose', ...composeArgs_, 'exec', '-T', 'app',
+          'sh', '-c',
+          'rm -rf /app/data/attachments.old && ' +
+          'mv /app/data/attachments /app/data/attachments.old 2>/dev/null; ' +
+          'mv /app/data/attachments.staging /app/data/attachments && ' +
+          'rm -rf /app/data/attachments.old',
+        ], workDir, { timeout: 30000 });
+      }).catch((err) => {
+        console.error('Attachment swap failed after bundle restore:', err);
+      });
+    }
+  }
+
+  return { success: true, file: bundlePath, frontendState };
+}
+
 // ── IPC: renderer can request a Docker image update ──────────────────────────
 ipcMain.handle('update:pull-image', async () => {
   if (!workDir) return { success: false, error: 'workDir not set' };
@@ -1493,7 +1766,7 @@ ipcMain.handle('backup:select-file', async () => {
     title: 'Select Backup File to Restore',
     buttonLabel: 'Restore',
     filters: [
-      { name: 'Vision Backup Files', extensions: ['sql', 'enc'] },
+      { name: 'Vision Backup Files', extensions: ['visionbak', 'visionbak.enc', 'sql', 'enc'] },
       { name: 'All Files', extensions: ['*'] },
     ],
   });
@@ -1501,13 +1774,18 @@ ipcMain.handle('backup:select-file', async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('backup:restore', async (_event, sqlFilePath) => {
+ipcMain.handle('backup:restore', async (_event, filePath) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
   try {
-    const result = await runRestore(sqlFilePath);
+    // Route .visionbak / .visionbak.enc through the new bundle restore path;
+    // legacy .sql / .enc files fall through to the original runRestore.
+    const isBundle = filePath.endsWith('.visionbak') || filePath.endsWith('.visionbak.enc');
+    const result = isBundle
+      ? await runBundleRestore(filePath)
+      : await runRestore(filePath);
     return result;
   } catch (err) {
-    // Make sure app container is back up even after an error
+    // Ensure app container is back up even after an error
     const composeFileArgs = composeArgs(workDir, overrideFiles);
     const env = { ...dockerEnv, PORT: String(appPort) };
     run('docker', [
@@ -1519,10 +1797,13 @@ ipcMain.handle('backup:restore', async (_event, sqlFilePath) => {
 });
 
 // ── IPC: backup:run ───────────────────────────────────────────────────────────
-ipcMain.handle('backup:run', async (_event, destDir) => {
+// frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
+// collected by the renderer before invoking this handler.  Optional — when null
+// (e.g. automated backup on quit) the bundle is created without frontend-state.json.
+ipcMain.handle('backup:run', async (_event, destDir, frontendStateJson = null) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
   try {
-    const result = await runBackup(destDir);
+    const result = await runBundleBackup(destDir, frontendStateJson);
     return result;
   } catch (err) {
     return { success: false, error: String(err) };
@@ -1916,7 +2197,7 @@ app.on('will-quit', (e) => {
     const backupDir = effective.backupDir || '';
 
     const doBackup = backupOnQuit && backupDir
-      ? runBackup(backupDir)
+      ? runBundleBackup(backupDir, null)  // frontendState unavailable at quit time
           .then((result) => {
             if (result && result.warning) console.warn(result.warning);
             notify(t('backup.done'));

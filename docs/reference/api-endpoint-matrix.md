@@ -6,8 +6,8 @@ date: 2026-04-27
 updated: 2026-04-27
 last_modified: 2026-04-27
 adr-reference: 026
-tags: [reference, api, endpoints, matrix, overview, openapi, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down]
-description: Complete matrix of all 140+ API endpoints organized by resource for quick lookup. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
+tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron]
+description: Complete matrix of all 149 API endpoints + 8 IPC handlers organized by resource for quick lookup. Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
 aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
 
@@ -268,6 +268,27 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 
 **Tool Categories (30 total):** Expenses (11), Portfolio (6), Planned (4), Belgian Tax (3), Insights (6). See [[docs/features/ai-chat#tool-registry-30-tools-across-6-domains\|AI Chat Feature]] for full reference.
 
+## IPC Handlers — Electron Desktop (8 handlers — Phase 1+2)
+
+Electron-specific inter-process communication for desktop features (backup, restore, file dialogs):
+
+| Handler | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| `backup:run` | `(destDir: string, frontendStateJson?: string)` | `Promise<{ success: boolean; file?: string; encrypted?: boolean; cleanupRemoved?: number; warning?: string; error?: string }>` | Create `.visionbak` bundle; optionally encrypt to `.visionbak.enc`. Includes DB dump, attachments tree, and serialized frontend state (theme, dismissed toasts, etc.). |
+| `backup:restore` | `(bundlePath: string)` | `Promise<{ success: boolean; file?: string; frontendState?: { keys: Record<string, string> }; error?: string }>` | Restore from `.visionbak` or `.visionbak.enc` bundle. Validates schema head, drops DB, loads SQL, atomically swaps attachments, returns frontend state for localStorage hydration. Blocks if bundle schema is newer (user must upgrade Vision first). |
+| `backup:select-file` | `()` | `Promise<string>` | Show native file picker dialog; returns selected `.visionbak` or `.visionbak.enc` file path. |
+| `backup:select-dir` | `()` | `Promise<string>` | Show native folder picker dialog; returns selected directory for backup destination. |
+| `backup:save-settings` | `({ backupDir, backupOnQuit })` | `Promise<void>` | Persist backup settings (directory path, auto-backup-on-quit flag) to `settings.json`. |
+| `backup:load-settings` | `()` | `Promise<{ backupDir: string; backupOnQuit: boolean }>` | Load backup settings from `settings.json` with fallback to default `~/Vision/backups`. |
+| `backup:get-encryption-status` | `()` | `Promise<{ hasStoredPassphrase: boolean }>` | Check if user has stored a backup encryption passphrase. |
+| `backup:set-passphrase` | `(passphrase: string)` | `Promise<void>` | Set or update backup encryption passphrase (stored encrypted in `settings.json` via `safeStorage`). Empty string clears passphrase. |
+
+**Frontend Wrappers:** `apps/frontend/src/lib/api/electron.ts` provides TypeScript signatures and async wrappers for all IPC handlers.
+
+**Integration:** `apps/frontend/src/components/settings/tabs/BackupTab.tsx` uses these handlers for UI-driven backup/restore, directory/file selection, and passphrase management.
+
+**Documentation:** See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for bundle format, coverage matrix, and restoration process.
+
 ## Summary
 
 | Resource | Endpoints | Rate-Limited |
@@ -291,7 +312,8 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | Reports (Phase 3/7) | 3 | 0 |
 | Info/Statistics | 14 | 5 |
 | AI Chat | 9 | 2 |
-| **Total** | **141** | **10** |
+| IPC Handlers (Phase 1+2) | 8 | 0 |
+| **Total** | **149** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

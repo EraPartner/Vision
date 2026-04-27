@@ -31,11 +31,14 @@ contextBridge.exposeInMainWorld('electronUpdater', {
  */
 contextBridge.exposeInMainWorld('electronBackup', {
   /**
-   * Run a pg_dump backup immediately, writing a backup file to destDir.
-   * @param {string} destDir  Absolute path to the destination directory.
+   * Create a .visionbak bundle in destDir.
+   * frontendStateJson is the serialised { keys: { … } } localStorage snapshot;
+   * pass null if unavailable (e.g. automated backup on quit).
+   * @param {string}      destDir           Absolute path to the destination directory.
+   * @param {string|null} frontendStateJson JSON string of { keys: { … } } or null.
    * @returns {Promise<{ success: boolean, file?: string, encrypted?: boolean, warning?: string, cleanupRemoved?: number, error?: string }>}
    */
-  runBackup: (destDir) => ipcRenderer.invoke('backup:run', destDir),
+  runBackup: (destDir, frontendStateJson = null) => ipcRenderer.invoke('backup:run', destDir, frontendStateJson),
 
   /**
    * Open the system folder-picker dialog to choose a backup directory.
@@ -50,12 +53,12 @@ contextBridge.exposeInMainWorld('electronBackup', {
   selectFile: () => ipcRenderer.invoke('backup:select-file'),
 
   /**
-   * Restore the database from a plain-SQL backup file.
-   * Stops the app container, drops & recreates the DB, runs psql, then restarts.
-   * @param {string} sqlFilePath  Absolute path to the .sql file on the host.
-   * @returns {Promise<{ success: boolean, file?: string, error?: string }>}
+   * Restore from a backup file.  Accepts .visionbak, .visionbak.enc (new bundle
+   * format) or legacy .sql / .enc files.
+   * @param {string} filePath  Absolute path to the backup file on the host.
+   * @returns {Promise<{ success: boolean, file?: string, frontendState?: object|null, error?: string }>}
    */
-  restoreBackup: (sqlFilePath) => ipcRenderer.invoke('backup:restore', sqlFilePath),
+  restoreBackup: (filePath) => ipcRenderer.invoke('backup:restore', filePath),
 
   /**
    * Persist backup settings (backupDir, backupOnQuit) to Electron settings.json.

@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { AlertCircle, CheckCircle2, Database, FolderOpen, Loader2, UploadCloud } from 'lucide-react';
+import { LOCAL_STORAGE_KEYS } from '@/lib/localStorage-keys';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -95,7 +96,18 @@ export const BackupTab = memo(function BackupTab({
         }
         setBackupRunning(true);
         try {
-            const result = await apiClient.runBackup(backupDir);
+            // Collect localStorage snapshot to include in the bundle
+            let frontendStateJson: string | null = null;
+            try {
+                const keys: Record<string, string> = {};
+                for (const key of Object.values(LOCAL_STORAGE_KEYS)) {
+                    const val = window.localStorage.getItem(key);
+                    if (val !== null) keys[key] = val;
+                }
+                frontendStateJson = JSON.stringify({ keys });
+            } catch { /* non-fatal — backup proceeds without frontend state */ }
+
+            const result = await apiClient.runBackup(backupDir, frontendStateJson);
             if (!result) return;
             if (result.success) {
                 toast.success(t('settings.backup.success'), {
@@ -197,13 +209,27 @@ export const BackupTab = memo(function BackupTab({
             const result = await apiClient.restoreBackup(restoreFile);
             if (!result) return;
             if (result.success) {
+                // Write frontend state from bundle back to localStorage before reload
+                if (result.frontendState?.keys) {
+                    try {
+                        for (const [key, value] of Object.entries(result.frontendState.keys)) {
+                            window.localStorage.setItem(key, String(value));
+                        }
+                    } catch { /* non-fatal */ }
+                }
                 toast.success(t('settings.restore.success'), {
                     description: t('settings.restore.successDesc').replace('{file}', result.file ?? restoreFile),
                     duration: 8000,
                 });
                 setTimeout(() => window.location.reload(), 3000);
             } else {
-                toast.error(t('settings.restore.failed'), { description: result.error });
+                // Surface schema version mismatch with a dedicated message
+                const errMsg = result.error ?? '';
+                if (errMsg.startsWith('BUNDLE_SCHEMA_NEWER:')) {
+                    toast.error(t('settings.restore.schemaMismatch'), { description: errMsg.replace('BUNDLE_SCHEMA_NEWER: ', ''), duration: 12000 });
+                } else {
+                    toast.error(t('settings.restore.failed'), { description: errMsg });
+                }
             }
         } catch (err: unknown) {
             toast.error(t('settings.restore.failed'), { description: String(err) });

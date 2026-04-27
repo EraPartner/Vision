@@ -2,10 +2,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +11,13 @@ import {
     CheckCircle2, CloudUpload, Loader2, BarChart3, Receipt,
     CalendarClock, TrendingUp, LineChart, File, X,
     HardDrive, ShieldCheck, FolderOpen, PiggyBank, CreditCard,
-    LayoutDashboard, Database,
+    LayoutDashboard,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logger from "@/lib/logger";
+import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
@@ -158,38 +155,6 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
     const [creatingCategories, setCreatingCategories] = useState(false);
     const [categoriesCreated, setCategoriesCreated] = useState(false);
 
-    // Restore state
-    const [restoreFile, setRestoreFile] = useState<string | null>(null);
-    const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
-    const [restoreRunning, setRestoreRunning] = useState(false);
-
-    const handleSelectRestoreFile = async () => {
-        const file = await apiClient.selectBackupFile();
-        if (file) {
-            setRestoreFile(file);
-            setRestoreConfirmOpen(true);
-        }
-    };
-
-    const handleRestoreConfirmed = async () => {
-        if (!restoreFile) return;
-        setRestoreRunning(true);
-        try {
-            const result = await apiClient.restoreBackup(restoreFile);
-            if (result?.success) {
-                toast.success(t('onboarding.restore.success'));
-                window.location.reload();
-            } else {
-                toast.error(t('onboarding.restore.failed', { msg: result?.error ?? 'Unknown error' }));
-                setRestoreRunning(false);
-            }
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            toast.error(t('onboarding.restore.failed', { msg }));
-            setRestoreRunning(false);
-        }
-    };
-
     useEffect(() => {
         if (!open) return;
         let mounted = true;
@@ -298,6 +263,10 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                 <Badge variant="secondary" className="gap-1">
                                     <BarChart3 className="h-3 w-3" /> {t('onboarding.analytics')}
                                 </Badge>
+                            </div>
+                            {/* Offer restore early so migrating users don't need to reach the backup step */}
+                            <div className="w-full max-w-md mt-1">
+                                <RestoreFromBackupCard compact onDismiss={onComplete} />
                             </div>
                         </div>
                     )}
@@ -578,38 +547,13 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                                 </Button>
                             </div>
 
-                            {/* Restore divider */}
-                            {apiClient.isElectron() && (
-                                <>
-                                    <div className="flex items-center gap-3 my-1">
-                                        <div className="h-px flex-1 bg-border" />
-                                        <span className="text-xs text-muted-foreground">{t('onboarding.restore.orTitle')}</span>
-                                        <div className="h-px flex-1 bg-border" />
-                                    </div>
-
-                                    <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30">
-                                        <div className="h-8 w-8 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                            <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                        </div>
-                                        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                                            <p className="text-sm font-medium text-foreground">{t('onboarding.restore.title')}</p>
-                                            <p className="text-xs text-muted-foreground leading-relaxed">{t('onboarding.restore.desc')}</p>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="mt-1 gap-1.5 self-start"
-                                                disabled={restoreRunning}
-                                                onClick={handleSelectRestoreFile}
-                                            >
-                                                {restoreRunning
-                                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                    : <Upload className="h-3.5 w-3.5" />}
-                                                {t('onboarding.restore.button')}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            {/* Restore — delegates to RestoreFromBackupCard (handles frontendState + schema errors) */}
+                            <div className="flex items-center gap-3 my-1">
+                                <div className="h-px flex-1 bg-border" />
+                                <span className="text-xs text-muted-foreground">{t('onboarding.restore.orTitle')}</span>
+                                <div className="h-px flex-1 bg-border" />
+                            </div>
+                            <RestoreFromBackupCard compact onDismiss={onComplete} />
                         </div>
                     )}
                 </div>
@@ -644,28 +588,6 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
                 </div>
             </DialogContent>
         </Dialog>
-
-        <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{t('onboarding.restore.confirm.title')}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        {t('onboarding.restore.confirm.desc')}
-                        {restoreFile && (
-                            <span className="block mt-1 font-medium text-foreground truncate">
-                                {restoreFile.split('/').pop()}
-                            </span>
-                        )}
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRestoreConfirmed}>
-                        {t('onboarding.restore.confirm.action')}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
         </>
     );
 }

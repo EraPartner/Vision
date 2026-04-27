@@ -2,11 +2,11 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-04-24
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, and health monitoring
-aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog]
-related_code: ["packaging/electron/", "apps/frontend/src/", "apps/node-backend/src/main.js"]
+date: 2026-04-27
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, and backup/restore bundle system (Phase 1+2)
+aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js"]
 ---
 
 # Electron Desktop Architecture
@@ -131,11 +131,32 @@ Electron configuration is in `packaging/electron/`.
 
 ## Native Features
 
-### Backup/Restore
+### Backup/Restore (Phase 1+2)
 
-Settings include a **Backup** tab for Electron-specific backup/restore:
-- Export configuration to file
-- Import configuration from file
+**IPC Handlers** for bundle-based backup/restore:
+
+| Handler | Signature | Purpose | Status |
+|---------|-----------|---------|--------|
+| `backup:run` | `(destDir, frontendStateJson?)` → Promise | Create and optionally encrypt `.visionbak` bundle; returns `{ success, file, encrypted?, cleanupRemoved?, warning?, error? }` | ✅ Phase 1+2 |
+| `backup:restore` | `(bundlePath)` → Promise | Restore from `.visionbak` bundle; schema-checks, drops DB, loads SQL, swaps attachments, restores frontend state; returns `{ success, file?, frontendState?, error? }` | ✅ Phase 1+2 |
+| `backup:select-file` | `()` → Promise<string> | Show file picker for `.visionbak` or `.visionbak.enc` selection | ✅ Phase 1+2 |
+| `backup:select-dir` | `()` → Promise<string> | Show folder picker for backup directory | ✅ Phase 1+2 |
+| `backup:save-settings` | `({ backupDir, backupOnQuit })` → Promise | Persist backup settings to `settings.json` | ✅ Phase 1+2 |
+| `backup:load-settings` | `()` → Promise | Load backup settings (directory, onQuit flag, encryption status) | ✅ Phase 1+2 |
+| `backup:get-encryption-status` | `()` → Promise | Return `{ hasStoredPassphrase }` | ✅ Phase 1+2 |
+| `backup:set-passphrase` | `(passphrase)` → Promise | Set or update backup encryption passphrase (stored encrypted in `settings.json`) | ✅ Phase 1+2 |
+
+**Frontend Integration:**
+
+- `apps/frontend/src/lib/api/electron.ts` — Type definitions and wrapper functions
+  - `runBackup(destDir, frontendStateJson?)` — Collects localStorage snapshot, invokes `backup:run`
+  - `restoreBackup(filePath)` — Invokes `backup:restore`, writes frontend state back to localStorage
+- `apps/frontend/src/components/settings/tabs/BackupTab.tsx` — UI for backup/restore, passphrases, directory selection
+  - Handles `BUNDLE_SCHEMA_NEWER` error with user-friendly toast
+
+**Bundle Format:**
+
+See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for `.visionbak` structure, encryption details, and restore process.
 
 ### Auto-Update
 

@@ -15,10 +15,14 @@ type ElectronUpdater = {
     installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
 };
 
+/** Snapshot of frontend localStorage keys collected before a backup. */
+type FrontendStateSnapshot = { keys: Record<string, string> };
+
 type ElectronBackup = {
-    runBackup: (destDir: string) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
+    runBackup: (destDir: string, frontendStateJson?: string | null) => Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string }>;
     selectFile: () => Promise<string | null>;
-    restoreBackup: (sqlFilePath: string) => Promise<{ success: boolean; file?: string; error?: string }>;
+    /** Accepts .visionbak, .visionbak.enc, or legacy .sql / .enc files. */
+    restoreBackup: (filePath: string) => Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string }>;
     selectDir: () => Promise<string | null>;
     saveSettings: (settings: { backupDir: string; backupOnQuit: boolean }) => Promise<void>;
     loadSettings: () => Promise<{ backupDir: string; backupOnQuit: boolean }>;
@@ -68,10 +72,11 @@ export async function installShellUpdate(): Promise<{ success: boolean; version?
 
 export async function runBackup(
     destDir: string,
+    frontendStateJson: string | null = null,
 ): Promise<{ success: boolean; file?: string; encrypted?: boolean; warning?: string; cleanupRemoved?: number; error?: string } | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
-    return backup.runBackup(destDir);
+    return backup.runBackup(destDir, frontendStateJson);
 }
 
 export async function selectBackupFile(): Promise<string | null> {
@@ -81,11 +86,11 @@ export async function selectBackupFile(): Promise<string | null> {
 }
 
 export async function restoreBackup(
-    sqlFilePath: string,
-): Promise<{ success: boolean; file?: string; error?: string } | null> {
+    filePath: string,
+): Promise<{ success: boolean; file?: string; frontendState?: FrontendStateSnapshot | null; error?: string } | null> {
     const backup = getElectronBackup();
     if (!backup) return null;
-    return backup.restoreBackup(sqlFilePath);
+    return backup.restoreBackup(filePath);
 }
 
 export async function selectBackupDir(): Promise<string | null> {
