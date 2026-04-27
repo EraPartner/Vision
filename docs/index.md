@@ -157,6 +157,19 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-04-27 Encrypted Backup Restore with Passphrase Modal (Phase 2)
+
+**UX Enhancement:**
+- **Encrypted restore detection**: Backup restore now detects encryption via magic header without decryption
+- **Passphrase modal**: When user attempts to restore an encrypted `.visionbak.enc` file, a modal prompts for the backup passphrase before decryption
+- **Error recovery**: Wrong passphrase shows clear error message and allows retry (no silent failures)
+- **Fallback sources**: Restore still respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) as fallback if user doesn't enter passphrase in modal
+- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; encrypted behavior is opt-in via user input
+- **Hook-driven UX**: New `useRestoreBackup` hook manages modal flow consistently across BackupTab and onboarding RestoreFromBackupCard
+- **i18n**: Six new translation keys already present (`settings.restore.passphraseTitle`, `passphraseDesc`, `passphraseLabel`, `passphraseSubmit`, `passphraseInvalid`, `passphraseRequired`)
+
+See [[docs/features/backup-coverage-audit|Backup Coverage Audit]], [[docs/features/settings|Settings]], [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog]], and [[docs/security/data-protection|Security: Data Protection]] for implementation details.
+
 ### 2026-04-26 Minor Frontend Fixes & Bank Reconciliation Removal
 
 **Component Updates:**

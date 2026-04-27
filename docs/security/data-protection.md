@@ -3,8 +3,8 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-04-25
-tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987]
+updated: 2026-04-27
+tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase]
 description: Content Security Policy, data protection, path traversal prevention, and privacy considerations for Vision
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
@@ -231,6 +231,20 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 
 ---
 
+## Backup Encryption (Phase 2)
+
+Encrypted backup restore (`.visionbak.enc`) is now fully implemented with a passphrase-modal UX:
+
+- **AES-256-CBC encryption**: All backup bundles can be optionally encrypted with a user-provided passphrase
+- **Scrypt KDF**: Passphrases are derived into AES keys using the same scrypt algorithm as local safeStorage
+- **Passphrase modal**: When restoring an encrypted backup, users are prompted via modal to enter the passphrase before decryption attempts
+- **Fallback sources**: Restore respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) as fallback if no modal input provided
+- **Error recovery**: Wrong passphrase shows clear error message and allows retry (no silent failures)
+- **Magic header detection**: Backup encryption is detected via file magic header (`VISIONBAK1` prefix) without decryption
+- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; encrypted backups always use the modal flow
+
+See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] and [[docs/features/settings|Settings Feature]] for full details.
+
 ## Future Security Roadmap
 
 | Feature | Status | Description |
@@ -239,7 +253,6 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 | Encryption at rest | Planned | Database encryption |
 | API authentication | Planned | Token-based API auth |
 | Audit logging | Planned | Track all data modifications |
-| Backup encryption | Planned | Encrypted backup files |
 
 ---
 

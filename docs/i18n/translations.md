@@ -4,7 +4,7 @@ type: i18n
 status: active
 date: 2026-04-27
 updated: 2026-04-27
-tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax]
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, phase-2, splits, settlement, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax, backup, encrypt, passphrase-modal]
 description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys. Recent additions include splits settlement success/failure notifications.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx", "apps/frontend/src/hooks/useSplits.ts"]
@@ -246,6 +246,14 @@ bun run build
 **Splits Settlement (2026-04-27):**
 - `splits.settled` — "Splits settled" (en) / "Splits verrekend" (nl) — Success toast shown when `useSettleSplit()` completes
 - `splits.settledFailed` — "Failed to settle splits" (en) / "Splits verrekenen mislukt" (nl) — Error toast shown when `useSettleSplit()` fails
+
+**Encrypted Backup Restore Modal (2026-04-27, Phase 2):**
+- `settings.restore.passphraseTitle` — "Backup is encrypted" (modal header) — Shown when user attempts to restore encrypted `.visionbak.enc` file
+- `settings.restore.passphraseDesc` — "This backup was encrypted with a passphrase. Enter it to continue." (modal description)
+- `settings.restore.passphraseLabel` — "Passphrase" (input label)
+- `settings.restore.passphraseSubmit` — "Restore" (submit button text)
+- `settings.restore.passphraseInvalid` — "Incorrect passphrase. Try again." (error message shown on wrong passphrase with retry prompt)
+- `settings.restore.passphraseRequired` — "This backup is encrypted. Enter the passphrase to continue." (error when no passphrase provided)
 
 **Earlier phases:**
 - `addInv.desc.metals`

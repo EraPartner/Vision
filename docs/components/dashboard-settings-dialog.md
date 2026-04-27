@@ -3,8 +3,8 @@ title: DashboardSettingsDialog
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-04-25
-tags: [components, forms, dialogs, settings, refactor, phase-3, memoization, useCallback, performance]
+updated: 2026-04-27
+tags: [components, forms, dialogs, settings, refactor, phase-3, memoization, useCallback, performance, backup, encrypt, passphrase-modal, phase-2]
 description: Multi-tab settings dialog split into 6 focused components with stable callbacks via useCallback and component memoization
 aliases: [settings-dialog, dashboard-settings, DashboardSettingsDialog]
 related_code:
@@ -526,12 +526,14 @@ const [tempEncrypt, setTempEncrypt] = useState(false);
   - Calls `apiClient.createBackup()`
   - Toast notification on success/failure
 
-- **Restore Backup**: Button to restore from backup file
-  - Opens file picker to select `.backup` file
-  - Shows restore confirmation dialog with passphrase input (if encrypted)
-  - `AlertDialog` with custom portal container to avoid modal stacking
-  - Calls `apiClient.restoreBackup(file, passphrase?)`
+- **Restore Backup**: Button to restore from backup file (Phase 2 Encrypted Support)
+  - Opens file picker to select `.visionbak` or `.visionbak.enc` file
+  - Detects encryption via `apiClient.isBackupEncrypted(filePath)`
+  - If encrypted: uses `useRestoreBackup` hook to open passphrase modal before decryption
+  - Passphrase modal allows retry on wrong passphrase; falls back to env/keychain if available
+  - Calls `apiClient.restoreBackup(file, { passphrase? })`
   - Requires app restart after restore
+  - Shows informative toasts on success/failure
 
 ### UI Pattern
 
@@ -627,10 +629,46 @@ useEffect(() => {
 
 This ensures BackupTab state is synced with Electron settings on dialog open, independent of the parent orchestrator.
 
+### Encrypted Restore Flow (Phase 2)
+
+BackupTab integrates the **`useRestoreBackup()` hook** (located in `[[apps/frontend/src/hooks/useRestoreBackup.tsx]]`) for encrypted-aware restore:
+
+```typescript
+const { restoreFile, isLoading, error } = useRestoreBackup();
+
+// User selects file
+const handleRestoreFile = async (file: File) => {
+  const isEncrypted = await apiClient.isBackupEncrypted(file.path);
+  
+  if (isEncrypted) {
+    // Hook manages passphrase modal internally
+    // User enters passphrase → hook calls restoreBackup({ passphrase })
+    // On INVALID_PASSPHRASE, modal re-prompts automatically
+  } else {
+    // Unencrypted restore directly
+    await restoreFile(file);
+  }
+};
+```
+
+**Hook Responsibilities:**
+- **Encryption detection**: Calls `apiClient.isBackupEncrypted()` without user input
+- **Modal management**: Opens/closes passphrase modal based on encryption status
+- **Retry logic**: On `INVALID_PASSPHRASE` error, re-opens modal for user retry
+- **Error messaging**: Shows informative toasts for network/DB/passphrase errors
+- **Post-restore**: Triggers full app reload after successful restore
+- **Fallback sources**: Respects `VISION_BACKUP_PASSPHRASE` env and OS keychain before prompting user
+
+This hook is also used by **RestoreFromBackupCard** in the onboarding wizard for consistent UX.
+
 ### Related API
 
+- `[[apps/frontend/src/hooks/useRestoreBackup.tsx]]` — Encrypted-aware restore hook (Phase 2)
+- `[[apps/frontend/src/lib/api/electron.ts]]` — `isBackupEncrypted()` and `restoreBackup(filePath, opts?)` exports
 - `[[apps/node-backend/src/routes/backup.js]]` — Backup and restore endpoints
-- `[[docs/features/settings|Settings Feature]]` — Backup configuration
+- `[[docs/features/backup-coverage-audit|Backup Coverage Audit]]` — Full restore process and encryption details
+- `[[docs/features/settings|Settings Feature]]` — Backup configuration and passphrase handling
+- `[[docs/features/onboarding|Onboarding Feature]]` — RestoreFromBackupCard integration
 
 ---
 

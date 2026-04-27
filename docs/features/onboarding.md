@@ -3,7 +3,8 @@ title: Feature - Onboarding
 type: feature
 status: active
 date: 2026-04-19
-tags: [feature, onboarding, wizard, first-run, phase-9]
+updated: 2026-04-27
+tags: [feature, onboarding, wizard, first-run, phase-9, backup, encrypt, passphrase, phase-2]
 description: First-run onboarding wizard for new Vision users
 aliases: [onboarding, setup wizard, first-run, welcome]
 related_code: ["apps/frontend/src/components/onboarding/OnboardingWizard.tsx", "apps/frontend/src/App.tsx"]
@@ -77,9 +78,24 @@ When the wizard fails to persist settings to the backend, users see a toast erro
 
 ---
 
+## Encrypted Backup Restore in Onboarding
+
+The **RestoreFromBackupCard** in the onboarding wizard now supports encrypted backup files:
+
+- **File selection**: User picks a `.visionbak` or `.visionbak.enc` file to restore
+- **Encryption detection**: System inspects the file header to determine if encryption is needed
+- **Passphrase modal**: If encrypted, a modal prompts for the backup passphrase before restore begins
+- **Error recovery**: Wrong passphrase shows an error message with prompt to retry; network errors show informative toast
+- **Fallback passphrases**: Respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) if available
+- **No friction for unencrypted**: Unencrypted backups restore immediately without modal
+
+This provides a seamless UX for first-time users who may have encrypted backups from previous Vision instances.
+
 ## Related
 
 - [[docs/api/settings]] — Settings API
 - [[docs/features/views#settings]] — Settings in views
-- [[docs/i18n/translations#recent-keys-added]] — New i18n key `onboarding.persist.failed`
+- [[docs/features/backup-coverage-audit]] — Backup system and encryption details
+- [[docs/features/settings#backup--restore-with-encryption-phase-2-ux]] — Backup/restore in Settings
+- [[docs/i18n/translations#recent-keys-added]] — Translation keys including passphrase modal keys
 - [[apps/frontend/src/contexts/AppSettingsContext.tsx]] — App settings context

@@ -3,7 +3,8 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-04-23
-tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store]
+updated: 2026-04-27
+tags: [feature, settings, configuration, preferences, frontend, backend, refactor, phase-3, phase-4, zustand, store, backup, encrypt, passphrase, phase-2]
 description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and split DashboardSettingsDialog UI component
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
@@ -227,9 +228,21 @@ The primary UI for managing settings is the **DashboardSettingsDialog** componen
 - **AppearanceTab** — Theme variant, color mode, schedule
 - **DashboardTab** (~240 lines) — Category/recipient exclusion, exclusion scope
 - **AppTab** (~230 lines) — Onboarding restart, update check, recurring reset, AI chat, reset-all
-- **BackupTab** (~310 lines) — Backup directory, passphrase, encrypt, restore (Electron only)
+- **BackupTab** (~310 lines) — Backup directory, passphrase, encrypt, restore with encrypted passphrase modal (Electron only)
 
 **Full Documentation**: See [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog Documentation]]
+
+### Backup & Restore with Encryption (Phase 2 UX)
+
+The **BackupTab** now integrates encrypted backup restore with a **passphrase modal**:
+
+- **Encrypted backup detection**: When user selects a `.visionbak.enc` file for restore, the system detects the encryption via magic header inspection (no decryption attempted yet).
+- **Passphrase prompt**: If encrypted, a modal dialog (`RestoreBackupPassphraseDialog`) prompts the user for the backup passphrase before attempting restore.
+- **Error handling**: Wrong passphrase errors (`INVALID_PASSPHRASE`) re-open the modal for a retry, while network/database errors show informative toasts.
+- **Fallback passphrases**: The restore flow still respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (safeStorage) as fallback sources if user does not enter a passphrase in the modal.
+- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; encrypted backups always prompt via the modal.
+
+**See:** [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for full restore process details and [[docs/features/onboarding|Onboarding Feature]] for RestoreFromBackupCard integration.
 
 This split follows the **thin-orchestrator pattern** established in Phase 3 for better cohesion, testability, and maintainability.
 

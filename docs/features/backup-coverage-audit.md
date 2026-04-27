@@ -3,7 +3,8 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2]
+updated: 2026-04-27
+tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, passphrase-modal, ux]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption, schema-safe restore, and localStorage hydration.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx"]
@@ -201,26 +202,41 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← AES-256-CBC encrypted arc
 | Handler | Signature | Purpose |
 |---------|-----------|---------|
 | `backup:run` | `(destDir, frontendStateJson?)` | Create and optionally encrypt bundle |
-| `backup:restore` | `(bundlePath)` | Restore from bundle (with schema check) |
+| `backup:restore` | `(bundlePath, opts?)` | Restore from bundle with optional passphrase; `opts = { passphrase }` |
+| `backup:is-encrypted` | `(filePath)` | Detect if backup file is encrypted (returns boolean) |
 | `backup:select-file` | `()` | Dialog to select .visionbak file |
 | `backup:select-dir` | `()` | Dialog to choose backup directory |
 
-**Restore Steps:**
+**New Helper Functions** (Phase 2 Encrypted Restore):
 
-1. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
-2. **Database Drop & Restore** — Drop existing DB via `docker exec` `dropdb`, then restore via `psql -f` with bind-mounted .sql file.
-3. **Docker Restart** — Kill and restart backend container to pick up new DB.
-4. **Health Poll** — Wait for `/health` to report ready (up to 10s).
-5. **Attachment Swap** — Extract `attachments/` to temporary staging directory, then atomically swap with `$ATTACHMENTS_DIR` on success. Rolled back on failure.
-6. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
-7. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
+- `deriveBackupKeyFromPassphrase(passphrase)` — Scrypt KDF to derive AES key from user-entered passphrase (same algorithm as `getBackupEncryptionKey`)
+- `decryptBackupFileToTemp(encryptedFilePath, key)` — Decrypt OpenSSL-format ciphertext using AES key; throws `Error('INVALID_PASSPHRASE')` on bad decrypt
+- Error sentinels: `ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED'`, `ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE'`
 
-**Error Handling:**
+**Restore Steps (Phase 2):**
 
+1. **Encryption Detection** — Check file magic header via `isBundleEncrypted()` or `isEncryptedBackupFile()`. If encrypted:
+   - Return `{ encrypted: true }` to frontend
+   - Frontend opens passphrase modal via `useRestoreBackup` hook
+   - User enters passphrase; frontend retries restore with `{ passphrase }` option
+2. **Decryption** (if encrypted) — Derive AES key via `deriveBackupKeyFromPassphrase(passphrase)` scrypt KDF. Decrypt bundle to temporary path; throw `Error('INVALID_PASSPHRASE')` on bad decrypt. Frontend catches this and re-prompts modal.
+3. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
+4. **Database Drop & Restore** — Drop existing DB via `docker exec` `dropdb`, then restore via `psql -f` with bind-mounted .sql file.
+5. **Docker Restart** — Kill and restart backend container to pick up new DB.
+6. **Health Poll** — Wait for `/health` to report ready (up to 10s).
+7. **Attachment Swap** — Extract `attachments/` to temporary staging directory, then atomically swap with `$ATTACHMENTS_DIR` on success. Rolled back on failure.
+8. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
+9. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
+
+**Error Handling (Phase 2):**
+
+- `PASSPHRASE_REQUIRED` → No passphrase provided for encrypted backup; retry prompt modal
+- `INVALID_PASSPHRASE` → Wrong passphrase entered; modal shows error and allows retry (up to 3 attempts typical)
 - `BUNDLE_SCHEMA_NEWER` → User-friendly toast: "Cannot restore — backup is from a newer Vision version"
-- Decrypt errors (wrong passphrase) → `openBundle()` fails; IPC returns error
+- Other decrypt errors (corrupted file, incomplete extraction) → `openBundle()` fails; IPC returns error with details
 - Attachment swap failure → Logged but does not block restore; user can manually sync later
 - DB restore failure → Explicit error with Docker logs; attachment staging rolled back automatically
+- Fallback source resolution: If user does not enter passphrase in modal, restore attempts `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) before throwing `PASSPHRASE_REQUIRED`
 
 **Related Code:**
 - `runBundleRestore()` in `packaging/electron/main.js` — Main restore orchestrator
