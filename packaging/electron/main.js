@@ -193,10 +193,24 @@ async function saveSettings(data) {
 
 // ── Repo/workDir resolution ───────────────────────────────────────────────────
 // In dev (electron . from packaging/electron/): resolve two levels up.
-// In packaged .app: uses embedded docker-compose.yml shipped in app resources.
+// In packaged .app with repoPath setting: use the local clone (repo mode).
+// In packaged .app without repoPath: uses embedded docker-compose.yml shipped in app resources.
 async function resolveWorkDir() {
   if (!app.isPackaged) {
     return path.resolve(__dirname, '..', '..');
+  }
+
+  const settings = await loadSettings();
+
+  // Repo mode: if settings.repoPath points to a valid clone, use it and build
+  // from local source exactly like dev mode — no GHCR image needed.
+  if (settings.repoPath) {
+    const repoCompose = path.join(settings.repoPath, 'docker-compose.yml');
+    const valid = await fs.promises.access(repoCompose).then(() => true).catch(() => false);
+    if (valid) {
+      useRepoMode = true;
+      return settings.repoPath;
+    }
   }
 
   // Ensure the generated i18n is present in the packaged app resources
@@ -223,7 +237,6 @@ async function resolveWorkDir() {
   }
 
   // If we've already set up the embedded compose, reuse it.
-  const settings = await loadSettings();
   const embeddedCompose = settings.embeddedDir && path.join(settings.embeddedDir, 'docker-compose.yml');
   const hasEmbedded = embeddedCompose && await fs.promises.access(embeddedCompose).then(() => true).catch(() => false);
   if (hasEmbedded) {
@@ -743,7 +756,7 @@ function startContainers(cwd, extraFiles = [], skipBuild = false) {
   const args = [
     'compose', ...composeArgs(cwd, extraFiles),
     'up', '-d',
-    ...(app.isPackaged || skipBuild ? [] : ['--build']),
+    ...((app.isPackaged && !useRepoMode) || skipBuild ? [] : ['--build']),
   ];
   // Inject the resolved port so docker-compose.yml's ${PORT:-3002} interpolation
   // maps the correct host port → container 3002.
@@ -787,10 +800,10 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
       // skip-build cache confirmed the running image matches the current source.
       // In dev mode without a cache hit, fall through so `compose up --build`
       // can detect whether the running containers have stale code.
-      if (services.every(s => getState(s) === 'running') && (app.isPackaged || skipBuild)) return { built: false };
+      if (services.every(s => getState(s) === 'running') && ((app.isPackaged && !useRepoMode) || skipBuild)) return { built: false };
       // All in a known stopped state + not a forced dev rebuild → compose start.
       const knownStates = new Set(['running', 'exited', 'created', 'paused']);
-      const canUseStart = app.isPackaged || skipBuild;
+      const canUseStart = (app.isPackaged && !useRepoMode) || skipBuild;
       if (canUseStart && services.every(s => knownStates.has(getState(s)))) {
         const env = { ...dockerEnv, PORT: String(appPort) };
         await run(
@@ -806,7 +819,7 @@ async function composeStartOrUp(cwd, extraFiles = [], skipBuild = false) {
     console.warn('composeStartOrUp probe failed; falling back to up:', err);
   }
   await startContainers(cwd, extraFiles, skipBuild);
-  return { built: !skipBuild && !app.isPackaged };
+  return { built: !skipBuild && (!app.isPackaged || useRepoMode) };
 }
 
 function stopContainers(cwd, extraFiles = []) {
@@ -1946,7 +1959,7 @@ ipcMain.handle('recovery:open-logs', async () => {
 // Used by the electron:dev and electron:clean root package.json scripts.
 function resolveOverrideFiles(workDir) {
   const override = process.env.VISION_COMPOSE_OVERRIDE;
-  if (!override || app.isPackaged) return [];
+  if (!override || (app.isPackaged && !useRepoMode)) return [];
   // Accept absolute paths too, but the common case is a repo-root filename.
   const resolved = path.isAbsolute(override) ? override : path.join(workDir, override);
   return fs.existsSync(resolved) ? [resolved] : [];
@@ -1955,6 +1968,9 @@ function resolveOverrideFiles(workDir) {
 // ── Launch flow ───────────────────────────────────────────────────────────────
 let workDir = null;
 let overrideFiles = [];
+// True when packaged .app is using a local repo clone instead of GHCR image.
+// Set by resolveWorkDir() when settings.repoPath points to a valid repo.
+let useRepoMode = false;
 
 async function launch() {
   const endLaunch = bootMark('launch');
@@ -2025,7 +2041,7 @@ async function launch() {
     // already present — the manual shell updater (setupManualShellUpdater)
     // owns the upgrade path; we don't want silent :latest churn on every boot.
     // Failures are non-fatal — `up` falls back to inline pull.
-    app.isPackaged
+    (app.isPackaged && !useRepoMode)
       ? (async () => {
           const end = bootMark('pre_pull_image');
           try {
@@ -2059,7 +2075,7 @@ async function launch() {
     //
     // Checking only Docker-relevant paths (not the whole repo) means edits to
     // packaging/electron/, docs/, etc. never trigger a needless image rebuild.
-    !app.isPackaged
+    (!app.isPackaged || useRepoMode)
       ? (async () => {
           const end = bootMark('decide_skip_build');
           const dockerSkipCacheFile = path.join(workDir, '.vision-cache', 'docker-build.json');
@@ -2183,7 +2199,7 @@ async function launch() {
   // Dev-mode: watch source files and trigger a docker rebuild+restart when
   // local sources change. This ensures the electron dev wrapper picks up
   // code edits without requiring manual docker-compose rebuilds.
-  if (!app.isPackaged && overrideFiles.length > 0) {
+  if ((!app.isPackaged || useRepoMode) && overrideFiles.length > 0) {
     try {
       let fileChangeTimer = null;
       let activeBuildChild = null;
