@@ -54,6 +54,8 @@ const DEFAULT_VISIBLE_METHOD_IDS: readonly string[] = [
     "holt_winters",
     "prophet_lite",
     "ensemble_imse",
+    "monte_carlo_parametric",
+    "monte_carlo_block_bootstrap",
 ];
 
 const BORDER_COLOR = "hsl(var(--border))";
