@@ -36,6 +36,19 @@ vi.mock('../../src/services/recipientMergeService.js', () => ({
   mergeRecipients: vi.fn(),
 }));
 
+vi.mock('../../src/services/recipientPatternService.js', () => ({
+  listPatternsForRecipient: vi.fn(),
+  createPattern: vi.fn(),
+  updatePattern: vi.fn(),
+  deletePattern: vi.fn(),
+  previewPatternMatches: vi.fn(),
+  suggestPatternFromNames: vi.fn(() => null),
+}));
+
+vi.mock('../../src/services/recipientClusterService.js', () => ({
+  findRecipientClusters: vi.fn(),
+}));
+
 vi.mock('../../src/config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -215,6 +228,7 @@ describe('Recipient Routes', () => {
             { id: 3, name: 'ALIAS A' },
             { id: 4, name: 'ALIAS B' },
           ],
+          patternSuggestion: null,
         },
       });
     });

@@ -5,10 +5,11 @@ method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
 date: 2026-04-16
-tags: [api, recipients, payees, merge, atomic, phase-6]
+updated: 2026-04-26
+tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
-related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]], [[apps/node-backend/src/services/recipientMergeService.js]]
+related_code: [[apps/node-backend/src/routes/recipients.js]], [[apps/node-backend/src/repositories/recipientRepository.js]], [[apps/node-backend/src/services/recipientMergeService.js]], [[apps/node-backend/src/services/recipientClusterService.js]]
 ---
 
 # Recipients API
@@ -147,15 +148,18 @@ Merges all transactions, splits, planned transactions, and bank accounts from al
 **Response:**
 ```json
 {
-  "id": 1,
-  "name": "Primary Recipient",
+  "primary": { "id": 1, "name": "Primary Recipient" },
   "merged_ids": [2, 3],
+  "reassigned": { "transactions": 7, "splits": 0, "planned": 0, "bankAccounts": 1 },
   "aliases": [
     { "id": 2, "name": "Alias One" },
     { "id": 3, "name": "Alias Two" }
-  ]
+  ],
+  "patternSuggestion": null
 }
 ```
+
+`patternSuggestion` is `null` when no common prefix can be derived from the merged names, or `{ pattern, kind, matchCount, confidence }` when a `literal_prefix` suggestion is available.`
 
 ### POST /api/recipients/:id/unmerge
 
@@ -184,6 +188,50 @@ Get all alias recipients for a primary recipient.
   "total": 2
 }
 ```
+
+### GET /api/recipients/clusters
+
+Identify recipient clusters for bulk merge operations. Analyzes active primary recipients and groups them by common prefixes and categories, returning potential match patterns for pattern-based merge suggestions.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| minCount | integer | 2 | Minimum recipients per cluster |
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "lcp": "SUPER",
+      "confidence": 0.95,
+      "recipientIds": [1, 5, 7],
+      "recipientNames": ["Supermarket ABC", "Supermarket XYZ", "Super Convenience"],
+      "categoryId": 5,
+      "suggestedPattern": "super%",
+      "suggestedKind": "prefix"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Response Fields:**
+- `lcp` (string): Longest common prefix of recipient names in the cluster
+- `confidence` (number): Match confidence (0.0–1.0) based on LCP length and cluster size
+- `recipientIds` (array): IDs of recipients in the cluster
+- `recipientNames` (array): Names of recipients in the cluster
+- `categoryId` (integer): Shared or most common category ID in the cluster
+- `suggestedPattern` (string): Recommended pattern for merge rule (e.g., `"super%"` for prefix matching)
+- `suggestedKind` (string): Pattern type, currently `"prefix"`
+
+**Implementation:**
+- Queries active primary recipients only (excludes aliases and inactive)
+- Buckets by first-4-character prefix + category for initial grouping
+- Analyzes longest common prefix (LCP) with minimum length of 8 characters
+- Returns up to 50 clusters sorted by confidence (highest first)
+- Used by the frontend to suggest pattern-based merge opportunities after manual merge actions
 
 ## Recipient Bank Accounts
 

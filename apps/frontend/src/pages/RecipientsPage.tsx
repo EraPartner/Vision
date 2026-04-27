@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users } from "lucide-react";
+import { Eye, EyeOff, ToggleLeft, ToggleRight, Trash2, Link2, Unlink, Users, Regex } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useUpdateRecipient, useDeleteRecipient, useUnmergeRecipient } from "@/hooks/useRecipients";
 import { AddRecipientDialog } from "@/features/recipients/AddRecipientDialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDialog";
+import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { apiClient } from "@/lib/api";
 import type { Recipient } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function RecipientsPage() {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+    const [patternsDialogRecipient, setPatternsDialogRecipient] = useState<{ id: number; name: string } | null>(null);
     const [allItems, setAllItems] = useState<Recipient[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -283,10 +285,22 @@ export default function RecipientsPage() {
         {
             key: "actions",
             header: "",
-            className: "w-24",
+            className: "w-32",
             editable: false,
             render: (row: TableRecipient) => (
                 <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="icon-touch-target text-muted-foreground hover:text-foreground"
+                        title={t('recipientPatterns.openBtn')}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setPatternsDialogRecipient({ id: row.id, name: row.name });
+                        }}
+                    >
+                        <Regex className="h-4 w-4" />
+                    </Button>
                     {row.primary_recipient_id && (
                         <Button
                             variant="ghost"
@@ -397,6 +411,15 @@ export default function RecipientsPage() {
                     open={mergeDialogOpen}
                     onOpenChange={setMergeDialogOpen}
                 />
+
+                {patternsDialogRecipient && (
+                    <RecipientPatternsDialog
+                        open={patternsDialogRecipient != null}
+                        onOpenChange={(o) => { if (!o) setPatternsDialogRecipient(null); }}
+                        recipientId={patternsDialogRecipient.id}
+                        recipientName={patternsDialogRecipient.name}
+                    />
+                )}
             </div>
             <ConfirmDialog />
         </>

@@ -83,6 +83,22 @@ export function useMergeRecipients() {
             queryClient.invalidateQueries({queryKey: ['recipients']});
             queryClient.invalidateQueries({queryKey: ['transactions']});
             toast.success(t('recipients.merged', { n: String(data.merged_ids.length), name: data.primary.name }));
+            if (data.patternSuggestion) {
+                const { patternSuggestion } = data;
+                toast.info(t('recipients.createRuleSuggestion', { pattern: patternSuggestion.pattern, n: String(patternSuggestion.matchCount) }), {
+                    action: {
+                        label: t('recipients.createRule'),
+                        onClick: () => {
+                            apiClient.createRecipientPattern(data.primary.id, {
+                                pattern: patternSuggestion.pattern,
+                                pattern_kind: patternSuggestion.kind,
+                            }).then(() => toast.success(t('recipientPatterns.toast.created')))
+                              .catch(() => toast.error(t('recipientPatterns.toast.error')));
+                        },
+                    },
+                    duration: 10_000,
+                });
+            }
         },
         onError: (error: Error) => {
             toast.error(t('recipients.mergeFailedTitle'), { description: error.message });

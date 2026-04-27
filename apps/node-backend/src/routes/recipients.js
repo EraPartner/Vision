@@ -5,10 +5,25 @@
 import { Router } from 'express';
 import recipientRepository from '../repositories/recipientRepository.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../services/recipientMergeService.js';
+import {
+  listPatternsForRecipient,
+  createPattern,
+  updatePattern,
+  deletePattern,
+  previewPatternMatches,
+  suggestPatternFromNames,
+} from '../services/recipientPatternService.js';
+import { findRecipientClusters } from '../services/recipientClusterService.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 import { validateIdParam } from '../middleware/validation.js';
 
 const router = Router();
+
+router.get('/clusters', async (req, res) => {
+  const minCount = Math.max(2, parseInt(req.query.min_count, 10) || 2);
+  const clusters = await findRecipientClusters({ minCount });
+  res.ok({ items: clusters, total: clusters.length });
+});
 
 router.get('/', async (req, res) => {
   const {
@@ -97,11 +112,33 @@ router.post('/:id/merge', validateIdParam, async (req, res) => {
   const updatedPrimary = await recipientRepository.getById(primaryId);
   const aliases = await recipientRepository.getAliases(primaryId);
 
+  // Build pattern suggestion from merged alias names + primary name
+  const mergedNames = aliases
+    .filter((a) => mergedAliasIds.includes(a.id))
+    .map((a) => a.name);
+  const allNames = [updatedPrimary.name, ...mergedNames];
+  const suggestion = suggestPatternFromNames(allNames);
+
+  let patternSuggestion = null;
+  if (suggestion) {
+    try {
+      const preview = await previewPatternMatches({
+        pattern: suggestion.pattern,
+        pattern_kind: suggestion.kind,
+        case_sensitive: false,
+      });
+      patternSuggestion = { pattern: suggestion.pattern, kind: suggestion.kind, matchCount: preview.matchCount, confidence: suggestion.confidence };
+    } catch {
+      // suggestion is optional; ignore preview errors
+    }
+  }
+
   res.ok({
     primary: { ...updatedPrimary, links: [] },
     merged_ids: mergedAliasIds,
     reassigned,
     aliases: aliases.map((a) => ({ id: a.id, name: a.name })),
+    patternSuggestion,
   });
 });
 
@@ -120,6 +157,44 @@ router.get('/:id/aliases', validateIdParam, async (req, res) => {
     items: aliases.map((a) => ({ ...a, links: [] })),
     total: aliases.length,
   });
+});
+
+// ── Pattern sub-routes ───────────────────────────────────────────────────────
+
+router.get('/:id/patterns', validateIdParam, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const patterns = await listPatternsForRecipient(id);
+  res.ok({ items: patterns, total: patterns.length });
+});
+
+router.post('/:id/patterns', validateIdParam, async (req, res) => {
+  const recipientId = parseInt(req.params.id, 10);
+  const { pattern, pattern_kind, case_sensitive, priority, notes } = req.body;
+  if (!pattern) throw new ValidationError('Missing required field: pattern');
+  const result = await createPattern({ recipientId, pattern, pattern_kind, case_sensitive, priority, notes });
+  res.status(201);
+  res.ok(result);
+});
+
+router.post('/:id/patterns/preview', validateIdParam, async (req, res) => {
+  const { pattern, pattern_kind, case_sensitive } = req.body;
+  if (!pattern) throw new ValidationError('Missing required field: pattern');
+  const result = await previewPatternMatches({ pattern, pattern_kind: pattern_kind ?? 'literal_prefix', case_sensitive: case_sensitive ?? false });
+  res.ok(result);
+});
+
+router.patch('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
+  const patternId = parseInt(req.params.patternId, 10);
+  if (!Number.isFinite(patternId)) throw new ValidationError('Invalid patternId');
+  await updatePattern(patternId, req.body);
+  res.ok({ patternId });
+});
+
+router.delete('/:id/patterns/:patternId', validateIdParam, async (req, res) => {
+  const patternId = parseInt(req.params.patternId, 10);
+  if (!Number.isFinite(patternId)) throw new ValidationError('Invalid patternId');
+  await deletePattern(patternId);
+  res.ok({ patternId });
 });
 
 export default router;

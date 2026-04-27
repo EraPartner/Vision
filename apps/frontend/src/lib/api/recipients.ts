@@ -41,10 +41,17 @@ export async function deleteRecipient(id: number): Promise<void> {
     await apiRequest<void>(`/api/recipients/${id}`, { method: 'DELETE' });
 }
 
+export interface PatternSuggestion {
+    pattern: string;
+    kind: 'literal_prefix' | 'glob' | 'regex';
+    matchCount: number;
+    confidence: 'high' | 'medium' | 'low';
+}
+
 export function mergeRecipients(
     primaryId: number,
     aliasIds: number[],
-): Promise<{ primary: Recipient; merged_ids: number[]; aliases: Array<{ id: number; name: string }> }> {
+): Promise<{ primary: Recipient; merged_ids: number[]; aliases: Array<{ id: number; name: string }>; patternSuggestion: PatternSuggestion | null }> {
     return apiRequest(`/api/recipients/${primaryId}/merge`, {
         method: 'POST',
         body: JSON.stringify({ alias_ids: aliasIds }),
@@ -57,4 +64,77 @@ export function unmergeRecipient(id: number): Promise<Recipient> {
 
 export function getRecipientAliases(id: number): Promise<{ items: Recipient[]; total: number }> {
     return apiRequest(`/api/recipients/${id}/aliases`);
+}
+
+export interface RecipientPattern {
+    id: number;
+    pattern: string;
+    pattern_kind: 'literal_prefix' | 'glob' | 'regex';
+    case_sensitive: boolean;
+    priority: number;
+    is_active: boolean;
+    source: 'user' | 'suggested' | 'system';
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RecipientPatternCreate {
+    pattern: string;
+    pattern_kind?: 'literal_prefix' | 'glob' | 'regex';
+    case_sensitive?: boolean;
+    priority?: number;
+    notes?: string;
+}
+
+export interface RecipientPatternUpdate {
+    pattern?: string;
+    pattern_kind?: 'literal_prefix' | 'glob' | 'regex';
+    case_sensitive?: boolean;
+    priority?: number;
+    is_active?: boolean;
+    notes?: string;
+}
+
+export function listRecipientPatterns(recipientId: number): Promise<{ items: RecipientPattern[]; total: number }> {
+    return apiRequest(`/api/recipients/${recipientId}/patterns`);
+}
+
+export function createRecipientPattern(recipientId: number, data: RecipientPatternCreate): Promise<{ id: number }> {
+    return apiRequest(`/api/recipients/${recipientId}/patterns`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export function updateRecipientPattern(recipientId: number, patternId: number, data: RecipientPatternUpdate): Promise<{ patternId: number }> {
+    return apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    });
+}
+
+export function deleteRecipientPattern(recipientId: number, patternId: number): Promise<{ patternId: number }> {
+    return apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
+}
+
+export function previewRecipientPattern(recipientId: number, data: Pick<RecipientPatternCreate, 'pattern' | 'pattern_kind' | 'case_sensitive'>): Promise<{ matchCount: number; recipientIds: number[] }> {
+    return apiRequest(`/api/recipients/${recipientId}/patterns/preview`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export interface RecipientCluster {
+    lcp: string;
+    confidence: 'high' | 'medium' | 'low';
+    recipientIds: number[];
+    recipientNames: string[];
+    categoryId: number | null;
+    suggestedPattern: string;
+    suggestedKind: 'literal_prefix' | 'glob' | 'regex';
+}
+
+export function getRecipientClusters(params?: { min_count?: number }): Promise<{ items: RecipientCluster[]; total: number }> {
+    return requestWithQuery('/api/recipients/clusters', params);
 }
