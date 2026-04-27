@@ -2,10 +2,10 @@
 title: Translations & i18n
 type: i18n
 status: active
-date: 2026-04-25
-updated: 2026-04-25
-tags: [i18n, translations, localization, internationalization, phase-6, phase-f, phase-9, phase-c, admin, observability, cash-flow-forecast]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys.
+date: 2026-04-27
+updated: 2026-04-27
+tags: [i18n, translations, localization, internationalization, phase-6, phase-8, phase-f, phase-9, phase-c, admin, observability, cash-flow-forecast, pdf-export, portfolio, tax]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report localization. Phase 8 adds 11 additional export.section.* keys for portfolio (6) and tax (7) report sections. Phase C adds 15 cash flow forecast keys. Phase F adds 60 admin observability keys.
 aliases: [i18n, translations, localization, language, nl, en, dutch, english]
 related_code: ["apps/frontend/src/locales", "apps/frontend/src/contexts/LanguageContext.tsx"]
 ---
@@ -183,13 +183,22 @@ bun run build
 - `export.section.bankBalances` — "Bank Balances"
 - `export.section.rollingAverages` — "Rolling Averages"
 - `export.section.plannedOutlook` — "Planned Outlook"
+- `export.section.portfolioExecutiveSummary` — "Portfolio Executive Summary" (Phase 8)
 - `export.section.portfolioAllocation` — "Portfolio Allocation"
 - `export.section.topHoldings` — "Top Holdings"
-- `export.section.taxBreakdown` — "Tax Breakdown"
+- `export.section.performanceTrend` — "Performance Trend" (Phase 8)
+- `export.section.assetClassDetail` — "Asset Class Detail" (Phase 8)
+- `export.section.dividendIncome` — "Dividend Income" (Phase 8)
+- `export.section.taxExecutiveSummary` — "Tax Executive Summary" (Phase 8)
+- `export.section.taxTypeBreakdown` — "Tax Type Breakdown" (Phase 8)
+- `export.section.taxByAssetClass` — "Tax by Asset Class" (Phase 8)
+- `export.section.taxMonthlyTrend` — "Tax Monthly Trend" (Phase 8)
+- `export.section.topInvestmentsByCost` — "Top Investments by Cost" (Phase 8)
+- `export.section.feeBreakdown` — "Fee Breakdown" (Phase 8)
+- `export.section.belgianRulesSummary` — "Belgian Tax Rules" (Phase 8)
 - `export.currency` — "Currency"
 - `export.download` — "Download PDF"
-- `export.downloading` — "Generating…"
-- `export.comingSoon` — "This report type is not yet available — a placeholder PDF will be generated."
+- `export.downloading` — "Generating…"`
 
 **Phase C (2026-04-25):**
 - `cashflow.forecastTitle` — "Cash Flow Forecast" (chart title)

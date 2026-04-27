@@ -2,9 +2,9 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-04-26
-tags: [feature, tax, belgian, cadastral-income, deductions]
-description: Belgian tax profile management, year-aware PIT calculator, cadastral income tracking, and deduction management
+date: 2026-04-27
+tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export]
+description: Belgian tax profile management, year-aware PIT calculator, cadastral income tracking, deduction management, and PDF tax report export (Phase 8)
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
@@ -203,9 +203,24 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 
 ---
 
+## PDF Report Export
+
+Tax data including Belgian tax profile and Personal Income Tax calculations can be exported as a comprehensive PDF report via the [[docs/features/pdf-report-export|PDF Report Export]] feature. The tax report (Phase 8, April 2026) includes:
+
+- **Tax Executive Summary** — KPI grid with total taxes, fees, and effective rates
+- **Tax Type Breakdown** — Horizontal bars of tax components (TOB, dividend WHT, capital gains, fees)
+- **Tax by Asset Class** — Grouped bars showing taxes and fees per asset class
+- **Monthly Tax Trend** — Stacked monthly bar chart of taxes and fees
+- **Top Investments by Cost** — Ranked investments by total taxes and fees paid
+- **Fee Breakdown** — Fee aggregation by asset class
+- **Belgian Tax Rules Summary** — Static bracket/exemption tables + PIT summary when Belgian tax profile is active
+
+See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for request/response details.
+
 ## Related
 
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
+- [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion
 - [[docs/adr/002-database-schema#belgian-inflation-rates]] — Database schema
 - [[docs/integrations/index#government-data]] — Government data integrations

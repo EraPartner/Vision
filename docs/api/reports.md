@@ -23,7 +23,7 @@ tags:
   - white-bar-fix
   - table-overflow-fix
   - page-continuation
-description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers with CSS page margin fix and enhanced print breaks. Phase 5 fixes add white bar elimination in page margins and table overflow prevention via page-continuation layout. Phase 6 adds i18n support. Phase 7 adds filter exclusions with dual-chart comparison view and section-level filtering. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
+description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers, white-bar fix, and table-overflow fix. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers; tax endpoint accepts optional taxProfile and precomputedPIT for Belgian tax rules. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
 aliases:
   - reports
   - pdf export
@@ -52,9 +52,19 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 - **Enhanced print breaks** (Phase 5): `break-inside: avoid` prevents card/row orphaning; `display: table-header-group` repeats table headers across pages
 - **Full i18n support** (Phase 6): 32 translation keys for dialog UI, period labels, section toggles, and actions (en/nl)
 - **Graceful degradation**: Promise.allSettled ensures one failed data source doesn't crash report
-- **Three report types**: Financial (complete), Portfolio (placeholder), Tax (placeholder)
+- **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
 
 ## Phase Updates
+
+### Phase 8 — Portfolio & Tax Report Implementation (2026-04-27)
+
+- **Portfolio report**: 6 data-backed sections replacing "Coming soon" stub. New `dataFetcherPortfolio.js` fetches portfolio snapshots, investment summaries, dividends, and asset-class aggregations in parallel. New `svgLineChart` helper added to `sectionHelpers.js` for performance trend overlay (value vs invested vs inflation-adjusted).
+- **Tax report**: 7 data-backed sections replacing "Coming soon" stub. New `dataFetcherTax.js` aggregates `portfolio_transactions` filtered to tax-year window, producing `totals`, `byMonth`, `byAssetClass`, and `byInvestment` payloads.
+- **Belgian tax pass-through**: `/api/reports/tax` now accepts optional `taxProfile` (`filingStatus`, `region`, `taxYear`) and `precomputedPIT` (`taxableIncome`, `totalTax`, `brackets[]`) in the POST body. `belgianTaxTables.js` provides static bracket/rate data; no server-side PIT computation.
+- **`svgGenericGroupedBarChart`**: New flexible chart helper in `sectionHelpers.js` accepting configurable `seriesDefs: { key, color, label }[]`; used by tax and portfolio section renderers.
+- **ExportDialog**: Removed `isImplemented` guard and "coming soon" notice. All 3 report types are now fully operational. Portfolio section list expanded from 2 → 6 entries; tax from 1 → 7 entries. Tax download resolves `taxProfile` + `precomputedPIT` from `BelgianTaxProfileContext` before sending.
+- **PortfolioOverviewPage**: `<ExportDialog defaultType="portfolio" />` added to PageHeader actions.
+- **i18n**: 11 new `export.section.*` keys added to all 6 locale files (`en.ts`, `nl.ts`, `i18n/source/en.json`, `i18n/source/nl.json`, `packaging/electron/i18n/en.json`, `packaging/electron/i18n/nl.json`).
 
 ### Phase 5 — PDF Polish (2026-04-24)
 
@@ -115,7 +125,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
   - Dialog UI: `export.title`, `export.description`, `export.openDialog`
   - Report Types: `export.reportType`, `export.reportType.{financial,portfolio,tax}`
   - Periods: `export.period`, `export.period.{ytd,rolling3,rolling12,year,custom}`, labels
-  - Sections: `export.sections`, `export.section.{7 financial + 3 placeholder}`
+  - Sections: `export.sections`, `export.section.{7 financial + 6 portfolio + 7 tax}` (Phase 8 complete, no placeholders)
   - Actions: `export.{currency,download,downloading,comingSoon}`
 - **Generated Artifacts**: Keys regenerated into `apps/frontend/src/locales/en.ts` and `nl.ts` via build system
 - **Validation**: All keys pass parity checks, placeholder consistency, type safety, and drift detection
@@ -247,19 +257,71 @@ const blob = await response.blob();
 
 ### POST /api/reports/portfolio
 
-Generate a portfolio PDF report (placeholder).
+Generate a portfolio PDF report with 6 data-backed sections (Phase 8).
 
-**Request body:** Same schema as `/api/reports/financial`. (`excludedCategoryIds` and `excludedRecipientIds` are accepted but not used in the placeholder implementation.)
+**Request body:** Same schema as `/api/reports/financial`. `excludedCategoryIds` and `excludedRecipientIds` are accepted but are no-op (portfolio data has no category/recipient join).
 
-**Response:** "Coming soon" placeholder page.
+**Available Sections:**
+
+| Section ID | Description |
+|---|---|
+| `portfolioExecutiveSummary` | KPI grid: total value, invested, unrealised P/L, realised P/L, dividends YTD, return % |
+| `portfolioAllocation` | Asset-class breakdown (stocks/ETFs, crypto, metals, cash) via horizontal bars + table |
+| `topHoldings` | Top 10 holdings by current value |
+| `performanceTrend` | Line chart overlaying portfolio value vs invested + inflation-adjusted; per-month table |
+| `assetClassDetail` | Grouped bar chart (invested vs value) per asset class + P/L summary |
+| `dividendIncome` | Monthly dividend bar chart + top dividend-paying investments |
 
 ### POST /api/reports/tax
 
-Generate a tax PDF report (placeholder).
+Generate a tax PDF report with 7 data-backed sections (Phase 8).
 
-**Request body:** Same schema as `/api/reports/financial`. (`excludedCategoryIds` and `excludedRecipientIds` are accepted but not used in the placeholder implementation.)
+**Request body:** Extends the base schema with two optional fields:
 
-**Response:** "Coming soon" placeholder page.
+```json
+{
+  "currency": "EUR",
+  "period": { "kind": "year", "year": 2024 },
+  "sections": [],
+  "theme": { "mode": "light" },
+  "taxProfile": {
+    "filingStatus": "employed",
+    "region": "belgium",
+    "taxYear": 2024
+  },
+  "precomputedPIT": {
+    "taxableIncome": 45000,
+    "totalTax": 12300,
+    "brackets": [
+      { "label": "25%", "rate": 0.25, "taxableIncome": 15200, "taxAmount": 3800 }
+    ]
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `taxProfile` | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary` |
+| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. |
+
+**Available Sections:**
+
+| Section ID | Description |
+|---|---|
+| `taxExecutiveSummary` | KPI grid: total taxes paid, fees, net cost, dividend WHT, TOB, effective rate |
+| `taxTypeBreakdown` | Horizontal bars of tax components (TOB, dividend WHT, sell tax, fees, other) |
+| `taxByAssetClass` | Grouped bar chart (taxes vs fees) per asset class |
+| `taxMonthlyTrend` | Monthly grouped bars (taxes and fees) |
+| `topInvestmentsByCost` | Top 15 investments ranked by total taxes + fees |
+| `feeBreakdown` | Fee aggregation by asset class |
+| `belgianRulesSummary` | Static bracket/exemption/TOB-rate tables; PIT summary block when `precomputedPIT` supplied |
+
+**Period and tax-year normalisation:**
+
+- `kind: 'year'` → that calendar year
+- `kind: 'ytd'` → current calendar year
+- `kind: 'rolling'` → current calendar year (note on cover)
+- `kind: 'custom'` → respects date range; bracket lookup uses year of `period.from`
 
 ### GET /api/reports/financial (Legacy)
 

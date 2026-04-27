@@ -2,11 +2,11 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-04-26
-last_modified: 2026-04-26
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9]
+date: 2026-04-27
+last_modified: 2026-04-27
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
-description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds
+description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/lib/api.ts"]
 ---
 
@@ -401,6 +401,21 @@ Code links: [[apps/node-backend/src/utils/portfolioMath.js]], [[apps/frontend/sr
 Portfolio info cards (Crypto, Savings, Real Estate, Stocks) previously rendered translations via `dangerouslySetInnerHTML`. This pattern was unnecessarily risky. Since translation strings are plain text with no embedded HTML, all info cards now render translations as plain text: `{t(...)}` instead of `dangerouslySetInnerHTML={{ __html: t(...) }}`. This eliminates the XSS surface while maintaining identical output.
 
 Code links: [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[docs/security/data-protection#xss-prevention]]
+
+## PDF Report Export (Phase 8)
+
+Portfolio data can be exported as a comprehensive PDF report via the [[docs/features/pdf-report-export|PDF Report Export]] feature. The portfolio report includes:
+
+- **Portfolio Executive Summary** — KPI grid with total value, invested, unrealised P/L, realised P/L, dividends YTD, and return %
+- **Portfolio Allocation** — Asset-class breakdown (stocks/ETFs, crypto, metals, cash) with horizontal bars and table
+- **Top Holdings** — Top 10 holdings by current value
+- **Performance Trend** — Line chart overlaying portfolio value vs invested + inflation-adjusted; per-month table
+- **Asset Class Detail** — Grouped bar chart (invested vs value) per asset class with P/L summary
+- **Dividend Income** — Monthly dividend bar chart + top dividend-paying investments
+
+Portfolio report is available from the Portfolio Overview page (`/portfolio`) and Stocks page (`/portfolio/stocks`).
+
+See [[docs/api/reports#post-apireportsportfolio|Reports API: Portfolio Endpoint]] for request/response details.
 
 ## Related
 

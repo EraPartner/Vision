@@ -205,8 +205,11 @@ package "Routes" {
     +GET /sankey : income flow diagram (Phase 7)
   }
 
-  class ReportsRouter <<Phase 7>> {
-    +GET /financial : PDF financial report
+  class ReportsRouter <<Phase 3-8>> {
+    +POST /financial : PDF financial report (7 sections, Puppeteer)
+    +POST /portfolio : PDF portfolio report (6 sections, Phase 8)
+    +POST /tax : PDF tax report (7 sections, Phase 8)
+    +GET /financial : legacy PDF financial (deprecated Phase 5)
   }
 }
 

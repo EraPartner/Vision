@@ -4,14 +4,14 @@
  * Entry point for all PDF report types. Each report type (financial, portfolio,
  * tax) builds an HTML document from theme tokens + data, then Puppeteer renders
  * it to a PDF buffer that is piped to the HTTP response.
- *
- * Phase 1: Cover page + placeholder sections. Section renderers added in phase 3.
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
 import { buildThemeCss } from './themeCss.js';
 import { escapeHtml, SECTION_CSS } from './sectionHelpers.js';
 import { fetchFinancialData } from './dataFetcher.js';
+import { fetchPortfolioData } from './dataFetcherPortfolio.js';
+import { fetchTaxData } from './dataFetcherTax.js';
 import { renderExecutiveSummary } from './sections/executiveSummary.js';
 import { renderCashflowTrend } from './sections/cashflowTrend.js';
 import { renderCategoryBreakdown } from './sections/categoryBreakdown.js';
@@ -19,6 +19,19 @@ import { renderTopRecipients } from './sections/topRecipients.js';
 import { renderBankBalances } from './sections/bankBalances.js';
 import { renderPlannedOutlook } from './sections/plannedOutlook.js';
 import { renderRollingAverages } from './sections/rollingAverages.js';
+import { renderPortfolioExecutiveSummary } from './sections/portfolioExecutiveSummary.js';
+import { renderPortfolioAllocation } from './sections/portfolioAllocation.js';
+import { renderTopHoldings } from './sections/topHoldings.js';
+import { renderPerformanceTrend } from './sections/performanceTrend.js';
+import { renderAssetClassDetail } from './sections/assetClassDetail.js';
+import { renderDividendIncome } from './sections/dividendIncome.js';
+import { renderTaxExecutiveSummary } from './sections/taxExecutiveSummary.js';
+import { renderTaxTypeBreakdown } from './sections/taxTypeBreakdown.js';
+import { renderFeeBreakdown } from './sections/feeBreakdown.js';
+import { renderTaxByAssetClass } from './sections/taxByAssetClass.js';
+import { renderTaxMonthlyTrend } from './sections/taxMonthlyTrend.js';
+import { renderTopInvestmentsByCost } from './sections/topInvestmentsByCost.js';
+import { renderBelgianRulesSummary } from './sections/belgianRulesSummary.js';
 
 /**
  * @typedef {'ytd' | 'rolling' | 'custom' | 'year'} PeriodKind
@@ -52,6 +65,8 @@ import { renderRollingAverages } from './sections/rollingAverages.js';
  *   res: import('express').Response;
  *   excludedCategoryIds?: number[];
  *   excludedRecipientIds?: number[];
+ *   taxProfile?: object;
+ *   precomputedPIT?: object;
  * }} GenerateReportOpts
  */
 
@@ -372,10 +387,7 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
   `.trim();
 }
 
-/**
- * Map of financial section IDs to their renderer functions.
- * Renderers receive (data, { currency, period }) and return an HTML string.
- */
+/** Financial section renderers keyed by section ID. */
 const FINANCIAL_SECTION_RENDERERS = {
   executiveSummary: renderExecutiveSummary,
   cashflowTrend: renderCashflowTrend,
@@ -386,7 +398,6 @@ const FINANCIAL_SECTION_RENDERERS = {
   rollingAverages: renderRollingAverages,
 };
 
-/** Sections rendered when no explicit list is requested. */
 const DEFAULT_FINANCIAL_SECTIONS = [
   'executiveSummary',
   'cashflowTrend',
@@ -397,9 +408,47 @@ const DEFAULT_FINANCIAL_SECTIONS = [
   'plannedOutlook',
 ];
 
+/** Portfolio section renderers keyed by section ID. */
+const PORTFOLIO_SECTION_RENDERERS = {
+  portfolioExecutiveSummary: renderPortfolioExecutiveSummary,
+  portfolioAllocation:       renderPortfolioAllocation,
+  topHoldings:               renderTopHoldings,
+  performanceTrend:          renderPerformanceTrend,
+  assetClassDetail:          renderAssetClassDetail,
+  dividendIncome:            renderDividendIncome,
+};
+
+const DEFAULT_PORTFOLIO_SECTIONS = [
+  'portfolioExecutiveSummary',
+  'portfolioAllocation',
+  'topHoldings',
+  'performanceTrend',
+  'assetClassDetail',
+  'dividendIncome',
+];
+
+/** Tax section renderers keyed by section ID. */
+const TAX_SECTION_RENDERERS = {
+  taxExecutiveSummary:   renderTaxExecutiveSummary,
+  taxTypeBreakdown:      renderTaxTypeBreakdown,
+  feeBreakdown:          renderFeeBreakdown,
+  taxByAssetClass:       renderTaxByAssetClass,
+  taxMonthlyTrend:       renderTaxMonthlyTrend,
+  topInvestmentsByCost:  renderTopInvestmentsByCost,
+  belgianRulesSummary:   renderBelgianRulesSummary,
+};
+
+const DEFAULT_TAX_SECTIONS = [
+  'taxExecutiveSummary',
+  'taxTypeBreakdown',
+  'taxByAssetClass',
+  'taxMonthlyTrend',
+  'topInvestmentsByCost',
+  'feeBreakdown',
+  'belgianRulesSummary',
+];
+
 /**
- * Build the body HTML for a financial report.
- *
  * @param {{ currency: string; period: Period; sections: string[]; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
  * @returns {Promise<string>}
  */
@@ -423,15 +472,49 @@ async function buildFinancialBody({ currency, period, sections, excludedCategory
 }
 
 /**
- * Placeholder body for report types not yet implemented (portfolio, tax).
+ * @param {{ currency: string; period: Period; sections: string[] }} opts
+ * @returns {Promise<string>}
  */
-function buildPlaceholderBody(sections) {
-  return `
-    <div class="page placeholder-notice">
-      <strong>Coming soon</strong>
-      This report type is not yet available.
-      ${sections.length > 0 ? `<br>Requested sections: ${sections.map(escapeHtml).join(', ')}.` : ''}
-    </div>`;
+async function buildPortfolioBody({ currency, period, sections }) {
+  const requested = sections.length > 0 ? sections : DEFAULT_PORTFOLIO_SECTIONS;
+  const valid = requested.filter(id => id in PORTFOLIO_SECTION_RENDERERS);
+
+  if (!valid.length) {
+    return `
+      <div class="page placeholder-notice">
+        <strong>No sections selected</strong>
+        Select sections in the export dialog to include them in this report.
+      </div>`;
+  }
+
+  const data = await fetchPortfolioData(currency, period);
+
+  return valid
+    .map(id => PORTFOLIO_SECTION_RENDERERS[id](data, { currency, period }))
+    .join('\n');
+}
+
+/**
+ * @param {{ currency: string; period: Period; sections: string[]; taxProfile?: object; precomputedPIT?: object }} opts
+ * @returns {Promise<string>}
+ */
+async function buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT }) {
+  const requested = sections.length > 0 ? sections : DEFAULT_TAX_SECTIONS;
+  const valid = requested.filter(id => id in TAX_SECTION_RENDERERS);
+
+  if (!valid.length) {
+    return `
+      <div class="page placeholder-notice">
+        <strong>No sections selected</strong>
+        Select sections in the export dialog to include them in this report.
+      </div>`;
+  }
+
+  const data = await fetchTaxData(currency, period, { taxProfile, precomputedPIT });
+
+  return valid
+    .map(id => TAX_SECTION_RENDERERS[id](data, { currency, period }))
+    .join('\n');
 }
 
 /**
@@ -459,7 +542,7 @@ ${body}
  *
  * @param {GenerateReportOpts} opts
  */
-export async function generateReport({ type, currency, period, sections, theme, res, excludedCategoryIds = [], excludedRecipientIds = [] }) {
+export async function generateReport({ type, currency, period, sections, theme, res, excludedCategoryIds = [], excludedRecipientIds = [], taxProfile, precomputedPIT }) {
   const generatedAt = new Date().toISOString();
   const mode = theme.mode ?? 'light';
 
@@ -470,8 +553,16 @@ export async function generateReport({ type, currency, period, sections, theme, 
   let bodyHtml;
   if (type === 'financial') {
     bodyHtml = await buildFinancialBody({ currency, period, sections, excludedCategoryIds, excludedRecipientIds });
+  } else if (type === 'portfolio') {
+    bodyHtml = await buildPortfolioBody({ currency, period, sections });
+  } else if (type === 'tax') {
+    bodyHtml = await buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT });
   } else {
-    bodyHtml = buildPlaceholderBody(sections);
+    bodyHtml = `
+      <div class="page placeholder-notice">
+        <strong>Unknown report type</strong>
+        Report type "${escapeHtml(String(type))}" is not supported.
+      </div>`;
   }
 
   const html = buildDocument({ themeCss, baseCss, body: coverHtml + '\n' + bodyHtml, mode });

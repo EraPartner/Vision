@@ -16,6 +16,25 @@ export type ReportPeriod =
   | { kind: 'custom'; from: string; to: string }
   | { kind: 'year'; year: number };
 
+export interface TaxReportProfile {
+  filingStatus?: string;
+  region?: string;
+  taxYear?: number;
+}
+
+export interface TaxReportPITBracket {
+  label?: string;
+  rate?: number;
+  taxableIncome?: number;
+  taxAmount?: number;
+}
+
+export interface TaxReportPIT {
+  taxableIncome?: number;
+  totalTax?: number;
+  brackets?: TaxReportPITBracket[];
+}
+
 export interface ReportOptions {
   currency?: string;
   period?: ReportPeriod;
@@ -23,6 +42,8 @@ export interface ReportOptions {
   theme?: ReportThemeTokens;
   excludedCategoryIds?: number[];
   excludedRecipientIds?: number[];
+  taxProfile?: TaxReportProfile;
+  precomputedPIT?: TaxReportPIT;
 }
 
 async function postReportDownload(
@@ -39,6 +60,8 @@ async function postReportDownload(
     theme,
     excludedCategoryIds: options.excludedCategoryIds ?? [],
     excludedRecipientIds: options.excludedRecipientIds ?? [],
+    ...(options.taxProfile     && { taxProfile:     options.taxProfile     }),
+    ...(options.precomputedPIT && { precomputedPIT: options.precomputedPIT }),
   };
 
   const response = await fetch(path, {

@@ -35,6 +35,7 @@ import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useBelgianTaxProfile } from '@/contexts/BelgianTaxProfileContext';
 import {
   downloadFinancialReport,
   downloadPortfolioReport,
@@ -64,12 +65,22 @@ const FINANCIAL_SECTIONS: SectionDef[] = [
 ];
 
 const PORTFOLIO_SECTIONS: SectionDef[] = [
-  { id: 'portfolioAllocation', labelKey: 'export.section.portfolioAllocation' },
-  { id: 'topHoldings',         labelKey: 'export.section.topHoldings'         },
+  { id: 'portfolioExecutiveSummary', labelKey: 'export.section.portfolioExecutiveSummary' },
+  { id: 'portfolioAllocation',       labelKey: 'export.section.portfolioAllocation'       },
+  { id: 'topHoldings',               labelKey: 'export.section.topHoldings'               },
+  { id: 'performanceTrend',          labelKey: 'export.section.performanceTrend'          },
+  { id: 'assetClassDetail',          labelKey: 'export.section.assetClassDetail'          },
+  { id: 'dividendIncome',            labelKey: 'export.section.dividendIncome'            },
 ];
 
 const TAX_SECTIONS: SectionDef[] = [
-  { id: 'taxBreakdown', labelKey: 'export.section.taxBreakdown' },
+  { id: 'taxExecutiveSummary',  labelKey: 'export.section.taxExecutiveSummary'  },
+  { id: 'taxTypeBreakdown',     labelKey: 'export.section.taxTypeBreakdown'     },
+  { id: 'taxByAssetClass',      labelKey: 'export.section.taxByAssetClass'      },
+  { id: 'taxMonthlyTrend',      labelKey: 'export.section.taxMonthlyTrend'      },
+  { id: 'topInvestmentsByCost', labelKey: 'export.section.topInvestmentsByCost' },
+  { id: 'feeBreakdown',         labelKey: 'export.section.feeBreakdown'         },
+  { id: 'belgianRulesSummary',  labelKey: 'export.section.belgianRulesSummary'  },
 ];
 
 const SECTIONS_BY_TYPE: Record<ReportType, SectionDef[]> = {
@@ -116,6 +127,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const { settings: dashSettings } = useSettings();
+  const { profile: taxProfile, calculation: pitCalc } = useBelgianTaxProfile();
   const defaultCurrency = appSettings.defaultCurrency || 'EUR';
   const currentYear = new Date().getFullYear();
 
@@ -133,7 +145,6 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sectionDefs = SECTIONS_BY_TYPE[reportType];
-  const isImplemented = reportType === 'financial';
 
   // Reset sections when report type changes
   function handleReportTypeChange(type: ReportType) {
@@ -164,7 +175,7 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
     const selectedSections = allSectionsEnabled(sections, sectionDefs) ? [] : [...sections];
 
     const filtersApply = dashSettings.exclusionScope === 'everywhere' || dashSettings.exclusionScope === 'statistics';
-    const opts = {
+    const baseOpts = {
       currency,
       period,
       sections: selectedSections,
@@ -175,11 +186,23 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
     setIsSubmitting(true);
     try {
       if (reportType === 'financial') {
-        await downloadFinancialReport(opts);
+        await downloadFinancialReport(baseOpts);
       } else if (reportType === 'portfolio') {
-        await downloadPortfolioReport(opts);
+        await downloadPortfolioReport(baseOpts);
       } else {
-        await downloadTaxReport(opts);
+        const resolvedTaxProfile = taxProfile.profileConfigured
+          ? { filingStatus: taxProfile.employmentType, region: taxProfile.region, taxYear: taxProfile.taxYear }
+          : undefined;
+        const resolvedPIT = taxProfile.profileConfigured
+          ? {
+              taxableIncome: pitCalc.taxableIncome,
+              totalTax: pitCalc.totalPIT,
+              brackets: pitCalc.breakdown
+                .filter((e) => e.bracket)
+                .map((e) => ({ label: e.label, rate: e.rate, taxAmount: e.amount })),
+            }
+          : undefined;
+        await downloadTaxReport({ ...baseOpts, taxProfile: resolvedTaxProfile, precomputedPIT: resolvedPIT });
       }
       toast.success(t('statsPage.report.downloadSuccess'));
       setOpen(false);
@@ -238,11 +261,6 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
               ))}
             </RadioGroup>
 
-            {!isImplemented && (
-              <p className="text-xs text-muted-foreground px-1">
-                {t('export.comingSoon')}
-              </p>
-            )}
           </div>
 
           <Separator />

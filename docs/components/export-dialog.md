@@ -2,9 +2,9 @@
 title: ExportDialog Component
 type: component
 status: active
-date: 2026-04-26
-tags: [component, export, dialog, reports, pdf, phase-4, ui, configuration]
-description: Unified PDF report export configuration dialog. Selects report type (financial/portfolio/tax), period (YTD/rolling/year/custom), sections, and currency before triggering backend PDF generation.
+date: 2026-04-27
+tags: [component, export, dialog, reports, pdf, phase-4, phase-8, ui, configuration, portfolio, tax]
+description: Unified PDF report export configuration dialog. Selects report type (financial/portfolio/tax with Phase 8 completion of portfolio and tax reports), period (YTD/rolling/year/custom), sections (6 portfolio + 7 tax sections fully implemented), and currency before triggering backend PDF generation.
 related_code:
   - apps/frontend/src/components/reports/ExportDialog.tsx
   - apps/frontend/src/lib/api/reports.ts
@@ -88,7 +88,7 @@ Pre-selects tax report type; user still configures period, sections, and currenc
 Radio group with three options (financial, portfolio, tax):
 - Styled as bordered cards with hover and active states
 - Changes the available sections list when toggled
-- "Coming soon" notice for unimplemented types (portfolio, tax)
+- All three types fully implemented and operational (Phase 8)
 
 ### Period Preset Selection
 
@@ -123,12 +123,22 @@ Radio group with five presets:
 6. Rolling Averages
 7. Planned Outlook
 
-**Portfolio sections (2, placeholder):**
-1. Portfolio Allocation
-2. Top Holdings
+**Portfolio sections (6, Phase 8 complete):**
+1. Portfolio Executive Summary
+2. Portfolio Allocation
+3. Top Holdings
+4. Performance Trend
+5. Asset Class Detail
+6. Dividend Income
 
-**Tax sections (1, placeholder):**
-1. Tax Breakdown
+**Tax sections (7, Phase 8 complete):**
+1. Tax Executive Summary
+2. Tax Type Breakdown
+3. Tax by Asset Class
+4. Tax Monthly Trend
+5. Top Investments by Cost
+6. Fee Breakdown
+7. Belgian Tax Rules
 
 ### Section Behavior Contract
 
@@ -245,7 +255,6 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 - `export.reportType.financial` → "Financial"
 - `export.reportType.portfolio` → "Portfolio"
 - `export.reportType.tax` → "Tax"
-- `export.comingSoon` → "This report type is not yet available — a placeholder PDF will be generated."
 
 **Period:**
 - `export.period` → "Period"
@@ -268,9 +277,19 @@ All labels, descriptions, and button text are i18n-enabled via `useLanguage()` h
 - `export.section.bankBalances` → "Bank Balances"
 - `export.section.rollingAverages` → "Rolling Averages"
 - `export.section.plannedOutlook` → "Planned Outlook"
+- `export.section.portfolioExecutiveSummary` → "Portfolio Executive Summary"
 - `export.section.portfolioAllocation` → "Portfolio Allocation"
 - `export.section.topHoldings` → "Top Holdings"
-- `export.section.taxBreakdown` → "Tax Breakdown"
+- `export.section.performanceTrend` → "Performance Trend"
+- `export.section.assetClassDetail` → "Asset Class Detail"
+- `export.section.dividendIncome` → "Dividend Income"
+- `export.section.taxExecutiveSummary` → "Tax Executive Summary"
+- `export.section.taxTypeBreakdown` → "Tax Type Breakdown"
+- `export.section.taxByAssetClass` → "Tax by Asset Class"
+- `export.section.taxMonthlyTrend` → "Tax Monthly Trend"
+- `export.section.topInvestmentsByCost` → "Top Investments by Cost"
+- `export.section.feeBreakdown` → "Fee Breakdown"
+- `export.section.belgianRulesSummary` → "Belgian Tax Rules"
 
 **Currency:**
 - `export.currency` → "Currency"
@@ -416,9 +435,10 @@ toast.error(t('statsPage.report.downloadError'), { description: '...' });
 
 | Page | Path | Report Type | Position |
 |------|------|-------------|----------|
-| **Statistics** | `apps/frontend/src/pages/StatisticsPage.tsx` (line 117) | financial | Header actions |
+| **Statistics** | `apps/frontend/src/pages/StatisticsPage.tsx` | financial | Header actions |
 | **Tax Overview** | `apps/frontend/src/pages/TaxOverviewPage.tsx` | tax | Header actions |
 | **Stocks** | `apps/frontend/src/pages/portfolio/StocksPage.tsx` | portfolio | Header actions |
+| **Portfolio Overview** | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | portfolio | Header actions |
 
 ## Related
 
@@ -429,7 +449,7 @@ toast.error(t('statsPage.report.downloadError'), { description: '...' });
 
 ## Future Enhancements
 
-- Portfolio and tax report section renderers (currently placeholder "Coming soon")
 - Report templates (e.g., "Quick Summary", "Detailed Analysis")
 - Export scheduling (e.g., "Email me monthly reports")
 - Custom branding options (logo, footer text)
+- Comparative period analysis (e.g., YoY or YTD vs same period last year)

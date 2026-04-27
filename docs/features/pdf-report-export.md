@@ -1,11 +1,11 @@
 ---
-title: PDF Financial Report Export
+title: PDF Report Export
 type: feature
 status: active
 date: 2026-04-27
-tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation]
-description: Comprehensive PDF financial report export with cover page, theme-aware styling, and modular section renderers. Phase 4 adds ExportDialog UI component. Phase 5 adds pagination footer with page numbers, improved print break control, and theme-aware footer styling. Phase 5 fixes add white bar elimination in page margins and table overflow prevention via page-continuation layout. Phase 6 adds 32 i18n keys for full localization (en/nl). Phase 7 adds filter exclusions with dual-chart comparison view and table pagination enhancements.
-aliases: [pdf export, financial report, report download, PDF generation, export dialog, report dialog, pagination, footer]
+tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, phase-8, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions, dual-chart, comparison, white-bar-fix, table-overflow-fix, page-continuation, portfolio, tax]
+description: Comprehensive PDF report export for financial, portfolio, and tax data. Cover page, theme-aware styling, modular section renderers. Phase 4 adds ExportDialog UI. Phase 5 adds pagination/footer/print-break polish. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers, belgianRulesSummary, and taxProfile/precomputedPIT pass-through.
+aliases: [pdf export, financial report, portfolio report, tax report, report download, PDF generation, export dialog, report dialog, pagination, footer]
 related_code:
   - apps/node-backend/src/services/reports/
   - apps/node-backend/src/routes/reports.js
@@ -26,6 +26,8 @@ related_code:
 > Phase 5 (April 2026): PDF polish improvements — paginated footer with page numbering, theme-aware footer styling, enhanced print break control (`break-inside: avoid` on card elements), and repeating table headers across page breaks.
 >
 > Phase 7 (April 2026): Filter exclusions with impact comparison view — when categories or recipients are excluded via the ExportDialog, the report now displays a "Filter Impact" comparison table on the cover page showing metrics with and without filters applied, plus delta badges for change visibility.
+>
+> Phase 8 (April 2026): Full portfolio and tax report implementation — replaces "Coming soon" placeholders with 6 portfolio sections and 7 tax sections using real data fetchers, shared SVG chart infrastructure (`svgLineChart`, `svgGenericGroupedBarChart`), and Belgian tax pass-through (`taxProfile` + `precomputedPIT`). Portfolio export button added to PortfolioOverviewPage.
 
 ## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 
@@ -309,6 +311,7 @@ interface ExportDialogProps {
 | Statistics | `apps/frontend/src/pages/StatisticsPage.tsx` | `financial` | PageHeader actions (left of WidgetVisibilityDialog) |
 | Tax Overview | `apps/frontend/src/pages/TaxOverviewPage.tsx` | `tax` | PageHeader actions (alongside TaxProfileDialog) |
 | Stocks | `apps/frontend/src/pages/portfolio/StocksPage.tsx` | `portfolio` | PageHeader actions (alongside AddInvestmentDialog) |
+| Portfolio Overview | `apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx` | `portfolio` | PageHeader actions (first action slot) |
 
 ### Period Presets
 
@@ -331,12 +334,22 @@ interface ExportDialogProps {
 - Rolling Averages
 - Planned Outlook
 
-**Portfolio Report (2 sections, placeholder):**
+**Portfolio Report (6 sections):**
+- Portfolio Summary
 - Portfolio Allocation
 - Top Holdings
+- Performance Trend
+- Asset Class Detail
+- Dividend Income
 
-**Tax Report (1 section, placeholder):**
-- Tax Breakdown
+**Tax Report (7 sections):**
+- Tax Summary
+- Tax Type Breakdown
+- Tax by Asset Class
+- Monthly Tax Trend
+- Top Investments by Cost
+- Fee Breakdown
+- Belgian Tax Rules
 
 ### Section Behavior
 
@@ -492,11 +505,24 @@ Omit `sections` or pass empty array to use `DEFAULT_FINANCIAL_SECTIONS` (all exc
 
 ### POST /api/reports/portfolio
 
-Portfolio report (placeholder — returns "Coming soon" page).
+Generate a portfolio PDF report with 6 data-backed sections. Accepts the same base body as `/api/reports/financial`. `excludedCategoryIds` and `excludedRecipientIds` are accepted but no-op (portfolio data has no category/recipient join).
+
+**Available Sections:** `portfolioExecutiveSummary`, `portfolioAllocation`, `topHoldings`, `performanceTrend`, `assetClassDetail`, `dividendIncome`
 
 ### POST /api/reports/tax
 
-Tax report (placeholder — returns "Coming soon" page).
+Generate a tax PDF report with 7 data-backed sections. Extends the base schema with optional `taxProfile` and `precomputedPIT` fields forwarded from the Belgian tax context in the frontend.
+
+**Available Sections:** `taxExecutiveSummary`, `taxTypeBreakdown`, `taxByAssetClass`, `taxMonthlyTrend`, `topInvestmentsByCost`, `feeBreakdown`, `belgianRulesSummary`
+
+**Additional Request Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `taxProfile` | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian tax profile; echoed into `belgianRulesSummary` |
+| `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets?: { label?, rate?, taxableIncome?, taxAmount? }[] }` — PIT calculation from frontend; rendered as bracket table in `belgianRulesSummary` |
+
+When `taxProfile` is omitted, the `belgianRulesSummary` section renders only the static bracket tables without a PIT block.
 
 ### GET /api/reports/financial (Legacy)
 
@@ -571,8 +597,8 @@ const pdf = await renderHtmlToPdf(html, {
 | Type | Status | Sections |
 |------|--------|----------|
 | `financial` | Implemented (Phase 3) | 7 renderers complete |
-| `portfolio` | Placeholder | "Coming soon" notice |
-| `tax` | Placeholder | "Coming soon" notice |
+| `portfolio` | Implemented (Phase 8) | 6 renderers (executive summary, allocation, top holdings, performance trend, asset class detail, dividend income) |
+| `tax` | Implemented (Phase 8) | 7 renderers (executive summary, type breakdown, by asset class, monthly trend, top investments by cost, fee breakdown, Belgian rules summary) |
 
 ### Default Section Order
 

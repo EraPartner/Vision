@@ -47,6 +47,23 @@ const periodSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('year'), year: z.number().int().min(2000).max(2100) }),
 ]).default({ kind: 'rolling', months: 12 });
 
+const taxProfileSchema = z.object({
+  filingStatus:  z.string().optional(),
+  region:        z.string().optional(),
+  taxYear:       z.number().int().optional(),
+}).optional();
+
+const precomputedPITSchema = z.object({
+  taxableIncome: z.number().optional(),
+  totalTax:      z.number().optional(),
+  brackets:      z.array(z.object({
+    label:         z.string().optional(),
+    rate:          z.number().optional(),
+    taxableIncome: z.number().optional(),
+    taxAmount:     z.number().optional(),
+  })).optional(),
+}).optional();
+
 const reportBodySchema = z.object({
   currency:             z.string().regex(/^[A-Z]{3}$/, 'currency must be a 3-letter ISO code').default('EUR'),
   period:               periodSchema,
@@ -54,6 +71,8 @@ const reportBodySchema = z.object({
   theme:                themeSchema,
   excludedCategoryIds:  z.array(z.number().int().positive()).default([]),
   excludedRecipientIds: z.array(z.number().int().positive()).default([]),
+  taxProfile:           taxProfileSchema,
+  precomputedPIT:       precomputedPITSchema,
 });
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -80,8 +99,8 @@ router.post('/portfolio', async (req, res) => {
 });
 
 router.post('/tax', async (req, res) => {
-  const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
-  await generateReport({ type: 'tax', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
+  const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT } = parseReportBody(req.body);
+  await generateReport({ type: 'tax', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds, taxProfile, precomputedPIT });
 });
 
 

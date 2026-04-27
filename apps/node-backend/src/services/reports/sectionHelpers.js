@@ -217,6 +217,130 @@ export function svgHorizontalBars(items, { maxItems = 10 } = {}) {
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${rows}</svg>`;
 }
 
+/**
+ * Generic grouped bar chart — configurable series colours.
+ * Each group has N bars defined by seriesDefs.
+ *
+ * @param {{ label: string; [key: string]: number | string }[]} groups
+ * @param {{ key: string; color: string; label: string }[]} seriesDefs
+ * @returns {string}
+ */
+export function svgGenericGroupedBarChart(groups, seriesDefs) {
+  const W = 500, H = 160;
+  const PAD_L = 10, PAD_R = 10, PAD_T = 18, PAD_B = 28;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  if (!groups.length || !seriesDefs.length) {
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
+  }
+
+  const numSeries = seriesDefs.length;
+  const maxVal = Math.max(
+    ...groups.flatMap(g => seriesDefs.map(s => Math.abs(Number(g[s.key]) || 0))),
+    1
+  );
+  const numGroups = groups.length;
+  const groupW = chartW / numGroups;
+  const totalBarW = Math.max(numSeries * 3 + (numSeries - 1) * 1, 1);
+  const barW = Math.max(3, Math.min(14, (groupW - 6) / numSeries));
+  const barGap = 1;
+  const baseline = PAD_T + chartH;
+
+  let rects = `<line x1="${PAD_L}" y1="${baseline}" x2="${W - PAD_R}" y2="${baseline}" stroke="hsl(var(--border))" stroke-width="1"/>`;
+  let labels = '';
+
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const cx = PAD_L + i * groupW + groupW / 2;
+    const groupTotalW = numSeries * barW + (numSeries - 1) * barGap;
+    let startX = cx - groupTotalW / 2;
+
+    for (let s = 0; s < seriesDefs.length; s++) {
+      const val = Math.abs(Number(g[seriesDefs[s].key]) || 0);
+      const bH = Math.max(1, (val / maxVal) * chartH);
+      rects += `<rect x="${startX.toFixed(1)}" y="${(baseline - bH).toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${seriesDefs[s].color}" rx="2" opacity="0.85"/>`;
+      startX += barW + barGap;
+    }
+
+    const step = numGroups > 12 ? 3 : numGroups > 6 ? 2 : 1;
+    if (i % step === 0) {
+      labels += `<text x="${cx.toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="hsl(var(--muted))">${escapeHtml(g.label)}</text>`;
+    }
+  }
+
+  let legend = '';
+  let lx = PAD_L;
+  for (const s of seriesDefs) {
+    legend += `<rect x="${lx}" y="4" width="8" height="8" rx="2" fill="${s.color}"/>`;
+    legend += `<text x="${lx + 10}" y="11" font-size="8" fill="hsl(var(--muted))">${escapeHtml(s.label)}</text>`;
+    lx += 70;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${legend}${rects}${labels}</svg>`;
+}
+
+/**
+ * Line chart overlaying 2–3 series over a shared time axis.
+ * Each series entry in `series` is { label, color, values: number[] }.
+ * `labels` is a parallel array of x-axis labels (same length as values).
+ *
+ * @param {{ label: string; color: string; values: number[] }[]} series
+ * @param {{ labels: string[]; height?: number }} opts
+ * @returns {string}
+ */
+export function svgLineChart(series, { labels = [], height = 160 } = {}) {
+  const W = 500;
+  const H = height;
+  const PAD_L = 10, PAD_R = 10, PAD_T = 18, PAD_B = 28;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  const allValues = series.flatMap(s => s.values);
+  if (!allValues.length || !labels.length) {
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
+  }
+
+  const maxVal = Math.max(...allValues.map(Math.abs), 1);
+  const n = labels.length;
+  const baseline = PAD_T + chartH;
+
+  const xOf = (i) => PAD_L + (i / Math.max(n - 1, 1)) * chartW;
+  const yOf = (v) => baseline - (v / maxVal) * chartH;
+
+  let paths = '';
+  let dots = '';
+
+  for (const s of series) {
+    const pts = s.values.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`);
+    paths += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    for (let i = 0; i < s.values.length; i++) {
+      dots += `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(s.values[i]).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
+    }
+  }
+
+  // X-axis baseline
+  let axis = `<line x1="${PAD_L}" y1="${baseline}" x2="${W - PAD_R}" y2="${baseline}" stroke="hsl(var(--border))" stroke-width="1"/>`;
+
+  // X labels
+  let xLabels = '';
+  const step = n > 12 ? 3 : n > 6 ? 2 : 1;
+  for (let i = 0; i < n; i += step) {
+    xLabels += `<text x="${xOf(i).toFixed(1)}" y="${(H - 6).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="hsl(var(--muted))">${escapeHtml(labels[i])}</text>`;
+  }
+
+  // Legend
+  let legend = '';
+  let lx = PAD_L;
+  for (const s of series) {
+    legend += `<line x1="${lx}" y1="8" x2="${lx + 16}" y2="8" stroke="${s.color}" stroke-width="2"/>`;
+    legend += `<text x="${lx + 20}" y="11" font-size="8" fill="hsl(var(--muted))">${escapeHtml(s.label)}</text>`;
+    lx += 80;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">${legend}${axis}${paths}${dots}${xLabels}</svg>`;
+}
+
 // ── Section CSS ────────────────────────────────────────────────────────────
 
 export const SECTION_CSS = `

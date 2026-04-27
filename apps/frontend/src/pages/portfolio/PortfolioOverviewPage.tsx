@@ -23,6 +23,7 @@ import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVis
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { parseYmd } from "@/lib/timezone";
+import { ExportDialog } from "@/components/reports/ExportDialog";
 
 function getPortfolioWidgets(t: (key: string) => string): WidgetDefinition[] {
   return [
@@ -251,6 +252,7 @@ export default function PortfolioOverviewPage() {
         icon={PieChartIcon}
         actions={(
           <>
+            <ExportDialog defaultType="portfolio" />
             <WidgetVisibilityDialog
               widgets={widgetDefs}
               isVisible={isVisible}

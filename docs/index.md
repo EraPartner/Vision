@@ -2,10 +2,10 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-04-26
-updated: 2026-04-26
-tags: [knowledge-base, index, project, overview, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Recent fixes include ExportDialog date picker UI, VirtualDataTable edit column width, and bank reconciliation feature removal.
+date: 2026-04-27
+updated: 2026-04-27
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes include ExportDialog date picker UI, VirtualDataTable edit column width, and bank reconciliation feature removal.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -220,12 +220,13 @@ See [[docs/adr/034-admin-environment|ADR-034]], [[docs/features/admin-observabil
 - **Print Break Control**: `break-inside: avoid` on `.kpi-card`, `.account-card`, `.stat-row`, `.planned-day` prevents orphaning; `display: table-header-group` on `.data-table thead` repeats headers across pages
 - **Improved Layout**: Top border on `.page` (4px primary color), `break-after: avoid` on section titles/subtitles for visual separation
 
-**PDF Report Export Phase 6 (i18n):**
-- **32 New Translation Keys**: Added `export.*` keys to `i18n/source/en.json` and `nl.ts` for dialog, period selection, section toggles, currency, and actions
-- **Full Localization**: Both English and Dutch translations for Report Type, Period (YTD/rolling/custom/year), Sections (7 financial + 3 placeholders), Currency, and Download actions
-- **Validation Pass**: `bun run validate-locales` confirms parity, placeholders, types, and no drift
+**PDF Report Export Phase 6 (i18n) & Phase 8 (Portfolio & Tax Reports):**
+- **32 New Translation Keys** (Phase 6): Added `export.*` keys to `i18n/source/en.json` and `nl.ts` for dialog, period selection, section toggles, currency, and actions
+- **Full Localization**: Both English and Dutch translations for Report Type, Period (YTD/rolling/custom/year), Sections (7 financial + 6 portfolio + 7 tax), Currency, and Download actions
+- **Phase 8 Completion**: Portfolio and tax reports fully implemented with real data fetchers, SVG charts, and Belgian tax profile pass-through. All 20 export.section.* keys now mapped to complete sections (no placeholders)
+- **Validation Pass**: `bun run validate-locales` confirms parity, types, and no drift
 
-See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 5 & 6), [[docs/i18n/translations|i18n Translations]] (32 new export keys)
+See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 3-8), [[docs/api/reports|Reports API]], [[docs/i18n/translations|i18n Translations]] (32 export keys + portfolio/tax sections)
 
 ### 2026-04-24 TypeScript & Error Handling Standards (Phase 5+ Linting Fixes)
 
