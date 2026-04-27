@@ -4,7 +4,7 @@
 import { curveMonotoneX } from "@visx/curve";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear } from "@visx/scale";
-import { LinePath } from "@visx/shape";
+import { Area, LinePath } from "@visx/shape";
 import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 
@@ -60,17 +60,24 @@ function Inner({
     return (
         <svg width={width} height={height} role="img">
             {fillArea ? (
-                <motion.path
-                    d={buildArea(data, xScale, yScale, height)}
-                    fill={color}
-                    fillOpacity={0.15}
+                <motion.g
                     initial={reduce ? { opacity: 1 } : { opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{
                         duration: reduce ? 0 : durations.slow,
                         ease: easings.outExpo,
                     }}
-                />
+                >
+                    <Area<number>
+                        data={data as number[]}
+                        x={(_, i) => xScale(i) ?? 0}
+                        y0={height}
+                        y1={(v) => yScale(v) ?? 0}
+                        curve={curveMonotoneX}
+                        fill={color}
+                        fillOpacity={0.15}
+                    />
+                </motion.g>
             ) : null}
             <motion.g
                 initial={reduce ? { opacity: 1 } : { opacity: 0 }}
@@ -94,23 +101,3 @@ function Inner({
     );
 }
 
-function buildArea(
-    data: ReadonlyArray<number>,
-    xScale: (v: number) => number,
-    yScale: (v: number) => number,
-    height: number,
-): string {
-    if (data.length === 0) return "";
-    const segments: string[] = [];
-    data.forEach((v, i) => {
-        const x = xScale(i);
-        const y = yScale(v);
-        segments.push(`${i === 0 ? "M" : "L"}${x},${y}`);
-    });
-    const lastX = xScale(data.length - 1);
-    const firstX = xScale(0);
-    segments.push(`L${lastX},${height}`);
-    segments.push(`L${firstX},${height}`);
-    segments.push("Z");
-    return segments.join(" ");
-}
