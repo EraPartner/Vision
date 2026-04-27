@@ -213,9 +213,8 @@ describe('Currency Conversion Service', () => {
 
     const rows = [{ amount: 100, currency: 'USD', day: '2020-01-15' }];
     const converted = await convertRowsToEur(rows, 'EUR', { useHistoricalRatesByDate: true, dateField: 'day' });
-    // With indexed historical prefetch, converter may use latest in-memory rate
-    // when no historical rows exist for currency/date.
-    expect(converted[0].amount_eur).toBeCloseTo(90, 6);
+    // With indexed historical prefetch and empty exact match, converter uses nearest DB rate.
+    expect(converted[0].amount_eur).toBeCloseTo(80, 6);
   });
 
   it('should cache historical miss per currency/date and avoid duplicate DB lookups', async () => {

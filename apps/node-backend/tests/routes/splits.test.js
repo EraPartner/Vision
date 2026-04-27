@@ -272,12 +272,12 @@ describe('Splits Routes', () => {
 
   describe('POST /:id/pay', () => {
     it('throws NotFoundError when split does not exist', async () => {
-      splitRepository.getSplitById.mockResolvedValue(null);
+      splitRepository.addPayment.mockRejectedValue(new NotFoundError('Split not found'));
 
       const req = { params: { id: '5' }, body: { amount: 5 }, get: () => null };
       const res = mockResponse();
       await expect(routeHandlers['post:/:id/pay'](req, res)).rejects.toBeInstanceOf(NotFoundError);
-      expect(splitRepository.addPayment).not.toHaveBeenCalled();
+      expect(splitRepository.addPayment).toHaveBeenCalled();
     });
 
     it('throws ValidationError for non-positive payment amount', async () => {

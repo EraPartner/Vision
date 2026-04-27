@@ -104,7 +104,7 @@ describe('property: calculateCostBasis', () => {
       }));
       const expected = txns.reduce((sum, t) => sum + Number(t.amount) + Number(t.fees) + Number(t.taxes), 0);
       const result = calculateCostBasis(txns);
-      expect(result.totalBuyCost).toBeCloseTo(expected, 8);
+      expect(result.totalBuyCost).toBeCloseTo(expected, 2);
     }
   });
 

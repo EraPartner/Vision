@@ -602,7 +602,7 @@ describe('Price Provider Service', () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({
-          KAU_EUR: [
+          KAU_USD: [
             { createdAt: '2023-05-19T00:00:00Z', price: 59 },
             { createdAt: '2023-05-20T00:00:00Z', price: 60 },
             { createdAt: '2023-05-21T00:00:00Z', price: 120 },
