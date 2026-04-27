@@ -3,9 +3,9 @@ title: Localization Documentation Index
 type: i18n-index
 status: active
 date: 2026-04-24
-updated: 2026-04-25
-tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability]
-description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys.
+updated: 2026-04-27
+tags: [i18n, index, localization, translations, phase-6, phase-f, admin, observability, splits, settlement]
+description: Internationalization system including supported languages, translation workflow, and usage patterns. Phase 6 adds 32 export keys for PDF report export dialog. Phase F adds 60 admin observability keys. Recent additions include splits settlement success/failure notifications.
 aliases: [i18n, localization, translations, languages]
 ---
 
@@ -81,6 +81,15 @@ function Component() {
 4. Use in components via `useLanguage()` hook
 
 ## Recent Key Additions
+
+### Splits Settlement (2026-04-27)
+
+Added 2 new keys for splits settlement toast notifications:
+
+- `splits.settled` — "Splits settled" (en) / "Splits verrekend" (nl) — Success toast when settlement completes
+- `splits.settledFailed` — "Failed to settle splits" (en) / "Splits verrekenen mislukt" (nl) — Error toast on settlement failure
+
+Used in [[apps/frontend/src/hooks/useSplits.ts]] by `useSettleSplit()` hook for user feedback when settling individual splits via the `/owes` page.
 
 ### Phase F (2026-04-24) — Admin Environment i18n
 

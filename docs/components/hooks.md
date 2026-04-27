@@ -3,8 +3,9 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4]
-description: Custom React hooks for data fetching and state management
+updated: 2026-04-27
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, i18n, notifications]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -315,6 +316,18 @@ const settleSplit = useSettleSplit();
 const settleAllByRecipient = useSettleAllSplitsByRecipient();
 const removeSplit = useDeleteSplit();
 ```
+
+### User Feedback
+
+All mutations provide toast notifications via `useLanguage()` i18n hook:
+
+| Mutation | Success Toast | Error Toast |
+|----------|---|---|
+| `useSettleSplit()` | `splits.settled` | `splits.settledFailed` |
+| `useSettleAllSplitsByRecipient()` | `splits.allSettled` | `splits.allSettledFailed` |
+| `useRecordPayment()` | `splits.paymentRecorded` | `splits.paymentFailed` |
+
+See [[docs/i18n/translations]] for key definitions.
 
 ---
 

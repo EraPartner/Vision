@@ -3,8 +3,9 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-04-22
-tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, decimal, money]
-description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations
+updated: 2026-04-27
+tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, decimal, money, i18n, notifications]
+description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys.
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
 related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -195,6 +196,17 @@ The owed summary returns:
   ]
 }
 ```
+
+### User Feedback & Notifications
+
+Settlement operations provide real-time user feedback via toast notifications (managed by the `useSplits` hooks):
+
+| Operation | Success Toast | Error Toast |
+|-----------|---|---|
+| Settle individual split | `splits.settled` — "Splits settled" | `splits.settledFailed` — "Failed to settle splits" |
+| Settle all splits (bulk) | `splits.allSettled` — "n splits settled" | `splits.allSettledFailed` — Error with description |
+
+i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and accessed via `useLanguage()` hook in [[apps/frontend/src/hooks/useSplits.ts]].
 
 ---
 
