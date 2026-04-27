@@ -251,11 +251,25 @@ export default function PortfolioTaxPage() {
     [summaries, txYear, convertToTarget],
   );
 
-  // Belgian dividend WHT (Pr.M / RV) is withheld at source on the FULL gross dividend.
-  // The exemption (€859 IY 2025) is reclaimed via the personal income tax return — it is NOT
-  // a deduction at source. Show: total WHT paid, exemption reclaimable, net non-recoverable.
-  const grossDividendWht = totalDividendIncome * dividendWhtRate;
-  const dividendWhtReclaim = Math.min(totalDividendIncome, dividendExemption) * dividendWhtRate;
+  const dividendWhtRecorded = useMemo(
+    () =>
+      summaries.reduce(
+        (sum, inv) =>
+          sum +
+          inv.transactions.reduce((txSum: number, txn: TxnLite) => {
+            if (yearOf(txn.date) !== txYear || txn.type !== "dividend") return txSum;
+            return txSum + convertToTarget(Number(txn.taxes) || 0, txn.currency);
+          }, 0),
+        0,
+      ),
+    [summaries, txYear, convertToTarget],
+  );
+
+  // Gross = recorded net amount + recorded WHT. Works for both recording conventions:
+  // net-in-amount (net + WHT = gross) and gross-in-amount (gross + 0 = gross).
+  const grossDividendBase = totalDividendIncome + dividendWhtRecorded;
+  const grossDividendWht = dividendWhtRecorded;
+  const dividendWhtReclaim = Math.min(dividendWhtRecorded, Math.min(grossDividendBase, dividendExemption) * dividendWhtRate);
   const dividendWhtNetCost = Math.max(grossDividendWht - dividendWhtReclaim, 0);
 
   const tobRecorded = useMemo(
@@ -574,7 +588,7 @@ export default function PortfolioTaxPage() {
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtPaid")}</p>
                     <p className="text-lg font-bold tabular-nums text-destructive">{fmt(grossDividendWht)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{(dividendWhtRate * 100).toFixed(0)}% {t("tax.witheldAtSource")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("tax.witheldAtSource")}</p>
                   </div>
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-xs text-muted-foreground mb-1">{t("tax.dividendWhtReclaim")}</p>

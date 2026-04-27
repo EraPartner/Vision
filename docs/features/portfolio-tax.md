@@ -2,12 +2,12 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-04-02
+date: 2026-04-27
 tags: [feature, portfolio, tax, belgian, frontend, investments]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
 related_code:
-  - apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx
+  - apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx
   - apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts
   - apps/frontend/src/components/portfolio/PortfolioTaxAdjustmentsDialog.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
@@ -46,7 +46,7 @@ totalCosts = totalTaxes + totalFees
 
 ## Frontend Page
 
-Located at `[[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]]` (708 lines).
+Located at `[[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]]` (636 lines).
 
 ### Widgets
 
@@ -110,12 +110,13 @@ The page integrates with the `BelgianTaxProfileContext` to:
 
 Shows the year-aware dividend WHT picture (using the active year's `dividendExemption` and `dividendWHTRate` from `getTaxTable`):
 
-| Field | Meaning |
+| Field | Calculation |
 |-------|---------|
-| Dividend income tracked | Sum of all `dividend` transactions for the tax year, currency-converted |
-| WHT paid (gross) | `totalDividendIncome × WHT rate` — withheld at source |
-| WHT reclaimable | `min(totalDividendIncome, exemption) × WHT rate` — credited via tax return |
-| Net WHT cost | Gross WHT − reclaim |
+| Dividend income tracked | Sum of all `dividend` transaction `amount` fields for the tax year, currency-converted |
+| WHT paid (gross) | Sum of all `dividend` transaction `taxes` fields for the tax year (actual recorded WHT, not estimated) |
+| Gross dividend base | `totalDividendIncome + dividendWhtRecorded` — works for both net-in-amount and gross-in-amount recording conventions |
+| WHT reclaimable | `min(dividendWhtRecorded, min(grossDividendBase, €859) × 30%)` — capped by both recorded WHT and the exemption threshold |
+| Net WHT cost | `max(grossDividendWht − dividendWhtReclaim, 0)` — after reclaim |
 
 Plus:
 - Total TOB recorded from buy-transaction taxes (currency-converted).

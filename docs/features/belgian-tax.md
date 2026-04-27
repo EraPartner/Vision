@@ -109,7 +109,7 @@ Investments of type `real_estate` include Belgian-specific fields:
 8. Special social security contribution: CSSS is a step function of net taxable income (€0 below €18,592 → flat tiers → cap €731.28).
 9. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences.
 10. Investment side calc:
-    - `dividendWhtReclaim = min(dividendIncome, exemption) × WHT_rate` — Belgian dividend withholding is taken at source on the **full** gross dividend; the €859 (IY 2025) exemption is reclaimed via the tax return.
+    - `dividendWhtReclaim = min(recordedWHT, min(grossDividendBase, exemption) × WHT_rate)` — Belgian dividend withholding is taken at source; reclaim is capped by both the recorded WHT and the exemption. Gross base = dividend amount + recorded WHT, which handles both net and gross recording conventions. The €859 (IY 2025) exemption applies to the gross base and is reclaimed via the tax return.
     - `savingsInterestTax = max(savingsInterest − €1,050, 0) × 15%` — Reynders / savings deposit excess.
 
 ### Aggregate metrics (no double-counting)
@@ -129,15 +129,16 @@ Investments of type `real_estate` include Belgian-specific fields:
 
 ### Dividend WHT widget (Belgian rules)
 
-Replaces the prior single "Estimated dividend WHT" tile with three explicit values:
+Shows four explicit values for dividend taxation:
 
 | Tile | Definition |
 |------|------------|
-| `WHT paid (gross)` | `totalDividendIncome × 30%` — withheld at source by the broker / paying agent |
-| `WHT reclaimable` | `min(totalDividendIncome, exemption) × 30%` — credited via the personal income tax return |
-| `Net WHT cost` | `gross WHT − reclaim` — the unrecoverable portion |
+| `Dividend income tracked` | Sum of all `dividend` transaction amounts for the tax year |
+| `WHT paid (gross)` | Sum of all recorded WHT from `dividend` transactions — actual withheld amount, not estimated |
+| `WHT reclaimable` | `min(recordedWHT, min(totalDividendIncome + recordedWHT, €859) × 30%)` — capped by both recorded WHT and the exemption threshold applied to gross dividend base |
+| `Net WHT cost` | `max(recordedWHT − reclaimable, 0)` — the unrecoverable portion |
 
-This corrects the earlier label which presented the unrecoverable portion as the gross WHT.
+The gross dividend base (`totalDividendIncome + recordedWHT`) works for both net-in-amount and gross-in-amount dividend recording conventions.
 
 ### Cross-Currency Normalization
 
