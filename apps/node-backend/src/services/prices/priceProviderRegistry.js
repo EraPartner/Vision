@@ -141,10 +141,55 @@ function _median(values) {
     : sorted[mid];
 }
 
-export function sanitizeKinesisIsolatedSpikes(points) {
-  if (!Array.isArray(points) || points.length < 5) return points || [];
+// Removes runs of ≥ minRunLength consecutive identical prices (stale API data).
+// Keeps only the first point of each such run so the series resumes at the
+// correct price when real updates arrive.
+function _removeStaleRuns(points, minRunLength = 8) {
+  if (points.length < 2) return [...points];
+  const result = [];
+  let i = 0;
+  while (i < points.length) {
+    result.push(points[i]);
+    let j = i + 1;
+    while (j < points.length && points[j].price === points[i].price) j++;
+    if (j - i >= minRunLength) {
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  return result;
+}
 
-  const sanitized = points.map((p) => ({ ...p }));
+export function sanitizeKinesisIsolatedSpikes(points) {
+  if (!Array.isArray(points) || points.length < 2) return points || [];
+
+  const sanitized = _removeStaleRuns(points).map((p) => ({ ...p }));
+
+  if (sanitized.length < 2) return sanitized;
+
+  const localNeedleRatio = 1.8;
+
+  // Edge: first point — check against its single neighbor
+  const firstCurr = toNumber(sanitized[0]?.price);
+  const firstNext = toNumber(sanitized[1]?.price);
+  if (isValidPrice(firstCurr) && isValidPrice(firstNext)) {
+    if (firstCurr * localNeedleRatio <= firstNext || firstCurr >= firstNext * localNeedleRatio) {
+      sanitized[0].price = firstNext;
+    }
+  }
+
+  // Edge: last point — check against its single neighbor
+  const lastIdx = sanitized.length - 1;
+  const lastPrev = toNumber(sanitized[lastIdx - 1]?.price);
+  const lastCurr = toNumber(sanitized[lastIdx]?.price);
+  if (isValidPrice(lastPrev) && isValidPrice(lastCurr)) {
+    if (lastCurr * localNeedleRatio <= lastPrev || lastCurr >= lastPrev * localNeedleRatio) {
+      sanitized[lastIdx].price = lastPrev;
+    }
+  }
+
+  if (sanitized.length < 5) return sanitized;
 
   const logReturns = [];
   for (let i = 1; i < sanitized.length; i += 1) {
@@ -165,7 +210,6 @@ export function sanitizeKinesisIsolatedSpikes(points) {
   const bridgeThreshold = 4 * robustSigma;
   const minSpikeMove = Math.log(1.18);
   const localNeedleNeighborTolerance = Math.log(1.12);
-  const localNeedleRatio = 1.8;
 
   for (let i = 1; i < sanitized.length - 1; i += 1) {
     const prev = toNumber(sanitized[i - 1]?.price);

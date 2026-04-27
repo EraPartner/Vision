@@ -3,11 +3,11 @@ title: Integration - Kinesis Price Provider
 type: integration
 status: active
 date: 2026-04-25
-last_modified: 2026-04-25
-tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping]
+last_modified: 2026-04-26
+tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization]
 description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping and misconfiguration detection
 aliases: [kinesis, kinesis price provider, metals prices, commodity data]
-related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js"]
+related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js", "apps/node-backend/tests/priceProviderRegistry.test.js"]
 ---
 
 # Integration: Kinesis Price Provider
@@ -100,9 +100,37 @@ An investment is eligible for Kinesis refresh when:
 - `price_provider` = 'kinesis'
 - Has `price_provider_id` OR name/symbol maps through Kinesis config
 
-### Spike Sanitization
+### Data Quality Sanitization
 
-Kinesis historical data may contain isolated price spikes. The system includes:
+Kinesis historical data may contain data quality issues from API behavior:
+
+#### Stale Data Plateaus (Added 2026-04-26)
+
+The Kinesis API occasionally stalls price updates for extended periods (60–137 hours observed for KAU/KAG), returning runs of identical prices before jumping to a new level. These stale plateaus create flat-line artifacts in charts.
+
+The sanitizer removes runs of ≥ 8 consecutive identical prices, keeping only the first point of each run. This collapses the plateau while preserving the correct price level when updates resume.
+
+**Example**: Series `[100, 114.30, 114.30, 114.30, 114.30, 114.30, 114.30, 114.30, 114.30, 102]` becomes `[100, 114.30, 102]`.
+
+#### Edge-Point Anomalies (Added 2026-04-26)
+
+Kinesis API data windows sometimes return year-boundary rollover artifacts (Jan 1, 2025 observed: first point at exactly 50% of real price). Edge-point sanitization checks the first and last points of each data window using a local needle ratio (`1.8x`): if a point deviates by more than 1.8x from its single neighbor, it is replaced with that neighbor value.
+
+**Example**: First point `46.31` (half of `92.60`) is corrected to `92.60`.
+
+#### Isolated Needle Spikes (Existing)
+
+Kinesis also contains isolated one-day needles (up/down spikes) detected via MAD-based robust outlier detection. These are replaced with geometric interpolation of neighbors.
+
+#### Implementation
+
+The function `sanitizeKinesisIsolatedSpikes(points)` (in `priceProviderRegistry.js`):
+1. Removes stale runs (≥ 8 identical prices)
+2. Checks and corrects edge points (first/last)
+3. Detects middle-point isolated spikes using MAD thresholds
+4. Returns cleaned points (immutable)
+
+Historical sanitization via:
 
 ```javascript
 sanitizePersistedKinesisHistory(investmentId)
@@ -110,9 +138,8 @@ sanitizePersistedKinesisHistory(investmentId)
 
 This function:
 1. Scans persisted `asset_price_history` rows
-2. Detects isolated one-day needles (up/down spikes)
-3. Replaces outliers with geometric interpolation of neighbors
-4. Persists corrected points back to DB
+2. Applies the full sanitization pipeline
+3. Persists corrected points back to DB
 
 ### Admin Endpoint
 

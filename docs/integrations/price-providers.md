@@ -4,10 +4,10 @@ type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
 last_modified: 2026-04-26
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping]
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
-related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js]]
+related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js]]
 ---
 
 # Integration: Price Providers
@@ -43,7 +43,9 @@ Price providers fetch live and historical market prices for investments, support
   - Historical points from same symbol stream
   - Symbol resolution from either explicit `price_provider_id` or configured asset-name mapping
   - **EUR-to-USD remapping (2026-04-25):** When `price_provider_id` is set to a EUR-denominated symbol (e.g., `KAU_EUR`, `XAU_EUR`), it is remapped to its USD equivalent (`KAU_USD`, `XAU_USD`) before API requests. Unmapped EUR symbols trigger a `WARN`-level log message to catch misconfiguration early, since Kinesis only provides USD symbols
-  - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`) ([[apps/node-backend/src/services/priceProviderService.js]])
+  - **Stale-run removal (2026-04-26):** Kinesis API occasionally stalls for 60–137 hours (observed on KAU/KAG), returning ≥ 8 consecutive identical prices before jumping to new levels. Sanitizer collapses these runs to first point only, preserving correct price level without chart flatlines
+  - **Edge-point anomalies (2026-04-26):** Year-boundary rollover bugs cause first/last points at ~50% of real price (Jan 1, 2025 artifact on KAU observed). Edge sanitizer checks first and last points using local needle ratio `1.8x`, replacing anomalies with neighbor value
+  - Isolated needle-spike sanitization (up/down) replaces only confirmed single-point anomalies using geometric interpolation from neighboring points, preserving non-spike detail; thresholds are tuned for moderate one-day needles (robust `6σ`, bridge `4σ`, min jump `18%`, local needle ratio `1.8x`)
 
 ### Yahoo Finance
 - **Asset Classes**: Stocks, ETFs, Metals
