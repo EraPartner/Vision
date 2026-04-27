@@ -1,4 +1,5 @@
 # Embedded compose for packaged app — replace the app image with your released image
+name: vision
 services:
   db:
     image: postgres:18-alpine
