@@ -97,8 +97,19 @@ function formatPeriod(period) {
  */
 function buildBaseCss() {
   return `
-    @page { size: A4 portrait; margin: 0; }
+    /* @page background paints the entire page canvas including the bottom
+       margin area reserved for the Puppeteer footer. Without it, Chromium
+       leaves a white strip below the footer iframe (the iframe's allotted
+       height is shorter than the @page bottom margin) and the html/body
+       backgrounds do not propagate into @page margin boxes. */
+    @page { size: A4 portrait; margin: 0 0 28px 0; background: hsl(var(--surface)); }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      background: hsl(var(--surface));
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
     :root {
       /* Height reserved for the Puppeteer footer in the bottom margin area.
@@ -211,6 +222,13 @@ function buildBaseCss() {
     .page-break {
       page-break-before: always;
     }
+    /* Continuation page within the same logical section — forced break.
+       Same green top border as .page so every printed page has the brand band. */
+    .page-continuation {
+      padding: 40px 52px 56px;
+      border-top: 4px solid hsl(var(--primary));
+      page-break-before: always;
+    }
     .section-title {
       font-size: 18px;
       font-weight: 700;
@@ -263,8 +281,17 @@ function buildFooterTemplate(theme) {
   const primary = theme.primary ? `hsl(${theme.primary})` : '#5b7fa6';
   const muted   = theme.muted   ? `hsl(${theme.muted})`   : '#8a939f';
   const border  = theme.border  ? `hsl(${theme.border})`  : '#d1d5db';
+  const surface = theme.surface ? `hsl(${theme.surface})` : '#ffffff';
 
+  // Puppeteer's footer iframe wraps the template in a default <html><body>
+  // with an 8 px body margin — zero it so the footer div fills the iframe
+  // edge to edge. CRITICAL: do NOT set `background` on `html` here. Chromium
+  // leaks top-level `html` rules from header/footer templates into the main
+  // document, repainting the entire report and hiding cover/section content.
+  // The page-bottom surface fill is owned by `@page { background }` in
+  // buildBaseCss, not by this template.
   return `
+    <style>html,body{margin:0;padding:0;}</style>
     <div style="
       box-sizing: border-box;
       width: 100%;
@@ -276,7 +303,10 @@ function buildFooterTemplate(theme) {
       font-size: 9px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       color: ${muted};
+      background-color: ${surface};
       border-top: 1px solid ${border};
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     ">
       <span style="font-weight: 600; color: ${primary};">Vision</span>
       <span>Confidential</span>

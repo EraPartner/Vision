@@ -4,40 +4,71 @@
  * Tokens are received as HSL components (e.g. "158 62% 32%") so templates can
  * compose them with `hsl(var(--primary) / 0.1)` for alpha variants, exactly
  * matching the app's Tailwind CSS convention.
- *
+ */
+
+// Mode-aware fallback palettes. Used when the frontend either omits a token or
+// sends `undefined` (which would otherwise serialise as `--text: undefined;`,
+// an invalid declaration that silently falls through to the wrong color and
+// produces dark-on-dark text in dark mode).
+const LIGHT_DEFAULTS = {
+  '--primary': '158 62% 32%',
+  '--accent':  '38 58% 52%',
+  '--success': '152 58% 38%',
+  '--expense': '358 74% 48%',
+  '--surface': '42 30% 97%',
+  '--text':    '200 18% 10%',
+  '--muted':   '200 10% 36%',
+  '--border':  '42 15% 87%',
+  '--chart-1': '158 62% 38%',
+  '--chart-2': '38 62% 54%',
+  '--chart-3': '204 68% 48%',
+  '--chart-4': '268 52% 58%',
+  '--chart-5': '14 76% 54%',
+  '--chart-6': '182 48% 40%',
+  '--chart-7': '340 58% 54%',
+  '--chart-8': '48 72% 48%',
+};
+
+const DARK_DEFAULTS = {
+  '--primary': '158 64% 52%',
+  '--accent':  '42 72% 66%',
+  '--success': '152 58% 50%',
+  '--expense': '358 74% 60%',
+  '--surface': '200 20% 7%',
+  '--text':    '42 25% 96%',
+  '--muted':   '42 12% 68%',
+  '--border':  '200 14% 20%',
+  '--chart-1': '158 64% 52%',
+  '--chart-2': '42 72% 66%',
+  '--chart-3': '204 68% 60%',
+  '--chart-4': '268 60% 70%',
+  '--chart-5': '14 76% 64%',
+  '--chart-6': '182 50% 55%',
+  '--chart-7': '340 62% 66%',
+  '--chart-8': '48 76% 60%',
+};
+
+/**
  * @param {import('./index.js').ThemeTokens} tokens
  * @returns {string} - `<style>` block content (`:root { ... }`)
  */
 export function buildThemeCss(tokens) {
   const { mode, ...colorTokens } = tokens;
 
+  // Skip tokens whose value is missing/null/undefined/blank so they don't
+  // override the mode-aware defaults below with invalid CSS like
+  // `--text: undefined;`.
   const vars = Object.entries(colorTokens)
+    .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
     .map(([key, value]) => `  ${tokenToCssVar(key)}: ${value};`)
     .join('\n');
 
-  // Default values used when a token is missing — matches app default theme light mode.
-  const defaults = [
-    '--primary: 158 62% 32%',
-    '--accent: 38 58% 52%',
-    '--success: 152 58% 38%',
-    '--expense: 358 74% 48%',
-    '--surface: 0 0% 100%',
-    '--text: 220 26% 14%',
-    '--muted: 220 13% 46%',
-    '--border: 220 13% 91%',
-    '--chart-1: 158 62% 32%',
-    '--chart-2: 38 58% 52%',
-    '--chart-3: 200 72% 48%',
-    '--chart-4: 270 62% 52%',
-    '--chart-5: 358 74% 48%',
-    '--chart-6: 32 84% 52%',
-    '--chart-7: 152 58% 38%',
-    '--chart-8: 220 52% 48%',
-  ]
-    .map((d) => `  ${d};`)
+  const palette = mode === 'dark' ? DARK_DEFAULTS : LIGHT_DEFAULTS;
+  const defaults = Object.entries(palette)
+    .map(([name, value]) => `  ${name}: ${value};`)
     .join('\n');
 
-  return `:root {\n  /* defaults */\n${defaults}\n\n  /* resolved theme */\n${vars}\n}`;
+  return `:root {\n  /* defaults (${mode === 'dark' ? 'dark' : 'light'} mode) */\n${defaults}\n\n  /* resolved theme */\n${vars}\n}`;
 }
 
 /**
