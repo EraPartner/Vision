@@ -21,6 +21,8 @@ export interface ReportOptions {
   period?: ReportPeriod;
   sections?: string[];
   theme?: ReportThemeTokens;
+  excludedCategoryIds?: number[];
+  excludedRecipientIds?: number[];
 }
 
 async function postReportDownload(
@@ -35,6 +37,8 @@ async function postReportDownload(
     period: options.period ?? { kind: 'rolling', months: 12 },
     sections: options.sections ?? [],
     theme,
+    excludedCategoryIds: options.excludedCategoryIds ?? [],
+    excludedRecipientIds: options.excludedRecipientIds ?? [],
   };
 
   const response = await fetch(path, {

@@ -48,10 +48,12 @@ const periodSchema = z.discriminatedUnion('kind', [
 ]).default({ kind: 'rolling', months: 12 });
 
 const reportBodySchema = z.object({
-  currency: z.string().regex(/^[A-Z]{3}$/, 'currency must be a 3-letter ISO code').default('EUR'),
-  period:   periodSchema,
-  sections: z.array(z.string()).default([]),
-  theme:    themeSchema,
+  currency:             z.string().regex(/^[A-Z]{3}$/, 'currency must be a 3-letter ISO code').default('EUR'),
+  period:               periodSchema,
+  sections:             z.array(z.string()).default([]),
+  theme:                themeSchema,
+  excludedCategoryIds:  z.array(z.number().int().positive()).default([]),
+  excludedRecipientIds: z.array(z.number().int().positive()).default([]),
 });
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -68,18 +70,18 @@ function parseReportBody(body) {
 /* ── POST endpoints ──────────────────────────────────────────────────────── */
 
 router.post('/financial', async (req, res) => {
-  const { currency, period, sections, theme } = parseReportBody(req.body);
-  await generateReport({ type: 'financial', currency, period, sections, theme, res });
+  const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
+  await generateReport({ type: 'financial', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
 });
 
 router.post('/portfolio', async (req, res) => {
-  const { currency, period, sections, theme } = parseReportBody(req.body);
-  await generateReport({ type: 'portfolio', currency, period, sections, theme, res });
+  const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
+  await generateReport({ type: 'portfolio', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
 });
 
 router.post('/tax', async (req, res) => {
-  const { currency, period, sections, theme } = parseReportBody(req.body);
-  await generateReport({ type: 'tax', currency, period, sections, theme, res });
+  const { currency, period, sections, theme, excludedCategoryIds, excludedRecipientIds } = parseReportBody(req.body);
+  await generateReport({ type: 'tax', currency, period, sections, theme, res, excludedCategoryIds, excludedRecipientIds });
 });
 
 

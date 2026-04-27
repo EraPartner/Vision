@@ -380,6 +380,17 @@ export const SECTION_CSS = `
 
   /* Repeat table header row when a table spans pages */
   .data-table thead { display: table-header-group; }
+  /* Prevent individual rows from splitting across pages */
+  .data-table tr { break-inside: avoid; }
+  /* Allow long cell text to wrap rather than overflow */
+  .data-table td { word-break: break-word; }
+  /* Cap the name column so very long strings don't blow out the layout */
+  .data-table td:nth-child(2) {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   /* ── Planned outlook ────────────────────────── */
   .planned-day {
@@ -405,4 +416,55 @@ export const SECTION_CSS = `
   .planned-row-name { color: hsl(var(--text)); flex: 1; }
   .planned-row-cat  { color: hsl(var(--muted)); font-size: 10px; margin-right: 8px; }
   .planned-row-amt  { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* ── Filter notice ──────────────────────────── */
+  .filter-notice {
+    font-size: 10px;
+    color: hsl(var(--muted));
+    background: hsl(var(--border) / 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Filter impact comparison ───────────────── */
+  .filter-impact { margin-top: 28px; }
+  .filter-impact-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: hsl(var(--text));
+    margin-bottom: 4px;
+    break-after: avoid;
+  }
+  .filter-impact-subtitle {
+    font-size: 11px;
+    color: hsl(var(--muted));
+    margin-bottom: 12px;
+    break-after: avoid;
+  }
+  .filter-impact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .filter-impact-table th {
+    text-align: left;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted));
+    padding: 0 8px 8px 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .filter-impact-table th.num { text-align: right; }
+  .filter-impact-table td {
+    padding: 6px 8px 6px 0;
+    color: hsl(var(--text));
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+  }
+  .filter-impact-table td.num { text-align: right; }
+  .filter-impact-table tr { break-inside: avoid; }
 `;

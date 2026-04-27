@@ -15,12 +15,13 @@ const MAX_CHART_ITEMS = 10;
 const MAX_TABLE_ROWS = 20;
 
 /**
- * @param {{ categories: { categories: object[] } | null }} data
+ * @param {{ categories: { categories: object[] } | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
  * @param {{ currency: string; period: import('../dataFetcher.js').Period }} opts
  * @returns {string}
  */
 export function renderCategoryBreakdown(data, { currency }) {
   const cats = data.categories?.categories ?? [];
+  const excludedCategoryCount = data.exclusions?.categoryIds?.length ?? 0;
 
   if (!cats.length) {
     return `
@@ -63,11 +64,16 @@ export function renderCategoryBreakdown(data, { currency }) {
     ? `<p style="font-size:10px;color:hsl(var(--muted));margin-top:8px">Showing top ${MAX_TABLE_ROWS} of ${cats.length} categories by spend.</p>`
     : '';
 
+  const filterNoticeHtml = excludedCategoryCount > 0
+    ? `<div class="filter-notice">Note: ${excludedCategoryCount} categor${excludedCategoryCount === 1 ? 'y' : 'ies'} excluded by active filters and not shown in this breakdown.</div>`
+    : '';
+
   return `
     <div class="page page-break">
       <div class="section-title">Category Breakdown</div>
       <div class="section-subtitle">Top spending categories (all time)</div>
       <hr class="section-divider">
+      ${filterNoticeHtml}
       <div class="chart-wrap">${chartSvg}</div>
       <table class="data-table">
         <thead>

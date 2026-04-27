@@ -2,9 +2,9 @@
 title: PDF Financial Report Export
 type: feature
 status: active
-date: 2026-04-24
-tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n]
-description: Comprehensive PDF financial report export with cover page, theme-aware styling, and modular section renderers. Phase 4 adds ExportDialog UI component. Phase 5 adds pagination footer with page numbers, improved print break control, and theme-aware footer styling. Phase 6 adds 32 i18n keys for full localization (en/nl).
+date: 2026-04-26
+tags: [feature, export, reporting, pdf, statistics, phase-3, phase-4, phase-5, phase-6, phase-7, puppeteer, export-dialog, ui, pdf-polish, pagination, footer, i18n, filter-exclusions]
+description: Comprehensive PDF financial report export with cover page, theme-aware styling, and modular section renderers. Phase 4 adds ExportDialog UI component. Phase 5 adds pagination footer with page numbers, improved print break control, and theme-aware footer styling. Phase 6 adds 32 i18n keys for full localization (en/nl). Phase 7 adds filter exclusions with impact comparison view.
 aliases: [pdf export, financial report, report download, PDF generation, export dialog, report dialog, pagination, footer]
 related_code:
   - apps/node-backend/src/services/reports/
@@ -24,6 +24,41 @@ related_code:
 > Phase 4 (April 2026): Unified ExportDialog UI component for report configuration, deployed to Statistics, Tax Overview, and Stocks pages. Supports report type selection, five period presets (YTD, rolling 3/12, calendar year, custom range), per-type section toggles, and currency selection.
 >
 > Phase 5 (April 2026): PDF polish improvements — paginated footer with page numbering, theme-aware footer styling, enhanced print break control (`break-inside: avoid` on card elements), and repeating table headers across page breaks.
+>
+> Phase 7 (April 2026): Filter exclusions with impact comparison view — when categories or recipients are excluded via the ExportDialog, the report now displays a "Filter Impact" comparison table on the cover page showing metrics with and without filters applied, plus delta badges for change visibility.
+
+## Phase 7: Filter Exclusions with Impact Comparison
+
+### Overview
+
+Phase 7 adds category and recipient filter exclusion support to PDF reports. When ExportDialog is configured with exclusions (via `exclusionScope: 'everywhere'` or `'statistics'`), the report:
+
+1. **Fetches parallel data**: Computes financial metrics both with filters applied (filtered view) and without filters (all data view)
+2. **Renders impact table**: Shows cover page comparison with columns for "With Filters" and "All Data", plus delta badges (↑/↓) for visibility
+3. **Section banners**: `categoryBreakdown` and `topRecipients` sections display a `.filter-notice` banner when relevant exclusions are active
+4. **CSS styling**: New `.filter-notice`, `.filter-impact`, `.filter-impact-title`, `.filter-impact-subtitle`, `.filter-impact-table` classes for filter UI elements
+
+### Implementation Details
+
+**Backend (Node.js):**
+- `dataFetcher.js` fetches `filteredMonthly` and `exclusions` metadata when exclusion arrays are non-empty
+- `generateReport()` passes `excludedCategoryIds` and `excludedRecipientIds` through the pipeline
+- `index.js` (`buildCoverHtml`) renders exclusion metadata ("X categories excluded, Y recipients excluded") on cover
+- `executiveSummary.js` renders "Filter Impact" comparison table when `data.filteredMonthly` is present
+
+**Frontend (React):**
+- `ExportDialog.tsx` reads active exclusions from `useSettings()` context when `exclusionScope` is `'everywhere'` or `'statistics'`
+- `postReportDownload()` forwards `excludedCategoryIds` and `excludedRecipientIds` in POST body
+
+**CSS:**
+- Table pagination support: `.data-table tr { break-inside: avoid }` + `word-break` + max-width truncation on second column
+- Filter UI: `.filter-impact-table` with header/data row styling and delta badge colors
+
+### Database Schema
+
+Migrations (if needed) are handled via existing alembic; no new tables added. Exclusions are passed as query parameters only, not persisted.
+
+---
 
 ## Phase 6: i18n (Localization)
 

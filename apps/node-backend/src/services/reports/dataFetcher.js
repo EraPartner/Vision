@@ -40,18 +40,26 @@ function unwrap(result, label) {
  * Fetch all data required for a financial PDF report in parallel.
  *
  * @param {string} currency  Target currency (e.g. "EUR")
+ * @param {{ excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} [exclusions]
  * @returns {Promise<{
  *   monthly: { months: object[]; summary: object } | null;
+ *   filteredMonthly: { months: object[]; summary: object } | null;
  *   categories: { categories: object[] } | null;
  *   recipients: { topMerchants: object[]; monthOverMonth: object[] } | null;
  *   banks: { accounts: object[]; total_net_position: number; history: object; total_history: object[] } | null;
  *   averages: { past_6_months: object; current_month: object; comparison: object } | null;
  *   planned: { summary: object; daily_data: object[] } | null;
+ *   exclusions: { categoryIds: number[]; recipientIds: number[] };
  * }>}
  */
-export async function fetchFinancialData(currency) {
-  const [monthly, categories, recipients, banks, averages, planned] = await Promise.allSettled([
+export async function fetchFinancialData(currency, { excludedCategoryIds = [], excludedRecipientIds = [] } = {}) {
+  const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
+
+  const [monthly, filteredMonthly, categories, recipients, banks, averages, planned] = await Promise.allSettled([
     computeMonthlySummary({ targetCurrency: currency, allTime: true }),
+    hasExclusions
+      ? computeMonthlySummary({ targetCurrency: currency, allTime: true, excludedCategoryIds, excludedRecipientIds })
+      : Promise.resolve(null),
     computeCategoryBreakdown({ targetCurrency: currency }),
     computeRecipientInsights({ targetCurrency: currency }),
     computeBankBalances({ targetCurrency: currency }),
@@ -62,12 +70,14 @@ export async function fetchFinancialData(currency) {
   return {
     // Aggregation wrappers return { data, meta } — unwrap .data
     monthly: unwrap(monthly, 'computeMonthlySummary')?.data ?? null,
+    filteredMonthly: hasExclusions ? (unwrap(filteredMonthly, 'computeMonthlySummary(filtered)')?.data ?? null) : null,
     categories: unwrap(categories, 'computeCategoryBreakdown')?.data ?? null,
     recipients: unwrap(recipients, 'computeRecipientInsights')?.data ?? null,
     banks: unwrap(banks, 'computeBankBalances')?.data ?? null,
     averages: unwrap(averages, 'computeAverageVsCurrent')?.data ?? null,
     // plannedRepository returns raw data (no envelope)
     planned: unwrap(planned, 'getPlannedExpensesNextMonth'),
+    exclusions: { categoryIds: excludedCategoryIds, recipientIds: excludedRecipientIds },
   };
 }
 

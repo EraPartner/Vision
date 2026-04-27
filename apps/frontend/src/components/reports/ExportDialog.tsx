@@ -34,6 +34,7 @@ import { DatePicker } from '@/components/shared/DatePicker';
 import { parseLocalDateFromYmd, toYmd } from '@/components/shared/dateUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import {
   downloadFinancialReport,
   downloadPortfolioReport,
@@ -114,6 +115,7 @@ interface ExportDialogProps {
 export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialogProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
+  const { settings: dashSettings } = useSettings();
   const defaultCurrency = appSettings.defaultCurrency || 'EUR';
   const currentYear = new Date().getFullYear();
 
@@ -161,7 +163,14 @@ export function ExportDialog({ trigger, defaultType = 'financial' }: ExportDialo
     // If all sections selected (or none deselected), send empty to use backend defaults.
     const selectedSections = allSectionsEnabled(sections, sectionDefs) ? [] : [...sections];
 
-    const opts = { currency, period, sections: selectedSections };
+    const filtersApply = dashSettings.exclusionScope === 'everywhere' || dashSettings.exclusionScope === 'statistics';
+    const opts = {
+      currency,
+      period,
+      sections: selectedSections,
+      excludedCategoryIds: filtersApply ? [...dashSettings.excludedCategoryIds] : [],
+      excludedRecipientIds: filtersApply ? [...dashSettings.excludedRecipientIds] : [],
+    };
 
     setIsSubmitting(true);
     try {

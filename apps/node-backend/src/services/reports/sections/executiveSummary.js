@@ -9,12 +9,13 @@ import {
   escapeHtml,
   fmtCurrency,
   fmtMonthLabel,
+  fmtPct,
   signClass,
 } from '../sectionHelpers.js';
 import { filterMonthsByPeriod } from '../dataFetcher.js';
 
 /**
- * @param {{ monthly: object | null }} data
+ * @param {{ monthly: object | null; filteredMonthly: object | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
  * @param {{ currency: string; period: import('../dataFetcher.js').Period }} opts
  * @returns {string}  HTML string for this section
  */
@@ -85,6 +86,64 @@ export function renderExecutiveSummary(data, { currency, period }) {
       <tbody>${tableRows}</tbody>
     </table>` : '<div class="empty-notice">No transactions in selected period.</div>';
 
+  // Filter impact block — shown only when exclusions produced a filtered dataset
+  let filterImpactHtml = '';
+  if (data.filteredMonthly) {
+    const fMonths = filterMonthsByPeriod(data.filteredMonthly?.months ?? [], period);
+    const fIncome   = fMonths.reduce((s, m) => s + m.total_income, 0);
+    const fSpending = fMonths.reduce((s, m) => s + m.total_spending, 0);
+    const fNet      = fMonths.reduce((s, m) => s + m.net_amount, 0);
+    const fTxCount  = fMonths.reduce((s, m) => s + m.transaction_count, 0);
+
+    const diffIncome   = fIncome - totalIncome;
+    const diffSpending = Math.abs(fSpending) - Math.abs(totalSpending);
+    const diffNet      = fNet - netAmount;
+    const diffTx       = fTxCount - txCount;
+
+    const diffCell = (val, isCount = false) => {
+      if (val === 0) return `<span class="badge badge-neutral">—</span>`;
+      const cls = val > 0 ? 'badge-pos' : 'badge-neg';
+      const sign = val > 0 ? '+' : '';
+      const formatted = isCount
+        ? `${sign}${val}`
+        : `${sign}${fmtCurrency(val, currency)}`;
+      const pct = isCount
+        ? (txCount !== 0 ? ` (${fmtPct((val / txCount) * 100, true)})` : '')
+        : '';
+      return `<span class="badge ${cls}">${escapeHtml(formatted + pct)}</span>`;
+    };
+
+    const impactRows = [
+      { label: 'Total Income',    filtered: fmtCurrency(fIncome, currency),              all: fmtCurrency(totalIncome, currency),              diffHtml: diffCell(diffIncome) },
+      { label: 'Total Expenses',  filtered: fmtCurrency(Math.abs(fSpending), currency),  all: fmtCurrency(Math.abs(totalSpending), currency),  diffHtml: diffCell(diffSpending) },
+      { label: 'Net Position',    filtered: fmtCurrency(fNet, currency),                 all: fmtCurrency(netAmount, currency),                diffHtml: diffCell(diffNet) },
+      { label: 'Transactions',    filtered: fTxCount.toLocaleString(),                   all: txCount.toLocaleString(),                        diffHtml: diffCell(diffTx, true) },
+    ].map(r => `
+      <tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td class="num">${escapeHtml(r.filtered)}</td>
+        <td class="num">${escapeHtml(r.all)}</td>
+        <td class="num">${r.diffHtml}</td>
+      </tr>`).join('');
+
+    filterImpactHtml = `
+      <div class="filter-impact">
+        <div class="filter-impact-title">Filter Impact</div>
+        <div class="filter-impact-subtitle">Comparison of filtered view vs. all data for selected period</div>
+        <table class="filter-impact-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th class="num">With Filters</th>
+              <th class="num">All Data</th>
+              <th class="num">Difference</th>
+            </tr>
+          </thead>
+          <tbody>${impactRows}</tbody>
+        </table>
+      </div>`;
+  }
+
   return `
     <div class="page">
       <div class="section-title">Executive Summary</div>
@@ -93,5 +152,6 @@ export function renderExecutiveSummary(data, { currency, period }) {
       <div class="kpi-grid">${kpiHtml}</div>
       ${avgHtml}
       ${tableHtml}
+      ${filterImpactHtml}
     </div>`;
 }

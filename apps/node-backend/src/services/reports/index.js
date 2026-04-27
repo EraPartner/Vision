@@ -50,6 +50,8 @@ import { renderRollingAverages } from './sections/rollingAverages.js';
  *   sections: string[];
  *   theme: ThemeTokens;
  *   res: import('express').Response;
+ *   excludedCategoryIds?: number[];
+ *   excludedRecipientIds?: number[];
  * }} GenerateReportOpts
  */
 
@@ -202,7 +204,7 @@ function buildBaseCss() {
 
     /* ── Content pages ─────────────────────────────── */
     .page {
-      padding: 40px 52px;
+      padding: 40px 52px 56px;
       border-top: 4px solid hsl(var(--primary));
       /* intentionally no break-inside: avoid — sections may span pages */
     }
@@ -287,14 +289,26 @@ function buildFooterTemplate(theme) {
 
 /**
  * Build the cover page HTML for any report type.
+ *
+ * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
  */
-function buildCoverHtml({ type, currency, period, generatedAt }) {
+function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds = [], excludedRecipientIds = [] }) {
   const title = REPORT_TITLES[type] ?? 'Report';
   const subtitle = REPORT_SUBTITLES[type] ?? '';
   const periodStr = formatPeriod(period);
   const dateStr = new Date(generatedAt).toLocaleDateString('en-US', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
+
+  const filterParts = [];
+  if (excludedCategoryIds.length > 0) filterParts.push(`${excludedCategoryIds.length} categor${excludedCategoryIds.length === 1 ? 'y' : 'ies'} excluded`);
+  if (excludedRecipientIds.length > 0) filterParts.push(`${excludedRecipientIds.length} recipient${excludedRecipientIds.length === 1 ? '' : 's'} excluded`);
+  const filtersRow = filterParts.length > 0
+    ? `<div class="meta-row">
+            <span class="meta-label">Filters</span>
+            <span class="meta-value">${escapeHtml(filterParts.join(', '))}</span>
+          </div>`
+    : '';
 
   return `
     <div class="cover">
@@ -317,6 +331,7 @@ function buildCoverHtml({ type, currency, period, generatedAt }) {
             <span class="meta-label">Generated</span>
             <span class="meta-value">${escapeHtml(dateStr)}</span>
           </div>
+          ${filtersRow}
         </div>
         <div class="cover-footer">
           <span class="cover-footer-brand">Vision</span>
@@ -355,10 +370,10 @@ const DEFAULT_FINANCIAL_SECTIONS = [
 /**
  * Build the body HTML for a financial report.
  *
- * @param {{ currency: string; period: Period; sections: string[] }} opts
+ * @param {{ currency: string; period: Period; sections: string[]; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
  * @returns {Promise<string>}
  */
-async function buildFinancialBody({ currency, period, sections }) {
+async function buildFinancialBody({ currency, period, sections, excludedCategoryIds = [], excludedRecipientIds = [] }) {
   const requested = sections.length > 0 ? sections : DEFAULT_FINANCIAL_SECTIONS;
   const valid = requested.filter(id => id in FINANCIAL_SECTION_RENDERERS);
 
@@ -370,7 +385,7 @@ async function buildFinancialBody({ currency, period, sections }) {
       </div>`;
   }
 
-  const data = await fetchFinancialData(currency);
+  const data = await fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds });
 
   return valid
     .map(id => FINANCIAL_SECTION_RENDERERS[id](data, { currency, period }))
@@ -414,17 +429,17 @@ ${body}
  *
  * @param {GenerateReportOpts} opts
  */
-export async function generateReport({ type, currency, period, sections, theme, res }) {
+export async function generateReport({ type, currency, period, sections, theme, res, excludedCategoryIds = [], excludedRecipientIds = [] }) {
   const generatedAt = new Date().toISOString();
   const mode = theme.mode ?? 'light';
 
   const themeCss = buildThemeCss(theme);
   const baseCss = buildBaseCss();
-  const coverHtml = buildCoverHtml({ type, currency, period, generatedAt });
+  const coverHtml = buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds, excludedRecipientIds });
 
   let bodyHtml;
   if (type === 'financial') {
-    bodyHtml = await buildFinancialBody({ currency, period, sections });
+    bodyHtml = await buildFinancialBody({ currency, period, sections, excludedCategoryIds, excludedRecipientIds });
   } else {
     bodyHtml = buildPlaceholderBody(sections);
   }

@@ -18,13 +18,14 @@ const MAX_TABLE_ROWS = 15;
 const MAX_MOM_ROWS = 8;
 
 /**
- * @param {{ recipients: { topMerchants: object[]; monthOverMonth: object[] } | null }} data
+ * @param {{ recipients: { topMerchants: object[]; monthOverMonth: object[] } | null; exclusions?: { categoryIds: number[]; recipientIds: number[] } }} data
  * @param {{ currency: string }} opts
  * @returns {string}
  */
 export function renderTopRecipients(data, { currency }) {
   const topMerchants = data.recipients?.topMerchants ?? [];
   const monthOverMonth = data.recipients?.monthOverMonth ?? [];
+  const excludedRecipientCount = data.exclusions?.recipientIds?.length ?? 0;
 
   if (!topMerchants.length) {
     return `
@@ -35,6 +36,10 @@ export function renderTopRecipients(data, { currency }) {
         <div class="empty-notice">No recipient data available.</div>
       </div>`;
   }
+
+  const filterNoticeHtml = excludedRecipientCount > 0
+    ? `<div class="filter-notice">Note: ${excludedRecipientCount} recipient${excludedRecipientCount === 1 ? '' : 's'} excluded by active filters and not shown in this ranking.</div>`
+    : '';
 
   // Chart: top N by totalSpend
   const chartItems = topMerchants.slice(0, MAX_CHART_ITEMS).map(m => ({
@@ -103,6 +108,7 @@ export function renderTopRecipients(data, { currency }) {
       <div class="section-title">Top Recipients</div>
       <div class="section-subtitle">Merchants ranked by total spend (all time)</div>
       <hr class="section-divider">
+      ${filterNoticeHtml}
       <div class="chart-wrap">${chartSvg}</div>
       <table class="data-table">
         <thead>

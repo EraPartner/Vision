@@ -2,7 +2,7 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-04-24
+date: 2026-04-26
 tags:
   - api
   - reports
@@ -11,12 +11,14 @@ tags:
   - phase-3
   - phase-5
   - phase-6
+  - phase-7
   - puppeteer
   - theme-aware
   - pagination
   - footer
   - i18n
-description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers and enhanced print breaks. Phase 6 adds i18n support. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
+  - filter-exclusions
+description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers and enhanced print breaks. Phase 6 adds i18n support. Phase 7 adds filter exclusions with impact comparison view. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
 aliases:
   - reports
   - pdf export
@@ -111,7 +113,9 @@ Generate a theme-aware financial PDF report with custom section selection and pe
     "chart7": "300 84% 60%",
     "chart8": "60 84% 60%",
     "mode": "light"
-  }
+  },
+  "excludedCategoryIds": [],
+  "excludedRecipientIds": []
 }
 ```
 
@@ -123,6 +127,8 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 | `period` | object | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below) |
 | `sections` | array | `[]` (uses defaults) | List of section IDs to include; empty = default sections |
 | `theme` | object | `{}` | Theme tokens (HSL values); omit to use defaults |
+| `excludedCategoryIds` | array | `[]` | Category IDs to exclude from filtered view (generates filter impact comparison) |
+| `excludedRecipientIds` | array | `[]` | Recipient IDs to exclude from filtered view (generates filter impact comparison) |
 
 **Period Options**
 
@@ -165,7 +171,17 @@ Content-Length: <byte-count>
 }
 ```
 
-**Example Request**
+**Filter Impact Comparison**
+
+When `excludedCategoryIds` or `excludedRecipientIds` are provided, the report includes a "Filter Impact" section on the cover page showing:
+
+- **With Filters**: Financial metrics (Total Income, Total Expenses, Net Position, Transaction Count) calculated with exclusions applied
+- **All Data**: Same metrics without exclusions
+- **Delta badges**: Changes between filtered and unfiltered views (↑/↓)
+
+Additionally, `categoryBreakdown` and `topRecipients` sections show a `.filter-notice` banner when relevant exclusions are active.
+
+**Example Request (with filters)**
 
 ```javascript
 const response = await fetch('/api/reports/financial', {
@@ -175,7 +191,9 @@ const response = await fetch('/api/reports/financial', {
     currency: 'EUR',
     period: { kind: 'rolling', months: 12 },
     sections: [],
-    theme: { /* theme tokens */ }
+    theme: { /* theme tokens */ },
+    excludedCategoryIds: [5, 7],      // Exclude Travel, Subscriptions
+    excludedRecipientIds: [12, 18]    // Exclude Amazon, Netflix
   })
 });
 
@@ -187,7 +205,7 @@ const blob = await response.blob();
 
 Generate a portfolio PDF report (placeholder).
 
-**Request body:** Same schema as `/api/reports/financial`.
+**Request body:** Same schema as `/api/reports/financial`. (`excludedCategoryIds` and `excludedRecipientIds` are accepted but not used in the placeholder implementation.)
 
 **Response:** "Coming soon" placeholder page.
 
@@ -195,7 +213,7 @@ Generate a portfolio PDF report (placeholder).
 
 Generate a tax PDF report (placeholder).
 
-**Request body:** Same schema as `/api/reports/financial`.
+**Request body:** Same schema as `/api/reports/financial`. (`excludedCategoryIds` and `excludedRecipientIds` are accepted but not used in the placeholder implementation.)
 
 **Response:** "Coming soon" placeholder page.
 
