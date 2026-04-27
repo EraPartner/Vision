@@ -381,7 +381,7 @@ export const SECTION_CSS = `
   /* Repeat table header row when a table spans pages */
   .data-table thead { display: table-header-group; }
   /* Prevent individual rows from splitting across pages */
-  .data-table tr { break-inside: avoid; }
+  .data-table tr { break-inside: avoid; page-break-inside: avoid; }
   /* Allow long cell text to wrap rather than overflow */
   .data-table td { word-break: break-word; }
   /* Cap the name column so very long strings don't blow out the layout */
@@ -466,5 +466,25 @@ export const SECTION_CSS = `
     vertical-align: middle;
   }
   .filter-impact-table td.num { text-align: right; }
-  .filter-impact-table tr { break-inside: avoid; }
+  .filter-impact-table tr { break-inside: avoid; page-break-inside: avoid; }
+
+  /* ── Dual-chart comparison pair ────────────── */
+  .chart-pair {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-bottom: 28px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .chart-pair-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: hsl(var(--muted));
+    margin-bottom: 6px;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
 `;
