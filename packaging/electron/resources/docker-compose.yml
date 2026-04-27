@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Embedded compose for packaged app — replace the app image with your released image
 services:
   db:
@@ -23,6 +21,7 @@ services:
     # Electron sets APP_IMAGE_TAG to the exact version tag so `docker compose pull`
     # fetches the correct image when updating.
     image: ghcr.io/erapartner/vision:${APP_IMAGE_TAG:-latest}
+    pull_policy: missing
     restart: unless-stopped
     env_file: .env
     ports:

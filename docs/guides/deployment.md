@@ -3,9 +3,8 @@ title: Deployment Guide
 type: guide
 status: active
 date: 2026-04-21
-updated: 2026-04-25
-tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening]
-tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding]
+updated: 2026-04-27
+tags: [guide, deployment, production, docker, electron, phase-1, security, admin-auth, port-binding, container-hardening, packaging, troubleshooting]
 description: Production deployment instructions including port binding and admin endpoints security
 aliases: [deployment-guide, production-deploy, docker-deploy, electron-packaging]
 related_code: [[docker-compose.yml]]
@@ -223,9 +222,204 @@ bun run electron:prod
 bun run electron:clean
 ```
 
-### Packaging
+### Packaging for macOS
 
-The Electron app is in `packaging/electron/`. For packaging into distributable formats, see the electron-builder configuration.
+Vision can be packaged into a clickable macOS .app bundle with `.dmg` and `.zip` distributions.
+
+#### Prerequisites
+
+- **Node.js (npm)** — `packaging/electron/` uses npm (not bun) for package management. See [[#package-manager-note|Package Manager Note]] below.
+- Docker Desktop running (required at runtime)
+- macOS 11.0 or later
+- arm64 architecture (Apple Silicon)
+
+#### Build Steps
+
+```bash
+# Navigate to electron packaging directory
+cd packaging/electron
+
+# Install dependencies (npm, not bun)
+npm install
+
+# Run build and package
+npm run dist
+```
+
+This produces three artifacts in `packaging/electron/dist/`:
+- `Vision.app/` — Standalone macOS application bundle
+- `Vision-1.0.0-arm64.dmg` — Disk image for distribution/installation
+- `Vision-1.0.0-arm64-mac.zip` — Compressed bundle for archival
+
+#### Package Manager Note
+
+`packaging/electron/` uses **npm** (not bun) for dependency management:
+
+- **Root project**: Uses bun (via `bun.lock`)
+- **Electron sub-package**: Uses npm (via `package-lock.json`)
+
+**Rationale:** Bun's nested-hoisting behavior confused electron-builder's asar tree-walker, leaving transitive dependencies as nested-only copies that Node.js resolution couldn't find at runtime. Switching to npm forces top-level flattening in `node_modules`, ensuring electron-builder bundles all dependencies at the correct depth inside `app.asar`.
+
+**Transitive dependencies caveat:** Archiver transitives are declared explicitly in `packaging/electron/package.json` to force electron-builder inclusion:
+
+```json
+{
+  "dependencies": {
+    "archiver": "^7.1.2",
+    "archiver-utils": "^5.0.2",
+    "compress-commons": "^6.0.2",
+    "readable-stream": "^4.5.2",
+    "zip-stream": "^6.0.1"
+  }
+}
+```
+
+Without explicit declarations, bundling-time hoisting fails and archiver-based backup cannot serialize the bundle at runtime.
+
+#### Bundled Resources Configuration
+
+Electron-builder's `files` and `extraResources` arrays control what gets packed inside `app.asar` vs. kept outside at `Contents/Resources/`.
+
+**Files inside asar** (`files` array in `package.json`):
+- `main.js` — Electron main process
+- `preload.js` — Security preload bridge
+- `backup/**/*` — Backup/restore bundle utilities
+- `assets/**/*` — Frontend build output
+
+**Files outside asar** (`extraResources` array):
+- `i18n/` → `Contents/Resources/i18n` — Runtime i18n locale files
+- `resources/` → `Contents/Resources/resources` — Additional static resources (e.g., docker-compose.yml)
+
+**Rationale:** `main.js` references i18n and resources via `process.resourcesPath` (lines 22, 204, 234). Packing them inside `app.asar` causes runtime path lookups to fail (`Cannot find module './i18n/...'`). Placing them at `Contents/Resources/` ensures they're accessible via the `process.resourcesPath` reference at runtime.
+
+**Configuration example:**
+```json
+{
+  "build": {
+    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"],
+    "extraResources": [
+      { "from": "i18n", "to": "i18n" },
+      { "from": "resources", "to": "resources" }
+    ]
+  }
+}
+```
+
+#### Installation & Launch
+
+**From DMG:**
+1. Open `Vision-1.0.0-arm64.dmg`
+2. Drag `Vision.app` to `/Applications` folder
+3. Open Applications, right-click `Vision.app`, select "Open" (first launch only — macOS Gatekeeper check)
+
+**From .app bundle directly:**
+```bash
+# If you have the Vision.app bundle, either:
+# 1. Drag to /Applications and launch from Launchpad
+# 2. Or launch from terminal (bypasses Gatekeeper on M-series Macs):
+cd /path/to/Vision.app
+./Contents/MacOS/Vision
+
+# To bypass Gatekeeper quarantine attribute on first run:
+xattr -dr com.apple.quarantine /Applications/Vision.app
+```
+
+#### Runtime Requirements
+
+The Vision desktop app spawns the Node.js backend as a child process. **Docker Desktop must be running** before launching the app.
+
+```bash
+# Check backend status in app:
+# Settings → App → Developer → Admin Mode (toggle) → Admin → Endpoints
+# Verify GET /health returns success
+```
+
+#### Code Signing & Notarization
+
+The app bundle is currently **unsigned** (no Developer ID certificate). This is suitable for personal/local use. For production distribution:
+
+- Acquire a Developer ID Application certificate from Apple Developer
+- Configure signing in `packaging/electron/package.json` (`mac.signing` + `mac.signingIdentity`)
+- Enable notarization via `mac.notarize` (submits binary to Apple for malware check)
+- Update CI/CD pipeline to provide signing secrets
+
+For now, the Gatekeeper prompt on first launch is expected.
+
+#### Application Metadata
+
+| Property | Value |
+|----------|-------|
+| App ID | `com.vaultvoyager.vision` |
+| Product Name | `Vision` |
+| Category | Finance |
+| Icon | `packaging/electron/build/icon.icns` (stylized "V eye" logo, 1024px) |
+
+The icon is located at `packaging/electron/build/icon.svg` (source vector) and compiled to `.icns` format for macOS.
+
+#### Troubleshooting
+
+**"Vision" cannot be opened because the developer cannot be verified:**
+- Expected on unsigned builds
+- Right-click the app, select "Open"
+- Or use `xattr -dr com.apple.quarantine /Applications/Vision.app`
+
+**Backend service unavailable:**
+- Ensure Docker Desktop is running
+- Check app logs: Settings → App → Developer → Open Logs
+- Verify Docker image is built: `cd apps/node-backend && docker build -t vision-app .`
+- Check that local Docker image is tagged: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest` (see [[#docker-composeyml-pull-policy|Docker Compose Pull Policy]] below)
+
+**Icon not showing in Finder:**
+- Ensure `build/icon.icns` exists
+- Rebuild: `npm run dist`
+- Clear Finder cache: `rm -rf ~/Library/Caches/com.apple.finder`
+
+**"Cannot find module './backup/bundle'" at startup:**
+- Cause: `backup/` directory not included in electron-builder `files` array
+- Fix: Add `backup/**/*` to `files` in `package.json` build config
+- Verify: `ls -la packaging/electron/dist/mac-arm64/Vision.app/Contents/Resources/app.asar` should contain `backup/bundle.js`
+
+**"Cannot find module 'archiver-utils'" or other missing transitives:**
+- Cause: Bun's nested-hoisting left archiver dependencies incomplete; npm flatten resolves them
+- Fix: Ensure `packaging/electron/package-lock.json` exists (use npm, not bun)
+- Add explicit transitives to `package.json`: `archiver-utils`, `compress-commons`, `readable-stream`, `zip-stream`
+- Rebuild: `npm install && npm run dist`
+
+**"ENOENT docker-compose.yml" in Contents/Resources/resources/:**
+- Cause: `resources/docker-compose.yml` not copied to `extraResources`
+- Fix: Ensure `extraResources` config includes `{ "from": "resources", "to": "resources" }`
+- Verify: `ls -la /path/to/Vision.app/Contents/Resources/resources/` shows `docker-compose.yml`
+
+**"registry unauthorized" on first launch (GHCR private image):**
+- Cause: Packaged app attempts to pull from private GHCR registry without auth
+- Fix: 
+  1. Build locally: `docker compose build` in project root
+  2. Retag image: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
+  3. Verify `packaging/electron/resources/docker-compose.yml` has `pull_policy: missing` (uses local image instead of attempting registry pull)
+- The embedded compose file defaults to `pull_policy: missing`, so freshly-built local images are used without registry auth
+
+#### Docker Compose Pull Policy
+
+The embedded `packaging/electron/resources/docker-compose.yml` includes:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/erapartner/vision:latest
+    pull_policy: missing
+```
+
+**Pull policy: missing** — Docker uses a local image if it exists; only pulls from registry if not found locally. This avoids GHCR auth failures on first install.
+
+**Workflow for packaged app:**
+1. In development or CI, build the image: `docker compose build` (creates `vision-app:latest`)
+2. Retag for embedded config: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
+3. Package the app: `cd packaging/electron && npm run dist` (embeds `docker-compose.yml` with `pull_policy: missing`)
+4. User installs and launches the app — compose finds local `ghcr.io/erapartner/vision:latest` image without registry access
+
+If you need users to pull from GHCR (e.g., published release), either:
+- Ensure the image is public, or
+- Document Docker login steps for users
 
 ## Environment Variables Reference
 

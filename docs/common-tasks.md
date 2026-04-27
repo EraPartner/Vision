@@ -3,6 +3,7 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
+updated: 2026-04-27
 tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi]
 description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
@@ -27,6 +28,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Configure environment variables | [[docs/reference/environment-variables\|Environment Variables]] | [[docs/guides/backend-configuration\|Backend Configuration]] |
 | Protect admin endpoints with token auth | [[docs/reference/environment-variables\|Environment Variables]] (`ADMIN_AUTH_TOKEN`) | [[docs/api/admin\|Admin API]], [[docs/security/index\|Security]] |
 | Set up the project locally | [[docs/guides/setup\|Setup Guide]] | [[docs/reference/scripts\|Scripts Reference]] |
+| Package for macOS distribution | [[docs/guides/deployment#packaging-for-macos\|Packaging for macOS]] | [[docs/architecture/electron\|Electron Architecture]] |
 | Deploy to production | [[docs/guides/deployment\|Deployment Guide]] | [[docs/reference/environment-variables\|Environment Variables]] |
 
 ## Frontend Tasks

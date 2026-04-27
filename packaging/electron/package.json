@@ -11,7 +11,11 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
-    "yauzl": "^3.3.0"
+    "archiver-utils": "^5.0.2",
+    "compress-commons": "^6.0.2",
+    "readable-stream": "^4.5.2",
+    "yauzl": "^3.3.0",
+    "zip-stream": "^6.0.1"
   },
   "devDependencies": {
     "electron": "^41.0.0",
@@ -20,8 +24,17 @@
   "build": {
     "appId": "com.vaultvoyager.vision",
     "productName": "Vision",
+    "directories": {
+      "buildResources": "build"
+    },
     "mac": {
       "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
         {
           "target": "zip",
           "arch": [
@@ -29,13 +42,24 @@
           ]
         }
       ],
-      "category": "public.app-category.finance"
+      "category": "public.app-category.finance",
+      "icon": "build/icon.icns"
     },
     "files": [
       "main.js",
       "preload.js",
-      "i18n/**/*",
-      "resources/**/*"
+      "backup/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "i18n",
+        "to": "i18n"
+      },
+      {
+        "from": "resources",
+        "to": "resources"
+      }
     ],
     "publish": {
       "provider": "github",

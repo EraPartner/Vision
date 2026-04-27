@@ -3,7 +3,8 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration]
+updated: 2026-04-27
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, troubleshooting]
 description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, and backup/restore bundle system (Phase 1+2)
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js"]
@@ -115,17 +116,107 @@ Electron configuration is in `packaging/electron/`.
 
 ## Packaging
 
-### Platforms
+### macOS Distribution
 
-- **macOS** — `.dmg` / `.app`
-- **Windows** — `.exe` / `.msi`
-- **Linux** — `.AppImage` / `.deb`
+Vision packages into native macOS formats via `electron-builder`:
+
+#### Output Artifacts
+
+| Format | Purpose | Location |
+|--------|---------|----------|
+| `.app` bundle | Native macOS application | `dist/mac-arm64/Vision.app` |
+| `.dmg` | Drag-to-install disk image | `dist/Vision-1.0.0-arm64.dmg` |
+| `.zip` | Compressed bundle for archival | `dist/Vision-1.0.0-arm64-mac.zip` |
+
+**Build:** `cd packaging/electron && npm run dist`
+
+#### Configuration
+
+Electron-builder configuration in `packaging/electron/package.json`:
+
+```json
+{
+  "build": {
+    "appId": "com.vaultvoyager.vision",
+    "productName": "Vision",
+    "directories": {
+      "buildResources": "build"
+    },
+    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"],
+    "extraResources": [
+      { "from": "i18n", "to": "i18n" },
+      { "from": "resources", "to": "resources" }
+    ],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.finance",
+      "icon": "build/icon.icns"
+    }
+  }
+}
+```
+
+**Key Configuration Details:**
+
+- **`files`** — Packed inside `app.asar`. Must include `backup/**/*` (backup/restore bundle) and `assets/**/*` (frontend dist). If missing, runtime raises `Cannot find module './backup/bundle'`.
+
+- **`extraResources`** — Kept outside asar at `Contents/Resources/`. Must include `i18n/` and `resources/` because `main.js` references them via `process.resourcesPath` (lines 22, 204, 234). Packing them in asar breaks runtime path resolution.
+
+- **`pull_policy: missing`** in embedded `resources/docker-compose.yml` — Uses local Docker image if available; avoids GHCR registry auth failures on first launch.
+
+#### Icon
+
+- **Source**: `packaging/electron/build/icon.svg` (1024px, stylized "V eye" gradient on dark navy rounded square)
+- **Compiled**: `packaging/electron/build/icon.icns` (macOS native icon format)
+- **Referenced in package.json**: `mac.icon: "build/icon.icns"`
+
+If updating the icon, regenerate `.icns` from `.svg` using an asset pipeline tool (e.g., `iconutil`, Figma export, or CI build step).
+
+#### Code Signing Status
+
+- **Current**: Ad-hoc unsigned (no Developer ID certificate)
+- **Suitable for**: Personal/local use, internal distribution
+- **First launch**: macOS Gatekeeper prompts "Cannot be verified"; user can:
+  - Right-click → "Open"
+  - Or: `xattr -dr com.apple.quarantine /Applications/Vision.app`
+- **For production**: Acquire Developer ID, set `mac.signingIdentity` + `mac.notarize` in electron-builder config
+
+#### Package Manager (npm vs. bun)
+
+The `packaging/electron/` sub-package uses **npm** for dependency management, while the root project uses **bun**.
+
+**Why npm for electron-builder?**
+
+Bun's nested-hoisting algorithm places transitive dependencies in their own `node_modules/` trees, with shared deps at intermediate paths. This confuses electron-builder's asar tree-walker, resulting in incomplete bundling — runtime hits `Cannot find module 'archiver-utils'` even though the package is installed.
+
+**Solution:** npm's flat-top-level hoisting ensures all dependencies (including Archiver's transitives) live at `node_modules/` root, where electron-builder can find and bundle them correctly.
+
+**Transitive Explicit Declaration:** Because hoisting timing varies, Vision's `packaging/electron/package.json` explicitly declares archiver's transitives:
+
+```json
+{
+  "dependencies": {
+    "archiver": "^7.1.2",
+    "archiver-utils": "^5.0.2",
+    "compress-commons": "^6.0.2",
+    "readable-stream": "^4.5.2",
+    "zip-stream": "^6.0.1"
+  }
+}
+```
+
+This forces npm and electron-builder to include them at the correct depth inside `app.asar`, guaranteeing backup serialization works at runtime.
+
+### Platforms (Future)
+
+- **Windows** — `.exe` / `.msi` (not yet implemented)
+- **Linux** — `.AppImage` / `.deb` (not yet implemented)
 
 ### Bundled Components
 
 - React frontend (built with Vite)
-- Node.js backend (bundled with dependencies)
-- PostgreSQL (external — not bundled)
+- Node.js backend (spawned as child process, not bundled)
+- PostgreSQL (external — not bundled, requires Docker Desktop)
 
 ---
 
@@ -321,6 +412,87 @@ If `settings.json` is unparsable:
 See [[docs/api/health|Health API]] for details.
 
 ---
+
+## Packaging Troubleshooting
+
+### Cannot find module './backup/bundle'
+
+**Cause:** `backup/` directory not in electron-builder `files` array.
+
+**Fix:** Ensure `packaging/electron/package.json` build config includes:
+```json
+{
+  "build": {
+    "files": ["main.js", "preload.js", "backup/**/*", "assets/**/*"]
+  }
+}
+```
+
+**Verification:** After build, inspect asar contents:
+```bash
+npm ls @electron/asar  # Confirm npm package installed
+file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
+```
+
+### Cannot find module 'archiver-utils' (or compress-commons, readable-stream, zip-stream)
+
+**Cause:** Hoisting left Archiver's transitives as nested-only, electron-builder couldn't bundle them. See [[#package-manager-npm-vs-bun|Package Manager (npm vs. bun)]] above.
+
+**Fix:**
+1. Ensure `package-lock.json` exists (npm, not bun.lock)
+2. Explicitly declare transitives in `packaging/electron/package.json`:
+   ```json
+   {
+     "dependencies": {
+       "archiver": "^7.1.2",
+       "archiver-utils": "^5.0.2",
+       "compress-commons": "^6.0.2",
+       "readable-stream": "^4.5.2",
+       "zip-stream": "^6.0.1"
+     }
+   }
+   ```
+3. Rebuild: `npm install && npm run dist`
+
+### ENOENT docker-compose.yml at Contents/Resources/resources/
+
+**Cause:** Embedded `resources/docker-compose.yml` not copied to app bundle via `extraResources`.
+
+**Fix:** Ensure `packaging/electron/package.json` includes:
+```json
+{
+  "build": {
+    "extraResources": [
+      { "from": "i18n", "to": "i18n" },
+      { "from": "resources", "to": "resources" }
+    ]
+  }
+}
+```
+
+**Verification:** After build, check asar not corrupted:
+```bash
+ls -la dist/mac-arm64/Vision.app/Contents/Resources/resources/docker-compose.yml
+```
+
+### registry unauthorized on first launch
+
+**Cause:** Packaged app attempted to pull Docker image from private GHCR registry without credentials.
+
+**Fix:** Use local Docker image with `pull_policy: missing` in embedded compose:
+
+1. Build locally: `docker compose build` (in project root, creates `vision-app:latest`)
+2. Retag: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
+3. Verify `packaging/electron/resources/docker-compose.yml` has:
+   ```yaml
+   services:
+     app:
+       image: ghcr.io/erapartner/vision:latest
+       pull_policy: missing  # ← Use local image if available
+   ```
+4. Rebuild: `npm run dist`
+
+With `pull_policy: missing`, Docker Compose finds the locally-tagged image without attempting registry auth.
 
 ## Related
 

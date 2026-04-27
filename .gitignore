@@ -36,6 +36,7 @@ Thumbs.db
 
 # Build
 build/
+!packaging/electron/build/
 *.log
 coverage/
 
@@ -52,3 +53,4 @@ htmlcov/
 copilot/
 opencode.json
 *.json
+!packaging/electron/package-lock.json
