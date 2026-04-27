@@ -2323,7 +2323,7 @@
   "tax.widget.yearlyOverview": "Jaaroverzicht",
   "tax.widget.yearlyTaxFeeTrend": "Maandtrend Belastingen & Kosten",
   "tax.widget.yearlyTaxPayments": "Maandelijkse Belastingbetalingen (selecteer categorieën)",
-  "tax.witheldAtSource": "aan de bron ingehouden",
+  "tax.witheldAtSource": "Uit geregistreerde belastingen op dividendtransacties",
   "tax.yearly.description": "Jaarlijkse historie uit uw transacties, geprojecteerd met uw huidige belastingprofiel.",
   "tax.yearly.title": "Jaarinkomen vs PIT",
   "tax.yearlyOverviewDesc": "Jaarlijkse inkomsten en geschatte belasting per jaar.",

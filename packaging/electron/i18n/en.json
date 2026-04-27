@@ -2323,7 +2323,7 @@
   "tax.widget.yearlyOverview": "Yearly Overview",
   "tax.widget.yearlyTaxFeeTrend": "Monthly Tax & Fee Trend",
   "tax.widget.yearlyTaxPayments": "Monthly Tax Payments (select categories)",
-  "tax.witheldAtSource": "withheld at source",
+  "tax.witheldAtSource": "From recorded taxes on dividend transactions",
   "tax.yearly.description": "Annual history from your transactions, projected with your current tax profile.",
   "tax.yearly.title": "Yearly Income vs PIT",
   "tax.yearlyOverviewDesc": "Annual income and estimated tax by year.",
