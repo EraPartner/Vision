@@ -11,6 +11,7 @@ import { formatDateStringWithAppSettings, parseLocalDateFromYmd, toYmd } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { apiClient } from "@/lib/api";
+import { getRecipient } from "@/lib/api/recipients";
 import type { Transaction } from "@/types/api";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
@@ -40,6 +41,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
     end_date: "",
     bank_account: "",
     recipient_name: "",
+    recipient_id: null as number | null,
     uncategorised: false,
     active: true,
     matchAmount: true,
@@ -51,11 +53,23 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
       setTxFilters((prev) => ({
         ...prev,
         recipient_name: payment.recipient || prev.recipient_name,
+        recipient_id: null,
         start_date: payment.due_date || prev.start_date,
         bank_account: payment.bank_account || prev.bank_account,
       }));
     }
   }, [payment]);
+
+  useEffect(() => {
+    if (!payment?.recipient_id) return;
+    let cancelled = false;
+    getRecipient(payment.recipient_id).then((r) => {
+      if (cancelled) return;
+      const clusterRootId = r.primary_recipient_id ?? r.id;
+      setTxFilters((prev) => ({ ...prev, recipient_id: clusterRootId }));
+    }).catch(() => { /* fall back to name-based search */ });
+    return () => { cancelled = true; };
+  }, [payment?.recipient_id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,8 +83,13 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
         if (txFilters.start_date) params.start_date = txFilters.start_date;
         if (txFilters.end_date) params.end_date = txFilters.end_date;
         if (txFilters.bank_account) params.bank_account = txFilters.bank_account;
-        if (txFilters.recipient_name) params.recipient_name = txFilters.recipient_name;
-        else if (payment.recipient) params.recipient_name = payment.recipient;
+        if (txFilters.recipient_id != null) {
+          params.recipient_id = txFilters.recipient_id;
+        } else if (txFilters.recipient_name) {
+          params.recipient_name = txFilters.recipient_name;
+        } else if (payment.recipient) {
+          params.recipient_name = payment.recipient;
+        }
         if (txFilters.uncategorised) params.uncategorised = true;
         params.active = txFilters.active;
 
@@ -151,7 +170,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               />
               {selectedTxId && (
                 <div className="text-xs text-muted-foreground">
-                  {t('plannedPage.link.txDate')} {candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date || '—'}
+                  {t('plannedPage.link.txDate')} {(() => { const d = candidateTxs.find((x) => x.id === selectedTxId)?.transaction_date; return d ? formatDateStringWithAppSettings(d, appSettings.dateFormat) : '—'; })()}
                 </div>
               )}
             </div>
@@ -188,7 +207,10 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tx-recipient">{t('recipientsPage.col.recipient')}</Label>
-                <Input id="tx-recipient" placeholder={t('recipientsPage.search') || "Partial recipient name"} value={txFilters.recipient_name} onChange={(e) => setTxFilters({ ...txFilters, recipient_name: e.target.value })} />
+                <Input id="tx-recipient" placeholder={t('recipientsPage.search') || "Partial recipient name"} value={txFilters.recipient_name} onChange={(e) => setTxFilters({ ...txFilters, recipient_name: e.target.value, recipient_id: null })} />
+                {txFilters.recipient_id != null && (
+                  <p className="text-xs text-muted-foreground">{t('plannedPage.link.includesLinked')}</p>
+                )}
               </div>
             </div>
 
@@ -229,7 +251,7 @@ export function LinkTransactionDialog({ open, onOpenChange, payment, onExecute }
               filteredCandidates.map((tx) => (
                 <label key={tx.id} className="flex items-center justify-between gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                   <div className="flex items-center gap-3">
-                    <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); setExecutionDate(tx.transaction_date); }} />
+                    <input type="radio" name="selectedTx" checked={selectedTxId === tx.id} onChange={() => { setSelectedTxId(tx.id); const d = tx.transaction_date; setExecutionDate(d?.includes("T") ? d.split("T")[0] : (d ?? "")); }} />
                     <div className="flex flex-col">
                       <span className="font-medium">{tx.memo || t('plannedPage.link.txFallback', { id: tx.id })}</span>
                       <span className="text-xs text-muted-foreground">

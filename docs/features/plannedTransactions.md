@@ -3,11 +3,11 @@ title: Planned Transactions
 type: feature
 status: active
 date: 2026-04-26
-updated: 2026-04-25
+updated: 2026-04-26
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses
-related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.js", "apps/node-backend/src/repositories/plannedTransactionRepository.js", "apps/node-backend/src/services/calculations/loanSchedule.js", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.js", "apps/frontend/src/components/planned/PlannedPaymentForm.tsx", "apps/frontend/src/components/planned/LinkTransactionDialog.tsx", "apps/frontend/src/components/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/components/shared/dateUtils.ts"]
 ---
 
 # Planned Transactions
@@ -405,10 +405,18 @@ Extracted dialog component that manages linking a transaction execution to a pla
 
 **Behavior:**
 - Initializes filters from planned payment's recipient/due_date/bank_account
+- **Recipient Resolution (2026-04-26):** When the planned payment has a `recipient_id`, the dialog:
+  1. Fetches the recipient object to resolve the cluster root
+  2. Uses `primary_recipient_id` if present (indicating the recipient is an alias in a cluster), otherwise uses the recipient's own ID
+  3. Sets `txFilters.recipient_id` to the resolved cluster root ID
+  4. Passes this to the API, which applies the filter `(t.recipient_id = $X OR r.primary_recipient_id = $X)` to include both the primary recipient's transactions and all alias transactions
+  5. Shows helper text "Includes transactions from linked recipients" when in linked-recipient mode
+- When user manually edits the recipient text input, `recipient_id` is cleared and search falls back to text-based matching
 - Debounced transaction fetch on filter changes
 - Shows matching transactions with amount, date, recipient
 - Allows optional execution date adjustment
 - **Error feedback (2026-04-26):** Uses `toast.error(...)` from sonner instead of native `alert()` for consistent project convention
+- **i18n (2026-04-26):** New key `plannedPage.link.includesLinked` for linked-recipient helper text
 
 **Code**: [[apps/frontend/src/components/planned/LinkTransactionDialog.tsx]]
 

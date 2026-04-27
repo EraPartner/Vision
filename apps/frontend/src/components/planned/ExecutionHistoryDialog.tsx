@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import logger from "@/lib/logger";
 import { ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -107,8 +107,11 @@ export function ExecutionHistoryDialog({ open, onOpenChange, payments }: Executi
     }
   }, [payments]);
 
+  useEffect(() => {
+    if (open) void loadExecutionHistory();
+  }, [open, loadExecutionHistory]);
+
   const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen) void loadExecutionHistory();
     onOpenChange(isOpen);
   };
 
