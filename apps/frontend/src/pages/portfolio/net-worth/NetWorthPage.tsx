@@ -31,6 +31,7 @@ import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 const MONTH_LABEL_MIN_PX = 60;
 
@@ -47,6 +48,7 @@ export default function NetWorthPage() {
   });
 
   const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
+  const isOnline = useOnlineStatus();
 
   const {
     allItems: tableSnapshots,
@@ -177,10 +179,20 @@ export default function NetWorthPage() {
                 {t('networth.emptyDescription')}
               </p>
             </div>
-            <Button onClick={refreshPrices} disabled={isRefreshingPrices} size="sm">
+            <Button
+              onClick={refreshPrices}
+              disabled={isRefreshingPrices || !isOnline}
+              size="sm"
+              title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
+            >
               <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
               {t('portfolio.refreshPrices')}
             </Button>
+            {!isOnline && (
+              <p className="text-xs text-muted-foreground max-w-md">
+                {t('portfolio.refreshPricesOffline')}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

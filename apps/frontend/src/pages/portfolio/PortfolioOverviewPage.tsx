@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCallback, useMemo } from "react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -50,6 +51,7 @@ export default function PortfolioOverviewPage() {
     summaries, totalGainLoss, transactions,
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
+  const isOnline = useOnlineStatus();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const PORTFOLIO_WIDGETS = useMemo(() => getPortfolioWidgets(t), [t]);
   const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults, widgets: widgetDefs } = useWidgetVisibility('portfolio', PORTFOLIO_WIDGETS);
@@ -261,7 +263,14 @@ export default function PortfolioOverviewPage() {
               setAllVisible={setAllVisible}
               resetToDefaults={resetToDefaults}
             />
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={refreshPrices} disabled={isRefreshingPrices}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={refreshPrices}
+              disabled={isRefreshingPrices || !isOnline}
+              title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
+            >
               {isRefreshingPrices ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {t('portfolio.refreshPrices')}
             </Button>

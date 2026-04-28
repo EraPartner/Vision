@@ -16,6 +16,7 @@ import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
@@ -38,6 +39,7 @@ const CHART_KEYS = {
 function PerformanceEmptyState() {
     const { t } = useLanguage();
     const { refreshPrices, isRefreshingPrices } = usePortfolio();
+    const isOnline = useOnlineStatus();
     return (
         <div className="space-y-6">
             <PageHeader title={t('performance.title')} icon={BarChart3} />
@@ -50,10 +52,20 @@ function PerformanceEmptyState() {
                             {t('performance.emptyDescription')}
                         </p>
                     </div>
-                    <Button onClick={refreshPrices} disabled={isRefreshingPrices} size="sm">
+                    <Button
+                        onClick={refreshPrices}
+                        disabled={isRefreshingPrices || !isOnline}
+                        size="sm"
+                        title={!isOnline ? t('portfolio.refreshPricesOffline') : undefined}
+                    >
                         <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
                         {t('portfolio.refreshPrices')}
                     </Button>
+                    {!isOnline && (
+                        <p className="text-xs text-muted-foreground max-w-md">
+                            {t('portfolio.refreshPricesOffline')}
+                        </p>
+                    )}
                 </CardContent>
             </Card>
         </div>
