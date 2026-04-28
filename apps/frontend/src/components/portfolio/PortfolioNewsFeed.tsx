@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Newspaper, ExternalLink, Clock } from "lucide-react";
+import { Newspaper, ExternalLink, Clock, WifiOff } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { formatDistanceToNow } from "@/components/shared/dateUtils";
 import { RemoteNewsImage } from "@/components/shared/RemoteNewsImage";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 interface PortfolioNewsFeedProps {
   symbols: string[];
@@ -15,12 +16,15 @@ interface PortfolioNewsFeedProps {
 
 export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
   const { t, language } = useLanguage();
+  const isOnline = useOnlineStatus();
   const { data, isLoading, error } = useQuery({
     queryKey: ["market-news", symbols],
     queryFn: () => apiClient.getMarketNews(symbols.length > 0 ? symbols : undefined, 25),
-    staleTime: 5 * 60 * 1000, // 5 min
-    refetchInterval: 10 * 60 * 1000, // 10 min
-    enabled: true,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: isOnline ? 10 * 60 * 1000 : false,
+    refetchOnWindowFocus: false,
+    retry: isOnline ? 1 : false,
+    enabled: isOnline,
   });
 
   const articles = data?.articles ?? [];
@@ -41,7 +45,16 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
       <CardContent className="p-0 flex-1 min-h-0">
         <ScrollArea className="h-full">
           <div className="px-6 pb-4 space-y-1">
-            {isLoading && (
+            {!isOnline && articles.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <WifiOff className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {t('newsFeed.offline')}
+                </p>
+              </div>
+            )}
+
+            {isOnline && isLoading && (
               Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex gap-3 py-3 border-b border-border/50 last:border-0">
                   <Skeleton className="h-16 w-24 rounded-md shrink-0" />
@@ -54,14 +67,14 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
               ))
             )}
 
-            {!isLoading && articles.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Newspaper className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {error ? t('newsFeed.unableToLoad') : t('newsFeed.noNews')}
-                  </p>
-                </div>
-                )}
+            {isOnline && !isLoading && articles.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Newspaper className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {error ? t('newsFeed.unableToLoad') : t('newsFeed.noNews')}
+                </p>
+              </div>
+            )}
 
             {articles.map((article, idx) => (
               <NewsItem key={`${article.title}-${idx}`} article={article} locale={language} />

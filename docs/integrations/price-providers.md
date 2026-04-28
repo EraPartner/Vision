@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
-last_modified: 2026-04-29
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default]
+last_modified: 2026-04-28
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js]]
@@ -152,6 +152,20 @@ Each fallback source is tracked in the refresh response as `priceSources: Record
 - `historical_fallback`: Database-backed but may be stale — frontend shows warning toast `portfolio.refreshedPricesStale` with count of stale prices
 
 This makes graceful offline degradation visible without blocking the user.
+
+**Provider Timeout Safety (Apr 2026):**
+- Binance ticker fetch now includes `signal: AbortSignal.timeout(8_000)` to abort after 8 seconds if the provider is unreachable/slow
+- Prevents hung refresh requests that would block startup or user-initiated refreshes indefinitely
+- Timeouts fall through to cached/historical fallback without blocking other providers
+
+**Parallel Provider Fetching (Apr 2026):**
+- The four provider buckets in `fetchLivePricesDetailed` (Binance, Yahoo, Custom, Kinesis) are now wrapped in async IIFEs and awaited via `Promise.allSettled()`
+- Changes from sequential bucket execution (wall time = sum of provider times) to parallel execution (wall time = max of provider times)
+- Improves overall refresh latency, especially when individual providers are slow or unresponsive
+- Failures in one provider (e.g., timeout) no longer block execution of other providers
+- Fallback chain is applied per-investment based on individual provider success/failure
+
+Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 **Price History & Report Timestamp Metadata (Apr 2026):**
 - Price-history endpoint (`GET /api/investments/:id/price-history`) now defaults `db_only=true` to prevent accidental external-fetch when no query is supplied (safe default for offline-first). Frontend can opt out with `?db_only=false` for explicit provider refresh.

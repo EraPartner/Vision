@@ -137,11 +137,13 @@ export function useInvestmentMutations() {
         });
       }
     },
-    onError: (err: Error) =>
+    onError: (err: Error) => {
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
       toast.error(t('portfolio.refreshPricesFailedTitle'), {
         id: 'portfolio-refresh-prices',
-        description: err.message,
-      }),
+        description: isOffline ? t('portfolio.refreshPricesOffline') : err.message,
+      });
+    },
   });
 
   const addInvestment = useCallback(

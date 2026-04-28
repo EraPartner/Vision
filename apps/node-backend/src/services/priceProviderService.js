@@ -80,72 +80,86 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
     }
   }
 
+  const providerTasks = [];
+
   if (stale.binance.length) {
-    try {
-      const ids = [...new Set(stale.binance.map(inv => (inv.price_provider_id || '').toUpperCase()).filter(Boolean))];
-      const prices = await PROVIDERS.binance(ids);
-      for (const inv of stale.binance) {
-        const pid = (inv.price_provider_id || '').toUpperCase();
-        if (prices[pid]) {
-          results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
-          cacheSet(`binance:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
+    providerTasks.push((async () => {
+      try {
+        const ids = [...new Set(stale.binance.map(inv => (inv.price_provider_id || '').toUpperCase()).filter(Boolean))];
+        const prices = await PROVIDERS.binance(ids);
+        for (const inv of stale.binance) {
+          const pid = (inv.price_provider_id || '').toUpperCase();
+          if (prices[pid]) {
+            results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
+            cacheSet(`binance:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
+          }
         }
+        recordProviderSuccess('binance');
+      } catch (err) {
+        logger.error('Binance batch fetch failed', { error: err.message });
+        recordProviderError('binance', err);
       }
-      recordProviderSuccess('binance');
-    } catch (err) {
-      logger.error('Binance batch fetch failed', { error: err.message });
-      recordProviderError('binance', err);
-    }
+    })());
   }
 
   if (stale.yahoo.length) {
-    try {
-      const ids = [...new Set(stale.yahoo.map(resolveYahooSymbol).filter(Boolean))];
-      const prices = await PROVIDERS.yahoo(ids);
-      for (const inv of stale.yahoo) {
-        const pid = resolveYahooSymbol(inv);
-        if (prices[pid]) {
-          results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
-          cacheSet(`yahoo:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
+    providerTasks.push((async () => {
+      try {
+        const ids = [...new Set(stale.yahoo.map(resolveYahooSymbol).filter(Boolean))];
+        const prices = await PROVIDERS.yahoo(ids);
+        for (const inv of stale.yahoo) {
+          const pid = resolveYahooSymbol(inv);
+          if (prices[pid]) {
+            results[inv.id] = { price: prices[pid].price, source: prices[pid].source || 'live' };
+            cacheSet(`yahoo:${pid}`, { price: prices[pid].price, source: prices[pid].source || 'live' });
+          }
         }
+        recordProviderSuccess('yahoo');
+      } catch (err) {
+        logger.error('Yahoo Finance batch fetch failed', { error: err.message });
+        recordProviderError('yahoo', err);
       }
-      recordProviderSuccess('yahoo');
-    } catch (err) {
-      logger.error('Yahoo Finance batch fetch failed', { error: err.message });
-      recordProviderError('yahoo', err);
-    }
+    })());
   }
 
   if (stale.custom.length) {
-    try {
-      const prices = await PROVIDERS.custom(stale.custom);
-      for (const inv of stale.custom) {
-        const data = prices[inv.id];
-        if (data !== undefined && isValidPrice(data.price)) {
-          results[inv.id] = { price: data.price, source: 'live' };
-          cacheSet(`custom:${inv.id}`, { price: data.price, source: 'live' });
+    providerTasks.push((async () => {
+      try {
+        const prices = await PROVIDERS.custom(stale.custom);
+        for (const inv of stale.custom) {
+          const data = prices[inv.id];
+          if (data !== undefined && isValidPrice(data.price)) {
+            results[inv.id] = { price: data.price, source: 'live' };
+            cacheSet(`custom:${inv.id}`, { price: data.price, source: 'live' });
+          }
         }
+      } catch (err) {
+        logger.error('Custom price fetch failed', { error: err.message });
       }
-    } catch (err) {
-      logger.error('Custom price fetch failed', { error: err.message });
-    }
+    })());
   }
 
   if (stale.kinesis.length) {
-    try {
-      const prices = await PROVIDERS.kinesis(stale.kinesis);
-      for (const inv of stale.kinesis) {
-        const data = prices[inv.id];
-        if (data !== undefined && isValidPrice(data.price)) {
-          results[inv.id] = { price: data.price, source: 'live' };
-          cacheSet(`kinesis:${inv.id}`, { price: data.price, source: 'live' });
+    providerTasks.push((async () => {
+      try {
+        const prices = await PROVIDERS.kinesis(stale.kinesis);
+        for (const inv of stale.kinesis) {
+          const data = prices[inv.id];
+          if (data !== undefined && isValidPrice(data.price)) {
+            results[inv.id] = { price: data.price, source: 'live' };
+            cacheSet(`kinesis:${inv.id}`, { price: data.price, source: 'live' });
+          }
         }
+        recordProviderSuccess('kinesis');
+      } catch (err) {
+        logger.error('Kinesis price fetch failed', { error: err.message });
+        recordProviderError('kinesis', err);
       }
-      recordProviderSuccess('kinesis');
-    } catch (err) {
-      logger.error('Kinesis price fetch failed', { error: err.message });
-      recordProviderError('kinesis', err);
-    }
+    })());
+  }
+
+  if (providerTasks.length > 0) {
+    await Promise.allSettled(providerTasks);
   }
 
   for (const inv of investments) {

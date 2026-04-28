@@ -11,6 +11,7 @@ import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog"
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
 import { PortfolioNewsFeed } from "@/components/portfolio/PortfolioNewsFeed";
+import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { TotalValueCard, type SparklinePoint } from "@/components/portfolio/TotalValueCard";
 import { ASSET_CLASS_LABELS, getAssetClassGroups } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
@@ -282,6 +283,12 @@ export default function PortfolioOverviewPage() {
         </Card>
       ) : (
         <>
+          <StalePricesBanner
+            investments={summaries}
+            onRefresh={refreshPrices}
+            isRefreshing={isRefreshingPrices}
+          />
+
           {isVisible('summaryCards') && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">

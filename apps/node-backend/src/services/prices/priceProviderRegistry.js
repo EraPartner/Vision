@@ -312,6 +312,7 @@ export const PROVIDERS = {
     try {
       const res = await fetch('https://data-api.binance.vision/api/v3/ticker/price', {
         headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
       const data = await res.json();

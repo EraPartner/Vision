@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, TrendingUp, Target, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, Target, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
@@ -15,6 +15,7 @@ import { WatchlistChartDialog } from "@/components/portfolio/WatchlistChartDialo
 import type { WatchlistItem } from "@/types/watchlist";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
@@ -29,6 +30,7 @@ export default function WatchlistPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const isOnline = useOnlineStatus();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
   const queryClient = useQueryClient();
@@ -39,14 +41,16 @@ export default function WatchlistPage() {
     queryFn: () => apiClient.getWatchlist(),
   });
 
-  // Fetch current prices for all symbols
   const symbols = data?.items?.map((i) => i.symbol).filter(Boolean).join(",") || "";
-  const { data: quotesData } = useQuery({
+  const { data: quotesData, isError: quotesError } = useQuery({
     queryKey: ["watchlist-quotes", symbols],
     queryFn: () => symbols ? apiClient.getMarketQuotes(symbols) : Promise.resolve({ quotes: [] }),
-    enabled: !!symbols,
-    refetchInterval: 60_000, // Refresh every minute
+    enabled: !!symbols && isOnline,
+    refetchInterval: isOnline ? 60_000 : false,
+    refetchOnWindowFocus: false,
+    retry: isOnline ? 1 : false,
   });
+  const quotesUnavailable = !isOnline || quotesError;
 
   const priceMap = new Map(quotesData?.quotes?.map((q) => [q.symbol, q]) || []);
 
@@ -95,6 +99,15 @@ export default function WatchlistPage() {
         </Button>
         }
       />
+
+      {quotesUnavailable && data?.items && data.items.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <WifiOff className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+          <div className="flex-1 text-foreground/80">
+            {t('watchlist.quotesOffline')}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

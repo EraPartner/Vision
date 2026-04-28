@@ -57,25 +57,37 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
     queryKey: ["watchlist-chart", item?.symbol, selectedRange.range],
     queryFn: async () => {
       if (!item?.symbol) return null;
-      const res = await fetch(
-        `${API_BASE_URL}/api/market/chart?symbol=${item.symbol}&range=${selectedRange.range}&interval=${selectedRange.interval}`
-      );
-      if (!res.ok) return null;
-      return res.json() as Promise<{ symbol: string; currency: string; points: ChartPoint[] }>;
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/market/chart?symbol=${item.symbol}&range=${selectedRange.range}&interval=${selectedRange.interval}`
+        );
+        if (!res.ok) return null;
+        return (await res.json()) as { symbol: string; currency: string; points: ChartPoint[] };
+      } catch {
+        return null;
+      }
     },
     enabled: !!item?.symbol && open,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: quoteData } = useQuery({
     queryKey: ["watchlist-quote", item?.symbol],
     queryFn: async () => {
       if (!item?.symbol) return null;
-      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${item.symbol}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.quotes?.[0] || null;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${item.symbol}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.quotes?.[0] || null;
+      } catch {
+        return null;
+      }
     },
     enabled: !!item?.symbol && open,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const handleUpdateTargetPrice = async () => {

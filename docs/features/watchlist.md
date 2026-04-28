@@ -3,7 +3,8 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-04-17
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6]
+last_modified: 2026-04-28
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
 aliases: [watch list, price alerts, investment tracking]
 related_code:
@@ -105,6 +106,20 @@ Watchlist prices are updated when:
 1. The user manually refreshes investment prices via `POST /api/investments/refresh-prices`
 2. The price provider service fetches live prices for all tracked symbols
 3. **Phase 3.6**: WatchlistPage uses `useQuery({ queryKey: ["watchlist-quotes", symbols], queryFn: () => apiClient.getMarketQuotes(symbols) })` with 60s refetch interval for automatic market quote updates
+
+## Offline Resilience
+
+The watchlist page gracefully degrades when offline:
+
+- **Online status detection**: Uses `useOnlineStatus()` hook to monitor browser connectivity
+- **Query gating**: Quotes query is enabled only when `isOnline`, preventing unnecessary API calls during offline periods
+- **Conditional refetch**: refetchInterval is conditional on `isOnline`; when offline, no background refetches occur
+- **Retry strategy**: `retry: 1` only when online; offline requests skip retries to fail fast
+- **Dialog handling**: Add/edit dialogs wrap queryFns in try/catch, set `retry: false`, and `refetchOnWindowFocus: false` to prevent unhandled rejections or spinner storms
+- **User feedback**: When quotes are unavailable (offline or provider error), a banner displays showing i18n key `watchlist.quotesOffline` ("Live quotes unavailable. Showing target prices only.")
+- **Target price fallback**: Page continues to show target prices and allow editing even when live quotes are unavailable
+
+Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
 
 ## Adding from Watchlist
 

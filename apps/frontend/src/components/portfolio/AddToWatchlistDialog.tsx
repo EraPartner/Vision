@@ -57,24 +57,35 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     queryKey: ["market-search", debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery || debouncedQuery.length < 2) return { items: [] };
-      const res = await fetch(`${API_BASE_URL}/api/market/search?q=${encodeURIComponent(debouncedQuery)}`);
-      if (!res.ok) return { items: [] };
-      return res.json() as Promise<{ items: SearchResult[] }>;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/market/search?q=${encodeURIComponent(debouncedQuery)}`);
+        if (!res.ok) return { items: [] };
+        return (await res.json()) as { items: SearchResult[] };
+      } catch {
+        return { items: [] };
+      }
     },
     enabled: debouncedQuery.length >= 2 && !selectedAsset,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
-  // Fetch current price when asset is selected
   const { data: quoteData } = useQuery({
     queryKey: ["quote", selectedAsset?.symbol],
     queryFn: async () => {
       if (!selectedAsset?.symbol) return null;
-      const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${selectedAsset.symbol}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.quotes?.[0] || null;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${selectedAsset.symbol}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.quotes?.[0] || null;
+      } catch {
+        return null;
+      }
     },
     enabled: !!selectedAsset?.symbol,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const handleSelectAsset = (result: SearchResult) => {

@@ -4,8 +4,8 @@ type: index
 status: active
 date: 2026-04-27
 updated: 2026-04-28
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, aead, backup-v2, security-hardening]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes include ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, aead, backup-v2, security-hardening, offline-resilience]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes (2026-04-28): offline-mode resilience with online-status detection, provider timeout safety, and parallel price-provider fetching; ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -156,6 +156,35 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-28 Offline Mode Resilience: Online Status Detection & Provider Timeout Safety
+
+**Frontend Online Status Detection:**
+- New hook `useOnlineStatus()` exposes browser `navigator.onLine` state with real-time `online`/`offline` event listeners
+- Portfolio components gate expensive queries and refetch intervals on connectivity: PortfolioNewsFeed, WatchlistPage, and dialog components all disable queries when offline
+- Dialogs use `retry: false` and `refetchOnWindowFocus: false` to prevent unhandled rejections and spinner storms during offline periods
+- Error messages check `navigator.onLine` and show user-friendly offline context instead of raw provider errors
+
+**Watchlist Graceful Degradation:**
+- Quotes query enabled only when online; target prices remain visible as fallback
+- Conditional refetch intervals and retry strategy based on connectivity
+- User-friendly banner showing `watchlist.quotesOffline` when quotes unavailable
+
+**Portfolio Pages Enhanced:**
+- `PortfolioOverviewPage.tsx` now renders `StalePricesBanner` alongside Stocks/Crypto/Metals pages (consistent stale-price UI across portfolio)
+- `PortfolioNewsFeed.tsx` shows `WifiOff` empty-state with i18n key `newsFeed.offline` when offline and no cached articles
+
+**Backend Provider Improvements:**
+- **Binance timeout safety**: Ticker fetch now uses `AbortSignal.timeout(8_000)` to prevent hung requests when provider unreachable
+- **Parallel provider execution**: Four provider buckets (Binance, Yahoo, Custom, Kinesis) in `fetchLivePricesDetailed()` now run in parallel via `Promise.allSettled()` instead of sequentially, reducing overall refresh latency (wall time = max instead of sum)
+- Failures in one provider no longer block others; fallback chain applied per-investment
+
+**i18n Keys (3 new):**
+- `newsFeed.offline` — News feed unavailable while offline
+- `watchlist.quotesOffline` — Live quotes unavailable. Showing target prices only.
+- `portfolio.refreshPricesOffline` — Offline context for refresh failure errors
+
+See [[docs/features/portfolio#offline-resilience-stale-price-indicators--empty-states]], [[docs/features/watchlist#offline-resilience]], [[docs/integrations/price-providers#error-handling--offline-fallback]]
 
 ### 2026-04-28 Security & Backup Hardening: v2 AEAD Encryption, Timing Attack Prevention, Install.sh Safety
 
