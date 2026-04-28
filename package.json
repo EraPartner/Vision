@@ -18,6 +18,7 @@
     "sync-nl": "node scripts/sync-nl-with-en.js",
     "generate-locales-if-not-ci": "sh -c 'if [ -z \"$CI\" ]; then node scripts/generate-locales.js; else echo \"Skipping locales generation in CI\"; fi'",
     "validate-locales": "node scripts/validate-locales.js",
+    "dist": "npm run build && cd packaging/electron && npm run dist",
     "build:dev": "bun run --filter 'vision-frontend' build:dev",
     "preview": "bun run --filter 'vision-frontend' preview",
     "lint": "bun run --filter 'vision-frontend' lint",
