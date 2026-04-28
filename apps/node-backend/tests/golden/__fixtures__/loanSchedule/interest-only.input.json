@@ -1,0 +1,8 @@
+{
+  "loan_type": "interest_only",
+  "loan_principal": 50000,
+  "loan_annual_interest_rate": 4.8,
+  "loan_term_months": 10,
+  "loan_start_date": "2026-03-05",
+  "loan_payment_day": 5
+}

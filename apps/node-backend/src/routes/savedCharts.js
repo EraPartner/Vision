@@ -75,7 +75,7 @@ router.post('/', async (req, res) => {
   }
 
   const normalizedCategoryIds = parseIntIds(categoryIds, 'categoryIds');
-  const normalizedRecipientIds = parseIntIds(recipientIds, 'recipientIds');
+  const normalizedRecipientIds = recipientIds !== undefined ? parseIntIds(recipientIds, 'recipientIds') : undefined;
   assertChartType(chartType);
   assertChartVariant(chartVariant);
   assertTimeBucket(timeBucket);

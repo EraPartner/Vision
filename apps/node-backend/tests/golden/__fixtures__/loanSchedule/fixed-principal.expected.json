@@ -1,0 +1,54 @@
+{
+  "regular_payment_amount": 1000,
+  "first_due_date": "2026-02-10",
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2026-02-10",
+      "payment_amount": 1060,
+      "principal_amount": 1000,
+      "interest_amount": 60,
+      "remaining_principal": 5000
+    },
+    {
+      "installment_number": 2,
+      "due_date": "2026-03-10",
+      "payment_amount": 1050,
+      "principal_amount": 1000,
+      "interest_amount": 50,
+      "remaining_principal": 4000
+    },
+    {
+      "installment_number": 3,
+      "due_date": "2026-04-10",
+      "payment_amount": 1040,
+      "principal_amount": 1000,
+      "interest_amount": 40,
+      "remaining_principal": 3000
+    },
+    {
+      "installment_number": 4,
+      "due_date": "2026-05-10",
+      "payment_amount": 1030,
+      "principal_amount": 1000,
+      "interest_amount": 30,
+      "remaining_principal": 2000
+    },
+    {
+      "installment_number": 5,
+      "due_date": "2026-06-10",
+      "payment_amount": 1020,
+      "principal_amount": 1000,
+      "interest_amount": 20,
+      "remaining_principal": 1000
+    },
+    {
+      "installment_number": 6,
+      "due_date": "2026-07-10",
+      "payment_amount": 1010,
+      "principal_amount": 1000,
+      "interest_amount": 10,
+      "remaining_principal": 0
+    }
+  ]
+}

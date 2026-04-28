@@ -328,7 +328,7 @@ async function processRawImportRow(txData, bankType) {
   }
 
   const dedupHash = computeHash(txData.rawData);
-  let isDup = false;
+  let isDup;
   try {
     isDup = await isRawDuplicate(bankType, txData.rawData);
   } catch {

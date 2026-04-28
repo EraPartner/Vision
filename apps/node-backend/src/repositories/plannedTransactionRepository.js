@@ -42,7 +42,6 @@ function buildPlannedTransactionWhereClause({
       rc.general ILIKE $${paramIdx} OR
       rc.detail ILIKE $${paramIdx}
     )`;
-    paramIdx++;
     params.push(sp);
   }
 

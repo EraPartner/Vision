@@ -1,0 +1,9 @@
+[
+  {
+    "recipient_id": 1,
+    "recipient_name": "Alice",
+    "total_owed": 100,
+    "total_paid": 40,
+    "split_count": 2
+  }
+]

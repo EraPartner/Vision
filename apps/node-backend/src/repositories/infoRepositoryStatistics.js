@@ -213,7 +213,7 @@ export const statisticsRepository = {
 
     if (bankAccount) { sql += ` AND t.bank_account ILIKE $${paramIdx++}`; params.push(`%${bankAccount}%`); }
     if (startDate) { sql += ` AND t.date >= $${paramIdx++}`; params.push(startDate); }
-    if (endDate) { sql += ` AND t.date <= $${paramIdx++}`; params.push(endDate); }
+    if (endDate) { sql += ` AND t.date <= $${paramIdx}`; params.push(endDate); }
 
     const result = await query(sql, params);
 

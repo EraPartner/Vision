@@ -1,0 +1,68 @@
+{
+  "hashes": [
+    {
+      "label": "rawData-passthrough",
+      "hash": "077706bb48a965ad4563ddf6eb31cb809001f7917461c1fe5cf11cc16ef669ef"
+    },
+    {
+      "label": "no-rawData-full-fields",
+      "hash": "f7a9193f417164f9be64487ddd77ad955d4932ef4922f86aa9fbf5bfb3915b05"
+    },
+    {
+      "label": "no-rawData-null-memo",
+      "hash": "d1a8c970a213469e1854105bda36f02ae231c155127e86b0a6c83ed642e7406e"
+    },
+    {
+      "label": "no-rawData-undefined-memo",
+      "hash": "d1a8c970a213469e1854105bda36f02ae231c155127e86b0a6c83ed642e7406e"
+    },
+    {
+      "label": "no-rawData-empty-memo",
+      "hash": "d1a8c970a213469e1854105bda36f02ae231c155127e86b0a6c83ed642e7406e"
+    },
+    {
+      "label": "no-rawData-negative-amount",
+      "hash": "36637964b102f7647e778155aaed235f962b8383727393b13b3754f7cb1c1102"
+    },
+    {
+      "label": "no-rawData-unicode-memo",
+      "hash": "35a37d2b2f9541c16f95bf9d0bcae1a9040a09aba514483caaf00def8a12a80c"
+    },
+    {
+      "label": "no-rawData-whitespace-memo",
+      "hash": "586277c42ed9757400ac69eb791bc93f6072ac70b431cd501a405dcbb4b6dbae"
+    },
+    {
+      "label": "no-rawData-date-midyear",
+      "hash": "ad71464c05d1abe8c467d79441cdacf3e7fc80552703fb63aa199df7fb08cbb6"
+    },
+    {
+      "label": "manual-full-fields",
+      "hash": "469f9b4292d58aa0afeecc05a223235172ffeb670d7e9d47a65be82c2897d17b"
+    },
+    {
+      "label": "manual-lowercase-inputs-upper-normalized",
+      "hash": "469f9b4292d58aa0afeecc05a223235172ffeb670d7e9d47a65be82c2897d17b"
+    },
+    {
+      "label": "manual-null-memo",
+      "hash": "8a4118ce491e43b950372433287c6727a2c3b23c429710952e302f1abfd18abc"
+    },
+    {
+      "label": "manual-undefined-memo-and-account",
+      "hash": "a1d67df0715a5ba1e9703cae16030b0b2cb271d7d1a436cda58de5b04a1093c3"
+    },
+    {
+      "label": "manual-empty-strings",
+      "hash": "a1d67df0715a5ba1e9703cae16030b0b2cb271d7d1a436cda58de5b04a1093c3"
+    },
+    {
+      "label": "manual-unicode-memo",
+      "hash": "36053da04c0a2db2d0c6e66c1e9c765515f7a6a1d967bfaf4599d45a36e3bfe5"
+    },
+    {
+      "label": "manual-negative-amount",
+      "hash": "62cb8fc20a09a5d5457a27993cda78d2189f0616a5b51fb3a6ba25f1a773e0cb"
+    }
+  ]
+}

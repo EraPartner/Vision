@@ -1,0 +1,86 @@
+{
+  "regular_payment_amount": 200,
+  "first_due_date": "2026-03-05",
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2026-03-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 2,
+      "due_date": "2026-04-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 3,
+      "due_date": "2026-05-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 4,
+      "due_date": "2026-06-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 5,
+      "due_date": "2026-07-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 6,
+      "due_date": "2026-08-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 7,
+      "due_date": "2026-09-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 8,
+      "due_date": "2026-10-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 9,
+      "due_date": "2026-11-05",
+      "payment_amount": 200,
+      "principal_amount": 0,
+      "interest_amount": 200,
+      "remaining_principal": 50000
+    },
+    {
+      "installment_number": 10,
+      "due_date": "2026-12-05",
+      "payment_amount": 50200,
+      "principal_amount": 50000,
+      "interest_amount": 200,
+      "remaining_principal": 0
+    }
+  ]
+}

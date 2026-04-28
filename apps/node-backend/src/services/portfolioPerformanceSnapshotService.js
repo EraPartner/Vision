@@ -136,11 +136,11 @@ async function buildSummary(inv, txnsByInvestment, targetCurrency) {
   const totalFees = feeTxnAmount + feesFieldAmount;
   const totalTaxes = taxTxnAmount + taxesFieldAmount;
 
-  let currentValue = 0;
-  let totalInvested = 0;
+  let currentValue;
+  let totalInvested;
   let realizedGain = 0;
   let unrealizedGain = 0;
-  let totalBuyCost = 0;
+  let totalBuyCost;
 
   if (isUnitBased) {
     const cb = calculateCostBasis(txns);

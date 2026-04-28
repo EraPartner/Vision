@@ -44,7 +44,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
             relax_column_count: true,
         });
     } catch (parseErr) {
-        throw new Error(`CSV parse error: ${parseErr.message}`);
+        throw new Error(`CSV parse error: ${parseErr.message}`, { cause: parseErr });
     }
 
     const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0, bank_account_errors: 0 };
@@ -146,7 +146,7 @@ export async function importCategoriesCSV(filePath, { separator = ',', encoding 
             relax_column_count: true,
         });
     } catch (parseErr) {
-        throw new Error(`CSV parse error: ${parseErr.message}`);
+        throw new Error(`CSV parse error: ${parseErr.message}`, { cause: parseErr });
     }
 
     const results = { total_processed: records.length, imported: 0, skipped: 0, errors: 0 };

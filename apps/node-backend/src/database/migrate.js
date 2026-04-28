@@ -244,7 +244,8 @@ export async function runMigrations(options = {}) {
       'alembic migrate failed'
     )
     throw new Error(
-      `Alembic migration failed (exit ${error.code ?? 'unknown'}): ${error.message}`
+      `Alembic migration failed (exit ${error.code ?? 'unknown'}): ${error.message}`,
+      { cause: error }
     )
   }
 }

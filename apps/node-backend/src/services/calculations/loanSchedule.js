@@ -84,7 +84,7 @@ export function generateLoanRepaymentSchedule(config) {
   let remaining = principal;
   const schedule = [];
 
-  let regularPayment = 0;
+  let regularPayment;
   if (loanType === 'amortizing') {
     if (Math.abs(monthlyRate) < EPSILON) {
       regularPayment = principal / termMonths;
@@ -104,8 +104,8 @@ export function generateLoanRepaymentSchedule(config) {
   for (let i = 1; i <= termMonths; i++) {
     const dueDate = addMonthsAtDay(startDate, i - 1, paymentDay);
     const interestAmount = roundMoney(remaining * monthlyRate);
-    let principalAmount = 0;
-    let paymentAmount = 0;
+    let principalAmount;
+    let paymentAmount;
 
     if (loanType === 'amortizing') {
       principalAmount = roundMoney(regularPayment - interestAmount);

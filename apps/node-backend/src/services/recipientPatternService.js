@@ -228,7 +228,7 @@ export async function previewPatternMatches(patternRow) {
   try {
     re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
   } catch (err) {
-    throw new Error(`Pattern compilation failed: ${err.message}`);
+    throw new Error(`Pattern compilation failed: ${err.message}`, { cause: err });
   }
 
   const matching = recipients.filter((r) => re.test(r.name.toUpperCase()));

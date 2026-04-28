@@ -1,0 +1,8 @@
+{
+  "splits": [
+    {"amount": 30},
+    {"amount": 20}
+  ],
+  "transactionTotal": 100,
+  "currentSplitTotal": 40
+}

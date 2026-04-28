@@ -23,7 +23,7 @@ export const watchlistRepository = {
     let sql = `SELECT * FROM watchlist ${where}`;
     let idx = nextParam;
 
-    sql += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    sql += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -38,7 +38,7 @@ export const watchlistRepository = {
       FROM watchlist w
       ${where.replace(/\basset_class\b/g, 'w.asset_class')}
       ORDER BY w.created_at DESC
-      LIMIT $${idx++} OFFSET $${idx++}
+      LIMIT $${idx} OFFSET $${idx + 1}
     `;
     const queryParams = [...params, limit, offset];
     const result = await query(sql, queryParams);

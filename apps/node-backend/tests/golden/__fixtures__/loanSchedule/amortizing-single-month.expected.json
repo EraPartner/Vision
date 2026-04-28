@@ -1,0 +1,14 @@
+{
+  "regular_payment_amount": 1004.17,
+  "first_due_date": "2026-06-15",
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2026-06-15",
+      "payment_amount": 1004.17,
+      "principal_amount": 1000,
+      "interest_amount": 4.17,
+      "remaining_principal": 0
+    }
+  ]
+}

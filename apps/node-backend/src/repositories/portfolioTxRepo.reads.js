@@ -10,7 +10,7 @@ export async function getAll({ investmentId = null, type = null, limit = 200, of
   let sql = `SELECT * FROM portfolio_transactions ${where}`;
   let idx = nextParam;
 
-  sql += ` ORDER BY date DESC, id DESC LIMIT $${idx++} OFFSET $${idx++}`;
+  sql += ` ORDER BY date DESC, id DESC LIMIT $${idx} OFFSET $${idx + 1}`;
   params.push(limit, offset);
 
   const result = await query(sql, params);
@@ -26,7 +26,7 @@ export async function getAllWithCount({ investmentId = null, type = null, limit 
     FROM portfolio_transactions pt
     ${where.replace(/\binvestment_id\b/g, 'pt.investment_id').replace(/\btype\b/g, 'pt.type')}
     ORDER BY pt.date DESC, pt.id DESC
-    LIMIT $${idx++} OFFSET $${idx++}
+    LIMIT $${idx} OFFSET $${idx + 1}
   `;
 
   const queryParams = [...params, limit, offset];
@@ -87,7 +87,7 @@ export async function getAllByInvestmentIds({
     params.push(safeLimit);
   }
 
-  sql += ` OFFSET $${idx++}`;
+  sql += ` OFFSET $${idx}`;
   params.push(safeOffset);
 
   const result = await query(sql, params);
@@ -111,7 +111,7 @@ export async function getCount({ investmentId = null, investmentIds = null, type
       params.push(normalizedIds);
     }
   }
-  if (type) { sql += ` AND type = $${idx++}`; params.push(type); }
+  if (type) { sql += ` AND type = $${idx}`; params.push(type); }
 
   const result = await query(sql, params);
   return parseInt(result.rows[0].count, 10);

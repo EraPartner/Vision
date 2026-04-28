@@ -1,0 +1,8 @@
+{
+  "loan_type": "amortizing",
+  "loan_principal": 6000,
+  "loan_annual_interest_rate": 0,
+  "loan_term_months": 12,
+  "loan_start_date": "2026-01-01",
+  "loan_payment_day": 1
+}

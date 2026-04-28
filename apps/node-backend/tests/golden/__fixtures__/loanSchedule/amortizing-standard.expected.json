@@ -1,0 +1,102 @@
+{
+  "regular_payment_amount": 1032.8,
+  "first_due_date": "2026-01-15",
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2026-01-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 972.8,
+      "interest_amount": 60,
+      "remaining_principal": 11027.2
+    },
+    {
+      "installment_number": 2,
+      "due_date": "2026-02-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 977.66,
+      "interest_amount": 55.14,
+      "remaining_principal": 10049.54
+    },
+    {
+      "installment_number": 3,
+      "due_date": "2026-03-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 982.55,
+      "interest_amount": 50.25,
+      "remaining_principal": 9066.99
+    },
+    {
+      "installment_number": 4,
+      "due_date": "2026-04-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 987.47,
+      "interest_amount": 45.33,
+      "remaining_principal": 8079.52
+    },
+    {
+      "installment_number": 5,
+      "due_date": "2026-05-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 992.4,
+      "interest_amount": 40.4,
+      "remaining_principal": 7087.12
+    },
+    {
+      "installment_number": 6,
+      "due_date": "2026-06-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 997.36,
+      "interest_amount": 35.44,
+      "remaining_principal": 6089.76
+    },
+    {
+      "installment_number": 7,
+      "due_date": "2026-07-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 1002.35,
+      "interest_amount": 30.45,
+      "remaining_principal": 5087.41
+    },
+    {
+      "installment_number": 8,
+      "due_date": "2026-08-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 1007.36,
+      "interest_amount": 25.44,
+      "remaining_principal": 4080.05
+    },
+    {
+      "installment_number": 9,
+      "due_date": "2026-09-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 1012.4,
+      "interest_amount": 20.4,
+      "remaining_principal": 3067.65
+    },
+    {
+      "installment_number": 10,
+      "due_date": "2026-10-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 1017.46,
+      "interest_amount": 15.34,
+      "remaining_principal": 2050.19
+    },
+    {
+      "installment_number": 11,
+      "due_date": "2026-11-15",
+      "payment_amount": 1032.8,
+      "principal_amount": 1022.55,
+      "interest_amount": 10.25,
+      "remaining_principal": 1027.64
+    },
+    {
+      "installment_number": 12,
+      "due_date": "2026-12-15",
+      "payment_amount": 1032.78,
+      "principal_amount": 1027.64,
+      "interest_amount": 5.14,
+      "remaining_principal": 0
+    }
+  ]
+}

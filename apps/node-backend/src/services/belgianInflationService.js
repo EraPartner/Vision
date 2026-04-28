@@ -105,7 +105,7 @@ const MONTH_NAME_TO_NUMBER = {
   september: 9, sep: 9, sept: 9,
   october: 10, oct: 10, oktober: 10, octobre: 10,
   november: 11, nov: 11,
-  december: 12, dec: 12, december: 12, decembre: 12, décembre: 12,
+  december: 12, dec: 12, decembre: 12, décembre: 12,
 };
 
 function parseMonthName(value) {

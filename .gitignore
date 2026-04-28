@@ -55,3 +55,4 @@ opencode.json
 *.json
 !packaging/electron/package-lock.json
 !packages/*/package.json
+!apps/node-backend/tests/golden/__fixtures__/**/*.json

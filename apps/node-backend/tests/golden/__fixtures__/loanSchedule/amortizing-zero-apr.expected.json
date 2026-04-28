@@ -1,0 +1,102 @@
+{
+  "regular_payment_amount": 500,
+  "first_due_date": "2026-01-01",
+  "schedule": [
+    {
+      "installment_number": 1,
+      "due_date": "2026-01-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 5500
+    },
+    {
+      "installment_number": 2,
+      "due_date": "2026-02-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 5000
+    },
+    {
+      "installment_number": 3,
+      "due_date": "2026-03-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 4500
+    },
+    {
+      "installment_number": 4,
+      "due_date": "2026-04-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 4000
+    },
+    {
+      "installment_number": 5,
+      "due_date": "2026-05-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 3500
+    },
+    {
+      "installment_number": 6,
+      "due_date": "2026-06-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 3000
+    },
+    {
+      "installment_number": 7,
+      "due_date": "2026-07-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 2500
+    },
+    {
+      "installment_number": 8,
+      "due_date": "2026-08-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 2000
+    },
+    {
+      "installment_number": 9,
+      "due_date": "2026-09-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 1500
+    },
+    {
+      "installment_number": 10,
+      "due_date": "2026-10-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 1000
+    },
+    {
+      "installment_number": 11,
+      "due_date": "2026-11-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 500
+    },
+    {
+      "installment_number": 12,
+      "due_date": "2026-12-01",
+      "payment_amount": 500,
+      "principal_amount": 500,
+      "interest_amount": 0,
+      "remaining_principal": 0
+    }
+  ]
+}

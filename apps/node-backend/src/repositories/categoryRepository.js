@@ -30,7 +30,7 @@ export const categoryRepository = {
       params.push(sp);
     }
 
-    sql += ` ORDER BY general, detail LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+    sql += ` ORDER BY general, detail LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -48,7 +48,6 @@ export const categoryRepository = {
     if (search) {
       const sp = `%${search}%`;
       sql += ` AND (general ILIKE $${paramIdx} OR detail ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`;
-      paramIdx++;
       params.push(sp);
     }
 

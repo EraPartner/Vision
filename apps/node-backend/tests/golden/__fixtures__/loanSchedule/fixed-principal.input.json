@@ -1,0 +1,8 @@
+{
+  "loan_type": "fixed_principal",
+  "loan_principal": 6000,
+  "loan_annual_interest_rate": 12,
+  "loan_term_months": 6,
+  "loan_start_date": "2026-02-10",
+  "loan_payment_day": 10
+}

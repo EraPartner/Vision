@@ -98,6 +98,11 @@ describe('Saved Charts Routes', () => {
         name: 'Main',
         chartType: 'line',
         categoryIds: [1, 2],
+        recipientIds: undefined,
+        chartVariant: 'default',
+        timeBucket: 'monthly',
+        dateRangeStart: undefined,
+        dateRangeEnd: undefined,
       });
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({ ok: true, data: { id: 4, name: 'Main', chart_type: 'line', category_ids: [1, 2] } });

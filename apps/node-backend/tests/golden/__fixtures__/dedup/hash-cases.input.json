@@ -1,0 +1,169 @@
+{
+  "cases": [
+    {
+      "kind": "transaction",
+      "label": "rawData-passthrough",
+      "args": {
+        "rawData": "bank-row|2025-03-15|100.00|ACME CORP|Invoice 42",
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP",
+        "memo": "Invoice 42"
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-full-fields",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP",
+        "memo": "Invoice 42"
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-null-memo",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP",
+        "memo": null
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-undefined-memo",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP"
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-empty-memo",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP",
+        "memo": ""
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-negative-amount",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "-42.50",
+        "recipient": "ACME CORP",
+        "memo": "Refund"
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-unicode-memo",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "19.99",
+        "recipient": "ÄCME CÖRP",
+        "memo": "Café — invoice #7"
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-whitespace-memo",
+      "args": {
+        "date": "2025-03-15T00:00:00.000Z",
+        "amount": "100.00",
+        "recipient": "ACME CORP",
+        "memo": "  spaced  memo  "
+      }
+    },
+    {
+      "kind": "transaction",
+      "label": "no-rawData-date-midyear",
+      "args": {
+        "date": "2025-07-04T00:00:00.000Z",
+        "amount": "250.00",
+        "recipient": "WIDGETS LTD",
+        "memo": "Q3 supplies"
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-full-fields",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "100.00",
+        "recipientId": 42,
+        "memo": "Invoice 42",
+        "bankAccount": "BE68 5390 0754 7034"
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-lowercase-inputs-upper-normalized",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "100.00",
+        "recipientId": 42,
+        "memo": "invoice 42",
+        "bankAccount": "be68 5390 0754 7034"
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-null-memo",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "100.00",
+        "recipientId": 42,
+        "memo": null,
+        "bankAccount": "BE68 5390 0754 7034"
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-undefined-memo-and-account",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "100.00",
+        "recipientId": 42
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-empty-strings",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "100.00",
+        "recipientId": 42,
+        "memo": "",
+        "bankAccount": ""
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-unicode-memo",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "19.99",
+        "recipientId": 7,
+        "memo": "Café — invoice #7",
+        "bankAccount": "BE68 5390 0754 7034"
+      }
+    },
+    {
+      "kind": "manual",
+      "label": "manual-negative-amount",
+      "args": {
+        "date": "2025-03-15",
+        "amount": "-42.50",
+        "recipientId": 42,
+        "memo": "Refund",
+        "bankAccount": "BE68 5390 0754 7034"
+      }
+    }
+  ]
+}

@@ -51,7 +51,7 @@ export async function stageBatch({ batchId, filePath, adapterName, customConfig,
   if (onProgress) onProgress({ phase: 'staging', current: 0, total });
 
   // Bulk insert in chunks using multi-VALUES statements.
-  let inserted = 0;
+  let inserted;
   for (let start = 0; start < total; start += STAGE_INSERT_CHUNK) {
     const end = Math.min(start + STAGE_INSERT_CHUNK, total);
     const slice = rows.slice(start, end);

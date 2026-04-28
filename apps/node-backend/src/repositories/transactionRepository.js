@@ -149,7 +149,7 @@ export const transactionRepository = {
     if (recipientId != null) { sql += ` AND t.recipient_id = $${paramIdx++}`; params.push(recipientId); }
     if (recipientName) { sql += ` AND r.name ILIKE $${paramIdx++}`; params.push(`%${recipientName}%`); }
 
-    sql += ` ORDER BY t.date DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+    sql += ` ORDER BY t.date DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -223,8 +223,8 @@ export const transactionRepository = {
       params.push(`%${recipientName}%`);
     }
 
-    const limitParam = paramIdx++;
-    const offsetParam = paramIdx++;
+    const limitParam = paramIdx;
+    const offsetParam = paramIdx + 1;
     params.push(limit, offset);
 
     const sql = `

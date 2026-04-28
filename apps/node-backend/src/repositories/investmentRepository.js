@@ -337,7 +337,7 @@ export const investmentRepository = {
       params.push(assetClass);
     }
 
-    sql += ` ORDER BY name LIMIT $${idx++} OFFSET $${idx++}`;
+    sql += ` ORDER BY name LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -350,7 +350,7 @@ export const investmentRepository = {
     let idx = 1;
 
     if (active) sql += ` AND is_active = true`;
-    if (assetClass) { sql += ` AND asset_class = $${idx++}`; params.push(assetClass); }
+    if (assetClass) { sql += ` AND asset_class = $${idx}`; params.push(assetClass); }
 
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);
@@ -371,7 +371,7 @@ export const investmentRepository = {
       params.push(assetClass);
     }
 
-    sql += ` ORDER BY i.name LIMIT $${idx++} OFFSET $${idx++}`;
+    sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);

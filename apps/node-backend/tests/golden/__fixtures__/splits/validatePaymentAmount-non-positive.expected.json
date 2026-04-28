@@ -1,0 +1,4 @@
+{
+  "ok": false,
+  "error": "Payment amount must be a positive number"
+}
