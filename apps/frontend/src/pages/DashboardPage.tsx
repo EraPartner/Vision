@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags } from "lucide-react";
+import { ArrowUpRight, LayoutDashboard, Receipt, TrendingDown, Tags, AlertTriangle } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFilteredDashboardStats } from "@/hooks/useFilteredDashboardStats";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -379,11 +379,17 @@ export default function DashboardPage() {
         );
     }
 
-    if (statsError || transactionsError || recentFilteredError) {
-        const errorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || 'Unknown error';
+    // Show an inline banner for failed queries instead of replacing the whole
+    // page. Cached data from any successful query still renders so the user
+    // sees something useful when the host is offline.
+    const partialError = statsError || transactionsError || recentFilteredError;
+    const partialErrorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || '';
+    const hasAnyData = Boolean(statsData) || (transactionsData?.items?.length ?? 0) > 0;
+
+    if (partialError && !hasAnyData) {
         return (
             <div className="space-y-8 animate-in">
-                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(errorMessage) })} icon={LayoutDashboard} />
+                <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.errorLoading', { msg: String(partialErrorMessage) })} icon={LayoutDashboard} />
             </div>
         );
     }
@@ -415,6 +421,15 @@ export default function DashboardPage() {
                     />
                 }
             />
+
+            {partialError && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+                    <div className="text-foreground/80">
+                        {t('dashboard.partialDataWarning', { msg: String(partialErrorMessage) })}
+                    </div>
+                </div>
+            )}
 
             {/* Stats — bento: featured net-balance tile + secondary metrics */}
             {isVisible('statCards') && (

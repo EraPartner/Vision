@@ -15,7 +15,7 @@ export const EXCHANGE_RATES_QUERY_KEY_PREFIX = 'exchange-rates';
 export function useCurrencyConverter(targetCurrency: string) {
   const { data: exchangeData, isLoading, error } = useQuery({
     queryKey: [EXCHANGE_RATES_QUERY_KEY_PREFIX, targetCurrency],
-    queryFn: () => apiClient.getExchangeRates(),
+    queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
     staleTime: 60_000,
   });
 

@@ -13,6 +13,7 @@ import { DashboardSettingsDialog } from "@/components/settings/DashboardSettings
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
+import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
 import { UpdateNotification } from "@/components/notifications/UpdateNotification";
 import { OnboardingWizard, useOnboarding } from "@/components/onboarding/OnboardingWizard";
 
@@ -137,6 +138,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         </Button>
                     </header>
                     <main className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)]">
+                        <FxStatusBanner />
                         <UpcomingPaymentsNotification />
                         {children}
                     </main>

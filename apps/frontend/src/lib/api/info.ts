@@ -166,10 +166,14 @@ export interface ExchangeRatesData {
     total_rates: number;
     rates: ExchangeRate[];
     fallback_rates: Record<string, number>;
+    source?: 'database' | 'fallback';
+    is_stale?: boolean;
+    last_fetched_at?: string | null;
 }
 
-export function getExchangeRates(): Promise<ExchangeRatesData> {
-    return apiRequest('/api/info/exchange-rates');
+export function getExchangeRates(options: { dbOnly?: boolean } = {}): Promise<ExchangeRatesData> {
+    const qs = options.dbOnly ? '?db_only=true' : '';
+    return apiRequest(`/api/info/exchange-rates${qs}`);
 }
 
 export function refreshExchangeRates(): Promise<{ message: string }> {

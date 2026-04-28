@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Database, Globe, Loader2 } from "lucide-react";
+import { RefreshCw, Database, Globe, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import type { ExchangeRatesData } from "@/lib/api/info";
@@ -21,7 +21,7 @@ export default function ExchangeRatesPage() {
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
         queryKey: ["exchangeRates"],
-        queryFn: () => apiClient.getExchangeRates(),
+        queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
     });
 
@@ -111,6 +111,21 @@ export default function ExchangeRatesPage() {
                     </Button>
                 )}
             />
+
+            {(data?.is_stale || data?.source === 'fallback') && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
+                    <div className="text-foreground/80">
+                        {data?.source === 'fallback'
+                            ? t('exchangeRates.fallbackInUse')
+                            : t('exchangeRates.staleWarning', {
+                                date: data?.last_fetched_at
+                                    ? formatDateTimeStringWithAppSettings(data.last_fetched_at, appSettings.dateFormat, locale)
+                                    : '—',
+                            })}
+                    </div>
+                </div>
+            )}
 
             {/* Summary cards */}
             <div className="grid gap-4 sm:grid-cols-3">

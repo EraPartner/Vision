@@ -32,6 +32,8 @@ router.get(
   '/exchange-rates',
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: 'exchange-rates' }),
   async (req, res) => {
+    const dbOnly = isTruthyQueryParam(req.query.db_only);
+
     const result = await dbQuery(`
       SELECT currency_code, rate_to_eur, rate_date, fetched_at
       FROM exchange_rates
@@ -48,7 +50,14 @@ router.get(
 
     const today = getCurrentDateString();
     const storedDate = rates.length > 0 ? rates[0].rate_date : null;
-    if (!storedDate || storedDate < today) {
+    const isStale = !storedDate || storedDate < today;
+    const lastFetchedAt = rates.reduce((latest, row) => {
+      const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;
+      return Number.isFinite(ts) && ts > latest ? ts : latest;
+    }, 0);
+    const source = rates.length > 0 ? 'database' : 'fallback';
+
+    if (isStale && !dbOnly) {
       clearMemoryCache();
       warmCache().catch((err) =>
         logger.warn('Background exchange rate refresh failed', { error: err.message })
@@ -59,6 +68,9 @@ router.get(
       total_rates: rates.length,
       rates,
       fallback_rates: FALLBACK_RATES || {},
+      source,
+      is_stale: isStale,
+      last_fetched_at: lastFetchedAt > 0 ? new Date(lastFetchedAt).toISOString() : null,
     });
   },
 );
@@ -75,7 +87,14 @@ router.get(
   async (req, res) => {
     const startMonth = getMonthParam(req.query.start_month);
     const endMonth = getMonthParam(req.query.end_month);
-    const dbOnly = isTruthyQueryParam(req.query.db_only);
+    // Default to DB-only so the request never blocks on a slow/unreachable
+    // Statbel/Eurostat fetch when the host is offline. Background refresh is
+    // scheduled so cached data is updated whenever connectivity returns.
+    // Clients can opt in to a synchronous live fetch with ?db_only=false.
+    const rawDbOnly = req.query.db_only;
+    const dbOnly = rawDbOnly == null || rawDbOnly === ''
+      ? true
+      : isTruthyQueryParam(rawDbOnly);
     const result = await getInflationRates({
       startMonth,
       endMonth,

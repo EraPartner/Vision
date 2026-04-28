@@ -244,7 +244,7 @@ export async function refreshPrices(req, res) {
       const { price, source } = priceData || {};
       if (price != null && !isNaN(price)) {
         priceSources[investmentId] = source || 'live';
-        if (source === 'cached') return 0;
+        if (source === 'cached' || source === 'historical_fallback') return 0;
         await investmentRepository.updatePrice(parseInt(investmentId, 10), {
           current_price: price,
           price_updated_at: new Date().toISOString(),
