@@ -9,14 +9,18 @@ function readStoredWorkspace(): Workspace {
   try {
     const v = sessionStorage.getItem(WORKSPACE_KEY);
     if (v === "portfolio" || v === "budgeting") return v;
-  } catch {}
+  } catch {
+    // sessionStorage unavailable (private mode, SSR) — fall through to default
+  }
   return "budgeting";
 }
 
 function writeWorkspace(ws: Workspace) {
   try {
     sessionStorage.setItem(WORKSPACE_KEY, ws);
-  } catch {}
+  } catch {
+    // sessionStorage unavailable — workspace persistence disabled this session
+  }
 }
 
 /**

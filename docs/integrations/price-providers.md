@@ -4,6 +4,7 @@ type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
 last_modified: 2026-04-28
+updated: 2026-04-28
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -164,6 +165,21 @@ This makes graceful offline degradation visible without blocking the user.
 - Improves overall refresh latency, especially when individual providers are slow or unresponsive
 - Failures in one provider (e.g., timeout) no longer block execution of other providers
 - Fallback chain is applied per-investment based on individual provider success/failure
+
+**Custom Provider Health Recording (2026-04-28):**
+- Custom provider now records success/error health metrics via `recordProviderSuccess('custom')` and `recordProviderError('custom', err)` to maintain consistency with Yahoo, Binance, and Kinesis health tracking
+- Previously custom provider errors were silently logged without health recording
+
+**Binance Symbol Coercion Fix (2026-04-28):**
+- Binance historical symbol coercion now correctly appends `USDT` only when symbol lacks a known quote suffix
+- Previously: `symbol.replace(/EUR$/, 'USDT')` was a no-op on non-EUR symbols (e.g., `BTCUSDT` remained unchanged, no USDT appended)
+- Now: Logic checks for existing `EUR`, `USDT`, `USDC`, `BUSD`, `BTC`, `ETH` suffixes before appending `USDT`, preventing duplicate suffixes
+- **Binance Ticker Validation (2026-04-28):** Parsed ticker prices now validate `Number.isFinite(p) && p > 0` before populating priceMap, preventing NaN/zero prices from being stored as valid quotes
+
+**Price Cache Eviction (2026-04-28):**
+- In-memory price cache now runs scheduled `sweepExpiredCacheEntries()` every 5 minutes (with `unref()` for graceful shutdown) to prevent unbounded Map growth
+- Previously relied on lazy-delete only; large portfolios over extended uptime could accumulate orphaned cache entries
+- Entries expire based on provider-specific TTLs (typically 60 minutes for live quotes)
 
 Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 

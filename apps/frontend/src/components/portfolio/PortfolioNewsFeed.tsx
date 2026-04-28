@@ -76,8 +76,12 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
               </div>
             )}
 
-            {articles.map((article, idx) => (
-              <NewsItem key={`${article.title}-${idx}`} article={article} locale={language} />
+            {articles.map((article) => (
+              <NewsItem
+                key={article.link || `${article.publishedAt ?? ""}-${article.title}`}
+                article={article}
+                locale={language}
+              />
             ))}
           </div>
         </ScrollArea>

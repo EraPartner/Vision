@@ -4,6 +4,7 @@ type: feature
 status: active
 date: 2026-04-17
 last_modified: 2026-04-28
+updated: 2026-04-28
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
 aliases: [watch list, price alerts, investment tracking]
@@ -120,6 +121,18 @@ The watchlist page gracefully degrades when offline:
 - **Target price fallback**: Page continues to show target prices and allow editing even when live quotes are unavailable
 
 Code links: [[apps/frontend/src/pages/portfolio/WatchlistPage.tsx]], [[apps/frontend/src/hooks/useOnlineStatus.ts]]
+
+## i18n Fixes (2026-04-28)
+
+**Dutch Localization Cleanup:**
+- Fixed corrupted `watchlist.empty` i18n key in Dutch (`nl.json`): previously contained ~80 escaped backslashes instead of actual newline character (`\n`)
+  - Fixed in: `i18n/source/nl.json`, `apps/frontend/src/locales/nl.ts`, `packaging/electron/i18n/nl.json`
+- Translated `portfolio.refreshPricesFailedTitle` from English "Refresh prices failed" to Dutch "Bijwerken van koersen mislukt"
+- Translated `portfolio.recordTxnFailedTitle` from English "Record transaction failed" to Dutch "Registreren van portfoliotransactie mislukt"
+
+**Known Dutch Translation Gap:**
+- Multiple `*FailedTitle` keys remain untranslated in Dutch: `categories.FailedTitle`, `recipients.FailedTitle`, `transactions.FailedTitle`, and additional portfolio error keys
+- These keys currently display English text in Dutch locale; flagged as follow-up work to complete Dutch coverage
 
 ## Adding from Watchlist
 

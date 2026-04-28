@@ -4,6 +4,7 @@ type: index
 status: active
 date: 2026-04-27
 updated: 2026-04-28
+last_modified: 2026-04-28
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, aead, backup-v2, security-hardening, offline-resilience]
 description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes (2026-04-28): offline-mode resilience with online-status detection, provider timeout safety, and parallel price-provider fetching; ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -156,6 +157,29 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-28 Bug-Hunt Sweep: Price Validation, Provider Health, i18n Fixes
+
+**Frontend Guard Rails:**
+- **WatchlistChartDialog**: Validates `target_price` and chart domain against NaN/zero; falls back to `[0, 1]` when no valid prices exist
+- **AddToWatchlistDialog**: Guards `quoteData.price` with `Number.isFinite() && > 0` before `.toFixed()` to prevent "undefined" interpolation and divide-by-zero in percentage calculations
+- **PortfolioOverviewPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce inside legend `.map()` for large portfolios
+- **PortfolioNewsFeed**: Replaced index-based React key with `article.link` (fallback `publishedAt+title`) to fix reconciliation on refetch reorder
+
+**Backend Price Provider Fixes:**
+- **Custom provider health**: Now records success/error metrics (was silently logging)
+- **Binance symbol coercion**: Fixed `symbol.replace(/EUR$/, 'USDT')` no-op on non-EUR symbols; now appends `USDT` only when symbol lacks known suffix
+- **Binance ticker validation**: Validates `Number.isFinite(p) && p > 0` before populating priceMap
+- **Price cache eviction**: Scheduled `sweepExpiredCacheEntries()` every 5 min (unref'd) prevents unbounded Map growth from lazy-delete only
+
+**i18n Dutch Fixes:**
+- Fixed corrupted `watchlist.empty`: contained ~80 escaped backslashes instead of `\n`
+- Added missing Dutch translations: `portfolio.refreshPricesFailedTitle` → "Bijwerken van koersen mislukt", `portfolio.recordTxnFailedTitle` → "Registreren van portfoliotransactie mislukt"
+- Flagged remaining untranslated `*FailedTitle` keys (categories/recipients/transactions/portfolio) as follow-up work
+
+**Verification:** `bun run validate-locales` passed; `npx vitest run` 1333 passed; `bun run build` clean; `bunx tsc --noEmit` clean.
+
+See [[docs/features/portfolio#price-guard-rails-2026-04-28-bug-fixes]], [[docs/features/watchlist#i18n-fixes-2026-04-28]], [[docs/integrations/price-providers#custom-provider-health-recording-2026-04-28]]
 
 ### 2026-04-28 Offline Mode Resilience: Online Status Detection & Provider Timeout Safety
 

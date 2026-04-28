@@ -113,10 +113,14 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
 
   if (!item) return null;
 
-  const targetPrice = Number(item.target_price);
+  const rawTargetPrice = Number(item.target_price);
+  const targetPrice = Number.isFinite(rawTargetPrice) ? rawTargetPrice : 0;
+  const hasValidTarget = Number.isFinite(rawTargetPrice) && rawTargetPrice > 0;
   const currentPrice = quoteData?.price ?? null;
-  const isBelowTarget = currentPrice != null && currentPrice <= targetPrice;
-  const priceDiff = currentPrice != null ? ((currentPrice - targetPrice) / targetPrice) * 100 : null;
+  const isBelowTarget = currentPrice != null && hasValidTarget && currentPrice <= targetPrice;
+  const priceDiff = currentPrice != null && hasValidTarget
+    ? ((currentPrice - targetPrice) / targetPrice) * 100
+    : null;
   const formatDisplayCurrency = (value: number, currency: string) =>
     new Intl.NumberFormat(locale, {
       style: "currency",
@@ -133,10 +137,13 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
   })) || [];
 
   // Find min/max for chart domain
-  const prices = formattedData.map((d) => d.price).filter(Boolean);
-  const allPrices = [...prices, targetPrice];
-  const minPrice = Math.min(...allPrices) * 0.98;
-  const maxPrice = Math.max(...allPrices) * 1.02;
+  const prices = formattedData
+    .map((d) => d.price)
+    .filter((p): p is number => Number.isFinite(p) && p > 0);
+  const allPrices = hasValidTarget ? [...prices, targetPrice] : prices;
+  const hasChartDomain = allPrices.length > 0;
+  const minPrice = hasChartDomain ? Math.min(...allPrices) * 0.98 : 0;
+  const maxPrice = hasChartDomain ? Math.max(...allPrices) * 1.02 : 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,7 +175,7 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                     step="0.01"
                     value={newTargetPrice}
                     onChange={(e) => setNewTargetPrice(e.target.value)}
-                    placeholder={item.target_price.toString()}
+                    placeholder={hasValidTarget ? targetPrice.toString() : "0"}
                     className="h-8"
                   />
                   <Button size="sm" onClick={handleUpdateTargetPrice}>
@@ -198,13 +205,15 @@ export function WatchlistChartDialog({ item, open, onOpenChange }: WatchlistChar
                   <p className="text-2xl font-bold">
                     {formatDisplayCurrency(currentPrice, item.currency)}
                   </p>
+                  {priceDiff != null && (
                     <div className={cn(
                       "flex items-center gap-1 text-sm mt-1",
-                      priceDiff! > 0 ? "text-red-500" : "text-green-500"
+                      priceDiff > 0 ? "text-red-500" : "text-green-500"
                     )}>
-                    {priceDiff! > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                    {Math.abs(priceDiff!).toFixed(2)}% {priceDiff! > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff!).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff!).toFixed(0) })}
-                  </div>
+                      {priceDiff > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                      {Math.abs(priceDiff).toFixed(2)}% {priceDiff > 0 ? t('watchlistChart.aboveTarget', { n: Math.abs(priceDiff).toFixed(0) }) : t('watchlistChart.belowTarget', { n: Math.abs(priceDiff).toFixed(0) })}
+                    </div>
+                  )}
                 </>
               ) : (
                 <Skeleton className="h-8 w-24" />

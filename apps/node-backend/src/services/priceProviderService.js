@@ -133,8 +133,10 @@ export async function fetchLivePricesDetailed(investments, { cachedPricesByInves
             cacheSet(`custom:${inv.id}`, { price: data.price, source: 'live' });
           }
         }
+        recordProviderSuccess('custom');
       } catch (err) {
         logger.error('Custom price fetch failed', { error: err.message });
+        recordProviderError('custom', err);
       }
     })());
   }
@@ -295,7 +297,9 @@ export async function fetchHistoricalPrices(investment, { fromMs, toMs, dbOnly =
       if (daysDiff > 0) days = Math.min(daysDiff, 365);
     }
 
-    const binanceSymbol = symbol.endsWith('EUR') ? symbol : symbol.replace(/EUR$/, 'USDT');
+    const KNOWN_QUOTE_SUFFIXES = ['EUR', 'USDT', 'USDC', 'BUSD', 'BTC', 'ETH'];
+    const hasKnownQuote = KNOWN_QUOTE_SUFFIXES.some((suffix) => symbol.endsWith(suffix));
+    const binanceSymbol = hasKnownQuote ? symbol : `${symbol}USDT`;
     const cacheKey = `binance-history:${symbol}:${days}`;
     const cached = cacheGet(cacheKey);
     let points = Array.isArray(cached?.points) ? cached.points : undefined;

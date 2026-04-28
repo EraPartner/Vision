@@ -319,7 +319,9 @@ export const PROVIDERS = {
 
       const priceMap = {};
       for (const item of data) {
-        if (item.symbol && item.price) priceMap[item.symbol] = parseFloat(item.price);
+        if (!item.symbol || !item.price) continue;
+        const parsed = parseFloat(item.price);
+        if (Number.isFinite(parsed) && parsed > 0) priceMap[item.symbol] = parsed;
       }
 
       for (const symbol of uniqueSymbols) {

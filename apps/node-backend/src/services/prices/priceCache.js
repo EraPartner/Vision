@@ -117,6 +117,22 @@ export function resetPriceCache() {
   _cache.clear();
 }
 
+const CACHE_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+export function sweepExpiredCacheEntries(now = Date.now()) {
+  let removed = 0;
+  for (const [key, entry] of _cache) {
+    if (now > entry.expiresAt) {
+      _cache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+const _sweepInterval = setInterval(sweepExpiredCacheEntries, CACHE_SWEEP_INTERVAL_MS);
+if (typeof _sweepInterval.unref === 'function') _sweepInterval.unref();
+
 // ─── DB persistence ───────────────────────────────────────────────────────────
 
 export async function loadHistoricalPointsFromDatabase(investmentId, { fromMs, toMs } = {}) {

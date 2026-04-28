@@ -337,13 +337,18 @@ export default function PortfolioOverviewPage() {
                     height={240}
                     tooltipValueFormat={(v) => fmt(v)}
                   />
-                  <ChartLegend
-                    className="mt-2 justify-center"
-                    items={allocationData.map((d, i): ChartLegendItem => ({
-                      label: `${d.name} ${allocationData.reduce((s, x) => s + x.value, 0) > 0 ? ((d.value / allocationData.reduce((s, x) => s + x.value, 0)) * 100).toFixed(0) : 0}%`,
-                      color: COLORS[i % COLORS.length],
-                    }))}
-                  />
+                  {(() => {
+                    const totalAllocation = allocationData.reduce((s, x) => s + x.value, 0);
+                    return (
+                      <ChartLegend
+                        className="mt-2 justify-center"
+                        items={allocationData.map((d, i): ChartLegendItem => ({
+                          label: `${d.name} ${totalAllocation > 0 ? ((d.value / totalAllocation) * 100).toFixed(0) : 0}%`,
+                          color: COLORS[i % COLORS.length],
+                        }))}
+                      />
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}

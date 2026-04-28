@@ -137,8 +137,16 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     onOpenChange(false);
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true);
+    } else {
+      handleClose();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('addWatchlist.title')}</DialogTitle>
@@ -202,9 +210,9 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                         {t('addWatchlist.change')}
                       </Button>
                     </div>
-                    {quoteData && (
+                    {quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0 && (
                       <p className="text-sm text-muted-foreground mt-2">
-                        {t('addWatchlist.currentPrice', { price: quoteData.price?.toFixed(2) })}
+                        {t('addWatchlist.currentPrice', { price: quoteData.price.toFixed(2) })}
                       </p>
                     )}
                   </div>
@@ -245,11 +253,13 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
                   <Input
                     type="number"
                     step="0.01"
-                    placeholder={quoteData ? t('addWatchlist.currentPrice', { price: quoteData.price?.toFixed(2) }) : t('addWatchlist.targetPlaceholder')}
+                    placeholder={quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0
+                      ? t('addWatchlist.currentPrice', { price: quoteData.price.toFixed(2) })
+                      : t('addWatchlist.targetPlaceholder')}
                     value={targetPrice}
                     onChange={(e) => setTargetPrice(e.target.value)}
                   />
-                {quoteData && targetPrice && (
+                {quoteData && Number.isFinite(quoteData.price) && quoteData.price > 0 && targetPrice && (
                   <p className="text-xs text-muted-foreground">
                     {parseDecimal(targetPrice) < quoteData.price
                       ? t('addWatchlist.belowCurrent', { n: ((1 - parseDecimal(targetPrice) / quoteData.price) * 100).toFixed(1) })

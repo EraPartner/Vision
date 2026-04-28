@@ -4,6 +4,7 @@ type: feature
 status: active
 date: 2026-04-27
 last_modified: 2026-04-28
+updated: 2026-04-28
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
@@ -319,6 +320,11 @@ When internet is unavailable and the backend cannot reach live price providers, 
   - **WatchlistPage**: quotes query enabled only when `isOnline`, conditional refetchInterval, `retry: 1` only when online.
   - **AddToWatchlistDialog, WatchlistChartDialog**: queryFns wrapped in try/catch, `retry: false`, `refetchOnWindowFocus: false` to prevent unhandled rejections / spinner storms when offline.
 
+### Price Guard Rails (2026-04-28 Bug Fixes)
+- **WatchlistChartDialog**: Validates `target_price` against `Number.isFinite() && > 0` before rendering chart domain; falls back to `[0, 1]` when no valid prices exist; removed unsafe `priceDiff!` assertions to prevent NaN chart rendering.
+- **AddToWatchlistDialog**: Guards `quoteData.price` with `Number.isFinite() && > 0` before `.toFixed()` to prevent "undefined" string interpolation and divide-by-zero in percentage calculations.
+- **PortfolioOverviewPage**: Pre-computes `totalAllocation` to avoid O(N²) reduce calls inside legend `.map()`, improving render performance on large portfolios.
+
 ### Stale Price Indicators
 - Frontend utility `priceStaleness.ts` detects investments with `price_updated_at` older than 24 hours.
 - Component `StalePriceIndicator.tsx` renders a small clock icon next to stale prices in holdings tables with a tooltip showing the last-updated date.
@@ -328,6 +334,9 @@ When internet is unavailable and the backend cannot reach live price providers, 
 - Component `StalePricesBanner.tsx` appears above portfolio holdings tables (Stocks, ETFs, Metals, Crypto) when one or more holdings have stale prices.
 - Banner shows count of stale holdings and includes a "Refresh Prices" button that triggers `usePortfolio().refreshPrices` for explicit retry.
 - Wired in `StocksPage.tsx`, `MetalsPage.tsx` (via DRY props to `StocksPage`), `CryptoPage.tsx`, and `PortfolioOverviewPage.tsx`.
+
+### News Feed Reconciliation (2026-04-28 Bug Fix)
+- **PortfolioNewsFeed**: Replaced index-based React key with `article.link` (with `publishedAt+title` fallback) to prevent reconciliation issues on refetch reorder; ensures articles maintain correct component state across API refreshes.
 
 ### Performance & Net Worth Empty States
 - `PerformancePage.tsx`: dedicated `<PerformanceEmptyState>` replaces spinner when snapshots are empty; shows "No performance history yet" + "Refresh Prices" CTA to trigger initial snapshot backfill.
