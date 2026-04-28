@@ -4,7 +4,8 @@ type: feature
 status: active
 date: 2026-04-27
 updated: 2026-04-28
-tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, passphrase-modal, ux, aead, aes-256-gcm]
+last_modified: 2026-04-28
+tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache]
 description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx"]
@@ -107,8 +108,9 @@ All 31 user-data tables are included in the `pg_dump` SQL artifact inside every 
 |-------|--------|--------|-------|
 | `exchange_rates` | FX | ✅ Included | Rate cache |
 | `belgian_inflation_rates` | Tax | ✅ Included | |
-| `cashflow_forecast_accuracy` | Forecasting | ✅ Included | |
-| `cashflow_forecast_mc` | Forecasting | ✅ Included | Monte Carlo cache |
+| `cashflow_forecast_accuracy` | Forecasting | ✅ Included | Backtest metrics |
+| `cashflow_forecast_mc` | Forecasting | ✅ Included | Month-view Monte Carlo cache |
+| `cashflow_forecast_mc_rolling` | Forecasting | ✅ Included | Rolling-window Monte Carlo cache |
 
 #### Operational
 

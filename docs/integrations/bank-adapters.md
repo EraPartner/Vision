@@ -37,6 +37,14 @@ Each bank adapter:
 - **States**: COMPLETED, PENDING, REVERTED, DECLINED
 - **Features**: Multi-currency support, fees tracking
 
+### ING
+- **Fields**: booking_date, amount, counterparty_account, transaction_number, description, detail, message
+- **Date Format**: DD/MM/YYYY
+- **Separator**: ;
+- **Columns**: Rekeningnummer, Naam van de rekening, Rekening tegenpartij, Omzetnummer, Boekingsdatum, Valutadatum, Bedrag, Munteenheid, Omschrijving, Detail van de omzet, Bericht
+- **Detection**: Header contains `Omzetnummer` + `Detail van de omzet`
+- **Features**: Counterparty IBAN, transaction reference, free-text message field
+
 ### KBC
 - **Fields**: transaction_date, amount, counterparty_name, structured_communication
 - **Date Format**: DD/MM/YYYY

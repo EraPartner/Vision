@@ -29,6 +29,7 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
     case "MM.yyyy":          return `${mm}.${y}`;
     case "MM-yyyy":          return `${mm}-${y}`;
     case "dd MMM yyyy":      return `${dd} ${MMM} ${y}`;
+    case "MMM d":            return `${MMM} ${d}`;
     default:
       return new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(date);
   }

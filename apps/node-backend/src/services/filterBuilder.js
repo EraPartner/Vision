@@ -18,6 +18,7 @@
  */
 
 const MAX_INT4 = 2147483647;
+const MAX_LIST_SIZE = 50;
 
 /**
  * Keep only safe PostgreSQL INT4 ids. Drops null, undefined, non-integer, non-positive,
@@ -43,12 +44,18 @@ export function validateInt4Ids(ids) {
  * @param {number|null} [opts.transactionId]
  * @param {string|null} [opts.startDate]    inclusive
  * @param {string|null} [opts.endDate]      inclusive
- * @param {string|null} [opts.bankAccount]  substring, ILIKE
- * @param {number|null} [opts.categoryId]   matches transaction, recipient-default or primary-default
- * @param {number|null} [opts.recipientId]  matches the txn recipient or any sub-recipient under it
+ * @param {string|null}   [opts.bankAccount]   substring, ILIKE
+ * @param {string[]|null} [opts.bankAccounts]  exact match IN clause; ignored when bankAccount is set; capped at MAX_LIST_SIZE
+ * @param {number|null}   [opts.categoryId]    matches transaction, recipient-default or primary-default
+ * @param {number[]|null} [opts.categoryIds]   multiple category IDs (IN clause); ignored when categoryId is set
+ * @param {number|null} [opts.recipientId]      matches the txn recipient or any sub-recipient under it
+ * @param {number|null} [opts.recipientGroupId] like recipientId but resolves the full primary group:
+ *                                              includes the recipient's own primary (if it is an alias)
+ *                                              and all other aliases sharing that primary
  * @param {string|null} [opts.recipientName] substring, ILIKE on r.name
  * @param {string|null} [opts.search]       multi-column substring
  * @param {boolean}     [opts.active=true]  require t.is_active = true
+ * @param {'income'|'expense'|null} [opts.transactionType] filter by amount sign
  * @param {number}      [opts.startParamIdx=1] first $-index to allocate
  */
 export function buildTransactionWhere(opts = {}) {
@@ -57,11 +64,15 @@ export function buildTransactionWhere(opts = {}) {
     startDate = null,
     endDate = null,
     bankAccount = null,
+    bankAccounts = null,
     categoryId = null,
+    categoryIds = null,
     recipientId = null,
+    recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
+    transactionType = null,
     startParamIdx = 1,
   } = opts;
 
@@ -86,17 +97,52 @@ export function buildTransactionWhere(opts = {}) {
   if (bankAccount) {
     clauses.push(`t.bank_account ILIKE $${p++}`);
     params.push(`%${bankAccount}%`);
+  } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
+    const safe = bankAccounts.slice(0, MAX_LIST_SIZE).map((s) => String(s).trim()).filter(Boolean);
+    if (safe.length > 0) {
+      const placeholders = safe.map(() => `$${p++}`).join(', ');
+      clauses.push(`t.bank_account IN (${placeholders})`);
+      params.push(...safe);
+    }
   }
   if (categoryId != null) {
     clauses.push(
       `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = $${p++}`,
     );
     params.push(categoryId);
+  } else if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+    const safe = validateInt4Ids(categoryIds);
+    if (safe.length > 0) {
+      const placeholders = safe.map(() => `$${p++}`).join(', ');
+      clauses.push(
+        `COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IN (${placeholders})`,
+      );
+      params.push(...safe);
+    }
+  }
+  if (transactionType === 'income') {
+    clauses.push('t.amount > 0');
+  } else if (transactionType === 'expense') {
+    clauses.push('t.amount < 0');
   }
   if (recipientId != null) {
     clauses.push(`(t.recipient_id = $${p} OR r.primary_recipient_id = $${p})`);
     p++;
     params.push(recipientId);
+  }
+  if (recipientGroupId != null) {
+    // Resolve the full primary group: match the recipient itself, any aliases under it,
+    // the recipient's own primary (if it is an alias), and siblings under that primary.
+    // The two subqueries return NULL when the recipient has no primary, making those
+    // branches no-ops (NULL = anything is false in SQL).
+    clauses.push(`(
+      t.recipient_id = $${p}
+      OR r.primary_recipient_id = $${p}
+      OR t.recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
+      OR r.primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
+    )`);
+    p++;
+    params.push(recipientGroupId);
   }
   if (recipientName) {
     clauses.push(`r.name ILIKE $${p++}`);

@@ -109,12 +109,15 @@ export const apiClient = {
     getStatistics: info.getStatistics,
     getSupportedParsers: info.getSupportedParsers,
     getBanks: info.getBanks,
+    getDistinctBankAccounts: info.getDistinctBankAccounts,
     getTransactionSummary: info.getTransactionSummary,
     getTransactionCount: info.getTransactionCount,
     getCashflowComparison: (params?: Parameters<typeof agg.getAggregationCashflowComparison>[0]) =>
         agg.getAggregationCashflowComparison(params).then(r => r.data),
     getCashflowForecastMethods: (params?: Parameters<typeof agg.getCashflowForecastMethods>[0]) =>
         agg.getCashflowForecastMethods(params).then(r => r.data),
+    getCashflowForecastRolling: (params?: Parameters<typeof agg.getCashflowForecastRolling>[0]) =>
+        agg.getCashflowForecastRolling(params).then(r => r.data),
     getCashflowForecastAccuracy: (params?: Parameters<typeof agg.getCashflowForecastAccuracy>[0]) =>
         agg.getCashflowForecastAccuracy(params).then(r => r.data),
     getMonthlyFinancialSummary: (params?: Parameters<typeof agg.getAggregationMonthlySummary>[0]) =>

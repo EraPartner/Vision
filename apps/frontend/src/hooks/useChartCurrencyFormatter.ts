@@ -5,10 +5,11 @@
  */
 
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { getCurrencySymbol, numberFormatToLocale } from "@/utils/currency";
+import { getCurrencySymbol, numberFormatToLocale, formatCurrencyCompact, type CompactFormatResult } from "@/utils/currency";
 
 export interface ChartCurrencyFormatter {
   formatCurrency: (val: number) => string;
+  formatCompact: (val: number) => CompactFormatResult;
   currencySymbol: string;
   locale: string;
   currency: string;
@@ -19,14 +20,18 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter {
   const currency = appSettings.defaultCurrency || "EUR";
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const currencySymbol = getCurrencySymbol(currency);
+  const fractionDigits = appSettings.showDecimalPlaces;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: appSettings.showDecimalPlaces,
-      maximumFractionDigits: appSettings.showDecimalPlaces,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(val);
 
-  return { formatCurrency, currencySymbol, locale, currency };
+  const formatCompact = (val: number) =>
+    formatCurrencyCompact(val, currency, locale, fractionDigits);
+
+  return { formatCurrency, formatCompact, currencySymbol, locale, currency };
 }

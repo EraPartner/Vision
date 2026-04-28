@@ -23,7 +23,10 @@ import { computeCashflowComparison } from '../services/calculations/aggregation/
 import { computeAverageVsCurrent } from '../services/calculations/aggregation/averageVsCurrent.js';
 import { computeBankBalances } from '../services/calculations/aggregation/bankBalances.js';
 import { computeCashflowForecast } from '../services/calculations/aggregation/cashflowForecast.js';
-import { computeCashflowForecast as computeCashflowForecastMethods } from '../services/calculations/forecast/index.js';
+import {
+  computeCashflowForecast as computeCashflowForecastMethods,
+  computeCashflowForecastRolling,
+} from '../services/calculations/forecast/index.js';
 import { getAllAccuracyHistory } from '../services/calculations/forecast/accuracyStore.js';
 import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.js';
 import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
@@ -127,6 +130,36 @@ router.get('/cashflow-forecast-methods', async (req, res) => {
     mcPercentiles,
     includeBacktest,
     includeBreakdown,
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/cashflow-forecast-rolling', async (req, res) => {
+  const daysBack = parseIntClamped(req.query.days_back, { max: 365, fallback: 90 });
+  const daysForward = parseIntClamped(req.query.days_forward, { max: 365, fallback: 90 });
+  if (daysBack + daysForward > 730) {
+    return res.status(400).json({ ok: false, error: { code: 'BAD_REQUEST', message: 'days_back + days_forward must be <= 730' } });
+  }
+  const mcPaths = parseIntClamped(req.query.mc_paths, { max: 5000, fallback: 1000 });
+  const historyMonths = parseIntClamped(req.query.history_months, { max: 120, fallback: 36 });
+  const percentiles = parseNumericArrayQueryParam(req.query.mc_percentiles);
+  const mcPercentiles = percentiles.length > 0 ? percentiles : [10, 50, 90];
+  const includePlanned =
+    req.query.include_planned === 'true' || req.query.include_planned === '1';
+  const includeBacktest =
+    req.query.include_backtest === 'true' || req.query.include_backtest === '1';
+
+  const { data, meta } = await computeCashflowForecastRolling({
+    targetCurrency: getTargetCurrency(req),
+    excludedCategoryIds: parseNumericArrayQueryParam(req.query.excluded_category_ids),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    includePlanned,
+    historyMonths,
+    daysBack,
+    daysForward,
+    mcPaths,
+    mcPercentiles,
+    includeBacktest,
   });
   res.ok({ data, meta });
 });

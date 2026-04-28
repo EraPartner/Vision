@@ -38,7 +38,7 @@ export type TranslationKey = string;
 export interface LanguageContextType {
     language: Language;
     setLanguage: (lang: Language) => void;
-    t: (key: TranslationKey, vars?: Record<string, string>) => string;
+    t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -80,13 +80,13 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
     }, [language, dicts]);
 
     const t = useCallback(
-        (key: TranslationKey, vars?: Record<string, string>): string => {
+        (key: TranslationKey, vars?: Record<string, string | number>): string => {
             const dict = dicts[language];
             const enDict = dicts['en'];
             let text = dict?.[key] ?? enDict?.[key] ?? key;
             if (vars) {
                 for (const [k, v] of Object.entries(vars)) {
-                    text = text.replace(`{${k}}`, v);
+                    text = text.replaceAll(`{${k}}`, String(v));
                 }
             }
             return text;

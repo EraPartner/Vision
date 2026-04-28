@@ -3,8 +3,9 @@ title: Frontend API Client Architecture
 type: reference
 status: active
 date: 2026-04-22
-tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, client-side, environment, domain-split, openapi]
-description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation
+updated: 2026-04-28
+tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups]
+description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
 related_code:
   - apps/frontend/src/lib/api/types.ts
@@ -196,7 +197,7 @@ Previous monolithic `api.ts` (1553 lines) split into 13 domain modules:
 
 | Module | Exports | Lines |
 |--------|---------|-------|
-| `transactions.ts` | getTransactions, getTransaction, createTransaction, updateTransaction, deleteTransaction | ~60 |
+| `transactions.ts` | getTransactions (with `recipient_group_id` support, Phase Q), getTransaction, createTransaction, updateTransaction, deleteTransaction | ~60 |
 | `categories.ts` | getCategories, getCategory, createCategory, updateCategory, deleteCategory | ~40 |
 | `recipients.ts` | getRecipients, getRecipient, createRecipient, updateRecipient, deleteRecipient, mergeRecipients, unmergeRecipient, getRecipientAliases | ~60 |
 | `planned.ts` | getPlannedTransactions, getPlannedTransaction, createPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, executePlannedTransaction | ~50 |

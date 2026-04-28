@@ -265,6 +265,56 @@ export function getCashflowForecastMethods(params?: {
     return apiRequest(`/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ''}`);
 }
 
+// ==================== Rolling-Window Cash Flow Forecast ====================
+
+export interface CashflowForecastRollingData {
+    readonly window_start: string;
+    readonly window_end: string;
+    readonly today: string;
+    readonly currency: string;
+    readonly days_back: number;
+    readonly days_forward: number;
+    readonly actual: ForecastActualPoint[];
+    readonly methods: ForecastMethod[];
+    readonly planned: ForecastPlannedPoint[];
+    readonly diagnostics: ForecastDiagnostics | null;
+    readonly history_months: number;
+    readonly include_planned: boolean;
+}
+
+export function getCashflowForecastRolling(params?: {
+    currency?: string;
+    excluded_category_ids?: number[];
+    excluded_recipient_ids?: number[];
+    history_months?: number;
+    days_back?: number;
+    days_forward?: number;
+    mc_paths?: number;
+    mc_percentiles?: number[];
+    include_planned?: boolean;
+    include_backtest?: boolean;
+}): Promise<AggregationEnvelope<CashflowForecastRollingData>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.history_months != null) qp.set('history_months', String(params.history_months));
+    if (params?.days_back != null) qp.set('days_back', String(params.days_back));
+    if (params?.days_forward != null) qp.set('days_forward', String(params.days_forward));
+    if (params?.mc_paths != null) qp.set('mc_paths', String(params.mc_paths));
+    if (params?.mc_percentiles?.length) {
+        params.mc_percentiles.forEach((p) => qp.append('mc_percentiles', String(p)));
+    }
+    if (params?.include_planned != null) qp.set('include_planned', params.include_planned ? 'true' : 'false');
+    if (params?.include_backtest != null) qp.set('include_backtest', params.include_backtest ? 'true' : 'false');
+    if (params?.excluded_category_ids?.length) {
+        params.excluded_category_ids.forEach((id) => qp.append('excluded_category_ids', String(id)));
+    }
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ''}`);
+}
+
 export interface AccuracyHistoryPoint {
     readonly month: string;
     readonly mae: number;

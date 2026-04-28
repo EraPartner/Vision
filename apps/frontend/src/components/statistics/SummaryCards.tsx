@@ -11,33 +11,44 @@ interface SummaryCardsProps {
 
 export function SummaryCards({ data }: SummaryCardsProps) {
   const { t } = useLanguage();
-  const { formatCurrency } = useChartCurrencyFormatter();
+  const { formatCompact } = useChartCurrencyFormatter();
+
+  const net = data.totalIncome - data.totalSpending;
+  const incomeCompact = formatCompact(data.totalIncome);
+  const spendingCompact = formatCompact(data.totalSpending);
+  const netCompact = formatCompact(net);
+  const avgIncomeCompact = formatCompact(data.averageMonthlyIncome);
+  const avgSpendingCompact = formatCompact(data.averageMonthlySpending);
 
   const cards = [
     {
       title: t("statsPage.totalIncome"),
-      value: formatCurrency(data.totalIncome),
+      value: incomeCompact.display,
+      fullValue: incomeCompact.isCompact ? incomeCompact.full : undefined,
       icon: TrendingUp,
-      description: t("statsPage.avgPerMonth", { amount: formatCurrency(data.averageMonthlyIncome) }),
+      description: t("statsPage.avgPerMonth", { amount: avgIncomeCompact.display }),
       className: "text-accent",
     },
     {
       title: t("statsPage.totalSpending"),
-      value: formatCurrency(data.totalSpending),
+      value: spendingCompact.display,
+      fullValue: spendingCompact.isCompact ? spendingCompact.full : undefined,
       icon: TrendingDown,
-      description: t("statsPage.avgPerMonth", { amount: formatCurrency(data.averageMonthlySpending) }),
+      description: t("statsPage.avgPerMonth", { amount: avgSpendingCompact.display }),
       className: "text-destructive",
     },
     {
       title: t("statsPage.netBalance"),
-      value: formatCurrency(data.totalIncome - data.totalSpending),
+      value: netCompact.display,
+      fullValue: netCompact.isCompact ? netCompact.full : undefined,
       icon: DollarSign,
       description: t("statsPage.overMonths", { n: data.monthlyData.length }),
-      className: data.totalIncome - data.totalSpending >= 0 ? "text-accent" : "text-destructive",
+      className: net >= 0 ? "text-accent" : "text-destructive",
     },
     {
       title: t("statsPage.monthsTracked"),
       value: data.monthlyData.length.toString(),
+      fullValue: undefined as string | undefined,
       icon: BarChart3,
       description: t("statsPage.years", { n: data.allYears.length }),
       className: "text-primary",
@@ -62,7 +73,9 @@ export function SummaryCards({ data }: SummaryCardsProps) {
             </span>
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${card.className}`}>{card.value}</p>
+            <p className={`text-2xl font-bold ${card.className}`}>
+              <span title={card.fullValue}>{card.value}</span>
+            </p>
             <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
           </CardContent>
         </Card>

@@ -21,6 +21,7 @@ import {
 } from '../middleware/errorHandler.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 import { escapeCsvValue } from '../lib/csv.js';
+import { buildTransactionWhere } from '../services/filterBuilder.js';
 
 const router = Router();
 
@@ -33,11 +34,16 @@ function parseTransactionListQuery(query) {
     limit = 50, offset = 0,
     transaction_id,
     start_date, end_date, bank_account,
-    category_id, recipient_id, recipient_name,
+    category_id, category_ids, recipient_id, recipient_group_id, recipient_name,
     active = 'true', search,
     sort_by, sort_dir,
     include_balance,
+    transaction_type,
   } = query;
+
+  const parsedCategoryIds = category_ids
+    ? String(category_ids).split(',').map((id) => parseInt(id, 10)).filter((id) => Number.isFinite(id) && id > 0)
+    : null;
 
   return {
     limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 5000)),
@@ -47,13 +53,16 @@ function parseTransactionListQuery(query) {
     endDate: end_date || null,
     bankAccount: bank_account || null,
     categoryId: category_id ? parseInt(category_id, 10) : null,
+    categoryIds: parsedCategoryIds?.length ? parsedCategoryIds : null,
     recipientId: recipient_id ? parseInt(recipient_id, 10) : null,
+    recipientGroupId: recipient_group_id ? parseInt(recipient_group_id, 10) : null,
     recipientName: recipient_name || null,
     search: search ? String(search).slice(0, 200) : null,
     active: active !== 'false',
     sortBy: sort_by || null,
     sortDir: sort_dir === 'asc' || sort_dir === 'desc' ? sort_dir : null,
     includeBalance: include_balance === 'true',
+    transactionType: transaction_type === 'income' || transaction_type === 'expense' ? transaction_type : null,
   };
 }
 
@@ -67,6 +76,7 @@ function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
 }
 
 const EXPORT_CHUNK_SIZE = 1000;
+const EXPORT_MAX_LIST_SIZE = 50;
 
 function buildExportTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -81,26 +91,57 @@ function buildTransactionExportJsonFilename() {
 }
 
 /**
- * Build WHERE clause + params array from common export filter query params.
+ * Build WHERE clause + params for the transactions export endpoints.
+ *
+ * Delegates to the shared `buildTransactionWhere` so the export filter set stays
+ * in lockstep with the list endpoint (`GET /api/transactions`). Accepts the same
+ * raw query-string shape used by the list endpoint, including `transaction_id`,
+ * `recipient_id`, `recipient_name`, `search`, `transaction_type`, and `active`.
+ *
+ * Bank-account multi-value support: `bank_accounts=a,b,c` → array of trimmed values.
+ *
  * Returns { whereSql, params, nextParamIdx }.
  */
 function buildExportFilters(query) {
-  const { start_date, end_date, bank_account, category_id } = query;
-  const filterClauses = [`t.is_active = true`];
-  const params = [];
-  let paramIdx = 1;
+  const opts = parseTransactionListQuery(query);
 
-  if (start_date) { filterClauses.push(`t.date >= $${paramIdx++}`); params.push(start_date); }
-  if (end_date) { filterClauses.push(`t.date <= $${paramIdx++}`); params.push(end_date); }
-  if (bank_account) { filterClauses.push(`t.bank_account ILIKE $${paramIdx++}`); params.push(`%${bank_account}%`); }
-  if (category_id) {
-    const catId = parseInt(category_id, 10);
-    if (!Number.isFinite(catId)) throw new ValidationError('category_id must be an integer');
-    filterClauses.push(`t.category_id = $${paramIdx++}`);
-    params.push(catId);
-  }
+  const bankAccounts = query.bank_accounts
+    ? String(query.bank_accounts)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, EXPORT_MAX_LIST_SIZE)
+    : null;
 
-  return { whereSql: filterClauses.join(' AND '), params, nextParamIdx: paramIdx };
+  const { sql, params, nextParamIdx } = buildTransactionWhere({
+    transactionId: opts.transactionId,
+    startDate: opts.startDate,
+    endDate: opts.endDate,
+    bankAccount: opts.bankAccount,
+    bankAccounts: bankAccounts && bankAccounts.length > 0 ? bankAccounts : null,
+    categoryId: opts.categoryId,
+    categoryIds: opts.categoryIds,
+    recipientId: opts.recipientId,
+    recipientGroupId: opts.recipientGroupId,
+    recipientName: opts.recipientName,
+    search: opts.search,
+    active: opts.active,
+    transactionType: opts.transactionType,
+  });
+
+  return { whereSql: sql, params, nextParamIdx };
+}
+
+const EXPORT_JOINS_SQL = `
+    FROM transactions t
+    LEFT JOIN recipients r ON t.recipient_id = r.id
+    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    LEFT JOIN categories c ON t.category_id = c.id
+    LEFT JOIN categories rc ON r.default_category_id = rc.id
+    LEFT JOIN categories pc ON pr.default_category_id = pc.id`;
+
+function buildExportProbeSql(whereSql) {
+  return `SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${whereSql} LIMIT 1`;
 }
 
 function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
@@ -115,12 +156,7 @@ function buildExportChunkSql(whereSql, limitParamIdx, offsetParamIdx) {
              ELSE ''
            END AS category_name,
            t.comment
-    FROM transactions t
-    LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    LEFT JOIN categories c ON t.category_id = c.id
-    LEFT JOIN categories rc ON r.default_category_id = rc.id
-    LEFT JOIN categories pc ON pr.default_category_id = pc.id
+    ${EXPORT_JOINS_SQL}
     WHERE ${whereSql}
     ORDER BY t.date ASC, t.id ASC
     LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}
@@ -220,7 +256,7 @@ router.get(
     const includeBalance = req.query.include_balance === 'true';
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
 
-    const probe = await dbQuery(`SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`, params);
+    const probe = await dbQuery(buildExportProbeSql(whereSql), params);
     if (probe.rows.length === 0) {
       throw new NotFoundError('No transactions found matching filters');
     }
@@ -272,7 +308,7 @@ router.get(
   async (req, res) => {
     const { whereSql, params, nextParamIdx } = buildExportFilters(req.query);
 
-    const probe = await dbQuery(`SELECT 1 FROM transactions t WHERE ${whereSql} LIMIT 1`, params);
+    const probe = await dbQuery(buildExportProbeSql(whereSql), params);
     if (probe.rows.length === 0) {
       throw new NotFoundError('No transactions found matching filters');
     }

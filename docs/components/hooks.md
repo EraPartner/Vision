@@ -3,9 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-04-27
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, i18n, notifications]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys.
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, i18n, notifications, export-filters]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -31,6 +32,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | `useTransactions()` | Transaction CRUD | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]] |
 | `useCategories()` | Category management | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]] |
 | `useRecipients()` | Recipient management | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]] |
+| `useBankAccounts()` | Distinct bank account IBANs (Phase 13) | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]] |
 | `usePortfolio()` | Investment portfolio | [[apps/frontend/src/hooks/usePortfolio.ts\|usePortfolio.ts]] |
 | `usePlannedPayments()` | Planned transactions | [[apps/frontend/src/hooks/usePlannedPayments.ts\|usePlannedPayments.ts]] |
 | `useStatistics()` | Analytics data | [[apps/frontend/src/hooks/useStatistics.ts\|useStatistics.ts]] |

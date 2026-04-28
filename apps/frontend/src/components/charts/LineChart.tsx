@@ -26,7 +26,8 @@ export interface LineSeries<Datum> {
 }
 
 export interface LineReferenceLine {
-    readonly y: number;
+    readonly y?: number;
+    readonly x?: Date | number;
     readonly label?: string;
     readonly color?: string;
     readonly dashed?: boolean;
@@ -118,7 +119,9 @@ function Inner<Datum>({
             }
         }
         if (referenceLines) {
-            for (const r of referenceLines) values.push(r.y);
+            for (const r of referenceLines) {
+                if (typeof r.y === "number") values.push(r.y);
+            }
         }
         const lo = values.length ? Math.min(...values) : 0;
         const hi = values.length ? Math.max(...values) : 1;
@@ -225,8 +228,35 @@ function Inner<Datum>({
                     })}
 
                     {referenceLines?.map((r, i) => {
-                        const y = yScale(r.y);
                         const color = r.color ?? CHART_NEUTRAL.label;
+                        const dashAttr = r.dashed === false ? undefined : "4 4";
+                        if (r.x != null) {
+                            const x = xScale(r.x as never) ?? 0;
+                            return (
+                                <g key={`ref-${i}`}>
+                                    <Line
+                                        from={{ x, y: 0 }}
+                                        to={{ x, y: innerHeight }}
+                                        stroke={color}
+                                        strokeWidth={1}
+                                        strokeDasharray={dashAttr}
+                                    />
+                                    {r.label ? (
+                                        <text
+                                            x={x + 4}
+                                            y={12}
+                                            textAnchor="start"
+                                            fontSize={11}
+                                            fill={color}
+                                        >
+                                            {r.label}
+                                        </text>
+                                    ) : null}
+                                </g>
+                            );
+                        }
+                        if (r.y == null) return null;
+                        const y = yScale(r.y);
                         return (
                             <g key={`ref-${i}`}>
                                 <Line
@@ -234,7 +264,7 @@ function Inner<Datum>({
                                     to={{ x: innerWidth, y }}
                                     stroke={color}
                                     strokeWidth={1}
-                                    strokeDasharray={r.dashed === false ? undefined : "4 4"}
+                                    strokeDasharray={dashAttr}
                                 />
                                 {r.label ? (
                                     <text

@@ -3,9 +3,9 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-04-22
-updated: 2026-04-27
-tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, decimal, money, i18n, notifications]
-description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys.
+updated: 2026-04-28
+tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, phase-q, decimal, money, i18n, notifications, recipient-groups]
+description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage.
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
 related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -169,7 +169,7 @@ Implementation notes:
 - **Owed Summary View**: Shows who owes whom with totals
 - **Per-Person Detail View**: Detailed breakdown per recipient
 - **Split Source Context**: Shows original transaction recipient and memo
-- **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient
+- **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient using `recipient_group_id` filter (Phase Q) — includes all transactions for the recipient and all linked recipients in the same primary group, surfacing the full transaction history even when linked recipients are involved
 - **Bulk Settle**: Settle all outstanding splits for a person with confirmation
 - **Jump to Source**: Double-click any split row to open Transactions filtered to the source `transaction_id`
 

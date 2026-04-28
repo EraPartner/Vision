@@ -1,11 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { TransactionsExportButtons } from "./TransactionsExportButtons";
 
 interface FilterBannerProps {
     transactionIdFilter?: number;
     recipientIdFilter?: number;
     categoryIdFilter?: number;
+    categoryIdsFilter?: number[];
+    startDateFilter?: string;
+    endDateFilter?: string;
+    transactionTypeFilter?: 'income' | 'expense';
+    searchFilter?: string;
     filterLabel?: string;
     onClear: () => void;
 }
@@ -14,12 +20,19 @@ export function FilterBanner({
     transactionIdFilter,
     recipientIdFilter,
     categoryIdFilter,
+    categoryIdsFilter,
+    startDateFilter,
+    endDateFilter,
+    transactionTypeFilter,
+    searchFilter,
     filterLabel,
     onClear,
 }: FilterBannerProps) {
     const { t } = useLanguage();
 
-    if (!transactionIdFilter && !recipientIdFilter && !categoryIdFilter) {
+    const hasFilter = transactionIdFilter || recipientIdFilter || categoryIdFilter ||
+        categoryIdsFilter?.length || startDateFilter || endDateFilter || transactionTypeFilter;
+    if (!hasFilter) {
         return null;
     }
 
@@ -36,9 +49,22 @@ export function FilterBanner({
             <span className="text-sm text-foreground">
                 {t('txPage.filteredBy', { label })}
             </span>
-            <Button variant="ghost" size="icon" className="icon-touch-target ml-auto" onClick={onClear}>
-                <X className="h-4 w-4" />
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+                <TransactionsExportButtons
+                    transactionIdFilter={transactionIdFilter}
+                    recipientIdFilter={recipientIdFilter}
+                    categoryIdFilter={categoryIdFilter}
+                    categoryIdsFilter={categoryIdsFilter}
+                    startDateFilter={startDateFilter}
+                    endDateFilter={endDateFilter}
+                    transactionTypeFilter={transactionTypeFilter}
+                    searchFilter={searchFilter}
+                    filterLabel={filterLabel}
+                />
+                <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear}>
+                    <X className="h-4 w-4" />
+                </Button>
+            </div>
         </div>
     );
 }

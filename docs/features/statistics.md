@@ -3,9 +3,10 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-25
-tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-12, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo]
-description: Complete analytics and statistics system with per-graph exclusions, pivot tables, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export.
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [feature, statistics, analytics, charts, frontend, backend, refactor, phase-7, phase-13, sankey-flow, rolling-averages, pdf-export, year-selector, useMemo, drillthrough]
+description: Complete analytics and statistics system with per-graph exclusions, pivot tables with clickable drillthrough, year-over-year comparisons, saved custom charts, Sankey flow visualization, rolling average overlays, and PDF export. Phase 7 adds flow diagram, moving averages, and financial report export. Phase 13 adds pivot table drillthrough to filtered transaction list and multi-select export filters.
 aliases: [stats, analytics, charts, pivot table, yearly comparison]
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
@@ -200,7 +201,7 @@ All charts use **Recharts** with consistent styling:
 
 ### Category Pivot Table
 
-The most complex widget — a hierarchical table showing categories × months:
+The most complex widget — a hierarchical table showing categories × months with drillthrough to transactions:
 
 - **Hierarchy**: Groups `GENERAL: DETAIL` categories under their GENERAL parent
 - **Value modes**: Absolute (default), Net, Income-only, Expense-only
@@ -208,6 +209,17 @@ The most complex widget — a hierarchical table showing categories × months:
 - **Sorting**: By total descending (absolute value for net mode)
 - **Sticky columns**: Category name column stays visible during horizontal scroll
 - **Column totals**: Footer row with per-period and grand totals
+- **Drillthrough (Phase 13)**: All cells (except zero-value cells) are clickable and navigate to `/transactions` with pre-populated filters (category, period, transaction type)
+
+**Drillthrough Details (Phase 13):**
+- **Detail row × period**: Filters to single category within the month/period
+- **Detail row × total**: Filters to single category across all periods
+- **Group header × period**: Filters to all detail categories in the GENERAL group within the month
+- **Group header × total**: Filters to all detail categories in the GENERAL group across all periods
+- **Footer × period**: Filters to all categories within the month
+- **Footer × total**: Filters to all categories across all periods
+- **Transaction type propagation**: When viewing "Income-only" or "Expense-only" modes, the drillthrough URL includes the corresponding `transaction_type` filter
+- **URL params**: Uses new backend filters `category_ids` (comma-separated for groups) and `transaction_type` (income/expense) ([[docs/api/transactions#query-parameters|Transactions API]])
 
 ### Saved Charts Integration
 
@@ -285,6 +297,40 @@ The statistics feature relies on these backend endpoints:
 | `GET /api/info/exchange-rates` | Exchange rates for currency normalization | [[apps/node-backend/src/routes/info.js]] |
 
 **Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
+
+## Phase 13 Additions: Pivot Table Drillthrough (April 2026)
+
+The CategoryPivotTable now supports clickable drillthrough to filtered transaction lists:
+
+### Backend Filter Enhancements
+
+Two new query parameters added to `GET /api/transactions`:
+
+- **`category_ids` (comma-separated string):** Filters by multiple category IDs. Enables drilling through entire category groups (e.g., "FOOD:GROCERIES", "FOOD:DINING", "FOOD:ALCOHOL"). Takes precedence ignored if `category_id` (singular) is set.
+- **`transaction_type` (enum: 'income' | 'expense'):** Filters by transaction sign. Enables income-only or expense-only views in pivot drillthrough.
+
+**Backend Implementation:**
+- `[[apps/node-backend/src/services/filterBuilder.js]]` — `buildTransactionWhere()` now accepts `categoryIds` and `transactionType` params
+- `[[apps/node-backend/src/routes/transactions.js]]` — `parseTransactionListQuery()` parses comma-separated `category_ids` and `transaction_type` from query string
+- `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` destructures and forwards filter params to service layer
+
+### Frontend Drillthrough Implementation
+
+**Component:** `[[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]]`
+
+**Helpers:**
+- `lastDayOfMonth(period: string): string` — Computes the last day of a month (e.g., `2026-03` → `2026-03-31`)
+- `buildDrillUrl(params)` — Constructs drill URL with category, period, and transaction-type filters
+
+**Interaction:**
+- All non-zero pivot cells are clickable
+- Detail rows drill to single category or multiple categories (for group headers)
+- Period column drills include start/end date filters
+- Total column drills omit date filters (all periods)
+- Income-only/expense-only modes propagate `transaction_type` to the drill URL
+
+**Test Coverage:**
+- `[[apps/frontend/src/components/statistics/CategoryPivotTable.test.ts]]` — 11 tests covering `lastDayOfMonth` and `buildDrillUrl` helpers
 
 ## Phase 7 Additions (April 2026)
 

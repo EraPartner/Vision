@@ -9,7 +9,7 @@ interface YearlySummaryTableProps {
 
 export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
   const { t } = useLanguage();
-  const { formatCurrency, locale } = useChartCurrencyFormatter();
+  const { formatCompact, locale } = useChartCurrencyFormatter();
 
   return (
     <Card>
@@ -38,27 +38,32 @@ export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
             </tr>
           </thead>
           <tbody>
-            {data.yearlyComparison.map((y) => (
-              <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">
-                <td className="py-2 px-3 font-medium">{y.year}</td>
-                <td className="text-right py-2 px-3 text-accent tabular-nums">
-                  {formatCurrency(y.totalIncome)}
-                </td>
-                <td className="text-right py-2 px-3 text-destructive tabular-nums">
-                  {formatCurrency(y.totalSpending)}
-                </td>
-                <td
-                  className={`text-right py-2 px-3 font-bold tabular-nums ${
-                    y.net >= 0 ? "text-accent" : "text-destructive"
-                  }`}
-                >
-                  {formatCurrency(y.net)}
-                </td>
-                <td className="text-right py-2 px-3 tabular-nums">
-                  {new Intl.NumberFormat(locale).format(y.transactionCount)}
-                </td>
-              </tr>
-            ))}
+            {data.yearlyComparison.map((y) => {
+              const incomeR = formatCompact(y.totalIncome);
+              const spendingR = formatCompact(y.totalSpending);
+              const netR = formatCompact(y.net);
+              return (
+                <tr key={y.year} className="border-b border-border/50 hover:bg-muted/50">
+                  <td className="py-2 px-3 font-medium">{y.year}</td>
+                  <td className="text-right py-2 px-3 text-accent tabular-nums">
+                    <span title={incomeR.isCompact ? incomeR.full : undefined}>{incomeR.display}</span>
+                  </td>
+                  <td className="text-right py-2 px-3 text-destructive tabular-nums">
+                    <span title={spendingR.isCompact ? spendingR.full : undefined}>{spendingR.display}</span>
+                  </td>
+                  <td
+                    className={`text-right py-2 px-3 font-bold tabular-nums ${
+                      y.net >= 0 ? "text-accent" : "text-destructive"
+                    }`}
+                  >
+                    <span title={netR.isCompact ? netR.full : undefined}>{netR.display}</span>
+                  </td>
+                  <td className="text-right py-2 px-3 tabular-nums">
+                    {new Intl.NumberFormat(locale).format(y.transactionCount)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </CardContent>

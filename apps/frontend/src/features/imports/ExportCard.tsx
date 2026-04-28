@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { API_BASE_URL } from "@/lib/api";
+import { downloadBlob } from "@/lib/downloadBlob";
 import {
   Card,
   CardContent,
@@ -9,25 +10,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
+import { CategoryMultiCombobox } from "@/components/shared/CategoryMultiCombobox";
+import { BankAccountMultiCombobox } from "@/components/shared/BankAccountMultiCombobox";
 import { toast } from "sonner";
 import { CheckCircle2, Download, Loader2 } from "lucide-react";
 
 interface ExportFilters {
   startDate: string;
   endDate: string;
-  bankAccount: string;
-  categoryId: string;
+  bankAccounts: string[];
+  categoryIds: number[];
 }
 
 const DEFAULT_FILTERS: ExportFilters = {
   startDate: "",
   endDate: "",
-  bankAccount: "",
-  categoryId: "",
+  bankAccounts: [],
+  categoryIds: [],
 };
 
 export function ExportCard() {
@@ -42,8 +44,8 @@ export function ExportCard() {
       const queryParams = new URLSearchParams();
       if (filters.startDate) queryParams.append('start_date', filters.startDate);
       if (filters.endDate) queryParams.append('end_date', filters.endDate);
-      if (filters.bankAccount) queryParams.append('bank_account', filters.bankAccount);
-      if (filters.categoryId) queryParams.append('category_id', filters.categoryId);
+      if (filters.bankAccounts.length > 0) queryParams.append('bank_accounts', filters.bankAccounts.join(','));
+      if (filters.categoryIds.length > 0) queryParams.append('category_ids', filters.categoryIds.join(','));
 
       const url = `${API_BASE_URL}/api/transactions/export/${format}?${queryParams.toString()}`;
       const response = await fetch(url, { method: 'GET' });
@@ -51,13 +53,9 @@ export function ExportCard() {
       if (!response.ok) throw new Error(t('importPage.toast.exportFailed'));
 
       const blob = await response.blob();
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
       const date = new Date().toISOString().slice(0, 10);
-      link.download = format === 'json' ? `transactions_${date}.ndjson` : `transactions_${date}.csv`;
-      link.click();
-      URL.revokeObjectURL(downloadUrl);
+      const filename = format === 'json' ? `transactions_${date}.ndjson` : `transactions_${date}.csv`;
+      downloadBlob(blob, filename);
 
       toast.success(t('importPage.toast.exportSuccess'), {
         icon: <CheckCircle2 className="h-4 w-4" />,
@@ -91,7 +89,7 @@ export function ExportCard() {
           <div className="space-y-4 mb-4 p-4 border rounded-lg bg-muted/30">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="start-date">{t('importPage.startDate')}</Label>
+                <Label>{t('importPage.startDate')}</Label>
                 <DatePicker
                   value={filters.startDate ? parseLocalDateFromYmd(filters.startDate) : undefined}
                   onChange={(date) => setFilters({ ...filters, startDate: date ? toYmd(date) : "" })}
@@ -101,7 +99,7 @@ export function ExportCard() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="end-date">{t('importPage.endDate')}</Label>
+                <Label>{t('importPage.endDate')}</Label>
                 <DatePicker
                   value={filters.endDate ? parseLocalDateFromYmd(filters.endDate) : undefined}
                   onChange={(date) => setFilters({ ...filters, endDate: date ? toYmd(date) : "" })}
@@ -114,21 +112,19 @@ export function ExportCard() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="bank-account">{t('importPage.bankAccount')}</Label>
-                <Input
-                  id="bank-account"
-                  placeholder={t('importPage.placeholderMainAccount')}
-                  value={filters.bankAccount}
-                  onChange={(e) => setFilters({ ...filters, bankAccount: e.target.value })}
+                <Label>{t('importPage.bankAccounts')}</Label>
+                <BankAccountMultiCombobox
+                  value={filters.bankAccounts}
+                  onChange={(ibans) => setFilters({ ...filters, bankAccounts: ibans })}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category-id">{t('importPage.categoryId')}</Label>
-                <Input
-                  id="category-id"
-                  placeholder={t('importPage.placeholderCategoryId')}
-                  value={filters.categoryId}
-                  onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+                <Label>{t('importPage.categories')}</Label>
+                <CategoryMultiCombobox
+                  value={filters.categoryIds}
+                  onChange={(ids) => setFilters({ ...filters, categoryIds: ids })}
+                  className="w-full"
                 />
               </div>
             </div>

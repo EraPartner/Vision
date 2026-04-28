@@ -71,6 +71,23 @@ describe('buildTransactionWhere', () => {
     expect(params).toEqual([5]);
   });
 
+  it('recipientGroupId resolves full primary group including parent and siblings', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientGroupId: 7 });
+    expect(sql).toContain('t.recipient_id = $1');
+    expect(sql).toContain('r.primary_recipient_id = $1');
+    expect(sql).toContain('SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL');
+    expect(params).toEqual([7]);
+    expect(nextParamIdx).toBe(2);
+  });
+
+  it('recipientGroupId and recipientId can coexist and use sequential $-indices', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ recipientId: 3, recipientGroupId: 7 });
+    expect(sql).toContain('t.recipient_id = $1 OR r.primary_recipient_id = $1');
+    expect(sql).toContain('t.recipient_id = $2');
+    expect(params).toEqual([3, 7]);
+    expect(nextParamIdx).toBe(3);
+  });
+
   it('search parameter is referenced by every LIKE column with a single $-slot', () => {
     const { sql, params, nextParamIdx } = buildTransactionWhere({ search: 'groceries' });
     // Every column reuses $1 (single bound value).
@@ -174,5 +191,100 @@ describe('buildAggregationFilter', () => {
     expect(whereSql).toBe('1=1 AND t.is_active = true AND t.bank_account ILIKE $1');
     expect(params).toEqual(['%BE12%']);
     expect(nextParamIdx).toBe(2);
+  });
+});
+
+describe('buildTransactionWhere — bankAccounts (plural IN clause)', () => {
+  it('builds correct IN clause for exact IBAN match', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ bankAccounts: ['NL12INGB0001234567', 'BE68539007547034'], active: false });
+    expect(sql).toContain('t.bank_account IN ($1, $2)');
+    expect(params).toEqual(['NL12INGB0001234567', 'BE68539007547034']);
+    expect(nextParamIdx).toBe(3);
+  });
+
+  it('skips clause when array is empty', () => {
+    const { sql, params } = buildTransactionWhere({ bankAccounts: [], active: false });
+    expect(sql).not.toContain('t.bank_account IN');
+    expect(params).toHaveLength(0);
+  });
+
+  it('filters out empty string values', () => {
+    const { sql, params } = buildTransactionWhere({ bankAccounts: ['', '  '], active: false });
+    expect(sql).not.toContain('t.bank_account IN');
+    expect(params).toHaveLength(0);
+  });
+
+  it('bankAccount (singular ILIKE) takes precedence over bankAccounts', () => {
+    const { sql, params } = buildTransactionWhere({ bankAccount: 'NL12', bankAccounts: ['BE68539007547034'], active: false });
+    expect(sql).toContain('ILIKE');
+    expect(sql).not.toContain('IN (');
+    expect(params).toEqual(['%NL12%']);
+  });
+
+  it('caps at MAX_LIST_SIZE (50) entries', () => {
+    const accounts = Array.from({ length: 60 }, (_, i) => `IBAN${i}`);
+    const { params } = buildTransactionWhere({ bankAccounts: accounts, active: false });
+    expect(params).toHaveLength(50);
+  });
+
+  it('respects startParamIdx offset', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ bankAccounts: ['NL12INGB0001234567'], active: false, startParamIdx: 4 });
+    expect(sql).toContain('IN ($4)');
+    expect(params).toEqual(['NL12INGB0001234567']);
+    expect(nextParamIdx).toBe(5);
+  });
+});
+
+describe('buildTransactionWhere — transactionType', () => {
+  it('adds t.amount > 0 for income', () => {
+    const { sql } = buildTransactionWhere({ transactionType: 'income', active: false });
+    expect(sql).toContain('t.amount > 0');
+    expect(sql).not.toContain('t.amount < 0');
+  });
+
+  it('adds t.amount < 0 for expense', () => {
+    const { sql } = buildTransactionWhere({ transactionType: 'expense', active: false });
+    expect(sql).toContain('t.amount < 0');
+    expect(sql).not.toContain('t.amount > 0');
+  });
+
+  it('adds no amount clause for null transactionType', () => {
+    const { sql } = buildTransactionWhere({ transactionType: null, active: false });
+    expect(sql).not.toContain('t.amount');
+  });
+
+  it('transactionType does not consume $-params', () => {
+    const { params, nextParamIdx } = buildTransactionWhere({ transactionType: 'income', active: false });
+    expect(params).toHaveLength(0);
+    expect(nextParamIdx).toBe(1);
+  });
+});
+
+describe('buildTransactionWhere — categoryIds (plural IN clause)', () => {
+  it('builds correct IN clause', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ categoryIds: [2, 5, 9], active: false });
+    expect(sql).toContain('COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IN ($1, $2, $3)');
+    expect(params).toEqual([2, 5, 9]);
+    expect(nextParamIdx).toBe(4);
+  });
+
+  it('drops invalid ids silently and skips clause when nothing remains', () => {
+    const { sql, params } = buildTransactionWhere({ categoryIds: [0, -1, null, 1.5], active: false });
+    expect(sql).not.toContain('IN (');
+    expect(params).toHaveLength(0);
+  });
+
+  it('categoryId (singular) takes precedence over categoryIds', () => {
+    const { sql, params } = buildTransactionWhere({ categoryId: 3, categoryIds: [1, 2], active: false });
+    expect(sql).toContain('= $1');
+    expect(sql).not.toContain('IN (');
+    expect(params).toEqual([3]);
+  });
+
+  it('respects startParamIdx offset', () => {
+    const { sql, params, nextParamIdx } = buildTransactionWhere({ categoryIds: [4, 7], active: false, startParamIdx: 3 });
+    expect(sql).toContain('IN ($3, $4)');
+    expect(params).toEqual([4, 7]);
+    expect(nextParamIdx).toBe(5);
   });
 });

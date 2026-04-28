@@ -34,3 +34,27 @@ export function formatPeriodShort(period: string): string {
     return period;
   }
 }
+
+export interface ExpandableGroupInput {
+  general: string;
+  children: ReadonlyArray<{ detailName: string }>;
+}
+
+// A group is expandable iff it has at least one child whose detailName
+// differs from the parent general name. Flat categories produce a single
+// self-child (detailName === general) and must not show a chevron.
+export function isExpandableGroup(group: ExpandableGroupInput): boolean {
+  return group.children.some((c) => c.detailName !== group.general);
+}
+
+export function computeMasterToggleState(
+  expandableGroupNames: ReadonlyArray<string>,
+  collapsedGroups: ReadonlySet<string>
+): { hasExpandable: boolean; allCollapsed: boolean } {
+  return {
+    hasExpandable: expandableGroupNames.length > 0,
+    allCollapsed:
+      expandableGroupNames.length > 0 &&
+      expandableGroupNames.every((g) => collapsedGroups.has(g)),
+  };
+}

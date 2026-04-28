@@ -24,6 +24,10 @@ export async function getBanks(): Promise<{ banks: string[] }> {
     return { banks: data.adapters.map((a) => a.key) };
 }
 
+export function getDistinctBankAccounts(): Promise<{ banks: string[] }> {
+    return apiRequest('/api/info/banks');
+}
+
 export function getTransactionSummary(params?: {
     bank_account?: string;
     start_date?: string;

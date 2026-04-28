@@ -3,9 +3,9 @@ title: Dashboard Components
 type: component
 status: active
 date: 2026-04-17
-updated: 2026-04-25
-tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, ensemble, visx]
-description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts
+updated: 2026-04-28
+tags: [components, dashboard, charts, widgets, liquid-glass, design-system, phase-9, phase-d, phase-f, phase-h, phase-h-v2, ensemble, visx, url-persistence, rolling-cache, rolling-diagnostics]
+description: Dashboard-specific components for financial overview and visualization with liquid-glass aesthetic and visx charts, including dual-mode cash flow forecast with URL state persistence and rolling window diagnostics
 aliases: [dashboard-widgets, dashboard-charts, overview-components, stat-cards]
 related_code: ["apps/frontend/src/components/dashboard"]
 ---
@@ -31,7 +31,9 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | MonthlyTrendsChart | Monthly income vs expenses bar chart (visx) | [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx\|MonthlyTrendsChart.tsx]] |
 | CategoryPieChart | Spending by category pie chart (visx) | [[apps/frontend/src/components/dashboard/CategoryPieChart.tsx\|CategoryPieChart.tsx]] |
 | CashFlowComparisonChart | Current vs previous period comparison (visx) | [[apps/frontend/src/components/dashboard/CashFlowComparisonChart.tsx\|CashFlowComparisonChart.tsx]] |
-| CashFlowForecastChart | 8-method statistical forecast with controls, MC bands, and diagnostics (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
+| CashFlowForecastChart | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]] |
+| ForecastInner | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel | [[apps/frontend/src/components/dashboard/ForecastInner.tsx\|ForecastInner.tsx]] |
+| ForecastInnerRolling | Rolling-window forecast rendering with preset duration chips and "today" reference line | [[apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]] |
 | CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F) | [[apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
 | BankBalancesWidget | Bank account balance display | [[apps/frontend/src/components/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]] |
 | MonthlySpendingChart | Monthly spending line chart (visx) | [[apps/frontend/src/components/dashboard/MonthlySpendingChart.tsx\|MonthlySpendingChart.tsx]] |
@@ -48,6 +50,7 @@ Displays a single statistic with optional trend indicator.
 interface StatCardProps {
   title: string;           // Card title
   value: string;           // Main value to display
+  titleValue?: string;     // Full value for tooltip (e.g., "€5,234.56" when display is "€5.2K")
   change?: string;         // Delta text (e.g., "+12%")
   changeType?: "positive" | "negative" | "neutral";
   subtitle?: string;       // Subtitle when no change
@@ -60,15 +63,24 @@ interface StatCardProps {
 
 ```tsx
 import { DollarSign } from "lucide-react";
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
-<StatCard
-  title="Total Income"
-  value="€5,000"
-  change="+12% vs last month"
-  changeType="positive"
-  icon={DollarSign}
-  trend="income"
-/>
+function MyCard() {
+  const { formatCompact } = useChartCurrencyFormatter();
+  const { display, full, isCompact } = formatCompact(5234.56);
+  
+  return (
+    <StatCard
+      title="Total Income"
+      value={display}
+      titleValue={isCompact ? full : undefined}  // Tooltip shows full value
+      change="+12% vs last month"
+      changeType="positive"
+      icon={DollarSign}
+      trend="income"
+    />
+  );
+}
 ```
 
 ### Visual Features
@@ -78,6 +90,7 @@ import { DollarSign } from "lucide-react";
 - Animated hover effect (lift + shadow)
 - Color-coded change indicator
 - Large formatted value with gradient text
+- **Compact currency display** — Optional `titleValue` prop enables tooltip showing full value when display is compacted (e.g., "€5.2K" with "€5,234.56" on hover)
 
 ### Surface Consistency (April 2026)
 
@@ -217,9 +230,9 @@ Code links: [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/frontend/src/c
 
 ---
 
-## CashFlowForecastChart (Phase C + F)
+## CashFlowForecastChart (Phase C + F + H + H v2)
 
-Multi-method cash flow forecast visualization with 8 statistical forecasting methods (7 base + inverse-MSE ensemble), confidence bands, and interactive diagnostics (Phase 10 + Phase C + Phase F). By default displays 6 methods (5 point methods + ensemble); Monte Carlo methods are hidden by default but toggleable.
+Multi-method cash flow forecast visualization with 8 statistical forecasting methods (7 base + inverse-MSE ensemble), confidence bands, and interactive diagnostics (Phase 10 + Phase C + Phase F). Features dual-mode view: **Current Month** (classical month-view with 8 methods, diagnostics, and walk-forward backtest) and **Rolling Window** (flexible 30/60/90/180-day window with 8-method ensemble, optional walk-forward diagnostics, and 6-hour TTL cache). By default displays 6 methods (5 point methods + ensemble); Monte Carlo methods are hidden by default but toggleable in month view. URL state persistence (`forecastMode=rolling&rollingDays=90`) enables bookmarking and direct-linking to preferred forecast views.
 
 ### Props
 
@@ -233,19 +246,29 @@ interface CashFlowForecastChartProps {
 
 ### Features
 
+#### Month View (Default)
 - **Multi-method ensemble** — Displays all 8 forecasting methods: 5 point methods (Simple Average, Weighted Average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods (Parametric, Block Bootstrap) + 1 ensemble method (inverse-MSE weighted combination)
 - **Default visibility** — Shows 6 methods by default: 5 point methods + ensemble inv-MSE. Monte Carlo methods hidden by default but can be toggled on via pill controls
 - **View modes** — Tabs toggle between cumulative balance and daily net views
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative forecast; triggers API refetch
 - **Per-method toggles** — Pill-button controls to show/hide individual methods on chart
 - **Monte Carlo confidence bands** — Dashed LineSeries rendering P10/P90 percentiles for MC methods (visible when MC methods are toggled on)
-- **Diagnostics panel** — Right-side sheet with:
-  - Backtest accuracy table (MAE, RMSE, MAPE per method, sorted by MAE)
-  - Method rank badge (1st/2nd/3rd place by accuracy)
-  - Per-method MAE sparkline for visual comparison
-  - Ensemble weights bar chart showing inverse-MSE normalized weights per method (Phase F)
+- **Diagnostics panel** — Right-side sheet with backtest accuracy table, method rank badges, MAE sparklines, ensemble weights visualization
 - **Diagnostics button** — Icon button to open/close sheet
-- **Self-contained data loading** — Internal `useQuery(getCashflowForecastMethods)` with params derived from props and local state
+
+#### Rolling Window View (Phase H + v2)
+- **Flexible window duration** — Preset chip row: 30, 60, 90, 180 days; selected window determines forecast horizon and historical lookback
+- **Full 8-method ensemble** — All 8 forecasting methods available (5 point + 2 MC + 1 ensemble), same as month view
+- **MC confidence bands** — Toggleable P25/P75 bands for Monte Carlo methods
+- **Cumulative anchor** — Cumulative balance computed relative to window start (not absolute account balance), enabling rolling trend visualization
+- **Today reference line** — Vertical line marking current date within the rolling window
+- **Optional diagnostics** — Diagnostics panel available when `include_backtest=true`; shows walk-forward results for rolling window
+- **MC rolling cache** — Uses 6-hour TTL cache when using default MC params (1000 paths, [10,50,90] percentiles); skipped when `include_backtest=true`
+- **URL state persistence** — `forecastMode=rolling&rollingDays=90` saved to URL via `useSearchParams()` with replace history; users can bookmark and share preferred views
+
+#### Shared
+- **Tab segmented control** — `[Current month | Rolling window]` at top of card
+- **Self-contained data loading** — Internal query logic with params derived from props and local state
 
 ### Usage
 
@@ -259,7 +282,8 @@ interface CashFlowForecastChartProps {
 
 ### Data Fetching
 
-Component calls `getCashflowForecastMethods()` from the API client with parameters:
+#### Month View
+Component calls `getCashflowForecastMethods()` with parameters:
 - `currency` (from props)
 - `excluded_category_ids[]`, `excluded_recipient_ids[]` (from props)
 - `history_months` (default 36)
@@ -269,6 +293,24 @@ Component calls `getCashflowForecastMethods()` from the API client with paramete
 - `include_backtest` (true, always included for diagnostics)
 
 Query refetches when `includePlanned` toggle changes or props change.
+
+#### Rolling Window View
+Component calls `getCashflowForecastRolling()` with parameters:
+- `currency` (from props)
+- `days_forward` (30, 60, 90, or 180 from preset chips, matching selected `rollingDays`)
+- `days_back` (same as `days_forward`, symmetric window)
+- `history_months` (default 36 for training)
+- `mc_paths` (default 500 for reduced computation)
+- `mc_percentiles` (default [25, 75] for tighter confidence bands)
+- `include_planned` (from local Switch state)
+- `include_backtest` (true, always included for diagnostics consistency with month view)
+
+Query refetches when window preset changes (chip selection) or props change.
+
+**State Persistence:**
+- `forecastMode` and `rollingDays` stored in URL query params via `useSearchParams()`
+- Setters use `{ replace: true }` to prevent building browser history
+- Page initialization derives mode/rollingDays from URL on mount
 
 ### Default Visibility
 
@@ -296,9 +338,9 @@ The `visibleMethodIds` state is initialized to `DEFAULT_VISIBLE_METHOD_IDS`. Use
 
 ---
 
-## CashFlowForecastDiagnostics (Phase C + D + F)
+## CashFlowForecastDiagnostics (Phase C + D + F + H v2)
 
-Right-side diagnostics sheet panel for forecast accuracy metrics, persisted accuracy history, and ensemble weight visualization.
+Right-side diagnostics sheet panel for forecast accuracy metrics, persisted accuracy history, and ensemble weight visualization. Supports both month-view (per-calendar-month backtest) and rolling-window (walk-forward rolling backtest) diagnostics by detecting active forecast mode and fetching appropriate data source.
 
 ### Props
 
@@ -318,10 +360,13 @@ interface CashFlowForecastDiagnosticsProps {
   - Per-method MAE sparkline (24-month trend from persisted accuracy history — Phase D)
   - Helps identify best-performing forecasting method for your data
 
-- **Data loading (Phase D)** — Sheet-open triggered lazy loading
+- **Data loading (Phase D + H v2)** — Sheet-open triggered lazy loading
   - Fetches persisted accuracy history via `useQuery(getCashflowForecastAccuracy)` when open
   - staleTime 10 minutes to avoid excessive refetch
   - Falls back to current session backtest if Postgres table is missing (error code 42P01)
+  - **Mode detection (H v2):** Detects active forecast mode (month vs. rolling) and selects appropriate data source
+    - Month view: Uses per-calendar-month backtest from API response
+    - Rolling view: Uses rolling walk-forward backtest when `include_backtest=true`
 
 - **Ensemble weights visualization (Phase F)** — Bar chart showing inverse-MSE normalized weights per method
   - Heights represent relative weighting of each point method in ensemble combination
@@ -331,6 +376,8 @@ interface CashFlowForecastDiagnosticsProps {
 - **Sheet positioning** — Right side of screen, overlays chart; dismissible via close button or background click
 
 - **Informational note** — Distinguishes backtest results (current session) from persisted history (nightly updates, Phase D)
+
+- **Multi-mode support (H v2)** — Diagnostics button and sheet visible in both month and rolling modes; content adapts to active mode
 
 ### Usage
 
@@ -372,6 +419,94 @@ const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
 ---
 
+## ForecastInnerRolling (Phase H)
+
+Rolling-window cash-flow forecast rendering component — displays actual transactions (past), planned transactions (overlay), and statistical projection across a flexible N-day rolling window.
+
+### Props
+
+```typescript
+interface ForecastInnerRollingProps {
+  data: CashflowForecastRollingData;  // Merged daily entries from API
+  currency: string;                    // Display currency
+  isLoading: boolean;                  // Data loading state
+  daysForward: 30 | 60 | 90 | 180;    // Active window duration preset
+  onDaysForwardChange: (days: 30 | 60 | 90 | 180) => void;  // Preset changed
+}
+```
+
+### Features
+
+- **Preset window chips** — Four fixed durations: 30, 60, 90, 180 days; user selects via pill buttons
+- **Merged daily series** — Shows actual transactions (grey/muted), planned transactions (colored overlay), and statistical simple-average forecast
+- **Cumulative balance chart** — LineChart rendering cumulative balance through window, with visual distinction for data sources
+- **Today reference line** — Vertical line marking current date within rolling window (enables "before/after today" visualization)
+- **Source coloring** — Visually distinct colors for `'actual'` (muted), `'planned'` (highlight), `'forecast'` (projection)
+- **Window boundaries** — Displays window start and end dates for context
+- **Loading state** — Renders skeleton/spinner during API fetch
+
+### Data Shape
+
+Receives pre-merged data from `getCashflowForecastRolling()`:
+
+```typescript
+interface CashflowForecastRollingData {
+  currency: string;
+  days_forward: number;
+  days_back: number;
+  today: string;          // YYYY-MM-DD
+  window_start: string;   // today - days_back
+  window_end: string;     // today + days_forward
+  merged: Array<{
+    date: string;                        // YYYY-MM-DD
+    net: number;                         // Daily net amount
+    cumulative: number;                  // Cumulative from window start
+    source: 'actual' | 'planned' | 'forecast';
+  }>;
+}
+```
+
+### Usage (within CashFlowForecastChart)
+
+```tsx
+const [daysForward, setDaysForward] = useState(30);
+
+const { data: rollingData } = useQuery({
+  queryKey: ['cashflowForecastRolling', daysForward, ...],
+  queryFn: () => getCashflowForecastRolling({
+    days_forward: daysForward,
+    days_back: daysForward * 3,  // 3× lookback
+    currency
+  })
+});
+
+<ForecastInnerRolling
+  data={rollingData}
+  currency={currency}
+  isLoading={isLoading}
+  daysForward={daysForward}
+  onDaysForwardChange={setDaysForward}
+/>
+```
+
+### Visual Design
+
+- **Container**: `surface-elevated premium-frame` (glass surface, consistent with month-view)
+- **Chart area**: LineChart with cumulative series, muted grid, "today" vertical reference
+- **Preset chips**: Horizontally scrollable row of pill buttons (one active)
+- **Legend**: Simplified — shows three data sources (actual, planned, forecast)
+- **Tooltips**: Show date, source, daily net, cumulative balance on hover
+- **Responsive**: Mobile-friendly with stacked chips, responsive chart height
+
+### Related
+
+- [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] — Phase H
+- [[docs/components/dashboard|Dashboard Components]]
+- [[docs/api/aggregations|Aggregations API]] — `/api/aggregations/cashflow-forecast-rolling`
+- [[docs/components/charts|Chart Primitives]] — LineChart + vertical reference lines
+
+---
+
 ## BankBalancesWidget
 
 Displays current balances for all bank accounts.
@@ -407,7 +542,7 @@ interface BankBalancesWidgetProps {
 - List of accounts with balances
 - Transaction count per account
 - Date range of transactions
-- Currency formatting
+- Currency formatting — large balances use compact notation (`formatCurrencyCompact`) with full value in `title` tooltip
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 - Total net-position card now uses non-glass `premium-frame` treatment for clearer hierarchy against dashboard hero stat cards
 - Per-account balance cards use a subtle `premium-frame` treatment (non-glass) to keep dense data readable

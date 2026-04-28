@@ -3,7 +3,9 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-tags: [component, shared, utility, frontend, reference]
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [component, shared, utility, frontend, reference, phase-13, multi-select, export-filters]
 description: Reference documentation for shared utility components used across the application
 aliases: [shared components, utility components, common components]
 related_code:
@@ -13,6 +15,8 @@ related_code:
   - apps/frontend/src/components/shared/dateUtils.ts
   - apps/frontend/src/components/shared/ErrorBoundary.tsx
   - apps/frontend/src/components/shared/CategoryCombobox.tsx
+  - apps/frontend/src/components/shared/CategoryMultiCombobox.tsx
+  - apps/frontend/src/components/shared/BankAccountMultiCombobox.tsx
   - apps/frontend/src/components/shared/RecipientCombobox.tsx
   - apps/frontend/src/components/shared/ExclusionToggle.tsx
   - apps/frontend/src/components/shared/WidgetVisibilityDialog.tsx
@@ -160,7 +164,71 @@ React Error Boundary component that catches rendering errors and displays a fall
 
 **Path:** `[[apps/frontend/src/components/shared/CategoryCombobox.tsx]]`
 
-Combobox for selecting categories with `GENERAL: DETAIL` format display. Used in transaction forms, filters, and settings.
+Single-select combobox for selecting a category with `GENERAL: DETAIL` format display. Used in transaction forms, filters, and settings.
+
+### Props
+
+```typescript
+interface CategoryComboboxProps {
+  value: number | null;
+  onChange: (categoryId: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+```
+
+## CategoryMultiCombobox
+
+**Path:** `[[apps/frontend/src/components/shared/CategoryMultiCombobox.tsx]]` (Phase 13)
+
+Multi-select category picker using Popover + Command (shadcn-ui). Allows selection of multiple categories for export filtering.
+
+### Features
+
+- **Multi-select**: Select multiple categories; selected items sort to top of list
+- **Display**: Shows "{n} categories" when multiple selected, "All categories" when none selected
+- **Clear button**: Clears all selections
+- **i18n**: Uses `combobox.categoryMulti.*` keys
+
+### Props
+
+```typescript
+interface CategoryMultiComboboxProps {
+  value: number[];
+  onChange: (categoryIds: number[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+```
+
+## BankAccountMultiCombobox
+
+**Path:** `[[apps/frontend/src/components/shared/BankAccountMultiCombobox.tsx]]` (Phase 13)
+
+Multi-select bank account picker for export filtering. Fetches distinct IBANs from `/api/info/banks` endpoint using `useBankAccounts` hook.
+
+### Features
+
+- **Multi-select**: Select multiple bank accounts (real IBANs, not adapter keys)
+- **Display**: Shows "{n} accounts" when multiple selected, "All accounts" when none selected
+- **Clear button**: Clears all selections
+- **Data source**: Real bank account IBANs from API (differs from deprecated `getBanks()` which returned adapter keys)
+- **i18n**: Uses `combobox.bankAccount.*` keys
+
+### Props
+
+```typescript
+interface BankAccountMultiComboboxProps {
+  value: string[];
+  onChange: (ibans: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+```
+
+### Dependencies
+
+Uses `useBankAccounts` hook (Phase 13) which wraps `apiClient.getDistinctBankAccounts()` with 2-min staleTime cache.
 
 ## RecipientCombobox
 
@@ -209,6 +277,8 @@ Shows notifications for upcoming planned/recurring payments.
 | ColumnFilter | DataTable + VirtualDataTable column filtering |
 | dateUtils | Every page (date formatting) |
 | CategoryCombobox | Transaction forms, filters, category assignment |
+| CategoryMultiCombobox | Export filters (Phase 13) |
+| BankAccountMultiCombobox | Export filters (Phase 13) |
 | RecipientCombobox | Transaction forms, filters |
 | ExclusionToggle | Statistics page (per-graph toggles) |
 | WidgetVisibilityDialog | Statistics, Portfolio Tax |

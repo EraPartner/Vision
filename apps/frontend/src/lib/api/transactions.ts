@@ -15,7 +15,9 @@ export async function getTransactions(params?: {
     end_date?: string;
     bank_account?: string;
     category_id?: number;
+    category_ids?: number[];
     recipient_id?: number;
+    recipient_group_id?: number;
     recipient_name?: string;
     uncategorised?: boolean;
     active?: boolean;
@@ -24,6 +26,7 @@ export async function getTransactions(params?: {
     target_currency?: string;
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
+    transaction_type?: 'income' | 'expense';
 }): Promise<TransactionsListResponse> {
     const res = await requestWithQuery<TransactionsListResponse>('/api/transactions', params);
     return {

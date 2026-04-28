@@ -124,4 +124,79 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
   return Array.from(perMethod.values());
 }
 
-export default { walkForwardBacktest };
+/**
+ * Walk-forward backtest for rolling-window forecasts.
+ * Shifts the anchor back by daysForward steps `windowCount` times and evaluates
+ * each method's daysForward-day forecast against confirmed actuals.
+ *
+ * @param {{
+ *   history: Array<{date: string, net: number}>,
+ *   methods: Array<{id: string, label: string, forecast: Function}>,
+ *   daysBack: number,
+ *   daysForward: number,
+ *   windowCount?: number,
+ * }} ctx
+ */
+export function walkForwardBacktestRolling({ history, methods, daysBack, daysForward, windowCount = 8 }) {
+  const now = new Date();
+  const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const isoAt = (offset) => new Date(todayMs + offset * 86_400_000).toISOString().slice(0, 10);
+
+  const perMethod = new Map();
+  for (const m of methods) {
+    perMethod.set(m.id, { id: m.id, label: m.label, perWindow: [], aggregate: null });
+  }
+
+  const actualByDate = new Map(history.map((r) => [r.date, r.net]));
+
+  for (let k = 1; k <= windowCount; k++) {
+    // "today" for this past window is shifted back k * daysForward from actual today
+    const anchorEndOffset = -(k * daysForward);
+    const anchorEnd = isoAt(anchorEndOffset);
+
+    const forecastDates = [];
+    for (let d = anchorEndOffset + 1; d <= anchorEndOffset + daysForward; d++) {
+      forecastDates.push(isoAt(d));
+    }
+    if (forecastDates.length === 0) continue;
+
+    // Train on all data up to (and including) anchorEnd, matching live forecast behaviour.
+    const trainHistory = history.filter((r) => r.date <= anchorEnd);
+    if (trainHistory.length === 0) continue;
+
+    const actualSeries = forecastDates.map((date) => ({ date, net: actualByDate.get(date) ?? 0 }));
+
+    for (const method of methods) {
+      let predicted;
+      try {
+        const out = method.forecast({ history: trainHistory, forecastDates });
+        predicted = Array.isArray(out) ? out : out.series;
+      } catch {
+        predicted = forecastDates.map((date) => ({ date, value: 0 }));
+      }
+      const s = stats(predicted, actualSeries);
+      perMethod.get(method.id).perWindow.push({
+        window_end: anchorEnd,
+        mae: s.mae,
+        rmse: s.rmse,
+        mape: s.mape,
+        sampleDays: s.sampleDays,
+      });
+    }
+  }
+
+  for (const entry of perMethod.values()) {
+    if (entry.perWindow.length === 0) {
+      entry.aggregate = { mae: 0, rmse: 0, mape: 0, windows: 0 };
+      continue;
+    }
+    let mae = 0, rmse = 0, mape = 0;
+    for (const w of entry.perWindow) { mae += w.mae; rmse += w.rmse; mape += w.mape; }
+    const n = entry.perWindow.length;
+    entry.aggregate = { mae: mae / n, rmse: rmse / n, mape: mape / n, windows: n };
+  }
+
+  return Array.from(perMethod.values());
+}
+
+export default { walkForwardBacktest, walkForwardBacktestRolling };

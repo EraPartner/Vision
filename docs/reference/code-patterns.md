@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-04-26
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, and aggregation query optimization with Map-based single-pass accumulation
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern]
+updated: 2026-04-28
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, and recipient group resolution via scalar subqueries (Phase Q)
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId]
 ---
 
 # Code Patterns Reference
@@ -1087,12 +1087,38 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 - `params` — Flattened array of bind parameters (in order with `sql`)
 - `nextParamIdx` — First unused `$`-index for further predicates
 
+### Options
+
+| Option | Type | Purpose |
+|--------|------|---------|
+| `recipientId` | number | Filter by recipient ID directly and its aliases (one direction) |
+| `recipientGroupId` | number | Filter by full primary-recipient group (Phase Q) — resolves the complete group via scalar subqueries: matches recipient itself, all aliases, recipient's own primary, and siblings |
+
 ### Key Functions
 
 | Function | Purpose |
 |----------|---------|
 | `validateInt4Ids(ids)` | Validate array of PostgreSQL INT4 IDs; returns filtered array |
-| `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters |
+| `buildTransactionWhere(opts)` | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q) |
+
+### Recipient Group Resolution (Phase Q)
+
+`recipientGroupId` resolves a complete primary-recipient group using a four-part SQL predicate with scalar subqueries:
+
+```sql
+(
+  t.recipient_id = $N                    -- Match the recipient itself
+  OR r.primary_recipient_id = $N         -- Match any aliases under it
+  OR t.recipient_id = (
+    SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
+  )                                       -- Match the recipient's own primary (if alias)
+  OR r.primary_recipient_id = (
+    SELECT primary_recipient_id FROM recipients WHERE id = $N AND primary_recipient_id IS NOT NULL
+  )                                       -- Match siblings under that primary
+)
+```
+
+**Use case:** `RecentRecipientTransactionsTable` in `OwesPage` queries `recipient_group_id` to show all transactions for a recipient and linked aliases in a unified view, enabling discovery of the full transaction history even when linked recipients are involved.
 
 ---
 
@@ -2228,6 +2254,64 @@ const slice = useAppStore(
 **Migration Path:** Alembic migration `0011_drop_feature_flags` drops the table while preserving the creation migration (`0002_feature_flags.py`) in the history for audit/compliance purposes.
 
 **For New Features:** If you need to control feature availability, use environment variables or configuration instead of database-backed toggles. See [[docs/adr/035-remove-feature-flags|ADR-035]] for rationale.
+
+---
+
+## Compact Currency Formatting Pattern
+
+**Source:** `[[apps/frontend/src/utils/currency.ts]]`, `[[apps/frontend/src/hooks/useChartCurrencyFormatter.ts]]`
+
+Large monetary totals in headline slots (dashboard cards, statistics tables) abbreviate automatically when the full formatted string exceeds 9 characters. Full precision is preserved in a native `title` tooltip. No user-configurable toggle — always on.
+
+### Utility Function
+
+```typescript
+import { formatCurrencyCompact } from "@/utils/currency";
+
+const result = formatCurrencyCompact(1_253_632, "EUR", "en-US", 2);
+// result.display  → "$1.3M"    (compact, shown in UI)
+// result.full     → "$1,253,632.00"  (full, shown on hover)
+// result.isCompact → true
+```
+
+`CompactFormatResult`:
+```typescript
+export interface CompactFormatResult {
+  display: string;   // compact if full > 9 chars AND compact is shorter, else full
+  full: string;      // always full-precision
+  isCompact: boolean;
+}
+```
+
+Threshold constant: `COMPACT_LENGTH_THRESHOLD = 9`. Guard: if `compact.length >= full.length`, returns full (avoids mid-range values where compact is paradoxically longer).
+
+### Hook Usage (Preferred)
+
+```tsx
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+
+function HeadlineCard({ amount }: { amount: number }) {
+  const { formatCompact } = useChartCurrencyFormatter();
+  const r = formatCompact(amount);
+  return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>;
+}
+```
+
+`formatCompact` is bound to the current user locale and currency from `AppSettingsContext` — no need to pass currency/locale explicitly.
+
+### Render Pattern
+
+- Attach `title` **only when `isCompact` is true** — avoids redundant tooltip on full-precision renders.
+- Use `tabular-nums` class alongside compact values in tables for alignment consistency.
+- In animated count-up contexts (`useCountUp`), pass `formatValue={r => formatCompact(r).display}` and a static `titleValue={r.isCompact ? r.full : undefined}` computed once from the final value (not every animation frame).
+
+### Scope
+
+Apply compact formatting to headline / summary slots only:
+- Dashboard: `NetSummaryCard`, `BankBalancesWidget`, `StatCard` (income/spending/net cards)
+- Statistics: `SummaryCards`, `YearlySummaryTable`, `CategoryPivotTable` (grand-total row/column only)
+
+**Out of scope:** portfolio cards, transactions table rows, per-cell values inside `CategoryPivotTable` body (preserve full precision there).
 
 ---
 

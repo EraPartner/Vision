@@ -3,9 +3,9 @@ title: Statistics Components
 type: component
 status: active
 date: 2026-04-24
-updated: 2026-04-25
-tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance]
-description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization
+updated: 2026-04-28
+tags: [components, statistics, charts, frontend, refactoring, lazy-loading, memoization, performance, phase-13, drillthrough]
+description: Statistics page sub-components and shared utilities for composable analytics widgets with lazy-loading per tab and component memoization. Phase 13 adds pivot table drillthrough to transactions page.
 related_code:
   - apps/frontend/src/pages/StatisticsPage.tsx
   - apps/frontend/src/components/statistics/
@@ -272,33 +272,62 @@ Wrapped with `React.memo()` to prevent re-renders when parent props change.
 
 ### CategoryPivotTable
 
-**File:** `CategoryPivotTable.tsx` (240 lines)  
-**Purpose:** Hierarchical category × month pivot table with mode/year filters
+**File:** `CategoryPivotTable.tsx` (240 lines, Phase 13)  
+**Purpose:** Hierarchical category × month pivot table with mode/year filters and clickable drillthrough
 
 **Props:**
 
 ```typescript
 interface CategoryPivotTableProps {
-  data: StatisticsData | null;
-  isLoading: boolean;
+  data: StatisticsData;
+  graphKey: string;
+  isFiltered: boolean;
+  onToggle: (key: string) => void;
+  exclusionsApply: boolean;
 }
 ```
 
 **Features:**
 
-1. **Hierarchy:** Groups `GENERAL:DETAIL` categories under their GENERAL parent, enables expand/collapse
-2. **Value modes:** Absolute (default), Net, Income-only, Expense-only (via dropdown)
-3. **Year filtering:** "All Periods" or specific year (via dropdown)
-4. **Sorting:** By total descending
-5. **Sticky columns:** Category name stays visible during horizontal scroll
-6. **Column totals:** Footer row with per-period and grand totals
-7. **Accessibility:** Keyboard navigation via arrow keys, tab through rows
+1. **Hierarchy:** Groups `GENERAL:DETAIL` categories under their GENERAL parent. Expandable parent groups show a chevron toggle; flat categories (no `:`) render without a chevron.
+2. **Collapse/Expand:** Per-row chevron buttons on parent groups with real children. CardHeader hosts a master "Expand all / Collapse all" button (hidden when no group is expandable). State is session-scoped.
+3. **Value modes:** Absolute (default), Net, Income-only, Expense-only (via dropdown)
+4. **Year filtering:** "All Periods" or specific year (via dropdown)
+5. **Sorting:** By total descending
+6. **Sticky columns:** Category name stays visible during horizontal scroll
+7. **Column totals:** Footer row with per-period and grand totals
+8. **Accessibility:** Tab through rows; chevron buttons expose `aria-expanded`/`aria-controls`, activated via Enter or Space
+9. **Drillthrough (Phase 13):** Clickable cells navigate to `/transactions` with pre-populated filters
+
+**Drillthrough Behavior (Phase 13):**
+
+All pivot cells are clickable and drill through to the TransactionsPage with pre-populated filters:
+
+| Cell Type | URL Query Params | Notes |
+|-----------|------------------|-------|
+| Detail row × month | `category_id={id}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | Single category detail |
+| Detail row × total | `category_id={id}`, `transaction_type` (if income/expense mode) | Entire detail across all periods |
+| Group header × month | `category_ids={id1,id2,...}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | All children in month |
+| Group header × total | `category_ids={id1,id2,...}`, `transaction_type` (if income/expense mode) | All children across all periods |
+| Footer × month | `category_ids={all}`, `start_date`, `end_date`, `transaction_type` (if income/expense mode) | All categories in month |
+| Footer × grand total | `category_ids={all}`, `transaction_type` (if income/expense mode) | All categories across all periods |
+
+**Collapse/Expand Detail:**
+- Each parent group with at least one child whose `detailName` differs from the parent name renders a `ChevronRight` (collapsed) / `ChevronDown` (expanded) button.
+- The CardHeader master button label is "Collapse all" when any group is expanded; "Expand all" when all are collapsed. Hidden when no group is expandable.
+- State is `useState<Set<string>>` (session-only); not persisted to localStorage or URL. Survives Year/Metric/Exclusion filter changes — collapsed keys remain stable across filter changes.
+- Flat categories (no `:` in name, `detailName === general`) do not receive a chevron.
+
+**URL Construction:**
+- `lastDayOfMonth(period)` helper computes the last day of a month (e.g., `2026-03` → `2026-03-31`)
+- `buildDrillUrl()` helper constructs the drill URL with params; zero-value cells remain non-clickable ([[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]])
+- `filter_label` param contains a human-readable label for UX context
 
 **Usage:**
 
 ```tsx
 <ChartCard graphKey="pivotTable" ...>
-  <CategoryPivotTable data={data} isLoading={isLoading} />
+  <CategoryPivotTable data={data} graphKey="pivotTable" isFiltered={isFiltered} onToggle={onToggle} exclusionsApply={exclusionsApply} />
 </ChartCard>
 ```
 
@@ -607,6 +636,23 @@ export function formatPeriodLabel(period: string): string;
 
 export function formatPeriodShort(period: string): string;
   // "2026-03" → "Mar 26"
+
+// Collapse/Expand helpers (Phase 13)
+export interface ExpandableGroupInput {
+  general: string;
+  children: ReadonlyArray<{ detailName: string }>;
+}
+
+export function isExpandableGroup(group: ExpandableGroupInput): boolean;
+  // Returns true if any child's detailName differs from parent general
+  // Flat categories (detailName === general) return false
+
+export function computeMasterToggleState(
+  expandableGroupNames: ReadonlyArray<string>,
+  collapsedGroups: ReadonlySet<string>
+): { hasExpandable: boolean; allCollapsed: boolean };
+  // Returns { hasExpandable, allCollapsed } for master toggle button state
+  // allCollapsed = true when all expandable groups are in collapsedGroups set
 ```
 
 ---
@@ -624,6 +670,7 @@ export function formatPeriodShort(period: string): string;
 ```typescript
 export interface ChartCurrencyFormatter {
   formatCurrency: (val: number) => string;
+  formatCompact: (val: number) => CompactFormatResult;
   currencySymbol: string;
   locale: string;
   currency: string;
@@ -632,11 +679,14 @@ export interface ChartCurrencyFormatter {
 export function useChartCurrencyFormatter(): ChartCurrencyFormatter
 ```
 
+(`CompactFormatResult` is `{ display: string; full: string; isCompact: boolean }` from `utils/currency.ts`.)
+
 **Behavior:**
 
 - Derives currency from `AppSettingsContext.defaultCurrency` (default: "EUR")
 - Derives locale from `AppSettingsContext.numberFormat`
 - Returns `formatCurrency()` function formatted with decimal places from settings
+- Returns `formatCompact()` — uses length-based threshold (>9 chars) to abbreviate large values via `Intl.NumberFormat({ notation: 'compact' })`; always returns `full` string for tooltip; falls back to full when compact is not shorter
 - Returns `currencySymbol` (e.g., "€" for EUR)
 
 **Usage:**
@@ -645,11 +695,13 @@ export function useChartCurrencyFormatter(): ChartCurrencyFormatter
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 
 function MyChart() {
-  const { formatCurrency, currencySymbol } = useChartCurrencyFormatter();
+  const { formatCurrency, formatCompact, currencySymbol } = useChartCurrencyFormatter();
+  const r = formatCompact(1_253_632);
   
   return (
     <div>
       <p>Income: {formatCurrency(5000)}</p>
+      <p>Large: <span title={r.isCompact ? r.full : undefined}>{r.display}</span></p>
       <p>Symbol: {currencySymbol}</p>
     </div>
   );

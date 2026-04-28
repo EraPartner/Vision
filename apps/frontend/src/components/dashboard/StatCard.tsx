@@ -14,9 +14,11 @@ interface StatCardProps {
     trend?: "income" | "expense" | "up" | "down" | "neutral";
     /** Format function that turns numeric → display string (e.g. currency formatter) */
     formatValue?: (n: number) => string;
+    /** Full unabbreviated value shown as tooltip when the displayed value is compact */
+    titleValue?: string;
 }
 
-export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue }: StatCardProps) {
+export function StatCard({ title, value, numericValue, change, changeType = "neutral", subtitle, icon: Icon, trend = "neutral", formatValue, titleValue }: StatCardProps) {
     const changeColor = {
         positive: "text-accent dark:text-accent",
         negative: "text-destructive dark:text-destructive",
@@ -55,7 +57,7 @@ export function StatCard({ title, value, numericValue, change, changeType = "neu
             </CardHeader>
             <CardContent>
                 <div className="text-3xl font-bold text-foreground tabular-nums">
-                    {displayValue}
+                    <span title={titleValue}>{displayValue}</span>
                 </div>
                 {change && (
                     <p className={`text-xs font-medium ${changeColor} mt-2 flex items-center gap-1`}>

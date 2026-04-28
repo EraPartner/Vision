@@ -16,6 +16,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import type { Transaction } from "@/types/api";
 import { toast } from "sonner";
@@ -170,12 +171,8 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
         setIsExportingCsv(true);
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
-            const downloadUrl = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = downloadUrl;
-            link.download = `owed_${recipient.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
-            link.click();
-            URL.revokeObjectURL(downloadUrl);
+            const filename = `owed_${recipient.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+            downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {
             const message = error instanceof Error ? error.message : t('owesPage.export.failed');
@@ -358,9 +355,9 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
     const loadingRef = useRef(false);
 
     const { data, isLoading } = useQuery({
-        queryKey: ['transactions', 'owes-recipient', recipientId],
+        queryKey: ['transactions', 'owes-recipient-group', recipientId],
         queryFn: () => apiClient.getTransactions({
-            recipient_id: recipientId,
+            recipient_group_id: recipientId,
             limit: 10,
             offset: 0,
             sort_by: 'transaction_date',
@@ -383,7 +380,7 @@ function RecentRecipientTransactionsTable({ recipientId, recipientName }: { reci
         setIsFetchingMore(true);
         try {
             const result = await apiClient.getTransactions({
-                recipient_id: recipientId,
+                recipient_group_id: recipientId,
                 limit: 10,
                 offset: offsetRef.current,
                 sort_by: 'transaction_date',

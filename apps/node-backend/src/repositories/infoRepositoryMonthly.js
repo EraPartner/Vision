@@ -11,6 +11,7 @@ import {
   getCashflowComparison,
   getCashflowForecastData,
   getCashflowForecastDataByCategory,
+  getCashflowForecastDataRolling,
 } from './infoRepo.forecast.js';
 
 export const monthlyRepository = {
@@ -19,4 +20,5 @@ export const monthlyRepository = {
   getCashflowComparison,
   getCashflowForecastData,
   getCashflowForecastDataByCategory,
+  getCashflowForecastDataRolling,
 };

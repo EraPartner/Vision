@@ -5,8 +5,8 @@ status: active
 date: 2026-04-27
 updated: 2026-04-28
 last_modified: 2026-04-28
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, aead, backup-v2, security-hardening, offline-resilience]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes (2026-04-28): offline-mode resilience with online-status detection, provider timeout safety, and parallel price-provider fetching; ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Recent fixes: offline-mode resilience with online-status detection, provider timeout safety, and parallel price-provider fetching; ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -157,6 +157,51 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-28 Bank Adapter Expansion: ING Dutch-Language CSV Support
+
+**New Feature:**
+- **ING Bank Support**: Added Dutch-language ING bank CSV adapter for importing transaction statements
+- **Adapter Details**: Semicolon-delimited CSV with header row containing `Omzetnummer` + `Detail van de omzet` columns
+- **Supported Fields**: Account number, counterparty IBAN, transaction reference, booking date (DD/MM/YYYY), amount (EU decimal), currency, description, counterparty name, and free-text message
+- **Detection**: Auto-detection enabled; ING imports placed before KBC in adapter registry to win detection order
+- **Testing**: Complete test coverage including adapter creation, CSV parsing, and detection logic in [[apps/node-backend/tests/bankAdapterFactory.test.js]]
+- **Documentation**: [[docs/integrations/bank-adapters#ing|Bank Adapters - ING section]]
+
+**Supported Banks Now (8):** Belfius, Revolut, ING, KBC, SABB, Wise, Vision (internal), Custom (user-defined)
+
+See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|Bank Adapters]], [[apps/node-backend/src/services/importPipeline/adapters/ing.js]]
+
+### 2026-04-28 Phase 13: Pivot Table Drillthrough with Multi-Category & Transaction-Type Filters
+
+**Feature Overview:**
+- **Pivot table drillthrough** — All non-zero cells in CategoryPivotTable now clickable; navigate to `/transactions` with pre-populated filters
+- **Category groups** — Group header cells drill through to all detail categories in that group via new `category_ids` (comma-separated) query param
+- **Single categories** — Detail row cells drill to individual category
+- **Period filtering** — Month cells include `start_date` and `end_date`; total column omits dates (all periods)
+- **Transaction type** — Income-only/Expense-only modes propagate `transaction_type` param to drill URL
+- **Zero-value cells** — Remain non-clickable (no drillthrough for empty cells)
+
+**Backend:**
+- New filters in `GET /api/transactions`: `category_ids` (comma-separated string, ignored if `category_id` set) and `transaction_type` (enum: 'income' | 'expense')
+- `[[apps/node-backend/src/services/filterBuilder.js]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
+- `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` forwards filter params
+- Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
+
+**Frontend:**
+- `[[apps/frontend/src/components/statistics/CategoryPivotTable.tsx]]` — Added `useNavigate` hook, `lastDayOfMonth()` helper, and `buildDrillUrl()` helper; all table cells with click handlers
+- `[[apps/frontend/src/lib/api/transactions.ts]]` — Extended `getTransactions()` params with `category_ids` and `transaction_type`
+- `[[apps/frontend/src/features/transactions/hooks/useTransactionListData.ts]]` — Extended options with `categoryIdsFilter`, `transactionTypeFilter`, passed through to API calls
+- `[[apps/frontend/src/pages/TransactionsPage.tsx]]` — Reads URL search params `category_ids`, `transaction_type`, passes to hook
+- `[[apps/frontend/src/features/transactions/components/FilterBanner.tsx]]` — Extended with new filter props; active-check updated
+- Tests: 11 new tests in `[[apps/frontend/src/components/statistics/CategoryPivotTable.test.ts]]`
+
+**Documentation:**
+- [[docs/api/transactions#query-parameters|Transactions API]] — Documented `category_ids` and `transaction_type` params
+- [[docs/features/statistics#phase-13-additions-pivot-table-drillthrough|Statistics Feature]] — Phase 13 drillthrough details
+- [[docs/components/statistics#categorypivottable|Statistics Components]] — Updated CategoryPivotTable component docs with drillthrough behavior
+
+See [[docs/api/transactions|Transactions API]], [[docs/features/statistics|Statistics Feature]], [[docs/components/statistics|Statistics Components]]
 
 ### 2026-04-28 Bug-Hunt Sweep: Price Validation, Provider Health, i18n Fixes
 

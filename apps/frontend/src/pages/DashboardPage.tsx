@@ -19,7 +19,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getCategoryColor } from "@/utils/categoryColors";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility, type WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -412,7 +412,7 @@ export default function DashboardPage() {
         return 'dashboard.greetingEvening';
     })();
 
-    const currencyFormatter = (n: number) => formatCurrency(n, appSettings.defaultCurrency, locale);
+    const compactCurrencyFormatter = (n: number) => formatCurrencyCompact(n, appSettings.defaultCurrency, locale).display;
 
     return (
         <div className="space-y-8 animate-in">
@@ -453,16 +453,15 @@ export default function DashboardPage() {
                         income={totalIncome}
                         spending={totalSpending}
                         history={netHistory}
-                        formatCurrency={currencyFormatter}
                     />
                 </div>
                 <div className="lg:col-span-3 lg:row-span-1">
-                    <StatCard title={t('dashboard.stat.lastMonthIncome')} value={currencyFormatter(totalIncome)} numericValue={totalIncome} formatValue={currencyFormatter} icon={ArrowUpRight} trend="income"
-                        subtitle={t('dashboard.stat.mostRecentMonth')} />
+                    <StatCard title={t('dashboard.stat.lastMonthIncome')} value={compactCurrencyFormatter(totalIncome)} numericValue={totalIncome} formatValue={compactCurrencyFormatter} icon={ArrowUpRight} trend="income"
+                        subtitle={t('dashboard.stat.mostRecentMonth')} titleValue={(() => { const r = formatCurrencyCompact(totalIncome, appSettings.defaultCurrency, locale); return r.isCompact ? r.full : undefined; })()} />
                 </div>
                 <div className="lg:col-span-3 lg:row-span-1 grid gap-4 sm:grid-cols-2">
-                    <StatCard title={t('dashboard.stat.lastMonthSpending')} value={currencyFormatter(totalSpending)} numericValue={totalSpending} formatValue={currencyFormatter} icon={TrendingDown} trend="expense"
-                        subtitle={t('dashboard.stat.mostRecentMonth')} />
+                    <StatCard title={t('dashboard.stat.lastMonthSpending')} value={compactCurrencyFormatter(totalSpending)} numericValue={totalSpending} formatValue={compactCurrencyFormatter} icon={TrendingDown} trend="expense"
+                        subtitle={t('dashboard.stat.mostRecentMonth')} titleValue={(() => { const r = formatCurrencyCompact(totalSpending, appSettings.defaultCurrency, locale); return r.isCompact ? r.full : undefined; })()} />
                     <StatCard title={t('dashboard.stat.totalTransactions')} value={integerLocaleFormatter.format(totalTransactions)} numericValue={totalTransactions} formatValue={(n) => integerLocaleFormatter.format(Math.round(n))} icon={Receipt} />
                 </div>
             </div>

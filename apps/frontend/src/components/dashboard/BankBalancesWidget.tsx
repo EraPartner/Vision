@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import { formatCurrency, formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
 import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, type AreaSeries, ChartLegend, type ChartLegendItem } from "@/components/charts";
@@ -134,7 +134,7 @@ export function BankBalancesWidget() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-3xl font-bold tabular-nums bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
-                        {formatCurrency(total_net_position, defaultCurrency, locale)}
+                        {(() => { const r = formatCurrencyCompact(total_net_position, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                     </div>
                     <p className={`text-xs font-medium mt-2 flex items-center gap-1 ${isPositive ? "text-accent" : "text-destructive"}`}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -165,7 +165,7 @@ export function BankBalancesWidget() {
                                         <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                     </div>
                                     <div className={`text-xl font-bold tabular-nums ${acctPositive ? "text-foreground" : "text-destructive"}`}>
-                                        {formatCurrency(acct.balance, defaultCurrency, locale)}
+                                        {(() => { const r = formatCurrencyCompact(acct.balance, defaultCurrency, locale); return <span title={r.isCompact ? r.full : undefined}>{r.display}</span>; })()}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
                                         {t('bankWidget.transactions', { n: integerLocaleFormatter.format(acct.transaction_count) })}

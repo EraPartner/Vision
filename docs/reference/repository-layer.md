@@ -3,9 +3,10 @@ title: Repository Layer Reference
 type: reference
 status: active
 date: 2026-04-23
-tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, decimal, money]
+updated: 2026-04-28
+tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
-description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions. Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization.
+description: Complete reference for all 13 backend repositories — exported methods, SQL patterns, and usage conventions. Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
 related_code: ["apps/node-backend/src/repositories/"]
 ---
 
@@ -69,9 +70,11 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 - **Dynamic WHERE Building:** Constructs filter clauses from `opts.filters` object (date range, category, recipient, amount, bank account, currency, hidden status)
 - **Pagination:** `LIMIT/OFFSET` with `COUNT(*) OVER()` for total
 - **Soft Delete:** Uses `hidden` boolean flag, not `DELETE`
+- **Recipient Group Filtering (Phase Q):** Supports `recipientGroupId` via `filterBuilder` to resolve full primary-recipient groups with scalar subqueries; enables linked-recipient transaction discovery in OwesPage
 
 ### Dependencies
 - `connection.js`
+- `filterBuilder.js` (Phase Q)
 
 ---
 

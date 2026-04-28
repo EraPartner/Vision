@@ -3,10 +3,11 @@ title: Aggregations API
 type: endpoint
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-last_modified: 2026-04-25
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-g, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), and per-category breakdown with reconciliation (Phase G)
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics]
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), and rolling-window cash flow forecast (Phase H)
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
@@ -14,13 +15,20 @@ related_code:
   - apps/node-backend/src/services/calculations/forecast/
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
+  - apps/node-backend/src/repositories/infoRepo.forecast.js
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
   - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
+  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/aggregations.ts
+  - apps/frontend/src/utils/forecastMerge.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
+  - apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx
+  - apps/frontend/src/components/dashboard/ForecastInner.tsx
+  - apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx
   - apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx
+  - apps/frontend/src/components/charts/LineChart.tsx
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
   - alembic/versions/0012_cashflow_forecast_accuracy.py
   - alembic/versions/0013_cashflow_forecast_mc.py
@@ -401,6 +409,170 @@ const envelope = await apiClient.getAggregationCashflowForecast({
 ```
 
 See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] for details.
+
+---
+
+### Cash Flow Forecast (Rolling Window — Phase H)
+
+N-day rolling-window projection of income and expenses from actual transactions + planned transactions, with configurable window (30/60/90/180 days). Supports walk-forward backtest diagnostics via optional `include_backtest` parameter and uses 6-hour TTL MC rolling cache.
+
+**Path:** `GET /api/aggregations/cashflow-forecast-rolling`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `days_back` | integer | 90 | 365 | Historical lookback window (days, typically 3× the forecast window) |
+| `days_forward` | integer | 90 | 365 | Days to forecast ahead (max 365) |
+| `currency` | string | EUR | — | Target currency (3-letter code, case-insensitive) |
+| `excluded_category_ids[]` | integer[] | [] | — | Categories to exclude from forecast |
+| `excluded_recipient_ids[]` | integer[] | [] | — | Recipients to exclude from forecast |
+| `include_planned` | boolean | false | — | When `true`, overlay pending planned transactions into cumulative view |
+| `history_months` | integer | 36 | 120 | Historical window for training methods (in months) |
+| `mc_paths` | integer | 500 | 5000 | Monte Carlo simulation paths per method (rolling-window default; distinct from month view default of 1000) |
+| `mc_percentiles[]` | integer[] | [25,75] | — | Percentiles for confidence bands (rolling-window defaults; distinct from month view [10,50,90]) |
+| `include_backtest` | boolean | false | — | When `true`, runs expensive walk-forward backtest and includes diagnostics in response (frontend uses lazy-load via separate query, only enabled when user opens diagnostics sheet) |
+
+**Note:** `days_back + days_forward` must be ≤ 730 days; requests exceeding this limit return 400 error.
+
+> [!info] Rolling Window Defaults
+> Rolling mode uses separate MC defaults from month view: **500 paths** and **P25/P75 percentiles** (vs. month view: 1000 paths, P10/P50/P90). The rolling window's broader horizon (up to 180+ days) makes higher path counts computationally expensive. Cache checks for these rolling-specific defaults; when frontend requests match them, response is served from 6-hour TTL cache.
+
+**Response (data field):**
+
+```json
+{
+  "window_start": "2026-01-28",
+  "window_end": "2026-07-27",
+  "today": "2026-04-28",
+  "currency": "EUR",
+  "days_back": 90,
+  "days_forward": 90,
+  "actual": [
+    { "date": "2026-01-28", "net": 12.34, "cumulative": 12.34 },
+    { "date": "2026-01-29", "net": 45.67, "cumulative": 58.01 }
+  ],
+  "methods": [
+    {
+      "id": "simple_avg",
+      "label": "Simple Average",
+      "daily": [
+        { "date": "2026-04-29", "value": 42.15 },
+        { "date": "2026-04-30", "value": 39.80 }
+      ],
+      "cumulative": [
+        { "date": "2026-04-29", "value": 3450.75 },
+        { "date": "2026-04-30", "value": 3490.55 }
+      ],
+      "bands": null,
+      "error": null
+    },
+    {
+      "id": "monte_carlo_parametric",
+      "label": "Monte Carlo (Parametric)",
+      "daily": [ /* ... */ ],
+      "cumulative": [ /* ... */ ],
+      "bands": {
+        "p10": [ { "date": "2026-04-29", "value": 35.20 } ],
+        "p50": [ { "date": "2026-04-29", "value": 42.15 } ],
+        "p90": [ { "date": "2026-04-29", "value": 49.10 } ]
+      },
+      "error": null
+    }
+  ],
+  "planned": [
+    { "date": "2026-05-01", "net": -1200 },
+    { "date": "2026-05-15", "net": 3500 }
+  ],
+  "diagnostics": {
+    "history_months": 36,
+    "backtest": [
+      {
+        "method_id": "simple_avg",
+        "label": "Simple Average",
+        "mae": 125.45,
+        "rmse": 165.30,
+        "mape": 8.2,
+        "months": 36
+      }
+    ]
+  },
+  "history_months": 36,
+  "include_planned": false
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `window_start` | string | Start of rolling window (today - days_back), YYYY-MM-DD format |
+| `window_end` | string | End of rolling window (today + days_forward), YYYY-MM-DD format |
+| `today` | string | Current date (YYYY-MM-DD) |
+| `currency` | string | Target currency |
+| `days_back` | integer | Historical lookback window (days) |
+| `days_forward` | integer | Forecast horizon (days) |
+| `actual[]` | array | Realized daily net cash flow (past dates only) |
+| `actual[].date` | string | ISO date (YYYY-MM-DD) |
+| `actual[].net` | number | Daily net amount |
+| `actual[].cumulative` | number | Cumulative from window start through date |
+| `methods[]` | array | Array of 8 forecasting methods (5 point + 2 MC + 1 ensemble); same structure as month-mode forecast |
+| `methods[].id` | string | Method identifier (simple_avg, weighted_avg, ewma, holt_winters, prophet_lite, ensemble_imse, monte_carlo_parametric, monte_carlo_block_bootstrap) |
+| `methods[].label` | string | Human-readable method name |
+| `methods[].daily[]` | array | Daily forecast values (future dates only) |
+| `methods[].cumulative[]` | array | Cumulative sum including actual-to-date and forecast |
+| `methods[].bands` | object \| null | Confidence bands for MC methods; `{ p10: [], p50: [], p90: [], ... }` per requested percentile |
+| `methods[].error` | string \| null | Error code if method failed |
+| `planned[]` | array | Pending planned transaction dates (if `include_planned=true`) |
+| `planned[].date` | string | Planned date |
+| `planned[].net` | number | Planned net amount |
+| `diagnostics` | object \| null | Walk-forward backtest results (null if `include_backtest=false`) |
+| `diagnostics.backtest[].method_id` | string | Forecasting method identifier |
+| `diagnostics.backtest[].mae` | number | Mean Absolute Error (EUR/currency) |
+| `diagnostics.backtest[].rmse` | number | Root Mean Squared Error |
+| `diagnostics.backtest[].mape` | number | Mean Absolute Percentage Error (%) |
+| `diagnostics.backtest[].months` | integer | Number of backtest windows |
+| `history_months` | integer | Historical training window (months) |
+| `include_planned` | boolean | Whether planned transactions are included in response |
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getCashflowForecastRolling({
+  days_forward: 90,
+  days_back: 90,
+  currency: 'EUR',
+  include_planned: false,
+  include_backtest: true,
+  mc_paths: 500,
+  mc_percentiles: [25, 75]
+});
+// envelope.data.actual → historical actuals
+// envelope.data.methods[] → 8 forecasting methods with daily/cumulative series
+// envelope.data.planned[] → pending planned transactions (if include_planned=true)
+// envelope.data.diagnostics → backtest results (if include_backtest=true)
+// envelope.data.window_start/window_end → rolling window boundaries
+// envelope.meta.source → "cache" (6-hour TTL) or "live" (fresh computation)
+```
+
+**Implementation Notes:**
+
+- **Reuses forecast engine:** Leverages the same 8-method statistical engine as `/api/aggregations/cashflow-forecast-methods` (5 point + 2 MC + 1 ensemble)
+- **Cumulative anchor:** Cumulative balance is computed relative to window start (not absolute account balance), allowing visualization of trend within the rolling window independently
+- **Planned overlay:** When `include_planned=true`, pending planned transactions are interpolated into the response; cumulative includes planned amounts
+- **MC seed:** Uses seeded PRNG derived from `hash(userId | todayIso | daysBack | daysForward | filterHash)` for deterministic samples across identical requests; seed changes daily as `today` shifts
+- **Rolling MC defaults:** Backend defaults to 500 paths and [25,75] percentiles (distinct from month view 1000 paths and [10,50,90]). Frontend requests use these defaults; `include_backtest: false` in main chart query allows lighter load
+- **Caching (Phase H v2):** Uses 6-hour TTL `cashflow_forecast_mc_rolling` table when using rolling-window default MC params (500 paths, [25,75] percentiles)
+  - `meta.source === 'cache'` indicates cached result (within last 6 hours)
+  - `meta.source === 'live'` indicates freshly computed result
+  - Cache skipped when `include_backtest=true` (requires fresh computation)
+- **Lazy diagnostics (Phase H v2):** Frontend splits rolling query into two:
+  - **Main query** (`include_backtest: false`) — runs on page load, feeds chart with lower cost
+  - **Diagnostics query** (`include_backtest: true`) — lazy-loaded, only enabled when user opens diagnostics sheet; includes walk-forward backtest with per-window metrics
+  - When user closes diagnostics sheet, backtest query is disabled, avoiding wasted computation
+  - Diagnostics response includes `diagnostics` field (same structure as month-mode) when `include_backtest=true`
+
+See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] — Phase H v2 for feature and UX details.
 
 ---
 
@@ -884,6 +1056,19 @@ await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });
 await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
+
+// Forecast endpoints
+await apiClient.getCashflowForecastMethods({ // Phase 10 + C + F
+  currency: 'EUR',
+  history_months: 36,
+  include_backtest: true
+});
+await apiClient.getCashflowForecastRolling({ // Phase H (rolling window)
+  days_forward: 30,
+  days_back: 90,
+  currency: 'EUR'
+});
+await apiClient.getCashflowForecastAccuracy({ limit_months: 24 }); // Phase D
 ```
 
 See [[apps/frontend/src/lib/api.ts|api.ts]] (lines ~1019–1107) for type definitions.

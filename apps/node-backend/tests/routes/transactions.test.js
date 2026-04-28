@@ -213,6 +213,87 @@ describe('Transaction Routes', () => {
         expect.objectContaining({ ok: false, error: expect.objectContaining({ message: expect.any(String) }) })
       );
     });
+
+    it('should apply transaction_type=expense filter to export query', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { transaction_type: 'expense' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const probeSql = dbQuery.mock.calls[0][0];
+      expect(probeSql).toContain('t.amount < 0');
+    });
+
+    it('should apply transaction_type=income filter to export query', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { transaction_type: 'income' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const probeSql = dbQuery.mock.calls[0][0];
+      expect(probeSql).toContain('t.amount > 0');
+    });
+
+    it('should apply recipient_id filter to export query', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { recipient_id: '42' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const probeParams = dbQuery.mock.calls[0][1];
+      expect(probeParams).toContain(42);
+    });
+
+    it('should apply search filter as ILIKE pattern in export query', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { search: 'netflix' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const [probeSql, probeParams] = dbQuery.mock.calls[0];
+      expect(probeSql).toMatch(/t\.memo ILIKE/);
+      expect(probeParams).toContain('%netflix%');
+    });
+
+    it('should apply transaction_id filter to export query', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { transaction_id: '7' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const [probeSql, probeParams] = dbQuery.mock.calls[0];
+      expect(probeSql).toMatch(/t\.id = \$/);
+      expect(probeParams).toContain(7);
+    });
+
+    it('should join recipients/categories tables in probe SQL so recipient/search filters resolve', async () => {
+      dbQuery
+        .mockResolvedValueOnce({ rows: [{}] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const req = { query: { search: 'foo' } };
+      const res = mockResponse();
+      await routeHandlers['get:/export/csv'](req, res);
+
+      const probeSql = dbQuery.mock.calls[0][0];
+      expect(probeSql).toContain('LEFT JOIN recipients r');
+      expect(probeSql).toContain('LEFT JOIN categories c');
+    });
   });
 
   describe('GET /export/json', () => {

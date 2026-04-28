@@ -3,7 +3,8 @@ title: Chart Primitives
 type: component
 status: active
 date: 2026-04-24
-tags: [components, charts, visx, d3, visualization, phase-9]
+updated: 2026-04-28
+tags: [components, charts, visx, d3, visualization, phase-9, phase-h]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling
 aliases: [charts, chart-components, visx-charts, charting, visualization]
 related_code: ["apps/frontend/src/components/charts"]
@@ -37,7 +38,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `StackedBarChart` | Multi-series bar stacks | Side-by-side category comparison | PerformancePage, StatisticsPage |
 | `PieChart` | Basic pie distribution | Category spending pie | StatisticsPage |
 | `DonutChart` | Donut/ring distribution | Segmented breakdown with center label | StatisticsPage |
-| `LineChart` | Multi-line trends | Portfolio performance, watchlist trends | PerformancePage, WatchlistPage |
+| `LineChart` | Multi-line trends + reference lines | Portfolio performance, rolling cashflow forecast | PerformancePage, WatchlistPage, CashFlowForecastChart (Phase H) |
 | `Sparkline` | Mini inline sparkline | Micro-charts in stat cards or tables | StatCard, performance tables |
 | `Candlestick` | OHLC price action | Stock/crypto price visualization | StocksPage, CryptoPage |
 | `TreemapChart` | Hierarchical rectangles | Category spending breakdown | StatisticsPage |
@@ -137,6 +138,52 @@ function PerformanceChart() {
   );
 }
 ```
+
+### LineChart with Vertical Reference Line (Phase H)
+
+`LineChart` supports an optional vertical reference line to mark a point-in-time (e.g., "today" in a rolling forecast):
+
+```tsx
+import { LineChart, LineReferenceLine } from '@/components/charts/LineChart';
+
+function RollingForecastChart() {
+  const data = [
+    { date: new Date('2026-04-28'), cumulative: 3450.75 },
+    { date: new Date('2026-04-29'), cumulative: 3365.75 },
+    { date: new Date('2026-05-01'), cumulative: 6865.75 },
+  ];
+
+  return (
+    <LineChart
+      data={data}
+      xKey="date"
+      xIsDate={true}  // Enable date-based X-axis scaling
+      lines={[
+        { key: 'cumulative', color: 'emerald', label: 'Cumulative' },
+      ]}
+      height={300}
+      referenceLines={[
+        {
+          x: new Date('2026-04-28'),  // Vertical line at today's date
+          label: 'Today',
+          color: 'var(--color-text-muted)',
+          strokeDasharray: '4 4'
+        }
+      ]}
+    />
+  );
+}
+```
+
+**Props:**
+
+- `xIsDate?: boolean` — When `true`, interprets `xKey` values as `Date` objects and scales X-axis to date range
+- `referenceLines?: LineReferenceLine[]` — Array of vertical reference lines
+  - `x?: Date | number` — Vertical line position (Date when `xIsDate=true`, numeric value otherwise)
+  - `y?: number` — Horizontal line position (for compatibility with existing usage)
+  - `label?: string` — Optional label for the reference line
+  - `color?: string` — Line color (CSS color or token variable)
+  - `strokeDasharray?: string` — Line dash pattern (e.g., "4 4" for dashed)
 
 ## Design Token Integration
 

@@ -5,7 +5,9 @@ method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export
 date: 2026-04-24
-tags: [api, transactions, finance, phase-5a, phase-9, decimal, money, export]
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
 related_code: [[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]], [[apps/node-backend/src/services/currencyConversionService.js]]
@@ -36,9 +38,12 @@ Retrieve a list of transactions with filtering and pagination.
 | start_date | string | null | Filter by start date (YYYY-MM-DD) |
 | end_date | string | null | Filter by end date (YYYY-MM-DD) |
 | bank_account | string | null | Filter by bank account |
-| category_id | integer | null | Filter by category ID |
-| recipient_id | integer | null | Filter by recipient ID |
+| category_id | integer | null | Filter by category ID (single) |
+| category_ids | string | null | Filter by multiple category IDs (comma-separated) — ignored if category_id is set (Phase 13) |
+| recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) |
+| recipient_group_id | integer | null | Filter by full recipient group (Phase Q) — resolves the complete primary-recipient group: matches the recipient itself, all aliases under it, the recipient's own primary (if alias), and all other aliases under that primary |
 | recipient_name | string | null | Filter by recipient name |
+| transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
 | uncategorised | boolean | false | Show only uncategorized |
 | active | boolean | true | Show active/inactive |
 | search | string | null | Search in memo/comment |
@@ -51,6 +56,10 @@ Retrieve a list of transactions with filtering and pagination.
 Notes:
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
+- `recipient_group_id` resolves the complete primary-recipient group via scalar subqueries: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/services/filterBuilder.js]]).
+- `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/services/filterBuilder.js]]).
+- `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/services/filterBuilder.js]]).
 - `include_balance=true` computes a `balance` field via SQL window function `SUM(amount) OVER (ORDER BY date ASC)` instead of JavaScript post-processing ([[apps/node-backend/src/routes/transactions.js]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
 - Non-`uncategorised` list requests now use repository one-query pagination (`getAllWithCount`) instead of separate list/count round-trips; filters, totals, and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -93,8 +102,26 @@ Notes:
 Export transactions to CSV format using chunked streaming.
 
 **Query Parameters:**
-- `start_date`, `end_date`, `bank_account`, `category_id`: Filter exported rows
-- `include_balance` (boolean, default false): Add a "Running Balance" column computed via JavaScript accumulator across chunks
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| transaction_id | integer | null | Filter by exact transaction ID (Phase 13) |
+| start_date | string | null | Filter by start date (YYYY-MM-DD) |
+| end_date | string | null | Filter by end date (YYYY-MM-DD) |
+| bank_account | string | null | Filter by single bank account (legacy; ignored if `bank_accounts` is set) |
+| bank_accounts | string | null | Filter by multiple bank accounts (comma-separated IBANs, e.g., `BE12...,BE34...`). Takes precedence over `bank_account` (Phase 13) |
+| category_id | integer | null | Filter by single category ID (legacy; ignored if `category_ids` is set) |
+| category_ids | string | null | Filter by multiple category IDs (comma-separated integers, e.g., `5,7,12`). Takes precedence over `category_id`. Throws `ValidationError` if any value is not an integer (Phase 13) |
+| recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
+| recipient_name | string | null | Filter by recipient name (Phase 13) |
+| transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
+| search | string | null | Filter by memo/comment text (Phase 13) |
+| include_balance | boolean | false | Add a "Running Balance" column computed via JavaScript accumulator across chunks |
+
+**Filter Capping (Phase 13):**
+- `bank_accounts` is capped at 50 entries; excess entries are silently ignored
+- `category_ids` is capped at 50 entries; excess entries are silently ignored
+- Trailing/leading whitespace is trimmed from bank accounts before filtering
 
 **Response:** CSV file download with headers (default):
 ```
@@ -115,6 +142,10 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Runnin
 **Rate Limited:** 30 requests per minute
 
 Implementation note:
+- CSV/JSON export filter construction (`buildExportFilters`) now delegates to the shared `buildTransactionWhere` from `filterBuilder.js` after parsing the query with `parseTransactionListQuery`. Result: both export endpoints accept the same filter set as `GET /api/transactions` (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
+- Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
+- CSV/JSON export filter construction supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
+- Shared `EXPORT_JOINS_SQL` constant and `buildExportProbeSql()` ensure existence-probe queries join `recipients`/`categories` exactly like the chunk query — fixes a latent bug where `recipient_name`/`search` filters would crash the probe (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
 - CSV export row escaping/assembly and filename creation are handled by dedicated helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged CSV header/content semantics and error responses ([[apps/node-backend/src/routes/transactions.js]]).
 - CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/routes/transactions.js]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
@@ -124,7 +155,25 @@ Implementation note:
 Export transactions to NDJSON (newline-delimited JSON) format using chunked streaming (Phase 5A).
 
 **Query Parameters:**
-- `start_date`, `end_date`, `bank_account`, `category_id`: Filter exported rows
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| transaction_id | integer | null | Filter by exact transaction ID (Phase 13) |
+| start_date | string | null | Filter by start date (YYYY-MM-DD) |
+| end_date | string | null | Filter by end date (YYYY-MM-DD) |
+| bank_account | string | null | Filter by single bank account (legacy; ignored if `bank_accounts` is set) |
+| bank_accounts | string | null | Filter by multiple bank accounts (comma-separated IBANs). Takes precedence over `bank_account` (Phase 13) |
+| category_id | integer | null | Filter by single category ID (legacy; ignored if `category_ids` is set) |
+| category_ids | string | null | Filter by multiple category IDs (comma-separated integers). Takes precedence over `category_id`. Throws `ValidationError` if any value is not an integer (Phase 13) |
+| recipient_id | integer | null | Filter by recipient ID (matches recipient directly and aliases under it, one direction) (Phase 13) |
+| recipient_name | string | null | Filter by recipient name (Phase 13) |
+| transaction_type | string | null | Filter by transaction type: `income` (amount > 0) or `expense` (amount < 0) (Phase 13) |
+| search | string | null | Filter by memo/comment text (Phase 13) |
+
+**Filter Capping (Phase 13):**
+- `bank_accounts` is capped at 50 entries; excess entries are silently ignored
+- `category_ids` is capped at 50 entries; excess entries are silently ignored
+- Trailing/leading whitespace is trimmed from bank accounts before filtering
 
 **Response:** NDJSON file download (one JSON object per line):
 ```
@@ -142,7 +191,7 @@ Export transactions to NDJSON (newline-delimited JSON) format using chunked stre
 **Rate Limited:** 30 requests per minute
 
 Implementation note:
-- JSON export uses shared filter-building and chunk-SQL helpers (`buildExportFilters`, `buildExportChunkSql`, `buildTransactionExportJsonFilename`) for consistency with CSV export ([[apps/node-backend/src/routes/transactions.js]]).
+- JSON export uses shared filter-building and chunk-SQL helpers (`buildExportFilters`, `buildExportChunkSql`, `buildTransactionExportJsonFilename`) for consistency with CSV export. `buildExportFilters` constructs precise SQL filters delegating to `buildTransactionWhere` with a 50-entry cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.js]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.js]]).
 
 ### GET /api/transactions/:id

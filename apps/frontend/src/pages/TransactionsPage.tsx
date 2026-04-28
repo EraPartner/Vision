@@ -30,6 +30,14 @@ export default function TransactionsPage() {
     const categoryIdFilter = searchParams.get('category_id') ? Number(searchParams.get('category_id')) : undefined;
     const transactionIdFilter = searchParams.get('transaction_id') ? Number(searchParams.get('transaction_id')) : undefined;
     const filterLabel = searchParams.get('filter_label') || undefined;
+    const startDateFilter = searchParams.get('start_date') || undefined;
+    const endDateFilter = searchParams.get('end_date') || undefined;
+    const transactionTypeRaw = searchParams.get('transaction_type');
+    const transactionTypeFilter = (transactionTypeRaw === 'income' || transactionTypeRaw === 'expense') ? transactionTypeRaw : undefined;
+    const categoryIdsRaw = searchParams.get('category_ids');
+    const categoryIdsFilter = categoryIdsRaw
+        ? categoryIdsRaw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0)
+        : undefined;
 
     const {
         allItems,
@@ -52,6 +60,10 @@ export default function TransactionsPage() {
         transactionIdFilter,
         recipientIdFilter,
         categoryIdFilter,
+        categoryIdsFilter,
+        startDateFilter,
+        endDateFilter,
+        transactionTypeFilter,
     });
 
     const updateMutation = useUpdateTransaction();
@@ -267,6 +279,11 @@ export default function TransactionsPage() {
                     transactionIdFilter={transactionIdFilter}
                     recipientIdFilter={recipientIdFilter}
                     categoryIdFilter={categoryIdFilter}
+                    categoryIdsFilter={categoryIdsFilter}
+                    startDateFilter={startDateFilter}
+                    endDateFilter={endDateFilter}
+                    transactionTypeFilter={transactionTypeFilter}
+                    searchFilter={search || undefined}
                     filterLabel={filterLabel}
                     onClear={() => setSearchParams({})}
                 />

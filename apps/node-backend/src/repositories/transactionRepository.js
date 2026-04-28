@@ -52,6 +52,7 @@ export const transactionRepository = {
     bankAccount = null,
     categoryId = null,
     recipientId = null,
+    recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
@@ -60,7 +61,7 @@ export const transactionRepository = {
     includeBalance = false,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active,
     });
 
     // Build ORDER BY — fall back to default date DESC when no valid sort supplied
@@ -106,12 +107,13 @@ export const transactionRepository = {
     bankAccount = null,
     categoryId = null,
     recipientId = null,
+    recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
   } = {}) {
     const { sql: where, params } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientGroupId, recipientName, search, active,
     });
 
     const sql = `
@@ -334,16 +336,19 @@ export const transactionRepository = {
     endDate = null,
     bankAccount = null,
     categoryId = null,
+    categoryIds = null,
     recipientId = null,
+    recipientGroupId = null,
     recipientName = null,
     search = null,
     active = true,
     sortBy = null,
     sortDir = null,
     includeBalance = false,
+    transactionType = null,
   } = {}) {
     const { sql: where, params, nextParamIdx: p } = buildTransactionWhere({
-      transactionId, startDate, endDate, bankAccount, categoryId, recipientId, recipientName, search, active,
+      transactionId, startDate, endDate, bankAccount, categoryId, categoryIds, recipientId, recipientGroupId, recipientName, search, active, transactionType,
     });
 
     const sortCol = TRANSACTION_SORT_COLUMNS[sortBy] || 't.date';

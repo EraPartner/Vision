@@ -3,10 +3,11 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-26
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters]
+updated: 2026-04-28
+last_modified: 2026-04-28
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components.
+description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components. Phase 13 adds multi-select export filters for bank accounts and categories.
 related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx"]
 ---
 
@@ -30,7 +31,7 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 | `TransactionImportCard.tsx` | 394 | CSV transaction import with SSE progress, column mapper, export buttons |
 | `RecipientsImportCard.tsx` | 155 | Bulk recipients CSV import with file upload and status |
 | `CategoriesImportCard.tsx` | 140 | Categories CSV import with category format validation |
-| `ExportCard.tsx` | 159 | Dual export UI (CSV + JSON) with download triggers |
+| `ExportCard.tsx` | 159 | Dual export UI (CSV + JSON) with multi-select filter pickers (Phase 13) |
 | `SupportedBanksCard.tsx` | 38 | Read-only chip list of supported bank adapters |
 | `useAdapters.ts` | 28 | Shared hook for fetching bank adapters (prevents duplicate API calls) |
 
@@ -441,6 +442,82 @@ Vision supports transaction export in two formats:
 ### Frontend Support
 - [[apps/frontend/src/pages/ImportPage.tsx]]: Dual export buttons (CSV + JSON) with `exportingFormat` state management
 - i18n: `importPage.exportBtn` ("Export CSV") and `importPage.exportJsonBtn` ("Export JSON")
+- Download helper: [[apps/frontend/src/lib/downloadBlob.ts]] (shared utility centralizing createObjectURL → anchor.click → revokeObjectURL pattern, used by `ExportCard` and `OwesPage`)
+
+## Multi-Select Export Filters (Phase 13)
+
+**Status:** Complete (April 2026)
+
+The `ExportCard` component now provides multi-select pickers for bank accounts and categories, enabling bulk export filtering without manual comma-separated input.
+
+### Frontend Components
+
+#### CategoryMultiCombobox
+**Path:** `[[apps/frontend/src/components/shared/CategoryMultiCombobox.tsx]]`
+
+- **Purpose:** Select multiple categories for export filtering
+- **Display:** "{n} categories" when multiple selected, "All categories" when none
+- **Integration:** Replaces raw text input in `ExportCard`
+
+#### BankAccountMultiCombobox
+**Path:** `[[apps/frontend/src/components/shared/BankAccountMultiCombobox.tsx]]`
+
+- **Purpose:** Select multiple bank accounts (real IBANs) for export filtering
+- **Data source:** `useBankAccounts` hook (calls `GET /api/info/banks`)
+- **Display:** "{n} accounts" when multiple selected, "All accounts" when none
+- **Note:** Returns real bank account IBANs, not legacy adapter keys
+
+#### useBankAccounts Hook
+**Path:** `[[apps/frontend/src/hooks/useBankAccounts.ts]]`
+
+- **Purpose:** React Query hook wrapping `apiClient.getDistinctBankAccounts()`
+- **Cache:** 2-minute staleTime
+- **Deduplication:** Shared across BankAccountMultiCombobox usage sites
+
+### Backend Filter Building
+
+#### buildExportFilters
+**File:** `[[apps/node-backend/src/routes/transactions.js]]`
+
+- **Purpose:** Construct precise SQL filters for `bank_accounts` and `category_ids` query params
+- **Precedence:** Plural params (`bank_accounts`, `category_ids`) take precedence over singular params (`bank_account`, `category_id`)
+- **Parsing:** Comma-separated values trimmed for whitespace
+- **Capping:** Both filters capped at 50 entries; excess silently ignored
+- **Validation:** `category_ids` throws `ValidationError` if any value is not an integer
+
+#### filterBuilder.buildTransactionWhere
+**File:** `[[apps/node-backend/src/services/filterBuilder.js]]`
+
+- **Purpose:** Build WHERE clause for transaction queries
+- **Support:** Now accepts `bankAccounts` (plural, exact IN clause) and `categoryIds` (plural, IN clause)
+- **Precedence:** `bankAccount` (singular ILIKE) still takes precedence when set, but plural `bankAccounts` is preferred by routes
+- **Whitespace handling:** Bank account IBANs trimmed; blank entries filtered out
+
+### Query Parameter Contracts
+
+#### CSV Export
+```
+GET /api/transactions/export/csv?bank_accounts=BE12...,BE34...&category_ids=5,7,12
+```
+
+#### JSON Export
+```
+GET /api/transactions/export/json?bank_accounts=BE12...,BE34...&category_ids=5,7,12
+```
+
+Both endpoints use `buildExportFilters()` to convert comma-separated strings into precise SQL IN clauses.
+
+### i18n Keys
+New keys added in Phase 13:
+- `combobox.bankAccount.label` - "Bank Account"
+- `combobox.bankAccount.placeholder` - "Select account..."
+- `combobox.bankAccount.searchPlaceholder` - "Search accounts..."
+- `combobox.bankAccount.empty` - "No accounts found"
+- `combobox.categoryMulti.label` - "Categories"
+- `combobox.categoryMulti.placeholder` - "Select categories..."
+- `combobox.categoryMulti.searchPlaceholder` - "Search categories..."
+- `importPage.bankAccounts` - "Bank Accounts"
+- `importPage.categories` - "Categories"
 
 ## Attachments (Phase 5A)
 

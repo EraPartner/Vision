@@ -3,9 +3,10 @@ title: Transactions
 type: feature
 status: active
 date: 2026-04-16
-tags: [feature, transactions, finance]
+updated: 2026-04-28
+tags: [feature, transactions, finance, phase-q, recipient-groups]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
-description: Core transaction management - income, expenses, and tracking financial activities
+description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery.
 related_code: ["apps/node-backend/src/routes/transactions.js", "apps/node-backend/src/repositories/transactionRepository.js", "apps/node-backend/src/services/filterBuilder.js", "apps/frontend/src/features/transactions/", "apps/frontend/src/pages/TransactionsPage.tsx"]
 ---
 
@@ -91,7 +92,8 @@ Transactions support rich filtering:
 - Date range (start/end)
 - Exact transaction ID
 - Category filter
-- Recipient filter
+- Recipient filter (direct + aliases via `recipient_id`)
+- Recipient group filter (full primary group via `recipient_group_id`, Phase Q)
 - Amount range (min/max)
 - Bank account
 - Currency
@@ -103,6 +105,7 @@ Implementation note:
 - PATCH name-resolution and CSV export DB-access helpers now use module-scoped imports (`dbQuery`, `normalizeForMatching`) instead of per-request dynamic imports, preserving route behavior while removing avoidable import overhead on hot paths ([[apps/node-backend/src/routes/transactions.js]]).
 - PATCH recipient/category name-resolution now runs concurrently and keeps existing recipient-first/category-second validation error precedence, reducing avoidable sequential lookup latency when both fields are provided ([[apps/node-backend/src/routes/transactions.js]]).
 - Repository transaction update now returns the enriched row via one CTE query (update + joins) instead of update followed by `getById`, preserving response shape and not-found behavior while reducing one DB round-trip per update ([[apps/node-backend/src/repositories/transactionRepository.js]]).
+- `recipientGroupId` filter in `buildTransactionWhere` resolves the full primary-recipient group via scalar subqueries (Phase Q), enabling linked-recipient transaction history discovery ([[apps/node-backend/src/services/filterBuilder.js]]).
 
 #### Table Search Sync Behavior
 
@@ -143,16 +146,17 @@ Code link: [[apps/frontend/src/pages/TransactionsPage.tsx]]
 
 ### Export
 
-Export transactions to CSV for external analysis:
+Export transactions to CSV or JSON for external analysis:
 
 ```
 GET /api/transactions/export/csv?start_date=2025-01-01&end_date=2025-03-18&include_balance=true
+GET /api/transactions/export/json?start_date=2025-01-01&end_date=2025-03-18
 ```
 
-**Streaming CSV Response (Phase 5):**
+**Streaming Response (Phase 5+):**
 - Response uses chunked `res.write()` streaming instead of `res.send()` to support large exports without memory overhead.
 - Pagination happens internally via `CSV_EXPORT_CHUNK_SIZE` (1000 rows per chunk).
-- Running balance is computed in JavaScript across chunks using an accumulator so balance stays correct when sorted by date.
+- Running balance (CSV only) is computed in JavaScript across chunks using an accumulator so balance stays correct when sorted by date.
 - Optional `include_balance=true` query param adds a "Running Balance" column; defaults to false for backward compatibility.
 - 404 probe query runs before streaming starts, so error responses still return JSON.
 
@@ -160,6 +164,20 @@ Implementation note:
 - CSV escaping, row construction, and filename generation use extracted helpers (`escapeCsvValue`, `buildTransactionCsvRow`, `buildTransactionExportFilename`) with unchanged output format.
 - CSV export neutralizes spreadsheet-formula-leading values (`=`, `+`, `-`, `@`) before writing cells to reduce formula-injection risk in spreadsheet tools.
 - Export and PATCH error responses avoid leaking internal exception details and return sanitized generic `detail` payloads.
+
+#### Filtered Export (Phase 13)
+
+The `FilterBanner` component exposes two export buttons (CSV, JSON) when a structural filter is active in the Transactions table. The export query string is built from:
+
+- **Structural filters**: `bank_account`, `bank_accounts`, `category_id`, `category_ids`, `recipient_id`, `recipient_name`, `transaction_type`, `transaction_id`
+- **Date filters**: `start_date`, `end_date`
+- **Search**: `search` (memo/comment text) is included in the export when present
+
+**Filename pattern**: `transactions_<slug-of-filterLabel-or-"filtered">_<YYYY-MM-DD>.{csv|ndjson}`
+
+**Frontend implementation**: [[apps/frontend/src/features/transactions/components/FilterBanner.tsx]], [[apps/frontend/src/features/transactions/components/TransactionsExportButtons.tsx]]
+
+This allows users to drill down from pivot-table summaries (e.g., "Show all transactions for Q1 2026 in the Groceries category") and export the resulting filtered view directly without manual parameter construction.
 
 ---
 

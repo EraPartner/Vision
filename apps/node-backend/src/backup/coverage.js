@@ -30,6 +30,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'belgian_inflation_rates',
   'cashflow_forecast_accuracy',
   'cashflow_forecast_mc',
+  'cashflow_forecast_mc_rolling',
   'categories',
   'custom_raw_transactions',
   'exchange_rates',

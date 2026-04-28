@@ -13,6 +13,10 @@ export interface UseTransactionListDataOptions {
     transactionIdFilter?: number;
     recipientIdFilter?: number;
     categoryIdFilter?: number;
+    categoryIdsFilter?: number[];
+    startDateFilter?: string;
+    endDateFilter?: string;
+    transactionTypeFilter?: 'income' | 'expense';
 }
 
 export interface UseTransactionListDataResult {
@@ -38,6 +42,10 @@ export function useTransactionListData({
     transactionIdFilter,
     recipientIdFilter,
     categoryIdFilter,
+    categoryIdsFilter,
+    startDateFilter,
+    endDateFilter,
+    transactionTypeFilter,
 }: UseTransactionListDataOptions): UseTransactionListDataResult {
     const [sortKey, setSortKey] = useState<string | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -67,6 +75,10 @@ export function useTransactionListData({
                 transactionIdFilter,
                 recipientIdFilter,
                 categoryIdFilter,
+                categoryIdsFilter,
+                startDateFilter,
+                endDateFilter,
+                transactionTypeFilter,
                 sortKey,
                 sortDir,
                 pageSize,
@@ -80,6 +92,10 @@ export function useTransactionListData({
             transaction_id: transactionIdFilter,
             recipient_id: recipientIdFilter,
             category_id: categoryIdFilter,
+            category_ids: categoryIdsFilter,
+            start_date: startDateFilter,
+            end_date: endDateFilter,
+            transaction_type: transactionTypeFilter,
             sort_by: sortKey || undefined,
             sort_dir: sortDir || undefined,
         }),
@@ -109,6 +125,10 @@ export function useTransactionListData({
                 transaction_id: transactionIdFilter,
                 recipient_id: recipientIdFilter,
                 category_id: categoryIdFilter,
+                category_ids: categoryIdsFilter,
+                start_date: startDateFilter,
+                end_date: endDateFilter,
+                transaction_type: transactionTypeFilter,
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
@@ -132,7 +152,7 @@ export function useTransactionListData({
             }
             loadingRef.current = false;
         }
-    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, sortKey, sortDir, pageSize]);
+    }, [showAll, search, transactionIdFilter, recipientIdFilter, categoryIdFilter, categoryIdsFilter, startDateFilter, endDateFilter, transactionTypeFilter, sortKey, sortDir, pageSize]);
 
     const handleSortChange = useCallback((key: string | null, dir: SortDir) => {
         setSortKey(key);

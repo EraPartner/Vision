@@ -138,6 +138,43 @@ export function formatCurrency(
   }).format(amount);
 }
 
+export interface CompactFormatResult {
+  display: string;
+  full: string;
+  isCompact: boolean;
+}
+
+const COMPACT_LENGTH_THRESHOLD = 9;
+
+export function formatCurrencyCompact(
+  amount: number,
+  currencyCode?: string,
+  locale?: string,
+  fractionDigits?: number
+): CompactFormatResult {
+  const effectiveCurrency = currencyCode || currencyFormatDefaults.defaultCurrency;
+  const effectiveLocale = locale || currencyFormatDefaults.locale;
+  const effectiveFractionDigits = fractionDigits ?? currencyFormatDefaults.fractionDigits;
+
+  const full = formatCurrency(amount, effectiveCurrency, effectiveLocale, effectiveFractionDigits);
+  if (full.length <= COMPACT_LENGTH_THRESHOLD) {
+    return { display: full, full, isCompact: false };
+  }
+
+  const compact = new Intl.NumberFormat(effectiveLocale, {
+    style: 'currency',
+    currency: effectiveCurrency,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(amount);
+
+  if (compact.length >= full.length) {
+    return { display: full, full, isCompact: false };
+  }
+
+  return { display: compact, full, isCompact: true };
+}
+
 /**
  * Format amount with currency symbol (simpler version)
  * @param amount The amount to format

@@ -317,6 +317,114 @@ export async function getCashflowForecastData(
   };
 }
 
+export async function getCashflowForecastDataRolling(
+  historyMonths,
+  daysBack,
+  daysForward,
+  excludedCategoryIds = [],
+  excludedRecipientIds = [],
+  targetCurrency = 'EUR',
+) {
+  if (!Number.isInteger(historyMonths) || historyMonths < 1 || historyMonths > 120) {
+    throw new Error('historyMonths must be an integer in [1, 120]');
+  }
+  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > 365) {
+    throw new Error('daysBack must be an integer in [1, 365]');
+  }
+  if (!Number.isInteger(daysForward) || daysForward < 1 || daysForward > 365) {
+    throw new Error('daysForward must be an integer in [1, 365]');
+  }
+
+  const validCatIds = (excludedCategoryIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+  const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+  let categoryExclusionJoin = '';
+  let categoryExclusionWhere = '';
+  const excludeParams = [];
+  let paramIdx = 1;
+
+  if (validCatIds.length > 0 || validRecIds.length > 0) {
+    categoryExclusionJoin = `
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+    `;
+  }
+  if (validCatIds.length > 0) {
+    const placeholders = validCatIds.map(() => `$${paramIdx++}`).join(', ');
+    categoryExclusionWhere += `
+      AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) NOT IN (${placeholders})
+    `;
+    excludeParams.push(...validCatIds);
+  }
+  if (validRecIds.length > 0) {
+    const placeholders = validRecIds.map(() => `$${paramIdx++}`).join(', ');
+    categoryExclusionWhere += `
+      AND COALESCE(r.primary_recipient_id, t.recipient_id) NOT IN (${placeholders})
+    `;
+    excludeParams.push(...validRecIds);
+  }
+
+  // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
+  const sqlHistory = `
+    SELECT t.amount, t.currency, t.date
+    FROM transactions t
+    ${categoryExclusionJoin}
+    WHERE t.is_active = true
+      AND t.date >= (CURRENT_DATE - interval '${daysBack} days') - interval '${historyMonths} months'
+      AND t.date < (CURRENT_DATE - interval '${daysBack} days')
+      ${categoryExclusionWhere}
+  `;
+  const sqlCurrent = `
+    SELECT t.amount, t.currency, t.date
+    FROM transactions t
+    ${categoryExclusionJoin}
+    WHERE t.is_active = true
+      AND t.date >= (CURRENT_DATE - interval '${daysBack} days')
+      AND t.date <= CURRENT_DATE
+      ${categoryExclusionWhere}
+  `;
+  const sqlPlannedFuture = `
+    SELECT pt.amount, pt.currency, pt.planned_date AS date
+    FROM planned_transactions pt
+    WHERE pt.is_active = true
+      AND pt.planned_date > CURRENT_DATE
+      AND pt.planned_date <= (CURRENT_DATE + interval '${daysForward} days')
+  `;
+
+  const [histRes, currentRes, plannedRes] = await Promise.all([
+    query(sqlHistory, excludeParams),
+    query(sqlCurrent, excludeParams),
+    query(sqlPlannedFuture),
+  ]);
+
+  const [histConv, currentConv, plannedConv] =
+    await batchConvertGroupsWithHistoricalRateFallback(
+      [
+        mapRowsForAmountConversion(histRes.rows, 'amount', false),
+        mapRowsForAmountConversion(currentRes.rows, 'amount', false),
+        mapRowsForAmountConversion(plannedRes.rows, 'amount', false),
+      ],
+      targetCurrency,
+      'date',
+    );
+
+  const aggregateByDate = (rows) => {
+    const map = new Map();
+    for (const r of rows) {
+      const iso = r.date instanceof Date ? formatDateToYmd(r.date) : String(r.date).slice(0, 10);
+      map.set(iso, (map.get(iso) ?? 0) + (Number(r.amount_eur) || 0));
+    }
+    return Array.from(map, ([date, net]) => ({ date, net })).sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  return {
+    history: aggregateByDate(histConv),
+    currentActual: aggregateByDate(currentConv),
+    plannedCurrent: aggregateByDate(plannedConv),
+    historyMonths,
+  };
+}
+
 export async function getCashflowForecastDataByCategory(
   historyMonths,
   excludedCategoryIds = [],

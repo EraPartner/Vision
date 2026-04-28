@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, FlaskConical } from "lucide-react";
 
@@ -35,6 +36,11 @@ import {
 } from "@/utils/forecastMerge";
 import { CashFlowForecastDiagnostics } from "./CashFlowForecastDiagnostics";
 import { ForecastInner } from "./ForecastInner";
+import { ForecastInnerRolling } from "./ForecastInnerRolling";
+
+type ForecastMode = "month" | "rolling";
+type RollingDays = 30 | 60 | 90 | 180;
+const ROLLING_PRESETS: ReadonlyArray<RollingDays> = [30, 60, 90, 180];
 
 const ALL_METHOD_IDS: readonly string[] = [
     "simple_avg",
@@ -88,6 +94,29 @@ export function CashFlowForecastChart({
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
 
+    const [searchParams, setSearchParams] = useSearchParams();
+    const mode: ForecastMode =
+        searchParams.get("forecastMode") === "rolling" ? "rolling" : "month";
+    const rollingDays: RollingDays = (() => {
+        const v = Number(searchParams.get("rollingDays"));
+        return (ROLLING_PRESETS as readonly number[]).includes(v)
+            ? (v as RollingDays)
+            : 90;
+    })();
+
+    function setMode(newMode: ForecastMode) {
+        setSearchParams(
+            (prev) => { const next = new URLSearchParams(prev); next.set("forecastMode", newMode); return next; },
+            { replace: true },
+        );
+    }
+    function setRollingDays(days: RollingDays) {
+        setSearchParams(
+            (prev) => { const next = new URLSearchParams(prev); next.set("rollingDays", String(days)); return next; },
+            { replace: true },
+        );
+    }
+
     const [view, setView] = useState<"cumulative" | "daily">("cumulative");
     const [includePlanned, setIncludePlanned] = useState(false);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -96,16 +125,14 @@ export function CashFlowForecastChart({
         () => new Set(DEFAULT_VISIBLE_METHOD_IDS),
     );
 
-    const queryKey = [
-        "cashflowForecastMethods",
-        currency,
-        excludedCategoryIds,
-        excludedRecipientIds,
-        includePlanned,
-    ] as const;
-
-    const { data, isLoading, error } = useQuery({
-        queryKey,
+    const monthQuery = useQuery({
+        queryKey: [
+            "cashflowForecastMethods",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+        ] as const,
         queryFn: () =>
             apiClient.getCashflowForecastMethods({
                 currency,
@@ -117,7 +144,62 @@ export function CashFlowForecastChart({
                 mc_percentiles: [25, 75],
             }),
         staleTime: 60_000,
+        enabled: mode === "month",
     });
+
+    const rollingQuery = useQuery({
+        queryKey: [
+            "cashflowForecastRolling",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+            rollingDays,
+        ] as const,
+        queryFn: () =>
+            apiClient.getCashflowForecastRolling({
+                currency,
+                excluded_category_ids: excludedCategoryIds,
+                excluded_recipient_ids: excludedRecipientIds,
+                include_planned: includePlanned,
+                days_back: rollingDays,
+                days_forward: rollingDays,
+                mc_paths: 500,
+                mc_percentiles: [25, 75],
+                include_backtest: false,
+            }),
+        staleTime: 60_000,
+        enabled: mode === "rolling",
+    });
+
+    const rollingDiagnosticsQuery = useQuery({
+        queryKey: [
+            "cashflowForecastRollingDiagnostics",
+            currency,
+            excludedCategoryIds,
+            excludedRecipientIds,
+            includePlanned,
+            rollingDays,
+        ] as const,
+        queryFn: () =>
+            apiClient.getCashflowForecastRolling({
+                currency,
+                excluded_category_ids: excludedCategoryIds,
+                excluded_recipient_ids: excludedRecipientIds,
+                include_planned: includePlanned,
+                days_back: rollingDays,
+                days_forward: rollingDays,
+                mc_paths: 500,
+                mc_percentiles: [25, 75],
+                include_backtest: true,
+            }),
+        staleTime: 300_000,
+        enabled: mode === "rolling" && showDiagnostics,
+    });
+
+    const data = mode === "month" ? monthQuery.data : rollingQuery.data;
+    const isLoading = mode === "month" ? monthQuery.isLoading : rollingQuery.isLoading;
+    const error = mode === "month" ? monthQuery.error : rollingQuery.error;
 
     const toggleMethod = useCallback((id: string) => {
         setVisibleMethodIds((prev) => {
@@ -131,14 +213,60 @@ export function CashFlowForecastChart({
         });
     }, []);
 
-    const monthName = data
+    const monthName = mode === "month" && monthQuery.data
         ? formatMonthYearWithAppSettings(
-              new Date(data.month + "-01"),
+              new Date(monthQuery.data.month + "-01"),
               appSettings.dateFormat,
               locale,
           )
         : "";
 
+    const description = mode === "rolling"
+        ? t("cashflow.rollingDesc", { n: rollingDays })
+        : t("cashflow.forecastDesc", { monthName });
+
+    const modeTabs = (
+        <Tabs
+            value={mode}
+            onValueChange={(v) => setMode(v as ForecastMode)}
+            className="mb-3"
+        >
+            <TabsList className="h-8">
+                <TabsTrigger value="month" className="text-xs px-3">
+                    {t("cashflow.modeMonth")}
+                </TabsTrigger>
+                <TabsTrigger value="rolling" className="text-xs px-3">
+                    {t("cashflow.modeRolling")}
+                </TabsTrigger>
+            </TabsList>
+        </Tabs>
+    );
+
+    const rollingPresets = mode === "rolling" && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="text-xs text-muted-foreground">
+                {t("cashflow.rollingWindow")}
+            </span>
+            {ROLLING_PRESETS.map((days) => {
+                const active = rollingDays === days;
+                return (
+                    <button
+                        key={days}
+                        type="button"
+                        onClick={() => setRollingDays(days)}
+                        className="px-3 py-0.5 rounded-full border text-xs transition-opacity"
+                        style={{
+                            borderColor: active ? "hsl(var(--primary))" : BORDER_COLOR,
+                            opacity: active ? 1 : 0.55,
+                            background: active ? "hsl(var(--primary) / 0.08)" : "transparent",
+                        }}
+                    >
+                        {t(`cashflow.window${days}`)}
+                    </button>
+                );
+            })}
+        </div>
+    );
 
     const controls = (
         <div className="flex flex-wrap items-center gap-4 mb-3">
@@ -217,6 +345,8 @@ export function CashFlowForecastChart({
 
     const chartContent = (
         <div>
+            {modeTabs}
+            {rollingPresets}
             {controls}
             {isLoading && (
                 <Skeleton className="w-full h-[320px] rounded-lg" />
@@ -229,22 +359,40 @@ export function CashFlowForecastChart({
             {data && !isLoading && (
                 <>
                     {methodToggles}
-                    <ForecastInner
-                        data={data}
-                        view={view}
-                        visibleMethodIds={visibleMethodIds}
-                        currency={data.currency}
-                    />
+                    {mode === "month" && monthQuery.data ? (
+                        <ForecastInner
+                            data={monthQuery.data}
+                            view={view}
+                            visibleMethodIds={visibleMethodIds}
+                            currency={monthQuery.data.currency}
+                        />
+                    ) : null}
+                    {mode === "rolling" && rollingQuery.data ? (
+                        <ForecastInnerRolling
+                            data={rollingQuery.data}
+                            view={view}
+                            visibleMethodIds={visibleMethodIds}
+                            currency={rollingQuery.data.currency}
+                        />
+                    ) : null}
                 </>
             )}
-            {data?.diagnostics && (
-                <CashFlowForecastDiagnostics
-                    open={showDiagnostics}
-                    onOpenChange={setShowDiagnostics}
-                    diagnostics={data.diagnostics}
-                    currency={data.currency}
-                />
-            )}
+            {(() => {
+                const diag = mode === "month"
+                    ? monthQuery.data?.diagnostics
+                    : rollingDiagnosticsQuery.data?.diagnostics;
+                const cur = mode === "month"
+                    ? monthQuery.data?.currency
+                    : (rollingQuery.data?.currency ?? rollingDiagnosticsQuery.data?.currency);
+                return diag && cur ? (
+                    <CashFlowForecastDiagnostics
+                        open={showDiagnostics}
+                        onOpenChange={setShowDiagnostics}
+                        diagnostics={diag}
+                        currency={cur}
+                    />
+                ) : null;
+            })()}
         </div>
     );
 
@@ -263,7 +411,7 @@ export function CashFlowForecastChart({
                             {t("cashflow.forecastTitle")}
                         </CardTitle>
                         <CardDescription className="text-base">
-                            {t("cashflow.forecastDesc", { monthName })}
+                            {description}
                         </CardDescription>
                     </div>
                 </div>

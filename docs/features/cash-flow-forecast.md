@@ -3,8 +3,8 @@ title: Cash Flow Forecast
 type: feature
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-last_modified: 2026-04-25
+updated: 2026-04-28
+last_modified: 2026-04-28
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + inverse-MSE ensemble (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation.
@@ -18,12 +18,14 @@ related_code:
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
   - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
+  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
   - apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx
   - apps/frontend/src/components/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/lib/api/aggregations.ts
   - alembic/versions/0012_cashflow_forecast_accuracy.py
   - alembic/versions/0013_cashflow_forecast_mc.py
+  - alembic/versions/0016_cashflow_forecast_mc_rolling.py
 ---
 
 # Cash Flow Forecast
@@ -794,3 +796,160 @@ Additionally, the diagnostics section includes ensemble weights:
   - Per-method MAE sparkline (visual trend from DB history, 24-month limit)
   - Ensemble weights bar chart (inverse-MSE normalized, read-only preview)
   - Informational note distinguishing backtest (current session) vs. persisted history (nightly updates)
+
+## Phase H: Rolling-Window View
+
+A second view inside `CashFlowForecastChart` that decouples the forecast from
+calendar-month boundaries. Where the month view shows rest-of-current-month
+only, the rolling view shows a continuous date timeline centred on today.
+
+### User-facing behaviour
+
+- Top-level `Tabs` segmented control on the card: `[Current month | Rolling window]`. Local state, default `month`.
+- When `Rolling window` is active, a preset chip row appears: `30 / 60 / 90 / 180` days. Default `90`. Same N applied symmetrically to past actuals and future forecast.
+- Chart X axis switches from day-of-month integer to a date scale, with a vertical dashed reference line at today.
+- Cumulative balance, daily net, MC P25/P75 confidence band, and planned-transaction overlay all work in both views.
+- Diagnostics button now available in rolling mode (lazy-loaded: walk-forward backtest runs only when diagnostics sheet opens, avoiding on-load cost).
+
+### Endpoint
+
+**Path:** `GET /api/aggregations/cashflow-forecast-rolling`
+
+**Query parameters**
+
+| Parameter | Type | Default | Max | Notes |
+|-----------|------|---------|-----|-------|
+| `days_back` | integer | 90 | 365 | Past actuals window. |
+| `days_forward` | integer | 90 | 365 | Forward forecast window. |
+| `currency` | string | EUR | — | ISO 4217. |
+| `excluded_category_ids[]` | int array | [] | — | |
+| `excluded_recipient_ids[]` | int array | [] | — | |
+| `include_planned` | boolean | false | — | Adds planned txns to cumulative. |
+| `mc_paths` | integer | 500 | 5000 | Rolling-window-specific default (distinct from month view 1000). |
+| `mc_percentiles[]` | int array | [25,75] | — | Rolling-window-specific defaults (distinct from month view [10,50,90]). |
+| `history_months` | integer | 36 | 120 | Pre-window history fed to methods. |
+| `include_backtest` | boolean | false | — | Optional walk-forward backtest diagnostics (lazy-loaded on diagnostics sheet open). |
+
+`days_back + days_forward > 730` returns 400.
+
+> [!info] Rolling Window MC Defaults
+> Rolling window mode uses separate MC parameter defaults (500 paths, P25/P75 percentiles) compared to month view (1000 paths, P10/P50/P90). This reflects the rolling window's broader horizon: more paths would be computationally expensive for 180+ day forecasts. The cache gate checks for these rolling-specific defaults; frontend requests automatically use these values.
+
+**Response shape**
+
+```json
+{
+  "data": {
+    "window_start": "2026-01-28",
+    "window_end": "2026-07-27",
+    "today": "2026-04-28",
+    "currency": "EUR",
+    "days_back": 90,
+    "days_forward": 90,
+    "actual": [{ "date": "2026-01-28", "net": 12.34, "cumulative": 12.34 }, ...],
+    "methods": [{ "id": "simple_avg", "label": "...", "daily": [...], "cumulative": [...], "bands": null, "error": null }, ...],
+    "planned": [{ "date": "2026-05-01", "net": -1200 }, ...],
+    "diagnostics": null,
+    "history_months": 36,
+    "include_planned": false
+  },
+  "meta": { "source": "live", "computedAt": "..." }
+}
+```
+
+### Engine reuse
+
+- The 8 method modules in `apps/node-backend/src/services/calculations/forecast/methods/` are date-agnostic — they accept any `forecastDates: string[]`. No method-file changes were needed.
+- `runForecastEngine(...)` is the shared orchestration helper extracted from `computeCashflowForecast`. Both the month and rolling entry points feed it different anchor + forecast date arrays.
+- Repository helper `getCashflowForecastDataRolling(historyMonths, daysBack, daysForward, ...)` lives in `apps/node-backend/src/repositories/infoRepo.forecast.js`. History SQL ends at `today - daysBack` to avoid overlap with `currentActual`.
+
+### Cumulative anchor
+
+Cumulative is **window-relative**: starts at the first actual `net` at `today - days_back`, not absolute account balance. The chart answers "how does my net position move across the window?", not "what is my actual bank balance?".
+
+### MC seed key
+
+```
+seed = fnv1aHash(`${userId}|${todayIso}|${daysBack}|${daysForward}|${filterHash}`)
+```
+
+Same-day calls with identical params return identical bands (deterministic). Day-rollover invalidates the seed — bands shift the next day. This is intentional and not cached server-side.
+
+### Caching omitted (v1)
+
+The `cashflow_forecast_mc` table key is `(user_id, month, filter_hash)` — a month string. Overloading it for rolling windows would break that schema. v1 ships without rolling cache; React Query `staleTime: 60_000` on the frontend absorbs interactive churn. If perf budgets are missed, a separate `cashflow_forecast_mc_rolling` table keyed by `(user_id, today, days_back, days_forward, filter_hash)` is the planned escape hatch.
+
+### Diagnostics omitted (v1)
+
+Walk-forward backtest is per-calendar-month: it iterates historical months and measures end-of-month forecast error. Reformulating it for an arbitrary rolling window requires a new harness — out of scope for v1. The diagnostics `Button` is hidden when `mode === 'rolling'`.
+
+### Performance budget
+
+180 forecast days × 8 methods × 1000 MC paths is roughly 5–10× the current-month cost. Holt-Winters grid search is bounded by history length (constant), MC scales linearly with horizon. Target p95 < 1500ms at `days_forward=180`. Frontend asks for `mc_paths=500` so MC cost is halved.
+
+### Frontend wiring
+
+- `apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx` owns `mode` and `rollingDays` state, branches between two `useQuery` calls (one enabled at a time), and renders either `ForecastInner` or `ForecastInnerRolling`.
+- `apps/frontend/src/components/dashboard/ForecastInnerRolling.tsx` uses `LineChart` with `xIsDate` and a vertical reference line at `data.today`.
+- `apps/frontend/src/utils/forecastMerge.ts` exports `mergeForViewRolling` that produces date-keyed `MergedDayDate[]` rows (with `t: Date`) instead of dayNum-keyed rows.
+- `apps/frontend/src/components/charts/LineChart.tsx` extends `LineReferenceLine` to support an optional `x: Date | number` field for vertical reference lines (backwards-compatible with existing `y` references).
+
+## Phase H v2: URL Persistence
+
+The `mode` and `rollingDays` parameters are persisted to the URL via `useSearchParams` from `react-router-dom`:
+
+- **Query params:** `forecastMode=rolling` (default: `month`), `rollingDays=90` (default: `90`)
+- **Navigation example:** `/?forecastMode=rolling&rollingDays=180` opens the dashboard in rolling mode with 180-day window
+- **History:** Setters use `{ replace: true }` to avoid building browser history; users can bookmark URL states for quick access to preferred forecast views
+- **Implementation:** `CashFlowForecastChart.tsx` extracts params via `useSearchParams().get()` on mount and updates via `setSearchParams(..., { replace: true })` when user toggles mode or rolling days
+
+## Phase H v2: Rolling MC Cache
+
+The rolling forecast endpoint now uses a dedicated materialized cache table:
+
+**New Table:** `cashflow_forecast_mc_rolling` (created by Alembic migration 0016)
+- Columns: id (serial PK), user_id (text, default 'anonymous'), today_iso (text, YYYY-MM-DD), days_back (int), days_forward (int), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
+- Unique constraint on `(user_id, today_iso, days_back, days_forward, filter_hash)` ensures idempotent cache writes
+- Index on `(user_id, today_iso)` for cache freshness lookups by user and date
+
+**New Repository:** `cashflowForecastMcRollingRepository` (`apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js`)
+- Methods:
+  - `get({ userId, todayIso, daysBack, daysForward, filterHash })` — Fetch cached payload and computed_at timestamp
+  - `isFresh(computedAt)` — Check if cached data is within 6-hour TTL
+  - `upsert({ userId, todayIso, daysBack, daysForward, filterHash, mcPaths, payload })` — Idempotent cache write (updates computed_at on conflict)
+
+**Cache-Aware Rolling Orchestrator:** Updated `computeCashflowForecastRolling()` in `apps/node-backend/src/services/calculations/forecast/index.js`
+- Before computing: checks DB cache if using default MC params (1000 paths, [10,50,90] percentiles)
+  - Returns cached result if fresh (<6h)
+  - Response envelope includes `source: 'cache'` in meta
+- After computing: writes to cache asynchronously if default MC params (non-blocking)
+  - Response envelope includes `source: 'live'` in meta
+- Cache skip: when `includeBacktest=true` (backtest requires fresh computation)
+- Fallback: cache read/write errors logged but don't abort computation
+
+## Phase H v2: Rolling Diagnostics (Lazy-Loaded)
+
+The rolling forecast now supports walk-forward backtesting and diagnostics via optional `include_backtest` query param. The backtest is **lazy-loaded**: it runs only when the user opens the diagnostics sheet, avoiding on-load computation cost.
+
+**New Function:** `walkForwardBacktestRolling()` in `apps/node-backend/src/services/calculations/forecast/backtest.js`
+- Runs rolling walk-forward backtest across default 8 windows
+- Returns `ForecastDiagnostics`-compatible payload with `window_end` mapped to `month` field for UI consistency
+- Shares same `ForecastDiagnostics` interface as month-mode backtest for unified diagnostics sheet
+
+**Route Update:** `GET /api/aggregations/cashflow-forecast-rolling` now accepts `include_backtest` query param
+- Default: `false` (omitted, no backtest; main rolling chart query excludes expensive backtest computation)
+- When `true`: runs rolling walk-forward backtest and includes `diagnostics` in response payload
+- Backtest skipped in main query by design (see **Lazy Diagnostics** below)
+
+**Frontend Lazy Diagnostics:**
+- `CashFlowForecastChart.tsx` maintains two separate rolling queries:
+  - **Main rolling query:** `getCashflowForecastRolling({ ..., include_backtest: false })` — always runs, feeds the chart
+  - **Diagnostics query:** `getCashflowForecastRolling({ ..., include_backtest: true })` — only enabled when `mode === "rolling" && showDiagnostics === true`, with `staleTime: 300_000` (5 minutes)
+- Diagnostics sheet reads from `rollingDiagnosticsQuery.data?.diagnostics` when in rolling mode
+- When user closes the diagnostics sheet, the expensive backtest query is disabled, avoiding wasted computation
+- This pattern mirrors month-mode diagnostics but applies lazy-loading to reduce typical rolling window load cost
+
+**Data Model Update:**
+- Frontend type `CashflowForecastRollingData.diagnostics` is `ForecastDiagnostics | null`
+- Rolling API response includes optional `diagnostics` field (same structure as month-mode diagnostics) only when `include_backtest=true`
+- Main chart response has `diagnostics: null` when using default `include_backtest: false`

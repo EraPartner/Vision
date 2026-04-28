@@ -6,6 +6,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
+import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { formatMonthYearWithAppSettings } from "@/components/shared/dateUtils";
 import type { NetHistoryPoint } from "@/hooks/useFilteredDashboardStats";
 
@@ -14,13 +15,13 @@ interface NetSummaryCardProps {
   income: number;
   spending: number;
   history: NetHistoryPoint[];
-  formatCurrency: (n: number) => string;
 }
 
-export function NetSummaryCard({ netBalance, income, spending, history, formatCurrency }: NetSummaryCardProps) {
+export function NetSummaryCard({ netBalance, income, spending, history }: NetSummaryCardProps) {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
+  const { formatCompact } = useChartCurrencyFormatter();
 
   const animatedNet = useCountUp(netBalance, 800);
   const isPositive = netBalance >= 0;
@@ -40,6 +41,10 @@ export function NetSummaryCard({ netBalance, income, spending, history, formatCu
   const trendGradient = isPositive ? "from-accent/10 to-accent/5" : "from-destructive/10 to-destructive/5";
   const netColor = isPositive ? "text-accent" : "text-destructive";
   const areaStroke = isPositive ? "var(--color-accent, oklch(72% 0.15 160))" : "var(--color-destructive, oklch(65% 0.2 25))";
+
+  const netCompact = formatCompact(animatedNet);
+  const incomeCompact = formatCompact(incomeTotal);
+  const spendingCompact = formatCompact(spendingTotal);
 
   return (
     <Card
@@ -64,7 +69,7 @@ export function NetSummaryCard({ netBalance, income, spending, history, formatCu
       <CardContent className="flex flex-1 flex-col gap-4">
         <div className="flex items-end gap-3 flex-wrap">
           <div className={`text-4xl md:text-5xl font-bold tabular-nums ${netColor}`}>
-            {formatCurrency(animatedNet)}
+            <span title={netCompact.isCompact ? netCompact.full : undefined}>{netCompact.display}</span>
           </div>
           {savingsRate !== null && (
             <Badge variant="outline" className="font-semibold text-xs">
@@ -92,10 +97,10 @@ export function NetSummaryCard({ netBalance, income, spending, history, formatCu
           <div className="flex items-center justify-between text-xs">
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <ArrowUpRight className="h-3.5 w-3.5 text-accent" />
-              <span className="tabular-nums text-foreground">{formatCurrency(incomeTotal)}</span>
+              <span className="tabular-nums text-foreground" title={incomeCompact.isCompact ? incomeCompact.full : undefined}>{incomeCompact.display}</span>
             </span>
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <span className="tabular-nums text-foreground">{formatCurrency(spendingTotal)}</span>
+              <span className="tabular-nums text-foreground" title={spendingCompact.isCompact ? spendingCompact.full : undefined}>{spendingCompact.display}</span>
               <TrendingDown className="h-3.5 w-3.5 text-destructive" />
             </span>
           </div>
