@@ -118,7 +118,20 @@ export function useInvestmentMutations() {
     mutationFn: () => apiClient.refreshInvestmentPrices(),
     onSuccess: (data) => {
       invalidateAll();
-      toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }));
+      const sources = Object.values(data.priceSources ?? {});
+      const staleCount = sources.filter(
+        (s) => s === 'historical_fallback' || s === 'cached',
+      ).length;
+      if (staleCount > 0) {
+        toast.warning(t('portfolio.refreshedPrices', { n: String(data.total) }), {
+          description: t('portfolio.refreshedPricesStale', {
+            n: String(staleCount),
+            total: String(data.total),
+          }),
+        });
+      } else {
+        toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }));
+      }
     },
     onError: (err: Error) =>
       toast.error(t('portfolio.refreshPricesFailedTitle'), { description: err.message }),

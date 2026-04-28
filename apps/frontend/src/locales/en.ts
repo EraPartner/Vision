@@ -1483,6 +1483,7 @@ const en: Record<string, string> = {
   'portfolio.refreshPricesFailed': 'Failed to refresh prices: {msg}',
   'portfolio.refreshPricesFailedTitle': 'Failed to refresh prices',
   'portfolio.refreshedPrices': 'Prices refreshed for {n} investment(s)',
+  'portfolio.refreshedPricesStale': '{n} of {total} prices are stale (live provider unreachable — using last known values)',
   'portfolio.rentalIncome': 'Rental Income',
   'portfolio.savings': 'Savings',
   'portfolio.symbol': 'Symbol',

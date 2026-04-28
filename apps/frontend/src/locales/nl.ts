@@ -1483,6 +1483,7 @@ const nl: Record<string, string> = {
   'portfolio.refreshPricesFailed': 'Vernieuwen van prijzen mislukt: {msg}',
   'portfolio.refreshPricesFailedTitle': 'Failed to refresh prices',
   'portfolio.refreshedPrices': 'Prijzen bijgewerkt voor {n} investering(en)',
+  'portfolio.refreshedPricesStale': '{n} van {total} prijzen zijn verouderd (live provider onbereikbaar — laatst bekende waarden gebruikt)',
   'portfolio.rentalIncome': 'Huurinkomsten',
   'portfolio.savings': 'Sparen',
   'portfolio.symbol': 'Symbool',

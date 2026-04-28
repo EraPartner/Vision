@@ -3,7 +3,7 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
-last_modified: 2026-04-26
+last_modified: 2026-04-28
 tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
@@ -135,14 +135,23 @@ Response:
 - Kinesis: provider/network dependent
 - Yahoo: Depends on usage
 
-## Error Handling
+## Error Handling & Offline Fallback
 
 If price fetch fails:
 - Fallback to previous close where available (Yahoo)
 - Fallback to latest historical close from Yahoo chart data when quote fields are unavailable
-- Fallback to existing stored `current_price` when provider data is unavailable
+- Fallback to existing stored `current_price` (`cached` source) when provider data is unavailable
+- Fallback to last persisted `asset_price_history` point (`historical_fallback` source) when live providers are unreachable and in-memory cache is cold (e.g., app restart with no internet)
 - Log error
 - Continue with other investments
+
+**Offline Resilience (Apr 2026):**
+Each fallback source is tracked in the refresh response as `priceSources: Record<investmentId, PriceSource>`. The frontend uses this to differentiate:
+- `live`: Fresh real-time quote — no warning
+- `close`, `cached`: Potentially stale but known good — no warning
+- `historical_fallback`: Database-backed but may be stale — frontend shows warning toast `portfolio.refreshedPricesStale` with count of stale prices
+
+This makes graceful offline degradation visible without blocking the user.
 
 ## Related
 

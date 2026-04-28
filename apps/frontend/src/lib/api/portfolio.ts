@@ -27,11 +27,13 @@ export function createInvestment(data: InvestmentCreate): Promise<Investment> {
     return apiRequest<Investment>('/api/investments', { method: 'POST', body: JSON.stringify(data) });
 }
 
+export type PriceSource = 'live' | 'close' | 'cached' | 'historical_fallback';
+
 export function refreshInvestmentPrices(): Promise<{
     updated: number;
     total: number;
     prices: Record<string, number>;
-    priceSources: Record<string, 'live' | 'close' | 'cached'>;
+    priceSources: Record<string, PriceSource>;
 }> {
     return apiRequest('/api/investments/refresh-prices', { method: 'POST' });
 }

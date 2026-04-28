@@ -5,7 +5,8 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-04-23
-tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money]
+last_modified: 2026-04-28
+tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
 related_code: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
@@ -142,6 +143,7 @@ Fallback chain for each investment price:
 2. Previous close (`close`, when provider live price is missing/0)
 3. Latest historical close from Yahoo chart data (`close`, when quote fields are unavailable)
 4. Stored `current_price` in DB (`cached`)
+5. Last persisted point from `asset_price_history` (`historical_fallback`, when live providers are unreachable and in-memory cache is cold)
 
 Additional refresh behavior:
 - Yahoo refresh accepts either `price_provider_id` **or** investment `symbol` (symbol fallback), matching Market Lookup symbol handling.
@@ -168,13 +170,15 @@ Compatibility safeguard:
   "priceSources": {
     "1": "close",
     "2": "live",
-    "3": "cached"
+    "3": "cached",
+    "4": "historical_fallback"
   }
 }
 ```
 
 - `total`: investments considered for refresh (with live providers)
 - `updated`: investments whose DB row was actively updated this run
+- `priceSources`: Map of investment ID → source type (one of `live`, `close`, `cached`, `historical_fallback`). Clients use this to detect stale prices when the live provider is unreachable (offline scenario).
 
 ### POST /api/investments
 

@@ -3,7 +3,7 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-04-27
+last_modified: 2026-04-28
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
@@ -93,8 +93,9 @@ When markets are closed or providers return missing/zero values, refresh uses a 
 - `live`: real-time quote
 - `close`: previous close or latest historical close quote (Yahoo)
 - `cached`: last non-zero `current_price` already stored in DB
+- `historical_fallback`: last persisted point from `asset_price_history` when live providers are unreachable (offline scenario)
 
-The refresh API response includes `priceSources` per investment ID so clients can show where each price came from.
+The refresh API response includes `priceSources` per investment ID so clients can show where each price came from. When the live provider is unreachable and the backend falls back to `historical_fallback` or `cached` sources, the frontend displays a warning toast (`portfolio.refreshedPricesStale`) with a count of stale prices instead of a plain success message, making the degradation explicit to the user.
 
 Implementation notes:
 - Yahoo provider resolution now follows Market Lookup style symbol handling by accepting `price_provider_id` first and falling back to `symbol` when needed.
