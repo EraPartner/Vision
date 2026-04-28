@@ -54,3 +54,4 @@ copilot/
 opencode.json
 *.json
 !packaging/electron/package-lock.json
+!packages/*/package.json

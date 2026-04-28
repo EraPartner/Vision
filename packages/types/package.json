@@ -1,0 +1,26 @@
+{
+  "name": "@vision/types",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared type definitions and runtime constants used by the Vision backend and frontend.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./api": {
+      "types": "./src/api.d.ts",
+      "default": "./src/api.js"
+    },
+    "./errors": {
+      "types": "./src/errors.d.ts",
+      "default": "./src/errors.js"
+    }
+  },
+  "types": "./src/index.d.ts",
+  "files": [
+    "src"
+  ]
+}
