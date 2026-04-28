@@ -154,6 +154,32 @@ export function getAggregationRecipientByYear(params?: {
     return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ''}`);
 }
 
+export interface RecipientPivotItem {
+    recipientId: number;
+    name: string;
+    total: number;
+    transactionCount: number;
+}
+
+export function getAggregationRecipientPivot(params?: {
+    currency?: string;
+    excluded_recipient_ids?: number[];
+    bucket?: 'monthly' | 'yearly';
+    start?: string | null;
+    end?: string | null;
+}): Promise<AggregationEnvelope<{ recipientPivot: Record<string, RecipientPivotItem[]> }>> {
+    const qp = new URLSearchParams();
+    if (params?.currency) qp.set('currency', params.currency);
+    if (params?.bucket) qp.set('bucket', params.bucket);
+    if (params?.start) qp.set('start', params.start);
+    if (params?.end) qp.set('end', params.end);
+    if (params?.excluded_recipient_ids?.length) {
+        params.excluded_recipient_ids.forEach((id) => qp.append('excluded_recipient_ids', String(id)));
+    }
+    const q = qp.toString();
+    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ''}`);
+}
+
 export interface SankeyNode {
     readonly id: string;
     readonly label: string;

@@ -1,42 +1,38 @@
 import { query } from '../database/connection.js';
 
+const COLUMNS = 'id, name, chart_type, category_ids, recipient_ids, chart_variant, time_bucket, date_range_start, date_range_end, created_at, updated_at';
+
+function mapRow(r) {
+  return {
+    ...r,
+    category_ids: Array.isArray(r.category_ids) ? r.category_ids.map(Number) : [],
+    recipient_ids: Array.isArray(r.recipient_ids) ? r.recipient_ids.map(Number) : [],
+  };
+}
+
 const savedChartsRepository = {
   async getAll() {
-    const result = await query(
-      `SELECT id, name, chart_type, category_ids, created_at, updated_at
-       FROM saved_charts
-       ORDER BY created_at ASC`
-    );
-    // Convert Postgres integer[] (returned as array) into JS arrays of numbers
-    return result.rows.map(r => ({
-      ...r,
-      category_ids: Array.isArray(r.category_ids) ? r.category_ids.map(Number) : (r.category_ids || []),
-    }));
+    const result = await query(`SELECT ${COLUMNS} FROM saved_charts ORDER BY created_at ASC`);
+    return result.rows.map(mapRow);
   },
 
   async getById(id) {
-    const result = await query(
-      `SELECT id, name, chart_type, category_ids, created_at, updated_at
-       FROM saved_charts WHERE id = $1`,
-      [id]
-    );
+    const result = await query(`SELECT ${COLUMNS} FROM saved_charts WHERE id = $1`, [id]);
     const r = result.rows[0];
-    if (!r) return null;
-    return { ...r, category_ids: Array.isArray(r.category_ids) ? r.category_ids.map(Number) : (r.category_ids || []) };
+    return r ? mapRow(r) : null;
   },
 
-  async create({ name, chartType, categoryIds }) {
+  async create({ name, chartType, categoryIds, recipientIds, chartVariant, timeBucket, dateRangeStart, dateRangeEnd }) {
     const result = await query(
-      `INSERT INTO saved_charts (name, chart_type, category_ids)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, chart_type, category_ids, created_at, updated_at`,
-      // Pass JS array directly; driver will send as SQL array
-      [name, chartType, categoryIds]
+      `INSERT INTO saved_charts (name, chart_type, category_ids, recipient_ids, chart_variant, time_bucket, date_range_start, date_range_end)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING ${COLUMNS}`,
+      [name, chartType, categoryIds, recipientIds, chartVariant, timeBucket, dateRangeStart ?? null, dateRangeEnd ?? null]
     );
-    return result.rows[0];
+    return mapRow(result.rows[0]);
   },
 
-  async update(id, { name, chartType, categoryIds }) {
+  async update(id, { name, chartType, categoryIds, recipientIds, chartVariant, timeBucket, dateRangeStart, dateRangeEnd }) {
     const fields = [];
     const values = [];
     let idx = 1;
@@ -44,23 +40,24 @@ const savedChartsRepository = {
     if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); }
     if (chartType !== undefined) { fields.push(`chart_type = $${idx++}`); values.push(chartType); }
     if (categoryIds !== undefined) { fields.push(`category_ids = $${idx++}`); values.push(categoryIds); }
+    if (recipientIds !== undefined) { fields.push(`recipient_ids = $${idx++}`); values.push(recipientIds); }
+    if (chartVariant !== undefined) { fields.push(`chart_variant = $${idx++}`); values.push(chartVariant); }
+    if (timeBucket !== undefined) { fields.push(`time_bucket = $${idx++}`); values.push(timeBucket); }
+    if (dateRangeStart !== undefined) { fields.push(`date_range_start = $${idx++}`); values.push(dateRangeStart); }
+    if (dateRangeEnd !== undefined) { fields.push(`date_range_end = $${idx++}`); values.push(dateRangeEnd); }
 
     if (fields.length === 0) return this.getById(id);
 
     values.push(id);
     const result = await query(
-      `UPDATE saved_charts SET ${fields.join(', ')} WHERE id = $${idx}
-       RETURNING id, name, chart_type, category_ids, created_at, updated_at`,
+      `UPDATE saved_charts SET ${fields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
       values
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
 
   async delete(id) {
-    const result = await query(
-      `DELETE FROM saved_charts WHERE id = $1 RETURNING id`,
-      [id]
-    );
+    const result = await query(`DELETE FROM saved_charts WHERE id = $1 RETURNING id`, [id]);
     return result.rows.length > 0;
   },
 };

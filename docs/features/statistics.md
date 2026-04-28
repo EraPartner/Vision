@@ -23,7 +23,7 @@ related_code:
 
 ## Overview
 
-The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 4 tabbed sections.
+The Statistics page (`/statistics`) is the primary analytics dashboard for transaction data. It provides comprehensive financial insights through multiple chart types, a category pivot table, year-over-year comparisons, and recipient spending analysis. It is the most complex single page in the frontend with 9 configurable widgets, per-graph exclusion toggles, and 6 tabbed sections (including the new Custom Charts tab added April 2026).
 
 ## Refactoring and Performance Optimization (April 2026)
 
@@ -49,7 +49,7 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 
 1. Fetches data via `useStatistics()` hook
 2. Manages widget visibility via `useWidgetVisibility()` hook
-3. Composes 11 sub-components into 4 tabs
+3. Composes 11 sub-components into 6 tabs
 
 **Sub-components:**
 
@@ -65,7 +65,9 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 | `TopRecipientsChart.tsx` | 67 | Top recipients horizontal bar chart (year-filterable) | Recipients |
 | `YearlyComparisonChart.tsx` | 41 | Year-over-year bar chart | Yearly |
 | `YearlySummaryTable.tsx` | 67 | Yearly summary table (income, spending, net, tx count) | Yearly |
-| `SavedChartsSection.tsx` | 42 | Renders saved custom category charts | All |
+| `SavedChartsSection.tsx` | 42 | Full tab content rendering user-created saved charts in grid with builder modal | Custom Charts |
+| `CustomChart.tsx` | — | Pure read-only chart display merging category + recipient pivot data | Custom Charts |
+| `CustomChartBuilderModal.tsx` | — | Two-column dialog (form left, live preview right) for creating/editing charts | Custom Charts |
 | `RecipientInsightsTab.tsx` | 311 | Merchant spending insights (MoM alerts, filters) | Recipients |
 | `SankeyTab.tsx` | 88 | Sankey flow diagram with year selector and exclusion toggle | Flow |
 
@@ -171,7 +173,7 @@ The Statistics page uses the `useWidgetVisibility` hook with 9 configurable widg
 
 ## Tab Structure
 
-The page is organized into 4 tabs:
+The page is organized into 6 tabs:
 
 ### Overview Tab
 - Monthly Income/Expense bar chart
@@ -190,6 +192,13 @@ The page is organized into 4 tabs:
 ### Yearly Tab
 - Year-over-Year Comparison bar chart
 - Yearly Summary table (year, income, spending, net, transaction count)
+
+### Custom Charts Tab
+- Grid of user-created saved charts (empty state with "Create Chart" button when none exist)
+- Each chart displays with its configured chart type, variant, and time bucket
+- Per-chart exclusion toggles
+- Edit and delete buttons on each chart card
+- Chart builder modal (two-column: form on left, live preview on right) for creating/editing charts
 
 ## Charts and Visualizations
 
@@ -245,7 +254,7 @@ This pattern:
 - **Reduces initial bundle**: Defers loading chart logic until the tab is opened
 - **Improves TTI**: Initial page render shows only SummaryCards (inline), other tabs load on-demand
 - **Maintains UX**: Skeleton fallbacks provide loading feedback
-- **8 components lazy-loaded**: MonthlyChart, NetTrendChart, CategoryPieChart, CategoryTrendChart, TopRecipientsChart, YearlyComparisonChart, RecipientInsightsTab, SankeyTab, SavedChartsSection
+- **9 components lazy-loaded**: MonthlyChart, NetTrendChart, CategoryPieChart, CategoryTrendChart, TopRecipientsChart, YearlyComparisonChart, RecipientInsightsTab, SankeyTab, SavedChartsSection
 
 ### Component Memoization (April 25)
 
@@ -375,7 +384,7 @@ See [[docs/features/pdf-report-export|PDF Report Export Feature]].
 
 - [[docs/features/splits|Splits & Owes]] — Owed summary uses similar aggregation patterns
 - [[docs/features/belgian-tax|Belgian Tax]] — Tax calculations use transaction data
-- [[docs/features/saved-charts|Saved Charts]] — Custom charts render within Statistics page
+- [[docs/features/saved-charts|Saved Charts]] — Custom charts with recipients + variants (6th tab, April 2026 extension)
 - [[docs/features/recipient-insights|Recipient Insights]] — Embedded as a tab within Statistics
 - [[docs/features/portfolio|Portfolio Performance]] — Separate analytics for investment data
 - [[docs/features/sankey-flow|Sankey Flow]] — Phase 7 income flow visualization

@@ -31,6 +31,7 @@ import { getAllAccuracyHistory } from '../services/calculations/forecast/accurac
 import { computeSankeyFlow } from '../services/calculations/aggregation/sankey.js';
 import { computeCategoryPivot } from '../services/calculations/aggregation/categoryPivot.js';
 import { computeRecipientByYear } from '../services/calculations/aggregation/recipientByYear.js';
+import { computeRecipientPivot } from '../services/calculations/aggregation/recipientPivot.js';
 
 const router = Router();
 
@@ -221,6 +222,20 @@ router.get('/recipient-by-year', async (req, res) => {
   const { data, meta } = await computeRecipientByYear({
     targetCurrency: getTargetCurrency(req),
     excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+  });
+  res.ok({ data, meta });
+});
+
+router.get('/recipient-pivot', async (req, res) => {
+  const bucket = ['monthly', 'yearly'].includes(req.query.bucket) ? req.query.bucket : 'monthly';
+  const startDate = req.query.start || null;
+  const endDate = req.query.end || null;
+  const { data, meta } = await computeRecipientPivot({
+    targetCurrency: getTargetCurrency(req),
+    excludedRecipientIds: parseNumericArrayQueryParam(req.query.excluded_recipient_ids),
+    bucket,
+    startDate,
+    endDate,
   });
   res.ok({ data, meta });
 });

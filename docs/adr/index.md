@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-04-28: Saved Charts Schema Extension — Recipients, Variants, Time Buckets, Date Ranges
+
+[[docs/adr/041-saved-charts-schema-extension|ADR-041]] — Extend `saved_charts` table with 5 new columns to support per-recipient aggregation and chart variant selection: `recipient_ids INTEGER[]`, `chart_variant TEXT`, `time_bucket TEXT`, `date_range_start DATE`, `date_range_end DATE`. Enables custom charts to render recipients (merchants) as independent series alongside categories, supporting multiple rendering styles (default, stacked, grouped) and time granularities (monthly/yearly) with optional date filtering. New `useRecipientPivot()` hook (keyed on currency, bucket, start, end) and `GET /api/aggregations/recipient-pivot` endpoint provide per-recipient spending series. CustomChart component renders correct chart primitive per (chart_type, chart_variant) combination; validation enforces valid pairs (no line stacked/grouped, no area grouped). Frontend form with live preview in CustomChartBuilderModal; SavedChartsSection refactored as full tab content in Statistics page. Migration 0017 additive with safe defaults. See [[docs/features/saved-charts|Saved Charts Feature]].
+
 ### 2026-04-28: Backup Format v2 AEAD Encryption with Per-Backup Salt
 
 [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]] — Upgrade from AES-256-CBC with static salt (v1) to AES-256-GCM (AEAD) with per-backup random 16-byte salt and 12-byte IV. KDF upgraded to Scrypt(N=2^15, r=8, p=1) — doubled iteration count. AEAD provides confidentiality + authenticity; tampering detected on decryption. Per-backup entropy eliminates salt-reuse collisions across multiple backups. Backward compatible: v1 format still readable; v2 is default for new backups. Auto-detection via magic header; no user-visible format change. See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for format details.

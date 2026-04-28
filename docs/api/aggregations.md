@@ -5,13 +5,14 @@ status: active
 date: 2026-04-25
 updated: 2026-04-28
 last_modified: 2026-04-28
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics]
-tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), and rolling-window cash flow forecast (Phase H)
+recipient_pivot_added: 2026-04-28
+tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, saved-charts]
+description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with inverse-MSE ensemble (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), and per-recipient spending pivot for custom charts (April 2026)
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.js
   - apps/node-backend/src/services/calculations/aggregation/
+  - apps/node-backend/src/services/calculations/aggregation/recipientPivot.js
   - apps/node-backend/src/services/calculations/forecast/
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
   - apps/node-backend/src/repositories/infoRepositoryMonthly.js
@@ -22,6 +23,7 @@ related_code:
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/aggregations.ts
+  - apps/frontend/src/hooks/useRecipientPivot.ts
   - apps/frontend/src/utils/forecastMerge.ts
   - apps/frontend/src/hooks/useFilteredDashboardStats.ts
   - apps/frontend/src/components/dashboard/CashFlowForecastChart.tsx
@@ -32,6 +34,7 @@ related_code:
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
   - alembic/versions/0012_cashflow_forecast_accuracy.py
   - alembic/versions/0013_cashflow_forecast_mc.py
+  - alembic/versions/0017_saved_charts_recipients_variants.py
 ---
 
 # Aggregations API
@@ -337,6 +340,104 @@ Account balances and historical balance data.
   ]
 }
 ```
+
+---
+
+### Recipient Pivot
+
+Per-recipient aggregated spending data with category and time-bucket filtering, supporting custom chart rendering with recipients and categories as co-series.
+
+**Path:** `GET /api/aggregations/recipient-pivot`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `currency` | string | EUR | Target currency (3-letter code, case-insensitive) |
+| `time_bucket` | string | monthly | `monthly` or `yearly` |
+| `category_ids[]` | integer[] | [] | Categories to include (if empty, all included) |
+| `recipient_ids[]` | integer[] | [] | Recipients to include (if empty, all included) |
+| `date_range_start` | string | null | ISO date filter start (YYYY-MM-DD) |
+| `date_range_end` | string | null | ISO date filter end (YYYY-MM-DD) |
+
+**Response (data field):**
+
+```json
+{
+  "recipients": [
+    {
+      "recipient_id": 10,
+      "recipient_name": "SuperMart",
+      "periods": [
+        {
+          "period": "2026-01",
+          "total": 425.50,
+          "count": 8
+        },
+        {
+          "period": "2026-02",
+          "total": 382.75,
+          "count": 7
+        }
+      ],
+      "total": 808.25,
+      "count": 15
+    },
+    {
+      "recipient_id": 11,
+      "recipient_name": "Gas Station",
+      "periods": [
+        {
+          "period": "2026-01",
+          "total": 85.00,
+          "count": 2
+        },
+        {
+          "period": "2026-02",
+          "total": 92.50,
+          "count": 2
+        }
+      ],
+      "total": 177.50,
+      "count": 4
+    }
+  ]
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `recipients[]` | array | Per-recipient aggregated series |
+| `recipient_id` | number | Recipient ID |
+| `recipient_name` | string | Recipient display name |
+| `periods[]` | array | Time-bucketed spending (monthly/yearly) |
+| `period` | string | Period key (YYYY-MM for monthly, YYYY for yearly) |
+| `total` | number | Recipient spending in this period |
+| `count` | number | Transaction count in this period |
+| `total` | number | Total recipient spending across all periods |
+| `count` | number | Total transaction count |
+
+**Frontend Usage:**
+
+```typescript
+const envelope = await apiClient.getAggregationRecipientPivot({
+  currency: 'EUR',
+  time_bucket: 'monthly',
+  recipient_ids: [10, 11],
+  category_ids: [5, 7],
+  date_range_start: '2026-01-01',
+  date_range_end: '2026-03-31'
+});
+
+// envelope.data.recipients → array of per-recipient series
+// Render as CustomChart with recipients as series
+```
+
+**Use Case:**
+
+The Recipient Pivot endpoint powers the **Custom Charts** feature's ability to render charts with recipients (merchants) as independent series alongside categories. When a user saves a chart with `recipient_ids` populated, the frontend calls this endpoint with the chart's filters and renders the result as a multi-series chart.
 
 ---
 
@@ -1056,6 +1157,12 @@ await apiClient.getAggregationCashflowComparison({ currency: 'EUR' });
 await apiClient.getAggregationAverageVsCurrent({ currency: 'EUR' });
 await apiClient.getAggregationBankBalances({ currency: 'EUR' });
 await apiClient.getSankeyFlow({ year: 2026, currency: 'EUR' }); // Phase 7
+await apiClient.getAggregationRecipientPivot({ // Custom Charts feature
+  currency: 'EUR',
+  time_bucket: 'monthly',
+  recipient_ids: [10, 11],
+  category_ids: [5, 7]
+});
 
 // Forecast endpoints
 await apiClient.getCashflowForecastMethods({ // Phase 10 + C + F

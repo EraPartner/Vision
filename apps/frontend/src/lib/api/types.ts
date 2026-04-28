@@ -93,19 +93,33 @@ export interface NetWorthResponse {
     snapshotsTotal?: number;
 }
 
+export type ChartType = 'line' | 'bar' | 'area';
+export type ChartVariant = 'default' | 'stacked' | 'grouped';
+export type TimeBucket = 'monthly' | 'yearly';
+
 export interface SavedChart {
     id: number;
     name: string;
-    chart_type: 'line' | 'bar' | 'area';
+    chart_type: ChartType;
+    chart_variant: ChartVariant;
+    time_bucket: TimeBucket;
     category_ids: number[];
+    recipient_ids: number[];
+    date_range_start: string | null;
+    date_range_end: string | null;
     created_at: string;
     updated_at: string;
 }
 
 export interface SavedChartCreate {
     name: string;
-    chartType: 'line' | 'bar' | 'area';
+    chartType: ChartType;
+    chartVariant?: ChartVariant;
+    timeBucket?: TimeBucket;
     categoryIds: number[];
+    recipientIds?: number[];
+    dateRangeStart?: string | null;
+    dateRangeEnd?: string | null;
 }
 
 export interface ImportBatch {

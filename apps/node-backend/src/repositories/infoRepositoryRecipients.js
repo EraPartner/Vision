@@ -177,4 +177,67 @@ export const recipientInsightsRepository = {
 
     return { recipientsByYear };
   },
+
+  async getRecipientPivot(excludedRecipientIds = [], targetCurrency = 'EUR', { bucket = 'monthly', startDate = null, endDate = null } = {}) {
+    const validRecIds = (excludedRecipientIds || []).filter(id => Number.isInteger(id) && id > 0 && id < 2147483647);
+
+    const params = [];
+    const recExclude = validRecIds.length > 0
+      ? `AND COALESCE(pr.id, r.id) NOT IN (${validRecIds.map(id => { params.push(id); return `$${params.length}`; }).join(',')})`
+      : '';
+
+    const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
+
+    const dateFilters = [];
+    if (startDate) { params.push(startDate); dateFilters.push(`t.date >= $${params.length}`); }
+    if (endDate) { params.push(endDate); dateFilters.push(`t.date <= $${params.length}`); }
+    const dateWhere = dateFilters.length > 0 ? dateFilters.join(' AND ') : '';
+
+    const sql = `
+      SELECT
+        COALESCE(pr.id, r.id)       AS recipient_id,
+        COALESCE(pr.name, r.name)   AS recipient_name,
+        ${periodExpr}               AS period,
+        t.amount, t.currency, t.date
+      FROM transactions t
+      JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      WHERE t.is_active = true
+        AND t.amount < 0
+        ${recExclude}
+        ${dateWhere ? `AND ${dateWhere}` : ''}
+      ORDER BY t.date
+    `;
+
+    const result = await query(sql, params);
+
+    const converted = await convertRowsToEur(
+      mapRowsForAmountConversion(result.rows, 'amount', false),
+      targetCurrency,
+      { useHistoricalRatesByDate: true, dateField: 'date' }
+    );
+
+    const periodRecMap = {};
+    for (const row of converted) {
+      const period = row.period;
+      const rid = parseInt(row.recipient_id, 10);
+      const absEur = Math.abs(row.amount_eur);
+
+      if (!periodRecMap[period]) periodRecMap[period] = {};
+      if (!periodRecMap[period][rid]) {
+        periodRecMap[period][rid] = { recipientId: rid, name: row.recipient_name, total: 0, transactionCount: 0 };
+      }
+      periodRecMap[period][rid].total += absEur;
+      periodRecMap[period][rid].transactionCount++;
+    }
+
+    const recipientPivot = {};
+    for (const [period, recs] of Object.entries(periodRecMap)) {
+      recipientPivot[period] = Object.values(recs)
+        .map(r => ({ ...r, total: roundToCents(r.total) }))
+        .sort((a, b) => a.total - b.total);
+    }
+
+    return { recipientPivot };
+  },
 };

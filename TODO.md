@@ -19,4 +19,3 @@ _None tracked._
 ## Features
 
 - Add more adapters (BNP, etc.) **P2**
-- Re-add saved charts instatistics' categories page at the bottom **P2**

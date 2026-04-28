@@ -231,6 +231,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET | `/api/aggregations/cashflow-forecast-methods` | Multi-method cash flow forecast for current month (Phase 10 + F, 8 forecasting methods: 7 base + inverse-MSE ensemble + walk-forward backtest; Phase G adds `include_breakdown` param for per-category breakdown) | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/cashflow-forecast-rolling` | Rolling-window forecast: past `days_back` days actuals + next `days_forward` days statistical projection on a date axis (defaults 90/90, max 365 each, sum ≤ 730). Reuses 8-method engine with date-keyed payload, window-relative cumulative anchor; rolling-specific MC defaults (500 paths, P25/P75 percentiles) lower cost for broad horizons; accepts `include_backtest` param for lazy-loaded walk-forward backtest diagnostics (only enabled when user opens diagnostics sheet); uses MC rolling cache with 6-hour TTL. | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D) | — | [[docs/api/aggregations\|Aggregations]] |
+| GET | `/api/aggregations/recipient-pivot` | Per-recipient spending keyed by period (monthly/yearly), supports date-range filter; powers custom saved-chart recipient series | — | [[docs/api/aggregations\|Aggregations]] |
 
 ## Info/Statistics (14 endpoints — Phase 9 Aggregation Cutover)
 

@@ -155,16 +155,6 @@ export default function StatisticsPage() {
 
       {isVisible("summaryCards") && <SummaryCards data={data} />}
 
-      <Suspense fallback={<ChartSkeleton />}>
-        <SavedChartsSection
-          data={data}
-          getGraphData={getGraphData}
-          graphExclusions={graphExclusions}
-          toggleGraphExclusion={toggleGraphExclusion}
-          exclusionsApply={exclusionsApply}
-        />
-      </Suspense>
-
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">{t("statsPage.tab.overview")}</TabsTrigger>
@@ -172,6 +162,7 @@ export default function StatisticsPage() {
           <TabsTrigger value="recipients">{t("statsPage.tab.recipients")}</TabsTrigger>
           <TabsTrigger value="yearly">{t("statsPage.tab.yearly")}</TabsTrigger>
           <TabsTrigger value="flow">{t("statsPage.tab.flow")}</TabsTrigger>
+          <TabsTrigger value="custom">{t("customChart.tab")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -278,6 +269,12 @@ export default function StatisticsPage() {
               exclusionsApply={exclusionsApply}
               availableYears={data?.allYears}
             />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="custom" className="space-y-6">
+          <Suspense fallback={<ChartSkeleton />}>
+            <SavedChartsSection data={data} />
           </Suspense>
         </TabsContent>
       </Tabs>
