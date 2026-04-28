@@ -33,6 +33,8 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'categories',
   'custom_raw_transactions',
   'exchange_rates',
+  'import_batches',
+  'import_staging_rows',
   'investments',
   'kbc_raw_transactions',
   'manual_raw_transactions',

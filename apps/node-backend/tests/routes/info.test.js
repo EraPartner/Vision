@@ -478,6 +478,9 @@ describe('Info Routes', () => {
               },
             ],
             fallback_rates: { USD: 1.1 },
+            source: 'database',
+            is_stale: true,
+            last_fetched_at: '2026-04-10T08:30:00.000Z',
           },
         });
       } finally {
@@ -812,8 +815,8 @@ describe('Info Routes', () => {
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: '2024-01',
         endMonth: '2024-12',
-        dbOnly: false,
-        scheduleBackgroundRefresh: false,
+        dbOnly: true,
+        scheduleBackgroundRefresh: true,
       });
       const payload = res.json.mock.calls[0][0].data;
       expect(payload.total_rates).toBe(2);
@@ -830,8 +833,8 @@ describe('Info Routes', () => {
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         startMonth: undefined,
         endMonth: undefined,
-        dbOnly: false,
-        scheduleBackgroundRefresh: false,
+        dbOnly: true,
+        scheduleBackgroundRefresh: true,
       });
     });
 
@@ -850,6 +853,24 @@ describe('Info Routes', () => {
         endMonth: undefined,
         dbOnly: true,
         scheduleBackgroundRefresh: true,
+      });
+    });
+
+    it('should opt out of db-only when db_only=false (synchronous live fetch)', async () => {
+      mockInflationService.getInflationRates.mockResolvedValue({
+        source: 'statbel',
+        rates: [{ month: '2024-01', monthly_rate: 0.004 }],
+      });
+
+      const req = { query: { db_only: 'false' } };
+      const res = mockResponse();
+      await routeHandlers['get:/inflation-rates'](req, res);
+
+      expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
+        startMonth: undefined,
+        endMonth: undefined,
+        dbOnly: false,
+        scheduleBackgroundRefresh: false,
       });
     });
 
