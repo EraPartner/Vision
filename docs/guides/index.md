@@ -37,8 +37,9 @@ SORT title ASC
 - [[docs/guides/how-to-add-react-component|How to Add a React Component]] - Step-by-step frontend component guide
 - [[docs/guides/debugging|Debugging Guide]] - Error handling, debugging techniques, common failure modes
 
-### Deployment
+### Deployment & Release
 - [[docs/guides/deployment\|Deployment Guide]] - Production deployment (Docker, Electron)
+- [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] - GitHub Actions workflows for testing, building, and releasing (April 2026)
 
 ## Troubleshooting
 

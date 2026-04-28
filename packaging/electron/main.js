@@ -1054,6 +1054,12 @@ function shellEscape(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
 }
 
+function getUpdateMode() {
+  if (!app.isPackaged) return 'dev';
+  if (useRepoMode) return 'source';
+  return 'docker';
+}
+
 function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, destRootPath, hostPid }) {
   const script = [
     '#!/bin/bash',
@@ -1062,6 +1068,7 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
     `SRC_LAUNCH=${shellEscape(sourceLaunchPath || '')}`,
     `DEST_ROOT=${shellEscape(destRootPath)}`,
     `HOST_PID=${hostPid}`,
+    'BAK_DIR="$(dirname "$DEST_ROOT")/.vision_update_bak_$$"',
     '',
     '# Wait until the running app exits before replacing source files.',
     'for i in {1..120}; do',
@@ -1070,7 +1077,24 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
     'done',
     '',
     'mkdir -p "$DEST_ROOT"',
-    'rsync -a --delete --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$SRC_ROOT/" "$DEST_ROOT/"',
+    '',
+    '# Snapshot current install for rollback on failure.',
+    'rsync -a --exclude ".git" --exclude "node_modules" --exclude "postgres_data" "$DEST_ROOT/" "$BAK_DIR/"',
+    '',
+    '# Install update — roll back automatically on any error.',
+    'rsync_ok=0',
+    'rsync -a --delete --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" "$SRC_ROOT/" "$DEST_ROOT/" && rsync_ok=1',
+    'if [ "$rsync_ok" -ne 1 ]; then',
+    '  echo "ERROR: rsync failed — rolling back from backup" >&2',
+    '  rsync -a --delete --exclude ".env" --exclude "postgres_data" "$BAK_DIR/" "$DEST_ROOT/" || true',
+    '  rm -rf "$BAK_DIR" 2>/dev/null || true',
+    '  exit 1',
+    'fi',
+    'rm -rf "$BAK_DIR" 2>/dev/null || true',
+    '',
+    '# Strip macOS quarantine from the updated source tree so launch.command',
+    '# can be opened without Gatekeeper blocking it (macOS 12+).',
+    'xattr -rd com.apple.quarantine "$DEST_ROOT" 2>/dev/null || true',
     '',
     '# Install bun if missing (non-interactive).',
     'if ! command -v bun >/dev/null 2>&1; then',
@@ -1086,6 +1110,10 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
     '  cp "$SRC_LAUNCH" "$DEST_ROOT/launch.command" 2>/dev/null || true',
     '  chmod +x "$DEST_ROOT/launch.command" 2>/dev/null || true',
     'fi',
+    '',
+    '# Strip quarantine from the launcher scripts specifically before opening.',
+    'xattr -d com.apple.quarantine "$DEST_ROOT/packaging/electron/unsigned/launch.command" 2>/dev/null || true',
+    'xattr -d com.apple.quarantine "$DEST_ROOT/launch.command" 2>/dev/null || true',
     '',
     'if [ -f "$DEST_ROOT/packaging/electron/unsigned/launch.command" ]; then',
     '  open "$DEST_ROOT/packaging/electron/unsigned/launch.command"',
@@ -1233,19 +1261,17 @@ async function prepareShellUpdateInstaller() {
 
   const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
   if (checksumAsset?.browser_download_url) {
-    let expected = null;
-    try {
-      const body = await fetchUrlBody(checksumAsset.browser_download_url);
-      expected = parseSha256Body(body);
-    } catch (err) {
-      console.warn('[update] Failed to fetch checksum:', err && err.message ? err.message : err);
+    // Checksum asset is present — must verify successfully or abort.
+    const body = await fetchUrlBody(checksumAsset.browser_download_url);
+    const expected = parseSha256Body(body);
+    if (!expected) {
+      try { fs.unlinkSync(zipPath); } catch (_) {}
+      throw new Error('Checksum file present but could not parse SHA256 hash');
     }
-    if (expected) {
-      const actual = await computeFileSha256(zipPath);
-      if (actual.toLowerCase() !== expected.toLowerCase()) {
-        try { fs.unlinkSync(zipPath); } catch (_) {}
-        throw new Error('Checksum mismatch');
-      }
+    const actual = await computeFileSha256(zipPath);
+    if (actual.toLowerCase() !== expected.toLowerCase()) {
+      try { fs.unlinkSync(zipPath); } catch (_) {}
+      throw new Error('Checksum mismatch — downloaded file may be corrupted or tampered with');
     }
   }
 
@@ -1285,9 +1311,10 @@ async function checkForShellUpdate() {
   const latestVersion = normalizeVersionTag(release?.tag_name);
   const currentVersion = getCurrentVersionTag();
   const sourceLauncherAsset = pickSourceLauncherZip(release);
+  const mode = getUpdateMode();
 
-  if (!latestVersion || !sourceLauncherAsset?.browser_download_url) {
-    return { up_to_date: true, current_version: currentVersion, latest_version: null, error: 'No compatible source launcher update asset found.' };
+  if (!latestVersion) {
+    return { up_to_date: true, current_version: currentVersion, latest_version: null, update_mode: mode, error: 'Could not determine latest release version.' };
   }
 
   return {
@@ -1298,6 +1325,7 @@ async function checkForShellUpdate() {
     release_notes: release?.body || '',
     published_at: release?.published_at,
     source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
+    update_mode: mode,
   };
 }
 
@@ -1809,15 +1837,35 @@ ipcMain.handle('update:check-github', async () => {
   try {
     return await checkForShellUpdate();
   } catch (err) {
-    return { error: String(err) };
+    return { error: String(err), update_mode: getUpdateMode() };
   }
 });
 
 ipcMain.handle('update:install-shell', async () => {
+  if (app.isPackaged && !useRepoMode) {
+    return { success: false, error: 'Shell update not available in embedded mode — use Docker image update instead.' };
+  }
   try {
     return await installPreparedShellUpdate();
   } catch (err) {
     return { success: false, error: String(err) };
+  }
+});
+
+ipcMain.handle('update:get-mode', () => ({
+  mode: getUpdateMode(),
+  is_packaged: app.isPackaged,
+  use_repo_mode: useRepoMode,
+}));
+
+ipcMain.handle('update:pre-update-backup', async () => {
+  try {
+    const backupDir = path.join(app.getPath('userData'), 'pre-update-backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const result = await runBundleBackup(backupDir, null);
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err?.message || String(err) };
   }
 });
 
@@ -2364,8 +2412,10 @@ async function launch() {
   // 8. Backend is being polled — poll /health in the background; navigate once ready.
   pollAndLoad();
 
-  // 10. Set up manual shell updater (non-blocking — runs in background)
-  setupManualShellUpdater();
+  // 10. Set up manual shell updater (source/dev mode only — not in embedded .app mode)
+  if (!app.isPackaged || useRepoMode) {
+    setupManualShellUpdater();
+  }
 
   // Dev-mode: watch source files and trigger a docker rebuild+restart when
   // local sources change. This ensures the electron dev wrapper picks up

@@ -16,14 +16,29 @@ contextBridge.exposeInMainWorld('electronUpdater', {
 
   /**
    * Query and (if needed) pre-download the latest shell update from GitHub.
+   * Response includes `update_mode: 'source' | 'docker' | 'dev'`.
    */
   checkRelease: () => ipcRenderer.invoke('update:check-github'),
 
   /**
    * Install a previously prepared shell update and restart the app.
+   * Only valid when update_mode is 'source'. Returns an error in embedded mode.
    * @returns {Promise<{ success: boolean, version?: string, error?: string }>}
    */
   installShellUpdate: () => ipcRenderer.invoke('update:install-shell'),
+
+  /**
+   * Get the current update mode and packaging state.
+   * @returns {Promise<{ mode: 'source' | 'docker' | 'dev', is_packaged: boolean, use_repo_mode: boolean }>}
+   */
+  getMode: () => ipcRenderer.invoke('update:get-mode'),
+
+  /**
+   * Create a pre-update database backup in userData/pre-update-backups/.
+   * Call this before any install action to ensure zero data loss.
+   * @returns {Promise<{ success: boolean, file?: string, error?: string }>}
+   */
+  preUpdateBackup: () => ipcRenderer.invoke('update:pre-update-backup'),
 });
 
 /**

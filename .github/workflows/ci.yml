@@ -1,0 +1,190 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Lint — frontend ESLint + backend ESLint
+  # ─────────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint frontend
+        run: bun run lint
+
+      - name: Lint backend
+        run: bun run lint:backend
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Type-check — TypeScript strict check on frontend
+  # ─────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate locales (required for type-check)
+        run: CI=1 bun run generate-locales
+
+      - name: Type-check frontend
+        run: cd apps/frontend && bunx tsc --noEmit
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Test — frontend (Vitest) + backend (Bun test)
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-frontend:
+    name: Test (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate locales
+        run: CI=1 bun run generate-locales
+
+      - name: Run frontend tests
+        run: bun run test:frontend
+
+  test-backend:
+    name: Test (Backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run backend tests
+        run: bun run test
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Docker verify — build image, spin up compose, hit /health
+  # ─────────────────────────────────────────────────────────────────────────────
+  docker-verify:
+    name: Docker Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: vision:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start services with Docker Compose
+        run: |
+          # Override image tag so compose uses the locally built image
+          export VISION_IMAGE=vision:ci
+          docker compose -f docker-compose.yml up -d
+        env:
+          POSTGRES_PASSWORD: ci_test_password
+          SECRET_KEY: ci_test_secret_key_minimum_32_chars_!
+
+      - name: Wait for /health to respond
+        run: |
+          echo "Waiting for backend health check..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3002/health; then
+              echo ""
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/30 — retrying in 3s..."
+            sleep 3
+          done
+          echo "Health check timed out"
+          docker compose logs
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Security scan — Trivy on the built Docker image
+  # ─────────────────────────────────────────────────────────────────────────────
+  security-scan:
+    name: Security Scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: vision:scan
+          cache-from: type=gha
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: vision:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

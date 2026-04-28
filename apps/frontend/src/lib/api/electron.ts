@@ -1,6 +1,8 @@
 import { apiRequest } from '@/lib/api/client';
 import { saveSetting, getSetting } from '@/lib/api/settings';
 
+type UpdateMode = 'source' | 'docker' | 'dev';
+
 type ElectronUpdater = {
     checkRelease?: () => Promise<{
         up_to_date: boolean;
@@ -9,10 +11,13 @@ type ElectronUpdater = {
         published_at?: string;
         release_notes?: string;
         html_url?: string;
+        update_mode?: UpdateMode;
         error?: string;
     }>;
     pullImage: () => Promise<{ success: boolean; wasNew: boolean; error?: string }>;
     installShellUpdate?: () => Promise<{ success: boolean; version?: string; error?: string }>;
+    getMode?: () => Promise<{ mode: UpdateMode; is_packaged: boolean; use_repo_mode: boolean }>;
+    preUpdateBackup?: () => Promise<{ success: boolean; file?: string; error?: string }>;
 };
 
 /** Snapshot of frontend localStorage keys collected before a backup. */
@@ -70,6 +75,18 @@ export async function installShellUpdate(): Promise<{ success: boolean; version?
     const updater = getElectronUpdater();
     if (!updater?.installShellUpdate) return null;
     return updater.installShellUpdate();
+}
+
+export async function getUpdateMode(): Promise<{ mode: UpdateMode; is_packaged: boolean; use_repo_mode: boolean } | null> {
+    const updater = getElectronUpdater();
+    if (!updater?.getMode) return null;
+    return updater.getMode();
+}
+
+export async function preUpdateBackup(): Promise<{ success: boolean; file?: string; error?: string } | null> {
+    const updater = getElectronUpdater();
+    if (!updater?.preUpdateBackup) return null;
+    return updater.preUpdateBackup();
 }
 
 export async function runBackup(

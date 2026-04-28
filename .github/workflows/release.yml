@@ -2,9 +2,10 @@ name: Release
 
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
+#   0. Verify: version tag matches packaging/electron/package.json + run lint/tests
 #   1. Build & push multi-arch Docker image to GHCR (linux/amd64 + linux/arm64)
 #   2. Build source launcher ZIP for source-based production startup
-#   3. Publish a GitHub Release with the source launcher ZIP attached
+#   3. Publish a GitHub Release with all artifacts + SHA256 checksums
 
 on:
   push:
@@ -22,10 +23,58 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
+  # 0. Verify: version tag == package.json version + lint + tests
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify:
+    name: Verify Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check version tag matches package.json
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Trim leading 'v' from tag
+          TAG_VERSION="${TAG#v}"
+          PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
+          echo "Tag version  : $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: git tag ($TAG_VERSION) does not match packaging/electron/package.json version ($PKG_VERSION)"
+            echo "Update packaging/electron/package.json before tagging."
+            exit 1
+          fi
+          echo "Version check passed."
+
+      - name: Lint frontend
+        run: bun run lint
+
+      - name: Lint backend
+        run: bun run lint:backend
+
+      - name: Generate locales
+        run: CI=1 bun run generate-locales
+
+      - name: Test backend
+        run: bun run test
+
+      - name: Test frontend
+        run: bun run test:frontend
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # 1. Build & push Docker image to GHCR
   # ─────────────────────────────────────────────────────────────────────────────
   docker:
     name: Build & Push Docker Image
+    needs: [verify]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -93,6 +142,7 @@ jobs:
   # produces a zip containing the Vision source tree + launch.command.
   package-mac:
     name: Package mac source launcher
+    needs: [verify]
     runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
@@ -135,11 +185,22 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
           mv "Vision-source-launcher-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
 
+      - name: Compute SHA256 checksum
+        run: |
+          TAG="${{ github.ref_name }}"
+          cd dist/unsigned
+          ZIP="Vision-source-launcher-${TAG}-arm64.zip"
+          shasum -a 256 "$ZIP" > "${ZIP}.sha256"
+          echo "--- Checksum ---"
+          cat "${ZIP}.sha256"
+
       - name: Upload source launcher zip
         uses: actions/upload-artifact@v4
         with:
           name: vision-source-launcher-zip
-          path: dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip
+          path: |
+            dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip
+            dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip.sha256
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
@@ -179,3 +240,4 @@ jobs:
           generate_release_notes: true
           files: |
             dist/unsigned/*.zip
+            dist/unsigned/*.sha256

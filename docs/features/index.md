@@ -66,6 +66,7 @@ SORT title ASC
 - [[docs/features/onboarding\|Onboarding]] - First-run setup wizard
 - [[docs/features/settings\|Settings]] - Application preferences with JSONB storage and preload optimization
 - [[docs/features/appearance\|Appearance]] - Theme variant selection with five color palettes, light/dark mode, and schedule-based transitions
+- [[docs/features/application-updates\|Application Updates]] - Three deployment modes (dev, source, docker) with backup-before-update, SHA256 verification, and Docker pull (April 2026)
 
 ### Administration & Maintenance (Phase 7, Phase F, Phase 9)
 - [[docs/features/database-maintenance\|Database Maintenance]] - Table statistics monitoring and VACUUM operations

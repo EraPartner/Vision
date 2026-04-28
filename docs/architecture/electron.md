@@ -3,11 +3,11 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-04-27
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, and backup/restore bundle system (Phase 1+2)
-aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle]
-related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py"]
+updated: 2026-04-28
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), and three-mode application update system with checksum verification (April 2026)
+aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes]
+related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
 
 # Electron Desktop Architecture
@@ -278,15 +278,107 @@ This forces npm and electron-builder to include them at the correct depth inside
 
 See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for `.visionbak` structure, encryption details, and restore process.
 
-### Auto-Update
+### Application Updates (April 2026)
 
-Electron can check for and apply updates:
+Vision supports **three deployment modes**, each with a distinct update path. See [[docs/features/application-updates|Application Updates Feature]] for full architecture, IPC handlers, and frontend UI.
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/admin/update/check` | Check for available updates |
-| `POST /api/admin/update/apply` | Acknowledge update |
-| `POST /api/admin/update/apply-and-restart` | Apply and restart app |
+#### Deployment Modes
+
+| Mode | Condition | Update Method | Artifacts |
+|------|-----------|----------------|-----------|
+| **dev** | `app.isPackaged === false && !useRepoMode` | File watcher → Docker rebuild | (automatic via file system) |
+| **source** | `app.isPackaged === true && useRepoMode === 'true'` | Shell script installer from GitHub | `vision-x.y.z.zip` + `vision-x.y.z.zip.sha256` |
+| **docker** | `app.isPackaged === true` (default) | `docker-compose pull` → restart | Docker image at `ghcr.io/erapartner/vision:<tag>` |
+
+#### IPC Handlers
+
+| Handler | Purpose | Modes |
+|---------|---------|-------|
+| `update:get-mode` | Return deployment mode (`'dev'` \| `'source'` \| `'docker'`) | All |
+| `update:pre-update-backup` | Create timestamped snapshot in `userData/pre-update-backups/` | source, docker |
+| `update:install-shell` | Download, verify SHA256, extract, install shell update | source only |
+| `update:check-release` | Check GitHub for new release; return `{ available, version, update_mode }` | source, docker |
+
+#### Shell Installer (Source Mode)
+
+The shell installer script (`install.sh`) included in release ZIPs:
+- **Rollback strategy:** BAK_DIR snapshot created before rsync, restored on failure
+- **Quarantine removal:** `xattr -rd com.apple.quarantine` applied to entire DEST_ROOT and launcher scripts
+- **Usage:** `./install.sh --dest-root /path/to/app --backup-dir /tmp/backup`
+
+#### Checksum Verification (ADR-023)
+
+When updating via shell installer:
+1. Download sibling `.sha256` file from GitHub release
+2. Compute SHA256 of downloaded ZIP
+3. **Hard verification:** If `.sha256` exists but is malformed or mismatches, abort immediately
+4. **Backward compat:** If `.sha256` absent, log warning and best-effort proceed
+5. On mismatch: delete ZIP, throw error, abort update
+
+See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for rationale.
+
+#### Docker Pre-Pull Optimization (Phase 0)
+
+During Electron startup, if Docker image is missing locally:
+1. Pre-pull `ghcr.io/erapartner/vision:<tag>` in parallel with other init steps
+2. If pre-pull succeeds, skip `--build` flag in `docker-compose up`
+3. If pre-pull fails (network, GHCR unavailable), fallback to inline pull during compose up
+4. Emit boot mark `pre_pull_image` to observability layer
+
+This reduces first-boot latency in packaged Docker mode.
+
+#### Backup-Before-Update Pattern
+
+All updates (source and docker modes) follow this sequence:
+
+```
+1. User clicks "Update & Restart"
+   ↓
+2. Backup phase: IPC call preUpdateBackup()
+   → Snapshot userData/ to userData/pre-update-backups/backup-{ISO8601}/
+   → Encrypt snapshot (AEAD, Phase 1+2)
+   ↓
+3. Download phase: Fetch installer or pull image
+   ↓
+4. Verify phase (source only): Check SHA256
+   ↓
+5. Install phase: Extract/deploy to install directory or restart container
+   ↓
+6. Restart phase: App restarts with new version
+   ↓
+7. Health poll: Verify backend is live before rendering UI
+   ↓
+8. Done: Frontend reconnects to backend
+```
+
+On failure at any step: error toast shown, user can manually restore from `pre-update-backups/` directory.
+
+#### Frontend UI
+
+**UpdateNotification component:**
+- Phases: idle → backing-up → downloading/pulling → restarting → done
+- Mode-aware routing: Docker shows "Pulling Docker image…", source shows "Downloading installer…"
+- Localized labels via i18n: `update.backingUp`, `update.downloadingUpdate`, `update.pullingImage`, etc.
+
+**AppTab (Settings → App):**
+- Shows current update mode
+- Manual "Check for Updates" button
+- Displays latest available version if newer
+
+#### CI/CD Integration (April 2026)
+
+**release.yml:**
+- `verify` job (version tag check, lint, tests) blocks all others
+- `docker` job pushes image with version tag to GHCR
+- `package-mac` job generates `.sha256` checksum alongside ZIP
+- Both artifacts uploaded to GitHub release
+
+**ci.yml:**
+- Lint, typecheck, unit tests
+- `docker-verify` job: build image, start compose, poll health on port 3002
+- `security-scan` job: Trivy scan with SARIF upload to GitHub Security
+
+Detailed workflow definitions in [[docs/features/application-updates|Application Updates Feature]].
 
 ---
 

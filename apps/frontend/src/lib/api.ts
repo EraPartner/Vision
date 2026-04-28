@@ -150,6 +150,8 @@ export const apiClient = {
     checkForUpdates: electron.checkForUpdates,
     triggerDockerUpdate: electron.triggerDockerUpdate,
     installShellUpdate: electron.installShellUpdate,
+    getUpdateMode: electron.getUpdateMode,
+    preUpdateBackup: electron.preUpdateBackup,
     runBackup: electron.runBackup,
     selectBackupFile: electron.selectBackupFile,
     restoreBackup: electron.restoreBackup,

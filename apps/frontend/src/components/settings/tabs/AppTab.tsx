@@ -21,10 +21,11 @@ type UpdateStatus = {
     published_at?: string;
     release_notes?: string;
     html_url?: string;
+    update_mode?: 'source' | 'docker' | 'dev';
     error?: string;
 } | null;
 
-type ApplyPhase = 'idle' | 'pulling' | 'restarting' | 'done';
+type ApplyPhase = 'idle' | 'backing-up' | 'downloading' | 'pulling' | 'restarting' | 'done';
 
 interface AppTabProps {
     aiDefaultModel: string | undefined;
@@ -78,7 +79,52 @@ export const AppTab = memo(function AppTab({
     };
 
     const handleApplyUpdate = async () => {
-        setApplyPhase('pulling');
+        const mode = updateStatus?.update_mode ?? 'source';
+
+        // Step 1: pre-update backup (Electron only)
+        if (apiClient.isElectron()) {
+            setApplyPhase('backing-up');
+            try {
+                const backupResult = await apiClient.preUpdateBackup();
+                if (backupResult && !backupResult.success) {
+                    toast.error(t('update.backupFailed'), { description: backupResult.error });
+                    setApplyPhase('idle');
+                    return;
+                }
+            } catch (err: unknown) {
+                const msg = (err as { message?: string })?.message ?? t('update.backupFailed');
+                toast.error(t('update.backupFailed'), { description: msg });
+                setApplyPhase('idle');
+                return;
+            }
+        }
+
+        // Step 2: apply update based on mode
+        if (mode === 'docker') {
+            setApplyPhase('pulling');
+            try {
+                const result = await apiClient.triggerDockerUpdate();
+                if (!result?.success) {
+                    toast.error(t('settings.app.updateFailed'), { description: result?.error });
+                    setApplyPhase('idle');
+                    return;
+                }
+                setApplyPhase('restarting');
+                toast.success(t('settings.app.updateComplete'), {
+                    description: t('settings.app.nowRunning', { version: updateStatus?.latest_version ?? '' }),
+                    duration: 8000,
+                });
+                setApplyPhase('done');
+            } catch (err: unknown) {
+                const msg = (err as { message?: string })?.message ?? t('settings.app.updateFailedDesc');
+                toast.error(t('settings.app.updateFailed'), { description: msg });
+                setApplyPhase('idle');
+            }
+            return;
+        }
+
+        // source / dev mode: shell update
+        setApplyPhase('downloading');
         try {
             const result = await apiClient.installShellUpdate();
             if (result === null) {
@@ -204,10 +250,13 @@ export const AppTab = memo(function AppTab({
                         </div>
                     )}
 
-                    {(applyPhase === 'pulling' || applyPhase === 'restarting') && (
+                    {applyingUpdate && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {applyPhase === 'pulling' ? t('settings.app.pulling') : t('settings.app.restarting')}
+                            {applyPhase === 'backing-up' ? t('update.backingUp') :
+                             applyPhase === 'downloading' ? t('update.downloading') :
+                             applyPhase === 'pulling' ? t('settings.app.pulling') :
+                             t('settings.app.restarting')}
                         </div>
                     )}
 
@@ -235,7 +284,9 @@ export const AppTab = memo(function AppTab({
                                     ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                                     : <Download className="h-3.5 w-3.5 mr-1.5" />
                                 }
-                                {applyPhase === 'restarting' ? t('settings.app.restarting2') : t('settings.app.installUpdate')}
+                                {applyPhase === 'restarting' ? t('settings.app.restarting2') :
+                                 applyingUpdate ? t('update.installing') :
+                                 t('settings.app.installUpdate')}
                             </Button>
                         )}
                     </div>

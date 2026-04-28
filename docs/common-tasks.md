@@ -3,9 +3,9 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
-updated: 2026-04-27
-tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi]
-description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation
+updated: 2026-04-28
+tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026]
+description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
 ---
 
@@ -74,6 +74,17 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Split a transaction | [[docs/api/splits\|Splits API]] | [[docs/features/views\|Owes Page]] |
 | Create a planned payment | [[docs/features/plannedTransactions\|Planned Transactions]] | [[docs/api/plannedTransactions\|Planned Transactions API]] |
 | Detect recurring payments | [[docs/features/plannedTransactions\|Recurring Detection]] | [[docs/diagrams/recurring-detection-flow.puml\|Recurring Detection Flow]] |
+
+## Release & Deployment Tasks
+
+| I want to... | Start here | Also check |
+|-------------|------------|------------|
+| Release a new version | [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] | [[docs/guides/deployment\|Deployment Guide]] |
+| Understand update modes | [[docs/features/application-updates\|Application Updates]] | [[docs/architecture/electron\|Electron Architecture]] |
+| Verify a release was published | [[docs/guides/cicd-pipelines#monitoring--alerts\|CI/CD Monitoring]] | GitHub Actions dashboard |
+| Fix a failed CI/CD job | [[docs/guides/cicd-pipelines#common-failure-causes\|CI/CD Common Failures]] | [[docs/troubleshooting\|Troubleshooting]] |
+| Publish Docker image | [[docs/guides/cicd-pipelines#docker--build-and-push-docker-image\|Docker Job]] | [[docs/guides/deployment\|Deployment Guide]] |
+| Generate installer checksum | [[docs/adr/023-update-installer-checksum-verification\|ADR-023]] | [[docs/guides/cicd-pipelines#packagemac--build-macos-installer\|Release Workflow]] |
 
 ## Debugging Tasks
 

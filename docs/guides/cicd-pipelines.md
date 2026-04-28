@@ -1,0 +1,480 @@
+---
+title: CI/CD Pipelines
+type: guide
+status: active
+date: 2026-04-28
+updated: 2026-04-28
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026]
+description: GitHub Actions CI/CD pipelines including continuous integration checks and release automation with checksums
+aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation]
+related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
+---
+
+# CI/CD Pipelines
+
+Vision uses **GitHub Actions** for continuous integration and release automation. Two main workflows handle different phases:
+
+- **ci.yml** — Runs on every commit to validate code quality and functionality
+- **release.yml** — Runs on version tags to publish Docker images and packaged artifacts
+
+---
+
+## Continuous Integration (ci.yml)
+
+The CI workflow runs on every push to `main` and `develop` branches. It validates code quality, types, tests, and deployment readiness.
+
+### Workflow Definition
+
+**Trigger:**
+```yaml
+on:
+  push:
+    branches: [main, develop]
+```
+
+### Jobs
+
+#### 1. **lint** — Code Quality
+
+Runs ESLint on frontend and backend source code.
+
+```yaml
+lint:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: ESLint (frontend + backend)
+      run: bun run lint
+```
+
+**What it checks:**
+- Unused variables and imports
+- Code style consistency
+- Common anti-patterns
+- Security issues (via eslint-plugin-security)
+
+**Failure:** Blocks further checks; must be fixed before merging.
+
+#### 2. **typecheck** — TypeScript Validation
+
+Checks TypeScript types without emitting code.
+
+```yaml
+typecheck:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: TypeScript check
+      run: bun run typecheck
+```
+
+**What it checks:**
+- Type mismatches in frontend (React, Electron, API client)
+- Type mismatches in backend (Express routes, services)
+- Missing or incorrect type annotations
+
+**Failure:** Blocks further checks; must be resolved before merging.
+
+#### 3. **test-frontend** — Frontend Unit Tests
+
+Runs Vitest on frontend components, hooks, and utilities.
+
+```yaml
+test-frontend:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Vitest
+      run: bun run test:frontend
+```
+
+**What it tests:**
+- React component rendering
+- Custom hooks logic
+- Utility functions
+- API client behavior
+
+**Coverage target:** 80% minimum (see [[docs/guides/testing|Testing Guide]] for strategies)
+
+**Failure:** Must achieve 80%+ coverage; may merge with lower coverage if justified in PR description.
+
+#### 4. **test-backend** — Backend Unit & Integration Tests
+
+Runs Bun test on backend services, repositories, and routes.
+
+```yaml
+test-backend:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Bun test
+      run: bun run test:backend
+```
+
+**What it tests:**
+- Service layer logic (transactions, categories, portfolio)
+- Repository data access
+- Express route handlers
+- Middleware and error handling
+
+**Coverage target:** 80% minimum
+
+**Failure:** Must achieve 80%+ coverage or justify in PR.
+
+#### 5. **docker-verify** — Container Health Check
+
+Builds the Docker image and verifies the backend starts successfully.
+
+```yaml
+docker-verify:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Build image
+      run: docker build -t vision:test .
+    - name: Start compose
+      run: |
+        docker-compose -f docker-compose.yml up -d
+        sleep 5
+    - name: Poll health
+      run: |
+        for i in {1..30}; do
+          if curl -f http://localhost:3002/health; then
+            echo "✓ Backend health check passed"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "✗ Backend health check failed"
+        exit 1
+```
+
+**What it verifies:**
+- Docker image builds without errors
+- PostgreSQL database starts
+- Backend service boots and responds to health check
+- All services are reachable on expected ports
+
+**Failure:** Indicates a runtime issue; must be resolved before merging.
+
+#### 6. **security-scan** — Vulnerability Scanning
+
+Uses Trivy to scan the codebase and dependencies for known vulnerabilities.
+
+```yaml
+security-scan:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    - name: Upload to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+```
+
+**What it scans:**
+- Frontend dependencies (npm packages in `package.json`)
+- Backend dependencies (Bun packages)
+- System packages in Dockerfile
+- Known CVEs in third-party libraries
+
+**Results:** Uploaded to GitHub Security tab for visibility. High-severity vulns should be patched immediately.
+
+---
+
+## Release Workflow (release.yml)
+
+The release workflow publishes new versions of Vision to Docker Container Registry (GHCR) and GitHub Releases (Electron packages).
+
+### Workflow Definition
+
+**Trigger:**
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+```
+
+Runs when a Git tag matching `v*` (e.g., `v1.2.3`) is pushed.
+
+### Jobs
+
+#### 1. **verify** — Pre-Release Validation (Blocks All Others)
+
+Before publishing, verify the release is safe and complete. This job must pass; all other jobs have `needs: [verify]`.
+
+```yaml
+verify:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Verify version tag
+      run: |
+        VERSION_TAG=${GITHUB_REF#refs/tags/v}
+        PKG_VERSION=$(jq -r '.version' packaging/electron/package.json)
+        if [[ "$VERSION_TAG" != "$PKG_VERSION" ]]; then
+          echo "Tag mismatch: $VERSION_TAG vs $PKG_VERSION"
+          exit 1
+        fi
+    - name: Lint
+      run: bun run lint
+    - name: Type check
+      run: bun run typecheck
+    - name: Test
+      run: bun run test
+```
+
+**Checks:**
+1. **Version alignment:** Tag (e.g., `v1.2.3`) must match `packaging/electron/package.json`
+2. **Lint:** No style violations
+3. **Type check:** All TypeScript types valid
+4. **Test:** All unit tests pass (frontend + backend)
+
+**Failure:** Release is blocked; must fix code and re-tag.
+
+#### 2. **docker** — Build and Push Docker Image
+
+Builds the Docker image and pushes it to GitHub Container Registry (GHCR) with the version tag.
+
+```yaml
+docker:
+  needs: [verify]
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Build and push Docker image
+      run: |
+        docker build -t ghcr.io/erapartner/vision:${{ github.ref_name }} .
+        docker push ghcr.io/erapartner/vision:${{ github.ref_name }}
+```
+
+**Publishes:**
+- Image tag: `ghcr.io/erapartner/vision:v1.2.3` (or current version tag)
+- Accessible via: `docker pull ghcr.io/erapartner/vision:v1.2.3`
+- Used by: Electron Docker mode updates, containerized deployments
+
+**Failure:** Indicates Dockerfile issue; must fix before re-releasing.
+
+#### 3. **package-mac** — Build macOS Installer
+
+Builds the Electron app for macOS and generates SHA256 checksums.
+
+```yaml
+package-mac:
+  needs: [verify]
+  runs-on: macos-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Build macOS package
+      run: cd packaging/electron && npm run dist
+    - name: Generate checksum
+      run: |
+        cd dist/
+        shasum -a 256 Vision-*.zip > Vision-*.zip.sha256
+        cat Vision-*.zip.sha256
+    - name: Upload artifacts
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/Vision-*.zip
+          dist/Vision-*.zip.sha256
+```
+
+**Steps:**
+
+1. **Build:** `cd packaging/electron && npm run dist`
+   - Runs electron-builder in distribution mode
+   - Outputs `Vision-x.y.z-arm64.dmg` and `Vision-x.y.z-arm64-mac.zip`
+
+2. **Checksum:** `shasum -a 256 Vision-*.zip > Vision-*.zip.sha256`
+   - Computes SHA256 hash of the ZIP file
+   - Format: `<hash> *<filename>` (standard sha256sum format)
+   - Example: `a1b2c3d4e5f6... *Vision-1.2.3-arm64-mac.zip`
+
+3. **Upload:** Both `.zip` and `.sha256` attached to the GitHub Release
+   - Enables checksum verification in update system
+   - See [[docs/adr/023-update-installer-checksum-verification|ADR-023]] for verification logic
+
+**Artifacts:**
+- `Vision-x.y.z-arm64-mac.zip` — Installer ZIP
+- `Vision-x.y.z-arm64-mac.zip.sha256` — SHA256 checksum
+- `Vision-x.y.z-arm64.dmg` — Native macOS installer
+
+**Failure:** Indicates macOS build or signing issue; must fix before re-releasing.
+
+#### 4. **release** — Finalize GitHub Release
+
+Creates or updates the GitHub Release page with all published artifacts.
+
+```yaml
+release:
+  needs: [docker, package-mac]
+  runs-on: ubuntu-latest
+  steps:
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: false
+        prerelease: false
+```
+
+**Result:**
+- Release page published at `https://github.com/erapartner/vision/releases/tag/v1.2.3`
+- Contains all artifacts (Docker image reference, `.zip`, `.sha256`)
+- Announces availability to users and integrators
+
+---
+
+## Update System Integration
+
+### Shell Installer Updates (Source Mode)
+
+When a user runs Vision in **source mode** with `--useRepoMode`:
+
+1. Check release API → fetches latest from GitHub
+2. User clicks "Update & Restart"
+3. **Backup** → snapshot to `userData/pre-update-backups/`
+4. **Download** → fetch `vision-x.y.z-arm64-mac.zip` + `vision-x.y.z-arm64-mac.zip.sha256`
+5. **Verify** → compute SHA256, compare against sibling `.sha256` file
+6. **Extract** → run `install.sh` with `--dest-root` and `--backup-dir` flags
+7. **Restart** → app restarts with new version
+
+See [[docs/features/application-updates|Application Updates Feature]] for details.
+
+### Docker Image Updates (Docker Mode)
+
+When a user runs Vision in **docker mode**:
+
+1. Check release API → fetches latest from GitHub
+2. User clicks "Update & Restart"
+3. **Backup** → snapshot to `userData/pre-update-backups/`
+4. **Pull** → `docker-compose pull` fetches `ghcr.io/erapartner/vision:v1.2.3` from GHCR
+5. **Restart** → `docker-compose up -d` starts container with new image
+6. **Health poll** → verify backend is live
+7. **Reload** → frontend reconnects to backend
+
+---
+
+## Monitoring & Alerts
+
+### GitHub Actions Dashboard
+
+Monitor workflow runs at: `https://github.com/erapartner/vision/actions`
+
+**Status checks:**
+- Green checkmark (✓) — All jobs passed
+- Red X (✗) — One or more jobs failed
+- Yellow (◐) — Job in progress
+
+### Common Failure Causes
+
+| Failure | Cause | Fix |
+|---------|-------|-----|
+| Lint fails | Code style violation | Run `bun run lint --fix` locally, commit |
+| Typecheck fails | Type mismatch | Fix TypeScript errors, ensure all imports typed |
+| Test fails | Logic bug or test issue | Run `bun run test` locally, debug and fix |
+| Docker verify fails | Backend startup issue | Check logs, verify Dockerfile, test locally |
+| Security scan flagged | Known CVE in dependency | Update vulnerable package, test, re-release |
+| Version tag mismatch | Forgot to update `packaging/electron/package.json` | Ensure tag matches package version, re-tag |
+
+### Re-Running Failed Workflows
+
+If a workflow job fails:
+
+1. Fix the underlying issue (code, config, dependency)
+2. Commit and push the fix
+3. For release workflows: delete the release tag and re-push the tag after fixing
+
+```bash
+git tag -d v1.2.3          # Delete local tag
+git push origin :refs/tags/v1.2.3  # Delete remote tag
+git tag v1.2.3             # Re-create tag
+git push origin v1.2.3     # Push again (triggers release workflow)
+```
+
+---
+
+## Secrets & Permissions
+
+### Required GitHub Secrets
+
+(Configure in repository settings → Secrets and variables → Actions)
+
+| Secret | Purpose | Example |
+|--------|---------|---------|
+| (None required) | All credentials use GitHub's built-in token | `${{ secrets.GITHUB_TOKEN }}` |
+
+### GHCR Authentication
+
+Docker push to GHCR uses the repository's built-in `GITHUB_TOKEN`, automatically scoped to the current repository.
+
+### Permissions
+
+Workflow files use minimal required permissions:
+
+```yaml
+permissions:
+  contents: read
+  security-events: write  # For security scan SARIF upload
+```
+
+---
+
+## Best Practices
+
+### 1. Always Update Both Version Sources
+
+Before tagging a release, ensure **both** sources are in sync:
+
+```bash
+# Check package.json version
+jq '.version' packaging/electron/package.json
+
+# Should match your intended tag (without 'v')
+# e.g., if tagging v1.2.3, package.json should have "version": "1.2.3"
+```
+
+### 2. Test Locally Before Publishing
+
+Run all checks locally before pushing a tag:
+
+```bash
+bun run lint       # Code style
+bun run typecheck  # Type checking
+bun run test       # Unit tests
+docker build .     # Docker build
+```
+
+### 3. Review Release Notes
+
+After the release job completes, verify the GitHub Release page:
+- Check that all artifacts are attached
+- Confirm `.sha256` file is present (for shell installer verification)
+- Add human-readable release notes (optional but recommended)
+
+### 4. Monitor Docker Image Health
+
+After pushing a Docker image, verify it can start:
+
+```bash
+docker pull ghcr.io/erapartner/vision:v1.2.3
+docker run -p 3002:3002 ghcr.io/erapartner/vision:v1.2.3
+curl http://localhost:3002/health
+```
+
+---
+
+## Related Documentation
+
+- [[docs/features/application-updates|Application Updates Feature]] — Update modes and user-facing UI
+- [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Checksum strategy
+- [[docs/guides/deployment|Deployment Guide]] — Production deployment options
+- [[docs/guides/testing|Testing Guide]] — Test structure and coverage requirements

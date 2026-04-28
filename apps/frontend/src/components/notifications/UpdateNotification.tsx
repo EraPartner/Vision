@@ -24,9 +24,10 @@ interface UpdateStatus {
     published_at?: string;
     release_notes?: string;
     html_url?: string;
+    update_mode?: 'source' | 'docker' | 'dev';
 }
 
-type ApplyPhase = "idle" | "pulling" | "restarting" | "done";
+type ApplyPhase = "idle" | "backing-up" | "downloading" | "pulling" | "restarting" | "done";
 
 export function UpdateNotification() {
     const { t } = useLanguage();
@@ -59,7 +60,53 @@ export function UpdateNotification() {
     }, [check]);
 
     const handleInstall = async () => {
-        setPhase("pulling");
+        const mode = status?.update_mode ?? 'source';
+
+        // Step 1: pre-update backup (Electron only)
+        if (apiClient.isElectron()) {
+            setPhase("backing-up");
+            try {
+                const backupResult = await apiClient.preUpdateBackup();
+                if (backupResult && !backupResult.success) {
+                    toast.error(t('update.backupFailed'), { description: backupResult.error });
+                    setPhase("idle");
+                    return;
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : t('update.backupFailed');
+                toast.error(t('update.backupFailed'), { description: msg });
+                setPhase("idle");
+                return;
+            }
+        }
+
+        // Step 2: apply update based on mode
+        if (mode === 'docker') {
+            setPhase("pulling");
+            try {
+                const result = await apiClient.triggerDockerUpdate();
+                if (!result?.success) {
+                    toast.error(t('update.failed'), { description: result?.error });
+                    setPhase("idle");
+                    return;
+                }
+                setPhase("restarting");
+                setDialogOpen(false);
+                toast.success(t('update.complete'), {
+                    description: t('update.nowRunning', { version: status?.latest_version ?? '' }),
+                    duration: 6000,
+                });
+                setPhase("done");
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : t('update.failed');
+                toast.error(t('update.failed'), { description: msg });
+                setPhase("idle");
+            }
+            return;
+        }
+
+        // source / dev mode: shell update
+        setPhase("downloading");
         try {
             const result = await apiClient.installShellUpdate();
 
@@ -92,7 +139,17 @@ export function UpdateNotification() {
     // Nothing to show when up to date or status not yet known
     if (!status || status.up_to_date) return null;
 
-    const isApplying = phase === "pulling" || phase === "restarting";
+    const isApplying = phase !== "idle" && phase !== "done";
+
+    const phaseLabel = () => {
+        switch (phase) {
+            case "backing-up": return t('update.backingUp');
+            case "downloading": return t('update.downloading');
+            case "pulling": return t('update.pulling');
+            case "restarting": return t('update.restarting');
+            default: return '';
+        }
+    };
 
     return (
         <>
@@ -141,7 +198,7 @@ export function UpdateNotification() {
                     {isApplying && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            {phase === "pulling" ? t('update.pulling') : t('update.restarting')}
+                            {phaseLabel()}
                         </div>
                     )}
 
@@ -168,7 +225,7 @@ export function UpdateNotification() {
                         </Button>
                         <Button onClick={handleInstall} disabled={isApplying} className="gap-2">
                             {isApplying ? (
-                                <><Loader2 className="h-4 w-4 animate-spin" /> {phase === "restarting" ? t('update.restarting') : t('update.pulling')}</>
+                                <><Loader2 className="h-4 w-4 animate-spin" /> {phaseLabel()}</>
                             ) : (
                                 <><Download className="h-4 w-4" /> {t('update.install')}</>
                             )}
