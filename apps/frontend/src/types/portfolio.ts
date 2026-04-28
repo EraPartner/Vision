@@ -90,6 +90,7 @@ export interface InvestmentSummary {
   price_provider_history_path?: string;
   price_provider_history_ts_path?: string;
   price_provider_history_price_path?: string;
+  price_updated_at?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

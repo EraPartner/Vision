@@ -27,6 +27,10 @@ import { useNetWorthChartScroll } from "./useNetWorthChartScroll";
 import { NetWorthChart } from "./NetWorthChart";
 import { SnapshotDataTable } from "./SnapshotDataTable";
 import { useNetWorthTableData } from "./useNetWorthTableData";
+import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { usePortfolio } from "@/hooks/usePortfolio";
 
 const MONTH_LABEL_MIN_PX = 60;
 
@@ -41,6 +45,8 @@ export default function NetWorthPage() {
     queryFn: () => apiClient.getNetWorth({ currency: targetCurrency }),
     staleTime: 120_000,
   });
+
+  const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
 
   const {
     allItems: tableSnapshots,
@@ -158,6 +164,29 @@ export default function NetWorthPage() {
     );
   }
 
+  if (snapshots.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t('networth.title')} icon={Wallet} />
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <Wallet className="h-10 w-10 text-muted-foreground" />
+            <div>
+              <p className="font-medium">{t('networth.emptyTitle')}</p>
+              <p className="text-sm text-muted-foreground max-w-md mt-1">
+                {t('networth.emptyDescription')}
+              </p>
+            </div>
+            <Button onClick={refreshPrices} disabled={isRefreshingPrices} size="sm">
+              <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+              {t('portfolio.refreshPrices')}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   let peak = current.netWorth;
   let trough = current.netWorth;
   for (const s of snapshots) {
@@ -187,6 +216,12 @@ export default function NetWorthPage() {
             {allTimeChange >= 0 ? "+" : ""}{fmt(allTimeChange)} {t('networth.allTime')} ({allTimePercent >= 0 ? "+" : ""}{allTimePercent.toFixed(1)}%)
           </Badge>
         )}
+      />
+
+      <StalePricesBanner
+        investments={investments}
+        onRefresh={refreshPrices}
+        isRefreshing={isRefreshingPrices}
       />
 
       {/* Summary — bento: featured Net Worth + liquid/investments split */}

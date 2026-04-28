@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-04-23
-last_modified: 2026-04-28
+last_modified: 2026-04-29
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -116,11 +116,11 @@ Persistence notes:
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| from_ms | integer | Optional lower bound (unix timestamp ms) |
-| to_ms | integer | Optional upper bound (unix timestamp ms) |
-| db_only | boolean (`true`/`false` or `1`/`0`) | Optional. When true, serves only persisted DB history and skips external provider refresh/fetch |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| from_ms | integer | — | Optional lower bound (unix timestamp ms) |
+| to_ms | integer | — | Optional upper bound (unix timestamp ms) |
+| db_only | boolean (`true`/`false` or `1`/`0`) | `true` | When true, serves only persisted DB history and skips external provider refresh/fetch. Defaults to `true` to prevent accidental external fetches when no `db_only` query is supplied (offline-resilience default). Frontend can opt out with `?db_only=false` to allow live provider refresh. |
 
 **Response:**
 ```json

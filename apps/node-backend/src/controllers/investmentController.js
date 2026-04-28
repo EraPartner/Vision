@@ -75,6 +75,12 @@ function parseDbOnlyQueryValue(raw) {
   return raw === '1' || raw === 'true' || raw === 1 || raw === true;
 }
 
+function parseDbOnlyOrDefault(raw, defaultValue) {
+  if (raw === undefined || raw === null || raw === '') return defaultValue;
+  if (raw === '0' || raw === 'false' || raw === 0 || raw === false) return false;
+  return parseDbOnlyQueryValue(raw);
+}
+
 function parseDefaultListOptions(query) {
   const { limit = 200, offset = 0, asset_class, active = 'true' } = query;
   return {
@@ -311,7 +317,7 @@ export async function getPriceHistory(req, res) {
   const points = await fetchHistoricalPrices(inv, {
     fromMs: fromMs !== undefined ? Number(fromMs) : undefined,
     toMs: toMs !== undefined ? Number(toMs) : undefined,
-    dbOnly: parseDbOnlyQueryValue(dbOnlyRaw),
+    dbOnly: parseDbOnlyOrDefault(dbOnlyRaw, true),
   });
 
   res.ok({ investment_id: investmentId, provider: inv.price_provider, points });

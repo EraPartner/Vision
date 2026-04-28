@@ -7,6 +7,8 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { StalePriceIndicator } from "@/components/portfolio/StalePriceIndicator";
+import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { cn } from "@/lib/utils";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -48,7 +50,7 @@ export default function StocksPage({
   const navigate = useNavigate();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = useMemo(() => byAssetClass(assetClasses), [byAssetClass, assetClasses]);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
@@ -212,6 +214,12 @@ export default function StocksPage({
         actions={<AddInvestmentDialog allowedAssetClasses={allowedAddAssetClasses} />}
       />
 
+      <StalePricesBanner
+        investments={holdings}
+        onRefresh={refreshPrices}
+        isRefreshing={isRefreshingPrices}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="group relative overflow-hidden surface-elevated premium-frame micro-lift bg-card backdrop-blur-sm">
@@ -342,7 +350,15 @@ export default function StocksPage({
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums">{h.totalUnits.toFixed(4)}</td>
                     <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(h.avgCostBasis, h.currency)}</td>
-                    <td className="text-right py-2 px-3 tabular-nums">{fmt(h.currentPrice ?? 0, h.currency)}</td>
+                    <td className="text-right py-2 px-3 tabular-nums">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        {fmt(h.currentPrice ?? 0, h.currency)}
+                        <StalePriceIndicator
+                          priceProvider={h.price_provider}
+                          priceUpdatedAt={h.price_updated_at}
+                        />
+                      </span>
+                    </td>
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(h.currentValue, h.currency)}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", (displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "text-accent" : "text-destructive")}>
                       {(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0) >= 0 ? "+" : ""}{fmt(displayedPnlByHoldingId[h.id]?.unrealizedTarget || 0)}

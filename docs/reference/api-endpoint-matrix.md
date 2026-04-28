@@ -3,8 +3,8 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-04-27
-last_modified: 2026-04-27
+updated: 2026-04-29
+last_modified: 2026-04-29
 adr-reference: 026
 tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron]
 description: Complete matrix of all 149 API endpoints + 8 IPC handlers organized by resource for quick lookup. Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover; see openapi.yaml for authoritative spec.
@@ -85,7 +85,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/api/investments/providers` | List price providers | — | [[docs/api/investments\|Investments]] |
 | POST | `/api/investments/refresh-prices` | Refresh all prices | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/transactions` | Bulk portfolio transactions | — | [[docs/api/investments\|Investments]] |
-| GET | `/api/investments/:id/price-history` | Historical price data | — | [[docs/api/investments\|Investments]] |
+| GET | `/api/investments/:id/price-history` | Historical price data (db_only=true by default for offline safety) | — | [[docs/api/investments\|Investments]] |
 | GET | `/api/investments/:id` | Get single | — | [[docs/api/investments\|Investments]] |
 | PATCH | `/api/investments/:id` | Update | — | [[docs/api/investments\|Investments]] |
 | DELETE | `/api/investments/:id` | Hard delete | — | [[docs/api/investments\|Investments]] |

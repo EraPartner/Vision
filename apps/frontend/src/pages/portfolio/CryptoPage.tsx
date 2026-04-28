@@ -7,6 +7,8 @@ import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
+import { StalePriceIndicator } from "@/components/portfolio/StalePriceIndicator";
+import { StalePricesBanner } from "@/components/portfolio/StalePricesBanner";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -26,7 +28,7 @@ export default function CryptoPage() {
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
-  const { byAssetClass, deleteInvestment } = usePortfolio();
+  const { byAssetClass, deleteInvestment, refreshPrices, isRefreshingPrices } = usePortfolio();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const holdings = byAssetClass('crypto');
 
@@ -81,6 +83,12 @@ export default function CryptoPage() {
         title={t('crypto.title')}
         icon={Bitcoin}
         actions={<AddInvestmentDialog allowedAssetClasses={[ 'crypto' ]} />}
+      />
+
+      <StalePricesBanner
+        investments={holdings}
+        onRefresh={refreshPrices}
+        isRefreshing={isRefreshingPrices}
       />
 
       {/* Summary Cards */}
@@ -206,7 +214,15 @@ export default function CryptoPage() {
                     </td>
                     <td className="text-right py-2 px-3 tabular-nums font-mono">{h.totalUnits.toFixed(6)}</td>
                     <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{fmt(convertToTarget(h.avgCostBasis, h.currency))}</td>
-                    <td className="text-right py-2 px-3 tabular-nums">{fmt(convertToTarget(h.currentPrice ?? 0, h.currency))}</td>
+                    <td className="text-right py-2 px-3 tabular-nums">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        {fmt(convertToTarget(h.currentPrice ?? 0, h.currency))}
+                        <StalePriceIndicator
+                          priceProvider={h.price_provider}
+                          priceUpdatedAt={h.price_updated_at}
+                        />
+                      </span>
+                    </td>
                     <td className="text-right py-2 px-3 tabular-nums font-medium">{fmt(convertToTarget(h.currentValue, h.currency))}</td>
                     <td className={cn("text-right py-2 px-3 tabular-nums font-medium", h.unrealizedGain >= 0 ? "text-accent" : "text-destructive")}>
                       {h.unrealizedGain >= 0 ? "+" : ""}{fmt(convertToTarget(h.unrealizedGain, h.currency))}

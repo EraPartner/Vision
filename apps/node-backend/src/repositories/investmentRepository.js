@@ -545,6 +545,17 @@ export const investmentRepository = {
     );
   },
 
+  async getLatestPriceUpdatedAt() {
+    const result = await query(
+      `SELECT MAX(price_updated_at) AS latest
+         FROM investments
+        WHERE is_active = true
+          AND price_provider IS NOT NULL
+          AND price_provider <> 'manual'`
+    );
+    return result.rows[0]?.latest ?? null;
+  },
+
   async hardDelete(id) {
     if (await hasInvestmentInheritanceSchema()) {
       try {

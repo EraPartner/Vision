@@ -13,6 +13,9 @@ import { formatDate, parseISO } from "@/components/shared/dateUtils";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import PerformanceBreakdown from "@/components/portfolio/PerformanceBreakdown";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { usePortfolio } from "@/hooks/usePortfolio";
 
 type Period = "1m" | "3m" | "6m" | "1y" | "3y" | "all";
 
@@ -31,6 +34,31 @@ const CHART_KEYS = {
     relativeMetals: 'relativeMetals',
     relativeInflationAdjusted: 'relativeInflationAdjusted',
 } as const;
+
+function PerformanceEmptyState() {
+    const { t } = useLanguage();
+    const { refreshPrices, isRefreshingPrices } = usePortfolio();
+    return (
+        <div className="space-y-6">
+            <PageHeader title={t('performance.title')} icon={BarChart3} />
+            <Card>
+                <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                    <BarChart3 className="h-10 w-10 text-muted-foreground" />
+                    <div>
+                        <p className="font-medium">{t('performance.emptyTitle')}</p>
+                        <p className="text-sm text-muted-foreground max-w-md mt-1">
+                            {t('performance.emptyDescription')}
+                        </p>
+                    </div>
+                    <Button onClick={refreshPrices} disabled={isRefreshingPrices} size="sm">
+                        <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshingPrices ? "animate-spin" : ""}`} />
+                        {t('portfolio.refreshPrices')}
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
 
 export default function PerformancePage() {
     const { t, language } = useLanguage();
@@ -122,7 +150,7 @@ export default function PerformancePage() {
         }));
     }, [snapshots]);
 
-    if (isLoading || snapshots.length === 0) {
+    if (isLoading) {
         return (
             <div className="space-y-6">
                 <PageHeader title={t('performance.title')} icon={BarChart3} />
@@ -133,6 +161,10 @@ export default function PerformancePage() {
                 </Card>
             </div>
         );
+    }
+
+    if (snapshots.length === 0) {
+        return <PerformanceEmptyState />;
     }
 
     return (

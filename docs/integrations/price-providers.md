@@ -3,8 +3,8 @@ title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments
 date: 2026-04-21
-last_modified: 2026-04-28
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis]
+last_modified: 2026-04-29
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
 related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js]]
@@ -152,6 +152,11 @@ Each fallback source is tracked in the refresh response as `priceSources: Record
 - `historical_fallback`: Database-backed but may be stale — frontend shows warning toast `portfolio.refreshedPricesStale` with count of stale prices
 
 This makes graceful offline degradation visible without blocking the user.
+
+**Price History & Report Timestamp Metadata (Apr 2026):**
+- Price-history endpoint (`GET /api/investments/:id/price-history`) now defaults `db_only=true` to prevent accidental external-fetch when no query is supplied (safe default for offline-first). Frontend can opt out with `?db_only=false` for explicit provider refresh.
+- Backend provides `getLatestPriceUpdatedAt()` helper returning `MAX(price_updated_at)` across active non-manual investments for report provenance.
+- Portfolio PDF reports include a "Prices as of <date>" meta row on the cover page. If prices are >1 day old, age in days is shown. If no live prices ever recorded, shows "No live prices recorded".
 
 ## Related
 

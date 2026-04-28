@@ -3,8 +3,8 @@ title: Feature - Portfolio & Investments
 type: feature
 status: active
 date: 2026-04-27
-last_modified: 2026-04-28
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export]
+last_modified: 2026-04-29
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export, offline-resilience, stale-prices]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
 related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/lib/api.ts"]
@@ -307,6 +307,32 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/nod
 - Heatmap first month is now `null` (no data) instead of forced `0.00%`, so the first displayed month does not imply a measured return without a prior month anchor; YTD is compounded from available non-null monthly returns.
 - Performance month labels for charts and heatmap now always follow app language locale (`en-US`/`nl-NL`) rather than number-format locale, preventing German month names when number format is set to EU style.
 - Performance inflation adjustment now uses Belgian monthly rates from backend (`/api/info/inflation-rates`) instead of hardcoded EU annual assumptions; real return and inflation-adjusted value are compounded month-by-month using backend month keys (`YYYY-MM`).
+
+## Offline Resilience: Stale Price Indicators & Empty States
+
+When internet is unavailable and the backend cannot reach live price providers, the portfolio UI degrades gracefully:
+
+### Stale Price Indicators
+- Frontend utility `priceStaleness.ts` detects investments with `price_updated_at` older than 24 hours.
+- Component `StalePriceIndicator.tsx` renders a small clock icon next to stale prices in holdings tables with a tooltip showing the last-updated date.
+- Manual-provider investments are never marked stale; missing/un-parseable `price_updated_at` is treated as stale.
+
+### Stale Prices Banner
+- Component `StalePricesBanner.tsx` appears above portfolio holdings tables (Stocks, ETFs, Metals, Crypto) when one or more holdings have stale prices.
+- Banner shows count of stale holdings and includes a "Refresh Prices" button that triggers `usePortfolio().refreshPrices` for explicit retry.
+- Wired in `StocksPage.tsx`, `MetalsPage.tsx` (via DRY props to `StocksPage`), and `CryptoPage.tsx`.
+
+### Performance & Net Worth Empty States
+- `PerformancePage.tsx`: dedicated `<PerformanceEmptyState>` replaces spinner when snapshots are empty; shows "No performance history yet" + "Refresh Prices" CTA to trigger initial snapshot backfill.
+- `NetWorthPage.tsx`: added empty-state branch ("No net worth history yet" + refresh CTA) when snapshots are empty; wires `StalePricesBanner` above the chart.
+- Both pages show these states only when no snapshots have been recorded yet, allowing graceful display instead of indefinite spinners.
+
+### Report Timestamp Metadata (Phase 8)
+- PDF report cover page now includes a "Prices as of <date>" row showing `MAX(price_updated_at)` across active holdings.
+- If prices are >1 day old, age in days appears next to the date (e.g., "Prices as of 2026-04-25 (2 days old)").
+- If no live prices have ever been recorded, shows "No live prices recorded" to indicate data freshness uncertainty.
+
+Code links: [[apps/frontend/src/utils/priceStaleness.ts]], [[apps/frontend/src/components/portfolio/StalePriceIndicator.tsx]], [[apps/frontend/src/components/portfolio/StalePricesBanner.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/NetWorthPage.tsx]], [[apps/node-backend/src/services/reports/index.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
 
 ## Performance Page Rewrite (Server-Computed Response)
 

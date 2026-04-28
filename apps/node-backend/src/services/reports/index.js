@@ -32,6 +32,7 @@ import { renderTaxByAssetClass } from './sections/taxByAssetClass.js';
 import { renderTaxMonthlyTrend } from './sections/taxMonthlyTrend.js';
 import { renderTopInvestmentsByCost } from './sections/topInvestmentsByCost.js';
 import { renderBelgianRulesSummary } from './sections/belgianRulesSummary.js';
+import investmentRepository from '../../repositories/investmentRepository.js';
 
 /**
  * @typedef {'ytd' | 'rolling' | 'custom' | 'year'} PeriodKind
@@ -339,7 +340,7 @@ function buildFooterTemplate(theme) {
  *
  * @param {{ type: string; currency: string; period: Period; generatedAt: string; excludedCategoryIds?: number[]; excludedRecipientIds?: number[] }} opts
  */
-function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds = [], excludedRecipientIds = [] }) {
+function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds = [], excludedRecipientIds = [], pricesAsOf = null }) {
   const title = REPORT_TITLES[type] ?? 'Report';
   const subtitle = REPORT_SUBTITLES[type] ?? '';
   const periodStr = formatPeriod(period);
@@ -356,6 +357,25 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
             <span class="meta-value">${escapeHtml(filterParts.join(', '))}</span>
           </div>`
     : '';
+
+  let pricesRow = '';
+  if (pricesAsOf) {
+    const pricesAsOfDate = new Date(pricesAsOf);
+    const pricesAsOfStr = pricesAsOfDate.toLocaleDateString('en-US', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+    const ageDays = Math.floor((new Date(generatedAt).getTime() - pricesAsOfDate.getTime()) / (24 * 60 * 60 * 1000));
+    const staleSuffix = ageDays > 1 ? ` (${ageDays} days old)` : '';
+    pricesRow = `<div class="meta-row">
+            <span class="meta-label">Prices as of</span>
+            <span class="meta-value">${escapeHtml(pricesAsOfStr + staleSuffix)}</span>
+          </div>`;
+  } else if (type === 'portfolio' || type === 'tax') {
+    pricesRow = `<div class="meta-row">
+            <span class="meta-label">Prices as of</span>
+            <span class="meta-value">No live prices recorded</span>
+          </div>`;
+  }
 
   return `
     <div class="cover">
@@ -378,6 +398,7 @@ function buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryI
             <span class="meta-label">Generated</span>
             <span class="meta-value">${escapeHtml(dateStr)}</span>
           </div>
+          ${pricesRow}
           ${filtersRow}
         </div>
         <div class="cover-footer">
@@ -550,7 +571,10 @@ export async function generateReport({ type, currency, period, sections, theme, 
 
   const themeCss = buildThemeCss(theme);
   const baseCss = buildBaseCss();
-  const coverHtml = buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds, excludedRecipientIds });
+  const pricesAsOf = (type === 'portfolio' || type === 'tax')
+    ? await investmentRepository.getLatestPriceUpdatedAt().catch(() => null)
+    : null;
+  const coverHtml = buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds, excludedRecipientIds, pricesAsOf });
 
   let bodyHtml;
   if (type === 'financial') {

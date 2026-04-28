@@ -369,7 +369,7 @@ describe('Investment Routes', () => {
 
       expect(fetchHistoricalPrices).toHaveBeenCalledWith(
         { id: 12, price_provider: 'custom' },
-        { fromMs: 1699999999999, toMs: 1700000000001, dbOnly: false }
+        { fromMs: 1699999999999, toMs: 1700000000001, dbOnly: true }
       );
       expect(res.json).toHaveBeenCalledWith({
         ok: true,
