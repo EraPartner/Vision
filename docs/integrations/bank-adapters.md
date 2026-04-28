@@ -61,6 +61,8 @@ Each bank adapter:
 - **Purpose**: User-defined column mapping
 - **Configuration**: Date format, column names, separator
 - **Date Parsing (2026-04-25)**: Generic adapter now uses `Date.UTC()` with explicit numeric components for all date formats, eliminating timezone-dependent parsing of unpadded dates (e.g., `5/1/2025`). This ensures dates are parsed consistently regardless of the server's local timezone, preventing off-by-one date shifts during import.
+- **CRLF Safety (2026-04-28)**: All adapters (Belfius, KBC, Custom, Generic) now use `splitCsvLines()` helper which splits on `\r\n|\r|\n` for cross-platform compatibility. CSV files exported from Windows (CRLF line endings) no longer corrupt column indices.
+- **EU Decimal Format (2026-04-28)**: `parseAmountField()` rewritten to handle both EU (`1.234,56`) and US (`1,234.56`) decimal formats correctly, including parens-for-negative with internal whitespace. Legacy version stripped ALL commas, breaking European amounts by a factor of 1000.
 
 ## Adding New Banks
 

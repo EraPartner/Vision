@@ -11,7 +11,16 @@
  * would also pass this check. Set ADMIN_AUTH_TOKEN in that case.
  */
 
+import { Buffer } from 'buffer';
+import { timingSafeEqual } from 'crypto';
 import { UnauthorizedError } from './errorHandler.js';
+
+function safeTokenEquals(provided, configured) {
+  const a = Buffer.from(String(provided), 'utf8');
+  const b = Buffer.from(String(configured), 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 function normalizeIp(ip) {
   if (typeof ip !== 'string') return null;
@@ -69,7 +78,7 @@ export function createAdminAuthMiddleware(getConfiguredToken) {
     }
 
     const providedToken = extractAdminBearerToken(req.headers.authorization);
-    if (!providedToken || providedToken !== configuredToken) {
+    if (!providedToken || !safeTokenEquals(providedToken, configuredToken)) {
       return next(new UnauthorizedError('Unauthorized'));
     }
 

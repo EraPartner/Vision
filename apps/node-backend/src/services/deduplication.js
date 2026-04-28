@@ -24,18 +24,19 @@ export function createManualTransactionHash({ date, amount, recipientId, memo, b
 }
 
 export async function isDuplicate(transactionData) {
-  // Field-based dedup: matches on date + amount + recipient.
-  // Hash-based dedup is performed separately by callers using the raw_transactions tables.
+  // Field-based dedup matches date + amount + recipient + memo so two
+  // legitimate same-day same-amount same-vendor purchases are not collapsed.
   const result = await query(
     `SELECT id FROM transactions
      WHERE date = $1 AND amount = $2 AND recipient_id = (
        SELECT id FROM recipients WHERE UPPER(name) = $3 LIMIT 1
-     ) AND is_active = true
+     ) AND COALESCE(TRIM(memo), '') = $4 AND is_active = true
      LIMIT 1`,
     [
       transactionData.date.toISOString().split('T')[0],
       transactionData.amount,
       (transactionData.recipient || '').toUpperCase(),
+      (transactionData.memo || '').trim(),
     ]
   );
   return result.rows.length > 0;
@@ -45,9 +46,10 @@ export async function isDuplicateByFields(date, amount, recipientName, memo) {
   const result = await query(
     `SELECT id FROM transactions t
      LEFT JOIN recipients r ON t.recipient_id = r.id
-     WHERE t.date = $1 AND t.amount = $2 AND UPPER(r.name) = $3 AND t.is_active = true
+     WHERE t.date = $1 AND t.amount = $2 AND UPPER(r.name) = $3
+       AND COALESCE(TRIM(t.memo), '') = $4 AND t.is_active = true
      LIMIT 1`,
-    [date, amount, (recipientName || '').toUpperCase()]
+    [date, amount, (recipientName || '').toUpperCase(), (memo || '').trim()]
   );
   return result.rows.length > 0;
 }
@@ -74,12 +76,13 @@ export async function isManualDuplicate({ date, amount, recipientId, memo, bankA
     // Table may not exist yet — fall through to field-based check
   }
 
-  // Fallback: field-based duplicate check
+  // Fallback: field-based duplicate check (includes memo for accurate match).
   const fieldResult = await query(
     `SELECT id FROM transactions
-     WHERE date = $1 AND amount = $2 AND recipient_id = $3 AND is_active = true
+     WHERE date = $1 AND amount = $2 AND recipient_id = $3
+       AND COALESCE(TRIM(memo), '') = $4 AND is_active = true
      LIMIT 1`,
-    [date, amount, recipientId]
+    [date, amount, recipientId, (memo || '').trim()]
   );
   if (fieldResult.rows.length > 0) {
     return { isDuplicate: true, existingTransactionId: fieldResult.rows[0].id };

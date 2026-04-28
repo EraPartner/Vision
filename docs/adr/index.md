@@ -3,8 +3,8 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-04-25
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker]
+updated: 2026-04-28
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -43,6 +43,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-28: Backup Format v2 AEAD Encryption with Per-Backup Salt
+
+[[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]] — Upgrade from AES-256-CBC with static salt (v1) to AES-256-GCM (AEAD) with per-backup random 16-byte salt and 12-byte IV. KDF upgraded to Scrypt(N=2^15, r=8, p=1) — doubled iteration count. AEAD provides confidentiality + authenticity; tampering detected on decryption. Per-backup entropy eliminates salt-reuse collisions across multiple backups. Backward compatible: v1 format still readable; v2 is default for new backups. Auto-detection via magic header; no user-visible format change. See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for format details.
 
 ### 2026-04-25: Docker Container Hardening
 

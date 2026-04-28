@@ -3,9 +3,9 @@ title: Backup Coverage Audit
 type: feature
 status: active
 date: 2026-04-27
-updated: 2026-04-27
-tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, passphrase-modal, ux]
-description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption, schema-safe restore, and localStorage hydration.
+updated: 2026-04-28
+tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, passphrase-modal, ux, aead, aes-256-gcm]
+description: Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration.
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/components/settings/tabs/BackupTab.tsx"]
 ---
@@ -182,14 +182,36 @@ vision_backup_{deviceId}_{timestamp}.visionbak   ← .zip archive (unencrypted)
 │   └── {txn_id}/{uuid}.{ext}
 └── frontend-state.json  # { keys: { vision_theme: "dark", … } }
 
-vision_backup_{deviceId}_{timestamp}.visionbak.enc ← AES-256-CBC encrypted archive
+vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or v2 format)
 ```
 
-**Encryption:** Optional per-bundle. If passphrase set, entire `.visionbak` zip is encrypted to `.visionbak.enc` using AES-256-CBC with pbkdf2 key derivation. Default: unencrypted (changed from legacy `.sql` behaviour where encryption was always presented).
+### Encryption Formats
+
+**v1 (Legacy, April 2026):** AES-256-CBC with static salt
+- **Magic:** `VISIONENC1` (9 bytes)
+- **Salt:** Static 12 bytes (hardcoded, same across all v1 backups)
+- **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
+- **Mode:** CBC (confidentiality only; no authentication)
+- **Confidentiality:** ✅ Provided | **Authenticity:** ❌ Not provided | **Per-backup Entropy:** ❌ No
+- **Status:** Readable indefinitely; no longer written to (v2 used for new backups as of 2026-04-28)
+
+**v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
+- **Magic:** `VISIONENC2` (9 bytes)
+- **Salt:** Random 16 bytes per backup (generated at encryption time)
+- **IV:** Random 12 bytes per backup (GCM standard)
+- **KDF:** Scrypt(passphrase, salt, N=2^15, r=8, p=1) — doubled iteration count vs v1
+- **Mode:** GCM (Galois/Counter Mode — AEAD: Authenticated Encryption with Associated Data)
+- **Auth Tag:** 16 bytes appended (detects tampering on decryption)
+- **Confidentiality:** ✅ Provided | **Authenticity:** ✅ Provided | **Per-backup Entropy:** ✅ Yes
+- **Overhead:** 53 bytes (magic + salt + IV + tag) vs v1's 40 bytes
+- **Status:** Default for new backups as of 2026-04-28; see [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]]
+
+**Backward Compatibility:** Auto-detection via magic header; v1 backups decrypt correctly; old passphrases work unchanged. No user action required. Restore process transparently dispatches to correct decoder.
 
 **Module:** `packaging/electron/backup/bundle.js` provides:
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
-- `encryptBundle()` — Wrap bundle in AES-256-CBC encryption
+- `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
+- `decryptToTemp(encPath, passphrase, tmpPath)` — Auto-detect v1 vs v2; dispatch to appropriate decoder
 - `openBundle()` — Extract and decrypt bundle; returns paths to sql, attachments, frontend state
 - `isBundleEncrypted()` — Inspect bundle header without full extraction
 
@@ -207,26 +229,36 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← AES-256-CBC encrypted arc
 | `backup:select-file` | `()` | Dialog to select .visionbak file |
 | `backup:select-dir` | `()` | Dialog to choose backup directory |
 
-**New Helper Functions** (Phase 2 Encrypted Restore):
+**Helper Functions** (Phase 2 + v2 Upgrade):
 
-- `deriveBackupKeyFromPassphrase(passphrase)` — Scrypt KDF to derive AES key from user-entered passphrase (same algorithm as `getBackupEncryptionKey`)
-- `decryptBackupFileToTemp(encryptedFilePath, key)` — Decrypt OpenSSL-format ciphertext using AES key; throws `Error('INVALID_PASSPHRASE')` on bad decrypt
+- `decryptBackupFileToTemp(filePath, passphrase, tmpPath)` — Auto-detect v1 vs v2 via magic header; dispatch to appropriate decoder (CBC for v1, GCM for v2); takes plaintext `passphrase`, not pre-derived key; throws `Error('INVALID_PASSPHRASE')` on bad decrypt or GCM auth failure
 - Error sentinels: `ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED'`, `ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE'`
+- Path validation (v2 security enhancement): `decryptBackupFileToTemp()` and `backup:restore` IPC handler validate:
+  - `filePath` is a string
+  - `filePath` was returned by prior `backup:select-file` dialog (stored in `ALLOWED_RESTORE_PATHS` set)
+  - `filePath` ends in `.visionbak`, `.visionbak.enc`, `.sql`, or `.enc`
+  - `filePath` exists on disk
+  - `filePath` does not escape `attachments` directory via `path.resolve()` + `fs.realpath()`
+  - Prevents XSS-in-renderer from passing arbitrary paths
 
 **Restore Steps (Phase 2):**
 
-1. **Encryption Detection** — Check file magic header via `isBundleEncrypted()` or `isEncryptedBackupFile()`. If encrypted:
+1. **Path Validation** (v2) — Check `filePath` is in `ALLOWED_RESTORE_PATHS` and exists on disk. Reject if path escapes attachments root. Prevents renderer XSS from triggering arbitrary file operations.
+2. **Encryption Detection** — Check file magic header via `isBundleEncrypted()`. If encrypted:
    - Return `{ encrypted: true }` to frontend
    - Frontend opens passphrase modal via `useRestoreBackup` hook
    - User enters passphrase; frontend retries restore with `{ passphrase }` option
-2. **Decryption** (if encrypted) — Derive AES key via `deriveBackupKeyFromPassphrase(passphrase)` scrypt KDF. Decrypt bundle to temporary path; throw `Error('INVALID_PASSPHRASE')` on bad decrypt. Frontend catches this and re-prompts modal.
-3. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
-4. **Database Drop & Restore** — Drop existing DB via `docker exec` `dropdb`, then restore via `psql -f` with bind-mounted .sql file.
-5. **Docker Restart** — Kill and restart backend container to pick up new DB.
-6. **Health Poll** — Wait for `/health` to report ready (up to 10s).
-7. **Attachment Swap** — Extract `attachments/` to temporary staging directory, then atomically swap with `$ATTACHMENTS_DIR` on success. Rolled back on failure.
-8. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
-9. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
+3. **Decryption** (if encrypted) — Call `decryptBackupFileToTemp(filePath, passphrase, tmpPath)`. Auto-detect v1 (CBC) or v2 (GCM):
+   - **v1:** Derive key via Scrypt KDF with static salt; decrypt CBC ciphertext
+   - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
+   - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
+4. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
+5. **Database Drop & Restore** — Drop existing DB via `docker exec` `dropdb`, then restore via `psql -f` with bind-mounted .sql file.
+6. **Docker Restart** — Kill and restart backend container to pick up new DB.
+7. **Health Poll** — Wait for `/health` to report ready (up to 10s).
+8. **Attachment Swap** — Extract `attachments/` to temporary staging directory, then atomically swap with `$ATTACHMENTS_DIR` on success. Rolled back on failure.
+9. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
+10. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
 
 **Error Handling (Phase 2):**
 

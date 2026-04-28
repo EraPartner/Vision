@@ -122,19 +122,26 @@ export function useInvestmentMutations() {
       const staleCount = sources.filter(
         (s) => s === 'historical_fallback' || s === 'cached',
       ).length;
+      // Stable id => Sonner replaces, never stacks duplicates on rapid re-clicks.
       if (staleCount > 0) {
         toast.warning(t('portfolio.refreshedPrices', { n: String(data.total) }), {
+          id: 'portfolio-refresh-prices',
           description: t('portfolio.refreshedPricesStale', {
             n: String(staleCount),
             total: String(data.total),
           }),
         });
       } else {
-        toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }));
+        toast.success(t('portfolio.refreshedPrices', { n: String(data.total) }), {
+          id: 'portfolio-refresh-prices',
+        });
       }
     },
     onError: (err: Error) =>
-      toast.error(t('portfolio.refreshPricesFailedTitle'), { description: err.message }),
+      toast.error(t('portfolio.refreshPricesFailedTitle'), {
+        id: 'portfolio-refresh-prices',
+        description: err.message,
+      }),
   });
 
   const addInvestment = useCallback(

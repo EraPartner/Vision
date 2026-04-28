@@ -20,7 +20,7 @@ export default function ExchangeRatesPage() {
     const queryClient = useQueryClient();
 
     const { data, isLoading, error, isFetching } = useQuery<ExchangeRatesData>({
-        queryKey: ["exchangeRates"],
+        queryKey: ["exchangeRates", { dbOnly: true }],
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
     });

@@ -15,6 +15,7 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/components/shared/dateUtils";
 import { createAddTransactionFormState } from "@/components/forms/addTransactionForm";
+import { parseLocaleNumber } from "@/utils/currency";
 
 export function AddTransactionDialog() {
     const { t } = useLanguage();
@@ -34,6 +35,12 @@ export function AddTransactionDialog() {
         e.preventDefault();
         if (!form.transaction_date || !form.bank_account.trim() || !form.recipient_id || !form.amount) return;
 
+        const amountValue = parseLocaleNumber(form.amount);
+        if (!Number.isFinite(amountValue)) {
+            toast.error(t('addTxn.invalidAmount') || 'Invalid amount');
+            return;
+        }
+
         createMutation.mutate(
             {
                 transaction_date: form.transaction_date,
@@ -41,7 +48,7 @@ export function AddTransactionDialog() {
                 recipient_id: Number(form.recipient_id),
                 category_id: form.category_id ? Number(form.category_id) : undefined,
                 memo: form.memo.trim() || undefined,
-                amount: Number(form.amount),
+                amount: amountValue,
                 currency: form.currency || appSettings.defaultCurrency,
                 comment: form.comment.trim() || undefined,
             },
@@ -83,7 +90,7 @@ export function AddTransactionDialog() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="tx_amount">{t('form.addTransaction.amount')}</Label>
-                            <Input id="tx_amount" type="number" step="0.01" placeholder={t('form.addTransaction.amountPlaceholder')} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required />
+                            <Input id="tx_amount" type="text" inputMode="decimal" pattern="^-?[0-9]+([.,][0-9]+)?$" placeholder={t('form.addTransaction.amountPlaceholder')} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} required />
                         </div>
                     </div>
 

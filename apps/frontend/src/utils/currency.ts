@@ -20,6 +20,39 @@ const currencyFormatDefaults: CurrencyFormatDefaults = {
  *
  * numberFormat values:  'eu' | 'us' | 'ch' | 'in'
  */
+/**
+ * Parse a user-entered numeric string into a Number, handling both
+ * comma-as-decimal (EU) and period-as-decimal (US) regardless of
+ * what `Number()` would do alone. Returns NaN if unparseable.
+ *
+ * Heuristic: if both "," and "." are present, the rightmost wins as decimal.
+ * If only "," and the segment after it is not 3 digits, treat as decimal.
+ */
+export function parseLocaleNumber(input: string | number | null | undefined): number {
+  if (typeof input === 'number') return input;
+  if (input == null) return NaN;
+  let s = String(input).trim();
+  if (!s) return NaN;
+  s = s.replace(/\s/g, '').replace(/[$€£¥]/g, '');
+  let negative = false;
+  if (s.startsWith('(') && s.endsWith(')')) { negative = true; s = s.slice(1, -1); }
+  if (s.startsWith('-')) { negative = !negative; s = s.slice(1); }
+  else if (s.startsWith('+')) { s = s.slice(1); }
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    const tail = s.length - lastComma - 1;
+    if (tail === 3 && s.indexOf(',') !== lastComma) s = s.replace(/,/g, '');
+    else s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  if (isNaN(n)) return NaN;
+  return negative ? -n : n;
+}
+
 export function numberFormatToLocale(numberFormat: string): string {
   switch (numberFormat) {
     case 'eu': return 'de-DE';   // 1.234,56 — European

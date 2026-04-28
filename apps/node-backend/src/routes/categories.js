@@ -12,8 +12,8 @@ const router = Router();
 router.get('/', async (req, res) => {
   const { limit = 50, offset = 0, general, detail, active = 'true', search } = req.query;
   const opts = {
-    limit: Math.min(parseInt(limit, 10) || 50, 1000),
-    offset: parseInt(offset, 10) || 0,
+    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 1000)),
+    offset: Math.max(0, parseInt(offset, 10) || 0),
     general: general || null,
     detail: detail || null,
     search: search ? String(search).slice(0, 200) : null,

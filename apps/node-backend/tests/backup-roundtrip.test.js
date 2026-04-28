@@ -14,7 +14,6 @@ import { promises as fsp, mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, scryptSync } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -65,11 +64,6 @@ async function buildFixtures(subdir) {
     await fsp.writeFile(join(attachmentsDir, 'tx-001', 'invoice.pdf'), Buffer.from('FAKEPDF'));
 
     return { base, dbSqlPath, dbSqlContent, attachmentsDir };
-}
-
-/** Derive a 32-byte AES key from a passphrase (same approach as main.js). */
-function passphraseToKey(passphrase) {
-    return scryptSync(passphrase, 'vision-salt', 32);
 }
 
 // ---------------------------------------------------------------------------
@@ -217,8 +211,7 @@ describe('isBundleEncrypted', () => {
             frontendState: null,
         });
 
-        const key = passphraseToKey('test-passphrase');
-        const { encPath } = await encryptBundle(bundlePath, key);
+        const { encPath } = await encryptBundle(bundlePath, 'test-passphrase');
 
         expect(await isBundleEncrypted(encPath)).toBe(true);
     });
@@ -233,7 +226,7 @@ describe('isBundleEncrypted', () => {
 // ---------------------------------------------------------------------------
 
 describe('encryptBundle + openBundle (encrypted)', () => {
-    it('round-trips through AES-256-CBC with correct key', async () => {
+    it('round-trips through AES-256-GCM with correct passphrase', async () => {
         const { dbSqlPath, dbSqlContent, attachmentsDir } = await buildFixtures('enc_rt');
         const frontendState = { keys: { 'vision.theme': 'light' } };
 
@@ -248,18 +241,17 @@ describe('encryptBundle + openBundle (encrypted)', () => {
             frontendState,
         });
 
-        // Encrypt
+        // Encrypt with v2 (GCM) — passphrase, per-bundle salt embedded in header.
         const passphrase = 'super-secret-passphrase';
-        const key = passphraseToKey(passphrase);
-        const { encPath } = await encryptBundle(bundlePath, key);
+        const { encPath } = await encryptBundle(bundlePath, passphrase);
 
         // Original .visionbak deleted after encryption
         expect(existsSync(bundlePath)).toBe(false);
         expect(existsSync(encPath)).toBe(true);
         expect(encPath).toMatch(/\.visionbak\.enc$/);
 
-        // Open with correct key
-        const result = await openBundle(encPath, { key });
+        // Open with correct passphrase
+        const result = await openBundle(encPath, { passphrase });
         try {
             expect(result.metadata.schemaHead).toBe('0020_enc_migration');
             expect(result.metadata.deviceId).toBe('enc-device');
@@ -278,7 +270,7 @@ describe('encryptBundle + openBundle (encrypted)', () => {
         }
     });
 
-    it('throws when opening encrypted bundle without a key', async () => {
+    it('throws when opening encrypted bundle without a passphrase', async () => {
         const { dbSqlPath } = await buildFixtures('enc_no_key');
 
         const destDir = join(TEST_TMP, 'enc_no_key_out');
@@ -292,13 +284,12 @@ describe('encryptBundle + openBundle (encrypted)', () => {
             frontendState: null,
         });
 
-        const key = passphraseToKey('some-pass');
-        const { encPath } = await encryptBundle(bundlePath, key);
+        const { encPath } = await encryptBundle(bundlePath, 'some-pass');
 
         await expect(openBundle(encPath)).rejects.toThrow(/encrypted/i);
     });
 
-    it('throws when opening encrypted bundle with wrong key', async () => {
+    it('throws when opening encrypted bundle with wrong passphrase', async () => {
         const { dbSqlPath } = await buildFixtures('enc_wrong_key');
 
         const destDir = join(TEST_TMP, 'enc_wrong_key_out');
@@ -312,11 +303,9 @@ describe('encryptBundle + openBundle (encrypted)', () => {
             frontendState: null,
         });
 
-        const rightKey = passphraseToKey('correct-pass');
-        const wrongKey = randomBytes(32);
-        const { encPath } = await encryptBundle(bundlePath, rightKey);
+        const { encPath } = await encryptBundle(bundlePath, 'correct-pass');
 
-        await expect(openBundle(encPath, { key: wrongKey })).rejects.toThrow();
+        await expect(openBundle(encPath, { passphrase: 'wrong-pass' })).rejects.toThrow();
     });
 });
 

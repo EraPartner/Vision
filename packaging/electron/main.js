@@ -103,7 +103,14 @@ function bootSummary(extraPhase = 'launch_total') {
 }
 const MANUAL_UPDATE_CHECK_DELAY_MS = 30_000;
 const BACKUP_ENC_MAGIC = Buffer.from('VISIONENC1');
+const BACKUP_ENC_MAGIC_V2 = Buffer.from('VISIONENC2');
 const BACKUP_ENC_IV_BYTES = 16;
+const BACKUP_ENC_V2_SALT_BYTES = 16;
+const BACKUP_ENC_V2_IV_BYTES = 12;
+const BACKUP_ENC_V2_TAG_BYTES = 16;
+const BACKUP_KDF_N = 1 << 15;
+const BACKUP_KDF_R = 8;
+const BACKUP_KDF_P = 1;
 const BACKUP_RETENTION_KEEP = 7;
 const BACKUP_RETENTION_GRACE_MS = 10 * 60 * 1000;
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
@@ -204,12 +211,23 @@ async function resolveWorkDir() {
 
   // Repo mode: if settings.repoPath points to a valid clone, use it and build
   // from local source exactly like dev mode — no GHCR image needed.
-  if (settings.repoPath) {
-    const repoCompose = path.join(settings.repoPath, 'docker-compose.yml');
-    const valid = await fs.promises.access(repoCompose).then(() => true).catch(() => false);
-    if (valid) {
-      useRepoMode = true;
-      return settings.repoPath;
+  if (settings.repoPath && typeof settings.repoPath === 'string') {
+    let canonicalRepoPath = null;
+    try {
+      // Resolve to absolute, then canonicalise to defeat ../ traversal and
+      // symlink shenanigans before trusting the directory.
+      const resolved = path.resolve(settings.repoPath);
+      canonicalRepoPath = await fs.promises.realpath(resolved);
+    } catch {
+      canonicalRepoPath = null;
+    }
+    if (canonicalRepoPath) {
+      const repoCompose = path.join(canonicalRepoPath, 'docker-compose.yml');
+      const valid = await fs.promises.access(repoCompose).then(() => true).catch(() => false);
+      if (valid) {
+        useRepoMode = true;
+        return canonicalRepoPath;
+      }
     }
   }
 
@@ -388,7 +406,22 @@ async function getBackupPassphraseStatus() {
 
 function deriveBackupKeyFromPassphrase(passphrase) {
   if (!passphrase || typeof passphrase !== 'string') return null;
+  // Legacy v1: static salt, default scrypt params. Kept solely for decrypting
+  // pre-existing v1 backups. Do not use for new encryptions — see deriveBackupKeyV2.
   return crypto.scryptSync(passphrase, `${APP_NAME.toLowerCase()}-backup-v1`, 32);
+}
+
+function deriveBackupKeyV2(passphrase, salt) {
+  if (!passphrase || typeof passphrase !== 'string') return null;
+  if (!Buffer.isBuffer(salt) || salt.length !== BACKUP_ENC_V2_SALT_BYTES) {
+    throw new Error('deriveBackupKeyV2 requires a 16-byte salt');
+  }
+  return crypto.scryptSync(passphrase, salt, 32, {
+    N: BACKUP_KDF_N,
+    r: BACKUP_KDF_R,
+    p: BACKUP_KDF_P,
+    maxmem: 128 * BACKUP_KDF_N * BACKUP_KDF_R * 2,
+  });
 }
 
 async function getBackupEncryptionKey() {
@@ -449,7 +482,7 @@ async function isEncryptedBackupFile(filePath) {
     const magic = Buffer.alloc(BACKUP_ENC_MAGIC.length);
     const { bytesRead } = await handle.read(magic, 0, magic.length, 0);
     if (bytesRead !== BACKUP_ENC_MAGIC.length) return false;
-    return magic.equals(BACKUP_ENC_MAGIC);
+    return magic.equals(BACKUP_ENC_MAGIC) || magic.equals(BACKUP_ENC_MAGIC_V2);
   } catch {
     return false;
   } finally {
@@ -460,62 +493,79 @@ async function isEncryptedBackupFile(filePath) {
 }
 
 async function encryptBackupFile(sqlFilePath) {
-  const key = await getBackupEncryptionKey();
-  if (!key) {
+  const passphrase = await getBackupPassphrase();
+  if (!passphrase) {
     return { file: sqlFilePath, encrypted: false, warning: 'Backup encryption skipped: VISION_BACKUP_PASSPHRASE is not set.' };
   }
 
   const encPath = `${sqlFilePath}.enc`;
-  const iv = crypto.randomBytes(BACKUP_ENC_IV_BYTES);
+  const salt = crypto.randomBytes(BACKUP_ENC_V2_SALT_BYTES);
+  const iv = crypto.randomBytes(BACKUP_ENC_V2_IV_BYTES);
+  const key = deriveBackupKeyV2(passphrase, salt);
 
-  await new Promise((resolve, reject) => {
-    const input = fs.createReadStream(sqlFilePath);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    const output = fs.createWriteStream(encPath);
+  try {
+    await new Promise((resolve, reject) => {
+      const input = fs.createReadStream(sqlFilePath);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      const output = fs.createWriteStream(encPath);
 
-    let settled = false;
-    const fail = (err) => {
-      if (settled) return;
-      settled = true;
-      input.destroy();
-      cipher.destroy();
-      output.destroy();
-      fs.unlink(encPath, () => {});
-      reject(err);
-    };
+      let settled = false;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        input.destroy();
+        cipher.destroy();
+        output.destroy();
+        fs.unlink(encPath, () => {});
+        reject(err);
+      };
 
-    input.on('error', fail);
-    cipher.on('error', fail);
-    output.on('error', fail);
+      input.on('error', fail);
+      cipher.on('error', fail);
+      output.on('error', fail);
 
-    output.write(BACKUP_ENC_MAGIC);
-    output.write(iv);
+      output.write(BACKUP_ENC_MAGIC_V2);
+      output.write(salt);
+      output.write(iv);
 
-    input.pipe(cipher).pipe(output);
+      input.pipe(cipher);
+      cipher.on('data', (chunk) => output.write(chunk));
+      cipher.on('end', () => {
+        try {
+          const tag = cipher.getAuthTag();
+          output.end(tag);
+        } catch (err) {
+          fail(err);
+        }
+      });
 
-    output.on('finish', () => {
-      if (settled) return;
-      settled = true;
-      resolve();
+      output.on('finish', () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      });
     });
-  });
+  } finally {
+    if (Buffer.isBuffer(key)) key.fill(0);
+  }
 
   fs.unlink(sqlFilePath, () => {});
   return { file: encPath, encrypted: true };
 }
 
-async function decryptBackupFileToTemp(encryptedFilePath, key) {
-  if (!key) {
+async function decryptBackupFileToTemp(encryptedFilePath, keyOrPassphrase) {
+  if (!keyOrPassphrase) {
     throw new Error(ERR_PASSPHRASE_REQUIRED);
   }
 
-  const headerLen = BACKUP_ENC_MAGIC.length + BACKUP_ENC_IV_BYTES;
-  const header = Buffer.alloc(headerLen);
+  // Read magic to determine version.
+  const magicLen = BACKUP_ENC_MAGIC.length;
+  const magicBuf = Buffer.alloc(magicLen);
   let handle;
   try {
     handle = await fs.promises.open(encryptedFilePath, 'r');
-    const { bytesRead } = await handle.read(header, 0, headerLen, 0);
-    if (bytesRead !== headerLen) {
+    const { bytesRead } = await handle.read(magicBuf, 0, magicLen, 0);
+    if (bytesRead !== magicLen) {
       throw new Error('Invalid encrypted backup header.');
     }
   } finally {
@@ -524,9 +574,32 @@ async function decryptBackupFileToTemp(encryptedFilePath, key) {
     }
   }
 
-  const magic = header.subarray(0, BACKUP_ENC_MAGIC.length);
-  if (!magic.equals(BACKUP_ENC_MAGIC)) {
-    throw new Error('Backup is not in a supported encrypted format.');
+  if (magicBuf.equals(BACKUP_ENC_MAGIC_V2)) {
+    return decryptBackupV2(encryptedFilePath, keyOrPassphrase);
+  }
+  if (magicBuf.equals(BACKUP_ENC_MAGIC)) {
+    return decryptBackupV1(encryptedFilePath, keyOrPassphrase);
+  }
+  throw new Error('Backup is not in a supported encrypted format.');
+}
+
+async function decryptBackupV1(encryptedFilePath, keyOrPassphrase) {
+  const key = Buffer.isBuffer(keyOrPassphrase)
+    ? keyOrPassphrase
+    : deriveBackupKeyFromPassphrase(keyOrPassphrase);
+  if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
+
+  const headerLen = BACKUP_ENC_MAGIC.length + BACKUP_ENC_IV_BYTES;
+  const header = Buffer.alloc(headerLen);
+  let handle;
+  try {
+    handle = await fs.promises.open(encryptedFilePath, 'r');
+    const { bytesRead } = await handle.read(header, 0, headerLen, 0);
+    if (bytesRead !== headerLen) throw new Error('Invalid encrypted backup header.');
+  } finally {
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
   }
 
   const iv = header.subarray(BACKUP_ENC_MAGIC.length, headerLen);
@@ -537,38 +610,103 @@ async function decryptBackupFileToTemp(encryptedFilePath, key) {
     await new Promise((resolve, reject) => {
       const input = fs.createReadStream(encryptedFilePath, { start: headerLen });
       const output = fs.createWriteStream(tempSqlPath);
-
       let settled = false;
       const fail = (err) => {
         if (settled) return;
         settled = true;
-        input.destroy();
-        decipher.destroy();
-        output.destroy();
+        input.destroy(); decipher.destroy(); output.destroy();
         fs.unlink(tempSqlPath, () => {});
         reject(err);
       };
-
       input.on('error', fail);
       decipher.on('error', fail);
       output.on('error', fail);
-
       input.pipe(decipher).pipe(output);
-
-      output.on('finish', () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      });
+      output.on('finish', () => { if (!settled) { settled = true; resolve(); } });
     });
   } catch (err) {
-    // Wrong key surfaces from OpenSSL as "bad decrypt" / EVP errors. Convert to
-    // a sentinel so the UI can prompt the user again.
     const msg = err && err.message ? String(err.message) : '';
     if (/bad decrypt/i.test(msg) || /wrong final block/i.test(msg) || (err && err.code === 'ERR_OSSL_BAD_DECRYPT')) {
       throw new Error(ERR_INVALID_PASSPHRASE);
     }
     throw err;
+  } finally {
+    if (typeof keyOrPassphrase === 'string' && Buffer.isBuffer(key)) key.fill(0);
+  }
+
+  return tempSqlPath;
+}
+
+async function decryptBackupV2(encryptedFilePath, keyOrPassphrase) {
+  const headerLen = BACKUP_ENC_MAGIC_V2.length + BACKUP_ENC_V2_SALT_BYTES + BACKUP_ENC_V2_IV_BYTES;
+  const header = Buffer.alloc(headerLen);
+  const stat = await fs.promises.stat(encryptedFilePath);
+  if (stat.size < headerLen + BACKUP_ENC_V2_TAG_BYTES) {
+    throw new Error('Invalid encrypted backup: file too small.');
+  }
+  const tagOffset = stat.size - BACKUP_ENC_V2_TAG_BYTES;
+  const tag = Buffer.alloc(BACKUP_ENC_V2_TAG_BYTES);
+  let handle;
+  try {
+    handle = await fs.promises.open(encryptedFilePath, 'r');
+    const h = await handle.read(header, 0, headerLen, 0);
+    if (h.bytesRead !== headerLen) throw new Error('Invalid encrypted backup header.');
+    const t = await handle.read(tag, 0, BACKUP_ENC_V2_TAG_BYTES, tagOffset);
+    if (t.bytesRead !== BACKUP_ENC_V2_TAG_BYTES) throw new Error('Invalid encrypted backup auth tag.');
+  } finally {
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
+  }
+
+  const salt = header.subarray(BACKUP_ENC_MAGIC_V2.length, BACKUP_ENC_MAGIC_V2.length + BACKUP_ENC_V2_SALT_BYTES);
+  const iv = header.subarray(BACKUP_ENC_MAGIC_V2.length + BACKUP_ENC_V2_SALT_BYTES, headerLen);
+
+  let key;
+  if (Buffer.isBuffer(keyOrPassphrase)) {
+    key = keyOrPassphrase;
+  } else {
+    key = deriveBackupKeyV2(keyOrPassphrase, salt);
+  }
+  if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  const tempSqlPath = path.join(app.getPath('temp'), `vision_restore_${Date.now()}_${process.pid}.sql`);
+
+  const cipherTextLen = stat.size - headerLen - BACKUP_ENC_V2_TAG_BYTES;
+  try {
+    await new Promise((resolve, reject) => {
+      const input = fs.createReadStream(encryptedFilePath, { start: headerLen, end: headerLen + cipherTextLen - 1 });
+      const output = fs.createWriteStream(tempSqlPath);
+      let settled = false;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        input.destroy(); decipher.destroy(); output.destroy();
+        fs.unlink(tempSqlPath, () => {});
+        reject(err);
+      };
+      input.on('error', fail);
+      decipher.on('error', fail);
+      output.on('error', fail);
+      input.pipe(decipher).pipe(output);
+      output.on('finish', () => { if (!settled) { settled = true; resolve(); } });
+    });
+  } catch (err) {
+    const msg = err && err.message ? String(err.message) : '';
+    if (
+      /unable to authenticate/i.test(msg)
+      || /bad decrypt/i.test(msg)
+      || /unsupported state/i.test(msg)
+      || (err && err.code === 'ERR_OSSL_BAD_DECRYPT')
+      || (err && err.code === 'ERR_CRYPTO_INVALID_AUTH_TAG')
+    ) {
+      throw new Error(ERR_INVALID_PASSPHRASE);
+    }
+    throw err;
+  } finally {
+    if (typeof keyOrPassphrase === 'string' && Buffer.isBuffer(key)) key.fill(0);
   }
 
   return tempSqlPath;
@@ -1453,13 +1591,13 @@ async function runBundleBackup(destDir, frontendStateJson = null) {
       frontendState,
     });
 
-    // 5. Encrypt if passphrase configured
-    const key = await getBackupEncryptionKey();
+    // 5. Encrypt if passphrase configured (v2: per-bundle salt + GCM)
+    const passphrase = await getBackupPassphrase();
     let finalFile = bundlePath;
     let encrypted = false;
     let warning;
-    if (key) {
-      const { encPath } = await encryptBundle(bundlePath, key);
+    if (passphrase) {
+      const { encPath } = await encryptBundle(bundlePath, passphrase);
       finalFile = encPath;
       encrypted = true;
     } else {
@@ -1486,28 +1624,30 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   if (!fs.existsSync(bundlePath)) throw new Error(`File not found: ${bundlePath}`);
 
   const isEncrypted = await isBundleEncrypted(bundlePath);
-  let key = null;
+  let effectivePassphrase = null;
   if (isEncrypted) {
-    key = deriveBackupKeyFromPassphrase(passphrase) ?? await getBackupEncryptionKey();
-    if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
+    effectivePassphrase = passphrase || (await getBackupPassphrase());
+    if (!effectivePassphrase) throw new Error(ERR_PASSPHRASE_REQUIRED);
   }
 
   // Open bundle — decrypt + extract to temp dir. openBundle throws on bad
   // decrypt; convert to a sentinel so the UI can re-prompt for the passphrase.
   let metadata, dbSqlPath, attachmentsDir, frontendState, cleanup;
   try {
-    ({ metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } = await openBundle(bundlePath, { key }));
+    ({ metadata, dbSqlPath, attachmentsDir, frontendState, cleanup } = await openBundle(bundlePath, { passphrase: effectivePassphrase }));
   } catch (err) {
     if (isEncrypted) {
       const msg = err && err.message ? String(err.message) : '';
       if (
         /bad decrypt/i.test(msg) ||
         /wrong final block/i.test(msg) ||
+        /unable to authenticate/i.test(msg) ||
         /missing metadata\.json/i.test(msg) ||
         /missing db\.sql/i.test(msg) ||
         /end of central directory/i.test(msg) ||
         /not a zip file/i.test(msg) ||
-        (err && err.code === 'ERR_OSSL_BAD_DECRYPT')
+        (err && err.code === 'ERR_OSSL_BAD_DECRYPT') ||
+        (err && err.code === 'ERR_CRYPTO_INVALID_AUTH_TAG')
       ) {
         throw new Error(ERR_INVALID_PASSPHRASE);
       }
@@ -1700,9 +1840,9 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
   let restoreSource = sqlFilePath;
   let cleanupRestoreSource = () => {};
   if (await isEncryptedBackupFile(sqlFilePath)) {
-    const key = deriveBackupKeyFromPassphrase(passphrase) ?? await getBackupEncryptionKey();
-    if (!key) throw new Error(ERR_PASSPHRASE_REQUIRED);
-    restoreSource = await decryptBackupFileToTemp(sqlFilePath, key);
+    const effectivePassphrase = passphrase || (await getBackupPassphrase());
+    if (!effectivePassphrase) throw new Error(ERR_PASSPHRASE_REQUIRED);
+    restoreSource = await decryptBackupFileToTemp(sqlFilePath, effectivePassphrase);
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
 
@@ -1819,6 +1959,21 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
 }
 
 // ── IPC: restore ──────────────────────────────────────────────────────────────
+// Paths blessed by a user-driven file-picker dialog. Only these can be passed
+// to `backup:restore` — prevents a compromised renderer from passing an
+// arbitrary filesystem path (e.g. /etc/passwd, malicious .sql) for restore.
+const ALLOWED_RESTORE_PATHS = new Set();
+
+const ALLOWED_RESTORE_EXTS = new Set(['.visionbak', '.enc', '.sql']);
+function hasAllowedRestoreExt(p) {
+  const lower = String(p).toLowerCase();
+  if (lower.endsWith('.visionbak.enc')) return true;
+  for (const ext of ALLOWED_RESTORE_EXTS) {
+    if (lower.endsWith(ext)) return true;
+  }
+  return false;
+}
+
 ipcMain.handle('backup:select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -1830,7 +1985,9 @@ ipcMain.handle('backup:select-file', async () => {
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
+  const chosen = path.resolve(result.filePaths[0]);
+  ALLOWED_RESTORE_PATHS.add(chosen);
+  return chosen;
 });
 
 ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
@@ -1847,14 +2004,28 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
 
 ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
+  if (typeof filePath !== 'string' || !filePath) {
+    return { success: false, error: 'Invalid restore path' };
+  }
+  const resolved = path.resolve(filePath);
+  if (!ALLOWED_RESTORE_PATHS.has(resolved)) {
+    return { success: false, error: 'Restore path was not selected via the file picker' };
+  }
+  if (!hasAllowedRestoreExt(resolved)) {
+    return { success: false, error: 'Unsupported backup file extension' };
+  }
+  if (!fs.existsSync(resolved)) {
+    return { success: false, error: 'Backup file not found' };
+  }
   const passphrase = opts && typeof opts === 'object' ? opts.passphrase : undefined;
   try {
     // Route .visionbak / .visionbak.enc through the new bundle restore path;
     // legacy .sql / .enc files fall through to the original runRestore.
-    const isBundle = filePath.endsWith('.visionbak') || filePath.endsWith('.visionbak.enc');
+    const lower = resolved.toLowerCase();
+    const isBundle = lower.endsWith('.visionbak') || lower.endsWith('.visionbak.enc');
     const result = isBundle
-      ? await runBundleRestore(filePath, { passphrase })
-      : await runRestore(filePath, { passphrase });
+      ? await runBundleRestore(resolved, { passphrase })
+      : await runRestore(resolved, { passphrase });
     return result;
   } catch (err) {
     // Ensure app container is back up even after an error

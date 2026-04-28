@@ -40,8 +40,8 @@ function parseTransactionListQuery(query) {
   } = query;
 
   return {
-    limit: Math.min(parseInt(limit, 10) || 50, 5000),
-    offset: parseInt(offset, 10) || 0,
+    limit: Math.max(1, Math.min(parseInt(limit, 10) || 50, 5000)),
+    offset: Math.max(0, parseInt(offset, 10) || 0),
     transactionId: transaction_id ? parseInt(transaction_id, 10) : null,
     startDate: start_date || null,
     endDate: end_date || null,

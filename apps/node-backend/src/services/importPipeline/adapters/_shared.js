@@ -14,15 +14,27 @@ export async function readFileAsync(filePath, encoding = 'utf-8') {
 }
 
 export function parseDayMonthYear(dateStr) {
-  const dateParts = dateStr.split('/');
+  const dateParts = String(dateStr).split('/');
   if (dateParts.length !== 3) return null;
-
-  const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
-  return isNaN(date.getTime()) ? null : date;
+  const day = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10);
+  const year = parseInt(dateParts[2], 10);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  // UTC midnight to avoid TZ-induced day shifts when serialised back to YYYY-MM-DD.
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (isNaN(date.getTime())) return null;
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+  return date;
 }
 
 export function parseCommaDecimal(value) {
-  return parseFloat(String(value).replace(',', '.'));
+  return parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
+}
+
+export function splitCsvLines(content) {
+  return String(content).split(/\r\n|\r|\n/);
 }
 
 export function buildOptionalComment(commentParts) {

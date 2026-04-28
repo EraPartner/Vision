@@ -11,7 +11,7 @@ export interface WidgetDefinition {
 export type WidgetVisibilityMap = Record<string, Record<string, boolean>>;
 // e.g. { dashboard: { statCards: true, bankBalances: false }, statistics: { ... } }
 let cachedVisibility: WidgetVisibilityMap | null = null;
-let listeners: Array<(v: WidgetVisibilityMap) => void> = [];
+const listeners = new Set<(v: WidgetVisibilityMap) => void>();
 function notify(v: WidgetVisibilityMap) {
     cachedVisibility = v;
     listeners.forEach((fn) => fn(v));
@@ -42,7 +42,7 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
         const listener = (v: WidgetVisibilityMap) => setVisibility(v);
-        listeners.push(listener);
+        listeners.add(listener);
         if (!cachedVisibility) {
             loadFromBackend().then((v) => {
                 notify(v);
@@ -50,7 +50,7 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
             });
         }
         return () => {
-            listeners = listeners.filter((l) => l !== listener);
+            listeners.delete(listener);
         };
     }, []);
     const pageVisibility = visibility[pageKey] || {};

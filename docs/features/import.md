@@ -239,6 +239,13 @@ Text processing utilities for import and recipient matching:
 
 Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|recipient|memo|bank_account` for raw table dedup, and direct field matching for the legacy path.
 
+**Memo inclusion (2026-04-28):** All deduplication checks now include trimmed `memo` field:
+- `isDuplicate()` — Hash-based check includes memo
+- `isDuplicateByFields()` — Field-based check includes memo
+- `isManualDuplicate()` — Field-fallback path includes `COALESCE(TRIM(memo), '')` matching
+- **Impact:** Two same-day same-amount same-recipient purchases with different memos are no longer falsely deduped. Example: "SUPERMARKET ABC" on 2026-04-28 for €50 + memo "Groceries" vs. the same transaction with memo "Household" are now distinct.
+- **Database:** Per-row dedup query in `services/importPipeline/commit.js` updated to match memo via `COALESCE(TRIM(t.memo), '')` against `(row.memo ?? '').trim()`
+
 ---
 
 ## Import Process

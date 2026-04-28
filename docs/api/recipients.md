@@ -28,8 +28,8 @@ Retrieve a list of recipients.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| limit | integer | 50 | Max items |
-| offset | integer | 0 | Items to skip |
+| limit | integer | 50 | Max items (clamped: 1–5000) |
+| offset | integer | 0 | Items to skip (clamped: ≥0) |
 | search | string | null | Search in name |
 | active | boolean | true | Show active/inactive |
 | name | string | null | Filter by exact name match |

@@ -51,6 +51,9 @@ export async function commitBatch({ batchId, onProgress }) {
         const effectiveRecipientId = row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
 
         // Field-based duplicate check against canonical transactions.
+        // Includes memo so two legitimate same-day same-amount same-recipient
+        // purchases (e.g. two coffees) are not falsely deduped.
+        const memoNorm = (row.memo ?? '').trim();
         const dupCheck = await client.query(
           `SELECT t.id
              FROM transactions t
@@ -60,9 +63,10 @@ export async function commitBatch({ batchId, onProgress }) {
                 ($3::integer IS NOT NULL AND t.recipient_id = $3)
                 OR ($3::integer IS NULL AND t.recipient_id IS NULL)
               )
+              AND COALESCE(TRIM(t.memo), '') = $4
               AND t.is_active = true
             LIMIT 1`,
-          [dateStr, row.amount, effectiveRecipientId]
+          [dateStr, row.amount, effectiveRecipientId, memoNorm]
         );
 
         if (dupCheck.rows.length > 0) {

@@ -229,21 +229,58 @@ webPreferences: {
 
 Limited IPC channel exposure through preload scripts. Only validated functions are exposed to the renderer.
 
+### Admin Bearer Token Authentication (2026-04-28)
+
+Admin endpoints protected by optional `ADMIN_AUTH_TOKEN` environment variable now use timing-safe comparison:
+
+- **Timing Attack Prevention**: Bearer token comparison uses `crypto.timingSafeEqual()` instead of `!==` operator
+- **Impact**: Prevents side-channel timing attacks where response time leaks information about token validity (e.g., attacker can time how many characters of the token match, reducing brute-force search space)
+- **Implementation**: In `middleware/adminAuth.js`, token comparison wraps both bearer value and configured token with equal-length padding before `timingSafeEqual()` call
+- **Fallback**: If `ADMIN_AUTH_TOKEN` not set, localhost-only access is allowed (see [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]])
+
 ---
 
-## Backup Encryption (Phase 2)
+## Backup Encryption (Phase 2 + v2 Upgrade 2026-04-28)
 
-Encrypted backup restore (`.visionbak.enc`) is now fully implemented with a passphrase-modal UX:
+Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase-modal UX and upgraded v2 AEAD encryption:
 
-- **AES-256-CBC encryption**: All backup bundles can be optionally encrypted with a user-provided passphrase
-- **Scrypt KDF**: Passphrases are derived into AES keys using the same scrypt algorithm as local safeStorage
+### Format v1 (Legacy, AES-256-CBC)
+- **Encryption**: AES-256-CBC with static 12-byte salt (hardcoded, same across all v1 backups)
+- **KDF**: Scrypt(N=2^14, r=8, p=1) from user passphrase
+- **Confidentiality**: ✅ Provided | **Authenticity**: ❌ Not provided
+- **Status**: Still readable; no longer written (v2 used for new backups as of 2026-04-28)
+
+### Format v2 (Current, AES-256-GCM with Per-Backup Salt)
+- **Encryption**: AES-256-GCM (AEAD — Authenticated Encryption with Associated Data)
+- **Salt**: Random 16 bytes per backup (generated at encryption time)
+- **IV**: Random 12 bytes per backup (GCM standard)
+- **KDF**: Scrypt(N=2^15, r=8, p=1) — doubled iteration count for stronger brute-force resistance
+- **Auth Tag**: 16 bytes appended; tampering detected immediately on decryption
+- **Confidentiality**: ✅ Provided | **Authenticity**: ✅ Provided | **Per-backup Entropy**: ✅ Yes
+- **Status**: Default for new backups as of 2026-04-28; see [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]] for full rationale
+
+### Restore Process
 - **Passphrase modal**: When restoring an encrypted backup, users are prompted via modal to enter the passphrase before decryption attempts
+- **Magic header detection**: Backup encryption is detected via file magic header (`VISIONENC1` or `VISIONENC2`) without decryption
+- **Auto-dispatch**: Restore process automatically detects v1 vs v2 format and invokes correct decoder
 - **Fallback sources**: Restore respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) as fallback if no modal input provided
-- **Error recovery**: Wrong passphrase shows clear error message and allows retry (no silent failures)
-- **Magic header detection**: Backup encryption is detected via file magic header (`VISIONBAK1` prefix) without decryption
-- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; encrypted backups always use the modal flow
+- **Error recovery**: Wrong passphrase shows clear error message and allows retry (up to 3 attempts typical)
+- **Path validation**: File path must have been returned by prior `backup:select-file` dialog; prevents XSS-in-renderer from passing arbitrary paths
+- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; v1 backups decrypt correctly with old passphrases unchanged
 
-See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] and [[docs/features/settings|Settings Feature]] for full details.
+See [[docs/features/backup-coverage-audit|Backup Coverage Audit]], [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], and [[docs/features/settings|Settings Feature]] for full details.
+
+## Installer Security (install.sh, 2026-04-28)
+
+Homebrew installation script now prevents pipe-to-bash vulnerabilities:
+
+- **Default Behavior**: Does NOT pipe curl output directly to bash (unsafe for MITM attacks)
+- **Safer Default**: Downloads installer to a temporary file first, prints SHA-256 digest, requires user confirmation
+- **Opt-in Pipe Mode**: Users can opt-in to legacy pipe-to-bash via `VISION_ALLOW_BREW_PIPE=1` environment variable (for CI/automation that can't pause for user interaction)
+- **Checksum Verification**: When opted in, supports optional `VISION_BREW_INSTALL_SHA256` env var to validate downloaded installer against expected SHA-256 (early warning of supply-chain tampering)
+- **Rationale**: Prevents MITM attacker from modifying installer during download by requiring user to visually inspect hash or configure it in automation
+
+---
 
 ## Future Security Roadmap
 

@@ -30,8 +30,8 @@ Retrieve a list of transactions with filtering and pagination.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| limit | integer | 50 | Max items to return (max 5000) |
-| offset | integer | 0 | Number of items to skip |
+| limit | integer | 50 | Max items to return (clamped: 1–5000) |
+| offset | integer | 0 | Number of items to skip (clamped: ≥0) |
 | transaction_id | integer | null | Filter by exact transaction ID |
 | start_date | string | null | Filter by start date (YYYY-MM-DD) |
 | end_date | string | null | Filter by end date (YYYY-MM-DD) |

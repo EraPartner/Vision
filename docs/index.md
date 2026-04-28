@@ -3,9 +3,9 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-04-27
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes include ExportDialog date picker UI, VirtualDataTable edit column width, and bank reconciliation feature removal.
+updated: 2026-04-28
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, aead, backup-v2, security-hardening]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Recent fixes include ADR-040 backup v2 format upgrade (AES-256-GCM with per-backup salt), admin token timing-attack prevention, install.sh hardening, dedup memo inclusion, CRLF CSV handling, and EU decimal parsing.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -156,6 +156,36 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-04-28 Security & Backup Hardening: v2 AEAD Encryption, Timing Attack Prevention, Install.sh Safety
+
+**Backup Format v2 Upgrade (ADR-040):**
+- **AES-256-GCM AEAD encryption** — Replaces v1's CBC-only confidentiality with authenticated encryption (tampering detected on decryption)
+- **Per-backup random salt** — 16 random bytes per backup (v1 used static salt); eliminates salt-reuse collisions
+- **Stronger KDF** — Scrypt N=2^15 (doubled from v1's N=2^14) for 2x brute-force resistance
+- **Auto-detection** — Transparent format dispatch via magic header; v1 backups still readable indefinitely
+- **See:** [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
+
+**Admin Bearer Token Security (2026-04-28):**
+- **Timing-safe comparison** — Token validation now uses `crypto.timingSafeEqual()` instead of `!==` to prevent side-channel timing attacks
+- **See:** [[docs/security/data-protection|Data Protection]]
+
+**Install.sh Hardening (2026-04-28):**
+- **Safe defaults** — No longer pipes curl directly to bash (MITM risk)
+- **User-friendly flow** — Downloads to tempfile, prints SHA-256, prompts confirmation
+- **Opt-in legacy mode** — `VISION_ALLOW_BREW_PIPE=1` for CI/automation; optional checksum env var `VISION_BREW_INSTALL_SHA256`
+- **See:** [[docs/security/data-protection|Data Protection]]
+
+**Bank CSV Import Fixes (2026-04-28):**
+- **CRLF safety** — Cross-platform CSV parsing handles Windows line endings correctly
+- **EU decimal support** — `1.234,56` format now parsed correctly (was broken 1000x)
+- **Dedup memo inclusion** — Same-day same-amount same-recipient with different memos are no longer falsely deduped
+- **See:** [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|Bank Adapters]]
+
+**Pagination Bounds (2026-04-28):**
+- **Limit clamping** — Parsed limit values clamped to 1–max (prevents 0 or negative)
+- **Offset clamping** — Parsed offset values clamped to ≥0 (prevents negative offsets)
+- **See:** [[docs/api/transactions|Transactions API]], [[docs/api/categories|Categories API]], [[docs/api/recipients|Recipients API]]
 
 ### 2026-04-27 Encrypted Backup Restore with Passphrase Modal (Phase 2)
 

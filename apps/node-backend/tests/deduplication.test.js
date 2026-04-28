@@ -115,7 +115,7 @@ describe('DeduplicationService', () => {
       expect(result).toBe(true);
       expect(query).toHaveBeenCalledTimes(1);
       expect(query.mock.calls[0][0]).toContain('FROM transactions');
-      expect(query.mock.calls[0][1]).toEqual(['2026-02-10', -50, 'RENT RECIPIENT']);
+      expect(query.mock.calls[0][1]).toEqual(['2026-02-10', -50, 'RENT RECIPIENT', 'Rent']);
     });
 
     it('returns false when no duplicate is found', async () => {
@@ -141,7 +141,7 @@ describe('DeduplicationService', () => {
       expect(result).toBe(true);
       expect(query).toHaveBeenCalledTimes(1);
       expect(query.mock.calls[0][0]).toContain('LEFT JOIN recipients');
-      expect(query.mock.calls[0][1]).toEqual(['2026-03-01', -12.5, 'COFFEE SHOP']);
+      expect(query.mock.calls[0][1]).toEqual(['2026-03-01', -12.5, 'COFFEE SHOP', 'morning coffee']);
     });
 
     it('returns false when field match does not exist', async () => {

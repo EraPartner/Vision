@@ -27,8 +27,8 @@ Retrieve a list of categories.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| limit | integer | 50 | Max items (max 1000) |
-| offset | integer | 0 | Items to skip |
+| limit | integer | 50 | Max items (clamped: 1–1000) |
+| offset | integer | 0 | Items to skip (clamped: ≥0) |
 | general | string | null | Filter by general category |
 | detail | string | null | Filter by detail category |
 | active | boolean | true | Show active/inactive |

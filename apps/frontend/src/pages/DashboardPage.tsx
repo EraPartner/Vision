@@ -87,7 +87,15 @@ export default function DashboardPage() {
                 .map((cat) => cat.id);
             ids.push(...hiddenIds);
         }
-        return [...new Set(ids)];
+        const seen = new Set<number>();
+        const ordered: number[] = [];
+        for (const id of ids) {
+            if (!seen.has(id)) {
+                seen.add(id);
+                ordered.push(id);
+            }
+        }
+        return ordered;
     }, [settings.exclusionScope, settings.excludedCategoryIds, settings.excludeHiddenCategories, categoriesData]);
 
     // Recipient exclusions
@@ -381,10 +389,12 @@ export default function DashboardPage() {
 
     // Show an inline banner for failed queries instead of replacing the whole
     // page. Cached data from any successful query still renders so the user
-    // sees something useful when the host is offline.
+    // sees something useful when the host is offline. The banner distinguishes
+    // "live" (some queries fresh, some failed) from "stale" (all served from cache).
     const partialError = statsError || transactionsError || recentFilteredError;
     const partialErrorMessage = statsError?.message || transactionsError?.message || recentFilteredError?.message || '';
     const hasAnyData = Boolean(statsData) || (transactionsData?.items?.length ?? 0) > 0;
+    const allFromCache = Boolean(statsError) && Boolean(transactionsError);
 
     if (partialError && !hasAnyData) {
         return (
@@ -426,7 +436,10 @@ export default function DashboardPage() {
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
                     <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-500 shrink-0" />
                     <div className="text-foreground/80">
-                        {t('dashboard.partialDataWarning', { msg: String(partialErrorMessage) })}
+                        {allFromCache
+                            ? t('dashboard.staleDataWarning', { msg: String(partialErrorMessage) })
+                              || t('dashboard.partialDataWarning', { msg: String(partialErrorMessage) })
+                            : t('dashboard.partialDataWarning', { msg: String(partialErrorMessage) })}
                     </div>
                 </div>
             )}

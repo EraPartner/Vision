@@ -131,7 +131,7 @@ function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
                 <tbody>
                     {rows.map((row, idx) => (
                         <tr
-                            key={idx}
+                            key={`${idx}-${cols.map((c) => String(row[c] ?? '')).join('|').slice(0, 80)}`}
                             className={cn(
                                 'border-b border-border/20 last:border-b-0',
                                 idx % 2 === 1 && 'bg-muted/20',
@@ -259,8 +259,8 @@ function PieChartView({ rows, xKey, yKeys }: ChartViewProps) {
                         labelLine={{ strokeWidth: 1 }}
                         isAnimationActive={false}
                     >
-                        {data.map((_, i) => (
-                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        {data.map((entry, i) => (
+                            <Cell key={`${entry.name}-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                         ))}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle} />

@@ -11,8 +11,49 @@ echo "    Repo: $REPO_PATH"
 
 # ── Homebrew ──────────────────────────────────────────────────────────────────
 if ! command -v brew &>/dev/null; then
-  echo "==> Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  cat <<'EOF'
+==> Homebrew is not installed.
+
+This installer can run the official Homebrew installation script from:
+    https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+
+For maximum security you should review that script before executing it.
+The Vision installer will NOT pipe an unverified script straight into bash.
+
+Recommended:
+  1. Install Homebrew yourself by following the instructions at https://brew.sh
+  2. Re-run this installer.
+
+Or, if you understand the risk and accept it, set the environment variable
+VISION_ALLOW_BREW_PIPE=1 before re-running:
+
+    VISION_ALLOW_BREW_PIPE=1 ./install.sh
+EOF
+  if [ "${VISION_ALLOW_BREW_PIPE:-0}" != "1" ]; then
+    exit 1
+  fi
+  echo "==> VISION_ALLOW_BREW_PIPE=1 set — installing Homebrew via official script."
+  BREW_INSTALL_TMP="$(mktemp -t vision_brew_install.XXXXXX)"
+  trap 'rm -f "$BREW_INSTALL_TMP"' EXIT
+  curl -fsSL --proto '=https' --tlsv1.2 \
+    https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
+    -o "$BREW_INSTALL_TMP"
+  echo "    Downloaded Homebrew installer to: $BREW_INSTALL_TMP"
+  echo "    SHA-256: $(shasum -a 256 "$BREW_INSTALL_TMP" | awk '{print $1}')"
+  if [ "${VISION_BREW_INSTALL_SHA256:-}" != "" ]; then
+    EXPECTED="${VISION_BREW_INSTALL_SHA256}"
+    ACTUAL="$(shasum -a 256 "$BREW_INSTALL_TMP" | awk '{print $1}')"
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+      echo "ERROR: Homebrew installer checksum mismatch."
+      echo "  expected: $EXPECTED"
+      echo "  actual:   $ACTUAL"
+      exit 1
+    fi
+    echo "    Checksum verified."
+  fi
+  /bin/bash "$BREW_INSTALL_TMP"
+  rm -f "$BREW_INSTALL_TMP"
+  trap - EXIT
   # Add brew to PATH for Apple Silicon
   eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || true
 fi

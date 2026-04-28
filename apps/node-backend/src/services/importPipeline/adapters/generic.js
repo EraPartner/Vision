@@ -22,12 +22,40 @@ function parseDate(dateStr, fmt) {
 }
 
 function parseAmountField(raw) {
-  const amountStr = String(raw || '').replace(/[$€£,]/g, '').trim();
-  let cleaned = amountStr;
-  if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
-    cleaned = '-' + cleaned.slice(1, -1);
+  let s = String(raw || '').trim();
+  if (!s) return NaN;
+  s = s.replace(/\s/g, '');
+  s = s.replace(/[$€£¥]/g, '');
+  let negative = false;
+  if (s.startsWith('(') && s.endsWith(')')) {
+    negative = true;
+    s = s.slice(1, -1);
   }
-  return parseFloat(cleaned);
+  if (s.startsWith('-')) {
+    negative = !negative;
+    s = s.slice(1);
+  } else if (s.startsWith('+')) {
+    s = s.slice(1);
+  }
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (lastComma >= 0) {
+    const tail = s.length - lastComma - 1;
+    if (tail === 3 && s.indexOf(',') !== lastComma) {
+      s = s.replace(/,/g, '');
+    } else {
+      s = s.replace(',', '.');
+    }
+  }
+  const n = parseFloat(s);
+  if (isNaN(n)) return NaN;
+  return negative ? -n : n;
 }
 
 function buildBankAccount(config) {

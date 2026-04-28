@@ -26,10 +26,10 @@ export function FxStatusBanner() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const [dismissed, setDismissed] = useState<boolean>(isDismissedRecently);
+    const [dismissed, setDismissed] = useState<boolean>(() => isDismissedRecently());
 
     const { data } = useQuery<ExchangeRatesData>({
-        queryKey: ["exchangeRates"],
+        queryKey: ["exchangeRates", { dbOnly: true }],
         queryFn: () => apiClient.getExchangeRates({ dbOnly: true }),
         staleTime: 60_000,
         retry: false,

@@ -6,7 +6,7 @@
 import fs from 'fs';
 import { cleanRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
 
 const NAME = 'belfius';
 const BANK_LABEL = 'Belfius';
@@ -95,14 +95,14 @@ function parseTransactionLine(line) {
 
 export function detect(csvSample) {
   if (!csvSample) return false;
-  const lines = csvSample.split('\n').slice(0, 15);
+  const lines = splitCsvLines(csvSample).slice(0, 15);
   return lines.some((line) => line.includes('Laatste saldo;'))
     || lines.some((line) => /^BE\d{2}/.test(line.trim()) && line.split(';').length >= MIN_FIELDS);
 }
 
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
-  const lines = content.split('\n');
+  const lines = splitCsvLines(content);
   const transactions = [];
   const lastBalance = lines.length > BALANCE_LINE_INDEX
     ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())

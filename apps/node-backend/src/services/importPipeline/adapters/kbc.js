@@ -5,7 +5,7 @@
 import fs from 'fs';
 import { cleanKbcRecipientName, normalizeToUppercase } from '../../textNormalization.js';
 import { logger } from '../../../config/logger.js';
-import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment } from './_shared.js';
+import { parseDayMonthYear, parseCommaDecimal, buildOptionalComment, splitCsvLines } from './_shared.js';
 
 const NAME = 'kbc';
 const BANK_LABEL = 'KBC';
@@ -88,14 +88,14 @@ function isNonDataLine(line) {
 
 export function detect(csvSample) {
   if (!csvSample) return false;
-  const lines = csvSample.split('\n').slice(0, 5);
+  const lines = splitCsvLines(csvSample).slice(0, 5);
   return lines.some((line) => line.startsWith('Rekeningnummer'))
     || lines.some((line) => line.includes('Vrije Mededeling'));
 }
 
 export async function parse(filePath) {
   const content = await fs.promises.readFile(filePath, 'utf-8');
-  const lines = content.split('\n');
+  const lines = splitCsvLines(content);
   const transactions = [];
 
   for (const rawLine of lines) {
