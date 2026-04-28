@@ -16,6 +16,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Deny all permissions by default; each job opts in to only what it needs.
+permissions: {}
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # Lint — frontend ESLint + backend ESLint
@@ -23,6 +26,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +51,8 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +76,8 @@ jobs:
   test-frontend:
     name: Test (Frontend)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -89,6 +98,8 @@ jobs:
   test-backend:
     name: Test (Backend)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -109,6 +120,8 @@ jobs:
   docker-verify:
     name: Docker Verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -160,7 +173,8 @@ jobs:
     name: Security Scan (Trivy)
     runs-on: ubuntu-latest
     permissions:
-      security-events: write
+      contents: read
+      security-events: write  # required to upload SARIF to GitHub Security tab
     steps:
       - uses: actions/checkout@v4
 

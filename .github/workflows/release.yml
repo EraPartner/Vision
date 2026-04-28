@@ -21,6 +21,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/vision
 
+# Deny all permissions by default; each job opts in to only what it needs.
+permissions: {}
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 0. Verify: version tag == package.json version + lint + tests
@@ -28,6 +31,8 @@ jobs:
   verify:
     name: Verify Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +50,7 @@ jobs:
           # Trim leading 'v' from tag
           TAG_VERSION="${TAG#v}"
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
-          echo "Tag version  : $TAG_VERSION"
+          echo "Tag version    : $TAG_VERSION"
           echo "Package version: $PKG_VERSION"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "ERROR: git tag ($TAG_VERSION) does not match packaging/electron/package.json version ($PKG_VERSION)"
@@ -78,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: write  # required to push to GHCR with GITHUB_TOKEN
 
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
@@ -98,7 +103,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata (tags & labels)
         id: meta
@@ -125,7 +130,6 @@ jobs:
       - name: Write docker metadata file
         run: |
           mkdir -p dist
-          # Write the resolved image version/tag and raw tags for later jobs
           echo "version=${{ steps.meta.outputs.version }}" > dist/docker-image-tag.txt
           echo "tags=${{ steps.meta.outputs.tags }}" >> dist/docker-image-tag.txt
 
@@ -138,14 +142,12 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 2. Build source launcher ZIP (arm64 — Apple Silicon only)
   # ─────────────────────────────────────────────────────────────────────────────
-  # Create a source launcher package (no .app binary distribution). This
-  # produces a zip containing the Vision source tree + launch.command.
   package-mac:
     name: Package mac source launcher
     needs: [verify]
     runs-on: macos-26
-    env:
-      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -209,12 +211,9 @@ jobs:
     name: Create GitHub Release
     needs: [docker, package-mac]
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
     permissions:
-      contents: write
+      contents: write  # required to create releases and upload assets
       packages: read
-
     steps:
       - name: Download source launcher zip
         uses: actions/download-artifact@v4
