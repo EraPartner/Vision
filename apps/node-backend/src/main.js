@@ -390,6 +390,7 @@ if (settings.isProduction()) {
   // SPA fallback: serve index.html (no-cache) for all non-API paths
   app.get(/^(?!\/api)/, spaRateLimiter, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
+    // codeql[js/missing-rate-limiting]: spaRateLimiter is applied as middleware in this route definition.
     res.sendFile(resolve(distPath, 'index.html'));
   });
 }

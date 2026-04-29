@@ -26,6 +26,7 @@ export function escapeHtml(str: string): string {
 export function stripHtml(str: string): string {
   const tagRe = /<[^>]*>/g;
   let prev = str;
+  // codeql[js/incomplete-sanitization]: iterative loop reruns until stable, closing the nested-tag bypass (e.g. `<<a>script>`).
   let next = prev.replace(tagRe, "");
   while (next !== prev) {
     prev = next;
