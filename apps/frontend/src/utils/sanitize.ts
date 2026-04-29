@@ -17,22 +17,27 @@ export function escapeHtml(str: string): string {
 }
 
 /**
- * Strip HTML tags from a string.
+ * Strip HTML tags from a string using a character-level state machine.
  *
- * Iterates until the output stops shrinking so that nested-tag bypasses such as
- * `<<a>script>` cannot survive the first pass. Each iteration removes at least
- * one character or terminates, so this is bounded.
+ * Tracks angle-bracket nesting depth so adversarial inputs like
+ * `<<a>script>alert</script>` cannot reconstruct a tag after one pass —
+ * tag bodies (and contents of nested tags) are dropped, only depth-0 text
+ * is kept.
  */
 export function stripHtml(str: string): string {
-  const tagRe = /<[^>]*>/g;
-  let prev = str;
-  // codeql[js/incomplete-sanitization]: iterative loop reruns until stable, closing the nested-tag bypass (e.g. `<<a>script>`).
-  let next = prev.replace(tagRe, "");
-  while (next !== prev) {
-    prev = next;
-    next = prev.replace(tagRe, "");
+  let result = "";
+  let depth = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === "<") {
+      depth++;
+    } else if (ch === ">") {
+      if (depth > 0) depth--;
+    } else if (depth === 0) {
+      result += ch;
+    }
   }
-  return next;
+  return result;
 }
 
 /**

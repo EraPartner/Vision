@@ -56,20 +56,17 @@ const upload = multer({
   },
 });
 
-const TMP_ROOTS = [...new Set([
-  path.resolve(os.tmpdir()),
-  path.resolve('/tmp'),
-  path.resolve('/private/tmp'),
-])].map((root) => root + path.sep);
+// Multer writes uploads to os.tmpdir() with a generated alphanumeric filename.
+// We rebuild the path from the basename + os.tmpdir() (a constant) so a tampered
+// req.file.path can't escape the tmp directory, and validate the basename
+// against a strict allowlist to break any taint flow into the unlink call.
+const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 function cleanup(filePath) {
   if (!filePath) return;
-  // Constrain unlink to a known temp-dir root so a tampered req.file.path cannot
-  // delete arbitrary files (defends against CodeQL js/path-injection).
-  const resolved = path.resolve(filePath);
-  if (!TMP_ROOTS.some((root) => resolved.startsWith(root))) return;
-  // codeql[js/path-injection]: resolved is validated against TMP_ROOTS allowlist above.
-  void fs.promises.unlink(resolved).catch(() => {});
+  const basename = path.basename(filePath);
+  if (!SAFE_BASENAME_RE.test(basename)) return;
+  void fs.promises.unlink(path.join(os.tmpdir(), basename)).catch(() => {});
 }
 
 function buildImportResult(result) {

@@ -22,33 +22,29 @@ import { recipientRepository } from '../repositories/recipientRepository.js';
 import { categoryRepository } from '../repositories/categoryRepository.js';
 import { recipientBankAccountRepository } from '../repositories/recipientBankAccountRepository.js';
 
-// Accept any well-known temp-dir root. multer writes to `os.tmpdir()`
-// (`/var/folders/...` on macOS, `/tmp` on Linux, `%TEMP%` on Windows); tests
-// commonly stage fixtures under `/tmp` as a stable cross-platform handle.
-const TMP_ROOTS = [...new Set([
-  path.resolve(os.tmpdir()),
-  path.resolve('/tmp'),
-  path.resolve('/private/tmp'),
-])].map((root) => root + path.sep);
 const ALLOWED_ENCODINGS = new Set(['utf-8', 'utf8', 'latin1', 'iso-8859-1', 'windows-1252']);
+const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /**
- * Read a CSV file restricted to a known temporary directory, with an allowlist
- * on the encoding. Defends against path traversal and unexpected encoding
- * labels (CodeQL js/path-injection).
+ * Read a CSV file from os.tmpdir() identified by its basename only.
+ *
+ * Multer writes uploads into os.tmpdir() with a generated alphanumeric
+ * filename. We rebuild the read path from the basename joined to a
+ * constant os.tmpdir() so a tampered filePath can't escape the tmp
+ * directory, and we validate the basename against a strict allowlist
+ * to break any taint flow into the readFile call.
  *
  * @param {string} filePath
  * @param {string} encoding
  * @returns {Promise<string>}
  */
 async function safeReadCsv(filePath, encoding) {
-  const resolved = path.resolve(filePath);
-  if (!TMP_ROOTS.some((root) => resolved.startsWith(root))) {
-    throw new Error('Refusing to read CSV outside a temporary directory');
+  const basename = path.basename(filePath);
+  if (!SAFE_BASENAME_RE.test(basename)) {
+    throw new Error('Refusing to read CSV with unsafe filename');
   }
   const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
-  // codeql[js/path-injection]: resolved is validated against TMP_ROOTS allowlist above.
-  return fs.promises.readFile(resolved, safeEncoding);
+  return fs.promises.readFile(path.join(os.tmpdir(), basename), safeEncoding);
 }
 
 // ─── Recipients ───────────────────────────────────────────────────────────────

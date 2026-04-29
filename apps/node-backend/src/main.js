@@ -6,6 +6,7 @@
  */
 
 import express from 'express';
+import fs from 'node:fs';
 import { createGzip } from 'node:zlib';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -387,11 +388,12 @@ if (settings.isProduction()) {
   const distPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'dist');
   // Hashed assets (JS/CSS) — long-lived cache
   app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
-  // SPA fallback: serve index.html (no-cache) for all non-API paths
-  app.get(/^(?!\/api)/, spaRateLimiter, (req, res) => {
+  // Preload the SPA shell once at startup; the fallback route then serves it
+  // from memory with no per-request file I/O.
+  const indexHtml = fs.readFileSync(resolve(distPath, 'index.html'), 'utf-8');
+  app.get(/^(?!\/api)/, spaRateLimiter, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
-    // codeql[js/missing-rate-limiting]: spaRateLimiter is applied as middleware in this route definition.
-    res.sendFile(resolve(distPath, 'index.html'));
+    res.type('html').send(indexHtml);
   });
 }
 
