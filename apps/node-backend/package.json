@@ -32,7 +32,7 @@
     "pdfkit": "^0.18.0",
     "pg": "^8.13.0",
     "puppeteer": "^24.42.0",
-    "yahoo-finance2": "^3.13.2",
+    "yahoo-finance2": "^3.14.0",
     "zod": "^3.25.76"
   }
 }
