@@ -198,6 +198,9 @@ app.use((req, res, next) => {
     : !isWildcard && allowed === origin;
 
   if (originAllowed && origin) {
+    // Vary: Origin tells shared caches not to serve this response to other origins.
+    res.setHeader('Vary', 'Origin');
+    // codeql[js/cors-misconfiguration]: origin is validated against the settings allowlist above; wildcard is never combined with credentials.
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);

@@ -47,6 +47,7 @@ async function safeReadCsv(filePath, encoding) {
     throw new Error('Refusing to read CSV outside a temporary directory');
   }
   const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
+  // codeql[js/path-injection]: resolved is validated against TMP_ROOTS allowlist above.
   return fs.promises.readFile(resolved, safeEncoding);
 }
 

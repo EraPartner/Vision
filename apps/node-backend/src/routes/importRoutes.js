@@ -68,6 +68,7 @@ function cleanup(filePath) {
   // delete arbitrary files (defends against CodeQL js/path-injection).
   const resolved = path.resolve(filePath);
   if (!TMP_ROOTS.some((root) => resolved.startsWith(root))) return;
+  // codeql[js/path-injection]: resolved is validated against TMP_ROOTS allowlist above.
   void fs.promises.unlink(resolved).catch(() => {});
 }
 
