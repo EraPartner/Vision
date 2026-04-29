@@ -26,9 +26,12 @@ function parseGeneratedTs(filePath) {
   if (content.includes('\\",\\n')) {
     fail(`Suspicious escaped fragment found in generated locale file ${filePath}. Regenerate locales from clean source.`);
   }
-  const re = /^\s*'([^']+)':\s*'((?:\\.|[^'])*)',\s*$/gm;
-  let match;
-  while ((match = re.exec(content)) !== null) {
+  // Anchored single-line regex: no alternation under a quantifier, so backtracking
+  // stays linear (avoids the ReDoS pattern CodeQL flagged on the multiline form).
+  const lineRe = /^\s*'([^']+)':\s*'(.*)',\s*$/;
+  for (const line of content.split('\n')) {
+    const match = lineRe.exec(line);
+    if (!match) continue;
     const key = match[1];
     const raw = match[2];
     let val = '';

@@ -3,9 +3,9 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-04-27
-tags: [security, csp, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase]
-description: Content Security Policy, data protection, path traversal prevention, and privacy considerations for Vision
+updated: 2026-04-29
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase]
+description: Content Security Policy, CORS, data protection, path traversal prevention, and privacy considerations for Vision
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
 ---
@@ -65,6 +65,44 @@ Market lookup news cards display remote HTTPS thumbnails. The CSP `img-src 'self
 | `X-XSS-Protection` | `1; mode=block` | XSS filter |
 | `Strict-Transport-Security` | `max-age=31536000` | HSTS (production only) |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Limit referrer info |
+
+---
+
+## Cross-Origin Resource Sharing (CORS)
+
+Vision implements CORS with strict origin validation to prevent credential leakage (2026-04-29 remediation per ADR-042):
+
+### Policy
+
+- **Explicit Allowlist**: Only origins in `settings.api.corsOrigins` receive `Access-Control-Allow-Origin` response header
+- **Credentials Only with Allowlist**: `Access-Control-Allow-Credentials: true` is set **only** when origin is on the explicit allowlist — never combined with wildcard `*`
+- **Wildcard Dev-Only**: Wildcard origin (`*`) permitted in development environments only, **without credentials** (browser enforces this requirement)
+- **Production**: Wildcard origin is never used; only explicit origins are allowed
+
+### Code Pattern
+
+```javascript
+const origin = req.headers.origin;
+const allowed = settings.api.corsOrigins;
+const isWildcard = allowed === '*';
+
+const originAllowed = Array.isArray(allowed)
+  ? allowed.includes(origin)
+  : !isWildcard && allowed === origin;
+
+if (originAllowed && origin) {
+  // Credentials only with explicit origin allowlist
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+} else if (isWildcard && isDevelopment()) {
+  // Wildcard dev-only, no credentials
+  res.setHeader('Access-Control-Allow-Origin', '*');
+}
+```
+
+### Rationale
+
+Combining wildcard origin with `Allow-Credentials: true` allows any web page to read authenticated responses (browser rejects this, but it's a code-smell security anti-pattern). The fix ensures credentials are never sent with wildcard origins, even in development.
 
 ---
 
@@ -295,6 +333,7 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 
 ## Related
 
+- [[docs/adr/042-codeql-dependabot-remediation-2026-04]] — CORS fix, rate limiters, input validation improvements
 - [[docs/security/index]] — Security documentation index
 - [[docs/security/input-validation]] — Input validation details
 - [[docs/security/rate-limiting]] — Rate limiting details

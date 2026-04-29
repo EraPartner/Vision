@@ -7,6 +7,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import { getSupportedBanks } from '../services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../services/dataImportService.js';
 import { logger } from '../config/logger.js';
@@ -55,9 +56,17 @@ const upload = multer({
   },
 });
 
+// Multer writes uploads to os.tmpdir() with a generated alphanumeric filename.
+// We rebuild the path from the basename + os.tmpdir() (a constant) so a tampered
+// req.file.path can't escape the tmp directory, and validate the basename
+// against a strict allowlist to break any taint flow into the unlink call.
+const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
+
 function cleanup(filePath) {
   if (!filePath) return;
-  void fs.promises.unlink(filePath).catch(() => {});
+  const basename = path.basename(filePath);
+  if (!SAFE_BASENAME_RE.test(basename)) return;
+  void fs.promises.unlink(path.join(os.tmpdir(), basename)).catch(() => {});
 }
 
 function buildImportResult(result) {
@@ -138,7 +147,8 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
     );
   }
 
-  if (separator && separator.length > 1) {
+  const separatorStr = separator != null ? String(separator) : '';
+  if (separatorStr && separatorStr.length !== 1) {
     cleanup(req.file.path);
     throw new ValidationError('separator must be a single character');
   }
@@ -147,7 +157,7 @@ router.post('/csv/custom', upload.single('file'), async (req, res) => {
     bank_name: bank_name.trim(),
     date_format: date_format.trim(),
     encoding: encoding || 'utf-8',
-    separator: separator || ',',
+    separator: separatorStr || ',',
     skip_rows: parseInt(skip_rows, 10) || 0,
     column_mapping: {
       date: date_column.trim(),
@@ -270,8 +280,8 @@ router.post('/recipients', upload.single('file'), async (req, res) => {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
 
-  const separator = req.query.separator || req.body.separator || ',';
-  const encoding = req.query.encoding || req.body.encoding || 'utf-8';
+  const separator = String(req.query.separator || req.body.separator || ',');
+  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
 
   if (separator.length !== 1) {
     cleanup(req.file.path);
@@ -294,8 +304,8 @@ router.post('/categories', upload.single('file'), async (req, res) => {
     throw new ValidationError('No file uploaded. Send a CSV file as multipart form-data with field name "file".');
   }
 
-  const separator = req.query.separator || req.body.separator || ',';
-  const encoding = req.query.encoding || req.body.encoding || 'utf-8';
+  const separator = String(req.query.separator || req.body.separator || ',');
+  const encoding = String(req.query.encoding || req.body.encoding || 'utf-8');
 
   if (separator.length !== 1) {
     cleanup(req.file.path);

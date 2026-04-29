@@ -3,8 +3,8 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-04-27
-updated: 2026-04-28
-last_modified: 2026-04-28
+updated: 2026-04-29
+last_modified: 2026-04-29
 adr-reference: 026
 tags: [reference, api, endpoints, matrix, overview, openapi, phase-1, phase-2, phase-3, phase-4, phase-5a, phase-5, phase-6, phase-7, phase-8, phase-g, phase-9, phase-13, phase-c, phase-d, phase-e, phase-f, cashflow-forecast, bill-reminders, sankey, pdf-report, db-maintenance, puppeteer, reports, multi-method-forecast, accuracy-persistence, materialized-cache, ensemble-methods, dependency-slim-down, backup, ipc, electron, drillthrough, export-filters, multi-select]
 description: Complete matrix of all 149 API endpoints + 8 IPC handlers organized by resource for quick lookup. Phase 1+2 adds 8 IPC handlers for bundle-based backup/restore with AES-256-CBC encryption and schema-safe restore. Phase 3 adds three new POST report endpoints with Puppeteer rendering. Phase 5A adds JSON export and attachments. Phase 6 adds cash flow forecast. Phase 7 adds Sankey flow and DB maintenance. Phase 8 completes portfolio and tax report generation (6 + 7 sections respectively). Phase F adds 4 admin endpoints. Phase 10 adds multi-method cash flow forecast. Phase C adds dashboard frontend visualization for Phase 10 forecast. Phase D adds persisted accuracy metrics endpoint. Phase E adds cache-aware forecast endpoint with materialized MC cache. Phase H adds rolling-window forecast with rolling-specific MC defaults (500 paths, P25/P75) and lazy-loaded diagnostics. Phase G removes 6 overlapping info endpoints in favor of aggregations. Phase 9 completes aggregation shadow cutover. Phase 13 adds multi-select export filters (`bank_accounts`, `category_ids` params); see openapi.yaml for authoritative spec.
@@ -25,6 +25,8 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 > **Phase G Update (April 2026):** Six legacy `/api/info/*` endpoints removed in favor of `/api/aggregations/*` alternatives. See [[#phase-g-endpoint-consolidation|Phase G Endpoint Consolidation]] below.
 >
 > **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. Shadow divergence admin endpoints (`GET /api/admin/shadow-divergences/summary`, `GET /api/admin/shadow-divergences`) removed. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes removed from wiring (see [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]]), though `info.js` persists for unrelated endpoints (portfolio-performance, net-worth, exchange-rates, inflation-rates).
+>
+> **2026-04-29 Security Update:** CodeQL + Dependabot remediation (ADR-042): `attachmentRateLimiter` (60 req/min) added to all attachment endpoints; `spaRateLimiter` (600 req/min) added to SPA fallback route. See [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] for full details.
 
 ## Transactions (7 endpoints)
 
@@ -129,10 +131,10 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
-| POST | `/api/attachments/transaction/:id` | Upload attachment | — | [[docs/api/attachments\|Attachments]] |
-| GET | `/api/attachments/transaction/:id` | List attachments for transaction | — | [[docs/api/attachments\|Attachments]] |
-| GET | `/api/attachments/:id/download` | Download attachment file | — | [[docs/api/attachments\|Attachments]] |
-| DELETE | `/api/attachments/:id` | Delete attachment | — | [[docs/api/attachments\|Attachments]] |
+| POST | `/api/attachments/transaction/:id` | Upload attachment | 60 req/min | [[docs/api/attachments\|Attachments]] |
+| GET | `/api/attachments/transaction/:id` | List attachments for transaction | 60 req/min | [[docs/api/attachments\|Attachments]] |
+| GET | `/api/attachments/:id/download` | Download attachment file | 60 req/min | [[docs/api/attachments\|Attachments]] |
+| DELETE | `/api/attachments/:id` | Delete attachment | 60 req/min | [[docs/api/attachments\|Attachments]] |
 
 ## Saved Charts (4 endpoints)
 

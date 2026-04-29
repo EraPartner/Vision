@@ -13,12 +13,39 @@
  */
 
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
 import { recipientRepository } from '../repositories/recipientRepository.js';
 import { categoryRepository } from '../repositories/categoryRepository.js';
 import { recipientBankAccountRepository } from '../repositories/recipientBankAccountRepository.js';
+
+const ALLOWED_ENCODINGS = new Set(['utf-8', 'utf8', 'latin1', 'iso-8859-1', 'windows-1252']);
+const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Read a CSV file from os.tmpdir() identified by its basename only.
+ *
+ * Multer writes uploads into os.tmpdir() with a generated alphanumeric
+ * filename. We rebuild the read path from the basename joined to a
+ * constant os.tmpdir() so a tampered filePath can't escape the tmp
+ * directory, and we validate the basename against a strict allowlist
+ * to break any taint flow into the readFile call.
+ *
+ * @param {string} filePath
+ * @param {string} encoding
+ * @returns {Promise<string>}
+ */
+async function safeReadCsv(filePath, encoding) {
+  const basename = path.basename(filePath);
+  if (!SAFE_BASENAME_RE.test(basename)) {
+    throw new Error('Refusing to read CSV with unsafe filename');
+  }
+  const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
+  return fs.promises.readFile(path.join(os.tmpdir(), basename), safeEncoding);
+}
 
 // ─── Recipients ───────────────────────────────────────────────────────────────
 
@@ -32,7 +59,7 @@ import { recipientBankAccountRepository } from '../repositories/recipientBankAcc
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await fs.promises.readFile(filePath, encoding);
+    const content = await safeReadCsv(filePath, encoding);
 
     let records;
     try {
@@ -134,7 +161,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await fs.promises.readFile(filePath, encoding);
+    const content = await safeReadCsv(filePath, encoding);
 
     let records;
     try {

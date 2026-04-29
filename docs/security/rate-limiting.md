@@ -3,7 +3,7 @@ title: Rate Limiting
 type: security
 status: active
 date: 2026-04-23
-updated: 2026-04-24
+updated: 2026-04-29
 tags:
   - security
   - rate-limiting
@@ -90,14 +90,40 @@ export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20
 
 Applied to `POST /api/import/*` endpoints.
 
+#### Attachment Rate Limiter
+
+Restrictive for file upload and download operations:
+
+```javascript
+// 60 requests per minute per IP
+export const attachmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 60, keyPrefix: 'attachment' });
+```
+
+Applied to `POST /api/attachments/*` (uploads) and `GET /api/attachments/*/download` endpoints. Prevents attachment spam and abuse while allowing typical user workflows (multiple file operations).
+
+#### SPA Rate Limiter
+
+Permissive limit for static file serving (SPA fallback):
+
+```javascript
+// 600 requests per minute per IP
+export const spaRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });
+```
+
+Applied only to `GET /^(?!\/api)/` fallback route in production (serving `index.html` for non-API paths). High limit intentional — protects against filesystem abuse rather than API logic; legitimate SPA page reloads and prefetching should never hit this limit.
+
 ## Configuration
 
 ### Endpoint-Specific Rate Limits
 
-Certain routes have additional custom rate limits beyond the three global presets:
+Certain routes have additional custom rate limits beyond the global presets:
 
 | Endpoint | Limit | Reason |
 |----------|-------|--------|
+| `POST /api/attachments/transaction/:id` | 60/min | File uploads; attachmentRateLimiter |
+| `GET /api/attachments/transaction/:id` | 60/min | List attachments; attachmentRateLimiter |
+| `GET /api/attachments/:id/download` | 60/min | File downloads; attachmentRateLimiter |
+| `DELETE /api/attachments/:id` | 60/min | Delete attachments; attachmentRateLimiter |
 | `PATCH /api/transactions/:id` | 30/min | Database-heavy operation |
 | `GET /api/transactions/export/csv` | 30/min | Export is resource-intensive |
 | `PATCH /api/planned-transactions/:id` | 30/min | Database-heavy operation |
@@ -145,12 +171,12 @@ For production deployments:
 - [[docs/security/input-validation]] - Input Validation
 - [[docs/api/index]] - API Index
 
-## Test Coverage Notes (2026-04-10, Updated 2026-04-24)
+## Test Coverage Notes (2026-04-10, Updated 2026-04-29)
 
 Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,
 - client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
-- presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), and `importRateLimiter` (`20 req/min`).
+- presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), `importRateLimiter` (`20 req/min`), `attachmentRateLimiter` (`60 req/min` for file operations), and `spaRateLimiter` (`600 req/min` for SPA fallback serving).
 
 Related code: [[apps/node-backend/src/middleware/rateLimiter.js]]

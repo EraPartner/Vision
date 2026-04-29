@@ -3,9 +3,9 @@ title: Input Validation
 type: security
 status: active
 date: 2026-04-26
-updated: 2026-04-25
-tags: [security, validation, sanitization, csv, formula-injection, cwe-1236]
-description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, and malformed data
+updated: 2026-04-29
+tags: [security, validation, sanitization, csv, formula-injection, cwe-1236, path-injection, redos]
+description: Input validation and sanitization mechanisms to prevent SQL injection, XSS, formula injection in CSV exports, path injection, ReDoS, and malformed data
 aliases: [input validation, sanitization, sql injection, xss, validation middleware, csv formula injection, cwe-1236]
 related_code: ["apps/node-backend/src/middleware/validation.js", "apps/node-backend/src/lib/csv.js"]
 ---
@@ -281,6 +281,7 @@ const csv = cols.map(escapeCsvValue).join(',');
 ## Related Security Topics
 
 - [[docs/security/rate-limiting]] - Rate limiting to prevent abuse
+- [[docs/adr/042-codeql-dependabot-remediation-2026-04]] - CodeQL fixes: CSV separator type coercion, path injection guards, ReDoS prevention
 - [[docs/adr/002-database-schema]] - Database schema design
 - [[docs/reference/code-patterns#safe-csv-export-pattern-phase-5]] - Safe CSV Export Pattern
 

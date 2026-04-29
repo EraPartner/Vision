@@ -17,10 +17,27 @@ export function escapeHtml(str: string): string {
 }
 
 /**
- * Strip HTML tags from a string.
+ * Strip HTML tags from a string using a character-level state machine.
+ *
+ * Tracks angle-bracket nesting depth so adversarial inputs like
+ * `<<a>script>alert</script>` cannot reconstruct a tag after one pass —
+ * tag bodies (and contents of nested tags) are dropped, only depth-0 text
+ * is kept.
  */
 export function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, "");
+  let result = "";
+  let depth = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === "<") {
+      depth++;
+    } else if (ch === ">") {
+      if (depth > 0) depth--;
+    } else if (depth === 0) {
+      result += ch;
+    }
+  }
+  return result;
 }
 
 /**
