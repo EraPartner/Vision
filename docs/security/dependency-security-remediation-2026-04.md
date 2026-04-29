@@ -71,3 +71,32 @@ The mock now uses `vi.fn().mockImplementation(function MockYahooFinance() { ... 
 - [[docs/security/index]]
 - [[docs/reference/scripts|Scripts Reference]]
 - [[docs/testing/testing|Testing Documentation]]
+
+---
+
+## 2026-04-29 — CodeQL + Dependabot Batch Remediation
+
+Second remediation batch; addressed 7 Dependabot alerts and 17 CodeQL/Trivy findings. Full triage and disposition documented in [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]].
+
+### Dependabot — tar CVEs (PR 1)
+
+All 6 `tar@6.2.1` CVEs (race condition Unicode APFS, hardlink/symlink path traversal, drive-relative path escapes) closed by bumping `electron-builder` `^25→^26` in `packaging/electron/package.json`. `tar@^7` resolves transitively; `npm audit` reports 0 vulnerabilities. `@tootallnate/once@2.0.0` dropped from dep graph entirely by the same upgrade.
+
+### CodeQL — Code fixes (PR 2)
+
+| Finding | File | Fix |
+|---------|------|-----|
+| CORS + credentials with wildcard | `main.js` | Wildcard dev-only, no credentials; credentials only with explicit origin allowlist |
+| Missing rate limiter — attachments | `main.js`, `rateLimiter.js` | `attachmentRateLimiter` (60 req/min) added and mounted |
+| Missing rate limiter — SPA fallback | `main.js`, `rateLimiter.js` | `spaRateLimiter` (600 req/min) added and mounted |
+| Type confusion on `separator` | `importRoutes.js` | `String()` coercion before length check in both import routes |
+| Path injection — tmpdir (cleanup) | `importRoutes.js` | `TMP_ROOTS` allowlist guard before `unlink` |
+| Path injection — tmpdir (readFile) | `dataImportService.js` | `safeReadCsv()` helper validates path + allowlists encoding |
+| ReDoS in locale parser | `scripts/validate-locales.js` | Line-by-line split + anchored single-line regex |
+| Incomplete HTML strip | `sanitize.ts` | `stripHtml` loops until stable |
+| SQL injection false positive (vacuum) | `admin.js` | `// codeql[js/sql-injection]` inline suppression with justification |
+| Missing rate-limit false positive (vacuum) | `admin.js` | `// codeql[js/missing-rate-limiting]` inline suppression with justification |
+
+### Trivy pip alerts
+
+Three pip version alerts (#38, #39, #40) are `not_applicable`: `venv/` is gitignored and never deployed. Dismiss via GitHub UI with reason `not_applicable`.

@@ -3,8 +3,8 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-04-28
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm]
+updated: 2026-04-29
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
 ---
@@ -43,6 +43,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-29: CodeQL + Dependabot Security Remediation
+
+[[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] — Triage and remediation of 7 Dependabot alerts (tar@6.2.1 CVEs) and 17 CodeQL/Trivy findings. Dependabot alerts resolved by bumping `electron-builder` `^25→^26` (tar@^7 transitive). CodeQL fixes: CORS no longer combines wildcard with `Allow-Credentials: true`; `attachmentRateLimiter` (60 req/min) and `spaRateLimiter` (600 req/min) added; CSV `separator` coerced via `String()` to prevent array type-confusion; `cleanup()` and `safeReadCsv()` add `TMP_ROOTS` allowlist guards; `stripHtml` loops until stable; `validate-locales.js` regex replaced with bounded line-by-line parse. Two false positives in `admin.js` suppressed with `// codeql[...]` inline comments and justification. Trivy pip alerts dismissed as `not_applicable` (gitignored venv).
 
 ### 2026-04-28: Saved Charts Schema Extension — Recipients, Variants, Time Buckets, Date Ranges
 
