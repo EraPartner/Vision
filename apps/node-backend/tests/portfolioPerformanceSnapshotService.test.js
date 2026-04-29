@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../src/database/connection.js', () => ({
-  query: vi.fn(),
-}));
+vi.mock('../src/database/connection.js', () => {
+  const queryFn = vi.fn();
+  return {
+    query: queryFn,
+    withTransaction: vi.fn(async (fn) => fn({ query: queryFn })),
+  };
+});
 
 vi.mock('../src/config/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

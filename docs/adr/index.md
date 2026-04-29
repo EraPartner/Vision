@@ -4,6 +4,7 @@ type: adr-index
 status: active
 date: 2026-04-23
 updated: 2026-04-29
+last_modified: 2026-04-29
 tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
@@ -43,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-04-29: Portfolio Snapshot Atomicity
+
+[[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]] — Wrap portfolio snapshot DELETE + batched INSERTs in a single PostgreSQL transaction to guarantee concurrent readers see either fully-old or fully-new snapshots via MVCC, never a torn/partial table. Fixes race condition during startup warmup where concurrent `/api/info/net-worth` requests read empty table after DELETE but before INSERT, triggering cache of zero portfolio value. Solution uses `withTransaction(...)` pattern already established in ADR-014.
 
 ### 2026-04-29: CodeQL + Dependabot Security Remediation
 

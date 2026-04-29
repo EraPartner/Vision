@@ -7,7 +7,7 @@
  * portfolio_performance_snapshots.
  */
 
-import { query } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes } from '../../utils/portfolioMath.js';
@@ -303,52 +303,57 @@ export async function computeAndStoreSnapshots(targetCurrency = 'EUR') {
     return [];
   }
 
-  await query('DELETE FROM portfolio_performance_snapshots WHERE currency = $1', [targetCurrency]);
+  // Atomic replace: DELETE + INSERTs in one transaction so concurrent readers
+  // (e.g. /api/info/net-worth during startup warmup) see either fully-old or
+  // fully-new state via Postgres MVCC — never an empty/partial table.
+  await withTransaction(async (client) => {
+    await client.query('DELETE FROM portfolio_performance_snapshots WHERE currency = $1', [targetCurrency]);
 
-  for (let i = 0; i < snapshots.length; i += BATCH_SIZE) {
-    const batch = snapshots.slice(i, i + BATCH_SIZE);
-    const values = [];
-    const params = [];
-    let p = 1;
+    for (let i = 0; i < snapshots.length; i += BATCH_SIZE) {
+      const batch = snapshots.slice(i, i + BATCH_SIZE);
+      const values = [];
+      const params = [];
+      let p = 1;
 
-    for (const snap of batch) {
-      values.push(
-        `($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},NOW())`
-      );
-      params.push(
-        snap.snapshot_date, snap.invested, snap.value,
-        snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,
-        snap.gain_loss, snap.return_pct, targetCurrency,
-        snap.inflation_adjusted_value,
-        snap.stocks_etfs_invested, snap.crypto_invested, snap.metals_invested,
-      );
+      for (const snap of batch) {
+        values.push(
+          `($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},NOW())`
+        );
+        params.push(
+          snap.snapshot_date, snap.invested, snap.value,
+          snap.stocks_etfs_value, snap.crypto_value, snap.metals_value, snap.cash_value,
+          snap.gain_loss, snap.return_pct, targetCurrency,
+          snap.inflation_adjusted_value,
+          snap.stocks_etfs_invested, snap.crypto_invested, snap.metals_invested,
+        );
+      }
+
+      await client.query(`
+        INSERT INTO portfolio_performance_snapshots (
+          snapshot_date, invested, value,
+          stocks_etfs_value, crypto_value, metals_value, cash_value,
+          gain_loss, return_pct, currency,
+          inflation_adjusted_value,
+          stocks_etfs_invested, crypto_invested, metals_invested,
+          computed_at
+        ) VALUES ${values.join(', ')}
+        ON CONFLICT (snapshot_date) DO UPDATE SET
+          invested                = EXCLUDED.invested,
+          value                   = EXCLUDED.value,
+          stocks_etfs_value       = EXCLUDED.stocks_etfs_value,
+          crypto_value            = EXCLUDED.crypto_value,
+          metals_value            = EXCLUDED.metals_value,
+          cash_value              = EXCLUDED.cash_value,
+          gain_loss               = EXCLUDED.gain_loss,
+          return_pct              = EXCLUDED.return_pct,
+          inflation_adjusted_value= EXCLUDED.inflation_adjusted_value,
+          stocks_etfs_invested    = EXCLUDED.stocks_etfs_invested,
+          crypto_invested         = EXCLUDED.crypto_invested,
+          metals_invested         = EXCLUDED.metals_invested,
+          computed_at             = NOW()
+      `, params);
     }
-
-    await query(`
-      INSERT INTO portfolio_performance_snapshots (
-        snapshot_date, invested, value,
-        stocks_etfs_value, crypto_value, metals_value, cash_value,
-        gain_loss, return_pct, currency,
-        inflation_adjusted_value,
-        stocks_etfs_invested, crypto_invested, metals_invested,
-        computed_at
-      ) VALUES ${values.join(', ')}
-      ON CONFLICT (snapshot_date) DO UPDATE SET
-        invested                = EXCLUDED.invested,
-        value                   = EXCLUDED.value,
-        stocks_etfs_value       = EXCLUDED.stocks_etfs_value,
-        crypto_value            = EXCLUDED.crypto_value,
-        metals_value            = EXCLUDED.metals_value,
-        cash_value              = EXCLUDED.cash_value,
-        gain_loss               = EXCLUDED.gain_loss,
-        return_pct              = EXCLUDED.return_pct,
-        inflation_adjusted_value= EXCLUDED.inflation_adjusted_value,
-        stocks_etfs_invested    = EXCLUDED.stocks_etfs_invested,
-        crypto_invested         = EXCLUDED.crypto_invested,
-        metals_invested         = EXCLUDED.metals_invested,
-        computed_at             = NOW()
-    `, params);
-  }
+  });
 
   logger.info('Portfolio performance snapshots stored', { count: snapshots.length });
   return snapshots;
