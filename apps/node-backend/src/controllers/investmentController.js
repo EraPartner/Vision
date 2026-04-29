@@ -17,6 +17,7 @@ import { refreshQuotesForInvestment } from '../services/quoteBackfillService.js'
 import { logger } from '../config/logger.js';
 import { getKinesisAssetConfig } from '../config/kinesisConfig.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { invalidatePortfolioCaches } from '../routes/info/_cache.js';
 
 // ── In-memory response caches ────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ let bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
 export function clearInvestmentsCaches() {
   investmentsCache = { data: undefined, expiresAt: 0 };
   bulkTxnCache = { data: undefined, key: '', expiresAt: 0 };
+  invalidatePortfolioCaches();
 }
 
 // ── Request parsers ──────────────────────────────────────────────────────────

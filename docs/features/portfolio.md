@@ -5,10 +5,10 @@ status: active
 date: 2026-04-27
 last_modified: 2026-04-29
 updated: 2026-04-29
-tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation]
+tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/lib/api.ts"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.js", "apps/frontend/src/pages/portfolio/PerformancePage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -392,6 +392,61 @@ The Performance page architecture was significantly refactored to move heavy com
 Code links: [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/components/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioOverviewPage.tsx]], [[apps/frontend/src/pages/portfolio/PerformancePage.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
+
+## Portfolio Summary: Single Source of Truth (Phase 14)
+
+### Problem Solved
+
+Prior to Phase 14 (2026-04-29), dashboard and performance page displayed portfolio totals via two separate computation paths with different FX timing, causing visible divergence:
+
+- **Dashboard**: Client-side computation via loop over per-investment summaries; FX conversion applied at request time
+- **Performance page**: Server-side computation from pre-computed daily snapshots; FX rates embedded from snapshot creation time (potentially stale by days)
+
+Result: Same portfolio, same moment, different total values shown on two pages (e.g., EUR 100,000 vs EUR 99,999.50).
+
+### Solution: `/api/info/portfolio-summary`
+
+New realtime endpoint serves portfolio totals (currentValue, totalInvested, totalGainLoss, realized, unrealized, fees, taxes, income, totalReturnPct) as single source of truth:
+
+**Backend:**
+- New service `portfolioSummaryService.js` with `getPortfolioSummary(targetCurrency)` function
+- Computes totals server-side with FX conversion applied pre-serialization
+- Returns both aggregate `totals` object and per-asset-class `summaries` array
+- 60-second in-memory cache with invalidation on any investment/transaction write
+- Inflight request deduplication prevents cache stampede on cold start
+
+**Frontend:**
+- Dashboard headline cards now source from `usePortfolioSummaryQuery(displayCurrency)` instead of client-side FX loop
+- Performance page headline metrics overridden with realtime values from portfolio-summary endpoint
+- Snapshot timeseries (value-over-time chart) still uses historical performance snapshots; only headline totals come from realtime summary
+
+**Reconciliation invariant** (verified by test):
+```
+sum(summaries[].currentValue) === totals.currentValue
+sum(summaries[].invested) === totals.invested
+(totalGainLoss / totalInvested) × 100 = totalReturnPct
+```
+
+### Cache Invalidation Strategy
+
+Cache cleared atomically on any investment or transaction write:
+- Investment creates, updates, deletes
+- Portfolio transaction creates, updates, deletes
+- Transaction creates, updates, deletes (affecting portfolio cash flows)
+
+All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePortfolioCaches()` for consistent state.
+
+### Rate Limit & Performance
+
+- **Rate limit**: 60 req/min (higher than portfolio-performance at 30 req/min due to frequent dashboard renders)
+- **Cache TTL**: 60 seconds (balances freshness with latency; price refreshes happen on 5+ min intervals)
+- **Latency**: ~200-400ms on cache miss (concurrent FX conversion + asset aggregation); instant on cache hit
+
+### Reference
+
+- **API doc**: [[docs/api/portfolio-summary|Portfolio Summary API]]
+- **ADR**: [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]]
+- **Code**: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/portfolioSummary.js]], [[apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts]]
 
 ## Belgian Inflation Data Flow
 

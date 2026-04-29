@@ -3,10 +3,10 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-04-28
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, and recipient group resolution via scalar subqueries (Phase Q)
-aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId]
+updated: 2026-04-29
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), and portfolio totals single-source-of-truth pattern (Phase 14)
+aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth]
 ---
 
 # Code Patterns Reference
@@ -2312,6 +2312,127 @@ Apply compact formatting to headline / summary slots only:
 - Statistics: `SummaryCards`, `YearlySummaryTable`, `CategoryPivotTable` (grand-total row/column only)
 
 **Out of scope:** portfolio cards, transactions table rows, per-cell values inside `CategoryPivotTable` body (preserve full precision there).
+
+---
+
+## Portfolio Totals Pattern (Phase 14)
+
+> [!important] Single Source of Truth
+> **Rule**: Any future UI surface displaying portfolio totals (total value, invested, gain/loss, return %) MUST source from `/api/info/portfolio-summary` endpoint, NOT recompute client-side or fetch raw investments + do FX manually.
+
+### Problem It Solves
+
+Prior to Phase 14, dashboard and performance page computed portfolio totals via different code paths with different FX timing, causing visible divergence:
+
+- Dashboard: loop over investments, convert each to target currency at request time
+- Performance page: use pre-computed snapshots with FX rates from snapshot creation time (stale)
+
+Result: Same portfolio, different totals on two pages (e.g., EUR 100,000 vs EUR 99,999.50).
+
+### Pattern
+
+**Backend (`portfolioSummaryService.js`):**
+
+```javascript
+/**
+ * Compute realtime portfolio totals for a target currency.
+ * All FX conversion applied server-side before serialization.
+ * @param {string} targetCurrency - Target currency code (default: EUR)
+ * @returns {Promise<object>}
+ */
+export async function getPortfolioSummary(targetCurrency = 'EUR') {
+  // 1. Fetch all active investments with current prices
+  const investments = await investmentRepository.getAll();
+  
+  // 2. Group by asset class
+  // 3. For each group: aggregate values in their native currency
+  // 4. Convert group totals to target currency (single FX call per group, not per investment)
+  // 5. Return { currency, computed_at, totals, summaries }
+  //
+  // Invariant: sum(summaries[].currentValue) === totals.currentValue
+}
+```
+
+**Frontend Hook:**
+
+```typescript
+// apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts
+export function usePortfolioSummaryQuery(currency = 'EUR') {
+  return useQuery({
+    queryKey: ['portfolio-summary', currency],
+    queryFn: () => apiClient.getPortfolioSummary({ currency }),
+    staleTime: 60_000, // 60 second TTL matches backend cache
+    retry: 1,
+  });
+}
+```
+
+**Consumer (Dashboard):**
+
+```typescript
+function PortfolioOverviewPage() {
+  const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
+  
+  return (
+    <div>
+      <Card>Total: {summary?.totals.currentValue.toFixed(2)}</Card>
+      <Card>Invested: {summary?.totals.totalInvested.toFixed(2)}</Card>
+      <Card>Gain/Loss: {summary?.totals.totalGainLoss.toFixed(2)}</Card>
+      <Card>Return: {summary?.totals.totalReturnPct.toFixed(2)}%</Card>
+    </div>
+  );
+}
+```
+
+**Consumer (Performance Page):**
+
+```typescript
+function PerformancePage() {
+  const { data: performance } = usePortfolioPerformanceQuery(displayCurrency, period);
+  const { data: summary } = usePortfolioSummaryQuery(displayCurrency);
+  
+  // Override snapshot-era totals with realtime values
+  const metricsBlock = {
+    ...performance.metrics,
+    currentValue: summary?.totals.currentValue,
+    totalInvested: summary?.totals.totalInvested,
+    totalGainLoss: summary?.totals.totalGainLoss,
+    totalReturnPct: summary?.totals.totalReturnPct,
+  };
+  
+  return <MetricsCard metrics={metricsBlock} />;
+}
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| **No client FX loops** | Don't recompute totals client-side; always use `/api/info/portfolio-summary` |
+| **Single API call per surface** | Dashboard = 1 call, Performance = 1 call (not per-investment calls + FX magic) |
+| **Cache invalidation** | `clearInvestmentsCaches()` on investment/transaction writes clears the summary cache automatically |
+| **FX applied server-side** | All monetary values in response are pre-converted; client just renders them |
+| **Reconciliation invariant** | `sum(summaries[].currentValue) === totals.currentValue` guaranteed by service, verified by tests |
+| **Future totals surfaces** | Any new portfolio-total UI (widgets, exports, reports, etc.) must use this endpoint |
+
+### When to Use
+
+- **Dashboard overview cards** — Total value, invested, gain/loss, return %
+- **Performance page headline metrics** — Current value, invested, gain/loss, return %
+- **Portfolio export/report cover pages** — Showing summary totals
+- **Any widget/card displaying portfolio totals** — Use this endpoint
+
+### When NOT to Use
+
+- Per-investment summaries (use `GET /api/investments` and breakdown response)
+- Historical snapshot data (use `GET /api/info/portfolio-performance` snapshots array)
+- Per-asset-class drill-down (available in summaries[] array from same endpoint)
+
+### Related
+
+- [[docs/api/portfolio-summary|Portfolio Summary API]]
+- [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]]
+- [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js|Service Implementation]]
 
 ---
 

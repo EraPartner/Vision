@@ -6,10 +6,24 @@
 
 export const NET_WORTH_CACHE_TTL_MS = 300_000; // 5min
 export const PERF_CACHE_TTL_MS = 300_000; // 5min
+export const PORTFOLIO_SUMMARY_CACHE_TTL_MS = 60_000; // 1min — realtime-ish
 export const MAX_CACHE_ENTRIES = 100;
 
 export const netWorthResponseCache = new Map();
 export const perfResponseCache = new Map();
+export const portfolioSummaryCache = new Map();
+
+/**
+ * Invalidate every cache that depends on portfolio investments or transactions.
+ * Call this from controllers after any investment/transaction write so the next
+ * request recomputes from fresh DB state. Performance snapshots have their own
+ * rebuild lifecycle and are not cleared here.
+ */
+export function invalidatePortfolioCaches() {
+  portfolioSummaryCache.clear();
+  netWorthResponseCache.clear();
+  perfResponseCache.clear();
+}
 
 function pruneExpiredCacheEntries(cache) {
   const now = Date.now();

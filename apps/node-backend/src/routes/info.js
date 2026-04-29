@@ -18,11 +18,14 @@ import { Router } from 'express';
 import infoRepository from '../repositories/infoRepository.js';
 import { logger } from '../config/logger.js';
 import { getSnapshots } from '../services/portfolioPerformanceSnapshotService.js';
+import { getPortfolioSummary } from '../services/portfolio/portfolioSummaryService.js';
 import {
   netWorthResponseCache,
   perfResponseCache,
+  portfolioSummaryCache,
   NET_WORTH_CACHE_TTL_MS,
   PERF_CACHE_TTL_MS,
+  PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   setCachedData,
 } from './info/_cache.js';
 import { buildPortfolioPerformancePayload } from './info/_performanceHelpers.js';
@@ -32,6 +35,7 @@ import statisticsRouter from './info/statistics.js';
 import netWorthRouter from './info/netWorth.js';
 import ratesRouter from './info/rates.js';
 import performanceRouter from './info/performance.js';
+import portfolioSummaryRouter from './info/portfolioSummary.js';
 import maintenanceRouter from './info/maintenance.js';
 
 const router = Router();
@@ -40,6 +44,7 @@ router.use('/', statisticsRouter);
 router.use('/', netWorthRouter);
 router.use('/', ratesRouter);
 router.use('/', performanceRouter);
+router.use('/', portfolioSummaryRouter);
 router.use('/', maintenanceRouter);
 
 async function warmNetWorthCache(targetCurrency) {
@@ -66,15 +71,26 @@ async function warmPortfolioPerformanceCache(targetCurrency) {
   }
 }
 
+async function warmPortfolioSummaryCache(targetCurrency) {
+  try {
+    const payload = await getPortfolioSummary(targetCurrency);
+    setCachedData(portfolioSummaryCache, targetCurrency, payload, PORTFOLIO_SUMMARY_CACHE_TTL_MS);
+    logger.info('Portfolio-summary cache warmed', { targetCurrency, count: payload.summaries.length });
+  } catch (err) {
+    logger.error('Failed to warm portfolio-summary cache', { error: err.message });
+  }
+}
+
 /**
- * Pre-warm the net-worth and portfolio-performance caches so the first
- * request after startup is served instantly from memory.
- * Both warmers run in parallel; failures are isolated per cache.
+ * Pre-warm the net-worth, portfolio-performance, and portfolio-summary caches
+ * so the first request after startup is served instantly from memory.
+ * Warmers run in parallel; failures are isolated per cache.
  */
 export async function warmInfoCaches(targetCurrency = 'EUR') {
   await Promise.allSettled([
     warmNetWorthCache(targetCurrency),
     warmPortfolioPerformanceCache(targetCurrency),
+    warmPortfolioSummaryCache(targetCurrency),
   ]);
 }
 

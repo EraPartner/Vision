@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, PieChart as PieChartIcon, Trash2, RefreshCw, Loader2, ArrowUpRight, Clock } from "lucide-react";
 import { DonutChart, ChartLegend, type ChartLegendItem } from "@/components/charts";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/components/portfolio/InvestmentDetailDialog";
@@ -48,9 +49,10 @@ export default function PortfolioOverviewPage() {
   const targetCurrency = appSettings.defaultCurrency || 'EUR';
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const {
-    summaries, totalGainLoss, transactions,
+    summaries, transactions,
     deleteInvestment, refreshPrices, isRefreshingPrices
   } = usePortfolio();
+  const { data: portfolioSummary } = usePortfolioSummaryQuery(targetCurrency);
   const isOnline = useOnlineStatus();
   const { confirm, ConfirmDialog } = useConfirmDialog();
   const PORTFOLIO_WIDGETS = useMemo(() => getPortfolioWidgets(t), [t]);
@@ -81,7 +83,21 @@ export default function PortfolioOverviewPage() {
 
   const assetClassGroups = useMemo(() => getAssetClassGroups(t), [t]);
 
-  const totalsAndDerived = useMemo(() => {
+  // Source of truth for totals: backend /api/info/portfolio-summary.
+  // Falls back to a fresh frontend reduce while the query is loading so the
+  // dashboard can still render. Once the query resolves, the BE response
+  // overrides — guaranteeing parity with the performance page.
+  const totals = portfolioSummary?.totals;
+  const totalPortfolioValueInTarget = totals?.totalPortfolioValue ?? 0;
+  const totalInvested = totals?.totalInvested ?? 0;
+  const totalGainLossInTarget = totals?.totalGain ?? 0;
+  const totalRealizedGainInTarget = totals?.totalRealizedGain ?? 0;
+  const totalUnrealizedGainInTarget = totals?.totalUnrealizedGain ?? 0;
+  const totalFeesInTarget = totals?.totalFees ?? 0;
+  const totalTaxesInTarget = totals?.totalTaxes ?? 0;
+  const totalIncome = totals?.totalIncome ?? 0;
+
+  const allocationAndNews = useMemo(() => {
     const classToGroup = new Map<string, string>();
     for (const [group, classes] of Object.entries(assetClassGroups)) {
       for (const cls of classes) {
@@ -92,45 +108,16 @@ export default function PortfolioOverviewPage() {
     const allocationByGroup = new Map<string, number>();
     const newsSymbols: string[] = [];
 
-    const totals = summaries.reduce((acc, summary) => {
+    for (const summary of summaries) {
       const currentValueInTarget = convertToTarget(summary.currentValue, summary.currency);
-      const totalBuyCostInTarget = convertToTarget(summary.totalBuyCost, summary.currency);
-      const totalIncomeInTarget = convertToTarget(summary.totalIncome, summary.currency);
-      const totalGainInTarget = convertToTarget(summary.totalGain, summary.currency);
-      const realizedGainInTarget = convertToTarget(summary.realizedGain, summary.currency);
-      const unrealizedGainInTarget = convertToTarget(summary.unrealizedGain, summary.currency);
-      const feesInTarget = convertToTarget(summary.totalFees, summary.currency);
-      const taxesInTarget = convertToTarget(summary.totalTaxes, summary.currency);
-
-      acc.totalInvested += totalBuyCostInTarget;
-      acc.totalIncome += totalIncomeInTarget;
-      acc.totalPortfolioValueInTarget += currentValueInTarget;
-      acc.totalGainLossInTarget += totalGainInTarget;
-      acc.totalRealizedGainInTarget += realizedGainInTarget;
-      acc.totalUnrealizedGainInTarget += unrealizedGainInTarget;
-      acc.totalFeesInTarget += feesInTarget;
-      acc.totalTaxesInTarget += taxesInTarget;
-
       const group = classToGroup.get(summary.assetClass);
       if (group) {
         allocationByGroup.set(group, (allocationByGroup.get(group) || 0) + currentValueInTarget);
       }
-
       if (summary.symbol && newsSymbols.length < 10) {
         newsSymbols.push(summary.symbol);
       }
-
-      return acc;
-    }, {
-      totalInvested: 0,
-      totalIncome: 0,
-      totalPortfolioValueInTarget: 0,
-      totalGainLossInTarget: 0,
-      totalRealizedGainInTarget: 0,
-      totalUnrealizedGainInTarget: 0,
-      totalFeesInTarget: 0,
-      totalTaxesInTarget: 0,
-    });
+    }
 
     const allocationData = Object.keys(assetClassGroups)
       .map((group) => ({
@@ -139,27 +126,12 @@ export default function PortfolioOverviewPage() {
       }))
       .filter((entry) => entry.value > 0);
 
-    return {
-      ...totals,
-      newsSymbols,
-      allocationData,
-    };
+    return { newsSymbols, allocationData };
   }, [summaries, convertToTarget, assetClassGroups]);
 
-  const {
-    totalInvested,
-    totalIncome,
-    totalPortfolioValueInTarget,
-    totalGainLossInTarget,
-    totalRealizedGainInTarget,
-    totalUnrealizedGainInTarget,
-    totalFeesInTarget,
-    totalTaxesInTarget,
-    newsSymbols,
-    allocationData,
-  } = totalsAndDerived;
+  const { newsSymbols, allocationData } = allocationAndNews;
 
-  const gainPercent = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
+  const gainPercent = totals?.totalReturnPct ?? 0;
 
   const performers = useMemo(() => {
     const eligible = summaries

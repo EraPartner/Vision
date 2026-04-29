@@ -143,8 +143,81 @@ export function getPortfolioPerformance(params?: {
         gainLoss: number;
         gainLossPercent: number;
     }>;
+    totals?: PortfolioSummaryTotals;
 }> {
     return requestWithQuery('/api/info/portfolio-performance', params);
+}
+
+export interface PortfolioSummaryTotals {
+    totalPortfolioValue: number;
+    totalInvested: number;
+    totalGainLoss: number;
+    totalRealizedGain: number;
+    totalUnrealizedGain: number;
+    totalGain: number;
+    totalIncome: number;
+    totalFees: number;
+    totalTaxes: number;
+    totalReturnPct: number;
+}
+
+export interface PortfolioSummaryItem {
+    id: number;
+    name: string;
+    symbol?: string;
+    asset_class: string;
+    assetClass: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    description?: string;
+    notes?: string;
+    location?: string;
+    municipality?: string;
+    cadastral_income?: number;
+    municipality_tax_rate?: number;
+    maturity_date?: string;
+    maturityDate?: string;
+    price_provider?: string;
+    price_provider_id?: string;
+    price_updated_at?: string;
+    /** Display currency — every monetary field on this object is in this currency. */
+    currency: string;
+    /** The investment's native currency (for label display only). */
+    originalCurrency: string;
+    totalUnits: number;
+    currentPrice: number;
+    current_price: number;
+    interestRate: number;
+    interest_rate: number;
+    totalInvested: number;
+    totalBuyCost: number;
+    totalSellProceeds: number;
+    currentValue: number;
+    totalFees: number;
+    totalTaxes: number;
+    totalDividends: number;
+    totalIncome: number;
+    avgCostBasis: number;
+    realizedGain: number;
+    unrealizedGain: number;
+    totalGain: number;
+    gainLoss: number;
+    gainLossPercent: number;
+    accruedInterest: number;
+    projectedAnnualInterest: number;
+    totalAppreciation: number;
+}
+
+export interface PortfolioSummaryResponse {
+    currency: string;
+    computed_at: string;
+    totals: PortfolioSummaryTotals;
+    summaries: PortfolioSummaryItem[];
+}
+
+export function getPortfolioSummary(params?: { currency?: string }): Promise<PortfolioSummaryResponse> {
+    return requestWithQuery('/api/info/portfolio-summary', params);
 }
 
 export function getNetWorth(params?: {

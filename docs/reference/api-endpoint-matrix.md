@@ -14,7 +14,7 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> All 141 API endpoints across 20 route files (updated 2026-04-28 — Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
+> All 150 API endpoints across 20 route files (updated 2026-04-29 — Phase 14 adds portfolio-summary realtime totals endpoint; Phase 13 adds `category_ids` and `transaction_type` query params to `GET /api/transactions` for pivot table drillthrough; unifies export endpoint filters with `GET /api/transactions` by delegating to shared `buildTransactionWhere`, enabling `transaction_id`, `recipient_id`, `recipient_name`, `search`, and `transaction_type` on export endpoints; adds `bank_accounts` and `category_ids` multi-select params to both list and export for flexible filtering via UI pickers; Phase 7 adds filter exclusions (`excludedCategoryIds`, `excludedRecipientIds`) to report endpoints with filter impact comparison view; adds `GET /api/recipients/clusters` for merge candidate identification; Phase E adds cache-aware forecast endpoint with 6-hour TTL materialized cache; Phase D adds persisted accuracy metrics endpoint; Phase 9 — aggregation shadow cutover complete; Phase F adds 4 admin endpoints for provider health, endpoint liveness, and metrics; Phase 10 adds multi-method cash flow forecast endpoint; Phase C adds dashboard frontend visualization for Phase 10 forecast; Phase 5 slim-down removes legacy GET `/api/reports/financial` endpoint; bank reconciliation removed). Use this as a quick reference to find any endpoint.
 > 
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -235,9 +235,9 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D) | — | [[docs/api/aggregations\|Aggregations]] |
 | GET | `/api/aggregations/recipient-pivot` | Per-recipient spending keyed by period (monthly/yearly), supports date-range filter; powers custom saved-chart recipient series | — | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (14 endpoints — Phase 9 Aggregation Cutover)
+## Info/Statistics (15 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
 
-Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints.
+Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics.
 
 | Method | Path | Description | Rate Limit | Doc |
 |--------|------|-------------|------------|-----|
@@ -255,6 +255,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | POST | `/api/info/inflation-rates/refresh` | Refresh inflation | admin | [[docs/api/info\|Info]] |
 | POST | `/api/info/refresh-views` | Refresh materialized views | — | [[docs/api/info\|Info]] |
 | GET | `/api/info/portfolio-performance` | Performance snapshots, metrics, heatmap | 30 req/min | [[docs/api/info\|Info]] |
+| GET | `/api/info/portfolio-summary` | Realtime portfolio totals (single source of truth for dashboard + performance) | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
 ## AI Chat (9 endpoints + 30 tool-calling tools)
 
@@ -314,10 +315,10 @@ Electron-specific inter-process communication for desktop features (backup, rest
 | Health | 2 | 0 |
 | Aggregations (Phase 2/6/10/D) | 10 | 0 |
 | Reports (Phase 3/7) | 3 | 0 |
-| Info/Statistics | 14 | 5 |
+| Info/Statistics (Phase 14) | 15 | 5 |
 | AI Chat | 9 | 2 |
 | IPC Handlers (Phase 1+2) | 8 | 0 |
-| **Total** | **149** | **10** |
+| **Total** | **150** | **10** |
 
 ## Phase G Endpoint Consolidation (April 2026)
 

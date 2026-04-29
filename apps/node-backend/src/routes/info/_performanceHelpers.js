@@ -5,7 +5,8 @@
  *   - final payload assembly (metrics + heatmap + breakdown summary)
  */
 
-import { computeMetrics, computeHeatmap, getBreakdownSummary } from '../../services/portfolioPerformanceSnapshotService.js';
+import { computeMetrics, computeHeatmap } from '../../services/portfolioPerformanceSnapshotService.js';
+import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
 import { downsampleLTTB } from '../../utils/downsample.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 
@@ -54,7 +55,7 @@ function filterSnapshotsByPeriod(snapshots, period) {
 }
 
 export async function buildPortfolioPerformancePayload(targetCurrency, startDate, endDate, allSnapshots, period) {
-  const metrics = computeMetrics(allSnapshots);
+  const snapshotMetrics = computeMetrics(allSnapshots);
   const heatmap = computeHeatmap(allSnapshots);
 
   const periodFiltered = filterSnapshotsByPeriod(allSnapshots, period);
@@ -66,7 +67,21 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
     (item) => item.value,
   );
 
-  const breakdownSummary = await getBreakdownSummary(targetCurrency);
+  // Realtime summary is the source of truth for current totals so the
+  // performance headline cards always reconcile with the dashboard. The
+  // historical-only fields (annualizedReturn, realReturnPct, cumulativeInflation)
+  // still come from the snapshot timeseries since they need a date span.
+  const liveSummary = await getPortfolioSummary(targetCurrency);
+  const t = liveSummary.totals;
+  const metrics = snapshotMetrics
+    ? {
+        ...snapshotMetrics,
+        currentValue: t.totalPortfolioValue,
+        totalInvested: t.totalInvested,
+        totalGainLoss: t.totalGainLoss,
+        totalReturnPct: t.totalReturnPct,
+      }
+    : null;
 
   return {
     currency: targetCurrency,
@@ -75,6 +90,17 @@ export async function buildPortfolioPerformancePayload(targetCurrency, startDate
     snapshots,
     metrics,
     heatmap,
-    breakdownSummary,
+    breakdownSummary: liveSummary.summaries.map((s) => ({
+      id: s.id,
+      name: s.name,
+      symbol: s.symbol,
+      assetClass: s.asset_class,
+      currency: s.originalCurrency,
+      currentValue: s.currentValue,
+      totalInvested: s.totalInvested,
+      gainLoss: s.gainLoss,
+      gainLossPercent: s.gainLossPercent,
+    })),
+    totals: liveSummary.totals,
   };
 }

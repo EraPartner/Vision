@@ -129,6 +129,7 @@ export const apiClient = {
     getRecipientInsights: (params?: Parameters<typeof agg.getAggregationRecipientInsights>[0]) =>
         agg.getAggregationRecipientInsights(params).then(r => r.data),
     getPortfolioPerformance: info.getPortfolioPerformance,
+    getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
     refreshMaterializedViews: info.refreshMaterializedViews,
     getExchangeRates: info.getExchangeRates,
@@ -217,5 +218,5 @@ export type {
 } from '@/types/aiChat';
 export type { SplitItem, SplitPayment } from '@/lib/api/splits';
 export type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate, RecipientCluster, PatternSuggestion } from '@/lib/api/recipients';
-export type { ExchangeRate, ExchangeRatesData } from '@/lib/api/info';
+export type { ExchangeRate, ExchangeRatesData, PortfolioSummaryItem, PortfolioSummaryResponse, PortfolioSummaryTotals } from '@/lib/api/info';
 export type { WatchlistItem, WatchlistCreate, WatchlistUpdate, WatchlistListResponse } from '@/types/watchlist';

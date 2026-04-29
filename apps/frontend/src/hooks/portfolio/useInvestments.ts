@@ -16,6 +16,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 export const INVESTMENTS_QUERY_KEY = ['investments'] as const;
 export const PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX = 'portfolio-transactions';
+export const PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX = 'portfolio-summary';
+export const PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX = 'portfolio-performance';
 
 export function useInvestmentsQuery() {
   return useQuery({
@@ -57,6 +59,8 @@ export function useInvestmentMutations() {
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: INVESTMENTS_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: [PORTFOLIO_TRANSACTIONS_QUERY_KEY_PREFIX] });
+    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_SUMMARY_QUERY_KEY_PREFIX] });
+    queryClient.invalidateQueries({ queryKey: [PORTFOLIO_PERFORMANCE_QUERY_KEY_PREFIX] });
   }, [queryClient]);
 
   const addInvestmentMutation = useMutation({
