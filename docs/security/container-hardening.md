@@ -3,7 +3,8 @@ title: Container Hardening
 type: security
 status: active
 date: 2026-04-25
-tags: [security, docker, containers, hardening, defense-in-depth]
+updated: 2026-04-29
+tags: [security, docker, containers, hardening, defense-in-depth, trivy-scan]
 description: Docker container hardening posture — non-root, dropped capabilities, read-only filesystem, resource ceilings, healthcheck, CI image scanning.
 aliases: [container security, docker hardening, container posture]
 ---
@@ -38,16 +39,22 @@ Host loopback (`127.0.0.1:3002`) → docker-proxy → hardened container. The co
 
 ## CI Image Scanning
 
-Trivy runs on every push to `main` and on every PR (`.github/workflows/docker-scan.yml`):
+Trivy runs on every push to `main` and on every PR (`.github/workflows/ci.yml:206`). As of 2026-04-29, Trivy now **blocks the CI build** on CRITICAL or HIGH severity vulnerabilities:
 
 ```yaml
+aquasecurity/trivy-action@0.28.0
 severity: CRITICAL,HIGH
 exit-code: '1'
 ignore-unfixed: true
 vuln-type: os,library
 ```
 
-`ignore-unfixed: true` keeps CI green for CVEs that have no upstream patch yet — those are tracked manually instead of blocking unrelated work.
+**Configuration:**
+- `exit-code: '1'` — Blocks CI/CD pipeline if CRITICAL or HIGH CVEs are detected
+- `ignore-unfixed: true` — Allows passing if CVEs have no upstream patch yet (tracked separately for later resolution)
+- `aquasecurity/trivy-action@0.28.0` — Pinned version (not floating `@master`) to prevent supply-chain risk
+
+This ensures no images with known critical/high vulnerabilities reach production.
 
 ## Out of Scope (Today)
 

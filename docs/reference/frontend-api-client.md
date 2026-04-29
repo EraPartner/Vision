@@ -3,9 +3,9 @@ title: Frontend API Client Architecture
 type: reference
 status: active
 date: 2026-04-22
-updated: 2026-04-28
-tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups]
-description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter.
+updated: 2026-04-29
+tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
+description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
 related_code:
   - apps/frontend/src/lib/api/types.ts
@@ -104,9 +104,9 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 export const MAX_RETRIES = 2;
 export const RETRYABLE_STATUS_CODES = [408, 429, 502, 503, 504];
 
-export async function backoffDelay(attempt: number): Promise<void> {
-  // Exponential backoff with jitter
-  const ms = 500 * Math.pow(2, attempt) + Math.random() * 200;
+export async function backoffDelay(attempt: number, baseMs: number = 500): Promise<void> {
+  // Exponential backoff with jitter, capped at MAX_BACKOFF_MS (30s)
+  const ms = Math.min(baseMs * Math.pow(2, attempt) + Math.random() * 200, MAX_BACKOFF_MS);
   await new Promise(r => setTimeout(r, ms));
 }
 
@@ -131,6 +131,7 @@ export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
 **Key features:**
 - Single `request<T>` function for all endpoint calls
 - Automatic retry on 408, 429, 502, 503, 504
+- Exponential backoff (base 500ms, doubled per attempt, jitter ±200ms) capped at 30s maximum
 - 30s timeout by default (per-call override supported)
 - AbortController support for cancellation
 - Envelope unwrapping: `{ ok, data/error }` → `data` or throws `ApiClientError`
@@ -206,7 +207,7 @@ Previous monolithic `api.ts` (1553 lines) split into 13 domain modules:
 | `settings.ts` | getSettings, getSetting, saveSetting, saveSettingsBulk | ~35 |
 | `aggregations.ts` | getCategoryAggregations, getRecipientAggregations, getMonthlyAggregations, getRecurringPatterns | ~60 |
 | `charts.ts` | getSavedCharts, getSavedChart, createSavedChart, updateSavedChart, deleteSavedChart | ~35 |
-| `market.ts` | searchMarket, getMarketNews | ~25 |
+| `market.ts` | searchMarket (2026-04-29), getMarketQuotes, getMarketNews, createWatchlistItem | ~40 |
 | `ai.ts` | chatMessage, createConversation, getConversations, updateConversation | ~90 |
 | `portfolio.ts` | getPortfolioTransactions, getPortfolioTransactionsBulk, createPortfolioTransaction, updatePortfolioTransaction, deletePortfolioTransaction | ~70 |
 | `info.ts` | getStatistics, getSupportedParsers, getBanks, getTransactionSummary, getNetWorth, refreshNetWorth | ~80 |

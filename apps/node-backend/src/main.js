@@ -47,6 +47,7 @@ import { wrapResponse } from './middleware/envelope.js';
 import { requestId } from './middleware/requestId.js';
 import { requestMetrics } from './middleware/requestMetrics.js';
 import { refreshCashflowForecastMc } from './jobs/refreshCashflowForecastMc.js';
+import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -414,8 +415,10 @@ app.use(createErrorHandler(() => settings.isProduction()));
 const PORT = settings.server.port;
 const HOST = settings.server.host;
 
-// Exchange rate refresh interval handle
+// Background interval handles — captured here so graceful shutdown can clear them.
 let exchangeRateRefreshInterval = null;
+let quotesRefreshInterval = null;
+let cashflowForecastRefreshInterval = null;
 
 // ── Boot instrumentation ───────────────────────────────────────────────────
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== '0';
@@ -580,7 +583,7 @@ async function start() {
       }, 12 * 60 * 60 * 1000); // every 12 hours
 
       // Schedule hourly quote refresh for currently-held investments
-      setInterval(() => {
+      quotesRefreshInterval = setInterval(() => {
         refreshActiveHoldingQuotes().catch((err) => {
           logger.error('Periodic quote refresh failed', { error: err.message });
         });
@@ -588,7 +591,7 @@ async function start() {
 
       // Nightly cashflow forecast MC cache pre-warm (runs 24h after startup,
       // then every 24h so daytime requests hit cache instead of re-running MC).
-      setInterval(() => {
+      cashflowForecastRefreshInterval = setInterval(() => {
         refreshCashflowForecastMc().catch((err) => {
           logger.error('Nightly cashflow forecast MC refresh failed', { error: err.message });
         });
@@ -604,6 +607,9 @@ async function start() {
 async function shutdown() {
   logger.info('Shutting down...');
   if (exchangeRateRefreshInterval) clearInterval(exchangeRateRefreshInterval);
+  if (quotesRefreshInterval) clearInterval(quotesRefreshInterval);
+  if (cashflowForecastRefreshInterval) clearInterval(cashflowForecastRefreshInterval);
+  cancelPendingAggregationRefresh();
   await Promise.allSettled([closePool(), closePuppeteerBrowser()]);
   process.exit(0);
 }

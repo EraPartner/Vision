@@ -30,11 +30,13 @@ export const MAX_RETRIES = 2;
 /** HTTP status codes that are safe to retry */
 export const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
 
+const MAX_BACKOFF_MS = 30_000;
+
 /**
- * Sleep for exponential backoff: base * 2^attempt (with jitter).
+ * Sleep for exponential backoff: base * 2^attempt (with jitter), capped at MAX_BACKOFF_MS.
  */
 export function backoffDelay(attempt: number, baseMs: number = 500): Promise<void> {
-    const delay = baseMs * Math.pow(2, attempt) + Math.random() * 200;
+    const delay = Math.min(baseMs * Math.pow(2, attempt) + Math.random() * 200, MAX_BACKOFF_MS);
     return new Promise((resolve) => setTimeout(resolve, delay));
 }
 

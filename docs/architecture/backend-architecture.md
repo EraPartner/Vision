@@ -4,8 +4,8 @@ type: architecture
 status: active
 description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27).
 date: 2026-04-23
-last_modified: 2026-04-27
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling]
+last_modified: 2026-04-29
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -38,6 +38,21 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 7. **Info caches** — `warmInfoCaches` runs after snapshot completion
 
 **Prior issue (2026-04-25):** FX cache and backfill were fire-and-forget, causing snapshot/cache work to run before historical FX was available, producing "Historical FX missing" warnings during startup.
+
+## Graceful Shutdown (2026-04-29)
+
+SIGTERM handler in `apps/node-backend/src/main.js` clears all background timers to enable clean process exit:
+
+1. **Three background intervals** — cleared via `clearInterval()`:
+   - `exchangeRateRefreshInterval` (existing; clears hourly FX refresh)
+   - `quotesRefreshInterval` (added 2026-04-29; clears hourly active-holding quotes refresh)
+   - `cashflowForecastRefreshInterval` (added 2026-04-29; clears 24h cashflow forecast refresh)
+
+2. **Debounced aggregation refresh** — cleared via `cancelPendingAggregationRefresh()` from [[apps/node-backend/src/services/aggregationRefresh.js]]:
+   - All `setTimeout` calls in aggregationRefresh are `.unref()`-ed (added 2026-04-29) so they don't block exit
+   - Pending debounce timer explicitly cancelled on shutdown
+
+**Outcome:** SIGTERM causes clean shutdown within ~1s even with pending background work. No "process still running after 10s" warnings or orphaned Bun processes.
 
 ## Monetary Precision (Phase 9)
 

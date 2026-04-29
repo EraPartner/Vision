@@ -3,9 +3,9 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-04-17
-last_modified: 2026-04-28
-updated: 2026-04-28
-tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection]
+last_modified: 2026-04-29
+updated: 2026-04-29
+tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts
 aliases: [watch list, price alerts, investment tracking]
 related_code:
@@ -107,6 +107,14 @@ Watchlist prices are updated when:
 1. The user manually refreshes investment prices via `POST /api/investments/refresh-prices`
 2. The price provider service fetches live prices for all tracked symbols
 3. **Phase 3.6**: WatchlistPage uses `useQuery({ queryKey: ["watchlist-quotes", symbols], queryFn: () => apiClient.getMarketQuotes(symbols) })` with 60s refetch interval for automatic market quote updates
+
+## API Client Migration (2026-04-29)
+
+**AddToWatchlistDialog** refactored to use encapsulated `apiClient` methods instead of raw `fetch()` calls:
+- Replaced 3 raw `fetch()` calls with `searchMarket()`, `getMarketQuotes()`, `createWatchlistItem()` from api client
+- Removed hardcoded `API_BASE_URL` dependency (now sourced via api client)
+- Added `MarketSearchResult` type export from `[[apps/frontend/src/lib/api/market.ts]]`
+- Dialog now benefits from shared error handling, retry logic, and timeout controls
 
 ## Offline Resilience
 

@@ -21,6 +21,19 @@ export function getMarketQuotes(
     return apiRequest(`/api/market/quote?symbols=${encodeURIComponent(symbols)}`);
 }
 
+export interface MarketSearchResult {
+    symbol: string;
+    name: string;
+    type: string;
+    exchange: string;
+}
+
+export function searchMarket(
+    query: string,
+): Promise<{ items: MarketSearchResult[] }> {
+    return apiRequest(`/api/market/search?q=${encodeURIComponent(query)}`);
+}
+
 export function getWatchlist(params?: {
     limit?: number;
     offset?: number;

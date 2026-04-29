@@ -3,8 +3,9 @@ title: ADR-023 Update Installer Checksum Verification
 type: adr
 status: Accepted
 date: 2026-04-19
-tags: [adr, electron, updates, security, supply-chain, checksums, phase-9]
-description: Verify SHA256 of downloaded update installers against sibling .sha256 artifacts on GitHub releases before extraction
+updated: 2026-04-29
+tags: [adr, electron, updates, security, supply-chain, checksums, phase-9, install-script, interactive-confirmation]
+description: Verify SHA256 of downloaded update installers against sibling .sha256 artifacts on GitHub releases before extraction. (2026-04-29: install.sh now adds interactive checksum confirmation gate via VISION_BREW_INSTALL_AUTO_CONFIRM env var)
 aliases: [adr-023, installer checksum, update verification, supply-chain security]
 ---
 
@@ -189,8 +190,31 @@ Can be automated in GitHub Actions:
       vision-1.0.0.zip.sha256
 ```
 
+## Install Script Enhancement (2026-04-29)
+
+The primary `install.sh` script (for Homebrew setup) now includes an interactive checksum verification gate:
+
+When `VISION_BREW_INSTALL_SHA256` is not set:
+1. Script downloads the Homebrew installer
+2. Prints the SHA-256 hash to stdout
+3. Prompts user: `Continue and execute this installer? [y/N]`
+4. Waits for input from `/dev/tty` (interactive terminal)
+5. **Only proceeds on explicit `y`, `Y`, `yes`, or `YES`** — aborts on any other input
+
+**Environment Variables:**
+- `VISION_BREW_INSTALL_SHA256` — If set, verification is automatic (no prompt); aborts if hash doesn't match
+- `VISION_BREW_INSTALL_AUTO_CONFIRM=1` — Skips the interactive prompt for CI/automation (equivalent to answering `yes`)
+
+**Behavior:**
+- User is forced to visually inspect the printed hash (opportunity to cross-check against `homebrew.sh` or release notes)
+- No silent proceed-on-no-answer — default is abort (safer than default-yes)
+- Backward compatible: scripts supplying `VISION_BREW_INSTALL_SHA256` or `VISION_BREW_INSTALL_AUTO_CONFIRM` are unaffected
+
+This addresses the supply-chain risk where an attacker could replace the Homebrew installer without the user noticing the hash changed.
+
 ## Related
 
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Complements sandbox isolation with integrity verification
 - [[docs/security/data-protection|Data Protection Policy]] — Part of supply-chain security posture
 - [[docs/architecture/electron-desktop-app|Electron Desktop App Architecture]] — Update flow architecture
+- [[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038: Dependency Slim Down]] — Parallel supply-chain hardening effort

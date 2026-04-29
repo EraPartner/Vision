@@ -146,12 +146,11 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          # Override image tag so compose uses the locally built image
+          # Override image tag so compose uses the locally built image.
+          # Compose auto-loads variables from the .env file written above,
+          # so we deliberately do not duplicate them in an env: block here.
           export VISION_IMAGE=vision:ci
           docker compose -f docker-compose.yml up -d
-        env:
-          POSTGRES_PASSWORD: ci_test_password
-          SECRET_KEY: ci_test_secret_key_minimum_32_chars_!
 
       - name: Wait for /health to respond
         run: |
@@ -197,13 +196,14 @@ jobs:
           cache-from: type=gha
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: vision:scan
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: "0"
+          exit-code: "1"
+          ignore-unfixed: true
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3

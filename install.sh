@@ -38,18 +38,35 @@ EOF
   curl -fsSL --proto '=https' --tlsv1.2 \
     https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh \
     -o "$BREW_INSTALL_TMP"
+  ACTUAL_SHA="$(shasum -a 256 "$BREW_INSTALL_TMP" | awk '{print $1}')"
   echo "    Downloaded Homebrew installer to: $BREW_INSTALL_TMP"
-  echo "    SHA-256: $(shasum -a 256 "$BREW_INSTALL_TMP" | awk '{print $1}')"
+  echo "    SHA-256: $ACTUAL_SHA"
   if [ "${VISION_BREW_INSTALL_SHA256:-}" != "" ]; then
     EXPECTED="${VISION_BREW_INSTALL_SHA256}"
-    ACTUAL="$(shasum -a 256 "$BREW_INSTALL_TMP" | awk '{print $1}')"
-    if [ "$EXPECTED" != "$ACTUAL" ]; then
+    if [ "$EXPECTED" != "$ACTUAL_SHA" ]; then
       echo "ERROR: Homebrew installer checksum mismatch."
       echo "  expected: $EXPECTED"
-      echo "  actual:   $ACTUAL"
+      echo "  actual:   $ACTUAL_SHA"
       exit 1
     fi
     echo "    Checksum verified."
+  elif [ "${VISION_BREW_INSTALL_AUTO_CONFIRM:-0}" = "1" ]; then
+    echo "    VISION_BREW_INSTALL_AUTO_CONFIRM=1 — skipping interactive confirmation."
+  else
+    echo ""
+    echo "    No VISION_BREW_INSTALL_SHA256 was provided to verify the download."
+    echo "    Compare the SHA-256 above against the published value before continuing."
+    echo "    See: https://github.com/Homebrew/install"
+    echo ""
+    printf "    Continue and execute this installer? [y/N] "
+    read -r confirm </dev/tty
+    case "$confirm" in
+      y|Y|yes|YES) ;;
+      *)
+        echo "    Aborted by user."
+        exit 1
+        ;;
+    esac
   fi
   /bin/bash "$BREW_INSTALL_TMP"
   rm -f "$BREW_INSTALL_TMP"
@@ -143,7 +160,11 @@ if [ -f "$SETTINGS" ]; then
     const fs = require('fs');
     const p = process.argv[1];
     let s = {};
-    try { s = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+    try {
+      s = JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch (err) {
+      console.warn('Warning: ' + p + ' is not valid JSON (' + err.message + '); using empty settings.');
+    }
     s.repoPath = process.argv[2];
     fs.writeFileSync(p, JSON.stringify(s, null, 2));
   " "$SETTINGS" "$REPO_PATH"

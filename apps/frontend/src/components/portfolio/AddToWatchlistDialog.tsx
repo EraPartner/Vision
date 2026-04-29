@@ -26,14 +26,14 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { API_BASE_URL } from "@/lib/api";
+import {
+  searchMarket,
+  getMarketQuotes,
+  createWatchlistItem,
+  type MarketSearchResult,
+} from "@/lib/api/market";
 
-interface SearchResult {
-  symbol: string;
-  name: string;
-  type: string;
-  exchange: string;
-}
+type SearchResult = MarketSearchResult;
 
 interface AddToWatchlistDialogProps {
   open: boolean;
@@ -58,9 +58,7 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     queryFn: async () => {
       if (!debouncedQuery || debouncedQuery.length < 2) return { items: [] };
       try {
-        const res = await fetch(`${API_BASE_URL}/api/market/search?q=${encodeURIComponent(debouncedQuery)}`);
-        if (!res.ok) return { items: [] };
-        return (await res.json()) as { items: SearchResult[] };
+        return await searchMarket(debouncedQuery);
       } catch {
         return { items: [] };
       }
@@ -75,10 +73,8 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
     queryFn: async () => {
       if (!selectedAsset?.symbol) return null;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/market/quote?symbols=${selectedAsset.symbol}`);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.quotes?.[0] || null;
+        const data = await getMarketQuotes(selectedAsset.symbol);
+        return data.quotes?.[0] ?? null;
       } catch {
         return null;
       }
@@ -103,21 +99,15 @@ export function AddToWatchlistDialog({ open, onOpenChange }: AddToWatchlistDialo
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/watchlist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: selectedAsset.name,
-          symbol: selectedAsset.symbol,
-          asset_class: assetClass,
-          target_price: parseDecimal(targetPrice),
-          currency,
-          notes: notes || null,
-          price_provider_id: selectedAsset.symbol,
-        }),
+      await createWatchlistItem({
+        name: selectedAsset.name,
+        symbol: selectedAsset.symbol,
+        asset_class: assetClass,
+        target_price: parseDecimal(targetPrice),
+        currency,
+        notes: notes || undefined,
+        price_provider_id: selectedAsset.symbol,
       });
-
-      if (!res.ok) throw new Error("Failed to add to watchlist");
 
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       toast.success(t('addWatchlist.success'));

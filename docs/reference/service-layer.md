@@ -3,9 +3,9 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-04-26
-tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline]
-description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, and AI Chat service.
+last_modified: 2026-04-29
+tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown]
+description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, and aggregationRefresh cancellation support (2026-04-29).
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -733,6 +733,33 @@ Maps Ollama errors to `AiChatServiceError` with HTTP status:
 **Impact:** Net worth endpoint (`GET /api/info/net-worth`) no longer makes requests to price providers at query time. All investment values are pre-computed daily by the snapshot service and read directly from the database. This eliminates latency/network dependency at request time, making the endpoint consistently fast regardless of portfolio size or number of price providers.
 
 See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapshot-backed architecture.
+
+---
+
+## aggregationRefresh.js (2026-04-29)
+
+**File:** [[apps/node-backend/src/services/aggregationRefresh.js]]  
+**Purpose:** Manages debounced and deferred refresh scheduling for aggregation materialized views without blocking server shutdown.
+
+### Exported Functions
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `scheduleAggregationRefresh` | `() => void` | Debounced refresh trigger (1s delay, `.unref()` timer) |
+| `refreshPhase1Views` | `() => Promise<void>` | Runs materialized view refresh + logs |
+| `cancelPendingAggregationRefresh` | `() => void` | Clears pending debounce timer (new in 2026-04-29) |
+
+### Key Behavior
+
+- **Debounced scheduling** via module-level `setTimeout` with 1s delay (`.unref()`-ed to not block process exit)
+- **Deferred refresh timing** in `refreshPhase1Views` uses `.unref()`-ed timer for background refresh scheduling
+- **Graceful shutdown** — `main.js` calls `cancelPendingAggregationRefresh()` during shutdown to clear pending timers before exit
+- **No blocking:** All timers are `.unref()`-ed, so SIGTERM exits cleanly even with pending aggregation work
+
+### Dependencies
+- `materializedViewService.js`, `connection.js`, `logger.js`
+
+---
 
 ## Related Documentation
 

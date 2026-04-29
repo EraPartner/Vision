@@ -86,11 +86,12 @@ async function refreshPhase1Views() {
     phase1InFlight = false;
     if (phase1Queued) {
       phase1Queued = false;
-      setTimeout(() => {
+      const t = setTimeout(() => {
         refreshPhase1Views().catch(err =>
           logger.error('Deferred Phase-1 refresh failed', { error: err?.message })
         );
       }, 500);
+      if (typeof t.unref === 'function') t.unref();
     }
   }
 }
@@ -123,6 +124,23 @@ export function scheduleAggregationRefresh() {
       logger.error('Scheduled Phase-1 refresh failed', { error: err?.message })
     );
   }, 1000);
+  if (typeof debounceTimer.unref === 'function') debounceTimer.unref();
 }
 
-export default { refreshAggregations, scheduleAggregationRefresh, TRIGGER_MAINTAINED_TABLES };
+/**
+ * Cancel any pending debounced Phase-1 refresh. Called from graceful
+ * shutdown so the process can exit without waiting on the debounce window.
+ */
+export function cancelPendingAggregationRefresh() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+}
+
+export default {
+  refreshAggregations,
+  scheduleAggregationRefresh,
+  cancelPendingAggregationRefresh,
+  TRIGGER_MAINTAINED_TABLES,
+};

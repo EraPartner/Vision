@@ -3,7 +3,8 @@ title: Setup Guide
 type: guide
 status: active
 date: 2026-04-21
-tags: [guide, setup, development, local, phase-1]
+updated: 2026-04-29
+tags: [guide, setup, development, local, phase-1, docker-compose, onboarding]
 description: Complete setup instructions for local development
 aliases: [setup-guide, installation, getting-started, local-dev]
 related_code: [[package.json]]
@@ -61,7 +62,9 @@ Startup flow runs automatically via `docker-entrypoint.sh`:
 3. Starts the backend application
 4. After backend start, non-blocking startup tasks run in background (cache warming, price provider refresh, Kinesis history sanitization)
 
-**Note:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been deleted. Fresh databases are bootstrapped by running `alembic/versions/0001_initial_database_schema.py`, which creates all 27 tables, enums, indexes, and triggers in a single baseline migration.
+**Note:** As of 2026-04-29, `docker-compose.dev.yml` no longer declares `vision_postgres_data_dev` as `external: true`. The volume is now auto-created by Docker Compose on first run — no manual setup needed. This fixes the "external volume not found" error on clean checkouts.
+
+**Database schema:** As of Phase 1 (2026-04-21), Alembic is the single source of schema DDL ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). The legacy `schemaInit.js` has been deleted. Fresh databases are bootstrapped by running `alembic/versions/0001_initial_database_schema.py`, which creates all 27 tables, enums, indexes, and triggers in a single baseline migration.
 
 If you are testing clean-slate startup repeatedly, prefer:
 

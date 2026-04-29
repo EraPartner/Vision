@@ -69,7 +69,16 @@ function cleanup(filePath) {
   if (!filePath) return;
   const basename = path.basename(filePath);
   if (!SAFE_BASENAME_RE.test(basename)) return;
-  void fs.promises.unlink(path.join(os.tmpdir(), basename)).catch(() => {});
+  const target = path.join(os.tmpdir(), basename);
+  void fs.promises.unlink(target).catch((err) => {
+    // ENOENT means already removed (e.g. by another handler) — silent OK.
+    if (err && err.code !== 'ENOENT') {
+      logger.warn('Failed to clean up uploaded CSV temp file', {
+        path: target,
+        error: err.message,
+      });
+    }
+  });
 }
 
 function buildImportResult(result) {
