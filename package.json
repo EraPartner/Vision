@@ -48,6 +48,9 @@
     "update": "bun update",
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts"
   },
+  "dependencies": {
+    "archiver": "^7.0.1"
+  },
   "devDependencies": {
     "concurrently": "^9.2.1",
     "openapi-typescript": "^7.13.0"
