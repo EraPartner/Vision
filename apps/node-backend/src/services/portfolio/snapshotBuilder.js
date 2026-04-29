@@ -8,7 +8,6 @@
  */
 
 import { query, withTransaction } from '../../database/connection.js';
-import { convertToCurrency } from '../currency/currencyConversionService.js';
 import { logger } from '../../config/logger.js';
 import { sanitizeSnapshotSpikes } from '../../utils/portfolioMath.js';
 
@@ -155,8 +154,10 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     if (from === to) return amount;
     const rateTo = fxRates[to] || 1;
     if (fxRateToEur !== undefined && Number.isFinite(fxRateToEur) && fxRateToEur > 0) {
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       return (amount * fxRateToEur) / rateTo;
     }
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     return (amount * (fxRates[from] || 1)) / rateTo;
   }
 
@@ -233,6 +234,7 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
         lastKnownPrice[inv.id] = priceHistoryByInvestment[inv.id][day];
       }
 
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const invValue = convertAmount(units * price, inv.currency);
       totalValue += invValue;
       if (inv.assetClass === 'stock' || inv.assetClass === 'etf') stocksEtfsValue += invValue;

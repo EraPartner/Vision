@@ -5,7 +5,7 @@
  * on a line chart, with a monthly return-% mini-table below.
  */
 
-import { escapeHtml, fmtCurrency, fmtMonthLabel, fmtPct, signClass, svgLineChart } from '../sectionHelpers.js';
+import { fmtCurrency, fmtMonthLabel, fmtPct, signClass, svgLineChart } from '../sectionHelpers.js';
 
 /**
  * @param {object | null} data  fetchPortfolioData result

@@ -3,6 +3,7 @@
  */
 
 import { Router } from 'express';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route
 import recipientRepository from '../repositories/recipientRepository.js';
 import { mergeRecipients as mergeRecipientsAtomic } from '../services/recipientMergeService.js';
 import {

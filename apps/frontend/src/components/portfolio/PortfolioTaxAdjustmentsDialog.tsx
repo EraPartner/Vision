@@ -82,7 +82,7 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
       await saveManyForYear(profile.taxYear, payload);
       toast.success(t('tax.manualAdjustmentsSaved'));
       setOpen(false);
-    } catch (err) {
+    } catch {
       toast.error(t('tax.manualAdjustmentsSaveFailed'));
     }
   }

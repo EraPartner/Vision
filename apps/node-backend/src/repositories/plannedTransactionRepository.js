@@ -130,7 +130,7 @@ export const plannedTransactionRepository = {
       const countResult = await query(countSql, params);
       total = parseInt(countResult.rows[0]?.count, 10) || 0;
     }
-    const rows = result.rows.map(({ total_count, ...row }) => row);
+    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
 
     const plannedTransactionIds = rows.map((row) => row.id);
     const executionsByPlannedTransactionId = new Map();
@@ -413,7 +413,7 @@ export const plannedTransactionRepository = {
    * @param {number} months - Forecast horizon in months (1–24)
    * @returns {Promise<Array>}
    */
-  async getForForecast(months) {
+  async getForForecast(_months) {
     const sql = `
       SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
              pt.memo, pt.is_recurring, pt.recurrence_pattern,

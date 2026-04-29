@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search, TrendingUp, TrendingDown, BarChart3, ArrowUpDown,
-  Building2, DollarSign, Activity, Clock, Newspaper, ExternalLink, Plus, Users,
+  DollarSign, Activity, Clock, Newspaper, ExternalLink, Users,
 } from "lucide-react";
 import { AreaChart, BarChart, type AreaSeries, type BarSeries } from "@/components/charts";
 import { useDebounce } from "@/hooks/useDebounce";

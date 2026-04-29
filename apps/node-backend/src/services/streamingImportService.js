@@ -288,6 +288,7 @@ export async function importCSVStreaming(filePath, bankName, customConfig = null
         current: batchEnd,
         total,
         ...results,
+        // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
         percent: Math.round(10 + (batchEnd / total) * 85),
       });
     }

@@ -4,6 +4,7 @@
 
 import { query, queryPrepared } from '../database/connection.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
+import { toDecimal, toNumber } from '../lib/money.js';
 import {
   mvAvailable,
   roundToCents,
@@ -24,7 +25,7 @@ export const statisticsRepository = {
       );
 
       const categories = buildCategoryFromConvertedRows(convertedRows);
-      const totalEur = categories.reduce((sum, cat) => sum + cat.total, 0);
+      const totalEur = toNumber(categories.reduce((sum, cat) => sum.plus(toDecimal(cat.total)), toDecimal(0)));
 
       return {
         total_transactions: parseInt(countResult.rows[0].count, 10),
@@ -226,12 +227,12 @@ export const statisticsRepository = {
       targetCurrency
     );
 
-    let total = 0;
+    let total = toDecimal(0);
     let min = Infinity;
     let max = -Infinity;
     for (const row of converted) {
       const eur = row.amount_eur;
-      total += eur;
+      total = total.plus(toDecimal(eur));
       if (eur < min) min = eur;
       if (eur > max) max = eur;
     }
@@ -240,7 +241,7 @@ export const statisticsRepository = {
     return {
       total_count: count,
       total_amount: roundToCents(total),
-      average: roundToCents(total / count),
+      average: roundToCents(total.dividedBy(count)),
       min: roundToCents(min),
       max: roundToCents(max),
     };

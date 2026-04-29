@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useBelgianTaxProfile, PENSION_SAVINGS_CAP_STANDARD, PENSION_SAVINGS_CAP_ALTERNATIVE, LIFE_INSURANCE_CAP, CHARITABLE_DONATION_MIN, CHILDCARE_DAILY_CAP_2025 } from '@/contexts/BelgianTaxProfileContext';
+import { useBelgianTaxProfile, PENSION_SAVINGS_CAP_STANDARD, PENSION_SAVINGS_CAP_ALTERNATIVE, LIFE_INSURANCE_CAP, CHILDCARE_DAILY_CAP_2025 } from '@/contexts/BelgianTaxProfileContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { numberFormatToLocale } from '@/utils/currency';

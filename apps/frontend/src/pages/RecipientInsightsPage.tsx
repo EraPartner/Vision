@@ -31,12 +31,12 @@ export default function RecipientInsightsPage() {
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
   const pageSize = appSettings.defaultPageSize;
-  const formatCurrency = (val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
+  const formatCurrency = useCallback((val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
-  }).format(val);
+  }).format(val), [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { settings } = useSettings();
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights", targetCurrency],
@@ -46,7 +46,10 @@ export default function RecipientInsightsPage() {
 
   // Check if exclusions apply
   const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-  const excludedRecipientIds = new Set(exclusionsApply ? settings.excludedRecipientIds : []);
+  const excludedRecipientIds = useMemo(
+    () => new Set(exclusionsApply ? settings.excludedRecipientIds : []),
+    [exclusionsApply, settings.excludedRecipientIds]
+  );
 
   // Filter data based on excluded recipients
   const filteredData = useMemo(() => {
@@ -125,7 +128,7 @@ export default function RecipientInsightsPage() {
         <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t, appSettings.dateFormat, appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
+  ], [t, appSettings.dateFormat, formatCurrency]);
 
   if (isLoading) {
     return (

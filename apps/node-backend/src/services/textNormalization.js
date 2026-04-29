@@ -8,10 +8,6 @@ const RECIPIENT_PREFIXES = [
   'Transfer from ', 'Transfer to ', 'Sent to ', 'Received from ',
 ];
 
-const KBC_RECIPIENT_PREFIXES = [
-  'IBAN: ', 'Virement: ', 'Virement automatique: ',
-  'Domiciliation: ', 'Creditrente ',
-];
 
 const KBC_TRANSACTION_TYPES = [
   'GELDOPNEMING', 'OVERSCHRIJVING', 'DOMICILIËRING', 'DOMICILIERING',

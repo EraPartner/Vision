@@ -26,7 +26,6 @@ import {
   resolveKinesisConfig,
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
-  getHistoricalPriceAt,
   yahooFinance,
 } from './prices/priceProviderRegistry.js';
 

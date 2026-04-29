@@ -44,15 +44,9 @@ import {
     type ProfessionalExpenseMethod,
 } from '@/contexts/BelgianTaxProfileContext';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const STEPS = ['employment', 'income', 'exemptions', 'region'] as const;
 export type Step = (typeof STEPS)[number];
-
-const STEP_LABELS: Record<Step, string> = {
-    employment: 'Employment',
-    income: 'Income',
-    exemptions: 'Deductions',
-    region: 'Region',
-};
 
 const STEP_ICONS: Record<Step, ElementType> = {
     employment: User,

@@ -35,6 +35,7 @@ export type {
     ProfessionalExpenseMethod,
     PensionScheme,
 } from '@/lib/belgianTax';
+/* eslint-disable react-refresh/only-export-components */
 export {
     computeBelgianPIT,
     BELGIAN_TAX_BRACKETS,
@@ -60,6 +61,7 @@ export {
     LATEST_TAX_YEAR,
     getTaxTable,
 } from '@/lib/belgianTax';
+/* eslint-enable react-refresh/only-export-components */
 
 interface BelgianTaxProfileContextType {
     profile: BelgianTaxProfile;
@@ -177,6 +179,7 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBelgianTaxProfile() {
     const ctx = useContext(BelgianTaxProfileContext);
     if (!ctx) throw new Error('useBelgianTaxProfile must be used within BelgianTaxProfileProvider');

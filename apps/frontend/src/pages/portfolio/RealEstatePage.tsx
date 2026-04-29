@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Trash2, Eye, TrendingUp, TrendingDown, DollarSign, Home, MapPin, Percent } from "lucide-react";
+import { Building2, Trash2, Eye, TrendingUp, DollarSign, Home, MapPin, Percent } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/components/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/components/portfolio/AddPortfolioTxnDialog";

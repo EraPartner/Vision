@@ -57,7 +57,7 @@ export default function CategoriesPage() {
                 items: items.sort((a, b) => a.detail.localeCompare(b.detail)),
                 activeCount: items.filter(i => i.is_active !== false).length,
             }));
-    }, [data?.items]);
+    }, [data]);
 
     const toggleGroup = (general: string) => {
         setExpandedGroups(prev => {

@@ -30,11 +30,6 @@ const FREQ_LABEL_KEYS: Record<string, string> = {
   custom: 'plannedPage.freq.custom',
 };
 
-const LOAN_TYPE_LABEL_KEYS: Record<string, string> = {
-  amortizing: 'plannedPage.loanType.amortizing',
-  fixed_principal: 'plannedPage.loanType.fixedPrincipal',
-  interest_only: 'plannedPage.loanType.interestOnly',
-};
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 

@@ -54,6 +54,7 @@ function fitRecurrence(y, alpha, beta, g1, g2) {
       sum += y[k] - initMean;
       cnt++;
     }
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     s1[i] = cnt > 0 ? sum / cnt : 0;
   }
   for (let i = 0; i < M2; i++) s2[i] = y[i] - initMean - s1[i % M1];

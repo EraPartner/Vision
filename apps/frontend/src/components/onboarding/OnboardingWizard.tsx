@@ -21,6 +21,7 @@ import { RestoreFromBackupCard } from "./RestoreFromBackupCard";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOnboarding() {
     const { t } = useLanguage();
     const [isComplete, setIsComplete] = useState(true);

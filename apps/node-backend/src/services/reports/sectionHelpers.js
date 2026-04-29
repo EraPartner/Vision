@@ -242,7 +242,6 @@ export function svgGenericGroupedBarChart(groups, seriesDefs) {
   );
   const numGroups = groups.length;
   const groupW = chartW / numGroups;
-  const totalBarW = Math.max(numSeries * 3 + (numSeries - 1) * 1, 1);
   const barW = Math.max(3, Math.min(14, (groupW - 6) / numSeries));
   const barGap = 1;
   const baseline = PAD_T + chartH;

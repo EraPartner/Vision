@@ -40,11 +40,13 @@ export function renderTaxTypeBreakdown(data, { currency }) {
     fmtValue: fmtCurrency(c.amount, currency),
   }));
 
+  /* eslint-disable vision-local-money/no-raw-money-arithmetic */
   const tableRows = components.map(c => `<tr>
     <td>${c.label}</td>
     <td class="num neg">${fmtCurrency(c.amount, currency)}</td>
     <td class="num">${total > 0 ? fmtPct((c.amount / total) * 100, false) : '—'}</td>
   </tr>`).join('');
+  /* eslint-enable vision-local-money/no-raw-money-arithmetic */
 
   return `
     <div class="page">

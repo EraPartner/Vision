@@ -130,12 +130,12 @@ async function buildInvestmentSummary(inv, txns, targetCurrency) {
 
   let totalUnits = 0;
   let avgCostBasis = 0;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
+  let totalBuyCost;
+  let totalSellProceeds;
   let realizedGain = 0;
   let unrealizedGain = 0;
-  let currentValue = 0;
-  let totalInvested = 0;
+  let currentValue;
+  let totalInvested;
   let accruedInterest = 0;
   let projectedInterest = 0;
 

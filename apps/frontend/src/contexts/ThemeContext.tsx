@@ -19,7 +19,6 @@ import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import { applyThemePalette, isThemeVariant, type ThemeVariant } from '@/styles/themes';
 import {
     useSettingsStore,
-    DEFAULT_THEME_SCHEDULE,
     type Theme,
     type ThemeMode,
     type ThemeSchedule,
@@ -180,6 +179,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme(): ThemeContextType {
     return useSettingsStore(
         useShallow((s) => ({

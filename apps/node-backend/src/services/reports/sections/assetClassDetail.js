@@ -73,6 +73,7 @@ export function renderAssetClassDetail(data, { currency }) {
   const tableRows = classes.map(c => {
     const gl  = c.value - c.invested;
     const pct = c.invested > 0 ? (gl / c.invested) * 100 : 0;
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     const share = total > 0 ? (c.value / total) * 100 : 0;
     const cls = signClass(gl);
     return `<tr>

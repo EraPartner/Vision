@@ -86,9 +86,10 @@ export function extractYearMonth(value) {
 
 export function buildMonthlySummary(months) {
   return {
-    total_spending: months.reduce((sum, m) => sum + m.total_spending, 0),
-    total_income: months.reduce((sum, m) => sum + m.total_income, 0),
-    net_amount: months.reduce((sum, m) => sum + m.net_amount, 0),
+    total_spending: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_spending)), toDecimal(0))),
+    total_income: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.total_income)), toDecimal(0))),
+    net_amount: toNumber(months.reduce((sum, m) => sum.plus(toDecimal(m.net_amount)), toDecimal(0))),
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     transaction_count: months.reduce((sum, m) => sum + m.transaction_count, 0),
     period_start: months[0]?.period_start,
     period_end: months[months.length - 1]?.period_end,
@@ -179,7 +180,6 @@ export async function batchConvertGroupsWithHistoricalRateFallback(groups, targe
   return groups.map((_, i) =>
     converted
       .filter(r => r[TAG] === i)
-      // eslint-disable-next-line no-unused-vars
       .map(({ [TAG]: _tag, ...rest }) => rest)
   );
 }

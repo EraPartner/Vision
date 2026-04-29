@@ -137,7 +137,7 @@ export function walkForwardBacktest({ history, methods, asOfMonth, windowMonths 
  *   windowCount?: number,
  * }} ctx
  */
-export function walkForwardBacktestRolling({ history, methods, daysBack, daysForward, windowCount = 8 }) {
+export function walkForwardBacktestRolling({ history, methods, daysBack: _daysBack, daysForward, windowCount = 8 }) {
   const now = new Date();
   const todayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const isoAt = (offset) => new Date(todayMs + offset * 86_400_000).toISOString().slice(0, 10);

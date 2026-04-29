@@ -78,7 +78,7 @@ export async function closeBrowser() {
   if (!browser) return;
   try {
     await browser.close();
-  } catch (_) {
+  } catch {
     // ignore errors during shutdown
   } finally {
     browser = null;

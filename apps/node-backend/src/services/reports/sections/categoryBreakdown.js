@@ -81,6 +81,7 @@ export function renderCategoryBreakdown(data, { currency }) {
   const tableRows = tableSource.slice(0, MAX_TABLE_ROWS).map((c, i) => {
     const rank = i + 1;
     const total = Math.abs(c.total);
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     const avg = c.count > 0 ? total / c.count : 0;
     return `
       <tr>

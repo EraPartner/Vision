@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
-import type { ImportPreviewGroup, ImportStagingRow } from "@/lib/api";
+import type { ImportStagingRow } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";

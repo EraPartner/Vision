@@ -255,7 +255,7 @@ export const transactionRepository = {
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     const rows = result.rows
       .filter((row) => row.id != null)
-      .map(({ total_count, ...row }) => row);
+      .map(({ total_count: _total_count, ...row }) => row);
 
     return { rows, total };
   },
@@ -382,7 +382,7 @@ export const transactionRepository = {
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     // Strip total_count from each row before returning
-    const rows = result.rows.map(({ total_count, ...row }) => row);
+    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
     return { rows, total };
   },
 

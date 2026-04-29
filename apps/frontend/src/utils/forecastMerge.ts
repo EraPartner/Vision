@@ -55,11 +55,6 @@ function bandBoundaryKeys(bands: Record<string, unknown>): {
     return { loKey, hiKey, loLabel, hiLabel };
 }
 
-type CoreMergeOutput<T extends MergedDay | MergedDayDate> = {
-    rows: T[];
-    series: LineSeries<T>[];
-};
-
 function buildSeries<T extends MergedDay | MergedDayDate>(
     methods: ReadonlyArray<ForecastMethod>,
     visibleMethodIds: ReadonlySet<string>,

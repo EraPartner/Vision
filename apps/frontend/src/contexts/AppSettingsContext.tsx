@@ -30,6 +30,7 @@ interface AppSettingsContextType {
 const SETTINGS_KEY = 'app_settings';
 
 /** @deprecated Import DEFAULT_APP_SETTINGS from \@/stores/settingsStore instead. */
+// eslint-disable-next-line react-refresh/only-export-components
 export { DEFAULT_APP_SETTINGS as defaultAppSettings };
 
 // ─── Provider ────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAppSettings(): AppSettingsContextType {
     return useSettingsStore(
         useShallow((s) => ({

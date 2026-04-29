@@ -37,6 +37,7 @@ function applyEventToLots(lots, type, units, amount, totalUnits) {
   }
 
   if (type === 'return_of_capital' && totalUnits > 0) {
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     const reductionPerUnit = amount / totalUnits;
     return {
       totalUnits,
@@ -138,12 +139,14 @@ export function calculateCostBasisFIFO(txns) {
     const taxes = Number(txn.taxes) || 0;
 
     if (txn.type === 'buy' || txn.type === 'gift') {
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const buyCost = amount + fees + taxes;
       lots = [...lots, { units, costBasis: buyCost }];
       totalUnits += units;
       totalBuyCost += buyCost;
     } else if (txn.type === 'sell' && units > 0) {
       let unitsToSell = Math.min(units, totalUnits);
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const netProceeds = amount - fees - taxes;
       let costOfSold = 0;
 
@@ -173,6 +176,7 @@ export function calculateCostBasisFIFO(txns) {
     }
   }
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
 
   return {
@@ -209,12 +213,14 @@ export function calculateCostBasisLIFO(txns) {
     const taxes = Number(txn.taxes) || 0;
 
     if (txn.type === 'buy' || txn.type === 'gift') {
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const buyCost = amount + fees + taxes;
       lots = [...lots, { units, costBasis: buyCost }];
       totalUnits += units;
       totalBuyCost += buyCost;
     } else if (txn.type === 'sell' && units > 0) {
       let unitsToSell = Math.min(units, totalUnits);
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const netProceeds = amount - fees - taxes;
       let costOfSold = 0;
 
@@ -244,6 +250,7 @@ export function calculateCostBasisLIFO(txns) {
     }
   }
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
 
   return {

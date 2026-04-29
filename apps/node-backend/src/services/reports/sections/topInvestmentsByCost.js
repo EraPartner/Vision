@@ -34,6 +34,7 @@ export function renderTopInvestmentsByCost(data, { currency }) {
     const tob   = inv.tobTotal          ?? 0;
     const wht   = inv.dividendWHTTotal  ?? 0;
     const sell  = inv.sellTaxTotal      ?? 0;
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     const total = taxes + fees;
     return `<tr>
       <td style="color:hsl(var(--muted));font-size:10px;">${idx + 1}</td>

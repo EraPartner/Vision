@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   TrendingUp, TrendingDown, Eye, Trash2, Calendar,
-  DollarSign, Percent, ArrowUpRight, ArrowDownRight, Clock, Pencil,
+  DollarSign, Percent, ArrowUpRight, Clock, Pencil,
 } from 'lucide-react';
 import { isUnitBased, isFixedIncome, isRealEstate } from '@/utils/assetClass';
 import { usePortfolio } from '@/hooks/usePortfolio';

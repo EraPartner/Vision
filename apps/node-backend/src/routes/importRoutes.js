@@ -14,12 +14,14 @@ import { logger } from '../config/logger.js';
 import { runImportPipeline, commitImport } from '../services/importPipeline/index.js';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
 import { createSseWriter } from '../lib/sse.js';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route
 import { listBatches, getBatch, rollbackBatch } from '../repositories/importBatchRepository.js';
 import { refreshAggregations } from '../services/aggregationRefresh.js';
 import { query } from '../database/connection.js';
 
 const router = Router();
 
+/* eslint-disable vision-local-money/no-raw-money-arithmetic */
 function v2ProgressToLegacy(ev) {
   const { phase, current = 0, total = 0, imported = 0, duplicates = 0, errors = 0 } = ev;
   const frac = total > 0 ? current / total : 0;
@@ -31,6 +33,7 @@ function v2ProgressToLegacy(ev) {
   else if (phase === 'complete') percent = 100;
   return { phase, current, total, imported, duplicates, errors, percent };
 }
+/* eslint-enable vision-local-money/no-raw-money-arithmetic */
 
 function isLikelyCsvFile(file) {
   const originalName = file?.originalname?.toLowerCase() || '';

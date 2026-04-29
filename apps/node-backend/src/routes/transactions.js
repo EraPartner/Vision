@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import { query as dbQuery } from '../database/connection.js';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route
 import transactionRepository from '../repositories/transactionRepository.js';
 import { isManualDuplicate, recordManualRawTransaction } from '../services/deduplication.js';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
@@ -273,7 +274,6 @@ router.get(
     let chunkOffset = 0;
     let runningBalance = 0;
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
         if (chunk.rows.length === 0) break;
@@ -319,7 +319,6 @@ router.get(
     const chunkSql = buildExportChunkSql(whereSql, nextParamIdx, nextParamIdx + 1);
     let chunkOffset = 0;
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const chunk = await dbQuery(chunkSql, [...params, EXPORT_CHUNK_SIZE, chunkOffset]);
         if (chunk.rows.length === 0) break;

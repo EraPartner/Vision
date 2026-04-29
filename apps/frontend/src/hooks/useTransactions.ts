@@ -2,7 +2,6 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {apiClient} from '@/lib/api';
 import type {TransactionCreate, TransactionUpdate} from '@/types/api';
 import {toast} from 'sonner';
-import {useCallback} from 'react';
 import {useLanguage} from '@/contexts/LanguageContext';
 
 interface UseTransactionsParams {

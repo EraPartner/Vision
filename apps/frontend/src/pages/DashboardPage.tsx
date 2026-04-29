@@ -188,7 +188,7 @@ export default function DashboardPage() {
 
     const recentTransactionsLoading = exclusionsApply ? recentFilteredLoading : false;
 
-    const allTransactions = transactionsData?.items || [];
+    const allTransactions = useMemo(() => transactionsData?.items || [], [transactionsData]);
 
     // Apply settings filters to transactions
     const transactions = useMemo(() => {

@@ -77,6 +77,7 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
  * Returns the preloaded value for a given settings key.
  * Returns `undefined` while loading, and `null` if the key was not found.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePreloadedSetting<T>(key: string): { value: T | null; isLoading: boolean } {
     const { rawSettings, isLoading } = useContext(SettingsPreloadContext);
     if (isLoading) return { value: null, isLoading: true };

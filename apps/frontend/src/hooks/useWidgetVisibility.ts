@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
 import logger from '@/lib/logger';
 const SETTINGS_KEY = 'widget_visibility';
@@ -53,7 +53,7 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
             listeners.delete(listener);
         };
     }, []);
-    const pageVisibility = visibility[pageKey] || {};
+    const pageVisibility = useMemo(() => visibility[pageKey] || {}, [visibility, pageKey]);
     const isVisible = useCallback(
         (widgetId: string): boolean => {
             if (widgetId in pageVisibility) return pageVisibility[widgetId];

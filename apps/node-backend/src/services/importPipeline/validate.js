@@ -55,6 +55,7 @@ export async function validateBatch({ batchId, onProgress }) {
   }
 
   logger.info('[pipeline:validate] done', { batchId, total, errors });
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   return { validated: total - errors, errors };
 }
 

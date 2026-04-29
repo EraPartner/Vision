@@ -13,7 +13,7 @@ import {
   KINESIS_DEFAULT_FROM_DATE,
   getKinesisAssetConfig,
 } from '../../config/kinesisConfig.js';
-import { toNumber, isValidPrice, normalizeHistoryPoints } from './priceCache.js';
+import { toNumber, isValidPrice } from './priceCache.js';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 

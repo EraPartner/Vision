@@ -126,7 +126,8 @@ export function validatePaymentAmount({
 export function computeSplitRemaining(split) {
   const amount = Number(split?.amount) || 0;
   const paid = Number(split?.amount_paid) || 0;
-  return roundToCents(Math.max(0, amount - paid));
+  const remaining = toDecimal(amount).minus(toDecimal(paid));
+  return roundToCents(remaining.lessThan(0) ? toDecimal(0) : remaining);
 }
 
 /**

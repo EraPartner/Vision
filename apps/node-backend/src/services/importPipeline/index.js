@@ -36,7 +36,7 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * @param {{ batchId: number, filePath: string, adapterName: string, customConfig?: object, filename?: string, sizeBytes?: number, onProgress?: Function }} args
  * @returns {Promise<{ batchId: number, rowsTotal: number, requiresReview: boolean, matchSourceCounts: object }>}
  */
-export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename, sizeBytes, onProgress }) {
+export async function prepareImport({ batchId, filePath, adapterName, customConfig, filename: _filename, sizeBytes: _sizeBytes, onProgress }) {
   const { rowsTotal } = await stageBatch({ batchId, filePath, adapterName, customConfig, onProgress });
 
   const { errors: validateErrors } = await validateBatch({ batchId, onProgress });

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { OwedSummary, TransactionSplit, TransactionSplitDetail, SplitPayment, SplitCreateInput } from '@/types/splits';
+import type { SplitCreateInput } from '@/types/splits';
 
 export function useOwedSummary() {
     return useQuery({

@@ -94,6 +94,7 @@ async function persistRefreshedPrices(prices) {
     })
   );
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   return updateResults.reduce((sum, count) => sum + count, 0);
 }
 

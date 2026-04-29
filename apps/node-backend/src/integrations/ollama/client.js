@@ -78,7 +78,7 @@ export function createOllamaClient({
       });
 
       if (!response.ok) {
-        const payload = await response.text().catch(() => '');
+        const _payload = await response.text().catch(() => '');
         throw new OllamaError(
           `Ollama ${method} ${path} failed with ${response.status}`,
           { status: response.status, code: 'HTTP_ERROR' },

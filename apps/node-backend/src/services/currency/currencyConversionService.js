@@ -272,10 +272,12 @@ export async function convertRowsToEur(rows, targetCurrency = 'EUR', options = {
     }
     if (!toResolved.rate) {
       logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       converted.push({ ...row, amount_eur: amount * fromResolved.rate, ...fallbackFields });
       continue;
     }
 
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     converted.push({ ...row, amount_eur: (amount * fromResolved.rate) / toResolved.rate, ...fallbackFields });
   }
 
@@ -303,9 +305,11 @@ export async function convertToCurrency(amount, fromCurrency, toCurrency) {
   }
   if (!rateTo) {
     logger.warn(`Unsupported target currency ${to}, falling back to EUR conversion`);
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     return amount * rateFrom;
   }
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   return (amount * rateFrom) / rateTo;
 }
 

@@ -32,7 +32,6 @@ const englishLoader = loaders.en;
 
 // Type-safe key is derived from the English dictionary at compile time.
 // We keep a static reference only to en for TypeScript — it is not bundled at runtime.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type TranslationKey = string;
 
 export interface LanguageContextType {
@@ -106,6 +105,7 @@ export function LanguageProvider({ children, language, setLanguage }: LanguagePr
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useLanguage(): LanguageContextType {
     const ctx = useContext(LanguageContext);
     if (!ctx) throw new Error('useLanguage must be used inside <LanguageProvider>');

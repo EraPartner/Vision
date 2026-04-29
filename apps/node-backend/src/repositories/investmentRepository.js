@@ -376,7 +376,7 @@ export const investmentRepository = {
 
     const result = await query(sql, params);
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count, ...row }) => row);
+    const rows = result.rows.map(({ total_count: _total_count, ...row }) => row);
     return { rows, total };
   },
 

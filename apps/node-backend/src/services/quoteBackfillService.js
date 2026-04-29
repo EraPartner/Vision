@@ -22,7 +22,6 @@ import {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const UNIT_BASED_ASSET_CLASSES = ['stock', 'etf', 'crypto', 'metals'];
 const SPIKE_RATIO_THRESHOLD = 3; // 3× single-day jump = spike
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const HOURLY_LOOKBACK_DAYS = 7;

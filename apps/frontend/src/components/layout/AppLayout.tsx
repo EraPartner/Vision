@@ -29,7 +29,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         setSettingsDefaultTab(tab);
         setSettingsOpen(true);
     };
-    const { theme, mode, schedule, setMode, setSchedule, toggleTheme } = useTheme();
+    const { mode, schedule, setMode, setSchedule } = useTheme();
     const { t } = useLanguage();
     const { isComplete: onboardingComplete, isLoading: onboardingLoading, complete: completeOnboarding } = useOnboarding();
 

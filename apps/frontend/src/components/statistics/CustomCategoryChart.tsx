@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
-import { Check, ChevronsUpDown, Plus, Settings2, X, Bookmark, Pencil, Trash2, CircleHelp } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Settings2, X, Bookmark, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LineChart, type LineSeries,
@@ -70,7 +70,7 @@ export function CustomCategoryChart({
   savedChart,
   hideSaveControls = false,
   persistSelection = false,
-  headerTooltip,
+  headerTooltip: _headerTooltip,
 }: CustomCategoryChartProps) {
   const isSavedMode = !!savedChart;
 

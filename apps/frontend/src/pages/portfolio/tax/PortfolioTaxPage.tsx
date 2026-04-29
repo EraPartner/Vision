@@ -111,7 +111,7 @@ export default function PortfolioTaxPage() {
           total: taxes + fees,
         };
       }),
-    [summaries, txYear, getAdjustment, t],
+    [summaries, txYear, getAdjustment, t, convertToTarget],
   );
 
   const totalTaxes = enrichedInvestments.reduce((s, i) => s + i.taxes, 0);

@@ -36,6 +36,7 @@ export function computeWeights(accuracyRows, methodIds) {
 
   const total = [...rawWeights.values()].reduce((s, w) => s + w, 0);
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   return new Map([...rawWeights.entries()].map(([mid, w]) => [mid, w / total]));
 }
 

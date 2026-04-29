@@ -27,6 +27,7 @@ function stats(values) {
   if (n === 0) return { mean: 0, variance: 0, std: 0, n: 0 };
   let sum = 0;
   for (const v of values) sum += v;
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   const mean = sum / n;
   let sq = 0;
   for (const v of values) {

@@ -42,17 +42,6 @@ type ForecastMode = "month" | "rolling";
 type RollingDays = 30 | 60 | 90 | 180;
 const ROLLING_PRESETS: ReadonlyArray<RollingDays> = [30, 60, 90, 180];
 
-const ALL_METHOD_IDS: readonly string[] = [
-    "simple_avg",
-    "weighted_avg",
-    "ewma",
-    "holt_winters",
-    "prophet_lite",
-    "ensemble_imse",
-    "monte_carlo_parametric",
-    "monte_carlo_block_bootstrap",
-];
-
 const DEFAULT_VISIBLE_METHOD_IDS: readonly string[] = [
     "simple_avg",
     "weighted_avg",

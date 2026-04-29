@@ -263,6 +263,7 @@ export async function refreshPrices(req, res) {
     }
   );
 
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
   const updated = updateResults.reduce((sum, n) => sum + n, 0);
   logger.info(`Refreshed prices for ${updated}/${toRefresh.length} investments`);
   clearInvestmentsCaches();

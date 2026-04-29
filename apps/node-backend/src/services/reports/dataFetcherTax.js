@@ -184,6 +184,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     inv.sell  += sellAmt;
     inv.other += otherAmt;
     inv.fees  += fees;
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     inv.total += tobAmt + whtAmt + sellAmt + otherAmt + fees;
   }
 

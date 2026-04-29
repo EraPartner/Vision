@@ -5,9 +5,9 @@
  * Deep-clones input data before passing to d3-sankey because the library
  * mutates node/link objects in-place during layout computation.
  */
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
-import type { SankeyGraph, SankeyNode, SankeyLink } from "d3-sankey";
+import type { SankeyGraph, SankeyNode } from "d3-sankey";
 import { ParentSize } from "@visx/responsive";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";

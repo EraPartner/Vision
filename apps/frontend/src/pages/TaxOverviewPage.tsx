@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
@@ -96,10 +96,10 @@ export default function TaxOverviewPage() {
 
   // Re-run the bracket calculation per year/month with the observed income to respect progressive
   // brackets — linear scaling of `totalPIT` is wrong because each bracket has a different rate.
-  function pitForGross(gross: number): number {
+  const pitForGross = useCallback((gross: number): number => {
     if (gross <= 0) return 0;
     return computeBelgianPIT({ ...profile, grossAnnualIncome: gross }).totalPIT;
-  }
+  }, [profile]);
 
   const yearlyIncome = useMemo(
     () =>
@@ -114,7 +114,7 @@ export default function TaxOverviewPage() {
           };
         })
         .filter((y) => y.income > 0),
-    [yearlyData, profile]
+    [yearlyData, pitForGross]
   );
 
   const monthlyIncomeTax = useMemo(
@@ -131,7 +131,7 @@ export default function TaxOverviewPage() {
             estimatedTax: monthlyPIT,
           };
         }),
-    [monthlyData, profile]
+    [monthlyData, pitForGross]
   );
 
   const cards = [

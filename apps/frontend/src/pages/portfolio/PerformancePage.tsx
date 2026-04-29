@@ -112,7 +112,7 @@ export default function PerformancePage() {
         return new Intl.DateTimeFormat(monthLabelLocale, { month: "short", year: "2-digit" });
     }, [monthLabelLocale, selectedPeriod]);
 
-    const snapshots = portfolioPerformanceData?.snapshots ?? [];
+    const snapshots = useMemo(() => portfolioPerformanceData?.snapshots ?? [], [portfolioPerformanceData]);
     const overallMetrics = portfolioPerformanceData?.metrics ?? null;
     const heatmapData = portfolioPerformanceData?.heatmap ?? { years: [] as number[], data: {} as Record<number, (number | null)[]>, maxAbsPct: 0 };
     const breakdownSummary = portfolioPerformanceData?.breakdownSummary ?? [];

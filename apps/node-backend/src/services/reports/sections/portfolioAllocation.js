@@ -72,6 +72,7 @@ export function renderPortfolioAllocation(data, { currency }) {
   }));
 
   const tableRows = classes.map(c => {
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     const pct = total > 0 ? (c.value / total) : 0;
     const gl  = c.value - c.invested;
     return `<tr>

@@ -129,7 +129,7 @@ export const banksRepository = {
     const totalsByMonth = new Map();
     for (const entries of Object.values(historyMap)) {
       for (const { month, balance } of entries) {
-        totalsByMonth.set(month, (totalsByMonth.get(month) ?? 0) + balance);
+        totalsByMonth.set(month, toNumber(toDecimal(totalsByMonth.get(month) ?? 0).plus(toDecimal(balance))));
       }
     }
     const totalHistory = [...totalsByMonth.keys()]

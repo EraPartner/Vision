@@ -121,6 +121,7 @@ export function reconcileCategoryForecasts(categoryForecasts, future, refByDate)
     series: series.map((p) => {
       const sum = sumByDate.get(p.date) ?? 0;
       const ref = refByDate.get(p.date) ?? 0;
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
       const scale = sum !== 0 ? ref / sum : 1;
       return { date: p.date, value: p.value * scale };
     }),

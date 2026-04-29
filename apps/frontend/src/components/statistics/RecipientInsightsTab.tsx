@@ -34,12 +34,12 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
   const targetCurrency = appSettings.defaultCurrency || "EUR";
-  const formatCurrency = (val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
+  const formatCurrency = useCallback((val: number, fractionDigits = appSettings.showDecimalPlaces) => new Intl.NumberFormat(locale, {
     style: "currency",
     currency: appSettings.defaultCurrency || "EUR",
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
-  }).format(val);
+  }).format(val), [locale, appSettings.defaultCurrency, appSettings.showDecimalPlaces]);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["recipient-insights", targetCurrency],
     queryFn: () => apiClient.getRecipientInsights({ currency: targetCurrency }),
@@ -47,7 +47,10 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
   });
 
   const exclusionsApply = settings.exclusionScope === 'everywhere' || settings.exclusionScope === 'statistics';
-  const excludedRecipientIds = new Set(exclusionsApply ? settings.excludedRecipientIds : []);
+  const excludedRecipientIds = useMemo(
+    () => new Set(exclusionsApply ? settings.excludedRecipientIds : []),
+    [exclusionsApply, settings.excludedRecipientIds]
+  );
 
   const filteredData = useMemo(() => {
     if (!data) return null;
@@ -126,7 +129,7 @@ export function RecipientInsightsTab({ statisticsTopRecipientsChart }: Recipient
         <span className="text-muted-foreground text-sm">{formatDateWithAppSettings(parseISO(row.lastSeen), appSettings.dateFormat)}</span>
       ),
     },
-  ], [t, appSettings.dateFormat, appSettings.defaultCurrency, appSettings.showDecimalPlaces, locale]);
+  ], [t, appSettings.dateFormat, formatCurrency]);
 
   if (isLoading) {
     return (

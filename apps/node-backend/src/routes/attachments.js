@@ -9,6 +9,7 @@
 
 import { Router } from 'express';
 import multer from 'multer';
+// eslint-disable-next-line vision-local/no-repo-direct-from-route
 import { attachmentRepository } from '../repositories/attachmentRepository.js';
 import {
   attachmentUpload,
