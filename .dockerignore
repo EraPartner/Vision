@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
+apps/frontend/node_modules/
 apps/node-backend/node_modules/
+packages/*/node_modules/
 
 # Local database (Docker uses its own volume)
 postgres_data/
