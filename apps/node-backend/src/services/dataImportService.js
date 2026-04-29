@@ -13,12 +13,42 @@
  */
 
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { logger } from '../config/logger.js';
 import { query } from '../database/connection.js';
 import { recipientRepository } from '../repositories/recipientRepository.js';
 import { categoryRepository } from '../repositories/categoryRepository.js';
 import { recipientBankAccountRepository } from '../repositories/recipientBankAccountRepository.js';
+
+// Accept any well-known temp-dir root. multer writes to `os.tmpdir()`
+// (`/var/folders/...` on macOS, `/tmp` on Linux, `%TEMP%` on Windows); tests
+// commonly stage fixtures under `/tmp` as a stable cross-platform handle.
+const TMP_ROOTS = [...new Set([
+  path.resolve(os.tmpdir()),
+  path.resolve('/tmp'),
+  path.resolve('/private/tmp'),
+])].map((root) => root + path.sep);
+const ALLOWED_ENCODINGS = new Set(['utf-8', 'utf8', 'latin1', 'iso-8859-1', 'windows-1252']);
+
+/**
+ * Read a CSV file restricted to a known temporary directory, with an allowlist
+ * on the encoding. Defends against path traversal and unexpected encoding
+ * labels (CodeQL js/path-injection).
+ *
+ * @param {string} filePath
+ * @param {string} encoding
+ * @returns {Promise<string>}
+ */
+async function safeReadCsv(filePath, encoding) {
+  const resolved = path.resolve(filePath);
+  if (!TMP_ROOTS.some((root) => resolved.startsWith(root))) {
+    throw new Error('Refusing to read CSV outside a temporary directory');
+  }
+  const safeEncoding = ALLOWED_ENCODINGS.has(String(encoding).toLowerCase()) ? encoding : 'utf-8';
+  return fs.promises.readFile(resolved, safeEncoding);
+}
 
 // ─── Recipients ───────────────────────────────────────────────────────────────
 
@@ -32,7 +62,7 @@ import { recipientBankAccountRepository } from '../repositories/recipientBankAcc
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importRecipientsCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await fs.promises.readFile(filePath, encoding);
+    const content = await safeReadCsv(filePath, encoding);
 
     let records;
     try {
@@ -134,7 +164,7 @@ export async function importRecipientsCSV(filePath, { separator = ',', encoding 
  * @returns {Promise<{total_processed, imported, skipped, errors}>}
  */
 export async function importCategoriesCSV(filePath, { separator = ',', encoding = 'utf-8' } = {}) {
-    const content = await fs.promises.readFile(filePath, encoding);
+    const content = await safeReadCsv(filePath, encoding);
 
     let records;
     try {

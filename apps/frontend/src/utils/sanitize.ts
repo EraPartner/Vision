@@ -18,9 +18,20 @@ export function escapeHtml(str: string): string {
 
 /**
  * Strip HTML tags from a string.
+ *
+ * Iterates until the output stops shrinking so that nested-tag bypasses such as
+ * `<<a>script>` cannot survive the first pass. Each iteration removes at least
+ * one character or terminates, so this is bounded.
  */
 export function stripHtml(str: string): string {
-  return str.replace(/<[^>]*>/g, "");
+  const tagRe = /<[^>]*>/g;
+  let prev = str;
+  let next = prev.replace(tagRe, "");
+  while (next !== prev) {
+    prev = next;
+    next = prev.replace(tagRe, "");
+  }
+  return next;
 }
 
 /**

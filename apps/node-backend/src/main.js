@@ -162,7 +162,13 @@ import savedChartsRouter from './routes/savedCharts.js';
 import aiRouter from './routes/ai.js';
 import attachmentsRouter from './routes/attachments.js';
 import reportsRouter from './routes/reports.js';
-import { rateLimiter, adminRateLimiter, importRateLimiter } from './middleware/rateLimiter.js';
+import {
+  rateLimiter,
+  adminRateLimiter,
+  importRateLimiter,
+  attachmentRateLimiter,
+  spaRateLimiter,
+} from './middleware/rateLimiter.js';
 import { buildRouteManifest, mountRouter } from './services/routeManifest.js';
 
 const settings = getSettings();
@@ -184,13 +190,22 @@ const CORS_EXPOSED_HEADERS = 'X-Request-Id';
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const allowed = settings.api.corsOrigins;
+  const isWildcard = allowed === '*';
+  // Never combine wildcard origin with credentials (browsers reject; CodeQL flags
+  // it as an injection vector). Reflect only origins on an explicit allowlist.
   const originAllowed = Array.isArray(allowed)
     ? allowed.includes(origin)
-    : allowed === origin || allowed === '*';
+    : !isWildcard && allowed === origin;
 
   if (originAllowed && origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
+    res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
+    res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
+  } else if (isWildcard && settings.isDevelopment()) {
+    // Dev convenience only: wildcard origin without credentials.
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
     res.setHeader('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
     res.setHeader('Access-Control-Expose-Headers', CORS_EXPOSED_HEADERS);
@@ -339,7 +354,7 @@ mountRouter(app, '/api/market', marketLookupRouter);
 mountRouter(app, '/api/watchlist', watchlistRouter);
 mountRouter(app, '/api/splits', splitsRouter);
 mountRouter(app, '/api/saved-charts', savedChartsRouter);
-mountRouter(app, '/api/attachments', attachmentsRouter);
+mountRouter(app, '/api/attachments', attachmentRateLimiter, attachmentsRouter);
 mountRouter(app, '/api/reports', reportsRouter);
 
 // AI chat: dedicated per-minute limit on /chat (Ollama calls are expensive);
@@ -370,7 +385,7 @@ if (settings.isProduction()) {
   // Hashed assets (JS/CSS) — long-lived cache
   app.use(express.static(distPath, { index: false, maxAge: '1y', immutable: true }));
   // SPA fallback: serve index.html (no-cache) for all non-API paths
-  app.get(/^(?!\/api)/, (req, res) => {
+  app.get(/^(?!\/api)/, spaRateLimiter, (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(resolve(distPath, 'index.html'));
   });

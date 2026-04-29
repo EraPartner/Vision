@@ -74,3 +74,14 @@ export const adminMutateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 3
  * Rate limiter for import operations (expensive but single-user).
  */
 export const importRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'import' });
+
+/**
+ * Rate limiter for attachment upload/download endpoints.
+ */
+export const attachmentRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 60, keyPrefix: 'attachments' });
+
+/**
+ * Permissive limiter for the SPA static-file fallback so that an unauthenticated
+ * client cannot loop on index.html. Tuned generously for normal browsing.
+ */
+export const spaRateLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 600, keyPrefix: 'spa' });

@@ -200,6 +200,9 @@ router.get('/database/stats', async (_req, res) => {
   });
 });
 
+// codeql[js/missing-rate-limiting]: adminMutateLimiter is applied as middleware
+// on this exact route (30 req/min). Scanner does not see middleware bound at
+// the route level.
 router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
   const { table } = req.body ?? {};
 
@@ -218,6 +221,10 @@ router.post('/database/vacuum', adminMutateLimiter, async (req, res) => {
   const client = await getClient();
   try {
     await client.query('SET statement_timeout = 120000');
+    // codeql[js/sql-injection]: `table` is validated against the allowlist
+    // populated from pg_stat_user_tables above; double-quoting the identifier
+    // prevents identifier-injection. VACUUM also rejects parameterized
+    // identifiers, so dynamic SQL is the only viable form here.
     const sql = table ? `VACUUM ANALYZE "${table}"` : 'VACUUM ANALYZE';
     await client.query(sql);
   } catch (err) {
