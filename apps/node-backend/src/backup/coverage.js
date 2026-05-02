@@ -22,6 +22,7 @@
  * Last verified against: 0019_transaction_splits_and_agg
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
+  'agg_split_outstanding',
   'ai_conversations',
   'ai_messages',
   'asset_price_history',
@@ -71,5 +72,4 @@ export const BACKUP_EXCLUDED_TABLES = Object.freeze({
   feature_flags: 'Dropped in migration 0011 — no longer exists in current schema',
   bank_statements: 'Dropped in migration 0014 — bank reconciliation feature was removed',
   reconciliation_entries: 'Dropped in migration 0014 — bank reconciliation feature was removed',
-  agg_split_outstanding: 'Trigger-maintained aggregate — recomputed from transaction_splits and split_payments on restore',
 });
