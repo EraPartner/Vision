@@ -3,9 +3,9 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-04-22
-updated: 2026-04-28
-tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, phase-q, decimal, money, i18n, notifications, recipient-groups]
-description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage.
+updated: 2026-05-02
+tags: [feature, splits, owes, debts, shared-expenses, phase-4, phase-9, phase-q, decimal, money, i18n, notifications, recipient-groups, recipient-alias-collapsing]
+description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage. Phase Q+ adds recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) into single rows for consistency with other reporting surfaces.
 aliases: [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
 related_code: ["apps/node-backend/src/routes/splits.js", "apps/node-backend/src/repositories/splitRepository.js", "apps/node-backend/src/services/calculations/splits.js", "apps/node-backend/src/lib/money.js", "apps/frontend/src/pages/OwesPage.tsx", "apps/frontend/src/components/splits/SplitTransactionDialog.tsx", "apps/frontend/src/hooks/useSplits.ts"]
 ---
@@ -166,12 +166,44 @@ Implementation notes:
 
 ### Features
 
-- **Owed Summary View**: Shows who owes whom with totals
-- **Per-Person Detail View**: Detailed breakdown per recipient
+- **Owed Summary View**: Shows who owes whom with totals; linked recipients (aliases sharing a `primary_recipient_id`) are automatically collapsed into a single row
+- **Per-Person Detail View**: Detailed breakdown per recipient; expands aliased recipients to show all splits from the full alias group
 - **Split Source Context**: Shows original transaction recipient and memo
 - **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient using `recipient_group_id` filter (Phase Q) — includes all transactions for the recipient and all linked recipients in the same primary group, surfacing the full transaction history even when linked recipients are involved
-- **Bulk Settle**: Settle all outstanding splits for a person with confirmation
+- **Bulk Settle**: Settle all outstanding splits for a person with confirmation; settling a primary recipient or alias settles all unsettled splits from the entire alias group
 - **Jump to Source**: Double-click any split row to open Transactions filtered to the source `transaction_id`
+
+### Recipient Alias Grouping (Owed View Consistency)
+
+**Problem (pre-fix):** Two recipients linked via `primary_recipient_id` appeared as separate rows in the "Who Owes You" (`GET /api/splits/owed`) summary, even though other reporting surfaces (categories, recipient insights) already collapsed aliased recipients into their primary. This created a view inconsistency — the owed page did not reflect the merge operation's intent to consolidate linked recipients.
+
+**Root Cause:** The legacy merge endpoint (ADR-014) only stamped `primary_recipient_id` on aliases without reassigning split FKs. Splits created before the merge remained stored against the alias recipient_id. The owed summary did not collapse these together.
+
+**Solution (Phase Q+):** All three owed-summary endpoints now collapse linked recipients:
+
+1. **`getOwedSummary()`** — Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns the primary's `name` (or alias name if not linked). The returned `recipient_id` is the primary's id (or self when not aliased). Aliases now appear as a single row on the summary.
+
+2. **`getOwedByRecipient(recipientId)`** — Accepts either a primary or alias recipient id. A CTE (`recipient_group`) expands the input to the full alias group:
+   - If input is a primary, returns all splits from that primary + all aliases
+   - If input is an alias, returns all splits from that alias + the primary + sibling aliases
+   - Supplies the full transaction history even when splits are stored on alias recipient_ids
+
+3. **`getOwedExportRowsByRecipient(recipientId)`** — Same group expansion; exported CSV includes all splits from the entire alias group.
+
+4. **`settleAllByRecipient(recipientId)`** — Same group expansion; settling a primary settles all unsettled splits from that primary and all aliases in the group.
+
+**CTE Definition:**
+```sql
+WITH recipient_group AS (
+  SELECT id FROM recipients
+  WHERE id = $1
+     OR primary_recipient_id = $1
+     OR id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
+     OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
+)
+```
+
+**Result:** The owed page now shows one row per "logical recipient" (primary + all aliases treated as a unit), matching the behavior of the recipients merge and other reporting surfaces.
 
 ### Response Shape
 

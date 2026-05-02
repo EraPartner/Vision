@@ -11,6 +11,27 @@ import { computeOwedSummary } from '../services/calculations/splits.js';
 import { toDecimal, subtract, toNumber, roundToCents } from '../lib/money.js';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
+/**
+ * CTE that resolves $1 to every recipient id in the same merge/alias group:
+ *   - the recipient itself
+ *   - any aliases pointing at it (when $1 is the primary)
+ *   - the recipient's own primary (when $1 is an alias)
+ *   - sibling aliases sharing that primary
+ *
+ * Used by owed-detail / export / settle-all so that linked recipients
+ * resolve as a single unit even when historical splits still reference
+ * the alias's recipient_id (legacy data prior to atomic-merge backfill).
+ */
+const RECIPIENT_GROUP_CTE = `
+  WITH recipient_group AS (
+    SELECT id FROM recipients
+    WHERE id = $1
+       OR primary_recipient_id = $1
+       OR id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
+       OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
+  )
+`;
+
 export const splitRepository = {
   /**
    * Get split allocation totals for a transaction.
@@ -97,17 +118,22 @@ export const splitRepository = {
    * drop out of the owed view.
    */
   async getOwedSummary() {
+    // Collapse alias recipients into their primary so linked recipients show
+    // as a single row. recipient_id returned is the primary's id (or self
+    // when not aliased) — the detail endpoint expands this back to the full
+    // group via getOwedByRecipient.
     const sql = `
-      SELECT a.recipient_id,
-             r.name AS recipient_name,
+      SELECT COALESCE(r.primary_recipient_id, r.id) AS recipient_id,
+             COALESCE(pr.name, r.name) AS recipient_name,
              SUM(a.original_amount) AS total_owed,
              SUM(a.paid_amount) AS total_paid,
              COUNT(a.split_id) AS split_count
       FROM agg_split_outstanding a
       JOIN recipients r ON r.id = a.recipient_id
+      LEFT JOIN recipients pr ON pr.id = r.primary_recipient_id
       JOIN transaction_splits ts ON ts.id = a.split_id
       WHERE ts.is_settled = false
-      GROUP BY a.recipient_id, r.name
+      GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name)
     `;
     const result = await query(sql, []);
     return computeOwedSummary(result.rows);
@@ -118,6 +144,7 @@ export const splitRepository = {
    */
   async getOwedByRecipient(recipientId) {
     const sql = `
+      ${RECIPIENT_GROUP_CTE}
       SELECT ts.*,
              t.date AS transaction_date,
              t.memo AS transaction_memo,
@@ -133,7 +160,7 @@ export const splitRepository = {
       LEFT JOIN (
         SELECT split_id, SUM(amount) AS paid FROM split_payments GROUP BY split_id
       ) sp_agg ON sp_agg.split_id = ts.id
-      WHERE ts.recipient_id = $1 AND ts.is_settled = false
+      WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
       ORDER BY t.date DESC
     `;
     const result = await query(sql, [recipientId]);
@@ -156,6 +183,7 @@ export const splitRepository = {
    */
   async getOwedExportRowsByRecipient(recipientId) {
     const sql = `
+      ${RECIPIENT_GROUP_CTE}
       SELECT
         t.date,
         t.bank_account,
@@ -183,7 +211,7 @@ export const splitRepository = {
         FROM split_payments
         GROUP BY split_id
       ) sp_agg ON sp_agg.split_id = ts.id
-      WHERE ts.recipient_id = $1
+      WHERE ts.recipient_id IN (SELECT id FROM recipient_group)
         AND ts.is_settled = false
         AND (ts.amount - COALESCE(sp_agg.paid, 0)) > 0
       ORDER BY t.date ASC
@@ -312,9 +340,10 @@ export const splitRepository = {
 
   async settleAllByRecipient(recipientId) {
     const sql = `
+      ${RECIPIENT_GROUP_CTE}
       UPDATE transaction_splits
       SET is_settled = true
-      WHERE recipient_id = $1 AND is_settled = false
+      WHERE recipient_id IN (SELECT id FROM recipient_group) AND is_settled = false
     `;
     const result = await query(sql, [recipientId]);
     return { settled_count: result.rowCount || 0 };

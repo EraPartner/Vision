@@ -3,6 +3,7 @@ title: Splits API
 type: endpoint
 status: active
 date: 2026-04-23
+updated: 2026-05-02
 tags:
   - api
   - splits
@@ -11,6 +12,8 @@ tags:
   - phase-9
   - decimal
   - money
+  - phase-q-plus
+  - recipient-alias-collapsing
 aliases:
   - splits-api
   - owes
@@ -18,7 +21,7 @@ aliases:
   - shared-expenses
   - settle-up
   - transaction-split
-description: API endpoints for transaction splitting and debt tracking between recipients
+description: API endpoints for transaction splitting and debt tracking between recipients. Phase Q+ adds automatic recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) for consistency with merge semantics.
 related_code:
   - apps/node-backend/src/routes/splits.js
   - apps/node-backend/src/repositories/splitRepository.js
@@ -74,6 +77,9 @@ Get a summary of who owes what across all recipients.
 
 Only unsettled splits with a positive remaining balance are included.
 
+**Recipient Alias Grouping (Phase Q+):**
+Linked recipients (those sharing a `primary_recipient_id` via merge operations) are automatically collapsed into a single row. The `recipient_id` returned is the primary recipient's id (or the recipient's own id if not aliased). This ensures the owed view remains consistent with merge operations — two recipients linked via `primary_recipient_id` appear as one logical entity.
+
 **Response:** `200 OK`
 
 ```json
@@ -92,7 +98,7 @@ Only unsettled splits with a positive remaining balance are included.
 ```
 
 Implementation note:
-- Repository cleanup removed unused alternative SQL drafts in `getOwedSummary` and keeps a single active aggregation query path; API behavior and response shape are unchanged ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
 
@@ -104,7 +110,12 @@ Get detailed splits owed by a specific recipient.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) |
+| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
+
+**Recipient Alias Grouping (Phase Q+):**
+If the provided `id` is an alias (has a `primary_recipient_id`), the endpoint expands the query to include all splits from the entire alias group: the alias itself, its primary, and all sibling aliases. If the provided `id` is a primary recipient, it returns splits from the primary and all aliases pointing at it.
+
+This ensures that viewing splits for a recipient shows the complete history even when splits are stored on different recipient ids within the same merge group.
 
 **Response:** `200 OK`
 
@@ -132,23 +143,29 @@ Get detailed splits owed by a specific recipient.
 
 `transaction_recipient_name` and `transaction_memo` are returned so clients can present the split source using both fields (for example in the Owes detail list).
 
+Implementation note:
+- Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+
 ---
 
 ### GET /api/splits/owed/:id/export/csv
 
 Export unsettled split transactions for a specific recipient as CSV, using the same transaction export columns.
 
+**Recipient Alias Grouping (Phase Q+):**
+If the provided `id` is an alias (has a `primary_recipient_id`), the export includes splits from the entire alias group. This matches the behavior of `GET /api/splits/owed/:id`, ensuring consistency.
+
 Important behavior:
 
-- Includes only splits for the recipient in `:id` that are **not settled** and still have a positive remaining amount.
-- Returns **one CSV row per split transaction** for that recipient.
+- Includes only splits from the recipient and all linked aliases that are **not settled** and still have a positive remaining amount.
+- Returns **one CSV row per split transaction** for the entire alias group.
 - `Amount` column is set to the split **remaining amount to settle** (`split.amount - paid`), not the original transaction amount.
 
 **Parameters:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) |
+| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
 
 **Response:** `200 OK`
 
@@ -157,10 +174,10 @@ Important behavior:
 
 **Error Responses:**
 
-- `404 Not Found` when no unsettled owed transactions exist for that recipient.
+- `404 Not Found` when no unsettled owed transactions exist for that recipient (or the recipient group).
 
 Implementation notes:
-- Internal route refactor extracted shared CSV helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) to reduce duplication and keep export formatting behavior unchanged ([[apps/node-backend/src/routes/splits.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 
 ---
 
@@ -445,13 +462,16 @@ Implementation notes:
 
 Mark all **unsettled** splits for a specific recipient as settled.
 
+**Recipient Alias Grouping (Phase Q+):**
+If the provided `id` is an alias (has a `primary_recipient_id`), all unsettled splits from the entire alias group are settled. This ensures that settling a primary or alias recipient settles all owed amounts from the entire merge group.
+
 This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records. Records a `settle_all` audit trail entry only if settled_count > 0.
 
 **Parameters:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | number | Recipient ID (positive integer) |
+| `id` | number | Recipient ID (positive integer) — can be a primary or alias recipient |
 
 **Response:** `200 OK`
 
@@ -470,7 +490,7 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 ```
 
 Implementation notes:
-- Settles all unsettled splits for recipient via `settleAllByRecipient(recipientId)` ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.js]]).
 - Audit trail written only if `settled_count > 0`, with action='settle_all' and payload containing recipient_id and settled_count ([[apps/node-backend/src/routes/splits.js]]).
 
 ---
