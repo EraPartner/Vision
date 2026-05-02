@@ -2,39 +2,32 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
-import { server } from "@/test/msw/server";
 import { ExportDialog } from "@/components/reports/ExportDialog";
+import * as reportsApi from "@/lib/api/reports";
 
 // jsdom does not implement these blob URL APIs
 beforeEach(() => {
     global.URL.createObjectURL = vi.fn().mockReturnValue("blob:fake");
     global.URL.revokeObjectURL = vi.fn();
+    vi.restoreAllMocks();
 });
 
-// The ExportDialog uses fetch() with a relative URL (/api/reports/financial).
-// In msw/node (used in Vitest), relative URLs are intercepted by path only —
-// without a host prefix in the handler pattern.
-const REPORT_URL = "/api/reports/financial";
+// Mock the reports API module so fetch is never called.
+// Node's fetch (undici) rejects relative URLs before MSW can intercept them.
+vi.mock("@/lib/api/reports", () => ({
+    downloadFinancialReport: vi.fn(),
+    downloadPortfolioReport: vi.fn(),
+    downloadTaxReport: vi.fn(),
+}));
 
-/** Stub a successful PDF response on the relative-URL fetch path. */
 function stubFinancialSuccess() {
-    server.use(
-        http.post(REPORT_URL, () =>
-            new HttpResponse(new Blob(["PDF"], { type: "application/pdf" }), {
-                status: 200,
-            }),
-        ),
-    );
+    vi.mocked(reportsApi.downloadFinancialReport).mockResolvedValue(undefined);
 }
 
-/** Stub a failing PDF response. */
 function stubFinancialError() {
-    server.use(
-        http.post(REPORT_URL, () =>
-            new HttpResponse(null, { status: 500, statusText: "Internal Server Error" }),
-        ),
+    vi.mocked(reportsApi.downloadFinancialReport).mockRejectedValue(
+        new Error("Report download failed: 500 Internal Server Error"),
     );
 }
 

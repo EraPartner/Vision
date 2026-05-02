@@ -303,6 +303,7 @@ export default function PlannedPaymentsPage() {
             className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
             onClick={(e) => { e.stopPropagation(); setEditing(row); setFormOpen(true); }}
             disabled={actionLoading}
+            aria-label="Edit planned payment"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -310,6 +311,7 @@ export default function PlannedPaymentsPage() {
             variant="ghost"
             size="icon"
             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            aria-label="Delete planned payment"
             onClick={async (e) => {
               e.stopPropagation();
               const ok = await confirm({

@@ -255,6 +255,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                             variant="ghost"
                                             size="icon"
                                             className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                            aria-label="Dismiss"
                                             onClick={() => dismiss(pattern.recipientId)}
                                         >
                                             <X className="h-3.5 w-3.5" />
@@ -286,6 +287,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="icon-touch-target"
+                                aria-label={expanded ? "Collapse" : "Expand"}
                                 onClick={() => setExpanded(!expanded)}
                             >
                                 {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

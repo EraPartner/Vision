@@ -249,6 +249,7 @@ export default function CategoriesPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            aria-label="Delete category"
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
                                                                 const ok = await confirm({

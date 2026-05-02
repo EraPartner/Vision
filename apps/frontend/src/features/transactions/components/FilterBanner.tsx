@@ -61,7 +61,7 @@ export function FilterBanner({
                     searchFilter={searchFilter}
                     filterLabel={filterLabel}
                 />
-                <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear}>
+                <Button variant="ghost" size="icon" className="icon-touch-target" onClick={onClear} aria-label="Clear filter">
                     <X className="h-4 w-4" />
                 </Button>
             </div>

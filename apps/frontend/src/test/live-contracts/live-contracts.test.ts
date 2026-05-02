@@ -75,6 +75,9 @@ const InvestmentItemSchema = z.object({
     is_active: z.boolean(),
 });
 
+// meta.source includes "mv" for materialized-view-backed aggregation endpoints
+const MetaSourceSchema = z.enum(["live", "cache", "mv"]);
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
@@ -87,13 +90,13 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(z.object({ status: z.string() }), json, "GET /health");
     });
 
-    it("GET /api/info returns version info", async () => {
+    it("GET /api/info returns statistics object", async () => {
         const data = await get("/api/info");
         validate(
             z.object({
-                version: z.string(),
-                commit: z.string(),
-                buildDate: z.string(),
+                total_transactions: z.number(),
+                total_amount: z.number(),
+                categories: z.array(z.unknown()),
             }),
             data,
             "GET /api/info",
@@ -137,7 +140,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                 }),
                 meta: z.object({
                     computedAt: z.string(),
-                    source: z.enum(["live", "cache"]),
+                    source: MetaSourceSchema,
                 }),
             }),
             data,
@@ -145,8 +148,8 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/portfolio/summary returns totals shape", async () => {
-        const data = await get("/api/portfolio/summary");
+    it("GET /api/info/portfolio-summary returns totals shape", async () => {
+        const data = await get("/api/info/portfolio-summary");
         validate(
             z.object({
                 currency: z.string(),
@@ -158,26 +161,25 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                 summaries: z.array(z.unknown()),
             }),
             data,
-            "GET /api/portfolio/summary",
+            "GET /api/info/portfolio-summary",
         );
     });
 
-    it("GET /api/info/exchange-rates returns rates array", async () => {
+    it("GET /api/info/exchange-rates returns rates object", async () => {
         const data = await get("/api/info/exchange-rates");
         validate(
             z.object({
                 rates: z.array(z.unknown()),
-                base: z.string(),
-                date: z.string(),
-            }),
+                total_rates: z.number(),
+            }).passthrough(),
             data,
             "GET /api/info/exchange-rates",
         );
     });
 
-    it("GET /api/info/transaction-count returns a number", async () => {
+    it("GET /api/info/transaction-count returns count object", async () => {
         const data = await get("/api/info/transaction-count");
-        validate(z.number(), data, "GET /api/info/transaction-count");
+        validate(z.object({ total_transactions: z.number() }), data, "GET /api/info/transaction-count");
     });
 
     it("GET /api/ai/status returns enabled flag", async () => {
@@ -233,7 +235,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         validate(
             z.object({
                 data: z.object({ categories: z.array(z.unknown()) }),
-                meta: z.object({ source: z.enum(["live", "cache"]) }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).passthrough(),
             }),
             data,
             "GET /api/aggregations/category-breakdown",
@@ -248,7 +250,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     topMerchants: z.array(z.unknown()),
                     monthOverMonth: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: z.enum(["live", "cache"]) }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).passthrough(),
             }),
             data,
             "GET /api/aggregations/recipient-insights",
@@ -267,7 +269,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     without_planned: z.array(z.unknown()),
                     with_planned: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: z.enum(["live", "cache"]) }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).passthrough(),
             }),
             data,
             "GET /api/aggregations/cashflow-comparison",
@@ -284,7 +286,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     history: z.record(z.array(z.unknown())),
                     total_history: z.array(z.unknown()),
                 }),
-                meta: z.object({ source: z.enum(["live", "cache"]) }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).passthrough(),
             }),
             data,
             "GET /api/aggregations/bank-balances",
@@ -300,7 +302,7 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
                     links: z.array(z.unknown()),
                     year: z.number(),
                 }),
-                meta: z.object({ source: z.enum(["live", "cache"]) }).passthrough(),
+                meta: z.object({ source: MetaSourceSchema }).passthrough(),
             }),
             data,
             "GET /api/aggregations/sankey",
@@ -311,12 +313,14 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         const data = await get("/api/info/portfolio-performance");
         validate(
             z.object({
-                snapshots: z.array(z.unknown()),
                 currency: z.string(),
-                start_value: z.number(),
-                end_value: z.number(),
-                absolute_return: z.number(),
-                percentage_return: z.number(),
+                start_date: z.string(),
+                end_date: z.string(),
+                snapshots: z.array(z.unknown()),
+                metrics: z.unknown().nullable(),
+                heatmap: z.unknown(),
+                breakdownSummary: z.array(z.unknown()),
+                totals: z.unknown(),
             }),
             data,
             "GET /api/info/portfolio-performance",
@@ -341,24 +345,36 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/info/banks returns array", async () => {
+    it("GET /api/info/banks returns banks object", async () => {
         const data = await get("/api/info/banks");
-        validate(z.array(z.unknown()), data, "GET /api/info/banks");
+        validate(z.object({ banks: z.array(z.unknown()) }), data, "GET /api/info/banks");
     });
 
-    it("GET /api/info/supported-adapters returns array", async () => {
+    it("GET /api/info/supported-adapters returns adapters object", async () => {
         const data = await get("/api/info/supported-adapters");
-        validate(z.array(z.unknown()), data, "GET /api/info/supported-adapters");
+        validate(
+            z.object({ adapters: z.array(z.unknown()), total_count: z.number() }),
+            data,
+            "GET /api/info/supported-adapters",
+        );
     });
 
-    it("GET /api/info/recurring-patterns returns array", async () => {
+    it("GET /api/info/recurring-patterns returns patterns object", async () => {
         const data = await get("/api/info/recurring-patterns");
-        validate(z.array(z.unknown()), data, "GET /api/info/recurring-patterns");
+        validate(
+            z.object({ patterns: z.array(z.unknown()), total: z.number() }),
+            data,
+            "GET /api/info/recurring-patterns",
+        );
     });
 
-    it("GET /api/info/inflation-rates returns array", async () => {
+    it("GET /api/info/inflation-rates returns rates object", async () => {
         const data = await get("/api/info/inflation-rates");
-        validate(z.array(z.unknown()), data, "GET /api/info/inflation-rates");
+        validate(
+            z.object({ rates: z.array(z.unknown()), source: z.string() }).passthrough(),
+            data,
+            "GET /api/info/inflation-rates",
+        );
     });
 
     it("GET /api/admin/endpoint-liveness returns array", async () => {

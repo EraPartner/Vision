@@ -408,6 +408,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         <Button
                             variant="ghost"
                             size="icon"
+                            aria-label="Clear search"
                             className="absolute right-1 top-1/2 -translate-y-1/2 icon-touch-target text-muted-foreground"
                             onClick={clearSearch}
                         >
@@ -613,19 +614,19 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             <div className="px-1 py-2 text-right" style={{ width: isEditing ? "88px" : "40px", flex: "none" }}>
                                                 {isEditing ? (
                                                     <div className="flex items-center justify-end gap-1">
-                                                        <Button variant="ghost" size="icon"
+                                                        <Button variant="ghost" size="icon" aria-label="Save"
                                                             className="icon-touch-target text-accent hover:text-accent hover:bg-accent/10"
                                                             onClick={() => saveEditing(sourceIndex, row)}>
                                                             <Check className="h-4 w-4" />
                                                         </Button>
-                                                        <Button variant="ghost" size="icon"
+                                                        <Button variant="ghost" size="icon" aria-label="Cancel"
                                                             className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                                             onClick={cancelEditing}>
                                                             <X className="h-4 w-4" />
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <Button variant="ghost" size="icon"
+                                                    <Button variant="ghost" size="icon" aria-label="Edit"
                                                         className="icon-touch-target text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                         onClick={() => startEditing(sourceIndex, row)}>
                                                         <Pencil className="h-4 w-4" />

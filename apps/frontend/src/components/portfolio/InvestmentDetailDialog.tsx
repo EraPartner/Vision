@@ -468,6 +468,7 @@ export function InvestmentDetailDialog({
                             variant="ghost"
                             className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
                             onClick={() => onEditTransaction(txn, investment)}
+                            aria-label="Edit transaction"
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -480,6 +481,7 @@ export function InvestmentDetailDialog({
                                 size="icon"
                                 variant="ghost"
                                 className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                aria-label="Edit transaction"
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -491,6 +493,7 @@ export function InvestmentDetailDialog({
                           variant="ghost"
                           className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteTxn(txn.id, getTxnTypeLabel(t, txn.type as PortfolioTxnType))}
+                          aria-label="Delete transaction"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

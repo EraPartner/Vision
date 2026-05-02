@@ -227,6 +227,7 @@ export default function WatchlistPage() {
                       variant="ghost"
                       size="icon"
                       className="icon-touch-target text-muted-foreground hover:text-destructive"
+                      aria-label="Remove from watchlist"
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteMutation.mutate(item.id);

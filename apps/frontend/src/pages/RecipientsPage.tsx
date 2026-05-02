@@ -317,6 +317,7 @@ export default function RecipientsPage() {
                         variant="ghost"
                         size="icon"
                         className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        aria-label="Delete recipient"
                         onClick={async () => {
                             const ok = await confirm({
                                 title: t('recipientsPage.delete.title'),

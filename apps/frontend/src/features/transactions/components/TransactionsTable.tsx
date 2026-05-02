@@ -165,6 +165,7 @@ export function TransactionsTable({
                         size="icon"
                         className="icon-touch-target text-muted-foreground hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); onOpenInfo(row); }}
+                        aria-label="Transaction info"
                     >
                         <Info className="h-4 w-4" />
                     </Button>
@@ -204,6 +205,7 @@ export function TransactionsTable({
                     className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     onClick={() => onDelete(row.id, row.memo || row.recipient)}
                     disabled={deletePending}
+                    aria-label="Delete transaction"
                 >
                     <Trash2 className="h-4 w-4" />
                 </Button>

@@ -198,6 +198,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                                 </div>
                                 {entries.length > 1 && (
                                     <Button variant="ghost" size="icon" className="icon-touch-target text-muted-foreground hover:text-destructive shrink-0"
+                                        aria-label="Remove entry"
                                         onClick={() => removeEntry(idx)}>
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
