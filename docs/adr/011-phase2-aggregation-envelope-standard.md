@@ -4,7 +4,7 @@ type: adr
 status: Accepted
 date: 2026-04-16
 tags: [adr, backend, aggregations, phase-2, api-design, frontend]
-description: Standard envelope for aggregation endpoints with source metadata (mv vs. live distinction) to surface data freshness and enable shadow-mode testing
+description: Standard envelope for aggregation endpoints with source metadata (mv / live / cache distinction) to surface data freshness and enable shadow-mode testing
 aliases: [adr-011, aggregation-envelope, source-metadata]
 ---
 
@@ -17,6 +17,7 @@ Accepted (Phase 9 Cutover Complete)
 2026-04-16
 
 ## Updated
+2026-05-02 — Phase E cash-flow-forecast adds "cache" source for 6-hour TTL materialized MC cache; meta.source enum now includes `"mv" | "live" | "cache"`
 2026-04-25 — Phase 9 cutover complete; `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` fallback removed from wiring (note: info.js itself stays for unrelated endpoints like portfolio-performance, net-worth, exchange-rates, etc.)
 
 ## Context
@@ -42,7 +43,7 @@ All `/api/aggregations/*` endpoints return a standardized envelope:
 {
   "data": { /* endpoint-specific aggregation result */ },
   "meta": {
-    "source": "mv" | "live",
+    "source": "mv" | "live" | "cache",
     "computedAt": "2026-04-16T12:34:56.789Z"
   }
 }
@@ -53,7 +54,7 @@ All `/api/aggregations/*` endpoints return a standardized envelope:
 | Field | Type | Meaning |
 |-------|------|---------|
 | `data` | object | Calculation-specific result (monthly summary, category breakdown, etc.) |
-| `meta.source` | enum | `'mv'` = served from materialized view; `'live'` = computed on demand |
+| `meta.source` | enum | `'mv'` = served from materialized view (no exclusions, ~15 min stale); `'live'` = computed on demand (custom exclusions/params); `'cache'` = served from TTL cache (Phase E cash-flow-forecast, 6-hour TTL) |
 | `meta.computedAt` | ISO 8601 | Timestamp when the response was computed (server time) |
 
 ### Source Heuristic
@@ -75,6 +76,12 @@ The `source` field is determined by the request parameters:
 3. **Endpoints with no exclusion parameters** → Determined per-endpoint
    - `/category-breakdown`, `/recipient-insights`, `/bank-balances`, `/average-vs-current` do not accept exclusion parameters
    - These use heuristics specific to their computation (e.g., `average-vs-current` always uses `'live'` because "current period" is inherently time-dependent)
+
+4. **Cached forecast endpoint** → `'cache'` (Phase E only)
+   - `/api/aggregations/cash-flow-forecast` checks a 6-hour TTL cache before computing live
+   - Used when cached result is available and within TTL
+   - Falls back to `'live'` on cache miss or expiry
+   - Example: `GET /api/aggregations/cash-flow-forecast` within 6 hours of last compute → `source: 'cache'`
 
 ### Implementation Pattern
 
