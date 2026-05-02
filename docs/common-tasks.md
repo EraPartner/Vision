@@ -3,8 +3,8 @@ title: Common Tasks Quick Reference
 type: map-of-content
 status: active
 date: 2026-04-22
-updated: 2026-04-28
-tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026]
+updated: 2026-05-02
+tags: [moc, tasks, quick-reference, navigation, how-to, phase-2, openapi, deployment, cicd, updates, april-2026, testing, e2e-testing, mutation-testing]
 description: Task-oriented navigation — find the right docs for what you want to do; includes Phase 2 OpenAPI and type generation; April 2026 adds deployment and update tasks
 aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet]
 ---
@@ -86,6 +86,19 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Publish Docker image | [[docs/guides/cicd-pipelines#docker--build-and-push-docker-image\|Docker Job]] | [[docs/guides/deployment\|Deployment Guide]] |
 | Generate installer checksum | [[docs/adr/023-update-installer-checksum-verification\|ADR-023]] | [[docs/guides/cicd-pipelines#packagemac--build-macos-installer\|Release Workflow]] |
 
+## Testing Tasks
+
+| I want to... | Start here | Also check |
+|-------------|------------|------------|
+| Run all tests | [[docs/reference/scripts\|Scripts Reference]] | `bun run test` |
+| Run E2E tests | [[docs/testing/testing#phase-b-e2e-testing-2026-04-30--complete\|E2E Testing]] | `bun run test:e2e` |
+| Run mutation tests | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run test:mutation` |
+| Write a unit test | [[docs/testing/testing\|Testing Documentation]] | [[docs/reference/code-patterns\|Code Patterns]] |
+| Write an integration test | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]] | [[docs/testing/test-inventory\|Test Inventory]] |
+| Write an E2E test | [[docs/testing/frontend/e2e\|E2E Test Guide]] | [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02\|Phase F4: Playwright Specs]] |
+| Check test coverage | `bun run test:coverage` | [[docs/reference/scripts\|Scripts Reference]] |
+| Update Playwright snapshots | `bun run test:e2e:update-snapshots` | [[docs/testing/testing#phase-c-accessibility--visual-regression-2026-04-30--complete\|Visual Regression]] |
+
 ## Debugging Tasks
 
 | I want to... | Start here | Also check |
@@ -96,6 +109,7 @@ aliases: [common tasks, quick reference, i want to, task navigation, cheat sheet
 | Fix a rate limit error | [[docs/reference/error-codes\|Error Codes]] | [[docs/security/rate-limiting\|Rate Limiting]] |
 | Fix a chart rendering issue | [[docs/performance/chart-downsampling\|Chart Downsampling]] | [[docs/troubleshooting\|Troubleshooting]] |
 | Fix a React Query cache issue | [[docs/reference/react-query-keys\|React Query Keys]] | [[docs/performance/caching-strategies\|Caching Strategies]] |
+| Fix a failing test | [[docs/testing/testing\|Testing Documentation]] | [[docs/testing/test-inventory\|Test Inventory]] |
 | Remediate dependency vulnerabilities | [[docs/security/dependency-security-remediation-2026-04\|Dependency Security Remediation (2026-04)]] | [[docs/reference/scripts\|Scripts Reference]] |
 
 ## KB Tasks
@@ -118,6 +132,8 @@ bun run db:upgrade       # Run migrations
 # Testing
 bun run test             # Run all tests
 bun run test:watch       # Watch mode
+bun run test:e2e         # Run E2E tests (Playwright)
+bun run test:mutation    # Run mutation tests (Stryker)
 
 # Building
 bun run build            # Production build

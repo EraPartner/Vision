@@ -103,5 +103,34 @@ export default defineConfig(({ mode }) => ({
             ['src/**/*.test.tsx', 'jsdom'],
             ['src/**/*.spec.tsx', 'jsdom'],
         ],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text', 'html', 'lcov'],
+            include: [
+                'src/components/**/*.{ts,tsx}',
+                'src/hooks/**/*.{ts,tsx}',
+                'src/lib/**/*.{ts,tsx}',
+                'src/pages/**/*.{ts,tsx}',
+                'src/utils/**/*.{ts,tsx}',
+            ],
+            exclude: [
+                '**/*.test.{ts,tsx}',
+                '**/*.spec.{ts,tsx}',
+                '**/__tests__/**',
+                '**/test/**',
+                'src/**/*.d.ts',
+            ],
+            // Ratchet gate — tracks current actual coverage so regressions are
+            // caught immediately. Bump after each phase adds meaningful tests;
+            // never lower these values.
+            // Last measured (Phase D baseline):
+            //   statements 17.82 % | branches 11.75 % | functions 11.03 % | lines 19 %
+            thresholds: {
+                statements: 17,
+                branches: 11,
+                functions: 10,
+                lines: 18,
+            },
+        },
     },
 }));

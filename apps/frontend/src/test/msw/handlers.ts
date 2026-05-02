@@ -1,0 +1,643 @@
+import { http, HttpResponse } from "msw";
+
+const API_BASE = "http://localhost:3002";
+
+interface EnvelopeMeta {
+    requestId?: string;
+    total?: number;
+    page?: number;
+    limit?: number;
+    [key: string]: unknown;
+}
+
+/** ADR-026 success envelope: { ok: true, data, meta? } */
+export function ok<T>(data: T, meta?: EnvelopeMeta) {
+    return HttpResponse.json({ ok: true, data, ...(meta ? { meta } : {}) });
+}
+
+/** ADR-026 failure envelope: { ok: false, error: { message, code? } } */
+export function err(status: number, message: string, code?: string) {
+    return HttpResponse.json(
+        { ok: false, error: { message, ...(code ? { code } : {}) } },
+        { status },
+    );
+}
+
+// ── Mutation fixture stubs — minimal valid shapes matching backend formatters ─
+
+export const TRANSACTION_STUB = {
+    id: 1,
+    transaction_date: "2025-01-15",
+    date: "2025-01-15",
+    bank_account: "BE12345678901234",
+    recipient_id: 1,
+    recipient_name: "Test Recipient",
+    memo: "Test memo",
+    amount: -25.5,
+    currency: "EUR",
+    balance: null,
+    category_id: 1,
+    category_name: "FOOD:GROCERIES",
+    comment: null,
+    is_active: true,
+    created_at: "2025-01-15T10:00:00.000Z",
+    updated_at: null,
+};
+
+export const CATEGORY_STUB = {
+    id: 1,
+    general: "FOOD",
+    detail: "GROCERIES",
+    description: null,
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: null,
+    category_name: "FOOD:GROCERIES",
+    links: [],
+};
+
+export const RECIPIENT_STUB = {
+    id: 1,
+    name: "Test Recipient",
+    normalized_name: "test recipient",
+    default_category_id: null,
+    primary_recipient_id: null,
+    notes: null,
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: null,
+    links: [],
+};
+
+export const INVESTMENT_STUB = {
+    id: 1,
+    name: "MSCI World ETF",
+    symbol: "IWDA",
+    asset_class: "etf",
+    currency: "EUR",
+    current_price: 95.5,
+    interest_rate: null,
+    maturity_date: null,
+    location: null,
+    municipality: null,
+    cadastral_income: null,
+    municipality_tax_rate: null,
+    notes: null,
+    is_active: true,
+    price_provider: "yahoo",
+    price_provider_id: "IWDA.AS",
+    price_provider_url: null,
+    price_provider_latest_url: null,
+    price_provider_latest_path: null,
+    price_provider_history_url: null,
+    price_provider_history_path: null,
+    price_provider_history_ts_path: null,
+    price_provider_history_price_path: null,
+    price_updated_at: "2025-01-15T10:00:00.000Z",
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-15T10:00:00.000Z",
+};
+
+export const PLANNED_TRANSACTION_STUB = {
+    id: 1,
+    planned_date: "2025-02-01",
+    bank_account: "BE12345678901234",
+    recipient_id: 1,
+    recipient_name: "Landlord",
+    memo: "Monthly rent",
+    amount: 1200.0,
+    currency: "EUR",
+    category_id: null,
+    category_name: null,
+    comment: null,
+    url: null,
+    is_recurring: true,
+    recurrence_pattern: "monthly",
+    reminder_days_before: null,
+    is_executed: false,
+    last_executed_date: null,
+    is_loan: false,
+    loan_type: null,
+    loan_principal: null,
+    loan_annual_interest_rate: null,
+    loan_term_months: null,
+    loan_start_date: null,
+    loan_payment_day: null,
+    loan_regular_payment_amount: null,
+    loan_first_payment_date: null,
+    loan_schedule: [],
+    executed_transaction_id: null,
+    execution_count: 0,
+    executions: [],
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: null,
+    links: [],
+};
+
+/**
+ * Default handlers cover the chatty boot-time endpoints so any page can render
+ * without crashing. Tests override per-flow handlers via `server.use(...)`.
+ */
+export const defaultHandlers = [
+    http.get(`${API_BASE}/api/settings`, () => ok({})),
+    http.get(`${API_BASE}/api/settings/:key`, () => ok(null)),
+    http.put(`${API_BASE}/api/settings/:key`, () => ok({ ok: true })),
+
+    http.get(`${API_BASE}/api/info`, () =>
+        ok({ version: "test", commit: "test", buildDate: "test" }),
+    ),
+    http.get(`${API_BASE}/api/info/health`, () => ok({ status: "ok" })),
+
+    http.get(`${API_BASE}/api/categories`, () =>
+        ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/recipients`, () =>
+        ok({ items: [], total: 0, limit: 200, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/transactions`, () =>
+        ok({ items: [], total: 0, limit: 50, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/planned`, () => ok([])),
+    http.get(`${API_BASE}/api/planned-transactions`, () =>
+        ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/investments`, () =>
+        ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+        ok({
+            data: {
+                months: [],
+                summary: {
+                    total_spending: 0,
+                    total_income: 0,
+                    net_amount: 0,
+                    transaction_count: 0,
+                    period_start: "",
+                    period_end: "",
+                },
+            },
+            meta: { computedAt: "2025-01-01T00:00:00.000Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
+        ok({
+            data: { topMerchants: [], monthOverMonth: [] },
+            meta: { computedAt: "2025-01-01T00:00:00.000Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/cashflow-comparison`, () =>
+        ok({
+            data: {
+                days_in_month: 31,
+                current_day: 1,
+                month: 1,
+                year: 2025,
+                without_planned: [],
+                with_planned: [],
+            },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/cashflow-forecast-accuracy`, () =>
+        ok({
+            data: { methods: [], limit_months: 0 },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/cashflow-forecast-methods`, () =>
+        ok({
+            data: {
+                month: "2025-01",
+                currency: "EUR",
+                days_in_month: 31,
+                current_day: 1,
+                actual: [],
+                methods: [],
+                planned: [],
+                diagnostics: null,
+                history_months: 0,
+                include_planned: false,
+            },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/cashflow-forecast-rolling`, () =>
+        ok({
+            data: {
+                window_start: "2025-01-01",
+                window_end: "2025-01-31",
+                today: "2025-01-15",
+                currency: "EUR",
+                days_back: 14,
+                days_forward: 14,
+                actual: [],
+                methods: [],
+                planned: [],
+                diagnostics: null,
+                history_months: 0,
+                include_planned: false,
+            },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
+        ok({
+            data: { categoryPivot: {} },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
+        ok({
+            data: { recipientsByYear: {} },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/recipient-pivot`, () =>
+        ok({
+            data: { recipientPivot: {} },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/sankey`, () =>
+        ok({
+            data: { nodes: [], links: [], year: 2025 },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/category-breakdown`, () =>
+        ok({
+            data: { categories: [] },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/bank-balances`, () =>
+        ok({
+            data: {
+                accounts: [],
+                total_net_position: 0,
+                history: {},
+                total_history: [],
+            },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/average-vs-current`, () =>
+        ok({
+            data: { months: [] },
+            meta: { computedAt: "2025-01-01T00:00:00Z", source: "live" as const },
+        }),
+    ),
+    http.get(`${API_BASE}/api/aggregations/:name`, () => ok(null)),
+    http.get(`${API_BASE}/api/portfolio/summary`, () =>
+        ok({
+            currency: "EUR",
+            computed_at: "2025-01-01T00:00:00.000Z",
+            totals: {
+                totalPortfolioValue: 0,
+                totalInvested: 0,
+                totalGainLoss: 0,
+                totalRealizedGain: 0,
+                totalUnrealizedGain: 0,
+                totalGain: 0,
+                totalIncome: 0,
+                totalFees: 0,
+                totalTaxes: 0,
+                totalReturnPct: 0,
+            },
+            summaries: [],
+        }),
+    ),
+
+    http.get(`${API_BASE}/api/info/exchange-rates`, () =>
+        ok({ rates: [], fallback_rates: {}, base: "EUR", date: "2025-01-01" }),
+    ),
+    http.get(`${API_BASE}/api/market/news`, () => ok({ articles: [] })),
+
+    http.get(`${API_BASE}/api/import/batches`, () =>
+        ok({ batches: [], total: 0 }),
+    ),
+    http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+        ok({
+            batch_id: 1,
+            groups: [],
+            totals: { exact: 0, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+        }),
+    ),
+
+    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [] })),
+
+    http.get(`${API_BASE}/api/market/quote`, () => ok({ quotes: [] })),
+    http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),
+    http.get(`${API_BASE}/api/watchlist`, () =>
+        ok({ items: [], total: 0, limit: 50, offset: 0 }),
+    ),
+
+    http.get(`${API_BASE}/api/ai/status`, () =>
+        ok({ ok: false, baseUrl: "", defaultModel: "", enabled: false }),
+    ),
+    http.get(`${API_BASE}/api/ai/conversations`, () => ok([])),
+
+    http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
+        ok({
+            snapshots: [],
+            currency: "EUR",
+            start_value: 0,
+            end_value: 0,
+            absolute_return: 0,
+            percentage_return: 0,
+        }),
+    ),
+    http.get(`${API_BASE}/api/info/net-worth`, () =>
+        ok({
+            current: { liquid: 0, investments: 0, netWorth: 0 },
+            monthlyChange: 0,
+            monthlyChangePercent: 0,
+            snapshots: [],
+        }),
+    ),
+    http.get(`${API_BASE}/api/info/transaction-summary`, () => ok(null)),
+    http.get(`${API_BASE}/api/info/transaction-count`, () => ok(0)),
+    http.get(`${API_BASE}/api/info/recurring-patterns`, () => ok([])),
+    http.get(`${API_BASE}/api/info/banks`, () => ok([])),
+    http.get(`${API_BASE}/api/info/supported-adapters`, () => ok([])),
+    http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
+
+    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/database/stats`, () =>
+        ok({ tables: [], db_size: null }),
+    ),
+    http.get(`${API_BASE}/api/admin/providers/health`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/metrics/requests`, () => ok([])),
+    http.get(`${API_BASE}/api/admin/endpoints`, () => ok([])),
+
+    // ── Mutation stubs ───────────────────────────────────────────────────────
+    // These prevent onUnhandledRequest:"error" and are validated by contract
+    // tests. Integration tests override them per-flow via server.use().
+
+    http.post(`${API_BASE}/api/transactions`, () => ok(TRANSACTION_STUB)),
+    http.patch(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
+    http.delete(`${API_BASE}/api/transactions/:id`, () =>
+        ok({ message: "Transaction deleted permanently", details: { method: "hard delete" }, links: [] }),
+    ),
+
+    http.post(`${API_BASE}/api/categories`, () => ok(CATEGORY_STUB)),
+    http.patch(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
+    http.delete(`${API_BASE}/api/categories/:id`, () =>
+        ok({ message: "Category 1 deleted permanently", links: [] }),
+    ),
+
+    http.post(`${API_BASE}/api/recipients`, () => ok(RECIPIENT_STUB)),
+    http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),
+    http.delete(`${API_BASE}/api/recipients/:id`, () =>
+        ok({ message: "Recipient 1 deleted permanently", links: [] }),
+    ),
+
+    http.post(`${API_BASE}/api/investments`, () => ok(INVESTMENT_STUB)),
+    http.patch(`${API_BASE}/api/investments/:id`, () => ok(INVESTMENT_STUB)),
+    http.delete(`${API_BASE}/api/investments/:id`, () =>
+        ok({ message: "Investment 1 deleted permanently", links: [] }),
+    ),
+
+    http.post(`${API_BASE}/api/planned-transactions`, () => ok(PLANNED_TRANSACTION_STUB)),
+    http.patch(`${API_BASE}/api/planned-transactions/:id`, () => ok(PLANNED_TRANSACTION_STUB)),
+    http.delete(`${API_BASE}/api/planned-transactions/:id`, () =>
+        ok({ message: "Planned transaction 1 deleted permanently", links: [] }),
+    ),
+    http.post(`${API_BASE}/api/planned-transactions/:id/execute`, () =>
+        ok({ ...PLANNED_TRANSACTION_STUB, is_executed: true }),
+    ),
+    http.get(`${API_BASE}/api/planned-transactions/due-soon`, () => ok([])),
+
+    // ── Phase F1: full contract surface coverage ────────────────────────────
+
+    // Admin
+    http.get(`${API_BASE}/api/admin/update/check`, () =>
+        ok({ available: false, current: "test", latest: "test" }),
+    ),
+    http.post(`${API_BASE}/api/admin/database/vacuum`, () =>
+        ok({ message: "Vacuum complete" }),
+    ),
+
+    // AI
+    http.post(`${API_BASE}/api/ai/chat`, () =>
+        ok({ id: "msg-1", conversationId: "conv-1", role: "assistant", content: "ok", createdAt: "2025-01-01T00:00:00Z" }),
+    ),
+    http.post(`${API_BASE}/api/ai/conversations`, () =>
+        ok({
+            conversation: { id: "conv-1", title: "New Conversation", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
+            messages: [],
+        }),
+    ),
+    http.get(`${API_BASE}/api/ai/conversations/:id`, () =>
+        ok({
+            conversation: { id: "conv-1", title: "Test", model: "llama3", createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" },
+            messages: [],
+        }),
+    ),
+    http.delete(`${API_BASE}/api/ai/conversations/:id`, () =>
+        ok({ message: "Conversation deleted" }),
+    ),
+    http.get(`${API_BASE}/api/ai/models`, () => ok({ models: [] })),
+
+    // Attachments
+    http.get(`${API_BASE}/api/attachments/transaction/:id`, () => ok({ items: [] })),
+    http.post(`${API_BASE}/api/attachments/transaction/:id`, () =>
+        ok({ id: 1, transaction_id: 1, filename: "test.pdf", mime_type: "application/pdf", size: 1024, created_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.get(`${API_BASE}/api/attachments/:id`, () =>
+        new Response(new Blob(["data"], { type: "application/pdf" }), { status: 200 }),
+    ),
+    http.delete(`${API_BASE}/api/attachments/:id`, () =>
+        ok({ message: "Attachment deleted" }),
+    ),
+
+    // Categories sub-routes
+    http.post(`${API_BASE}/api/categories/assign`, () =>
+        ok({ message: "Assigned", count: 0 }),
+    ),
+    http.post(`${API_BASE}/api/categories/:id/assign`, () =>
+        ok({ message: "Assigned", count: 0 }),
+    ),
+    http.get(`${API_BASE}/api/categories/:id`, () => ok(CATEGORY_STUB)),
+
+    // Imports
+    http.post(`${API_BASE}/api/import/csv`, () =>
+        ok({ batch_id: 1, rows: 0, status: "queued" }),
+    ),
+    http.post(`${API_BASE}/api/import/csv/custom`, () =>
+        ok({ batch_id: 1, rows: 0, status: "queued" }),
+    ),
+    http.post(`${API_BASE}/api/import/categories`, () =>
+        ok({ message: "Imported", count: 0 }),
+    ),
+    http.post(`${API_BASE}/api/import/recipients`, () =>
+        ok({ message: "Imported", count: 0 }),
+    ),
+    http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
+        ok({ message: "Committed", batch_id: 1, transactions_committed: 0 }),
+    ),
+    http.put(`${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`, () =>
+        ok({ message: "Override applied" }),
+    ),
+
+    // Info / portfolio extras
+    http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+        ok({
+            currency: "EUR",
+            totals: {
+                totalPortfolioValue: 0,
+                totalInvested: 0,
+                totalGainLoss: 0,
+                totalRealizedGain: 0,
+                totalUnrealizedGain: 0,
+                totalGain: 0,
+                totalIncome: 0,
+                totalFees: 0,
+                totalTaxes: 0,
+                totalReturnPct: 0,
+            },
+            summaries: [],
+        }),
+    ),
+    http.post(`${API_BASE}/api/info/exchange-rates/refresh`, () =>
+        ok({ message: "Rates refreshed", rates_updated: 0 }),
+    ),
+    http.post(`${API_BASE}/api/info/refresh-views`, () =>
+        ok({ message: "Views refreshed" }),
+    ),
+
+    // Investments sub-routes
+    http.get(`${API_BASE}/api/investments/providers`, () => ok({ providers: [] })),
+    http.post(`${API_BASE}/api/investments/refresh-prices`, () =>
+        ok({
+            message: "Prices refreshed",
+            updated_count: 0,
+            stale_count: 0,
+            cached_count: 0,
+            live: true,
+        }),
+    ),
+    http.get(`${API_BASE}/api/investments/transactions`, () =>
+        ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
+    ),
+    http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
+        ok({ items: [], total: 0 }),
+    ),
+    http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
+        ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.patch(`${API_BASE}/api/investments/transactions/:id`, () =>
+        ok({ id: 1, investment_id: 1, type: "buy", date: "2025-01-01", amount: 100, units: 1, price_per_unit: 100, currency: "EUR", is_recurring: false, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
+        ok({ message: "Transaction deleted" }),
+    ),
+
+    // Recipients sub-routes
+    http.get(`${API_BASE}/api/recipients/clusters`, () => ok({ clusters: [] })),
+    http.get(`${API_BASE}/api/recipients/:id/aliases`, () => ok({ aliases: [] })),
+    http.post(`${API_BASE}/api/recipients/:id/merge`, () =>
+        ok({ message: "Merged", merged_count: 0 }),
+    ),
+    http.post(`${API_BASE}/api/recipients/:id/unmerge`, () =>
+        ok({ message: "Unmerged" }),
+    ),
+    http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
+        ok({ items: [], total: 0 }),
+    ),
+    http.post(`${API_BASE}/api/recipients/:id/patterns`, () =>
+        ok({ id: 1, pattern: "TEST*", pattern_kind: "glob", case_sensitive: false, priority: 1, is_active: true, source: "user", notes: null, created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.patch(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
+        ok({ patternId: 1 }),
+    ),
+    http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
+        ok({ patternId: 1 }),
+    ),
+    http.post(`${API_BASE}/api/recipients/:id/patterns/preview`, () =>
+        ok({ matches: [] }),
+    ),
+
+    // Reports
+    http.post(`${API_BASE}/api/reports/financial`, () =>
+        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    ),
+    http.post(`${API_BASE}/api/reports/portfolio`, () =>
+        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    ),
+    http.post(`${API_BASE}/api/reports/tax`, () =>
+        new Response(new Blob(["PDF"], { type: "application/pdf" }), { status: 200 }),
+    ),
+
+    // Saved charts
+    http.get(`${API_BASE}/api/saved-charts`, () => ok({ charts: [] })),
+    http.post(`${API_BASE}/api/saved-charts`, () =>
+        ok({ id: 1, name: "Test chart", config: {}, created_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.patch(`${API_BASE}/api/saved-charts/:id`, () =>
+        ok({ id: 1, name: "Updated", config: {}, created_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.delete(`${API_BASE}/api/saved-charts/:id`, () =>
+        ok({ message: "Chart deleted" }),
+    ),
+
+    // Splits sub-routes
+    http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [] })),
+    http.post(`${API_BASE}/api/splits/batch`, () => ok({ items: [] })),
+    http.patch(`${API_BASE}/api/splits/:id`, () =>
+        ok({ id: 1, transaction_id: 1, recipient_id: 1, amount: 0, note: null, is_paid: false, paid_at: null, created_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.delete(`${API_BASE}/api/splits/:id`, () =>
+        ok({ message: "Split deleted" }),
+    ),
+    http.post(`${API_BASE}/api/splits/:id/pay`, () =>
+        ok({ message: "Paid" }),
+    ),
+    http.post(`${API_BASE}/api/splits/:id/settle`, () =>
+        ok({ message: "Settled" }),
+    ),
+    http.get(`${API_BASE}/api/splits/owed/:recipientId`, () =>
+        ok({ items: [], total_owed: 0 }),
+    ),
+    http.post(`${API_BASE}/api/splits/owed/:recipientId/settle-all`, () =>
+        ok({ message: "Settled", settled_count: 0 }),
+    ),
+
+    // Transactions sub-routes
+    http.get(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
+    http.get(`${API_BASE}/api/transactions/export/csv`, () =>
+        new Response("date,amount\n", {
+            status: 200,
+            headers: { "Content-Type": "text/csv" },
+        }),
+    ),
+    http.get(`${API_BASE}/api/transactions/export/json`, () =>
+        new Response("[]\n", {
+            status: 200,
+            headers: { "Content-Type": "application/x-ndjson" },
+        }),
+    ),
+
+    // Watchlist sub-routes
+    http.post(`${API_BASE}/api/watchlist`, () =>
+        ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.patch(`${API_BASE}/api/watchlist/:id`, () =>
+        ok({ id: 1, symbol: "TEST", name: "Test", asset_class: "stock", currency: "USD", target_price: 100, notes: null, price_provider_id: "TEST", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" }),
+    ),
+    http.delete(`${API_BASE}/api/watchlist/:id`, () =>
+        ok({ message: "Watchlist item deleted" }),
+    ),
+
+    // Recipients delete (already handled above) — clusters, etc. covered
+
+    // Market chart
+    http.get(`${API_BASE}/api/market/chart`, () =>
+        new Response(JSON.stringify({ symbol: "TEST", currency: "USD", points: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        }),
+    ),
+];

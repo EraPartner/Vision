@@ -2,8 +2,9 @@
 title: Package.json Scripts Reference
 type: reference
 status: active
-date: 2026-04-21
-tags: [reference, scripts, npm, bun, build, commands, phase-1]
+date: 2026-04-29
+updated: 2026-05-02
+tags: [reference, scripts, npm, bun, build, commands, phase-1, testing, e2e, mutation-testing]
 description: Complete reference of all npm/bun scripts available in the Vision project
 aliases: [scripts, npm scripts, bun scripts, commands, build commands, run commands]
 ---
@@ -49,11 +50,25 @@ For transitive vulnerability remediation patterns, see [[docs/security/dependenc
 
 ## Testing
 
+### Backend
+
 | Script | Command | Description | When to Use |
 |--------|---------|-------------|-------------|
 | `test` | `bun --cwd apps/node-backend vitest run` | Run all backend tests | Before committing |
 | `test:watch` | `bun --cwd apps/node-backend vitest` | Watch mode for backend tests | During test development |
 | `test:coverage` | `bun --cwd apps/node-backend vitest run --coverage` | Run tests with coverage | Coverage reporting |
+
+### Frontend
+
+| Script | Command | Description | When to Use |
+|--------|---------|-------------|-------------|
+| `test:frontend` | `bun --cwd apps/frontend vitest run` | Run all frontend unit + integration tests (Vitest + RTL + MSW) | Before committing |
+| `test:frontend:watch` | `bun --cwd apps/frontend vitest` | Watch mode for frontend tests | During test development |
+| `test:coverage` | `bun --cwd apps/frontend vitest run --coverage` | Run frontend tests with V8 coverage | Coverage reporting (Phase F1: 17/11/10/18) |
+| `test:e2e` | `bun run --filter 'vision-frontend' test:e2e` | Run Playwright E2E tests (smoke, dialogs-edge, critical-flows, mutations-parity, network-drift, a11y) | Before pushing; validates real browser behavior |
+| `test:e2e:visual` | `bun run --filter 'vision-frontend' test:e2e:visual` | Update Playwright visual regression baselines | After intentional visual changes |
+| `test:e2e:update-snapshots` | `bun run --filter 'vision-frontend' test:e2e:update-snapshots` | Update all Playwright snapshots | After intentional changes to pages |
+| `test:mutation` | `bun --cwd apps/frontend run test:mutation` | Run Stryker mutation testing on scoped modules (currency + API client) | Measure test quality baseline (opt-in, not in CI) |
 
 ## Database
 

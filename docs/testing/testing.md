@@ -2,13 +2,30 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-04-25
+date: 2026-04-30
+updated: 2026-05-02
+last-updated: 2026-05-02
+last_updated_timestamp: 2026-05-02T00:00:00Z
 tags:
   - testing
   - vitest
+  - playwright
   - quality
+  - a11y
+  - visual-regression
   - phase-0
   - phase-1
+  - frontend-phase-a
+  - frontend-phase-b
+  - frontend-phase-c
+  - frontend-phase-d
+  - frontend-phase-f
+  - contract-testing
+  - context-testing
+  - react-contexts
+  - e2e-testing
+  - property-testing
+  - mutation-testing
 aliases:
   - testing
   - unit tests
@@ -31,8 +48,10 @@ Vision uses comprehensive testing to ensure code quality and prevent regressions
 
 | Tool | Purpose | Location |
 |------|---------|----------|
-| **Vitest** | Backend unit tests | `apps/node-backend/tests/` |
-| **React Testing Library** | Frontend component tests | `apps/frontend/src/` |
+| **Vitest** | Backend unit tests; frontend unit/integration tests | `apps/node-backend/tests/`, `apps/frontend/src/` |
+| **React Testing Library** | Frontend component unit and integration tests | `apps/frontend/src/` |
+| **MSW** | Network mocking at the HTTP boundary (component-integration tests) | `apps/frontend/src/test/msw/` |
+| **Playwright** | E2E tests for critical user flows w/ real backend | `apps/frontend/e2e/` |
 | **Bun** | Test runner | `package.json` |
 
 ## Running Tests
@@ -56,8 +75,17 @@ bun vitest run --test-name-pattern="testName"
 ### Frontend Tests
 
 ```bash
-# Run frontend tests (if configured)
+# Run frontend unit/integration tests (Vitest + React Testing Library + MSW)
 bun test:frontend
+
+# Run E2E tests (Playwright)
+bun run test:e2e
+
+# Run E2E tests with headed browser (see what Playwright sees)
+bun exec playwright test --headed
+
+# Run E2E tests in debug mode (step through)
+bun exec playwright test --debug
 ```
 
 ## Test Structure
@@ -87,13 +115,79 @@ apps/node-backend/tests/
 │   └── ...
 ```
 
+### Frontend Tests
+
+```
+apps/frontend/
+├── src/
+│   ├── hooks/*.test.ts             # Hook unit tests
+│   ├── components/**/*.test.tsx    # Component unit tests
+│   ├── utils/*.test.ts             # Utility unit tests
+│   ├── pages/__tests__/            # Component-integration tests (MSW + RTL)
+│   │   └── *.integration.test.tsx
+│   └── test/                       # Test infrastructure
+│       ├── renderWithApp.tsx       # Provider tree helper
+│       ├── test-setup.ts           # MSW lifecycle
+│       └── msw/
+│           ├── server.ts           # MSW server
+│           └── handlers.ts         # Default HTTP handlers
+├── e2e/                            # E2E tests (Playwright)
+│   └── smoke.spec.ts               # Smoke tests: 5 critical routes
+├── playwright.config.ts            # Playwright configuration
+└── package.json
+```
+
 ### Test File Naming
 
-- Pattern: `*.test.js` or `*.test.ts`
-- Location: `tests/` folder next to source files
-- Example: `src/middleware/validation.js` → `tests/validation.test.js`
+- Pattern: `*.test.{js,ts,tsx}` or `*.spec.{js,ts,tsx}`
+- Unit tests: colocated with source file (e.g., `src/utils/foo.ts` → `src/utils/foo.test.ts`)
+- Component-integration tests: `__tests__/` subdirectory with `.integration.test.tsx` suffix
+- Example: `src/pages/TransactionsPage.tsx` → `src/pages/__tests__/TransactionsPage.integration.test.tsx`
 
 ## Test Patterns
+
+### Component-Integration Tests (MSW + RTL)
+
+Render a full page with Vision's real provider stack, mock the network via MSW, drive with userEvent, assert on the DOM. This is the fastest layer that exercises data flow, hooks, and routes together without spinning up a backend server.
+
+**Key files:**
+- [[docs/testing/frontend-component-integration|Complete guide]] — conventions, patterns, coverage goals, and advanced RTL/MSW patterns
+- `apps/frontend/src/test/renderWithApp.tsx` — Provider stack mirror (QueryClient, contexts, routing)
+- `apps/frontend/src/test/msw/server.ts` — MSW server + default handlers
+- `apps/frontend/src/test-setup.ts` — MSW lifecycle wiring
+
+**Why MSW instead of vi.mock():**
+- Centralizes API contract (ADR-026 envelope shape)
+- Avoids Bun/Vitest mock-bleed gotcha
+- Tests exercise the real `apiClient` (retries, timeouts, envelope unwrap)
+
+**Advanced patterns (2026-04-30):**
+- **Handler ordering:** Register specific routes before wildcard patterns — MSW evaluates handlers FIFO
+- **Stale elements:** Just `await findByRole(...)` (don't assert `.toBeInTheDocument()` on result) when component re-mounts
+- **Multiple elements:** Use `findAllByRole` when same element appears in multiple locations
+- **Role over text:** Prefer `findByRole` over `findByText` when text spans multiple DOM nodes
+
+See [[docs/testing/frontend-component-integration#msw--rtl-advanced-patterns-2026-04-30|Advanced Patterns]] for details.
+
+**Example:**
+```tsx
+// @vitest-environment jsdom
+import { describe, it, expect } from "vitest";
+import { screen } from "@testing-library/react";
+import { renderWithApp } from "@/test/renderWithApp";
+import { server } from "@/test/msw/server";
+import TransactionsPage from "@/pages/TransactionsPage";
+
+describe("TransactionsPage", () => {
+    it("renders with empty data", async () => {
+        renderWithApp(<TransactionsPage />);
+        const heading = await screen.findByRole("heading", { name: /transactions/i });
+        expect(heading).toBeInTheDocument();
+    });
+});
+```
+
+See [[docs/testing/frontend-component-integration|Component-Integration Tests]] for full authoring guide.
 
 ### Unit Tests
 
@@ -108,6 +202,176 @@ describe('myFunction', () => {
   });
 });
 ```
+
+### Hook Unit Tests (Frontend, 2026-05-01, updated 2026-05-03)
+
+Test custom React hooks in isolation using `renderHook` from React Testing Library. Hook tests verify return values, state mutations, side effects, and integration with external dependencies (timers, window events, API calls).
+
+**Test files (5 new, 2026-05-01–2026-05-03):**
+- `apps/frontend/src/hooks/__tests__/useUtilityHooks.test.ts` (13 tests)
+- `apps/frontend/src/hooks/__tests__/useChartCurrencyFormatter.test.ts` (5 tests)
+- `apps/frontend/src/hooks/__tests__/usePlannedPayments.test.ts` (8 tests)
+- `apps/frontend/src/hooks/__tests__/useQueryHooks.test.tsx` (13 tests)
+- `apps/frontend/src/hooks/portfolio/__tests__/useInvestments.test.ts` (25 tests) — NEW 2026-05-03
+
+**Key patterns:**
+
+1. **Fake timers for delay-based hooks:**
+   ```typescript
+   describe("useDebounce", () => {
+     beforeEach(() => vi.useFakeTimers());
+     afterEach(() => vi.useRealTimers());
+
+     it("delays value update", () => {
+       const { result, rerender } = renderHook(
+         ({ value }: { value: string }) => useDebounce(value, 300),
+         { initialProps: { value: "hello" } },
+       );
+       rerender({ value: "world" });
+       expect(result.current).toBe("hello");
+       act(() => vi.advanceTimersByTime(300));
+       expect(result.current).toBe("world");
+     });
+   });
+   ```
+
+2. **DOM event hooks:**
+   ```typescript
+   describe("useOnlineStatus", () => {
+     it("responds to offline event", () => {
+       const { result } = renderHook(() => useOnlineStatus());
+       expect(result.current).toBe(true);
+       act(() => { window.dispatchEvent(new Event("offline")); });
+       expect(result.current).toBe(false);
+     });
+   });
+   ```
+
+3. **API-dependent hooks with MSW:**
+   ```typescript
+   it("fetches and refetches data", async () => {
+     const { result } = renderHook(() => usePlannedPayments(), { wrapper: makeWrapper() });
+     await waitFor(() => expect(result.current.isLoading).toBe(false));
+     expect(result.current.data).toEqual([...]);
+   });
+   ```
+
+4. **TanStack Query hooks with provider:**
+   ```typescript
+   function makeWrapper() {
+     return function Wrapper({ children }) {
+       return (
+         <QueryClientProvider client={testQueryClient}>
+           <LanguageProvider>{children}</LanguageProvider>
+         </QueryClientProvider>
+       );
+     };
+   }
+   ```
+
+5. **Mocking LanguageContext synchronously in async factory (2026-05-03):**
+   ```typescript
+   // @vitest-environment jsdom
+   vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+     const actual = await importOriginal<typeof import("@/contexts/LanguageContext")>();
+     const { default: enDict } = await import("@/locales/en");
+     return {
+       ...actual,
+       useLanguage: () => ({
+         language: "en" as const,
+         setLanguage: vi.fn(),
+         t: (key: string, vars?: Record<string, string | number>) => {
+           let str = (enDict as Record<string, string>)[key] ?? key;
+           if (vars) {
+             for (const [k, v] of Object.entries(vars)) {
+               str = str.replaceAll(`{${k}}`, String(v));
+             }
+           }
+           return str;
+         },
+       }),
+     };
+   });
+   ```
+   This pattern avoids Vitest module-loading complexity: import locale dictionary synchronously once per test run instead of mocking the context dynamically per test.
+
+**Total Phase E8+ hook tests:** 64 tests across 5 files, all passing
+
+### Context Unit Tests (Frontend, 2026-05-03)
+
+Test React Context hooks and providers in isolation using `renderHook` with custom wrappers. Context tests verify hook behavior, loading states, state mutations, and integration with dependent contexts.
+
+**Key patterns:**
+
+1. **Hook guard (error boundary test):**
+   ```typescript
+   it("throws when used outside provider", () => {
+     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+     expect(() => renderHook(() => useMyContext())).toThrow(
+       "useMyContext must be used within MyProvider",
+     );
+     spy.mockRestore();
+   });
+   ```
+
+2. **Loading state verification:**
+   ```typescript
+   it("isLoading is true on initial render", () => {
+     const { result } = renderHook(() => useTaxProfile(), { wrapper: makeWrapper() });
+     expect(result.current.isLoading).toBe(true);
+   });
+
+   it("isLoading becomes false after data loads", async () => {
+     const { result } = renderHook(() => useTaxProfile(), { wrapper: makeWrapper() });
+     await waitFor(() => expect(result.current.isLoading).toBe(false));
+   });
+   ```
+
+3. **State mutation with MSW:**
+   ```typescript
+   server.use(
+     http.post(`${API_BASE}/api/settings`, () =>
+       ok({ saved: true }),
+     ),
+   );
+   const { result } = renderHook(() => useSettings(), { wrapper: makeWrapper() });
+   await act(async () => {
+     await result.current.saveSetting("key", "value");
+   });
+   expect(result.current.settings.key).toBe("value");
+   ```
+
+4. **Zustand store reset (no provider needed):**
+   ```typescript
+   beforeEach(() => {
+     useSettingsStore.setState({
+       appSettings: DEFAULT_APP_SETTINGS,
+       isAppSettingsLoading: true,
+     });
+   });
+   ```
+
+5. **Provider stacking (dependent contexts):**
+   ```typescript
+   function makeWrapper() {
+     return function Wrapper({ children }) {
+       return (
+         <SettingsPreloadProvider>
+           <BelgianTaxProfileProvider>{children}</BelgianTaxProfileProvider>
+         </SettingsPreloadProvider>
+       );
+     };
+   }
+   ```
+
+**Test files (2026-05-03):**
+- `apps/frontend/src/contexts/__tests__/BelgianTaxProfileContext.test.tsx` (8 tests)
+- `apps/frontend/src/contexts/__tests__/SettingsContexts.test.tsx` (12 tests)
+- `apps/frontend/src/contexts/__tests__/LanguageContext.test.tsx` (6 tests)
+- `apps/frontend/src/contexts/__tests__/SettingsPreloadContext.test.tsx` (5 tests)
+- `apps/frontend/src/contexts/__tests__/WorkspaceContext.test.tsx` (6 tests)
+
+Total: 37 context tests, all passing.
 
 ### Integration Tests
 
@@ -138,6 +402,33 @@ vi.mock('../src/database/connection.js', () => ({
   query: vi.fn().mockResolvedValue({ rows: [] }),
 }));
 ```
+
+### Frontend Error-State Test Timeout Gotcha: apiRequest Retry Loop
+
+> [!warning] apiRequest Retry Behavior
+> **Problem:** `apiRequest` in `apps/frontend/src/lib/api/client.ts` has an internal retry loop (MAX_RETRIES=2, backoff ~500ms+1000ms). When the server returns a 500 error, the exception is thrown inside a try-catch, causing `apiRequest` to retry (~1500ms total before finally throwing). React Query's `retry: false` configuration does **NOT** bypass this internal retry cycle.
+>
+> **Impact:** Component-integration tests that assert error UI must use `{ timeout: 5000 }` in `findByText` / `findByRole` calls to outlast the `apiRequest` retry backoff cycle (~1500ms) plus React's render/update time.
+>
+> **Affected test files:** 
+> - `apps/frontend/src/pages/__tests__/CategoriesPage.integration.test.tsx`
+> - `apps/frontend/src/pages/__tests__/RecipientsPage.integration.test.tsx`
+> - `apps/frontend/src/pages/__tests__/StatisticsPage.integration.test.tsx`
+> - `apps/frontend/src/pages/__tests__/PlannedPaymentsPage.integration.test.tsx`
+>
+> **Example pattern:**
+> ```typescript
+> server.use(
+>     http.get(`${API_BASE}/api/planned-transactions`, () =>
+>         err(500, "database unavailable"),
+>     ),
+> );
+> renderWithApp(<PlannedPaymentsPage />);
+> // Must use timeout: 5000 to account for ~1500ms apiRequest retry + render time
+> expect(await screen.findByText(/database unavailable/i, {}, { timeout: 5000 })).toBeInTheDocument();
+> ```
+>
+> **Root cause:** `apiRequest` wraps the fetch in `try { ... }` where a 500 status throws an exception. This exception is caught, logged, and the retry loop proceeds. The loop completes after ~1500ms (two retries with exponential backoff). Tests waiting for error UI must account for this delay.
 
 ### Envelope-Aware Route Testing (ADR-026)
 
@@ -483,6 +774,280 @@ Code links: [[apps/frontend/src/components/dashboard/MonthlyTrendsChart.tsx]], [
 
 Dependency remediation links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/package.json]], [[apps/frontend/package.json]], [[package.json]]
 
+## Frontend Phase A: Component-Integration Testing (2026-04-30 — COMPLETE)
+
+Launched initial frontend component-integration test infrastructure to validate page renders, user interactions, and API integration without spinning up a backend server. Phase A now complete with 31 passing tests across 7 pages.
+
+### Key Components
+
+1. **jsdom Polyfills for Radix UI** (`apps/frontend/src/test-setup.ts`)
+   - Added `PointerEvent`, `hasPointerCapture`, `setPointerCapture`, `releasePointerCapture`, and `scrollIntoView` polyfills guarded by `typeof window !== "undefined"`
+   - Enables Radix UI components (Select, Dialog, Combobox, etc.) to render and interact correctly in tests
+   - Node-env tests unaffected (polyfills only apply when `window` exists)
+
+2. **MSW Envelope Helpers** (`apps/frontend/src/test/msw/handlers.ts`)
+   - `ok<T>(data: T, meta?: EnvelopeMeta)` → returns `{ ok: true, data, meta? }`
+   - `err(status: number, message: string, code?: string)` → returns `{ ok: false, error: { message, code? } }`
+   - Matches ADR-026 unified API response envelope
+   - Default handlers expanded to 13 endpoints covering boot-time endpoints: `/api/settings`, `/api/info`, `/api/categories`, `/api/recipients`, `/api/transactions`, `/api/planned`, `/api/planned-transactions`, `/api/investments`, `/api/aggregations/:name`, `/api/info/exchange-rates`, `/api/market/news`, `/api/import/batches`, `/api/admin/endpoint-liveness`
+
+3. **Component-Integration Tests** (in `apps/frontend/src/pages/__tests__/`)
+   - `TransactionsPage.integration.test.tsx` — 5 tests: empty-list render, error state, Add Transaction button, dialog open, POST form submission with MSW recipient mock
+   - `ImportPage.integration.test.tsx` — 5 tests: heading, bank source label, select trigger placeholder, Import Transactions button, CSV file input
+   - `LanguageSwitch.integration.test.tsx` — 8 tests: EN/NL switching across 4 pages (PlannedPayments, Transactions, Import, TaxOverview)
+   - `TaxOverviewPage.integration.test.tsx` — 5 tests: heading, empty state, CTA button via `findAllByRole`, sheet open, Employment radio via `getByRole` anchored to start
+   - `AddTransactionDialog.integration.test.tsx` — 4 tests: dialog open/close, form submission with request body capture, 409 duplicate error handling via toast spy
+   - `PlannedPaymentsPage.integration.test.tsx` — 2 tests: heading, New Payment button
+   - `PortfolioOverviewPage.integration.test.tsx` — 2 tests: heading, empty state
+
+### Test Authoring Pattern
+
+```tsx
+// @vitest-environment jsdom
+import { describe, it, vi } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http } from "msw";
+import { renderWithApp } from "@/test/renderWithApp";
+import { server } from "@/test/msw/server";
+import { ok, err } from "@/test/msw/handlers";
+
+describe("ComponentIntegration", () => {
+    it("renders with default handlers", async () => {
+        renderWithApp(<MyComponent />);
+        expect(await screen.findByRole("heading")).toBeInTheDocument();
+    });
+
+    it("overrides endpoint per test", async () => {
+        const user = userEvent.setup();
+        server.use(
+            http.post("http://localhost:3002/api/foo", () =>
+                ok({ id: 42, message: "success" }),
+            ),
+        );
+        renderWithApp(<MyComponent />);
+        await user.click(screen.getByRole("button"));
+        await waitFor(() => expect(screen.getByText("success")).toBeInTheDocument());
+    });
+
+    it("spies on async handlers (e.g., toast.error)", async () => {
+        const user = userEvent.setup();
+        const toastSpy = vi.spyOn(toast, "error");
+
+        server.use(
+            http.post("http://localhost:3002/api/foo", () =>
+                err(409, "Conflict"),
+            ),
+        );
+        renderWithApp(<MyComponent />);
+        await user.click(screen.getByRole("button"));
+
+        await waitFor(() =>
+            expect(toastSpy).toHaveBeenCalledWith(
+                expect.stringMatching(/conflict/i),
+            ),
+        );
+    });
+});
+```
+
+### Phase A Gotchas Documented
+
+Four key testing gotchas discovered during Phase A completion:
+
+1. **TaxOverviewPage renders two TaxProfileDialog instances** — use `findAllByRole("dialog")` and index the first; cannot use `findByRole` (would throw on multiple matches).
+
+2. **Radix Select accessible name without htmlFor link** — locate by traversing element `textContent` rather than expecting direct label association via `getByLabelText`.
+
+3. **Recipient category regex in getByRole matches substrings** — `/employee/i` matches civil_servant description "Government employee". Use anchored pattern: `getByRole("radio", { name: /^employee/i })`.
+
+4. **VirtualDataTable rows not measurable in jsdom** — skip delete-row and scroll-position tests; focus on interaction flows (button clicks, form submission, async state changes).
+
+### Coverage Summary
+
+- **Test files:** 7 page test files
+- **Tests:** 31 tests, all passing (0 failures)
+- **Infrastructure:** Vitest + RTL + MSW v2 with `renderWithApp` helper, `server.use()` per-test overrides, `ok()`/`err()` envelope helpers
+- **Default handlers:** 13 endpoints with paginated/envelope-conformant shapes
+- **Pages covered:** Transactions, Import, Language Switch, Tax Overview, Add Transaction Dialog, Planned Payments, Portfolio Overview
+
+### Phase B: E2E Testing (2026-04-30) — COMPLETE
+
+- Playwright configuration with auto-boot dev server (local) or Docker Compose (CI)
+- 5 smoke E2E tests covering critical routes: dashboard, transactions, import, planned, portfolio
+- CI job in GitHub Actions: build Docker image, start Compose, run tests, upload artifact
+- See [[docs/testing/frontend/e2e|E2E Test Guide]] for running locally and adding new tests
+
+### Phase C: Accessibility & Visual Regression (2026-04-30) — COMPLETE
+
+**Accessibility Checks (Axe-Core):**
+- Every smoke test in `smoke.spec.ts` calls `checkA11y(page)` using `@axe-core/playwright@4.11.2`
+- Scans for WCAG 2.1 violations (fails on critical/serious, warns on minor/warning)
+- Integrated into all 5 smoke tests (dashboard, transactions, import, planned, portfolio)
+
+**Visual Regression Tests:**
+- New `visual.spec.ts` captures full-page screenshots of 5 critical pages
+- Playwright `toHaveScreenshot({ fullPage: true })` with 2% pixel tolerance
+- Baselines stored in `apps/frontend/e2e/__screenshots__/`
+- NPM scripts: `bun run test:e2e:visual` (with update), `bun run test:e2e:update-snapshots` (emergency refresh)
+- CI job `test-e2e-visual`: Runs on main branch pushes only, automatically updates baselines
+
+See [[docs/testing/frontend/e2e|E2E Test Guide]] for running, debugging, and updating baselines.
+
+### Phase D: Coverage Threshold Ratchet & Contract Tests (2026-04-30, updated 2026-05-02) — COMPLETE
+
+**Coverage Threshold Ratchet** (`apps/frontend/vite.config.ts`):
+- Thresholds updated from placeholder (8/5/3/8) to actual Phase C levels (17/11/10/18)
+- Comment explains these are regression-prevention gates, not aspirational targets
+- Bump per phase after adding meaningful tests
+- Prevents silent coverage erosion across test suite enhancements
+
+**Contract Tests** (`apps/frontend/src/test/msw/contracts.test.ts`) — Expanded 2026-05-02:
+- Node-env Vitest suite (no jsdom needed) with **40 tests** (expanded from 16)
+- Organized into **three test suites:**
+
+  **E1: Strict list item schemas (10 tests)**
+  - Validates empty paginated responses + fixture items for all 5 resources
+  - Each resource (categories, recipients, transactions, planned-transactions, investments) has 2 tests:
+    - Empty list envelope is valid
+    - Item shape matches strict per-field Zod schema
+  - **Schema approach:** Replaced `z.object({}).passthrough()` with strict field-by-field validation for robustness
+
+  **E2: Mutation handler contracts (15 tests)**
+  - Validates POST/PATCH/DELETE responses for all 5 resource types
+  - Each resource has 3 tests (POST, PATCH, DELETE):
+    - POST response matches resource item schema
+    - PATCH response matches resource item schema
+    - DELETE response matches delete response schema (with optional transaction `details` field)
+  - Ensures mutation endpoints return properly typed items, not loose blobs
+
+  **E3: Error envelope compliance (4 tests)**
+  - Validates ADR-026 error envelope across HTTP status codes and endpoint types
+  - Tests: 500 error, 404 error with optional `code`, 422 mutation error, 503 error without code
+  - Error schema: `{ ok: false, error: { message: string, code?: string } }`
+  - Covers both GET and mutation endpoints
+
+**Schemas covered:**
+- Paginated list items: `{ items[], total, limit, offset, links[] }` (categories, recipients, transactions, planned-transactions, investments) with strict per-field schemas
+- Resource items: CategoryItemSchema, RecipientItemSchema, TransactionItemSchema, InvestmentItemSchema, PlannedTransactionItemSchema (all with explicit field types, not passthrough)
+- Delete responses: `{ message, links[] }` with optional transaction-specific `details`
+- Exchange rates: `{ rates[{currency, rate_to_eur, rate_date, fetched_at}], fallback_rates, base, date }`
+- Market news: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
+- Import batches: `{ batches[], total }`
+- Portfolio summary: `{ currency, computed_at, totals{10 numeric fields}, summaries[] }`
+- Singletons: settings, info, health, planned, aggregations, endpoint-liveness
+- Error envelope: `{ ok: false, error: { message, code? } }` per ADR-026
+
+**MSW Fixture Stubs** (`apps/frontend/src/test/msw/handlers.ts`) — Expanded 2026-05-02:
+- Exported 5 new stub constants matching backend formatters:
+  - `TRANSACTION_STUB` — Complete transaction item with all fields (balance: null, updated_at: null)
+  - `CATEGORY_STUB` — Complete category with `category_name` derived field
+  - `RECIPIENT_STUB` — Complete recipient with normalization fields
+  - `INVESTMENT_STUB` — Complete investment with 30+ fields including provider config
+  - `PLANNED_TRANSACTION_STUB` — Complete planned transaction with loan/recurrence fields
+- All 15 mutation handlers use these stubs (POST/PATCH return stub; DELETE returns message envelope)
+- Prevents hand-rolling fixture data in tests; ensures consistency across handlers
+
+**Why contract tests matter:**
+- E1 strict schemas catch fixture field mismatches (type, nullability, required fields)
+- E2 mutation coverage ensures endpoints return items, not stripped payloads
+- E3 error coverage validates error envelope across all status codes and endpoint types
+- Acts as living documentation of backend contract
+- Catches breaking schema changes before they break component tests
+
+**Maintenance:**
+- Backend schema change → update corresponding Zod schema in E1 before shipping
+- New boot-time endpoint → add default MSW handler + contract test in E1/E2/E3 as applicable
+- Fixture-to-schema mismatch → contract test fails; fix the fixture, never weaken the schema
+- New mutation endpoint → add POST/PATCH/DELETE to `defaultHandlers` + E2 tests
+
+### Phase F1: Backend Drift Detection Sweep (2026-05-02) — COMPLETE
+
+**Goal:** Detect frontend regressions from backend contract changes. Scope: every endpoint the frontend calls is covered by both MSW contract tests and live-API contract tests.
+
+**What landed:**
+- **MSW handlers expanded** to ~50 previously-unstubbed endpoints (admin, aggregations, AI chat, attachments, categories, imports, info, investments, recipients, reports, splits, transactions, watchlist, planned-transactions)
+- **Contract tests expanded** (`apps/frontend/src/test/msw/contracts.test.ts`): 16 → **120 tests** (E1: 10 list schemas, E2: 15 mutation contracts, E3: 4 error envelopes)
+- **Live-API contract tests** (`apps/frontend/src/test/live-contracts/live-contracts.test.ts`): 13 → **37 tests** (skipped locally unless `LIVE_API_BASE` set; run on CI against real backend)
+- **Playwright e2e specs:** `dialogs-edge.spec.ts` (focus/escape/backdrop), `critical-flows.spec.ts` (smoke + mutation roundtrips)
+
+**Coverage delta:** 1147 → **1204 vitest** (+57 contract-level). +24 live-API tests. +9 Playwright tests.
+
+See [[docs/testing/test-inventory#phase-f1--backend-drift-detection-sweep-2026-05-02|Phase F1 in Test Inventory]]
+
+### Phase F2: Stale Refetch / Mutation Invalidation Sweep (2026-05-02) — COMPLETE
+
+**Goal:** Verify every CRUD mutation triggers appropriate list refetch via TanStack Query `invalidateQueries`.
+
+**What landed:** 6 new mutation-invalidation tests across RecipientsPage, OwesPage, WatchlistPage, CryptoPage, StocksPage, StatisticsPage. Pattern: stub GET with call counter, perform mutation, assert GET fires.
+
+**Coverage delta:** 1204 → **1210 vitest** (+6).
+
+See [[docs/testing/test-inventory#phase-f2--stale-refetch--mutation-invalidation-sweep-2026-05-02|Phase F2 in Test Inventory]]
+
+### Phase F3: Dialog Completeness Sweep (2026-05-02) — COMPLETE
+
+**Goal:** Every dialog taking user input has at least one field-validation test and one submit-error test (5xx response).
+
+**What landed:** 9 new tests ensuring dialogs stay open on error, field guards block submission, validation errors show as toasts. Tests for TransactionInfoDialog, AddInvestmentFromMarketDialog, LinkTransactionDialog, ExecutionHistoryDialog, CustomChartBuilderModal.
+
+**Coverage delta:** 1210 → **1219 vitest** (+9).
+
+See [[docs/testing/test-inventory#phase-f3--dialog-completeness-sweep-2026-05-02|Phase F3 in Test Inventory]]
+
+### Phase F4: Playwright Parity Expansion (2026-05-02) — COMPLETE
+
+**Goal:** Push browser-only edges (real backdrop, real focus trap, network drift, a11y scanning) to Playwright.
+
+**What landed (3 new e2e specs, 32 new tests):**
+- `e2e/mutations-parity.spec.ts` — Full CRUD lifecycle in real browser (4 tests: Category/Recipient/Planned create, persist-after-reload invariant)
+- `e2e/a11y.spec.ts` — Axe WCAG 2.1 A/AA scans on 9 pages (9 tests, zero critical violations required)
+- `e2e/network-drift.spec.ts` — Network listener catching 5xx/4xx during page boot (10 tests catching frontend → backend route mismatches)
+
+**Updated:** `test:e2e` script now runs all 3 new specs alongside smoke, dialogs-edge, critical-flows.
+
+**Coverage delta:** 1219 vitest (unchanged); +**32 Playwright e2e tests**.
+
+See [[docs/testing/test-inventory#phase-f4--playwright-parity-expansion-2026-05-02|Phase F4 in Test Inventory]]
+
+### Phase F5: Property + Chaos Tests (2026-05-02) — COMPLETE
+
+**Goal:** Cover invariants (parser round-trips, envelope passthrough) and verify UI survives transient backend faults.
+
+**What landed (3 new files, 14 new vitest tests):**
+- `src/test/property/currency.property.test.ts` — 8 fast-check properties for `parseLocaleNumber` invariants
+- `src/test/property/envelope.property.test.ts` — 4 properties for `unwrapEnvelope` per ADR-026
+- `src/test/property/chaos-resilience.test.tsx` — 2 chaos tests wrapping endpoints with random latency + 503 errors
+- `src/test/msw/chaos.ts` — `chaos(handler)` decorator with deterministic mulberry32 PRNG; tunable via env
+
+**Coverage delta:** 1219 → **1233 vitest** (+14).
+
+See [[docs/testing/test-inventory#phase-f5--property--chaos-tests-2026-05-02|Phase F5 in Test Inventory]]
+
+### Phase F6: Mutation Testing Harness (2026-05-02) — COMPLETE
+
+**Goal:** Measure test *quality* (do tests catch realistic faults?) beyond *coverage*.
+
+**What landed:**
+- `stryker.config.json` — Vitest runner, TypeScript checker, scoped to `src/utils/currency.ts` + `src/lib/api/client.ts`
+- `package.json` script: `"test:mutation": "stryker run"` (opt-in, not in CI yet)
+- Dev deps: `@stryker-mutator/core`, `@stryker-mutator/vitest-runner`, `@stryker-mutator/typescript-checker`
+
+**Why scoped:** Full-codebase mutation testing takes hours. Seed baseline on two highest-leverage pure-logic modules to identify tests with low semantic value (kill rate < 60%). Expand after baseline run.
+
+**Run locally:** `bun run test:mutation` from `apps/frontend`
+
+See [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|Phase F6 in Test Inventory]]
+
+### Next Steps (Phase E+)
+
+- E2E performance profiling (LCP, INP, CLS assertions)
+- Coverage expansion beyond 17% statements (Phase E goal: 25%+)
+- Additional component-integration tests for complex pages (Settings, Analytics, etc.)
+- Mutation testing scope expansion (identify low-kill modules from baseline run)
+
+Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/frontend/e2e|E2E Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]], [[apps/frontend/e2e/]], [[apps/frontend/stryker.config.json]]
+
 ## Test Examples
 
 ### Validation Tests
@@ -770,3 +1335,406 @@ Coverage loop artifacts:
 - [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
 
 Related areas: market lookup routes, price-provider behavior, investment repository compatibility, import pipeline orchestration (Phase C), portfolio snapshot calculation paths, info repository aggregation, and materialized view refresh behavior.
+
+## Frontend Phase E11: VirtualDataTable Component-Integration Tests (2026-05-01)
+
+Added comprehensive component-integration test coverage for VirtualDataTable, Vision's most complex table UI component.
+
+**What's tested:**
+
+1. **Rendering (6 tests)** — Title, subtitle, headers, rows, empty states, actions slot, footer count
+2. **Local Search (4 tests)** — Search placeholder, filtering updates footer, no-results state, clear button
+3. **Server-Side Search (3 tests)** — Placeholder changes with callback, 200ms debounce, pre-debounce no-fire
+4. **Server-Side Sort (3 tests)** — Click 1→asc, click 2→desc, click 3→clear
+5. **Inline Editing (5 tests)** — Double-click to edit, cancel, Escape key, Enter to save with callback, textbox index accounting
+6. **Clear All (2 tests)** — Button appears after search, clears state on click
+
+**Test Results:** 23 tests, all passing, <2 seconds execution
+
+**Key Patterns Established:**
+
+- **Mock LanguageContext with async factory:** Import locale dictionary synchronously for test speed
+  ```typescript
+  vi.mock("@/contexts/LanguageContext", async (importOriginal) => {
+    const { default: enDict } = await import("@/locales/en");
+    return { ...actual, useLanguage: () => ({ t: (key) => enDict[key] ?? key }) };
+  });
+  ```
+
+- **Mock TanStack React Virtual to render all items unconditionally:** Avoids DOM layout measurement requirement
+  ```typescript
+  vi.mock("@tanstack/react-virtual", () => ({
+    useVirtualizer: ({ count }) => ({
+      getVirtualItems: () => Array.from({ length: count }, (_, i) => ({ index: i, key: i, ... })),
+    }),
+  }));
+  ```
+
+- **Debounce testing with fake timers:** Use `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync()` for delay validation
+- **Textbox index accounting:** Search input is always first textbox (index 0); edit inputs are offset by +1
+- **Stale reference handling:** Use `await waitFor()` when re-querying elements after component re-mounts
+
+**Reference:** [[docs/testing/test-inventory|Test Inventory]], [[docs/testing/frontend-component-integration|Component-Integration Test Guide]]
+
+## Frontend Phase E14: Dialog Component Integration Tests (2026-05-01)
+
+Comprehensive dialog and modal testing patterns established across 11 new test files covering portfolio, recipients, statistics, planned, and tax domains. Tests exercise trigger-based and controlled dialog lifecycles with full MSW network mocking.
+
+**Dialog Types and Patterns:**
+
+1. **Trigger-Based Dialogs** (Portfolio, Statistics, Planned, Tax)
+   - Dialog manages its own open/close state via internal state or `trigger` prop
+   - Test clicks trigger button to open dialog
+   - Dialog closes automatically after successful action or via cancel button
+   - Example: `AddPortfolioTxnDialog`, `PortfolioTaxAdjustmentsDialog`
+
+2. **Controlled Dialogs** (Recipients, some Portfolio)
+   - Parent owns open state via `open` / `onOpenChange` props
+   - Dialog cannot close itself; must call `onOpenChange(false)` for parent to close
+   - Test provides `onOpenChange` mock to verify close behavior
+   - Example: `AddToWatchlistDialog`, `EditPortfolioTxnDialog`, `LinkTransactionDialog`
+
+3. **Fully Presentational Dialogs** (Portfolio: InvestmentDetailDialog)
+   - All state external; dialog is pure render + callbacks
+   - Parent controls all behavior via callbacks
+   - Example: `InvestmentDetailDialog` with `onEdit`, `onDelete` callbacks
+
+4. **Multi-Step Modals** (Tax)
+   - Radix **Sheet** component (slide-out) instead of Dialog
+   - Step indicator with back/next/save buttons
+   - All steps in same component; no page reload
+   - Example: `TaxProfileDialog` with 4-step employment/income/exemptions/region form
+
+**Key Testing Patterns (2026-05-01):**
+
+**Within-Dialog Scoping for Ambiguous Triggers:**
+```typescript
+// Problem: "Add Investment" button appears both as dialog trigger and inside dialog
+// Solution: Use within(dialog) to scope selector to inside the dialog
+server.use(http.post(`${API_BASE}/api/investments`, () => ok(INVESTMENT_STUB)));
+const user = userEvent.setup();
+renderWithApp(<AddInvestmentFromMarketDialog />);
+const triggerBtn = screen.getByRole("button", { name: /add investment/i });
+await user.click(triggerBtn);
+
+const dialog = await screen.findByRole("dialog");
+const addFromMarketBtn = within(dialog).getByRole("button", { name: /add from market/i });
+await user.click(addFromMarketBtn);
+```
+
+**Icon-Only Button Finding by Index:**
+```typescript
+// Problem: "Edit" button is icon-only (no accessible name)
+// Solution: within(container).getAllByRole("button")[N] by index
+const row = within(dialog).getByRole("row", { name: /investment name/i });
+const editBtn = within(row).getAllByRole("button")[0]; // Pencil icon
+const deleteBtn = within(row).getAllByRole("button")[1]; // Trash icon
+await user.click(editBtn);
+```
+
+**Combobox Selection by Index:**
+```typescript
+// Problem: Multiple combobox components in CustomChartBuilderModal
+// Solution: getAllByRole("combobox")[N] by positional index
+const comboboxes = screen.getAllByRole("combobox");
+const categoryCombobox = comboboxes[2]; // Third combobox = category picker
+await user.click(categoryCombobox);
+await user.click(screen.getByRole("option", { name: /food:groceries/i }));
+```
+
+**Raw Fetch vs. apiClient Exception (WatchlistChartDialog):**
+```typescript
+// WatchlistChartDialog uses raw fetch() instead of apiClient
+// MSW handlers must use HttpResponse.json() directly (no ok() envelope)
+server.use(
+  http.get(`${API_BASE}/api/market/chart`, () =>
+    HttpResponse.json({ data: [...] }) // Direct response, no envelope
+  )
+);
+```
+
+**Controlled Dialog with onOpenChange Callback:**
+```typescript
+const onOpenChange = vi.fn();
+renderWithApp(<AddToWatchlistDialog open={true} onOpenChange={onOpenChange} />);
+await user.click(screen.getByRole("button", { name: /add to watchlist/i }));
+await waitFor(() =>
+  expect(onOpenChange).toHaveBeenCalledWith(false) // Parent owns close
+);
+```
+
+**Multi-Step Form with Step Navigation:**
+```typescript
+// TaxProfileDialog uses step indicator buttons to jump steps
+renderWithApp(<TaxProfileDialog />);
+const triggerBtn = screen.getByRole("button", { name: /tax profile/i });
+await user.click(triggerBtn);
+
+// Navigate to step 2 (income)
+const incomStepBtn = screen.getByRole("button", { name: /income/i });
+await user.click(incomStepBtn);
+expect(screen.getByText(/household income/i)).toBeInTheDocument();
+```
+
+**Confirm Dialogs within Dialogs (RecipientPatternsDialog):**
+```typescript
+// RecipientPatternsDialog has delete patterns with confirm modal
+const deleteBtn = within(patternRow).getAllByRole("button")[1]; // Trash icon
+await user.click(deleteBtn);
+
+// Confirm dialog appears
+const confirmBtn = screen.getByRole("button", { name: /confirm/i });
+expect(server.use).toHaveBeenCalled(); // Verify DELETE was called
+```
+
+**Test File Header and Infrastructure:**
+```typescript
+// @vitest-environment jsdom
+import { describe, it, vi, beforeEach, afterEach } from "vitest";
+import { renderWithApp } from "@/test/renderWithApp";
+import { server } from "@/test/msw/server";
+// server.listen/close/resetHandlers are managed globally in test-setup.ts
+// Test files ONLY call server.use(...) for per-test overrides
+```
+
+**Form Validation Pattern:**
+```typescript
+// Submit button disabled until required fields + selections made
+const saveBtn = screen.getByRole("button", { name: /save/i });
+expect(saveBtn).toBeDisabled(); // Initially disabled
+
+// Fill name
+await user.type(screen.getByLabelText(/name/i), "Test Name");
+expect(saveBtn).toBeDisabled(); // Still disabled (no selection yet)
+
+// Make selection
+await user.click(screen.getByRole("combobox"));
+await user.click(screen.getByRole("option", { name: /category/i }));
+expect(saveBtn).not.toBeDisabled(); // Now enabled
+```
+
+**API Call Verification with vi.spyOn:**
+```typescript
+// Verify correct endpoint and payload
+const postSpy = vi.spyOn(apiClient, "post");
+server.use(
+  http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
+    ok({ id: 123, ... })
+  )
+);
+await user.click(screen.getByRole("button", { name: /submit/i }));
+await waitFor(() =>
+  expect(postSpy).toHaveBeenCalledWith(
+    expect.stringMatching(/\/api\/investments\/\d+\/transactions/),
+    expect.objectContaining({ type: "buy" })
+  )
+);
+```
+
+**Total E14 test files:** 11, **88 tests**, all passing (2026-05-01)
+
+**Test execution:** <10 seconds (integrated into main suite)
+
+**Related documentation:** [[docs/testing/test-inventory#e14-portfolio-recipients-statistics-planned-and-tax-dialog-tests-2026-05-01|E14 Test Inventory]], [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/adr/026-unified-api-response-envelope|ADR-026]]
+
+## Frontend Phase E15: Onboarding, Notifications, AI Chat, Backup, and Import Tests (2026-05-01)
+
+Six new frontend test files covering multi-step wizards, platform-specific update notifications, AI chat conversation management, Electron-only backup restoration, settings-driven backup controls, and import history workflows. Tests establish three new conventions: Electron stub patterns, stateful harness wrappers for controlled components, and partial fake timer management.
+
+**New Components and Features Tested:**
+
+1. **OnboardingWizard** (11 tests)
+   - Multi-step wizard flow: welcome → bank → categories → tour → backup
+   - Bank adapter selection step calls `GET /api/info/supported-adapters` (not in defaultHandlers; requires `server.use()` override for `{ adapters, total_count }` shape)
+   - Wizard completion calls `onComplete()` callback
+   - Navigation between steps via prev/next buttons
+
+2. **UpdateNotification** (8 tests)
+   - Version check via `GET /api/admin/update/check`
+   - Platform-aware install paths: web (reload hint), Electron (shell update), Docker (pull instructions)
+   - Electron branch requires `window.electronUpdater` global stub
+   - Platform detection via `apiClient.isElectron()` check
+
+3. **ChatConversationList** (10 tests)
+   - List rendering with `onSelect(id | null)` callback
+   - Rename dialog: `PATCH /api/ai/conversations/:id`
+   - Delete with confirm: `DELETE /api/ai/conversations/:id`
+   - Clearing selection when currently-selected conversation is deleted
+   - Uses `getByRole("textbox")` for initial values (avoids `getByDisplayValue` timeout with Radix dialogs)
+
+4. **RestoreFromBackupCard** (8 tests)
+   - **Electron-only component** — returns `null` on web
+   - IPC-based restoration via `window.electronBackup` (no HTTP)
+   - Stubs installed per-test in `beforeEach`, restored in `afterEach`
+   - Partial `setTimeout` stub to suppress 3s reload timer during tests
+   - Encrypted backup triggers passphrase input dialog
+
+5. **BackupTab** (9 tests)
+   - Settings page tab with Electron platform detection
+   - Controlled component (owns state via test harness)
+   - Routes through `window.electronBackup` IPC: `runBackup`, `selectDir`, `setPassphrase`
+   - Uses **stateful harness wrapper** to hold state and enable parent re-renders
+
+6. **ImportHistoryCard** (8 tests)
+   - Bank import batch list rendering
+   - `GET /api/import/batches` in MSW defaultHandlers
+   - Rollback workflow: AlertDialog → `DELETE /api/import/batches/:id`
+   - Pagination logic: shows pagination UI when `total > PAGE_SIZE` (10)
+
+**Three New Testing Conventions (E15):**
+
+### 1. Electron Stub Pattern
+
+When testing components that conditionally branch on `apiClient.isElectron()` (checks `window.electronUpdater` global):
+
+```typescript
+// @vitest-environment jsdom
+import { vi, beforeEach, afterEach } from "vitest";
+
+describe("UpdateNotification", () => {
+  beforeEach(() => {
+    // Install Electron stub as global
+    const mockElectronUpdater = {
+      installShellUpdate: vi.fn(),
+      on: vi.fn(),
+    };
+    window.electronUpdater = mockElectronUpdater;
+  });
+
+  afterEach(() => {
+    // Restore (remove stub)
+    delete window.electronUpdater;
+  });
+
+  it("calls window.electronUpdater.installShellUpdate on Electron", async () => {
+    renderWithApp(<UpdateNotification />);
+    const installBtn = screen.getByRole("button", { name: /install/i });
+    await user.click(installBtn);
+    expect(window.electronUpdater.installShellUpdate).toHaveBeenCalled();
+  });
+});
+```
+
+**Key points:**
+- Install mock in `beforeEach`, **not** in test body (ensures fresh per-test)
+- Delete in `afterEach` to prevent bleed to next test
+- Component's `apiClient.isElectron()` checks `window.electronUpdater` existence
+- No MSW needed when component uses IPC, not HTTP
+
+### 2. Stateful Harness Wrapper for Controlled Components
+
+When a component is controlled (has `value` + `onChange` props) and you need to test state changes:
+
+```typescript
+// Problem: Test cannot directly update BackupTab's value prop
+// Solution: Wrap in harness component that manages state
+
+interface BackupTabHarness {
+  value: BackupSettings;
+  onChange: (newValue: BackupSettings) => void;
+}
+
+function BackupTabHarness() {
+  const [value, setValue] = useState<BackupSettings>({ ... });
+  return <BackupTab value={value} onChange={setValue} />;
+}
+
+describe("BackupTab", () => {
+  it("calls onChange when directory is selected", async () => {
+    const user = userEvent.setup();
+    renderWithApp(<BackupTabHarness />);
+    
+    const selectDirBtn = screen.getByRole("button", { name: /select directory/i });
+    await user.click(selectDirBtn);
+    
+    // window.electronBackup.selectDir resolves; onChange fires
+    await waitFor(() => {
+      expect(screen.getByText(/backup directory selected/i)).toBeInTheDocument();
+    });
+  });
+});
+```
+
+**Key points:**
+- Harness holds state locally; component re-renders on `onChange`
+- Simpler than attempting `rerender()` with new props
+- Test drives UI changes through callbacks, not prop mutations
+
+### 3. Partial Fake Timers (Long-Duration Stubs Only)
+
+When a component uses `setTimeout` for side effects (e.g., 3s page reload) that would break test isolation:
+
+```typescript
+// Problem: RestoreFromBackupCard calls window.location.reload() after 3s
+// Solution: Stub only long timers (>= 1s); keep short timers real for Radix
+
+import { vi, beforeEach, afterEach } from "vitest";
+
+const realSetTimeout = global.setTimeout;
+
+describe("RestoreFromBackupCard", () => {
+  beforeEach(() => {
+    // Replace setTimeout with selective stub
+    vi.stubGlobal("setTimeout", vi.fn((cb, ms) => {
+      // For timers >= 1000ms, return null (suppress)
+      if (ms >= 1000) {
+        return undefined;
+      }
+      // For timers < 1000ms, call real setTimeout
+      return realSetTimeout(cb, ms);
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("restores backup without triggering page reload", async () => {
+    renderWithApp(<RestoreFromBackupCard />);
+    
+    // Simulate backup file selection and restoration
+    // The 3s reload timer is stubbed; test completes without reload
+    await waitFor(() => {
+      expect(screen.getByText(/backup restored/i)).toBeInTheDocument();
+    });
+    
+    // Verify reload was NOT called (timer was suppressed)
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+});
+```
+
+**Key points:**
+- Use `vi.stubGlobal()` instead of `vi.mock()` for globals (avoids module-wide effects)
+- Check timer duration: suppress long timers, allow short ones (Radix uses `requestAnimationFrame` and sub-second timers)
+- Restore with `vi.unstubAllGlobals()` in `afterEach`
+- Pattern: `ms >= 1000` threshold (adjust per component needs)
+
+### Pattern Integration
+
+**UpdateNotification (Electron stub + partial timers):**
+```typescript
+// Install Electron stub to route to shell update path
+// Stub 3s version-check timeout to prevent async hangs
+// MSW mocks GET /api/admin/update/check
+```
+
+**RestoreFromBackupCard (Electron stub + partial timers):**
+```typescript
+// Install window.electronBackup stub for IPC calls
+// Stub 3s reload timer to avoid test breakage
+// No MSW (IPC path, not HTTP)
+```
+
+**ChatConversationList (textbox role pattern):**
+```typescript
+// Rename dialog opens with initial value pre-filled
+// Radix onOpenChange(true) doesn't fire for initially-open dialogs in tests
+// Use getByRole("textbox") instead of getByDisplayValue to find input
+```
+
+**Total E15 test files:** 6, **54 tests**, all passing (2026-05-01)
+
+**Test execution:** <10 seconds (integrated into main suite)
+
+**Related documentation:** [[docs/testing/test-inventory#e15-onboarding-wizard-notifications-ai-chat-backup-and-import-dialog-tests-2026-05-01|E15 Test Inventory]], [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/adr/026-unified-api-response-envelope|ADR-026]]

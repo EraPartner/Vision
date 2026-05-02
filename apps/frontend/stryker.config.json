@@ -1,0 +1,36 @@
+{
+    "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+    "_comment": "Phase F6 — mutation testing for Vision frontend. Scope is intentionally narrow (pure utilities + envelope unwrap) so a full run finishes in <2min. Expand `mutate` once the score is healthy on the seed set.",
+    "packageManager": "npm",
+    "testRunner": "vitest",
+    "vitest": {
+        "configFile": "vite.config.ts"
+    },
+    "coverageAnalysis": "perTest",
+    "checkers": ["typescript"],
+    "tsconfigFile": "tsconfig.json",
+    "mutate": [
+        "src/utils/currency.ts",
+        "src/lib/api/client.ts"
+    ],
+    "ignorePatterns": [
+        "dist",
+        "build",
+        ".vite",
+        "node_modules",
+        "coverage",
+        "playwright-report",
+        "test-results"
+    ],
+    "thresholds": {
+        "high": 80,
+        "low": 60,
+        "break": null
+    },
+    "reporters": ["progress", "html", "clear-text"],
+    "htmlReporter": {
+        "fileName": "reports/mutation/mutation.html"
+    },
+    "timeoutMS": 30000,
+    "concurrency": 2
+}

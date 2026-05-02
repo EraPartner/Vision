@@ -1,0 +1,328 @@
+// @vitest-environment jsdom
+import { describe, expect, it } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http } from "msw";
+import { renderWithApp } from "@/test/renderWithApp";
+import { server } from "@/test/msw/server";
+import { ok, err } from "@/test/msw/handlers";
+import { EditPortfolioTxnDialog } from "@/components/portfolio/EditPortfolioTxnDialog";
+import type { InvestmentSummary } from "@/types/portfolio";
+import type { PortfolioTransaction } from "@/types/api";
+
+const API_BASE = "http://localhost:3002";
+
+const PORTFOLIO_TXN_STUB = {
+    id: 101,
+    investment_id: 1,
+    type: "buy" as const,
+    units: 10,
+    price_per_unit: 90,
+    amount: 900,
+    fees: 2.5,
+    taxes: 0,
+    date: "2025-01-10",
+    currency: "EUR",
+    note: null,
+    is_recurring: false,
+    recurrence_interval: undefined,
+    recurrence_end_date: undefined,
+    created_at: "2025-01-10T10:00:00Z",
+    updated_at: null,
+};
+
+const INVESTMENT: InvestmentSummary = {
+    id: 1,
+    name: "MSCI World ETF",
+    symbol: "IWDA",
+    asset_class: "etf",
+    assetClass: "etf",
+    currency: "EUR",
+    current_price: 95.5,
+    currentPrice: 95.5,
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-15T10:00:00.000Z",
+    totalUnits: 10,
+    totalInvested: 900,
+    totalFees: 2.5,
+    totalTaxes: 0,
+    totalDividends: 0,
+    totalIncome: 0,
+    currentValue: 955,
+    avgCostBasis: 90,
+    realizedGain: 0,
+    unrealizedGain: 55,
+    totalGain: 55,
+    gainLoss: 55,
+    gainLossPercent: 6.1,
+    accruedInterest: 0,
+    projectedAnnualInterest: 0,
+    totalAppreciation: 0,
+    totalBuyCost: 902.5,
+    totalSellProceeds: 0,
+    transactions: [],
+};
+
+const TRANSACTION: PortfolioTransaction = {
+    id: 101,
+    investment_id: 1,
+    type: "buy",
+    date: "2025-01-10",
+    amount: 900,
+    units: 10,
+    price_per_unit: 90,
+    fees: 2.5,
+    taxes: 0,
+    currency: "EUR",
+    note: "Initial purchase",
+    is_recurring: false,
+    created_at: "2025-01-10T10:00:00Z",
+    updated_at: "2025-01-10T10:00:00Z",
+};
+
+describe("EditPortfolioTxnDialog", () => {
+    it("renders trigger button", async () => {
+        // Arrange + Act
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Assert — default trigger shows "Edit" text
+        expect(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        ).toBeInTheDocument();
+    });
+
+    it("opens dialog and form is pre-populated with transaction data", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // Assert — pre-populated numeric fields
+        const unitsInput = await screen.findByLabelText(/units/i);
+        expect(unitsInput).toHaveValue(10);
+
+        const ppuInput = screen.getByLabelText(/price per unit/i);
+        expect(ppuInput).toHaveValue(90);
+
+        const amountInput = screen.getByLabelText(/total amount/i);
+        expect(amountInput).toHaveValue(900);
+    });
+
+    it("cancel button closes dialog", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        await user.click(await screen.findByRole("button", { name: /cancel/i }));
+
+        // Assert
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    it("Escape key closes dialog", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        await user.keyboard("{Escape}");
+
+        // Assert
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    it("submits updated transaction successfully and closes dialog", async () => {
+        // Arrange
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/101`, () =>
+                ok({ ...PORTFOLIO_TXN_STUB, units: 12, price_per_unit: 90, amount: 1080 }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act — open, update units, submit
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        const unitsInput = await screen.findByLabelText(/units/i);
+        await user.clear(unitsInput);
+        await user.type(unitsInput, "12");
+
+        // Clear amount so it derives from units * pricePerUnit
+        const amountInput = screen.getByLabelText(/total amount/i);
+        await user.clear(amountInput);
+
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — dialog closes after success
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    it("shows error toast on API failure and keeps dialog open", async () => {
+        // Arrange
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/101`, () =>
+                err(500, "Update failed"),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act — open, keep existing valid values, submit
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — dialog remains open
+        await waitFor(() =>
+            expect(screen.getByRole("dialog")).toBeInTheDocument(),
+        );
+    });
+
+    it("pre-populates fees and taxes from transaction prop", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // Assert — fees and taxes are populated (buy type shows fee/tax fields)
+        const feesInput = await screen.findByLabelText(/fees/i);
+        expect(feesInput).toHaveValue(2.5);
+
+        const taxesInput = screen.getByLabelText(/taxes/i);
+        expect(taxesInput).toHaveValue(0);
+    });
+
+    it("pre-populates note field from transaction prop", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // Assert — note textarea has the value from the transaction
+        const noteInput = await screen.findByLabelText(/note/i);
+        expect(noteInput).toHaveValue("Initial purchase");
+    });
+
+    it("transaction type field is read-only (disabled input showing current type)", async () => {
+        // Arrange
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+
+        // Act
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        // Assert — type is displayed as a disabled input, not an editable select
+        const typeInputs = screen.getAllByRole("textbox");
+        const disabledTypeInput = typeInputs.find(
+            (el) => el.getAttribute("disabled") !== null && /buy/i.test((el as HTMLInputElement).value),
+        );
+        expect(disabledTypeInput).toBeDefined();
+        expect(disabledTypeInput).toBeDisabled();
+    });
+
+    it("submits dividend transaction with amount-only fields populated", async () => {
+        // Arrange
+        const dividendTxn: PortfolioTransaction = {
+            ...TRANSACTION,
+            id: 102,
+            type: "dividend",
+            amount: 25,
+            units: undefined,
+            price_per_unit: undefined,
+            fees: 0,
+            taxes: 0,
+            note: undefined,
+        };
+        server.use(
+            http.patch(`${API_BASE}/api/investments/transactions/102`, () =>
+                ok({ ...dividendTxn, amount: 30 }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={dividendTxn} />,
+        );
+
+        // Act — open, update amount, submit
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+
+        const amountInput = await screen.findByLabelText(/total amount/i);
+        await user.clear(amountInput);
+        await user.type(amountInput, "30");
+
+        await user.click(screen.getByRole("button", { name: /save/i }));
+
+        // Assert — dialog closes
+        await waitFor(() =>
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+        );
+    });
+
+    // ─── Edge cases ────────────────────────────────────────────────────────
+
+    it("dialog renders in open state (a11y / backdrop guard)", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog).toHaveAttribute("data-state", "open");
+    });
+
+    it("first focusable element exists for keyboard nav", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog investment={INVESTMENT} transaction={TRANSACTION} />,
+        );
+        await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+        await screen.findByRole("dialog");
+        const inputs = screen.getAllByRole("textbox");
+        const numbers = screen.queryAllByRole("spinbutton");
+        expect(inputs.length + numbers.length).toBeGreaterThan(0);
+    });
+});
