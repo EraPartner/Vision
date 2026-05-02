@@ -428,12 +428,12 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
 
     it("GET /api/saved-charts returns charts array", async () => {
         const data = await get("/api/saved-charts");
-        validate(z.object({ charts: z.array(z.unknown()) }), data, "GET /api/saved-charts");
+        validate(z.array(z.unknown()), data, "GET /api/saved-charts");
     });
 
     it("GET /api/recipients/clusters returns clusters", async () => {
         const data = await get("/api/recipients/clusters");
-        validate(z.object({ clusters: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
+        validate(z.object({ items: z.array(z.unknown()) }), data, "GET /api/recipients/clusters");
     });
 
     it("GET /api/info/transaction-summary returns null or summary", async () => {

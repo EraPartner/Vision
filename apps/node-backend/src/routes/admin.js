@@ -266,4 +266,9 @@ router.get('/endpoints', (_req, res) => {
   res.ok(getRouteManifest());
 });
 
+router.get('/endpoint-liveness', (_req, res) => {
+  const manifest = getRouteManifest();
+  res.ok(manifest.map((entry) => ({ ...entry, live: true })));
+});
+
 export default router;

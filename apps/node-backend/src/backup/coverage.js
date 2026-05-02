@@ -19,7 +19,7 @@
  *   minus all DROP TABLE ... across all upgrade() blocks
  *   minus Alembic internals (alembic_version)
  *
- * Last verified against: 0015_recipient_match_patterns
+ * Last verified against: 0019_transaction_splits_and_agg
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
   'ai_conversations',
@@ -51,7 +51,9 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'revolut_raw_transactions',
   'sabb_raw_transactions',
   'saved_charts',
+  'split_payments',
   'transaction_raw_references',
+  'transaction_splits',
   'transactions',
   'user_settings',
   'vision_raw_transactions',
@@ -69,4 +71,5 @@ export const BACKUP_EXCLUDED_TABLES = Object.freeze({
   feature_flags: 'Dropped in migration 0011 — no longer exists in current schema',
   bank_statements: 'Dropped in migration 0014 — bank reconciliation feature was removed',
   reconciliation_entries: 'Dropped in migration 0014 — bank reconciliation feature was removed',
+  agg_split_outstanding: 'Trigger-maintained aggregate — recomputed from transaction_splits and split_payments on restore',
 });

@@ -3,7 +3,7 @@ title: Frontend E2E Tests (Playwright)
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-04-30
+updated: 2026-05-02
 tags:
   - testing
   - frontend
@@ -59,14 +59,15 @@ New `visual.spec.ts` captures full-page screenshots of 5 critical pages. Subsequ
 - **Tool:** Playwright `toHaveScreenshot({ fullPage: true })`
 - **Scope:** Dashboard, Transactions, Import, Planned Payments, Portfolio
 - **Baseline storage:** `apps/frontend/e2e/__screenshots__/`
-- **CI behavior:** Runs only on main branch pushes; automatically updates baselines on CI (no manual approval needed on main)
+- **CI behavior:** Runs only on main branch pushes; automatically updates baselines on CI (no manual approval needed on main). Marked with `continue-on-error: true` to prevent visual failures from blocking other CI jobs
 - **Max diff ratio:** 2% pixel difference tolerance before flagging
+- **Network idle wait:** All tests call `page.waitForLoadState('networkidle')` after navigation to ensure the page is fully rendered before screenshot (prevents incomplete/loading states)
 
 **Example:**
 ```typescript
 test('dashboard visual regression', async ({ page }) => {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('networkidle');  // Wait for page to be fully interactive
   await expect(page).toHaveScreenshot({ fullPage: true });
 });
 ```
@@ -131,19 +132,28 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
   
+  timeout: 90_000,                    // Global test timeout (90 seconds)
+  
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080',
+    navigationTimeout: 60_000,        // Page navigation timeout (60 seconds)
+    actionTimeout: 30_000,            // Action timeout (30 seconds)
     // ... webServer config ...
   },
 
-  snapshotDir: './e2e/__screenshots__',  // NEW: Visual snapshot baseline dir
+  snapshotDir: './e2e/__screenshots__',  // Visual snapshot baseline dir
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,  // NEW: 2% tolerance for pixel diffs
+      maxDiffPixelRatio: 0.02,  // 2% tolerance for pixel diffs
     },
   },
 });
 ```
+
+**Timeout Rationale:**
+- **Global timeout (90s):** Accounts for slow Docker environments and network I/O in CI
+- **Navigation timeout (60s):** Page.goto() waits up to 60s for DOM to be ready
+- **Action timeout (30s):** User actions (click, fill, etc.) timeout after 30s if element is unresponsive
 
 ### When to Update Baselines
 
@@ -248,22 +258,26 @@ The GitHub Actions `test-e2e` job handles smoke tests with a11y checks on every 
 
 **Skipped for:** Draft PRs
 
+**Timeouts:** Global 90s, navigation 60s, action 30s (from `playwright.config.ts`)
+
 ### Test-E2E-Visual Job (Visual Regression — Main Pushes Only)
 
-New GitHub Actions `test-e2e-visual` job runs visual regression tests **only on push to main**:
+GitHub Actions `test-e2e-visual` job runs visual regression tests **only on push to main**:
 
 1. Builds the Docker image from `Dockerfile`
 2. Starts the full stack with `docker compose up`
 3. Waits for `/health` endpoint to confirm readiness
 4. Installs Playwright chromium
 5. Sets `CI=true` and `PLAYWRIGHT_BASE_URL=http://localhost:3002`
-6. Runs `bun run test:e2e:visual` (visual regression with `--update-snapshots`)
+6. Runs `bun run test:e2e:visual` (visual regression with `--update-snapshots`) with **`continue-on-error: true`**
 7. Uploads visual snapshots as a 30-day artifact
 8. Tears down with `docker compose down`
 
 **Job config:** `.github/workflows/ci.yml` (`test-e2e-visual` job)
 
 **Runs on:** Push to main branch only (`if: github.event_name == 'push'`)
+
+**Continue-on-error:** Marked as `continue-on-error: true` because visual regression tests are environment-sensitive (rendering timing, OS-specific font rasterization) and failures often reflect transient factors rather than actual bugs. This allows the baseline snapshots to be captured and uploaded for human review without blocking the merge.
 
 **Rationale:** Visual baselines are updated automatically on main to avoid manual approval and drift. PRs compare against the current main baseline instead of updating it.
 
@@ -532,7 +546,7 @@ Opens HTML report with:
 - Fallback: Start backend on 3002 with `PLAYWRIGHT_BASE_URL=http://localhost:3002`
 
 **"Target page, context or browser has been closed"**
-- Test took too long; browser context timed out. Add explicit waits: `page.waitForLoadState('networkidle')`
+- Test exceeded the global timeout (90s) or navigation timeout (60s). Causes: slow backend, many async requests, or test not waiting for page readiness. Solution: ensure all tests call `page.waitForLoadState('networkidle')` after `page.goto()`; check backend performance logs; consider increasing timeouts if CI is slower than local dev
 
 **"Timeout waiting for selector"**
 - Element didn't appear. Check if backend returned expected data. Use `--debug` to inspect state.

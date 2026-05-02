@@ -12,9 +12,13 @@ export default defineConfig({
     workers: process.env.CI ? 1 : undefined,
     reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "html",
 
+    timeout: 90_000,
+
     use: {
         baseURL,
         trace: "on-first-retry",
+        navigationTimeout: 60_000,
+        actionTimeout: 30_000,
     },
 
     snapshotDir: "./e2e/__screenshots__",

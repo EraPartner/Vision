@@ -3,8 +3,8 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-04-28
-updated: 2026-04-28
-tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026]
+updated: 2026-05-02
+tags: [guide, cicd, github-actions, testing, linting, docker, release, packaging, automation, april-2026, may-2026]
 description: GitHub Actions CI/CD pipelines including continuous integration checks and release automation with checksums
 aliases: [github-actions, ci-cd, pipelines, release-workflow, testing-automation]
 related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
@@ -157,7 +157,41 @@ docker-verify:
 
 **Failure:** Indicates a runtime issue; must be resolved before merging.
 
-#### 6. **security-scan** — Vulnerability Scanning
+#### 6. **test-e2e-visual** — Visual Regression (Main Pushes Only)
+
+Captures and compares full-page screenshots of critical pages. Runs **only on push to main**, never on PRs.
+
+```yaml
+test-e2e-visual:
+  name: Test (Visual)
+  runs-on: ubuntu-latest
+  if: github.event_name == 'push'
+  steps:
+    - uses: actions/checkout@v4
+    - name: Build Docker image
+      # ... (same Docker Compose setup as test-e2e) ...
+    - name: Capture visual baselines
+      run: cd apps/frontend && bun run test:e2e:visual
+      continue-on-error: true  # Visual failures don't block merge
+      env:
+        CI: true
+        PLAYWRIGHT_BASE_URL: http://localhost:3002
+    - name: Upload visual snapshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: visual-snapshots
+        path: apps/frontend/e2e/__screenshots__/
+        retention-days: 30
+```
+
+**Rationale for `continue-on-error`:**
+- Visual regression tests check for unintended style changes but are inherently environment-dependent (OS rendering, font rasterization, timing)
+- Failures often stem from transient factors (browser timing, network latency affecting paint) rather than true bugs
+- Tagged with `continue-on-error: true` to allow the merge while still capturing visual artifacts for human review
+- Snapshots are automatically updated on main pushes, establishing the visual baseline for subsequent PR comparisons
+
+#### 7. **security-scan** — Vulnerability Scanning
 
 Uses Trivy to scan the codebase and dependencies for known vulnerabilities.
 

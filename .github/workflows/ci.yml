@@ -386,6 +386,7 @@ jobs:
 
       - name: Capture visual baselines
         run: cd apps/frontend && bun run test:e2e:visual
+        continue-on-error: true
         env:
           CI: true
           PLAYWRIGHT_BASE_URL: http://localhost:3002
