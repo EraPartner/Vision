@@ -42,6 +42,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'planned_transaction_executions',
   'planned_transaction_loan_schedule',
   'planned_transactions',
+  'portfolio_performance_snapshots',
   'portfolio_transactions',
   'provider_health',
   'recipient_bank_accounts',
