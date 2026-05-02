@@ -225,11 +225,8 @@ describe("InvestmentDetailDialog", () => {
         const txnTab = await screen.findByRole("tab", { name: /transactions/i });
         await user.click(txnTab);
 
-        // Transaction row has two icon-only buttons: edit (Pencil) then delete (Trash).
-        // Both have no accessible text. We grab all such buttons and click the first
-        // which corresponds to the edit action.
-        const iconButtons = await screen.findAllByRole("button", { name: "" });
-        await user.click(iconButtons[0]);
+        const editBtn = await screen.findByRole("button", { name: /edit transaction/i });
+        await user.click(editBtn);
 
         // Assert
         expect(onEditTransaction).toHaveBeenCalledWith(TXN, INVESTMENT);
@@ -260,9 +257,7 @@ describe("InvestmentDetailDialog", () => {
         const txnTab = await screen.findByRole("tab", { name: /transactions/i });
         await user.click(txnTab);
 
-        // Transaction row has two icon-only buttons: edit first, delete last.
-        const iconButtons = await screen.findAllByRole("button", { name: "" });
-        const deleteBtn = iconButtons[iconButtons.length - 1];
+        const deleteBtn = await screen.findByRole("button", { name: /delete transaction/i });
         await user.click(deleteBtn);
 
         // Assert — confirmation AlertDialog appears (useConfirmDialog renders AlertDialog)
@@ -338,8 +333,7 @@ describe("InvestmentDetailDialog", () => {
         const txnTab = await screen.findByRole("tab", { name: /transactions/i });
         await user.click(txnTab);
 
-        const iconButtons = await screen.findAllByRole("button", { name: "" });
-        const deleteBtn = iconButtons[iconButtons.length - 1];
+        const deleteBtn = await screen.findByRole("button", { name: /delete transaction/i });
         await user.click(deleteBtn);
 
         const confirmDialog = await screen.findByRole("alertdialog");

@@ -1046,15 +1046,10 @@ describe("Portfolio pages (integration)", () => {
             await waitFor(() => expect(getCalls).toBeGreaterThan(0));
             const before = getCalls;
 
-            // Click delete on the watchlist item — assumes Trash button per item
-            const trashBtns = await screen.findAllByRole("button", { name: "" });
-            const trashBtn = trashBtns.find((b) =>
-                b.querySelector("svg.lucide-trash-2"),
-            );
-            if (trashBtn) {
-                await user.click(trashBtn);
-                await waitFor(() => expect(getCalls).toBeGreaterThan(before));
-            }
+            // Click delete on the watchlist item
+            const trashBtn = await screen.findByRole("button", { name: /remove from watchlist/i });
+            await user.click(trashBtn);
+            await waitFor(() => expect(getCalls).toBeGreaterThan(before));
         });
 
         it("PortfolioTaxPage does not crash on 5xx investments endpoint", async () => {
