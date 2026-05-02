@@ -3,8 +3,8 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-04-29
-last_modified: 2026-04-29
+updated: 2026-05-02
+last_modified: 2026-05-02
 tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting]
 description: Architecture Decision Records documenting significant technical choices and their rationale
 aliases: [ADRs, decisions, architecture decisions]
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-02: Electron App Name & userData Migration
+
+[[docs/adr/045-electron-app-name-userData-migration|ADR-045]] — Call `app.setName('Vision')` before any `app.getPath('userData')` usage to align Electron's `app.getName()` with the macOS bundle name (CFBundleName). Without this, `app.getPath('userData')` resolves to `~/Library/Application Support/vision-desktop/` instead of the canonical `Vision/`, triggering macOS Sonoma+ TCC prompts for cross-app data access. Worse, rename/reinstall lands in different userData dirs, generating fresh `embedded_compose/.env` with new `POSTGRES_PASSWORD` while the shared docker volume retains old password, causing authentication failures. Includes one-shot `migrateLegacyUserData()` IIFE that safely renames legacy dir and preserves docker-compose state. Non-fatal; backward compatible.
 
 ### 2026-04-29: Portfolio Snapshot Atomicity
 

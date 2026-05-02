@@ -87,6 +87,27 @@ Electron configuration is in `packaging/electron/`.
 
 ## Startup Sequence
 
+### App Identity & userData Directory
+
+**⚠️ Critical:** `app.setName('Vision')` is called at the very top of main.js, before any `app.getPath('userData')` calls.
+
+- **Why:** `package.json` `name` field is `"vision-desktop"`, but the macOS bundle name (CFBundleName) is `"Vision"` (appId: `com.vaultvoyager.vision`)
+- **Without this:** Electron's `app.getName()` returns `"vision-desktop"`, causing `app.getPath('userData')` to resolve to `~/Library/Application Support/vision-desktop/` instead of the canonical `Vision/`
+- **macOS Sonoma+ consequence:** TCC (Transparency, Consent, and Control) treats the mismatch as cross-app data access, firing the prompt `"Vision would like to access data from other apps"` on every data access
+- **Cascading failure:** Rename/reinstall lands in a different userData dir, regenerating a fresh `embedded_compose/.env` with a new `POSTGRES_PASSWORD`, while the shared docker volume keeps the old password → backend authentication fails → app appears completely empty
+
+See [[docs/adr/045-electron-app-name-userData-migration|ADR-045]] for the full problem statement and migration strategy.
+
+**One-shot userData migration (lines ~82–104):**
+
+The `migrateLegacyUserData()` IIFE detects and migrates any legacy `vision-desktop/` userData directory to the canonical `Vision/`:
+
+- **Fresh install:** No legacy dir → skip migration
+- **Existing install (legacy only):** Rename `vision-desktop/` → `Vision/`; preserves `settings.json` and `embedded_compose/.env` so docker volume stays authenticated
+- **Migration conflict (both exist):** Archive legacy to `vision-desktop.legacy-<timestamp>` to avoid TCC visibility
+
+Migration is non-fatal; any error is logged and app continues.
+
 ### Main Process Initialization
 
 1. **Electron Main** starts, calls `app.requestSingleInstanceLock()`
@@ -643,6 +664,7 @@ With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the local
 
 ## Related
 
+- [[docs/adr/045-electron-app-name-userData-migration|ADR-045: App Name & userData Migration]] — macOS TCC prompt fix + legacy dir migration
 - [[docs/adr/022-electron-sandbox-hardening-and-recovery|ADR-022: Electron Sandbox Hardening]] — Security + recovery design
 - [[docs/adr/023-update-installer-checksum-verification|ADR-023: Installer Checksum Verification]] — Supply-chain security
 - [[docs/api/health|Health API]] — Backend readiness endpoints

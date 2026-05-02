@@ -3,8 +3,9 @@ title: Troubleshooting & FAQ
 type: reference
 status: active
 date: 2026-04-21
-tags: [troubleshooting, faq, reference, debugging, phase-1]
-description: Common issues, error messages, and their solutions for the Vision project
+updated: 2026-05-02
+tags: [troubleshooting, faq, reference, debugging, phase-1, electron, app-naming, password-mismatch]
+description: Common issues, error messages, and their solutions for the Vision project including Electron desktop app password authentication failures
 aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 ---
 
@@ -132,6 +133,36 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
 2. Force refresh: call `POST /api/admin/investments/update-prices`
 3. Check provider configuration in `priceProviderService.js`
 4. For Kinesis spikes: use `POST /api/admin/investments/kinesis/sanitize-history`
+
+## Electron Desktop App
+
+### Backend authentication fails after app restart (macOS)
+
+**Symptom:** After updating or reinstalling Vision, the app launches but all API calls return `FATAL: password authentication failed for user "ftm_user"`. Frontend loads but displays empty (no transactions, portfolio blank). TCC ("Vision would like to access data from other apps") prompt appeared during first use.
+
+**Root cause:** Electron's `app.getName()` was returning `"vision-desktop"` (from `package.json` `name` field) instead of the bundle name `"Vision"`, causing `app.getPath('userData')` to resolve to `~/Library/Application Support/vision-desktop/` instead of the canonical `Vision/`. Rename or reinstall landed in a different userData directory, generating a fresh `embedded_compose/.env` with a new `POSTGRES_PASSWORD`, while the shared docker volume `embedded_compose_db_data` retained the old password from the first init. Postgres honors `POSTGRES_PASSWORD` only on first init, so authentication fails.
+
+**Solution:** This is **fixed in version 2026-05-02+**. The app now calls `app.setName('Vision')` at startup and automatically migrates legacy userData. See [[docs/adr/045-electron-app-name-userData-migration|ADR-045]] for details.
+
+**Recovery for already-broken installs:**
+
+If you're seeing this error and cannot wait for an app update:
+
+1. **Delete the corrupted docker volume:**
+   ```bash
+   docker volume rm embedded_compose_db_data   # or vision_postgres_data if in repo mode
+   ```
+
+2. **Restore from your most recent backup** (if available):
+   - Open Settings → Backup
+   - Select a recent backup file and click "Restore"
+   - Follow the passphrase prompt if the backup is encrypted
+
+3. **Relaunch Vision.app**
+   - The app will recreate the docker volume with fresh credentials
+   - Backend authentication should now succeed
+
+**Prevention:** Ensure you update to version 2026-05-02 or later. The migration helper automatically detects and renames legacy userData directories on first launch.
 
 ## Docker & Deployment
 

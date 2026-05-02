@@ -60,6 +60,49 @@ function t(key, vars) {
   return txt;
 }
 
+// ── App identity ──────────────────────────────────────────────────────────────
+// Force Electron's runtime name to match CFBundleName ("Vision") so
+// `app.getPath('userData')` resolves to ~/Library/Application Support/Vision/
+// instead of the package.json `name` field ("vision-desktop"). Without this:
+//   1. macOS Sonoma+ TCC fires the "Vision would like to access data from
+//      other apps" prompt, because Vision.app reads/writes a userData folder
+//      whose name doesn't match its bundle.
+//   2. Each rename/reinstall lands in a different userData dir, generating a
+//      fresh .env with a new POSTGRES_PASSWORD while the docker volume
+//      `embedded_compose_db_data` (project name = basename of workDir =
+//      "embedded_compose") is shared and keeps the OLD password — backend
+//      auth fails, frontend loads empty.
+// MUST run before any `app.getPath('userData')` (e.g. settingsPath below).
+app.setName('Vision');
+
+// One-shot migration from the legacy "vision-desktop" userData dir to the
+// canonical "Vision" dir. Preserves existing settings.json + embedded_compose
+// (and its .env with the original POSTGRES_PASSWORD) so the shared docker
+// volume keeps authenticating after the rename.
+(function migrateLegacyUserData() {
+  try {
+    const target = app.getPath('userData');
+    const legacy = path.join(path.dirname(target), 'vision-desktop');
+    if (legacy === target) return;
+    if (!fs.existsSync(legacy)) return;
+    const targetExists = fs.existsSync(target);
+    const targetEmpty = targetExists
+      ? fs.readdirSync(target).filter(n => n !== '.DS_Store').length === 0
+      : false;
+    if (!targetExists || targetEmpty) {
+      if (targetExists) fs.rmSync(target, { recursive: true, force: true });
+      fs.renameSync(legacy, target);
+      console.error('[migrate] Moved legacy userData "vision-desktop" → "Vision"');
+    } else {
+      const archived = `${legacy}.legacy-${Date.now()}`;
+      fs.renameSync(legacy, archived);
+      console.error(`[migrate] "Vision" userData already populated; archived legacy dir to ${archived}`);
+    }
+  } catch (err) {
+    console.warn('[migrate] userData migration failed (non-fatal):', err && err.message ? err.message : err);
+  }
+})();
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const APP_NAME = 'Vision';
 const DEFAULT_APP_PORT = 3002;
