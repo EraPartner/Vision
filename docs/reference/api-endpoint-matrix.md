@@ -126,6 +126,13 @@ aliases: [api matrix, endpoint matrix, all endpoints, api overview, endpoint lis
 | GET | `/api/import/supported-banks` | List supported banks | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/recipients` | Bulk import recipients | — | [[docs/api/imports\|Imports]] |
 | POST | `/api/import/categories` | Bulk import categories | — | [[docs/api/imports\|Imports]] |
+| GET | `/api/import/batches` | List import batches | — | [[docs/api/imports\|Imports]] |
+| GET | `/api/import/batches/:id` | Get import batch | — | [[docs/api/imports\|Imports]] |
+| DELETE | `/api/import/batches/:id` | Rollback import batch | — | [[docs/api/imports\|Imports]] |
+| GET | `/api/import/batches/:id/preview` | Review preview (groups + categories) | ADR-046 | [[docs/api/imports\|Imports]] |
+| POST | `/api/import/batches/:id/rows/:rowId/override` | Override recipient on staged row | — | [[docs/api/imports\|Imports]] |
+| POST | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row | ADR-046 | [[docs/api/imports\|Imports]] |
+| POST | `/api/import/batches/:id/commit` | Commit reviewed batch | — | [[docs/api/imports\|Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
 

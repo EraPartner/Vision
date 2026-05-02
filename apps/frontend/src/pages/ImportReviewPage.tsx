@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
-import type { ImportStagingRow } from "@/lib/api";
+import type { ImportStagingRow, ImportPreviewGroup } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
   AccordionContent,
@@ -16,6 +17,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
+import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { formatCurrency } from "@/utils/currency";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -25,7 +27,11 @@ type MatchSource = "exact" | "fuzzy" | "pattern" | "new" | null;
 interface GroupState {
   recipientId: number | null;
   recipientName: string | null;
-  saving: boolean;
+  categoryId: number | null;
+  categoryLabel: string | null;
+  persistAsDefault: boolean;
+  recipientSaving: boolean;
+  categorySaving: boolean;
 }
 
 function matchSourceBadge(source: MatchSource, similarity?: number | null) {
@@ -96,6 +102,16 @@ export default function ImportReviewPage() {
       apiClient.overrideImportRow(batchId, rowId, recipientId),
   });
 
+  const categoryOverrideMutation = useMutation({
+    mutationFn: ({ rowId, categoryId }: { rowId: number; categoryId: number | null }) =>
+      apiClient.overrideImportRowCategory(batchId, rowId, categoryId),
+  });
+
+  const persistDefaultMutation = useMutation({
+    mutationFn: ({ recipientId, categoryId }: { recipientId: number; categoryId: number | null }) =>
+      apiClient.updateRecipient(recipientId, { default_category_id: categoryId }),
+  });
+
   const commitMutation = useMutation({
     mutationFn: () => apiClient.commitImportBatch(batchId),
     onSuccess: (data) => {
@@ -115,25 +131,45 @@ export default function ImportReviewPage() {
     },
   });
 
+  const groupStateFor = (group: ImportPreviewGroup, key: string): GroupState => {
+    const existing = groupOverrides.get(key);
+    if (existing) return existing;
+    return {
+      recipientId: group.recipient_id,
+      recipientName: group.recipient_name,
+      categoryId: group.current_category_id,
+      categoryLabel: group.current_category_label,
+      // Default the persist checkbox ON when the recipient has no current
+      // default — most common case where the user wants to set one.
+      persistAsDefault: group.recipient_default_category_id == null,
+      recipientSaving: false,
+      categorySaving: false,
+    };
+  };
+
+  const updateGroupState = (groupKey: string, patch: Partial<GroupState>, fallback: GroupState) => {
+    setGroupOverrides((prev) => {
+      const next = new Map(prev);
+      const current = next.get(groupKey) ?? fallback;
+      next.set(groupKey, { ...current, ...patch });
+      return next;
+    });
+  };
+
   const handleGroupOverride = async (
     groupKey: string,
+    fallback: GroupState,
     rows: ImportStagingRow[],
     recipientId: number | null,
     recipientName: string | null,
   ) => {
-    setGroupOverrides((prev) => {
-      const next = new Map(prev);
-      next.set(groupKey, { recipientId, recipientName, saving: true });
-      return next;
-    });
+    updateGroupState(groupKey, { recipientId, recipientName, recipientSaving: true }, fallback);
 
     try {
       await Promise.all(rows.map((row) => overrideMutation.mutateAsync({ rowId: row.id, recipientId })));
-      setGroupOverrides((prev) => {
-        const next = new Map(prev);
-        next.set(groupKey, { recipientId, recipientName, saving: false });
-        return next;
-      });
+      updateGroupState(groupKey, { recipientSaving: false }, fallback);
+      // Recipient changed — recipient default category may differ. Refresh.
+      queryClient.invalidateQueries({ queryKey: ["import-preview", batchId] });
     } catch (err) {
       toast.error(t("importReview.toast.overrideFailed"), {
         description: err instanceof Error ? err.message : undefined,
@@ -144,6 +180,57 @@ export default function ImportReviewPage() {
         return next;
       });
     }
+  };
+
+  const handleCategoryOverride = async (
+    groupKey: string,
+    fallback: GroupState,
+    rows: ImportStagingRow[],
+    categoryId: number | null,
+    categoryLabel: string | null,
+  ) => {
+    updateGroupState(
+      groupKey,
+      { categoryId, categoryLabel, categorySaving: true },
+      fallback,
+    );
+
+    try {
+      await Promise.all(
+        rows.map((row) => categoryOverrideMutation.mutateAsync({ rowId: row.id, categoryId })),
+      );
+      updateGroupState(groupKey, { categorySaving: false }, fallback);
+
+      const state = groupOverrides.get(groupKey) ?? fallback;
+      const persist = (groupOverrides.get(groupKey)?.persistAsDefault ?? fallback.persistAsDefault);
+      const targetRecipientId = (groupOverrides.get(groupKey)?.recipientId ?? state.recipientId);
+
+      if (persist && targetRecipientId != null && categoryId != null) {
+        try {
+          await persistDefaultMutation.mutateAsync({
+            recipientId: targetRecipientId,
+            categoryId,
+          });
+        } catch (persistErr) {
+          toast.error(t("importReview.toast.persistDefaultFailed"), {
+            description: persistErr instanceof Error ? persistErr.message : undefined,
+          });
+        }
+      }
+    } catch (err) {
+      toast.error(t("importReview.toast.categoryOverrideFailed"), {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      updateGroupState(groupKey, { categorySaving: false }, fallback);
+    }
+  };
+
+  const handlePersistDefaultToggle = (
+    groupKey: string,
+    fallback: GroupState,
+    next: boolean,
+  ) => {
+    updateGroupState(groupKey, { persistAsDefault: next }, fallback);
   };
 
   const totalRows = preview?.groups.reduce((sum, g) => sum + g.row_count, 0) ?? 0;
@@ -222,11 +309,14 @@ export default function ImportReviewPage() {
       <Accordion type="multiple" className="space-y-2">
         {preview.groups.map((group) => {
           const groupKey = String(group.recipient_id ?? "__unresolved__");
-          const override = groupOverrides.get(groupKey);
-          const effectiveName = override?.recipientName ?? group.recipient_name;
-          const effectiveRecipientId = override !== undefined ? override.recipientId : group.recipient_id;
+          const fallbackState = groupStateFor(group, groupKey);
+          const state = groupOverrides.get(groupKey) ?? fallbackState;
+          const effectiveName = state.recipientName ?? group.recipient_name;
+          const effectiveRecipientId = state.recipientId;
+          const effectiveCategoryId = state.categoryId;
           const dominant = dominantMatchSource(group.rows);
           const isNew = group.recipient_id == null || dominant === "new";
+          const persistCheckboxId = `persist-default-${groupKey}`;
 
           return (
             <AccordionItem
@@ -250,21 +340,60 @@ export default function ImportReviewPage() {
                   className="flex items-center gap-2 mr-2 shrink-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {override?.saving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                  {(state.recipientSaving || state.categorySaving) && (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  )}
                   <RecipientCombobox
                     value={effectiveRecipientId}
-                    onSelect={(id, name) => handleGroupOverride(groupKey, group.rows, id, name)}
+                    onSelect={(id, name) =>
+                      handleGroupOverride(groupKey, fallbackState, group.rows, id, name)
+                    }
                     className="h-7 text-xs max-w-[180px]"
-                    disabled={override?.saving}
+                    disabled={state.recipientSaving}
                   />
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-2">
+              <AccordionContent className="px-4 pb-3">
                 {group.matched_pattern_text && (
                   <p className="text-xs text-muted-foreground mb-3 font-mono truncate">
                     {t("importReview.pattern")}: {group.matched_pattern_text}
                   </p>
                 )}
+
+                {/* Category controls — apply to all rows in the group. */}
+                <div
+                  className="flex flex-wrap items-center gap-3 mb-3 pb-3 border-b border-border/40"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {t("importReview.category")}
+                  </span>
+                  <CategoryCombobox
+                    value={effectiveCategoryId}
+                    onSelect={(id, label) =>
+                      handleCategoryOverride(groupKey, fallbackState, group.rows, id, label)
+                    }
+                    className="h-7 text-xs max-w-[260px]"
+                    disabled={state.categorySaving || effectiveRecipientId == null}
+                  />
+                  {effectiveRecipientId != null && (
+                    <label
+                      htmlFor={persistCheckboxId}
+                      className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none"
+                    >
+                      <Checkbox
+                        id={persistCheckboxId}
+                        checked={state.persistAsDefault}
+                        onCheckedChange={(checked) =>
+                          handlePersistDefaultToggle(groupKey, fallbackState, checked === true)
+                        }
+                        disabled={state.categorySaving}
+                      />
+                      {t("importReview.persistDefault")}
+                    </label>
+                  )}
+                </div>
+
                 <div className="space-y-1">
                   {group.rows.map((row) => (
                     <div

@@ -20,12 +20,26 @@ export async function commitBatch({ batchId, onProgress }) {
   await query(`UPDATE import_batches SET status = 'committing' WHERE id = $1`, [batchId]);
 
   const { rows: matched } = await query(
-    `SELECT id, row_index, tx_date, bank_account, recipient_raw, memo,
-            amount, currency, balance, comment,
-            resolved_recipient_id, user_override_recipient_id, matched_pattern_id
-       FROM import_staging_rows
-      WHERE batch_id = $1 AND status = 'matched'
-      ORDER BY row_index ASC`,
+    `SELECT isr.id,
+            isr.row_index,
+            isr.tx_date,
+            isr.bank_account,
+            isr.recipient_raw,
+            isr.memo,
+            isr.amount,
+            isr.currency,
+            isr.balance,
+            isr.comment,
+            isr.resolved_recipient_id,
+            isr.user_override_recipient_id,
+            isr.matched_pattern_id,
+            isr.override_category_id,
+            r.default_category_id AS recipient_default_category_id
+       FROM import_staging_rows isr
+       LEFT JOIN recipients r
+         ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
+      WHERE isr.batch_id = $1 AND isr.status = 'matched'
+      ORDER BY isr.row_index ASC`,
     [batchId]
   );
 
@@ -82,15 +96,22 @@ export async function commitBatch({ batchId, onProgress }) {
           // When overridden, clear matched_pattern_id — the link is now manual.
           const effectivePatternId = row.user_override_recipient_id ? null : (row.matched_pattern_id ?? null);
 
+          // ADR-046: per-row override beats recipient default. Both may be null
+          // (truly uncategorized), in which case the runtime COALESCE in
+          // transactionRepository falls back to the recipient default at read.
+          const effectiveCategoryId =
+            row.override_category_id ?? row.recipient_default_category_id ?? null;
+
           await client.query(
             `INSERT INTO transactions
-                (date, bank_account, recipient_id, amount, memo, currency, balance, comment,
+                (date, bank_account, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)`,
             [
               dateStr,
               row.bank_account || null,
               effectiveRecipientId,
+              effectiveCategoryId,
               row.amount,
               row.memo || '',
               row.currency || null,

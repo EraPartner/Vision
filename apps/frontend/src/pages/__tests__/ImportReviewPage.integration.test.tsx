@@ -307,6 +307,57 @@ describe("ImportReviewPage (integration)", () => {
 
     // ─── Edge cases ────────────────────────────────────────────────────────
 
+    // ─── ADR-046: category review ─────────────────────────────────────────
+
+    it("renders category controls when group is expanded (ADR-046)", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
+                ok({
+                    batch_id: 1,
+                    groups: [
+                        {
+                            recipient_id: 9,
+                            recipient_name: "Carrefour",
+                            recipient_default_category_id: null,
+                            recipient_default_category_label: null,
+                            override_category_id: null,
+                            current_category_id: null,
+                            current_category_label: null,
+                            row_count: 1,
+                            rows: [
+                                {
+                                    id: 99,
+                                    tx_date: "2026-04-15",
+                                    amount: "-12.34",
+                                    currency: "EUR",
+                                    recipient_raw: "CARREFOUR EXPRESS",
+                                    memo: null,
+                                    match_source: "exact",
+                                    match_similarity: null,
+                                    override_category_id: null,
+                                },
+                            ],
+                            matched_pattern_text: null,
+                        },
+                    ],
+                    totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+                }),
+            ),
+        );
+
+        renderReviewPage();
+
+        const user = userEvent.setup();
+        await user.click(await screen.findByText("Carrefour"));
+
+        // Category label rendered next to combobox.
+        expect(await screen.findByText(/^Category$/i)).toBeInTheDocument();
+        // Persist-default checkbox visible (recipient has no current default).
+        expect(
+            await screen.findByLabelText(/save as recipient default/i),
+        ).toBeInTheDocument();
+    });
+
     it("does not crash when preview endpoint returns 404", async () => {
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         server.use(

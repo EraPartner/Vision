@@ -50,6 +50,7 @@ aliases: [glossary, terms, terminology, dictionary, vocabulary, disambiguation]
 | **Inheritance Tables** | PostgreSQL table inheritance pattern for investments | [[docs/adr/002-database-schema\|Database Schema]] |
 | **Raw Transactions** | Bank-specific raw data stored before creating normalized transactions | [[docs/features/import\|Import]] |
 | **Deduplication Hash** | SHA-256 hash used to prevent duplicate imports | [[docs/features/import\|Import]] |
+| **Override Category ID** | Per-row category assignment during import review (can optionally persist to recipient default) | [[docs/adr/046-import-review-category-assignment\|ADR-046]] |
 
 ## UI Terms
 

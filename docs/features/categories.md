@@ -116,13 +116,23 @@ Key transactional guarantees:
 - **POST /api/categories** — Create-or-get with UNIQUE constraint on (general, detail).
 - **POST /api/categories/:id/assign** — Atomic assignment (single DB transaction).
 
+## Import Review Category Assignment (ADR-046)
+
+When importing bank statements, Vision now allows category assignment during the import review step before committing the batch. See [[docs/adr/046-import-review-category-assignment|ADR-046]] for design details.
+
+Key behaviors:
+- Per-row category override via `POST /api/import/batches/:id/rows/:rowId/category-override`
+- Optional "Save as recipient default" checkbox to persist the category to `recipients.default_category_id`
+- Committed transactions have category written explicitly: `COALESCE(override_category_id, recipient_default_category_id, NULL)`
+
 ## Related Features
 
 - [[docs/features/recipients|Recipients]] — Recipient default categories
 - [[docs/features/transactions|Transactions]] — Transaction categorization
 - [[docs/features/statistics|Statistics]] — Category-based spending reports
-- [[docs/features/import|CSV Import]] — Auto-categorization during import
+- [[docs/features/import|CSV Import]] — Category assignment during import review (ADR-046)
 
 ## Related ADRs
 
+- [[docs/adr/046-import-review-category-assignment|ADR-046]] — Import review category assignment with optional persist-as-recipient-default
 - [[docs/adr/015-recipient-bank-account-uniqueness|ADR-015]] — UNIQUE constraint migration for categories, recipients, and bank accounts

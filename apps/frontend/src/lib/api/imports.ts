@@ -169,6 +169,13 @@ export function overrideImportRow(batchId: number, rowId: number, recipientId: n
     });
 }
 
+export function overrideImportRowCategory(batchId: number, rowId: number, categoryId: number | null): Promise<{ row_id: number; override_category_id: number | null }> {
+    return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/category-override`, {
+        method: 'POST',
+        body: JSON.stringify({ category_id: categoryId }),
+    });
+}
+
 export function commitImportBatch(batchId: number): Promise<{ batch_id: number; imported: number; duplicates: number; errors: number }> {
     return apiRequest(`/api/import/batches/${batchId}/commit`, { method: 'POST' });
 }

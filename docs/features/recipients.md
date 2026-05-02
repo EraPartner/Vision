@@ -76,6 +76,15 @@ If any step fails, the entire merge rolls back.
 
 **Service:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]]
 
+### Default Category Assignment (ADR-046)
+
+Recipients can have an optional `default_category_id` which is used to auto-categorize transactions:
+- During import review, users can override the category per staging row
+- The "Save as recipient default" checkbox persists the category to `recipients.default_category_id` for future imports
+- Committed transactions have category written explicitly: `COALESCE(override_category_id, recipient_default_category_id, NULL)`
+
+See [[docs/adr/046-import-review-category-assignment|ADR-046]] for implementation details.
+
 ### Frontend Reorganization (Phase 6)
 
 Dialog components have been moved into feature folders:
@@ -114,5 +123,6 @@ These constraints are enforced at the database level and handled gracefully in a
 
 ## Related ADRs
 
+- [[docs/adr/046-import-review-category-assignment|ADR-046]] — Import review category assignment with persist-as-default flow
 - [[docs/adr/014-atomic-merge-transactional-safety|ADR-014]] — Atomic merge design and row-locking strategy
 - [[docs/adr/015-recipient-bank-account-uniqueness|ADR-015]] — UNIQUE constraint migration for bank accounts and recipients

@@ -3,12 +3,12 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-04-24
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters]
+updated: 2026-05-02
+last_modified: 2026-05-02
+tags: [feature, import, export, csv, json, deduplication, phase-5a, attachments, phase-c, phase-e, phase-1, phase-12, phase-13, performance, concurrency, import-pipeline, component-split, error-handling, recipient-clusters, multi-select, export-filters, adr-046, category-review]
 aliases: [csv-import, bank-import, bank-statement, deduplication, data-import, streaming-import]
-description: Import transactions from bank CSV files with automatic deduplication. Phase E refactor split ImportPage into self-contained feature components. Phase 13 adds multi-select export filters for bank accounts and categories.
-related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx"]
+description: Import transactions from bank CSV files with automatic deduplication, fuzzy/pattern recipient matching, and (ADR-046) per-row category review with optional persist-as-recipient-default.
+related_code: ["apps/node-backend/src/services/importPipeline/index.js", "apps/node-backend/src/services/importPipeline/stage.js", "apps/node-backend/src/services/importPipeline/validate.js", "apps/node-backend/src/services/importPipeline/match.js", "apps/node-backend/src/services/importPipeline/commit.js", "apps/node-backend/src/services/dataImportService.js", "apps/node-backend/src/services/deduplication.js", "apps/node-backend/src/services/textNormalization.js", "apps/node-backend/src/routes/importRoutes.js", "apps/node-backend/src/lib/sse.js", "apps/node-backend/src/repositories/importBatchRepository.js", "apps/frontend/src/features/imports/TransactionImportCard.tsx", "apps/frontend/src/features/imports/RecipientsImportCard.tsx", "apps/frontend/src/features/imports/CategoriesImportCard.tsx", "apps/frontend/src/features/imports/ExportCard.tsx", "apps/frontend/src/features/imports/SupportedBanksCard.tsx", "apps/frontend/src/features/imports/useAdapters.ts", "apps/frontend/src/pages/ImportPage.tsx", "apps/frontend/src/pages/ImportReviewPage.tsx"]
 ---
 
 # Feature: CSV Import & Deduplication
@@ -274,10 +274,13 @@ Duplicate detection checks:
 2. Date + Amount + Recipient field matching
 3. Bank-specific deduplication strategies
 
-### 4. Category Detection
-- Looks up recipient's default category
-- Applies category if found
-- Falls back to uncategorized if not
+### 4. Category Detection (ADR-046)
+- At review time, each group surfaces its `recipient_default_category_id` plus any per-row `override_category_id`.
+- The user can change the category in the review accordion. Changes apply to all rows in the group via `POST /api/import/batches/:id/rows/:rowId/category-override`.
+- A "Save as recipient default" checkbox (defaults `true` when the recipient has no current default) persists the chosen category to `recipients.default_category_id` via `PATCH /api/recipients/:id`.
+- At commit, the category written into `transactions.category_id` is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
+- The runtime fallback `COALESCE(t.category_id, r.default_category_id)` in `transactionRepository` is preserved for backwards compatibility with rows committed before ADR-046 (which carry `category_id = NULL`).
+- See [[docs/adr/046-import-review-category-assignment|ADR-046]] for full decision context.
 
 ### 5. Transaction Creation
 - Creates transactions in main table

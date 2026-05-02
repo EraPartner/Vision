@@ -82,6 +82,7 @@ export const apiClient = {
     rollbackImportBatch: imp.rollbackImportBatch,
     getImportPreview: imp.getImportPreview,
     overrideImportRow: imp.overrideImportRow,
+    overrideImportRowCategory: imp.overrideImportRowCategory,
     commitImportBatch: imp.commitImportBatch,
 
     // Settings

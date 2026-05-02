@@ -49,11 +49,17 @@ export interface ImportStagingRow {
     match_similarity: number | null;
     matched_pattern_id: number | null;
     user_override_recipient_id: number | null;
+    override_category_id: number | null;
 }
 
 export interface ImportPreviewGroup {
     recipient_id: number | null;
     recipient_name: string | null;
+    recipient_default_category_id: number | null;
+    recipient_default_category_label: string | null;
+    override_category_id: number | null;
+    current_category_id: number | null;
+    current_category_label: string | null;
     matched_pattern_id: number | null;
     matched_pattern_text: string | null;
     matched_pattern_kind: string | null;

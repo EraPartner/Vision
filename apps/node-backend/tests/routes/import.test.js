@@ -88,10 +88,16 @@ vi.mock('../../src/services/aggregationRefresh.js', () => ({
   refreshAggregations: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../src/database/connection.js', () => ({
+  query: vi.fn(),
+  withTransaction: vi.fn(),
+}));
+
 import { runImportPipeline } from '../../src/services/importPipeline/index.js';
 import { getSupportedBanks } from '../../src/services/bankAdapters.js';
 import { importRecipientsCSV, importCategoriesCSV } from '../../src/services/dataImportService.js';
 import { listBatches, getBatch, rollbackBatch } from '../../src/repositories/importBatchRepository.js';
+import { query } from '../../src/database/connection.js';
 import multer from 'multer';
 import { ValidationError, NotFoundError } from '../../src/middleware/errorHandler.js';
 await import('../../src/routes/importRoutes.js');
@@ -701,6 +707,175 @@ describe('Import Routes', () => {
 
       expect(next).toHaveBeenCalledWith(err);
       expect(res.status).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // POST /api/import/batches/:id/rows/:rowId/category-override
+  // ──────────────────────────────────────────
+  describe('POST /batches/:id/rows/:rowId/category-override', () => {
+    const route = 'post:/batches/:id/rows/:rowId/category-override';
+
+    it('rejects non-numeric ids', async () => {
+      const req = { params: { id: 'abc', rowId: '5' }, body: { category_id: 1 } };
+      const res = mockResponse();
+      await expect(routeHandlers[route](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('rejects non-integer category_id', async () => {
+      const req = { params: { id: '1', rowId: '5' }, body: { category_id: 'foo' } };
+      const res = mockResponse();
+      await expect(routeHandlers[route](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('clears the override when category_id is null', async () => {
+      query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const req = { params: { id: '1', rowId: '5' }, body: { category_id: null } };
+      const res = mockResponse();
+      await routeHandlers[route](req, res);
+
+      expect(query).toHaveBeenCalledTimes(1);
+      const [sql, args] = query.mock.calls[0];
+      expect(sql).toContain('UPDATE import_staging_rows');
+      expect(sql).toContain('override_category_id = $3');
+      expect(args).toEqual([5, 1, null]);
+
+      const body = res.json.mock.calls[0][0];
+      expect(body.data).toEqual({ row_id: 5, override_category_id: null });
+    });
+
+    it('sets the override after verifying category exists', async () => {
+      // First call: category lookup. Second call: UPDATE.
+      query.mockResolvedValueOnce({ rows: [{ id: 12 }] });
+      query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const req = { params: { id: '7', rowId: '42' }, body: { category_id: 12 } };
+      const res = mockResponse();
+      await routeHandlers[route](req, res);
+
+      expect(query).toHaveBeenCalledTimes(2);
+      const [lookupSql, lookupArgs] = query.mock.calls[0];
+      expect(lookupSql).toContain('FROM categories');
+      expect(lookupArgs).toEqual([12]);
+
+      const [updateSql, updateArgs] = query.mock.calls[1];
+      expect(updateSql).toContain('override_category_id = $3');
+      expect(updateArgs).toEqual([42, 7, 12]);
+
+      const body = res.json.mock.calls[0][0];
+      expect(body.data).toEqual({ row_id: 42, override_category_id: 12 });
+    });
+
+    it('rejects unknown category_id with ValidationError', async () => {
+      query.mockResolvedValueOnce({ rows: [] });
+
+      const req = { params: { id: '1', rowId: '5' }, body: { category_id: 9999 } };
+      const res = mockResponse();
+      await expect(routeHandlers[route](req, res)).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('throws NotFoundError when staging row not found or wrong status', async () => {
+      query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+      query.mockResolvedValueOnce({ rowCount: 0 });
+
+      const req = { params: { id: '1', rowId: '5' }, body: { category_id: 1 } };
+      const res = mockResponse();
+      await expect(routeHandlers[route](req, res)).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // ──────────────────────────────────────────
+  // GET /api/import/batches/:id/preview — category fields
+  // ──────────────────────────────────────────
+  describe('GET /batches/:id/preview category fields', () => {
+    const route = 'get:/batches/:id/preview';
+
+    it('exposes recipient_default_category_id and current_category_label per group', async () => {
+      getBatch.mockResolvedValue({ id: 1, status: 'awaiting_review' });
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 100,
+            row_index: 0,
+            recipient_raw: 'SUPERMARKET',
+            amount: '-12.50',
+            currency: 'EUR',
+            tx_date: '2026-04-01',
+            memo: '',
+            match_source: 'exact',
+            match_similarity: null,
+            matched_pattern_id: null,
+            resolved_recipient_id: 7,
+            user_override_recipient_id: null,
+            override_category_id: null,
+            effective_recipient_id: 7,
+            recipient_name: 'SUPERMARKET ABC',
+            recipient_default_category_id: 12,
+            recipient_default_category_general: 'Groceries',
+            recipient_default_category_detail: 'Food',
+            override_category_general: null,
+            override_category_detail: null,
+            matched_pattern_text: null,
+            matched_pattern_kind: null,
+          },
+        ],
+      });
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers[route](req, res);
+
+      const body = res.json.mock.calls[0][0];
+      expect(body.data.groups).toHaveLength(1);
+      const g = body.data.groups[0];
+      expect(g.recipient_default_category_id).toBe(12);
+      expect(g.recipient_default_category_label).toBe('Groceries: Food');
+      expect(g.current_category_id).toBe(12);
+      expect(g.current_category_label).toBe('Groceries: Food');
+      expect(g.override_category_id).toBeNull();
+    });
+
+    it('per-row override beats recipient default in current_category fields', async () => {
+      getBatch.mockResolvedValue({ id: 1, status: 'awaiting_review' });
+      query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: 101,
+            row_index: 0,
+            recipient_raw: 'SUPERMARKET',
+            amount: '-99.99',
+            currency: 'EUR',
+            tx_date: '2026-04-01',
+            memo: '',
+            match_source: 'exact',
+            match_similarity: null,
+            matched_pattern_id: null,
+            resolved_recipient_id: 7,
+            user_override_recipient_id: null,
+            override_category_id: 22,
+            effective_recipient_id: 7,
+            recipient_name: 'SUPERMARKET ABC',
+            recipient_default_category_id: 12,
+            recipient_default_category_general: 'Groceries',
+            recipient_default_category_detail: 'Food',
+            override_category_general: 'Hardware',
+            override_category_detail: 'Tools',
+            matched_pattern_text: null,
+            matched_pattern_kind: null,
+          },
+        ],
+      });
+
+      const req = { params: { id: '1' } };
+      const res = mockResponse();
+      await routeHandlers[route](req, res);
+
+      const g = res.json.mock.calls[0][0].data.groups[0];
+      expect(g.override_category_id).toBe(22);
+      expect(g.current_category_id).toBe(22);
+      expect(g.current_category_label).toBe('Hardware: Tools');
+      expect(g.recipient_default_category_id).toBe(12);
     });
   });
 

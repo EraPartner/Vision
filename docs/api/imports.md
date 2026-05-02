@@ -238,6 +238,60 @@ See [[docs/testing/testing|Testing Documentation]] for envelope-aware test patte
 - Import route failures now return generic `detail: "Import failed"` style responses and avoid leaking raw internal exception strings.
 - SSE error events also use sanitized generic details to keep payloads safe for frontend display.
 
+## Review Endpoints
+
+When the pipeline detects fuzzy / pattern / new recipient resolutions it leaves the batch in `awaiting_review` status and the streaming endpoint emits a `review_required` SSE event with the `batch_id` so the frontend can navigate to the review page. The review endpoints below let the client inspect, override, and commit the staged batch.
+
+### GET /api/import/batches/:id/preview
+
+Returns staging rows grouped by effective recipient with match-source badges and category state.
+
+**Path Parameters:**
+- `id` — import batch id (must be in `awaiting_review` or `matched` status)
+
+**Response:** unified envelope with `data: { batch_id, groups[], totals }`. Each group:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `recipient_id` | `number \| null` | Effective recipient (override > resolved). `null` = unresolved. |
+| `recipient_name` | `string \| null` | Display name. |
+| `recipient_default_category_id` | `number \| null` | The current default on the recipient row. |
+| `recipient_default_category_label` | `string \| null` | `"general: detail"` formatted. |
+| `override_category_id` | `number \| null` | Per-row category override (ADR-046). |
+| `current_category_id` | `number \| null` | `override_category_id ?? recipient_default_category_id`. |
+| `current_category_label` | `string \| null` | Label for `current_category_id`. |
+| `matched_pattern_id` / `matched_pattern_text` / `matched_pattern_kind` | various | Set when resolved by `pattern`. |
+| `row_count` | `number` | Number of staging rows in the group. |
+| `rows[]` | `ImportStagingRow[]` | Per-row detail (date, amount, memo, match_source, similarity, override flags). |
+
+### POST /api/import/batches/:id/rows/:rowId/override
+
+Set or clear the recipient override on a single staging row.
+
+**Body:** `{ "recipient_id": number \| null }`
+
+**Response:** `{ "row_id": number, "user_override_recipient_id": number | null }`
+
+### POST /api/import/batches/:id/rows/:rowId/category-override
+
+Set or clear the per-row category override (ADR-046). Validated against `categories(id)`. The committed transaction's category is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
+
+**Body:** `{ "category_id": number \| null }`
+
+**Response:** `{ "row_id": number, "override_category_id": number | null }`
+
+**Errors:**
+- `400` — non-integer / unknown `category_id`
+- `404` — staging row not in batch or not in `matched` status
+
+### POST /api/import/batches/:id/commit
+
+Commit a reviewed batch. Honours all recipient and category overrides set above.
+
+**Response:** `{ "batch_id": number, "imported": number, "duplicates": number, "errors": number }`
+
+> **Persisting category as recipient default:** there is no dedicated endpoint. The review UI calls `PATCH /api/recipients/:id` with `{ "default_category_id": ... }` whenever the user opts in via the "Save as recipient default" checkbox.
+
 ## Rate Limits
 
 - Standard imports: General rate limits apply

@@ -404,13 +404,21 @@ router.get('/batches/:id/preview', async (req, res) => {
         isr.matched_pattern_id,
         isr.resolved_recipient_id,
         isr.user_override_recipient_id,
+        isr.override_category_id,
         COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id) AS effective_recipient_id,
         r.name AS recipient_name,
+        r.default_category_id AS recipient_default_category_id,
+        rdc.general AS recipient_default_category_general,
+        rdc.detail AS recipient_default_category_detail,
+        oc.general AS override_category_general,
+        oc.detail AS override_category_detail,
         rmp.pattern AS matched_pattern_text,
         rmp.pattern_kind AS matched_pattern_kind
        FROM import_staging_rows isr
        LEFT JOIN recipients r
          ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
+       LEFT JOIN categories rdc ON rdc.id = r.default_category_id
+       LEFT JOIN categories oc ON oc.id = isr.override_category_id
        LEFT JOIN recipient_match_patterns rmp ON rmp.id = isr.matched_pattern_id
       WHERE isr.batch_id = $1
         AND isr.status = 'matched'
@@ -418,14 +426,35 @@ router.get('/batches/:id/preview', async (req, res) => {
     [batchId]
   );
 
+  const formatCategoryLabel = (general, detail) => {
+    if (!general && !detail) return null;
+    return [general, detail].filter(Boolean).join(': ');
+  };
+
   // Group rows by effective_recipient_id (null = unresolved).
   const groupMap = new Map();
   for (const row of rows) {
     const key = row.effective_recipient_id ?? '__unresolved__';
     if (!groupMap.has(key)) {
+      const defaultLabel = formatCategoryLabel(
+        row.recipient_default_category_general,
+        row.recipient_default_category_detail,
+      );
+      const overrideLabel = formatCategoryLabel(
+        row.override_category_general,
+        row.override_category_detail,
+      );
+      const currentCategoryId = row.override_category_id ?? row.recipient_default_category_id ?? null;
+      const currentCategoryLabel = overrideLabel ?? defaultLabel ?? null;
+
       groupMap.set(key, {
         recipient_id: row.effective_recipient_id,
         recipient_name: row.recipient_name,
+        recipient_default_category_id: row.recipient_default_category_id ?? null,
+        recipient_default_category_label: defaultLabel,
+        override_category_id: row.override_category_id ?? null,
+        current_category_id: currentCategoryId,
+        current_category_label: currentCategoryLabel,
         matched_pattern_id: row.matched_pattern_id,
         matched_pattern_text: row.matched_pattern_text,
         matched_pattern_kind: row.matched_pattern_kind,
@@ -444,6 +473,7 @@ router.get('/batches/:id/preview', async (req, res) => {
       match_similarity: row.match_similarity,
       matched_pattern_id: row.matched_pattern_id,
       user_override_recipient_id: row.user_override_recipient_id,
+      override_category_id: row.override_category_id ?? null,
     });
   }
 
@@ -490,6 +520,48 @@ router.post('/batches/:id/rows/:rowId/override', async (req, res) => {
   }
 
   res.ok({ row_id: rowId, user_override_recipient_id: effectiveRecipientId });
+});
+
+// POST /api/import/batches/:id/rows/:rowId/category-override
+// Set (or clear) override_category_id on a single staging row. Symmetrical to
+// the recipient override above. The category landing on the committed
+// transaction is COALESCE(staging.override_category_id, recipient.default_category_id).
+router.post('/batches/:id/rows/:rowId/category-override', async (req, res) => {
+  const batchId = parseInt(req.params.id, 10);
+  const rowId = parseInt(req.params.rowId, 10);
+  if (!Number.isFinite(batchId) || !Number.isFinite(rowId)) {
+    throw new ValidationError('Invalid batch or row id');
+  }
+
+  const { category_id } = req.body;
+  if (category_id !== null && category_id !== undefined && !Number.isInteger(Number(category_id))) {
+    throw new ValidationError('category_id must be an integer or null');
+  }
+
+  const effectiveCategoryId = category_id != null ? Number(category_id) : null;
+
+  if (effectiveCategoryId !== null) {
+    const { rows: catRows } = await query(
+      `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
+      [effectiveCategoryId]
+    );
+    if (catRows.length === 0) {
+      throw new ValidationError(`Category ${effectiveCategoryId} not found`);
+    }
+  }
+
+  const { rowCount } = await query(
+    `UPDATE import_staging_rows
+        SET override_category_id = $3
+      WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
+    [rowId, batchId, effectiveCategoryId]
+  );
+
+  if (rowCount === 0) {
+    throw new NotFoundError(`Row ${rowId} not found in batch ${batchId} or not in matched status`);
+  }
+
+  res.ok({ row_id: rowId, override_category_id: effectiveCategoryId });
 });
 
 // POST /api/import/batches/:id/commit
