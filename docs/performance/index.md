@@ -3,8 +3,9 @@ title: Performance Documentation Index
 type: performance-index
 status: active
 date: 2026-04-25
-tags: [performance, index, optimization]
-description: Performance optimization strategies including caching, materialized views, and chart downsampling
+last_modified: 2026-05-03
+tags: [performance, index, optimization, startup, offline-resilience]
+description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
 aliases: [performance, optimization, speed]
 ---
 
@@ -23,6 +24,8 @@ SORT title ASC
 ```
 
 ## Recent Optimizations
+
+**2026-05-03: Offline-Aware Startup Optimization** — Backend now probes internet reachability at startup via new [[apps/node-backend/src/lib/network.js]] module (TCP to 1.1.1.1:443, 1.5s timeout, 30s cache). When offline is detected, skips all external data fetches (ECB rates, Yahoo quotes, Kinesis trendlines, historical backfills) that would each burn 5–15s on per-call timeouts. Result: `/health/detailed` ready status reached ~15 seconds sooner when offline; graceful degradation via cached/DB data. Scheduled hourly/12h refreshes also force-probe connectivity before fetching, avoiding unnecessary waits. See [[docs/architecture/backend-architecture#Network Reachability Module|Network Reachability Module]], [[docs/integrations/price-providers#Startup Behavior When Offline|Price Providers - Startup Offline]], [[docs/integrations/currency-conversion#Error Handling|Currency Conversion - Startup Offline]].
 
 **2026-04-25: Frontend Component Memoization & Lazy-Loading (Phase 12)** — Statistics page: all 8 chart components (MonthlyChart, NetTrendChart, YearlyComparisonChart, TopRecipientsChart, CategoryPieChart, CategoryTrendChart, RecipientInsightsTab, SankeyTab, SavedChartsSection) now lazy-loaded via `React.lazy()` + `Suspense` per tab, reducing initial bundle size. All 6 chart components + SavedChartsSection wrapped with `React.memo()` to prevent re-renders when parent state changes. `chartCardProps` memoized with `useMemo()` to stabilize children props. DashboardSettingsDialog: all 6 tab components wrapped with `React.memo()`. Stable callbacks for `aiDefaultModel` and `adminMode` changes via `useCallback` + functional updater pattern (no dependency on `localAppSettings`) to prevent memoized children from re-rendering. Async file I/O on import service: replaced `fs.readFileSync` with `await fs.promises.readFile()` for consistency with adapter pattern. Backend: added `LIMIT 10000` guard on unbounded fallback query path in `infoRepo.statistics`. See [[docs/features/statistics|Statistics Feature]] and [[docs/components/statistics|Statistics Components]].
 

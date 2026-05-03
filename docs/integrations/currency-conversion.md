@@ -3,10 +3,10 @@ title: Currency Conversion
 type: integration
 status: active
 date: 2026-04-25
-updated: 2026-04-25
-tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1]
-description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+).
-related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js"]
+updated: 2026-05-03
+tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization]
+description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03).
+related_code: ["apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.js"]
 ---
 
 # Currency Conversion
@@ -327,6 +327,16 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 - **Invalid source currencies**: Returns 1:1 passthrough amount
 - **Invalid target currencies**: Falls back to EUR conversion behavior
 - **Stale data**: Uses hardcoded fallback if all sources fail
+
+**Startup Behavior When Offline (May 2026):**
+During server startup, a network reachability probe determines if the host has internet connectivity. When offline is detected:
+- **Exchange rate cache warmup skipped**: `warmExchangeRateCache()` is not called
+- **Portfolio historical FX backfill skipped**: `backfillPortfolioHistoricalRates()` is not called
+- **No API timeouts**: Avoids 5–15s hang on ECB/Open Exchange Rates APIs
+- **Cached/DB fallback**: In-memory cache (24h TTL) + database → hardcoded rates
+- **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner
+
+Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
 
 ---
 

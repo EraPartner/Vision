@@ -2,10 +2,10 @@
 title: Backend Architecture
 type: architecture
 status: active
-description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27).
+description: Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. Startup sequence fixed to order FX cache warmup before snapshots (2026-04-25); backend now owns DB readiness polling (2026-04-27); offline-aware startup that skips external fetches when network unavailable (2026-05-03).
 date: 2026-04-23
-last_modified: 2026-04-29
-tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling]
+last_modified: 2026-05-03
+tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability]
 aliases: [backend architecture, node architecture, server design]
 ---
 
@@ -31,13 +31,57 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
 2. **Database migrations** — Alembic schema upgrade via JS runner
-3. **Exchange rate cache warmup** — `warmExchangeRateCache()` (captured as promise)
-4. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (captured as promise)
-5. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
-6. **Live price refresh** — Investment prices refreshed after snapshots
-7. **Info caches** — `warmInfoCaches` runs after snapshot completion
+3. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.js]]
+   - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
+   - Result cached for 30s; concurrent callers share in-flight promise
+   - If offline: skips all external data fetches; snapshots/info use DB/cache only
+   - If online: proceeds with external warmups as normal
+4. **Exchange rate cache warmup** — `warmExchangeRateCache()` (online only; captured as promise)
+5. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise)
+6. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
+7. **Live price refresh** — Investment prices refreshed after snapshots (online only)
+8. **Info caches** — `warmInfoCaches` runs after snapshot completion
 
 **Prior issue (2026-04-25):** FX cache and backfill were fire-and-forget, causing snapshot/cache work to run before historical FX was available, producing "Historical FX missing" warnings during startup.
+
+**Offline resilience (2026-05-03):** When the host has no internet connectivity, external data fetches (ECB rates, Yahoo quotes, Kinesis trendlines, historical backfills) would each burn 5–15 seconds on per-call timeouts before falling back to cached/DB data, delaying readiness and flooding logs with warnings. The reachability probe detects this early and skips these fetches entirely; the app reaches `/health/detailed` ready status ~15 seconds sooner when offline. Graceful degradation fallbacks remain intact: snapshots compute from stale/empty FX rows, info caches use existing DB data, and portfolio endpoints serve cached historical prices.
+
+## Network Reachability Module (2026-05-03)
+
+New module: [[apps/node-backend/src/lib/network.js]] — detects internet connectivity at startup and during scheduled tasks.
+
+**Usage in main.js:**
+
+- **Startup probe** (line ~522): Single async call `const online = await isInternetReachable()` gates all external fetches
+- **Scheduled 12h FX refresh** (line ~598): `if (!(await isInternetReachable({ force: true })))` — force-refreshes cache every 12h to detect connectivity changes; skips fetch if still offline
+- **Scheduled hourly quote refresh** (line ~616): `if (!(await isInternetReachable({ force: true })))` — force-refreshes cache hourly; skips fetch if still offline
+
+**Implementation:**
+
+```javascript
+isInternetReachable({ 
+  force?: boolean,      // Bypass cache and probe immediately
+  host?: string,        // Probe target (default 1.1.1.1)
+  port?: number,        // Probe port (default 443)
+  timeoutMs?: number    // Probe timeout in ms (default 1500)
+}): Promise<boolean>
+```
+
+- TCP connection attempt to public host within timeout
+- **Caching**: Result cached for 30s (reduces probe load during rapid startup calls)
+- **Concurrent deduplication**: Multiple callers share in-flight promise to avoid redundant probes
+- **Force refresh**: `force: true` bypasses cache, used by scheduled intervals to detect connectivity changes over time
+
+**Fallback behavior when offline:**
+
+All external APIs fall back to cached or database data:
+
+- **Exchange rates**: In-memory cache (24h TTL) + database → hardcoded rates
+- **Investment prices**: Cached current prices + historical DB → fallback to previous close
+- **Portfolio snapshots**: Computed from existing FX rows (may be stale)
+- **Info endpoints**: Aggregated from database only, no external calls
+
+Users see no errors; data is simply older.
 
 ## Graceful Shutdown (2026-04-29)
 

@@ -48,6 +48,7 @@ import { requestId } from './middleware/requestId.js';
 import { requestMetrics } from './middleware/requestMetrics.js';
 import { refreshCashflowForecastMc } from './jobs/refreshCashflowForecastMc.js';
 import { cancelPendingAggregationRefresh } from './services/aggregationRefresh.js';
+import { isInternetReachable } from './lib/network.js';
 
 function hasLivePriceRefreshConfig(investment) {
   const provider = investment?.price_provider;
@@ -495,7 +496,7 @@ async function start() {
 
     // Start Express server immediately after DB is ready
     const endListen = bootMark('app_listen');
-    app.listen(PORT, HOST, () => {
+    app.listen(PORT, HOST, async () => {
       endListen();
       bootSummary('backend_total');
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
@@ -514,10 +515,21 @@ async function start() {
           logger.error('Failed to refresh materialized views on startup', { error: err.message });
         });
 
+      // Probe internet reachability once. When offline, skip outbound fetches
+      // (ECB rates, Yahoo quotes, historical backfills) — they would each burn
+      // 5–15s on per-call timeouts before falling back to cached/DB data,
+      // delaying readiness and flooding logs with warnings.
+      const online = await isInternetReachable();
+      if (!online) {
+        logger.warn('No internet connectivity detected — skipping external data refresh on startup; using cached/DB data only');
+      }
+
       // Warm exchange rate cache AFTER server is accepting connections.
       // This avoids blocking startup while waiting for external API calls.
       // Captured as a promise so dependent tasks (info caches) can wait for it.
-      const exchangeRateWarmPromise = warmExchangeRateCache()
+      const exchangeRateWarmPromise = (online
+        ? warmExchangeRateCache()
+        : Promise.resolve())
         .then(() => { warmupStatus.exchangeRates = true; })
         .catch((err) => {
           warmupStatus.exchangeRates = true;
@@ -532,13 +544,22 @@ async function start() {
         });
 
       // Run backfill concurrently but capture promise so snapshots can wait.
-      const fxBackfillPromise = backfillPortfolioHistoricalRates().catch((err) => {
+      // Skip when offline — backfill would issue ECB historical fetches per
+      // missing date and stall on timeouts.
+      const fxBackfillPromise = (online
+        ? backfillPortfolioHistoricalRates()
+        : Promise.resolve()
+      ).catch((err) => {
         logger.error('Failed to backfill portfolio historical exchange rates on startup', { error: err.message });
       });
 
-      backfillHistoricalAssetQuotes().catch((err) => {
-        logger.error('Failed to backfill historical asset quotes on startup', { error: err.message });
-      });
+      if (online) {
+        backfillHistoricalAssetQuotes().catch((err) => {
+          logger.error('Failed to backfill historical asset quotes on startup', { error: err.message });
+        });
+      } else {
+        logger.info('Skipping historical asset quote backfill on startup — offline');
+      }
 
       sanitizePersistedKinesisHistory().catch((err) => {
         logger.error('Failed to sanitize persisted Kinesis history on startup', { error: err.message });
@@ -563,13 +584,21 @@ async function start() {
           logger.error('Failed to compute portfolio performance snapshots on startup', { error: err.message });
         });
 
-      refreshInvestmentPricesOnStartup().catch((err) => {
-        logger.error('Failed to refresh investment prices on startup', { error: err.message });
-      });
+      if (online) {
+        refreshInvestmentPricesOnStartup().catch((err) => {
+          logger.error('Failed to refresh investment prices on startup', { error: err.message });
+        });
+      } else {
+        logger.info('Skipping startup investment price refresh — offline');
+      }
 
       // Schedule automatic exchange rate refresh every 12 hours so rates stay
       // current even when no currency conversions are triggered by user activity
       exchangeRateRefreshInterval = setInterval(async () => {
+        if (!(await isInternetReachable({ force: true }))) {
+          logger.debug('Skipping scheduled exchange rate refresh — offline');
+          return;
+        }
         logger.info('Running scheduled exchange rate refresh...');
         clearExchangeRateCache();
         await warmExchangeRateCache().catch((err) => {
@@ -583,7 +612,11 @@ async function start() {
       }, 12 * 60 * 60 * 1000); // every 12 hours
 
       // Schedule hourly quote refresh for currently-held investments
-      quotesRefreshInterval = setInterval(() => {
+      quotesRefreshInterval = setInterval(async () => {
+        if (!(await isInternetReachable({ force: true }))) {
+          logger.debug('Skipping periodic quote refresh — offline');
+          return;
+        }
         refreshActiveHoldingQuotes().catch((err) => {
           logger.error('Periodic quote refresh failed', { error: err.message });
         });

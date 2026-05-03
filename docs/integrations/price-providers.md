@@ -1,14 +1,14 @@
 ---
 title: Integration - Price Providers
 type: integration
-description: Live and historical price feeds for stocks, crypto, and other investments
+description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
 date: 2026-04-21
-last_modified: 2026-04-28
-updated: 2026-04-28
-tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching]
+last_modified: 2026-05-03
+updated: 2026-05-03
+tags: [integration, price, stocks, crypto, api, historical-quotes, quote-backfill, phase-1, eur-to-usd-mapping, data-sanitization, kinesis, offline-resilience, price-history-default, provider-timeout, parallel-fetching, startup-optimization, network-reachability]
 aliases: [price providers, market data, Binance, Kinesis, Yahoo Finance, live prices]
 status: active
-related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js]]
+related_code: [[apps/node-backend/src/services/priceProviderService.js], [apps/node-backend/src/services/quoteBackfillService.js], [apps/node-backend/src/services/prices/priceProviderRegistry.js], [apps/node-backend/tests/priceProviderRegistry.test.js], [apps/node-backend/src/lib/network.js]]
 ---
 
 # Integration: Price Providers
@@ -153,6 +153,16 @@ Each fallback source is tracked in the refresh response as `priceSources: Record
 - `historical_fallback`: Database-backed but may be stale — frontend shows warning toast `portfolio.refreshedPricesStale` with count of stale prices
 
 This makes graceful offline degradation visible without blocking the user.
+
+**Startup Behavior When Offline (May 2026):**
+During server startup, before any price refresh attempts, a network reachability probe (TCP to 1.1.1.1:443, 1.5s timeout) determines if the host has internet connectivity. When the probe detects offline status:
+- **Startup refresh skipped**: `refreshInvestmentPricesOnStartup()` is not called
+- **Historical backfill skipped**: `backfillHistoricalAssetQuotes()` is not called
+- **No timeouts**: Avoids 5–15s burn-time on per-call timeouts waiting for unreachable providers
+- **Cached/DB fallback**: Snapshots and info endpoints use existing stored `current_price` and `asset_price_history` rows
+- **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner when offline
+
+Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
 
 **Provider Timeout Safety (Apr 2026):**
 - Binance ticker fetch now includes `signal: AbortSignal.timeout(8_000)` to abort after 8 seconds if the provider is unreachable/slow

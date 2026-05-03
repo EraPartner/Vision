@@ -3,10 +3,10 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-04-29
-last_modified: 2026-04-29
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. Recent fixes: offline-mode resilience, ADR-040 backup v2 (AES-256-GCM), admin token timing, dedup memo, CRLF CSV, EU decimals.
+updated: 2026-05-03
+last_modified: 2026-05-03
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, startup-optimization, network-reachability]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. Recent fixes: offline-mode resilience, ADR-040 backup v2 (AES-256-GCM), admin token timing, dedup memo, CRLF CSV, EU decimals.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
