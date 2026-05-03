@@ -36,7 +36,7 @@ export function drainIfNeeded(res) {
  */
 export function createSseWriter(req, res) {
   let closed = false;
-  res.on('close', () => { closed = true; });
+  req.on('close', () => { closed = true; });
 
   return {
     get closed() { return closed; },
