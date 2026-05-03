@@ -38,6 +38,7 @@ import {
   ShieldCheck,
   Activity,
   Globe,
+  PanelLeftClose,
 } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -52,7 +53,7 @@ function isActiveRoute(itemUrl: string, pathname: string) {
 }
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { workspace, setWorkspace } = useWorkspace();
@@ -145,18 +146,33 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="glass-chrome border-r border-sidebar-border/60">
       <SidebarHeader className={`border-b border-sidebar-border/50 py-4 ${collapsed ? "px-0" : "px-4"}`}>
         <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
-          <div className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04]">
+          <button
+            type="button"
+            onClick={() => toggleSidebar()}
+            aria-label="Toggle sidebar"
+            className="h-8 w-8 shrink-0 rounded-xl bg-gradient-to-br from-primary via-primary/85 to-accent/70 flex items-center justify-center shadow-[0_10px_30px_-10px_hsl(var(--primary)/0.55)] ring-1 ring-primary/20 transition-transform duration-300 hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <Wallet className="h-4 w-4 text-primary-foreground" />
-          </div>
+          </button>
           {!collapsed && (
-            <div className="overflow-hidden">
-              <h1 className="font-display text-lg font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
-                Vision
-              </h1>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground truncate">
-                {t('nav.financeManager')}
-              </p>
-            </div>
+            <>
+              <div className="overflow-hidden flex-1">
+                <h1 className="font-display text-lg font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
+                  Vision
+                </h1>
+                <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground truncate">
+                  {t('nav.financeManager')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSidebar()}
+                aria-label="Collapse sidebar"
+                className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </>
           )}
         </div>
       </SidebarHeader>

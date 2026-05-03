@@ -81,7 +81,7 @@ export default function AIChatPage() {
     const composerDisabled = !status?.ok;
 
     return (
-        <div className="flex h-[calc(100vh-6rem)] gap-4 p-4">
+        <div className="flex h-[calc(100vh-8rem)] gap-4 p-4">
             <aside className="w-72 shrink-0 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm">
                 <ChatConversationList
                     selectedId={selectedId}

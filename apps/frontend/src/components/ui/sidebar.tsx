@@ -134,7 +134,7 @@ const Sidebar = React.forwardRef<
     if (collapsible === "none") {
         return (
             <div
-                className={cn("glass-chrome flex h-full w-[--sidebar-width] flex-col text-sidebar-foreground", className)}
+                className={cn("glass-chrome flex h-full w-[var(--sidebar-width)] flex-col text-sidebar-foreground", className)}
                 ref={ref}
                 {...props}
             >
@@ -149,7 +149,7 @@ const Sidebar = React.forwardRef<
                 <SheetContent
                     data-sidebar="sidebar"
                     data-mobile="true"
-                    className="glass-chrome w-[--sidebar-width] p-0 text-sidebar-foreground [&>button]:hidden"
+                    className="glass-chrome w-[var(--sidebar-width)] p-0 text-sidebar-foreground [&>button]:hidden"
                     style={
                         {
                             "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -174,23 +174,26 @@ const Sidebar = React.forwardRef<
         >
             <div
                 className={cn(
-                    "relative h-svh w-[--sidebar-width] bg-transparent transition-[width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)]",
-                    "group-data-[collapsible=offcanvas]:w-0",
+                    "relative h-svh bg-transparent transition-[width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)]",
+                    collapsible === "offcanvas"
+                        ? "w-0"
+                        : collapsible === "icon"
+                            ? variant === "floating" || variant === "inset"
+                                ? "w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
+                                : "w-[var(--sidebar-width-icon)]"
+                            : "w-[var(--sidebar-width)]",
                     "group-data-[side=right]:rotate-180",
-                    variant === "floating" || variant === "inset"
-                        ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-                        : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]",
                 )}
             />
             <div
                 className={cn(
-                    "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] md:flex",
+                    "fixed inset-y-0 z-50 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-[var(--duration-normal)] ease-[var(--ease-out-expo)] md:flex",
                     side === "left"
                         ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
                         : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
                     variant === "floating" || variant === "inset"
                         ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-                        : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=left]:border-border/40 group-data-[side=right]:border-l group-data-[side=right]:border-border/40",
+                        : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)] group-data-[side=left]:border-r group-data-[side=left]:border-border/40 group-data-[side=right]:border-l group-data-[side=right]:border-border/40",
                     className,
                 )}
                 {...props}
@@ -533,7 +536,7 @@ const SidebarMenuSkeleton = React.forwardRef<
         >
             {showIcon && <Skeleton className="size-[18px] rounded-md" data-sidebar="menu-skeleton-icon"/>}
             <Skeleton
-                className="h-4 max-w-[--skeleton-width] flex-1"
+                className="h-4 max-w-[var(--skeleton-width)] flex-1"
                 data-sidebar="menu-skeleton-text"
                 style={
                     {

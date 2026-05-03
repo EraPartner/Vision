@@ -41,8 +41,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     }[mode];
 
     return (
-        <SidebarProvider>
-            <div className="relative min-h-screen flex w-full overflow-hidden">
+        <SidebarProvider defaultOpen={false}>
+            <div className="relative min-h-screen flex w-full overflow-x-clip">
                 <AppSidebar />
                 <div className="flex-1 flex flex-col min-w-0">
                     <header
