@@ -3,6 +3,11 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { server } from "./test/msw/server";
 
+// Warm dynamic-import cache for locales so LanguageProvider's lazy load
+// resolves synchronously in tests. Prevents flaky findByText timeouts on
+// slower CI runners where the first dynamic import can exceed 1s.
+await Promise.all([import("./locales/en"), import("./locales/nl")]);
+
 // Polyfills for Radix UI in jsdom (jsdom tests only — node-env tests have no window).
 if (typeof window !== "undefined") {
     window.PointerEvent = MouseEvent as unknown as typeof PointerEvent;
