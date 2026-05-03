@@ -654,3 +654,4 @@ start().catch((err) => {
   logger.error('Failed to start application', { error: err.message });
   process.exit(1);
 });
+
