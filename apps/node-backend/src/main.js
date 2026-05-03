@@ -268,8 +268,21 @@ app.use((req, res, next) => {
     gz = createGzip();
     res.removeHeader('Content-Length');
     res.setHeader('Content-Encoding', 'gzip');
-    gz.on('data', (chunk) => _write(chunk));
+
+    // Downstream backpressure: pause gz when raw socket buffer is full,
+    // resume on socket drain. Without this the gzip transform spins until
+    // its own buffer fills and then the response stalls.
+    gz.on('data', (chunk) => {
+      if (_write(chunk) === false) {
+        gz.pause();
+        res.once('drain', () => gz.resume());
+      }
+    });
     gz.on('end', () => _end());
+    // Upstream backpressure: when gz drains, surface the drain on res so
+    // pipe sources (e.g. fs.createReadStream from express.static) resume.
+    gz.on('drain', () => res.emit('drain'));
+    gz.on('error', (err) => res.destroy(err));
   };
 
   res.write = (chunk, encoding, cb) => {
@@ -281,9 +294,16 @@ app.use((req, res, next) => {
   res.end = (chunk, encoding, cb) => {
     setup();
     if (gz) {
+      if (typeof chunk === 'function') {
+        cb = chunk;
+        chunk = undefined;
+      } else if (typeof encoding === 'function') {
+        cb = encoding;
+        encoding = undefined;
+      }
       if (chunk != null && chunk !== '') gz.write(chunk, encoding);
       gz.end();
-      if (typeof cb === 'function') gz.once('finish', cb);
+      if (typeof cb === 'function') gz.once('end', cb);
       return res;
     }
     return _end(chunk, encoding, cb);
