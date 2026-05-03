@@ -264,20 +264,29 @@ Documentation:
 - [[docs/architecture/electron|Electron Architecture]] — IPC handlers, security model
 - [[docs/reference/api-endpoint-matrix#ipc-handlers--electron-desktop-phase-12|API Endpoint Matrix — IPC Section]]
 
-## Frontend Design System (Phase 9)
+## Frontend Design System (Phase 9) & CSS Architecture (Tailwind v4, May 2026)
 
 The frontend implements a premium liquid-glass aesthetic with:
 
 - **Color Palette**: Emerald + champagne-gold with deep charcoal base
-- **Typography**: Fraunces (display, serif) + Inter Tight (body, geometric sans-serif)
+- **Typography**: Fraunces (display, serif) + Inter (body, geometric sans-serif) — static weights (400/500/600) via `@fontsource`
 - **Material System**: Five-tier glass hierarchy + premium surface utilities
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
-- **Charts**: visx + d3 primitives replacing Recharts
+- **Charts**: visx + d3 primitives (primary); Recharts 3.8.1 (retained for compatibility, inactive)
+- **CSS Architecture**: Tailwind CSS v4 (4.2.4) with unified `@tailwindcss/postcss` plugin
+
+**Tailwind v4 Updates (May 2026):**
+- **PostCSS Config** — Simplified to `{ '@tailwindcss/postcss': {}, autoprefixer: {} }`
+- **CSS Entry Point** — Uses `@import "tailwindcss"` + `@config` directives (replaces v3's `@tailwind base/components/utilities`)
+- **@apply Restrictions** — Custom `.glass*` aliases now declare full CSS rules; v4 restricts @apply to registered utilities only
+- **Font Optimization** — Static weights replace variable fonts for reduced payload
 
 Documentation:
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
+- [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]] (NEW)
+- [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture]]
 - [[docs/reference/code-patterns#motion-consumer-pattern-phase-9|Motion Consumer Pattern]]
 - [[docs/reference/code-patterns#surface-shell-pattern-phase-9|Surface Shell Pattern]]
 

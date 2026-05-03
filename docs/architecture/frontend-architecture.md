@@ -2,9 +2,10 @@
 title: Frontend Architecture
 type: architecture
 status: active
-description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. Updated April 2026 with Statistics page component refactoring and Phase 4 unified settings store.
+description: React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. Updated April 2026 with Statistics page component refactoring and Phase 4 unified settings store.
 date: 2026-04-23
-tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring, zustand, state-management]
+updated: 2026-05-03
+tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
 
@@ -27,11 +28,12 @@ This organization improves feature discoverability and reduces cross-cutting con
 
 - **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite
-- **Styling**: Tailwind CSS + Radix UI + design tokens
+- **Styling**: **Tailwind CSS v4** (4.2.4) with unified `@tailwindcss/postcss` plugin + Radix UI + design tokens
 - **Design System**: Liquid-glass aesthetic (emerald + champagne-gold palette)
-- **Typography**: Fraunces (display) + Inter Tight (body) via `@fontsource-variable`
+- **Typography**: Fraunces (display) + Inter Tight (body) via `@fontsource` static weights (400/500/600)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
-- **Charts**: visx + d3 (replacing Recharts)
+- **Charts**: visx + d3 (primary); Recharts 3.8.1 (inactive, retained for compatibility)
+- **Notifications**: Sonner 2.0.7 (improved toast API and accessibility)
 - **State Management**: React Query (server state) + React Context (client state)
 - **Routing**: React Router v7
 - **HTTP Client**: Axios (custom ApiClient)
@@ -437,12 +439,48 @@ Migrated from Recharts to visx + d3 primitives in `apps/frontend/src/components/
 
 All charts consume design tokens directly and respect reduced-motion via Framer Motion integration.
 
+### CSS Architecture: Tailwind v4 (May 2026)
+
+Upgraded to Tailwind CSS v4 (4.2.4) with unified build system:
+
+**PostCSS Configuration** (`apps/frontend/postcss.config.cjs`):
+```js
+module.exports = {
+    plugins: {
+        '@tailwindcss/postcss': {},
+        autoprefixer: {},
+    },
+};
+```
+
+Replaced v3's plugin-based config with v4's unified `@tailwindcss/postcss` single plugin. Config resolution automatic.
+
+**CSS Entry Point** (`apps/frontend/src/index.css`):
+```css
+@import "tailwindcss";
+@config '../tailwind.config.ts';
+```
+
+The `@import "tailwindcss"` loads entire Tailwind v4 layer system; explicit `@config` ensures deterministic config resolution.
+
+**@apply Restrictions (v4)**:
+- Tailwind v4 restricts `@apply` to registered utilities only
+- Custom glass/surface class aliases declare full CSS rules instead of @apply
+- All `.glass*` variants in `@layer utilities` are now complete declarations
+
+**Typography Optimization**:
+- Static font weights (400/500/600) via `@fontsource/*` instead of variable fonts
+- Reduces payload; no visual regression for current design
+
+See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration]] for full migration details.
+
 ### Related Documentation
 
 - [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017: Liquid Glass Aesthetic]]
 - [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]]
 - [[docs/adr/019-framer-motion-adoption|ADR-019: Framer Motion Adoption]]
 - [[docs/adr/020-glass-system-downgrade-liquid-canvas-removal|ADR-020: Glass System Downgrade & Liquid Canvas Removal]] (Performance optimization)
+- [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]]
 - [[docs/components/ui-components|UI Components]]
 
 ## Component Hierarchy

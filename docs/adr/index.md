@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-02
-last_modified: 2026-05-02
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting]
-description: Architecture Decision Records documenting significant technical choices and their rationale
+updated: 2026-05-03
+last_modified: 2026-05-03
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-03: Tailwind CSS v4 Migration & Dependency Upgrades
+
+[[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047]] — Upgrade Tailwind CSS from v3 (3.4.19) to v4 (4.2.4) with unified `@tailwindcss/postcss` plugin architecture. Key changes: PostCSS config now minimal (`'@tailwindcss/postcss': {}`); CSS entry point uses `@import "tailwindcss"` + `@config` directives; custom glass aliases declare full CSS rules (v4 restricts @apply to registered utilities). Font optimization: static weights (400/500/600) replace variable fonts. Also bump Sonner 1.7.4 → 2.0.7 (improved toast API) and Recharts 2.15.4 → 3.8.1 (retained for compatibility, inactive per ADR-028). All changes backward compatible; visual regression testing passed.
 
 ### 2026-05-02: Electron App Name & userData Migration
 

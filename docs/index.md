@@ -5,8 +5,8 @@ status: active
 date: 2026-04-27
 updated: 2026-05-03
 last_modified: 2026-05-03
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, startup-optimization, network-reachability]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. Recent fixes: offline-mode resilience, ADR-040 backup v2 (AES-256-GCM), admin token timing, dedup memo, CRLF CSV, EU decimals.
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. Recent fixes: offline-mode resilience, ADR-040 backup v2 (AES-256-GCM), admin token timing, dedup memo, CRLF CSV, EU decimals.
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -157,6 +157,32 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-05-03 Tailwind CSS v4 Migration & Dependency Upgrades
+
+**Major Dependency Updates:**
+- **Tailwind CSS**: 3.4.19 → **4.2.4** (unified PostCSS plugin architecture)
+- **Sonner (notifications)**: 1.7.4 → **2.0.7** (improved toast API, better a11y)
+- **Recharts (charts)**: 2.15.4 → **3.8.1** (retained for compatibility, inactive in new code per ADR-028)
+
+**Tailwind v4 Migration Details:**
+- **PostCSS config** (`apps/frontend/postcss.config.cjs`): Replaced v3's `tailwindcss: { config: ... }` plugin with unified `'@tailwindcss/postcss': {}`
+- **CSS entry point** (`apps/frontend/src/index.css`): Replaced `@tailwind base/components/utilities` with `@import "tailwindcss"; @config '../tailwind.config.ts';`
+- **@apply restrictions** (v4): Custom `.glass*` aliases now declare full CSS rules instead of using @apply (v4 restricts @apply to registered utilities only)
+- **Font optimization**: Swapped `@fontsource-variable/*` → `@fontsource/*` static weights (400/500/600) for smaller payload
+- **No visual regressions**: All glass materials, surfaces, and motion utilities render identically; reduced-motion compliance maintained
+
+**ADR & Documentation:**
+- [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration & Dependency Upgrades]] — Full migration details, rationale, and rollback plan
+- [[docs/architecture/frontend-architecture#css-architecture-tailwind-v4-may-2026|Frontend Architecture — CSS Architecture section]] — Implementation details and references
+
+**Testing & Verification:**
+- `bun run build` succeeds
+- `bunx tsc --noEmit` clean (no type errors)
+- `bun run test` — all 1333+ tests pass
+- Visual inspection: glass materials, surfaces, animations, and theme switching work as expected
+
+See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047]], [[docs/architecture/frontend-architecture|Frontend Architecture]], [[docs/adr/017-liquid-glass-aesthetic-design-system|ADR-017 (Liquid Glass)]]
 
 ### 2026-04-28 Bank Adapter Expansion: ING Dutch-Language CSV Support
 
