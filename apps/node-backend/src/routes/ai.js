@@ -222,7 +222,7 @@ router.post('/chat', async (req, res) => {
   const parsed = validateChatBody(req.body);
 
   const abortController = new AbortController();
-  req.on('close', () => {
+  res.on('close', () => {
     if (!res.writableEnded) abortController.abort();
   });
 
@@ -231,6 +231,7 @@ router.post('/chat', async (req, res) => {
       conversationId: parsed.conversationId,
       message: parsed.message,
       model: parsed.model,
+      useTools: parsed.useTools,
       signal: abortController.signal,
     });
     res.ok({
@@ -247,7 +248,7 @@ router.post('/chat', async (req, res) => {
 });
 
 function validateChatBody(body) {
-  const { conversationId, message, model } = body || {};
+  const { conversationId, message, model, useTools } = body || {};
 
   if (conversationId !== undefined && conversationId !== null) {
     if (typeof conversationId !== 'string' || !UUID_RE.test(conversationId)) {
@@ -265,10 +266,14 @@ function validateChatBody(body) {
       throw new ValidationError('"model" must be a non-empty string');
     }
   }
+  if (useTools !== undefined && typeof useTools !== 'boolean') {
+    throw new ValidationError('"useTools" must be a boolean');
+  }
   return {
     conversationId: conversationId || null,
     message,
     model: model || null,
+    useTools: useTools !== false,
   };
 }
 
@@ -279,6 +284,13 @@ function validateChatBody(body) {
 // commit, errors ride the SSE `error` frame.
 router.post('/chat/stream', async (req, res) => {
   const parsed = validateChatBody(req.body);
+  logger.info('[ai] chat/stream start', {
+    requestId: req.id,
+    conversationId: parsed.conversationId,
+    model: parsed.model,
+    useTools: parsed.useTools,
+    messageLen: parsed.message.length,
+  });
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -289,7 +301,7 @@ router.post('/chat/stream', async (req, res) => {
 
   const writer = createSseWriter(req, res);
   const abortController = new AbortController();
-  req.on('close', () => {
+  res.on('close', () => {
     if (!res.writableEnded) abortController.abort();
   });
 
@@ -298,6 +310,7 @@ router.post('/chat/stream', async (req, res) => {
       conversationId: parsed.conversationId,
       message: parsed.message,
       model: parsed.model,
+      useTools: parsed.useTools,
       signal: abortController.signal,
       streaming: true,
       onEvent: async (evt) => {

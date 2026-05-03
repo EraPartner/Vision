@@ -77,8 +77,21 @@ await import('../../src/routes/ai.js');
 
 const UUID = '11111111-2222-4333-8444-555555555555';
 
+function makeListenerStub() {
+  const listeners = {};
+  return {
+    on: vi.fn((event, cb) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(cb);
+    }),
+    emit(event, ...args) {
+      (listeners[event] || []).forEach((cb) => cb(...args));
+    },
+  };
+}
+
 function mockResponse() {
-  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn() };
+  const res = { json: vi.fn(), status: vi.fn(), send: vi.fn(), ...makeListenerStub() };
   res.status.mockReturnValue(res);
   res.ok = (data, meta) => {
     const body = { ok: true, data };
@@ -94,6 +107,7 @@ function mockSseResponse() {
     write: vi.fn(),
     end: vi.fn(),
     writableEnded: false,
+    ...makeListenerStub(),
   };
 }
 
@@ -298,7 +312,7 @@ describe('POST /api/ai/chat/stream', () => {
     const res = mockSseResponse();
 
     const promise = routeHandlers['post:/chat/stream'](req, res);
-    req.emit('close');
+    res.emit('close');
     await promise;
 
     expect(capturedSignal?.aborted).toBe(true);

@@ -13,9 +13,12 @@
 
 import { query } from '../database/connection.js';
 
-const CONVERSATION_COLUMNS = 'id, title, model, created_at, updated_at';
+const CONVERSATION_COLUMNS =
+  'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
 const MESSAGE_COLUMNS =
-  'id, conversation_id, role, content, tool_name, tool_args, tool_result, status, created_at';
+  'id, conversation_id AS "conversationId", role, content, '
+  + 'tool_name AS "toolName", tool_args AS "toolArgs", tool_result AS "toolResult", '
+  + 'status, created_at AS "createdAt"';
 
 function serializeJsonb(value) {
   if (value === undefined || value === null) return null;

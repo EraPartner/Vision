@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
@@ -16,16 +16,22 @@ export default function AIChatPage() {
     const { data: status, isLoading: statusLoading } = useOllamaStatus();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [modelOverride, setModelOverride] = useState<string | null>(null);
+    const [useTools, setUseTools] = useState<boolean>(true);
 
     const { data: detail } = useConversation(selectedId);
     const {
         send,
         cancel,
+        reset,
         isStreaming,
         assistantDraft,
         userMessage: streamingUserMessage,
         toolMessages: streamingToolMessages,
     } = useSendChatMessage();
+
+    useEffect(() => {
+        reset();
+    }, [selectedId, reset]);
 
     const messages: ChatMessage[] = useMemo(() => detail?.messages ?? [], [detail]);
 
@@ -41,6 +47,7 @@ export default function AIChatPage() {
             conversationId: selectedId,
             message,
             model: activeModel ?? undefined,
+            useTools,
         });
         if (result && !selectedId) {
             setSelectedId(result.conversation.id);
@@ -113,6 +120,8 @@ export default function AIChatPage() {
                     disabled={composerDisabled}
                     model={activeModel}
                     onModelChange={setModelOverride}
+                    useTools={useTools}
+                    onUseToolsChange={setUseTools}
                 />
             </main>
         </div>

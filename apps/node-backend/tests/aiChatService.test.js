@@ -23,6 +23,7 @@ vi.mock('../src/repositories/aiChatRepository.js', () => ({
     getConversation: vi.fn(),
     createConversation: vi.fn(),
     updateConversationModel: vi.fn(),
+    renameConversation: vi.fn(),
     getMessages: vi.fn(),
     appendMessage: vi.fn(),
   },

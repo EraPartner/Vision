@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
+import logger from '@/lib/logger';
 import type {
     ChatDoneEvent,
     ChatMessage,
@@ -76,8 +77,8 @@ export function useDeleteConversation() {
     return useMutation({
         mutationFn: (id: string) => apiClient.deleteConversation(id),
         onSuccess: (_void, id) => {
-            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
             queryClient.removeQueries({ queryKey: ['ai', 'conversations', id] });
+            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
             toast.success(t('aiChat.deleted'));
         },
         onError: (error: Error) => {
@@ -107,16 +108,24 @@ export function useSendChatMessage() {
     const { t } = useLanguage();
     const [state, setState] = useState<StreamingState>(INITIAL_STREAM);
     const abortRef = useRef<(() => void) | null>(null);
+    const isStreamingRef = useRef<boolean>(false);
 
     useEffect(() => {
         return () => {
-            if (abortRef.current) abortRef.current();
+            if (abortRef.current && isStreamingRef.current) {
+                logger.warn('[useSendChatMessage] unmount cleanup aborting in-flight stream');
+                abortRef.current();
+            }
         };
     }, []);
 
     const send = useCallback(
         async (body: SendChatBody): Promise<ChatDoneEvent | null> => {
-            if (abortRef.current) abortRef.current();
+            if (abortRef.current) {
+                logger.warn('[useSendChatMessage] new send aborting prior in-flight stream');
+                abortRef.current();
+            }
+            isStreamingRef.current = true;
             setState({ ...INITIAL_STREAM, isStreaming: true });
 
             const handleEvent = (event: ChatStreamEvent) => {
@@ -152,6 +161,7 @@ export function useSendChatMessage() {
                 return null;
             } finally {
                 abortRef.current = null;
+                isStreamingRef.current = false;
             }
         },
         [queryClient, t],
@@ -162,10 +172,18 @@ export function useSendChatMessage() {
             abortRef.current();
             abortRef.current = null;
         }
+        isStreamingRef.current = false;
         setState((prev) => ({ ...prev, isStreaming: false }));
     }, []);
 
-    const reset = useCallback(() => setState(INITIAL_STREAM), []);
+    const reset = useCallback(() => {
+        if (abortRef.current) {
+            abortRef.current();
+            abortRef.current = null;
+        }
+        isStreamingRef.current = false;
+        setState(INITIAL_STREAM);
+    }, []);
 
     return { send, cancel, reset, ...state };
 }

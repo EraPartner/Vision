@@ -84,10 +84,11 @@ export function toOllamaMessage(row) {
   if (!row || !row.role) return null;
 
   if (row.role === 'tool') {
-    const payload = row.tool_result ?? { ok: false, error: { code: 'MISSING', message: 'No result persisted' } };
+    const payload = row.toolResult ?? row.tool_result
+      ?? { ok: false, error: { code: 'MISSING', message: 'No result persisted' } };
     return {
       role: 'tool',
-      name: row.tool_name || 'unknown',
+      name: row.toolName || row.tool_name || 'unknown',
       content: typeof payload === 'string' ? payload : JSON.stringify(payload),
     };
   }

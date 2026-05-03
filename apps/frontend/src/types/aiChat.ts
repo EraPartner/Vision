@@ -112,4 +112,5 @@ export interface SendChatBody {
   conversationId: string | null;
   message: string;
   model?: string;
+  useTools?: boolean;
 }

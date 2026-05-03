@@ -2,9 +2,10 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-04-23
+date: 2026-05-03
+updated: 2026-05-03
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1]
-description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with 30 tool-calling tools
+description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names.
 aliases: [ai api, chat api, ollama api, ai endpoints]
 ---
 
@@ -66,7 +67,7 @@ Pass-through of `GET /api/tags` from Ollama.
 
 ## GET /api/ai/conversations
 
-List conversations newest-first.
+List conversations newest-first. All fields use camelCase (e.g., `createdAt`, `updatedAt`).
 
 **Response 200:** Array of `{ id, title, model, createdAt, updatedAt, messageCount }`.
 
@@ -79,22 +80,28 @@ Create an empty conversation. Optional `title` (≤200 chars) and `model`.
 { "title": "Tax questions", "model": "llama3.2:3b" }
 ```
 
-**Response 201:** Full conversation record with empty messages array.
+**Response 201:** 
+```json
+{
+  "conversation": { "id": "...", "title": "...", "model": "...", "createdAt": "...", "updatedAt": "..." },
+  "messages": []
+}
+```
 
 **400** when `title` > 200 chars or `model` is empty string.
 
 ## GET /api/ai/conversations/:id
 
-Conversation with messages. `id` must be a UUID.
+Conversation with messages. `id` must be a UUID. All timestamps and nested fields use camelCase (e.g., `createdAt`, `conversationId`, `toolName`, `toolArgs`, `toolResult`).
 
 **Response 200:**
 ```json
 {
-  "conversation": { "id": "...", "title": "...", "model": "...", "updatedAt": "..." },
+  "conversation": { "id": "...", "title": "...", "model": "...", "createdAt": "...", "updatedAt": "..." },
   "messages": [
-    { "id": "...", "role": "user", "content": "...", "createdAt": "..." },
-    { "id": "...", "role": "assistant", "content": "...", "createdAt": "..." },
-    { "id": "...", "role": "tool", "toolName": "getSpendByCategory", "toolArgs": {...}, "toolResult": {...}, "createdAt": "..." }
+    { "id": "...", "conversationId": "...", "role": "user", "content": "...", "createdAt": "..." },
+    { "id": "...", "conversationId": "...", "role": "assistant", "content": "...", "createdAt": "..." },
+    { "id": "...", "conversationId": "...", "role": "tool", "toolName": "getSpendByCategory", "toolArgs": {...}, "toolResult": {...}, "createdAt": "..." }
   ]
 }
 ```
@@ -113,6 +120,9 @@ Delete a conversation. Messages cascade via FK.
 
 **Response 204** on success. **404** when not found.
 
+> [!info] Frontend coordination
+> Frontend clears `selectedId` **before** awaiting `deleteMut.mutateAsync()` to prevent a race where in-flight `useConversation(deletedId)` queries trigger 404s. Backend hook uses `removeQueries` for the detail key before `invalidateQueries` on the list key with `exact: true` to prevent prefix-matching and re-triggering nested detail fetches.
+
 ## POST /api/ai/chat
 
 Non-streaming chat turn — runs the tool loop to completion then returns the full turn.
@@ -122,22 +132,24 @@ Non-streaming chat turn — runs the tool loop to completion then returns the fu
 {
   "conversationId": "uuid-or-null",
   "message": "biggest expense category in 2025?",
-  "model": "llama3.2:3b"
+  "model": "llama3.2:3b",
+  "useTools": true
 }
 ```
 
-- `message` required; trimmed; ≤8000 chars.
+- `message` required; trimmed; ≤4000 chars.
 - `conversationId` null → creates a new conversation.
 - `model` optional; falls back to `ollama.defaultModel`.
+- `useTools` optional boolean (default `true`); when `false`, the backend passes `tools: undefined` to Ollama, disabling all tool-calling and returning text-only responses.
 
 **Response 200:**
 ```json
 {
-  "conversation": { "id": "...", "title": "...", "model": "...", "updatedAt": "..." },
-  "userMessage":      { "id": "...", "role": "user", "content": "...", "createdAt": "..." },
-  "toolMessages":     [{ "role": "tool", "toolName": "...", "toolArgs": {...}, "toolResult": {...} }],
-  "assistantMessage": { "id": "...", "role": "assistant", "content": "...", "createdAt": "..." },
-  "usage":      { "promptTokens": 123, "completionTokens": 456, "totalTokens": 579 },
+  "conversation": { "id": "...", "title": "...", "model": "...", "createdAt": "...", "updatedAt": "..." },
+  "userMessage":      { "id": "...", "conversationId": "...", "role": "user", "content": "...", "createdAt": "..." },
+  "toolMessages":     [{ "id": "...", "conversationId": "...", "role": "tool", "toolName": "...", "toolArgs": {...}, "toolResult": {...}, "createdAt": "..." }],
+  "assistantMessage": { "id": "...", "conversationId": "...", "role": "assistant", "content": "...", "createdAt": "..." },
+  "usage":      { "evalCount": 123, "promptEvalCount": 456, "totalDurationMs": 579 },
   "iterations": 2
 }
 ```
@@ -199,11 +211,11 @@ data: {
 
 | Event | Payload | When |
 |-------|---------|------|
-| `user_message` | `{ message }` | Persisted user row — first event |
+| `user_message` | `{ message }` | Persisted user row (camelCase fields) — first event |
 | `token` | `"delta"` (string) | Assistant content chunk |
 | `tool_call` | `{ name, args }` | Model requested a tool — before dispatch |
-| `tool_result` | `{ message }` | Tool row persisted (result in `message.toolResult`) |
-| `done` | `{ conversation, assistantMessage, usage, iterations }` | Terminal success |
+| `tool_result` | `{ message }` | Tool row persisted (camelCase fields; result in `message.toolResult`) |
+| `done` | `{ conversation, assistantMessage, usage, iterations }` | Terminal success (all fields camelCase) |
 | `error` | `{ detail, code? }` | Terminal failure — `code` present for `AiChatServiceError` |
 
 > [!info] Disconnect
@@ -217,11 +229,12 @@ data: {
 | Field | Rule |
 |-------|------|
 | `conversationId` | UUID v4 pattern or null |
-| `message` | non-empty string, ≤8000 chars |
+| `message` | non-empty string, ≤4000 chars |
 | `model` | non-empty string or omitted |
+| `useTools` | optional boolean (default `true`) |
 | `title` (CRUD) | non-empty string (PATCH), ≤200 chars |
 
-`MAX_MESSAGE_LENGTH = 8000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.js|routes/ai.js]].
+`MAX_MESSAGE_LENGTH = 4000`, `MAX_TITLE_LENGTH = 200` — hardcoded in [[apps/node-backend/src/routes/ai.js|routes/ai.js]].
 
 ## Rate Limiting
 

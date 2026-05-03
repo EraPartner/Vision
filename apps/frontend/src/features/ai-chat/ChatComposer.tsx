@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Send, Square } from 'lucide-react';
+import { Send, Square, Wrench } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { useOllamaModels, useOllamaStatus } from '@/hooks/useOllamaStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 
 interface ChatComposerProps {
     onSend: (message: string) => void;
@@ -19,6 +20,8 @@ interface ChatComposerProps {
     disabled?: boolean;
     model: string | null;
     onModelChange: (model: string) => void;
+    useTools: boolean;
+    onUseToolsChange: (next: boolean) => void;
 }
 
 const MAX_LEN = 4000;
@@ -30,6 +33,8 @@ export function ChatComposer({
     disabled = false,
     model,
     onModelChange,
+    useTools,
+    onUseToolsChange,
 }: ChatComposerProps) {
     const { t } = useLanguage();
     const [value, setValue] = useState('');
@@ -85,6 +90,22 @@ export function ChatComposer({
                             ))}
                         </SelectContent>
                     </Select>
+                    <button
+                        type="button"
+                        onClick={() => onUseToolsChange(!useTools)}
+                        disabled={isStreaming}
+                        aria-pressed={useTools}
+                        title={useTools ? t('aiChat.toolsOn') : t('aiChat.toolsOff')}
+                        className={cn(
+                            'inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] uppercase tracking-[0.12em] transition-colors',
+                            useTools
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border/60 bg-transparent text-muted-foreground hover:bg-muted/40',
+                        )}
+                    >
+                        <Wrench className="h-3 w-3" />
+                        {useTools ? t('aiChat.toolsOn') : t('aiChat.toolsOff')}
+                    </button>
                 </div>
                 <div className="flex items-end gap-2 rounded-xl border border-border/60 bg-background/80 p-2 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/60 transition-colors">
                     <Textarea

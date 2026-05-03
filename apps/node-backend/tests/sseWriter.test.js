@@ -14,6 +14,7 @@ function makeRes({ needDrain = false } = {}) {
     write: vi.fn((chunk) => { written.push(chunk); return !needDrain; }),
     end: vi.fn(() => { emitter.writableEnded = true; }),
     once: (event, cb) => emitter.once(event, cb),
+    on: (event, cb) => emitter.on(event, cb),
     emit: (event) => emitter.emit(event),
   };
 }
@@ -76,13 +77,13 @@ describe('createSseWriter', () => {
     expect(writer.closed).toBe(false);
   });
 
-  it('becomes closed when req emits close', () => {
-    req.emit('close');
+  it('becomes closed when res emits close', () => {
+    res.emit('close');
     expect(writer.closed).toBe(true);
   });
 
   it('no-ops write() after client disconnect', async () => {
-    req.emit('close');
+    res.emit('close');
     await writer.write('token', 'ignored');
     expect(res.write).not.toHaveBeenCalled();
   });

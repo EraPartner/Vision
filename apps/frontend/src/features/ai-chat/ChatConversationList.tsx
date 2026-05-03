@@ -50,10 +50,9 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
 
     const handleDeleteConfirm = async () => {
         if (!deleteTarget) return;
-        const wasSelected = deleteTarget.id === selectedId;
+        if (deleteTarget.id === selectedId) onSelect(null);
         await deleteMut.mutateAsync(deleteTarget.id);
         setDeleteTarget(null);
-        if (wasSelected) onSelect(null);
     };
 
     return (

@@ -82,6 +82,13 @@ async function ensureConversation({ conversationId, model, firstUserMessage }) {
       await aiChatRepository.updateConversationModel(conversationId, model);
       existing.model = model;
     }
+    if (existing.title === DEFAULT_CONVERSATION_TITLE && firstUserMessage) {
+      const newTitle = truncateTitle(firstUserMessage);
+      if (newTitle && newTitle !== DEFAULT_CONVERSATION_TITLE) {
+        const renamed = await aiChatRepository.renameConversation(conversationId, newTitle);
+        if (renamed) existing.title = renamed.title;
+      }
+    }
     return existing;
   }
 
@@ -119,6 +126,7 @@ export async function runChatTurn({
   conversationId = null,
   message,
   model = null,
+  useTools = true,
   signal,
   streaming = false,
   onEvent,
@@ -153,8 +161,8 @@ export async function runChatTurn({
   });
   await onEvent?.({ type: 'user_message', data: userMessage });
 
-  const toolSchemas = getToolSchemas();
-  const toolNames = getToolNames();
+  const toolSchemas = useTools ? getToolSchemas() : [];
+  const toolNames = useTools ? getToolNames() : [];
   const baseMessages = buildChatMessages({
     toolNames,
     history,
@@ -168,13 +176,22 @@ export async function runChatTurn({
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;
+    const iterStart = Date.now();
+    logger.debug('[aiChat] iteration start', {
+      conversationId: conversation.id,
+      iteration: iterations,
+      model: activeModel,
+      messageCount: baseMessages.length,
+      useTools,
+      toolCount: toolSchemas.length,
+    });
     let response;
     try {
       if (streaming && typeof ollamaClient.chatStream === 'function') {
         response = await ollamaClient.chatStream({
           model: activeModel,
           messages: baseMessages,
-          tools: toolSchemas,
+          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           signal,
           onToken: async (delta) => {
             if (delta) await onEvent?.({ type: 'token', data: delta });
@@ -184,11 +201,25 @@ export async function runChatTurn({
         response = await ollamaClient.chat({
           model: activeModel,
           messages: baseMessages,
-          tools: toolSchemas,
+          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           signal,
         });
       }
+      logger.debug('[aiChat] iteration ollama returned', {
+        conversationId: conversation.id,
+        iteration: iterations,
+        ms: Date.now() - iterStart,
+        toolCalls: response.toolCalls?.length ?? 0,
+        contentLen: response.content?.length ?? 0,
+      });
     } catch (err) {
+      logger.warn('[aiChat] iteration ollama failed', {
+        conversationId: conversation.id,
+        iteration: iterations,
+        ms: Date.now() - iterStart,
+        code: err?.code,
+        message: err?.message,
+      });
       if (err instanceof OllamaError) {
         throw new AiChatServiceError(`Ollama call failed: ${err.message}`, {
           code: err.code || 'OLLAMA_ERROR',
@@ -290,14 +321,15 @@ export async function getConversationWithMessages(id) {
   const conversation = await aiChatRepository.getConversation(id);
   if (!conversation) return null;
   const messages = await aiChatRepository.getMessages(id);
-  return { ...conversation, messages };
+  return { conversation, messages };
 }
 
 export async function createEmptyConversation({ title, model }) {
-  return aiChatRepository.createConversation({
+  const conversation = await aiChatRepository.createConversation({
     title: truncateTitle(title) || DEFAULT_CONVERSATION_TITLE,
     model: model || settings.ollama.defaultModel,
   });
+  return { conversation, messages: [] };
 }
 
 export async function renameConversation(id, title) {

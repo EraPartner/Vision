@@ -11,6 +11,7 @@ import type {
     SendChatBody,
 } from '@/types/aiChat';
 import { API_BASE_URL, apiRequest, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
+import logger from '@/lib/logger';
 
 export function getOllamaStatus(): Promise<OllamaStatus> {
     return apiRequest('/api/ai/status');
@@ -106,6 +107,8 @@ export function streamChat(
     };
 
     const result = (async (): Promise<ChatStreamEvent & { type: 'done' }> => {
+        const start = Date.now();
+        logger.debug('[ai] streamChat start', { conversationId: body.conversationId, model: body.model, useTools: body.useTools, msgLen: body.message.length });
         try {
             const response = await fetch(url, {
                 method: 'POST',
@@ -116,6 +119,7 @@ export function streamChat(
                 body: JSON.stringify(body),
                 signal: controller.signal,
             });
+            logger.debug('[ai] streamChat response', { status: response.status, ms: Date.now() - start });
 
             if (!response.ok) {
                 throw await parseEnvelopeError(response, 'Chat stream failed');
@@ -134,6 +138,7 @@ export function streamChat(
                 if (!parsed) return;
                 const event = decodeEvent(parsed.eventName, parsed.dataRaw);
                 if (!event) return;
+                logger.debug('[ai] streamChat event', { type: event.type, ms: Date.now() - start });
                 onEvent(event);
                 if (event.type === 'done') terminal = event;
                 if (event.type === 'error') terminalError = { detail: event.detail, code: event.code };
@@ -171,5 +176,11 @@ export function streamChat(
         }
     })();
 
-    return { abort: () => controller.abort(), result };
+    return {
+        abort: () => {
+            logger.warn('[ai] streamChat abort() called', new Error('abort stack').stack);
+            controller.abort();
+        },
+        result,
+    };
 }

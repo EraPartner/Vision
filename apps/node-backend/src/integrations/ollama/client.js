@@ -26,8 +26,10 @@ export class OllamaError extends Error {
 
 function withTimeout(signal, timeoutMs) {
   const controller = new AbortController();
+  let timedOut = false;
   const timer = setTimeout(() => {
-    controller.abort(new OllamaError('Ollama request timed out', { code: 'TIMEOUT' }));
+    timedOut = true;
+    controller.abort();
   }, timeoutMs);
 
   if (signal) {
@@ -38,7 +40,11 @@ function withTimeout(signal, timeoutMs) {
     }
   }
 
-  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
+  return {
+    signal: controller.signal,
+    cancel: () => clearTimeout(timer),
+    isTimeout: () => timedOut,
+  };
 }
 
 async function readJson(response) {
@@ -68,7 +74,7 @@ export function createOllamaClient({
   const url = (path) => `${baseUrl}${path}`;
 
   async function request(path, { method = 'GET', body, signal, timeoutMs = requestTimeoutMs } = {}) {
-    const { signal: composedSignal, cancel } = withTimeout(signal, timeoutMs);
+    const { signal: composedSignal, cancel, isTimeout } = withTimeout(signal, timeoutMs);
     try {
       const response = await fetchImpl(url(path), {
         method,
@@ -88,7 +94,10 @@ export function createOllamaClient({
       return await readJson(response);
     } catch (err) {
       if (err instanceof OllamaError) throw err;
-      if (err?.name === 'AbortError') {
+      if (isTimeout()) {
+        throw new OllamaError(`Ollama ${method} ${path} timed out after ${timeoutMs}ms`, { code: 'TIMEOUT', cause: err });
+      }
+      if (err?.name === 'AbortError' || composedSignal.aborted) {
         throw new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
       }
       throw new OllamaError(`Ollama ${method} ${path} failed: ${err.message}`, {
@@ -194,7 +203,14 @@ export function createOllamaClient({
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
 
-    const { signal: composedSignal, cancel } = withTimeout(signal, requestTimeoutMs);
+    const { signal: composedSignal, cancel, isTimeout } = withTimeout(signal, requestTimeoutMs);
+    logger.info('[ollama] chatStream request', {
+      url: url('/api/chat'),
+      model,
+      messageCount: messages.length,
+      toolCount: tools?.length ?? 0,
+      timeoutMs: requestTimeoutMs,
+    });
     let response;
     try {
       response = await fetchImpl(url('/api/chat'), {
@@ -203,9 +219,16 @@ export function createOllamaClient({
         body: JSON.stringify(body),
         signal: composedSignal,
       });
+      logger.info('[ollama] chatStream response received', {
+        status: response.status,
+        contentType: response.headers?.get?.('content-type') ?? null,
+      });
     } catch (err) {
       cancel();
-      if (err?.name === 'AbortError') {
+      if (isTimeout()) {
+        throw new OllamaError(`Ollama request timed out after ${requestTimeoutMs}ms`, { code: 'TIMEOUT', cause: err });
+      }
+      if (err?.name === 'AbortError' || composedSignal.aborted) {
         throw new OllamaError('Ollama request aborted', { code: 'ABORTED', cause: err });
       }
       throw new OllamaError(`Ollama POST /api/chat failed: ${err.message}`, {
@@ -295,7 +318,10 @@ export function createOllamaClient({
       if (buffer.length > 0) await handleLine(buffer);
     } catch (err) {
       if (err instanceof OllamaError) throw err;
-      if (err?.name === 'AbortError') {
+      if (isTimeout()) {
+        throw new OllamaError(`Ollama stream timed out after ${requestTimeoutMs}ms`, { code: 'TIMEOUT', cause: err });
+      }
+      if (err?.name === 'AbortError' || composedSignal.aborted) {
         throw new OllamaError('Ollama stream aborted', { code: 'ABORTED', cause: err });
       }
       throw new OllamaError(`Ollama stream read failed: ${err.message}`, {
