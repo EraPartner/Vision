@@ -9,9 +9,8 @@
 /* Design tokens: palette, materials, motion, typography */
 @import "./styles/tokens.css";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config '../tailwind.config.ts';
 
 /* ------------------------------------------------------------------
  * Base
@@ -166,7 +165,8 @@
     }
 
     /* Thin — for top chrome, navigation */
-    .glass-thin {
+    .glass-thin,
+    .liquid-glass-soft {
         background:
             linear-gradient(
                 180deg,
@@ -179,7 +179,8 @@
             0 1px 18px hsl(var(--glass-shadow) / 0.06);
     }
 
-    .dark .glass-thin {
+    .dark .glass-thin,
+    .dark .liquid-glass-soft {
         background:
             linear-gradient(
                 180deg,
@@ -192,7 +193,10 @@
     }
 
     /* Regular — default card material */
-    .glass-regular {
+    .glass-regular,
+    .liquid-glass,
+    .surface-glass,
+    .glass-effect {
         background:
             linear-gradient(
                 135deg,
@@ -207,7 +211,10 @@
             0 8px 28px hsl(var(--glass-shadow) / 0.08);
     }
 
-    .dark .glass-regular {
+    .dark .glass-regular,
+    .dark .liquid-glass,
+    .dark .surface-glass,
+    .dark .glass-effect {
         background:
             linear-gradient(
                 135deg,
@@ -275,7 +282,8 @@
     }
 
     /* Elevated — hero tiles and featured KPIs */
-    .glass-elevated {
+    .glass-elevated,
+    .liquid-glass-hero {
         background:
             linear-gradient(
                 138deg,
@@ -287,7 +295,8 @@
         box-shadow: 0 8px 16px hsl(var(--glass-shadow) / 0.14);
     }
 
-    .dark .glass-elevated {
+    .dark .glass-elevated,
+    .dark .liquid-glass-hero {
         background:
             linear-gradient(
                 138deg,
@@ -300,7 +309,8 @@
     }
 
     /* Trend accents — layered on top of glass-regular */
-    .glass-trend-up {
+    .glass-trend-up,
+    .liquid-glass-trend-up {
         background:
             linear-gradient(
                 138deg,
@@ -311,7 +321,8 @@
         border: 1px solid hsl(var(--success) / 0.36);
     }
 
-    .glass-trend-down {
+    .glass-trend-down,
+    .liquid-glass-trend-down {
         background:
             linear-gradient(
                 138deg,
@@ -322,7 +333,8 @@
         border: 1px solid hsl(var(--destructive) / 0.36);
     }
 
-    .dark .glass-trend-up {
+    .dark .glass-trend-up,
+    .dark .liquid-glass-trend-up {
         background:
             linear-gradient(
                 138deg,
@@ -333,7 +345,8 @@
         border-color: hsl(var(--success) / 0.44);
     }
 
-    .dark .glass-trend-down {
+    .dark .glass-trend-down,
+    .dark .liquid-glass-trend-down {
         background:
             linear-gradient(
                 138deg,
@@ -371,37 +384,6 @@
             -webkit-backdrop-filter: blur(var(--glass-elevated-blur));
             backdrop-filter: blur(var(--glass-elevated-blur));
         }
-    }
-
-    /* ------------------------------------------------------------------
-     * Legacy alias classes — maintain during migration
-     * ------------------------------------------------------------------ */
-    .liquid-glass {
-        @apply glass-regular;
-    }
-
-    .liquid-glass-soft {
-        @apply glass-thin;
-    }
-
-    .liquid-glass-hero {
-        @apply glass-elevated;
-    }
-
-    .liquid-glass-trend-up {
-        @apply glass-trend-up;
-    }
-
-    .liquid-glass-trend-down {
-        @apply glass-trend-down;
-    }
-
-    .surface-glass {
-        @apply glass-regular;
-    }
-
-    .glass-effect {
-        @apply glass-regular;
     }
 
     /* ------------------------------------------------------------------
