@@ -20,6 +20,18 @@ const MESSAGE_COLUMNS =
   + 'tool_name AS "toolName", tool_args AS "toolArgs", tool_result AS "toolResult", '
   + 'status, created_at AS "createdAt"';
 
+const PG_FK_VIOLATION = '23503';
+
+export class ConversationDeletedError extends Error {
+  constructor(conversationId, cause) {
+    super(`Conversation ${conversationId} was deleted while a message was being appended`);
+    this.name = 'ConversationDeletedError';
+    this.code = 'CONVERSATION_DELETED';
+    this.conversationId = conversationId;
+    if (cause) this.cause = cause;
+  }
+}
+
 function serializeJsonb(value) {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
@@ -103,22 +115,29 @@ const aiChatRepository = {
     toolResult = null,
     status = 'complete',
   }) {
-    const result = await query(
-      `INSERT INTO ai_messages
-         (conversation_id, role, content, tool_name, tool_args, tool_result, status)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
-       RETURNING ${MESSAGE_COLUMNS}`,
-      [
-        conversationId,
-        role,
-        content,
-        toolName,
-        serializeJsonb(toolArgs),
-        serializeJsonb(toolResult),
-        status,
-      ],
-    );
-    return result.rows[0];
+    try {
+      const result = await query(
+        `INSERT INTO ai_messages
+           (conversation_id, role, content, tool_name, tool_args, tool_result, status)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
+         RETURNING ${MESSAGE_COLUMNS}`,
+        [
+          conversationId,
+          role,
+          content,
+          toolName,
+          serializeJsonb(toolArgs),
+          serializeJsonb(toolResult),
+          status,
+        ],
+      );
+      return result.rows[0];
+    } catch (err) {
+      if (err && err.code === PG_FK_VIOLATION) {
+        throw new ConversationDeletedError(conversationId, err);
+      }
+      throw err;
+    }
   },
 
   async updateMessageStatus(id, status) {

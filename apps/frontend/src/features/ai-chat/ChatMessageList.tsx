@@ -3,6 +3,7 @@ import { Bot } from 'lucide-react';
 import type { ChatMessage } from '@/types/aiChat';
 import { ChatBubble } from './ChatBubble';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { isOptimisticUserId } from '@/lib/aiChatStreamStore';
 
 interface ChatMessageListProps {
     messages: ChatMessage[];
@@ -27,7 +28,20 @@ export function ChatMessageList({
         const existing = new Set(messages.map((m) => m.id));
         const extras: ChatMessage[] = [];
         if (streamingUserMessage && !existing.has(streamingUserMessage.id)) {
-            extras.push(streamingUserMessage);
+            // Defensive dedupe: if this is the optimistic placeholder and the
+            // real persisted user row already lives in `messages` (e.g. after a
+            // refetch on remount), suppress the optimistic to avoid a doubled
+            // bubble. Match by role + content since the optimistic id will not
+            // collide with any server-issued UUID.
+            const isOptimistic = isOptimisticUserId(streamingUserMessage.id);
+            const optimisticAlreadyPersisted =
+                isOptimistic
+                && messages.some(
+                    (m) => m.role === 'user' && m.content === streamingUserMessage.content,
+                );
+            if (!optimisticAlreadyPersisted) {
+                extras.push(streamingUserMessage);
+            }
         }
         for (const tool of streamingToolMessages) {
             if (!existing.has(tool.id)) extras.push(tool);
@@ -81,10 +95,10 @@ export function ChatMessageList({
                         <div className="rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-2.5 text-sm text-muted-foreground ring-1 ring-border/50">
                             <span className="inline-flex items-center gap-1">
                                 <span className="motion-safe:animate-pulse">{t('aiChat.thinking')}</span>
-                                <span className="inline-flex gap-0.5">
-                                    <span className="motion-safe:animate-bounce [animation-delay:0ms]">.</span>
-                                    <span className="motion-safe:animate-bounce [animation-delay:150ms]">.</span>
-                                    <span className="motion-safe:animate-bounce [animation-delay:300ms]">.</span>
+                                <span className="inline-flex gap-0.5" aria-hidden="true">
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:0ms]">.</span>
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:300ms]">.</span>
+                                    <span className="motion-safe:animate-bounce [animation-duration:900ms] [animation-delay:600ms]">.</span>
                                 </span>
                             </span>
                         </div>

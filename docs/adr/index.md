@@ -5,8 +5,8 @@ status: active
 date: 2026-04-23
 updated: 2026-05-03
 last_modified: 2026-05-03
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Tailwind CSS v4 migration (ADR-047).
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-03: AI Chat Module-Level Stream Store
+
+[[docs/adr/048-ai-chat-module-level-stream-store|ADR-048]] — Decouple AI chat SSE stream lifetime from React component lifecycle via singleton store (`aiChatStreamStore`). Streams now survive navigation; users can leave the chat page and the in-flight response continues. Store holds `{streams, aborts, listeners}` maps; React hooks subscribe via `useSyncExternalStore` and re-subscribe on return. Conversation pre-created before streaming (no PENDING bookkeeping). URL-backed selection (`?c=<id>`). Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`. Consequence: uninterrupted streaming, deep-linkable conversations, live activity visibility even on other pages.
 
 ### 2026-05-03: Tailwind CSS v4 Migration & Dependency Upgrades
 

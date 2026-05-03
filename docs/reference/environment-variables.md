@@ -52,7 +52,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 |----------|---------|----------|-------------|------|
 | `OLLAMA_URL` | _(unset)_ | No | Base URL for local Ollama server | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `OLLAMA_DEFAULT_MODEL` | `llama3.1:8b` | No | Default model for AI chat | [[apps/node-backend/src/config/env.js\|env.js]] |
-| `OLLAMA_REQUEST_TIMEOUT_MS` | `60000` | No | Chat request timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `600000` | No | Chat request timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `OLLAMA_HEALTH_TIMEOUT_MS` | `3000` | No | Health-check timeout | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `AI_CHAT_ENABLED` | `false` | No | Feature gate for AI chat endpoint | [[apps/node-backend/src/config/env.js\|env.js]] |
 | `AI_CHAT_RATE_LIMIT` | `30` | No | Per-minute rate limit | [[apps/node-backend/src/config/env.js\|env.js]] |

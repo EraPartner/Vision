@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MoreVertical, Plus, Pencil, Trash2, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,7 +25,9 @@ import {
     useCreateConversation,
     useDeleteConversation,
     useRenameConversation,
+    useStreamingConversationIds,
 } from '@/hooks/useAIChat';
+import { aiChatStreamStore } from '@/lib/aiChatStreamStore';
 import type { ConversationSummary } from '@/types/aiChat';
 
 interface ChatConversationListProps {
@@ -38,6 +40,8 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
     const { data, isLoading } = useConversations();
     const createMut = useCreateConversation();
     const deleteMut = useDeleteConversation();
+    const streamingIds = useStreamingConversationIds();
+    const streamingSet = useMemo(() => new Set(streamingIds), [streamingIds]);
     const [renameTarget, setRenameTarget] = useState<ConversationSummary | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null);
 
@@ -50,6 +54,11 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
 
     const handleDeleteConfirm = async () => {
         if (!deleteTarget) return;
+        // Abort any in-flight stream before deletion. Otherwise the backend
+        // tool/assistant inserts race against the cascade-delete and trip the
+        // ai_messages → ai_conversations foreign key.
+        aiChatStreamStore.cancel(deleteTarget.id);
+        aiChatStreamStore.clear(deleteTarget.id);
         if (deleteTarget.id === selectedId) onSelect(null);
         await deleteMut.mutateAsync(deleteTarget.id);
         setDeleteTarget(null);
@@ -88,6 +97,7 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
                     <ul className="flex flex-col gap-0.5">
                         {conversations.map((conv) => {
                             const active = conv.id === selectedId;
+                            const streaming = streamingSet.has(conv.id);
                             return (
                                 <li key={conv.id}>
                                     <div
@@ -112,6 +122,13 @@ export function ChatConversationList({ selectedId, onSelect }: ChatConversationL
                                             <span className="truncate text-sm tracking-tight">
                                                 {conv.title || t('aiChat.untitled')}
                                             </span>
+                                            {streaming && (
+                                                <span
+                                                    className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-primary motion-safe:animate-pulse"
+                                                    aria-label={t('aiChat.streamingIndicator')}
+                                                    title={t('aiChat.streamingIndicator')}
+                                                />
+                                            )}
                                         </button>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

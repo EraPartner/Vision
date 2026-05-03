@@ -97,7 +97,7 @@ See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and
 |-----|---------|---------|
 | `OLLAMA_URL` | `http://localhost:11434` | Base URL |
 | `OLLAMA_DEFAULT_MODEL` | `llama3.2:3b` | Fallback model |
-| `OLLAMA_REQUEST_TIMEOUT_MS` | 60000 | Per-chat deadline |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | 600000 | Per-chat deadline |
 
 ## Offline Handling
 

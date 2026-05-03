@@ -1,37 +1,66 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useOllamaStatus } from '@/hooks/useOllamaStatus';
-import { useConversation, useSendChatMessage } from '@/hooks/useAIChat';
+import {
+    useConversation,
+    useCreateConversation,
+    useSendChatMessage,
+    useStreamingConversationIds,
+} from '@/hooks/useAIChat';
 import { ChatConversationList } from '@/features/ai-chat/ChatConversationList';
 import { ChatMessageList } from '@/features/ai-chat/ChatMessageList';
 import { ChatComposer } from '@/features/ai-chat/ChatComposer';
 import { OllamaStatusBanner } from '@/features/ai-chat/OllamaStatusBanner';
 import type { ChatMessage } from '@/types/aiChat';
 
+const SELECTED_PARAM = 'c';
+
 export default function AIChatPage() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const { data: status, isLoading: statusLoading } = useOllamaStatus();
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedId = searchParams.get(SELECTED_PARAM);
     const [modelOverride, setModelOverride] = useState<string | null>(null);
     const [useTools, setUseTools] = useState<boolean>(true);
 
+    const setSelectedId = useCallback(
+        (next: string | null) => {
+            setSearchParams(
+                (prev) => {
+                    const params = new URLSearchParams(prev);
+                    if (next) params.set(SELECTED_PARAM, next);
+                    else params.delete(SELECTED_PARAM);
+                    return params;
+                },
+                { replace: true },
+            );
+        },
+        [setSearchParams],
+    );
+
     const { data: detail } = useConversation(selectedId);
+    const createMut = useCreateConversation();
     const {
         send,
         cancel,
-        reset,
         isStreaming,
         assistantDraft,
         userMessage: streamingUserMessage,
         toolMessages: streamingToolMessages,
-    } = useSendChatMessage();
+    } = useSendChatMessage(selectedId);
+    const streamingIds = useStreamingConversationIds();
 
+    // If the user returns to the page with no selection but a stream is in
+    // flight in the background, jump to that conversation so they can see it.
     useEffect(() => {
-        reset();
-    }, [selectedId, reset]);
+        if (!selectedId && streamingIds.length > 0) {
+            setSelectedId(streamingIds[0]);
+        }
+    }, [selectedId, streamingIds, setSelectedId]);
 
     const messages: ChatMessage[] = useMemo(() => detail?.messages ?? [], [detail]);
 
@@ -43,15 +72,24 @@ export default function AIChatPage() {
         ?? null;
 
     const handleSend = async (message: string) => {
-        const result = await send({
-            conversationId: selectedId,
+        let conversationId = selectedId;
+        if (!conversationId) {
+            try {
+                const created = await createMut.mutateAsync(
+                    activeModel ? { model: activeModel } : {},
+                );
+                conversationId = created.conversation.id;
+                setSelectedId(conversationId);
+            } catch {
+                return;
+            }
+        }
+        await send({
+            conversationId,
             message,
             model: activeModel ?? undefined,
             useTools,
         });
-        if (result && !selectedId) {
-            setSelectedId(result.conversation.id);
-        }
     };
 
     const statusLabel = statusLoading

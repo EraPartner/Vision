@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
-import logger from '@/lib/logger';
+import { aiChatStreamStore, type SendBody } from '@/lib/aiChatStreamStore';
 import type {
     ChatDoneEvent,
-    ChatMessage,
-    ChatStreamEvent,
     ConversationDetail,
     CreateConversationBody,
-    SendChatBody,
 } from '@/types/aiChat';
 
 const CONVERSATIONS_KEY = ['ai', 'conversations'] as const;
@@ -87,103 +84,42 @@ export function useDeleteConversation() {
     });
 }
 
-interface StreamingState {
-    isStreaming: boolean;
-    assistantDraft: string;
-    toolMessages: ChatMessage[];
-    userMessage: ChatMessage | null;
-    error: string | null;
-}
-
-const INITIAL_STREAM: StreamingState = {
-    isStreaming: false,
-    assistantDraft: '',
-    toolMessages: [],
-    userMessage: null,
-    error: null,
-};
-
-export function useSendChatMessage() {
+/**
+ * Streaming chat hook backed by a module-level store. The stream survives the
+ * component unmounting — the user can navigate away and the request keeps
+ * running. When they return, the hook resubscribes and rehydrates the preview
+ * from the store.
+ */
+export function useSendChatMessage(conversationId: string | null) {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
-    const [state, setState] = useState<StreamingState>(INITIAL_STREAM);
-    const abortRef = useRef<(() => void) | null>(null);
-    const isStreamingRef = useRef<boolean>(false);
 
-    useEffect(() => {
-        return () => {
-            if (abortRef.current && isStreamingRef.current) {
-                logger.warn('[useSendChatMessage] unmount cleanup aborting in-flight stream');
-                abortRef.current();
-            }
-        };
-    }, []);
+    const subscribe = useCallback((listener: () => void) => aiChatStreamStore.subscribe(listener), []);
+    const getSnapshot = useCallback(() => aiChatStreamStore.getState(conversationId), [conversationId]);
+    const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
     const send = useCallback(
-        async (body: SendChatBody): Promise<ChatDoneEvent | null> => {
-            if (abortRef.current) {
-                logger.warn('[useSendChatMessage] new send aborting prior in-flight stream');
-                abortRef.current();
-            }
-            isStreamingRef.current = true;
-            setState({ ...INITIAL_STREAM, isStreaming: true });
-
-            const handleEvent = (event: ChatStreamEvent) => {
-                setState((prev) => {
-                    switch (event.type) {
-                        case 'user_message':
-                            return { ...prev, userMessage: event.message };
-                        case 'token':
-                            return { ...prev, assistantDraft: prev.assistantDraft + event.delta };
-                        case 'tool_result':
-                            return { ...prev, toolMessages: [...prev.toolMessages, event.message] };
-                        case 'error':
-                            return { ...prev, error: event.detail, isStreaming: false };
-                        default:
-                            return prev;
-                    }
-                });
-            };
-
-            const { abort, result } = apiClient.streamChat(body, handleEvent);
-            abortRef.current = abort;
-
-            try {
-                const done = await result;
-                setState((prev) => ({ ...prev, isStreaming: false }));
-                queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
-                queryClient.invalidateQueries({ queryKey: ['ai', 'conversations', done.payload.conversation.id] });
-                return done.payload;
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                setState((prev) => ({ ...prev, isStreaming: false, error: message }));
+        (body: SendBody): Promise<ChatDoneEvent | null> => {
+            return aiChatStreamStore.send(body, queryClient, (message) => {
                 toast.error(t('aiChat.sendFailed'), { description: message });
-                return null;
-            } finally {
-                abortRef.current = null;
-                isStreamingRef.current = false;
-            }
+            });
         },
         [queryClient, t],
     );
 
     const cancel = useCallback(() => {
-        if (abortRef.current) {
-            abortRef.current();
-            abortRef.current = null;
-        }
-        isStreamingRef.current = false;
-        setState((prev) => ({ ...prev, isStreaming: false }));
-    }, []);
+        if (conversationId) aiChatStreamStore.cancel(conversationId);
+    }, [conversationId]);
 
-    const reset = useCallback(() => {
-        if (abortRef.current) {
-            abortRef.current();
-            abortRef.current = null;
-        }
-        isStreamingRef.current = false;
-        setState(INITIAL_STREAM);
-    }, []);
+    return { send, cancel, ...state };
+}
 
-    return { send, cancel, reset, ...state };
+/**
+ * Subscribes to the set of conversation ids currently streaming. Used by the
+ * sidebar to surface live activity while the user is on another page.
+ */
+export function useStreamingConversationIds(): readonly string[] {
+    const subscribe = useCallback((listener: () => void) => aiChatStreamStore.subscribe(listener), []);
+    const getSnapshot = useCallback(() => aiChatStreamStore.getActiveConversationIds(), []);
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

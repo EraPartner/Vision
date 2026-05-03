@@ -69,7 +69,7 @@ const envSchema = z.object({
 
   OLLAMA_URL: optionalStringEnv,
   OLLAMA_DEFAULT_MODEL: stringEnv('llama3.1:8b'),
-  OLLAMA_REQUEST_TIMEOUT_MS: intEnv(60000),
+  OLLAMA_REQUEST_TIMEOUT_MS: intEnv(600000),
   OLLAMA_HEALTH_TIMEOUT_MS: intEnv(3000),
 
   AI_CHAT_ENABLED: booleanEnv(true),

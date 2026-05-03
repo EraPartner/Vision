@@ -145,6 +145,47 @@ export async function runChatTurn({
     });
   }
 
+  try {
+    return await runChatTurnInner({
+      conversationId,
+      message,
+      model,
+      useTools,
+      signal,
+      streaming,
+      onEvent,
+      ollamaClient,
+    });
+  } catch (err) {
+    // The repository throws ConversationDeletedError (code: 'CONVERSATION_DELETED')
+    // when an appendMessage hits the FK constraint — i.e. the user deleted
+    // the conversation while a stream was in flight. Surface as a clean
+    // service-level error so the route emits an SSE error frame instead of
+    // a 500 stack.
+    if (err && err.code === 'CONVERSATION_DELETED') {
+      logger.info('[aiChat] turn aborted: conversation deleted mid-stream', {
+        conversationId: err.conversationId,
+      });
+      throw new AiChatServiceError(err.message, {
+        code: 'CONVERSATION_DELETED',
+        status: 410,
+        cause: err,
+      });
+    }
+    throw err;
+  }
+}
+
+async function runChatTurnInner({
+  conversationId,
+  message,
+  model,
+  useTools,
+  signal,
+  streaming,
+  onEvent,
+  ollamaClient,
+}) {
   const conversation = await ensureConversation({
     conversationId,
     model,
