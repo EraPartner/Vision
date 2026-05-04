@@ -33,9 +33,14 @@ services:
       # Expose version to the backend so /api/admin/update/check can report it
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
     volumes:
+      # Persist user-uploaded attachments across container recreate / image
+      # update — without this, attachments live on the writable container
+      # layer and disappear on every `docker compose up` after a version bump.
+      - attachments_data:/app/data/attachments
       - vision_cache_data:/app/.vision-cache
     # depends_on removed — see docker-compose.yml for explanation.
 
 volumes:
   postgres_data:
+  attachments_data:
   vision_cache_data:

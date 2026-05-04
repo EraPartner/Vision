@@ -107,6 +107,7 @@ Your settings, attachments, and database are preserved across updates.
 |---|---|
 | `~/Library/Application Support/Vision/` | Settings, embedded `docker-compose.yml`, logs |
 | Docker volume `vision_postgres_data` | The Postgres database (transactions, accounts, …) |
+| Docker volume `vision_attachments_data` | Files you've attached to transactions |
 | Docker volume `vision_vision_cache_data` | Backend cache; safe to delete |
 
 ## Backup & restore

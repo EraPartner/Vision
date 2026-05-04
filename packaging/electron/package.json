@@ -1,6 +1,6 @@
 {
   "name": "vision-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Vision desktop wrapper",
   "main": "main.js",
   "packageManager": "bun",
