@@ -187,7 +187,10 @@ jobs:
           npm install
           # electron-builder reads `mac.identity: null` from package.json and
           # falls back to ad-hoc signing because CSC_IDENTITY_AUTO_DISCOVERY=false.
-          npm run dist
+          # `--publish never` stops electron-builder from trying to upload to
+          # GitHub itself; the release job at the end of this workflow handles
+          # asset upload via softprops/action-gh-release.
+          npx electron-builder --mac --arm64 --publish never
 
       - name: Stage release artifacts
         run: |
