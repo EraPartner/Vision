@@ -146,10 +146,13 @@ jobs:
           path: dist/docker-image-tag.txt
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # 2. Build source launcher ZIP (arm64 — Apple Silicon only)
+  # 2. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
+  #    Ad-hoc signed (mac.identity=null) so the binary loads on Apple Silicon
+  #    without an Apple Developer ID. Users still see Gatekeeper on first run
+  #    and need right-click → Open once. README explains this.
   # ─────────────────────────────────────────────────────────────────────────────
   package-mac:
-    name: Package mac source launcher
+    name: Build mac .app + DMG
     needs: [verify]
     runs-on: macos-26
     permissions:
@@ -158,56 +161,74 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Bun
+      - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Create source launcher zip (ditto)
+      - name: Setup Node (for electron-builder native deps)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate locales (writes packaging/electron/i18n)
+        run: CI=1 bun run generate-locales
+
+      - name: Install electron deps and build .app + DMG
+        env:
+          # No Apple Developer cert — fall back to ad-hoc signing.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          TAG="${{ github.ref_name }}"
-          mkdir -p dist/source-launcher/unsigned
+          cd packaging/electron
+          npm install
+          # electron-builder reads `mac.identity: null` from package.json and
+          # falls back to ad-hoc signing because CSC_IDENTITY_AUTO_DISCOVERY=false.
+          npm run dist
 
-          # Package source tree (without .git and heavy transient dirs)
-          rsync -a ./ dist/source-launcher/unsigned/Vision/ \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude 'apps/frontend/node_modules' \
-            --exclude 'apps/node-backend/node_modules' \
-            --exclude 'packaging/electron/node_modules' \
-            --exclude 'dist' \
-            --exclude 'postgres_data' \
-            --exclude 'venv' \
-            --exclude '.idea' \
-            --exclude '.pytest_cache' \
-            --exclude '.DS_Store'
-
-          cp packaging/electron/unsigned/launch.command dist/source-launcher/unsigned/launch.command
-          chmod +x dist/source-launcher/unsigned/launch.command
-
-          cd dist/source-launcher
-          ditto -c -k --sequesterRsrc --keepParent unsigned "Vision-source-launcher-${TAG}-arm64.zip"
-          mkdir -p "$GITHUB_WORKSPACE/dist/unsigned"
-          mv "Vision-source-launcher-${TAG}-arm64.zip" "$GITHUB_WORKSPACE/dist/unsigned/"
-
-      - name: Compute SHA256 checksum
+      - name: Stage release artifacts
         run: |
+          set -euo pipefail
           TAG="${{ github.ref_name }}"
-          cd dist/unsigned
-          ZIP="Vision-source-launcher-${TAG}-arm64.zip"
-          shasum -a 256 "$ZIP" > "${ZIP}.sha256"
-          echo "--- Checksum ---"
-          cat "${ZIP}.sha256"
+          VER="${TAG#v}"
+          OUT="$GITHUB_WORKSPACE/dist/release"
+          mkdir -p "$OUT"
 
-      - name: Upload source launcher zip
+          # electron-builder emits files into packaging/electron/dist/. Filenames
+          # use `productName` ("Vision") + version. We rename to predictable
+          # names that match the README and setup script.
+          DMG_SRC=$(ls packaging/electron/dist/*.dmg | head -1)
+          ZIP_SRC=$(ls packaging/electron/dist/*-arm64-mac.zip 2>/dev/null | head -1 \
+                    || ls packaging/electron/dist/*-mac.zip | head -1)
+          cp "$DMG_SRC" "$OUT/Vision-${VER}-arm64.dmg"
+          cp "$ZIP_SRC" "$OUT/Vision-${VER}-arm64-mac.zip"
+
+          # Inject the version tag into the setup script and README, then
+          # ship them alongside the binaries.
+          sed "s/__VERSION__/${VER}/g" packaging/release/vision-setup.command \
+            > "$OUT/vision-setup.command"
+          chmod +x "$OUT/vision-setup.command"
+          sed "s/__VERSION__/${VER}/g" packaging/release/README.md \
+            > "$OUT/README.md"
+
+      - name: Compute SHA256 checksums
+        run: |
+          set -euo pipefail
+          cd dist/release
+          for f in Vision-*.dmg Vision-*.zip vision-setup.command README.md; do
+            shasum -a 256 "$f" > "${f}.sha256"
+            echo "--- ${f} ---"
+            cat "${f}.sha256"
+          done
+
+      - name: Upload mac release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vision-source-launcher-zip
-          path: |
-            dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip
-            dist/unsigned/Vision-source-launcher-${{ github.ref_name }}-arm64.zip.sha256
+          name: vision-mac-release
+          path: dist/release/
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 3. Create GitHub Release and attach artifacts
@@ -220,11 +241,11 @@ jobs:
       contents: write  # required to create releases and upload assets
       packages: read
     steps:
-      - name: Download source launcher zip
+      - name: Download mac release artifacts
         uses: actions/download-artifact@v4
         with:
-          name: vision-source-launcher-zip
-          path: dist/unsigned
+          name: vision-mac-release
+          path: dist/mac
 
       - name: Download docker metadata artifact
         uses: actions/download-artifact@v4
@@ -243,5 +264,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            dist/unsigned/*.zip
-            dist/unsigned/*.sha256
+            dist/mac/Vision-*.dmg
+            dist/mac/Vision-*.zip
+            dist/mac/vision-setup.command
+            dist/mac/README.md
+            dist/mac/*.sha256
