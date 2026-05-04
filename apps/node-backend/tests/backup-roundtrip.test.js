@@ -323,7 +323,7 @@ describe('openBundle error conditions', () => {
 
     it('throws on a zip missing db.sql', async () => {
         // Build a zip with only metadata.json (no db.sql)
-        const archiver = require(join(REPO_ROOT, 'packaging/electron/node_modules/archiver'));
+        const archiver = require('archiver');
         const { createWriteStream } = require('node:fs');
 
         const noDbPath = join(TEST_TMP, 'no_db.visionbak');
@@ -341,7 +341,7 @@ describe('openBundle error conditions', () => {
     });
 
     it('throws on a zip missing metadata.json', async () => {
-        const archiver = require(join(REPO_ROOT, 'packaging/electron/node_modules/archiver'));
+        const archiver = require('archiver');
         const { createWriteStream } = require('node:fs');
 
         const noMetaPath = join(TEST_TMP, 'no_meta.visionbak');
