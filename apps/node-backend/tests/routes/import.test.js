@@ -353,11 +353,12 @@ describe('Import Routes', () => {
         file: { path: '/tmp/stream.csv', originalname: 'stream.csv' },
         query: { bank_name: 'belfius' },
         body: {},
-        on: vi.fn((event, cb) => {
-          if (event === 'close') closeHandler = cb;
-        }),
+        on: vi.fn(),
       };
       const res = mockSseResponse();
+      res.on = vi.fn((event, cb) => {
+        if (event === 'close') closeHandler = cb;
+      });
 
       await routeHandlers['post:/csv/stream'](req, res);
 
