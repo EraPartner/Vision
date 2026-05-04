@@ -1,12 +1,17 @@
 import "@testing-library/jest-dom";
 import { afterAll, afterEach, beforeAll } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { server } from "./test/msw/server";
 
 // Warm dynamic-import cache for locales so LanguageProvider's lazy load
 // resolves synchronously in tests. Prevents flaky findByText timeouts on
 // slower CI runners where the first dynamic import can exceed 1s.
 await Promise.all([import("./locales/en"), import("./locales/nl")]);
+
+// CI runners on GitHub Actions are ~3x slower than local. Bump RTL's
+// async-utility timeout so findBy*/waitFor calls have headroom for chains
+// like loading→fetch→re-render that can exceed the 1s default under load.
+configure({ asyncUtilTimeout: 5000 });
 
 // Polyfills for Radix UI in jsdom (jsdom tests only — node-env tests have no window).
 if (typeof window !== "undefined") {

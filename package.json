@@ -51,7 +51,8 @@
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts"
   },
   "dependencies": {
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "yauzl": "^3.3.0"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
