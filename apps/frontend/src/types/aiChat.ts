@@ -35,6 +35,13 @@ export interface ConversationDetail {
   messages: ChatMessage[];
 }
 
+export interface ToolErrorDetail {
+  code?: string;
+  field?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 export interface ToolResultPayload {
   ok: boolean;
   data?: unknown;
@@ -46,7 +53,7 @@ export interface ToolResultPayload {
     total?: number;
     [key: string]: unknown;
   };
-  error?: string;
+  error?: string | ToolErrorDetail;
 }
 
 export interface TokenUsage {

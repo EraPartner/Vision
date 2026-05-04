@@ -47,6 +47,49 @@ function mergeMessageIntoConversationCache(
     );
 }
 
+function mergeDoneIntoConversationCache(
+    queryClient: QueryClient,
+    conversationId: string,
+    done: ChatDoneEvent,
+    current: StreamState,
+): void {
+    queryClient.setQueryData<ConversationDetail | null>(
+        ['ai', 'conversations', conversationId],
+        (prev) => {
+            if (!prev) return prev;
+            const existing = prev.messages;
+            const seen = new Set(existing.map((m) => m.id));
+            const additions: ChatMessage[] = [];
+
+            if (
+                current.userMessage
+                && !isOptimisticUserId(current.userMessage.id)
+                && !seen.has(current.userMessage.id)
+            ) {
+                additions.push(current.userMessage);
+                seen.add(current.userMessage.id);
+            }
+            for (const toolMsg of current.toolMessages) {
+                if (!seen.has(toolMsg.id)) {
+                    additions.push(toolMsg);
+                    seen.add(toolMsg.id);
+                }
+            }
+            if (
+                done.assistantMessage
+                && !seen.has(done.assistantMessage.id)
+            ) {
+                additions.push(done.assistantMessage);
+            }
+
+            return {
+                conversation: done.conversation,
+                messages: [...existing, ...additions],
+            };
+        },
+    );
+}
+
 function buildOptimisticUserMessage(content: string): ChatMessage {
     return {
         id: `${OPTIMISTIC_USER_ID_PREFIX}${Date.now()}`,
@@ -160,15 +203,39 @@ class AiChatStreamStore {
             switch (event.type) {
                 case 'user_message':
                     next = { ...current, userMessage: event.message };
-                    mergeMessageIntoConversationCache(queryClient, id, event.message);
+                    try {
+                        mergeMessageIntoConversationCache(queryClient, id, event.message);
+                    } catch (cacheErr) {
+                        logger.warn('[aiChatStreamStore] cache merge failed', { cacheErr });
+                    }
                     break;
                 case 'token':
                     next = { ...current, assistantDraft: current.assistantDraft + event.delta };
                     break;
                 case 'tool_result':
                     next = { ...current, toolMessages: [...current.toolMessages, event.message] };
-                    mergeMessageIntoConversationCache(queryClient, id, event.message);
+                    try {
+                        mergeMessageIntoConversationCache(queryClient, id, event.message);
+                    } catch (cacheErr) {
+                        logger.warn('[aiChatStreamStore] cache merge failed', { cacheErr });
+                    }
                     break;
+                case 'done':
+                    // Fast-path cleanup. Tied to the SSE event so the UI flips
+                    // out of streaming the instant the terminal frame lands —
+                    // we do not wait for the post-await path which can race
+                    // against a refetch that has already populated the cache.
+                    try {
+                        mergeDoneIntoConversationCache(queryClient, id, event.payload, current);
+                    } catch (cacheErr) {
+                        logger.warn('[aiChatStreamStore] done merge failed', { cacheErr });
+                    }
+                    this.streams.delete(id);
+                    this.aborts.delete(id);
+                    this.emit();
+                    queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+                    queryClient.invalidateQueries({ queryKey: ['ai', 'conversations', id] });
+                    return;
                 case 'error':
                     next = { ...current, error: event.detail, isStreaming: false };
                     break;
@@ -184,60 +251,14 @@ class AiChatStreamStore {
 
         try {
             const done = await result;
+            // Cleanup already happened inside handleEvent on the 'done' SSE
+            // event. Defensive: if for any reason the entry survived (e.g.
+            // event arrived corrupt), make sure it is gone now.
+            if (this.streams.has(id)) {
+                this.streams.delete(id);
+                this.emit();
+            }
             this.aborts.delete(id);
-            const current = this.streams.get(id) ?? INITIAL_STREAM_STATE;
-
-            // Merge the just-finished turn directly into the conversation
-            // detail cache so the assistant message is visible the instant the
-            // stream ends, even before the safety refetch lands. The `done`
-            // SSE payload only carries the assistant message + conversation
-            // metadata, so we splice in the streaming user/tool messages we
-            // already accumulated.
-            queryClient.setQueryData<ConversationDetail | null>(
-                ['ai', 'conversations', id],
-                (prev) => {
-                    if (!prev) return prev;
-                    const existing = prev.messages;
-                    const seen = new Set(existing.map((m) => m.id));
-                    const additions: ChatMessage[] = [];
-
-                    if (
-                        current.userMessage
-                        && !isOptimisticUserId(current.userMessage.id)
-                        && !seen.has(current.userMessage.id)
-                    ) {
-                        additions.push(current.userMessage);
-                        seen.add(current.userMessage.id);
-                    }
-                    for (const toolMsg of current.toolMessages) {
-                        if (!seen.has(toolMsg.id)) {
-                            additions.push(toolMsg);
-                            seen.add(toolMsg.id);
-                        }
-                    }
-                    if (
-                        done.payload.assistantMessage
-                        && !seen.has(done.payload.assistantMessage.id)
-                    ) {
-                        additions.push(done.payload.assistantMessage);
-                    }
-
-                    return {
-                        conversation: done.payload.conversation,
-                        messages: [...existing, ...additions],
-                    };
-                },
-            );
-
-            // Drop the preview now — the cache has the real rows. Marking
-            // isStreaming=false in the same batch as the delete avoids a
-            // single-frame gap between draft and final message.
-            this.streams.delete(id);
-            this.emit();
-
-            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
-            queryClient.invalidateQueries({ queryKey: ['ai', 'conversations', id] });
-
             return done.payload;
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

@@ -10,6 +10,7 @@ import {
     useSendChatMessage,
     useStreamingConversationIds,
 } from '@/hooks/useAIChat';
+import { aiChatStreamStore } from '@/lib/aiChatStreamStore';
 import { ChatConversationList } from '@/features/ai-chat/ChatConversationList';
 import { ChatMessageList } from '@/features/ai-chat/ChatMessageList';
 import { ChatComposer } from '@/features/ai-chat/ChatComposer';
@@ -63,6 +64,19 @@ export default function AIChatPage() {
     }, [selectedId, streamingIds, setSelectedId]);
 
     const messages: ChatMessage[] = useMemo(() => detail?.messages ?? [], [detail]);
+
+    // Defensive sweep: if the conversation cache picks up an assistant message
+    // (via refetch or done-merge) while the streaming entry still claims to be
+    // streaming, the `done` SSE event was lost or never arrived. Clear the
+    // stale entry so the UI flips out of "Thinking..." instead of getting
+    // stuck rendering both the persisted response and the spinner.
+    useEffect(() => {
+        if (!selectedId || !isStreaming) return;
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+            aiChatStreamStore.clear(selectedId);
+        }
+    }, [selectedId, isStreaming, messages]);
 
     const activeModel =
         modelOverride

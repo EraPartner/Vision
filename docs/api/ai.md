@@ -3,7 +3,7 @@ title: AI Chat API
 type: api
 status: active
 date: 2026-05-03
-updated: 2026-05-03
+updated: 2026-05-04
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names.
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -219,7 +219,7 @@ data: {
 | `error` | `{ detail, code? }` | Terminal failure — `code` present for `AiChatServiceError` |
 
 > [!info] Disconnect
-> Route registers `req.on('close')` → `AbortController.abort()`. Mid-turn Ollama calls are cancelled; no further SSE frames are written. The assistant message is already persisted in the DB before `done` fires, so a late disconnect does not leak orphans.
+> Route registers `res.on('close')` to detect client disconnect and abort the `AbortController`. Mid-turn Ollama calls are cancelled; no further SSE frames are written. The assistant message is already persisted in the DB before `done` fires, so a late disconnect does not leak orphans. (Note: listening on `req.on('close')` is unsafe—Node's Readable streams emit `close` after the request body is consumed by middleware, before SSE events are emitted.)
 
 > [!warning] Error semantics
 > On `error` the server emits the frame and calls `res.end()`. No `done` follows. Internal error messages are not leaked — generic failures surface as `"Failed to stream AI chat message"`.

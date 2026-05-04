@@ -193,11 +193,12 @@ describe('POST /api/ai/chat/stream', () => {
       'X-Accel-Buffering': 'no',
     }));
 
-    const writes = res.write.mock.calls.map(([payload]) => payload);
-    const eventNames = writes.map((p) => {
-      const m = p.match(/^event: (\w+)/);
-      return m ? m[1] : null;
-    });
+    const writes = res.write.mock.calls
+      .map(([payload]) => payload)
+      // Skip the leading padding comment (lines beginning with `:`) used to
+      // flush the browser SSE buffer threshold.
+      .filter((p) => /^event:/.test(p));
+    const eventNames = writes.map((p) => p.match(/^event: (\w+)/)[1]);
     expect(eventNames).toEqual([
       'user_message',
       'token',

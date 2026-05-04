@@ -15,7 +15,23 @@ import {
     YAxis,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import type { ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
+import type { ToolErrorDetail, ToolRenderAs, ToolResultPayload } from '@/types/aiChat';
+
+function formatToolError(error: ToolResultPayload['error']): string {
+    if (!error) return 'Tool failed.';
+    if (typeof error === 'string') return error;
+    const detail = error as ToolErrorDetail;
+    const parts: string[] = [];
+    if (detail.field) parts.push(detail.field);
+    if (detail.message) parts.push(detail.message);
+    if (parts.length === 0) {
+        if (detail.code) parts.push(detail.code);
+        else {
+            try { return JSON.stringify(detail); } catch { return 'Tool failed.'; }
+        }
+    }
+    return parts.join(': ');
+}
 
 interface ToolResultCardProps {
     toolName?: string | null;
@@ -84,7 +100,7 @@ export function ToolResultCard({ toolName, result }: ToolResultCardProps) {
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                 <p className="text-xs font-medium text-destructive">
                     {toolName ? `${toolName}: ` : ''}
-                    {result.error ?? 'Tool failed.'}
+                    {formatToolError(result.error)}
                 </p>
             </div>
         );

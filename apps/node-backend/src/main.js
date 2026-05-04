@@ -263,6 +263,10 @@ app.use((req, res, next) => {
     if (res.headersSent) return;
     const contentType = String(res.getHeader('Content-Type') ?? '');
     const contentLength = parseInt(String(res.getHeader('Content-Length') ?? '0'), 10);
+    // Never gzip SSE: the gzip transform buffers input until a block fills,
+    // which would batch tokens and break per-event delivery.
+    if (contentType.includes('text/event-stream')) return;
+    if (String(res.getHeader('X-Accel-Buffering') ?? '').toLowerCase() === 'no') return;
     if (!COMPRESSIBLE_RE.test(contentType)) return;
     if (contentLength > 0 && contentLength < NO_COMPRESS_BELOW) return;
     gz = createGzip();

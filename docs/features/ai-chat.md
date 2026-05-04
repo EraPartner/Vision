@@ -3,8 +3,8 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-05-03
-updated: 2026-05-03
-last_modified: 2026-05-03
+updated: 2026-05-04
+last_modified: 2026-05-04
 tags: [feature, ai, chat, ollama, llm, natural-language, frontend, backend, phase-1, phase-10]
 description: Local AI chat with background streaming via module-level store; conversations persist in URL (`?c=<id>`), sidebar shows live indicator for active streams, streams survive navigation and component unmount
 aliases: [ai-chat, ai chat, ollama-chat, natural-language-queries, financial chat, llm chat]
@@ -222,7 +222,7 @@ Tools are declared with JSON Schema params. Backend validates args via Zod befor
 - **Context window overflow** — service trims history to last N turns + tool-result summaries; adds a `system` note when truncation happens.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
 - **LLM emits invalid args** — Zod rejection returned as `tool` error; LLM retries with corrected args (up to 2 retries before giving up).
-- **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; `req.on('close')` handler marks the assistant message aborted in the DB; client discards partial preview and clears streaming flag.
+- **User aborts mid-stream** — clicking "Stop" calls `cancel()` on the store, which aborts the fetch via stored controller; server-side `res.on('close')` handler detects the abort and marks the assistant message as aborted in the DB; client discards partial preview and clears streaming flag.
 - **Rate limit tripped** — 429 with `Retry-After`; composer shows cooldown hint.
 - **Long tool result** — capped to 500 rows; LLM informed in `tool_result.meta.truncated = true` so it can mention the cap.
 - **Schema drift** — tool integration tests in CI catch repository signature changes before merge.

@@ -145,6 +145,16 @@ Small local models (3B–8B parameters, the realistic range for consumer hardwar
 # Offline — Ollama unreachable → banner + friendly error, no crash
 ```
 
+## Updates
+
+### 2026-05-04: SSE Close-Event Tracking Fix
+
+**Issue discovered:** In early implementations, the SSE writer listened to both `req.on('close')` and `res.on('close')` to detect client disconnect. However, Node.js Readable streams (which `req` is) emit `close` ~1ms after the request body is consumed by upstream middleware (e.g., `express.json()`). This happens *before* any SSE event is written, causing the writer's `closed` flag to be set prematurely. Result: every `writer.write(...)` call became a no-op, and clients received only the 2KB padding comment before the stream silently died. Server-side `runChatTurn` still completed and persisted messages, making the symptom appear only on page reload/refetch.
+
+**Fix:** Removed `req.on('close', onClose)` listener from `createSseWriter()`. Kept only `res.on('close', onClose)`. The `res` `close` event already covers both client disconnects and normal end-of-response, and fires at the correct time in the response lifecycle. Updated JSDoc to document the reasoning. See `apps/node-backend/src/lib/sse.js` and [[docs/reference/code-patterns|Code Patterns: SSE Writer]].
+
+**Testing:** Existing test mocks never simulated `req.on('close')` firing, so the regression was not caught by unit tests. Integration tests pass without new coverage needed (the mock behavior already matched the corrected implementation).
+
 ## Related
 
 - [[docs/features/ai-chat|AI Chat Feature]] — feature spec

@@ -59,6 +59,20 @@ describe('createSseWriter', () => {
     req = makeReq();
     res = makeRes();
     writer = createSseWriter(req, res);
+    // Reset write mock so the constructor's flush-padding comment is not
+    // counted in subsequent assertions.
+    res.write.mockClear();
+    res._written.length = 0;
+  });
+
+  it('writes a leading flush-padding comment on construction', () => {
+    const padReq = makeReq();
+    const padRes = makeRes();
+    createSseWriter(padReq, padRes);
+    expect(padRes._written.length).toBeGreaterThan(0);
+    const first = padRes._written[0];
+    expect(first.startsWith(':')).toBe(true);
+    expect(first.length).toBeGreaterThanOrEqual(2048);
   });
 
   it('writes correctly formatted SSE frame', async () => {
