@@ -343,11 +343,38 @@ async function ensureEnv(workDir) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Extend PATH so the docker CLI is found when launched as a macOS .app
-const dockerEnv = {
-  ...process.env,
-  PATH: [process.env.PATH, '/usr/local/bin', '/opt/homebrew/bin'].filter(Boolean).join(':'),
-};
+// Extend PATH so the docker CLI is found when launched as a macOS .app.
+// Whitelist only the env vars that docker/psql/bun actually need — inheriting
+// all of process.env leaks secrets (API keys, tokens, etc.) into every
+// spawned subprocess.
+const DOCKER_ENV_ALLOWLIST = [
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'TEMP', 'TMP',
+  'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE',
+  'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CERT_PATH', 'DOCKER_TLS_VERIFY',
+  'XDG_RUNTIME_DIR', 'SSH_AUTH_SOCK',
+];
+const dockerEnv = (() => {
+  const env = {};
+  for (const key of DOCKER_ENV_ALLOWLIST) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
+  }
+  env.PATH = [process.env.PATH, '/usr/local/bin', '/opt/homebrew/bin'].filter(Boolean).join(':');
+  return env;
+})();
+
+/**
+ * Write `PGPASSWORD=<password>` to a mode-0600 temp file, invoke callback(envFilePath),
+ * then delete the file. Prevents PGPASSWORD from appearing in `ps` / `docker inspect`.
+ */
+async function withPgPassEnvFile(password, callback) {
+  const envFilePath = path.join(app.getPath('temp'), `pgpass_${Date.now()}_${process.pid}.env`);
+  await fs.promises.writeFile(envFilePath, `PGPASSWORD=${password}\n`, { mode: 0o600 });
+  try {
+    return await callback(envFilePath);
+  } finally {
+    try { fs.unlinkSync(envFilePath); } catch (_) {}
+  }
+}
 
 function run(bin, args, cwd, opts = {}) {
   const { env: envOverride, ...rest } = opts;
@@ -1113,8 +1140,17 @@ function normalizeVersionTag(version) {
 }
 
 function compareVersions(a, b) {
-  const pa = String(a || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
-  const pb = String(b || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  // Split off pre-release suffix (e.g. "1.2.3-rc.1" → ["1.2.3", "rc.1"])
+  const splitPre = (v) => {
+    const s = String(v || '').replace(/^v/, '');
+    const dash = s.indexOf('-');
+    if (dash === -1) return { core: s, pre: null };
+    return { core: s.slice(0, dash), pre: s.slice(dash + 1) };
+  };
+  const { core: ca, pre: prea } = splitPre(a);
+  const { core: cb, pre: preb } = splitPre(b);
+  const pa = ca.split('.').map(n => parseInt(n, 10) || 0);
+  const pb = cb.split('.').map(n => parseInt(n, 10) || 0);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i += 1) {
     const da = pa[i] || 0;
@@ -1122,6 +1158,10 @@ function compareVersions(a, b) {
     if (da > db) return 1;
     if (da < db) return -1;
   }
+  // Equal numeric cores: pre-release < release (semver §9)
+  if (prea && !preb) return -1;
+  if (!prea && preb) return 1;
+  if (prea && preb) return prea < preb ? -1 : prea > preb ? 1 : 0;
   return 0;
 }
 
@@ -1195,7 +1235,7 @@ function writeInstallerScript({ scriptPath, sourceRootPath, sourceLaunchPath, de
     'fi',
     '',
     'cd "$DEST_ROOT"',
-    'bun install',
+    'bun install --ignore-scripts',
     '',
     'if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
     '  cp "$SRC_LAUNCH" "$DEST_ROOT/launch.command" 2>/dev/null || true',
@@ -1324,79 +1364,88 @@ async function prepareShellUpdateInstaller() {
   const extractDir = path.join(tempRoot, 'extract');
   fs.mkdirSync(extractDir, { recursive: true });
 
-  await new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(zipPath);
-    const req = https.get(sourceLauncherAsset.browser_download_url, {
-      headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
-    }, (res) => {
-      if (res.statusCode !== 200) {
-        file.close(() => fs.unlink(zipPath, () => {}));
-        reject(new Error(`Download failed (${res.statusCode})`));
-        return;
+  try {
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(zipPath);
+      const req = https.get(sourceLauncherAsset.browser_download_url, {
+        headers: { 'User-Agent': `${APP_NAME}-desktop/${app.getVersion()}` },
+      }, (res) => {
+        if (res.statusCode !== 200) {
+          file.close(() => {});
+          reject(new Error(`Download failed (${res.statusCode})`));
+          return;
+        }
+        res.pipe(file);
+        file.on('finish', () => file.close(resolve));
+      });
+      req.setTimeout(UPDATE_DOWNLOAD_TIMEOUT_MS, () => {
+        req.destroy(new Error('Update download timed out'));
+      });
+      req.on('error', (err) => { file.close(() => {}); reject(err); });
+      file.on('error', (err) => { req.destroy(err); reject(err); });
+    });
+
+    const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
+    if (!checksumAsset?.browser_download_url) {
+      throw new Error('No checksum asset found for this release — aborting update to prevent running an unverified installer');
+    }
+    const body = await fetchUrlBody(checksumAsset.browser_download_url);
+    const expected = parseSha256Body(body);
+    if (!expected) {
+      throw new Error('Checksum file present but could not parse SHA256 hash');
+    }
+    const actual = await computeFileSha256(zipPath);
+    if (actual.toLowerCase() !== expected.toLowerCase()) {
+      throw new Error('Checksum mismatch — downloaded file may be corrupted or tampered with');
+    }
+
+    // Validate ZIP entry paths before extraction to prevent path traversal attacks.
+    // zipinfo -1 lists one path per line; any entry escaping extractDir is rejected.
+    const zipEntries = await run('zipinfo', ['-1', zipPath], tempRoot, { env: dockerEnv }).catch(() => '');
+    for (const entry of zipEntries.split('\n')) {
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      const normalized = path.normalize(trimmed);
+      if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
+        throw new Error(`Unsafe path in update ZIP: ${trimmed}`);
       }
-      res.pipe(file);
-      file.on('finish', () => file.close(resolve));
+    }
+
+    await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: dockerEnv });
+
+    const sourceDir = path.join(extractDir, 'unsigned', 'Vision');
+    const sourceLaunchPath = path.join(extractDir, 'unsigned', 'launch.command');
+    const sourcePackageJson = path.join(sourceDir, 'package.json');
+    if (!fs.existsSync(sourcePackageJson)) {
+      throw new Error('Downloaded update ZIP does not contain Vision source files');
+    }
+
+    const destRootPath = workDir || path.resolve(__dirname, '..', '..');
+    const installerPath = path.join(tempRoot, 'install-update.command');
+    writeInstallerScript({
+      scriptPath: installerPath,
+      sourceRootPath: sourceDir,
+      sourceLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : '',
+      destRootPath,
+      hostPid: process.pid,
     });
-    req.setTimeout(UPDATE_DOWNLOAD_TIMEOUT_MS, () => {
-      req.destroy(new Error('Update download timed out'));
-    });
-    req.on('error', (err) => {
-      file.close(() => fs.unlink(zipPath, () => {}));
-      reject(err);
-    });
-    file.on('error', (err) => {
-      req.destroy(err);
-      reject(err);
-    });
-  });
 
-  const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
-  if (!checksumAsset?.browser_download_url) {
-    try { fs.unlinkSync(zipPath); } catch (_) {}
-    throw new Error('No checksum asset found for this release — aborting update to prevent running an unverified installer');
+    return {
+      up_to_date: false,
+      current_version: currentVersion,
+      latest_version: latestVersion,
+      html_url: release?.html_url,
+      release_notes: release?.body || '',
+      published_at: release?.published_at,
+      source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
+      installerPath,
+    };
+  } catch (err) {
+    // Clean up temp dir on any error — on success tempRoot is intentionally kept
+    // because installerPath lives inside it and must remain until the user runs it.
+    try { fs.rmSync(tempRoot, { recursive: true, force: true }); } catch (_) {}
+    throw err;
   }
-  // Checksum asset present — verify before proceeding.
-  const body = await fetchUrlBody(checksumAsset.browser_download_url);
-  const expected = parseSha256Body(body);
-  if (!expected) {
-    try { fs.unlinkSync(zipPath); } catch (_) {}
-    throw new Error('Checksum file present but could not parse SHA256 hash');
-  }
-  const actual = await computeFileSha256(zipPath);
-  if (actual.toLowerCase() !== expected.toLowerCase()) {
-    try { fs.unlinkSync(zipPath); } catch (_) {}
-    throw new Error('Checksum mismatch — downloaded file may be corrupted or tampered with');
-  }
-
-  await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: process.env });
-
-  const sourceDir = path.join(extractDir, 'unsigned', 'Vision');
-  const sourceLaunchPath = path.join(extractDir, 'unsigned', 'launch.command');
-  const sourcePackageJson = path.join(sourceDir, 'package.json');
-  if (!fs.existsSync(sourcePackageJson)) {
-    throw new Error('Downloaded update ZIP does not contain Vision source files');
-  }
-
-  const destRootPath = workDir || path.resolve(__dirname, '..', '..');
-  const installerPath = path.join(tempRoot, 'install-update.command');
-  writeInstallerScript({
-    scriptPath: installerPath,
-    sourceRootPath: sourceDir,
-    sourceLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : '',
-    destRootPath,
-    hostPid: process.pid,
-  });
-
-  return {
-    up_to_date: false,
-    current_version: currentVersion,
-    latest_version: latestVersion,
-    html_url: release?.html_url,
-    release_notes: release?.body || '',
-    published_at: release?.published_at,
-    source_launcher_available: Boolean(sourceLauncherAsset?.browser_download_url),
-    installerPath,
-  };
 }
 
 async function checkForShellUpdate() {
@@ -1841,12 +1890,12 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
     const hostDir = path.dirname(dbSqlPath);
     const sqlFilename = path.basename(dbSqlPath);
 
-    await new Promise((resolve, reject) => {
+    await withPgPassEnvFile(dbPass, (envFile) => new Promise((resolve, reject) => {
       const child = spawn('docker', [
         'run', '--rm',
         '-v', `${hostDir}:/restore:ro`,
         ...(networkName ? ['--network', networkName] : []),
-        '-e', `PGPASSWORD=${dbPass}`,
+        '--env-file', envFile,
         pgImageTag,
         'psql', '-h', 'db', '-U', dbUser, '-d', dbName,
         '-f', `/restore/${sqlFilename}`,
@@ -1860,7 +1909,7 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
         if (code === 0) resolve();
         else reject(new Error(Buffer.concat(stderr).toString().trim() || `psql exited with code ${code}`));
       });
-    });
+    }));
 
     // 4. Copy attachments into stopped app container (docker cp works on stopped containers).
     //    Uses staging + atomic swap inside the container's filesystem.
@@ -1887,21 +1936,19 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
       console.error('Failed to restart app container after bundle restore:', err);
     });
 
-    // 6. Atomically swap attachments.staging → attachments once container is up
+    // 6. Atomically swap attachments.staging → attachments once container is up.
+    //    Awaited so a swap failure surfaces to the caller instead of being silently dropped.
     if (attachmentsDir) {
-      pollHealth().then(() => {
-        const composeArgs_ = composeArgs(workDir, overrideFiles);
-        return run('docker', [
-          'compose', ...composeArgs_, 'exec', '-T', 'app',
-          'sh', '-c',
-          'rm -rf /app/data/attachments.old && ' +
-          'mv /app/data/attachments /app/data/attachments.old 2>/dev/null; ' +
-          'mv /app/data/attachments.staging /app/data/attachments && ' +
-          'rm -rf /app/data/attachments.old',
-        ], workDir, { timeout: 30000 });
-      }).catch((err) => {
-        console.error('Attachment swap failed after bundle restore:', err);
-      });
+      await pollHealth();
+      const composeArgs_ = composeArgs(workDir, overrideFiles);
+      await run('docker', [
+        'compose', ...composeArgs_, 'exec', '-T', 'app',
+        'sh', '-c',
+        'rm -rf /app/data/attachments.old && ' +
+        'mv /app/data/attachments /app/data/attachments.old 2>/dev/null; ' +
+        'mv /app/data/attachments.staging /app/data/attachments && ' +
+        'rm -rf /app/data/attachments.old',
+      ], workDir, { timeout: 30000 });
     }
   }
 
@@ -2048,25 +2095,20 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
     const hostDir = path.dirname(restoreSource);
     const sqlFilename = path.basename(restoreSource);
 
-    const dockerRunArgs = [
-      'run', '--rm',
-      '-v', `${hostDir}:/restore:ro`,
-      ...(networkName ? ['--network', networkName] : []),
-      '-e', `PGPASSWORD=${dbPass}`,
-      pgImageTag,
-      'psql',
-      '-h', 'db',
-      '-U', dbUser,
-      '-d', dbName,
-      '-f', `/restore/${sqlFilename}`,
-    ];
-
     // Stream psql output — no buffering, works for any file size
-    await new Promise((resolve, reject) => {
-      const child = spawn('docker', dockerRunArgs, {
-        env: dockerEnv,
-        cwd: workDir,
-      });
+    await withPgPassEnvFile(dbPass, (envFile) => new Promise((resolve, reject) => {
+      const child = spawn('docker', [
+        'run', '--rm',
+        '-v', `${hostDir}:/restore:ro`,
+        ...(networkName ? ['--network', networkName] : []),
+        '--env-file', envFile,
+        pgImageTag,
+        'psql',
+        '-h', 'db',
+        '-U', dbUser,
+        '-d', dbName,
+        '-f', `/restore/${sqlFilename}`,
+      ], { env: dockerEnv, cwd: workDir });
 
       const stderr = [];
       child.stderr.on('data', (chunk) => stderr.push(chunk));
@@ -2078,7 +2120,7 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
         if (code === 0) resolve();
         else reject(new Error(Buffer.concat(stderr).toString().trim() || `psql exited with code ${code}`));
       });
-    });
+    }));
 
   } finally {
     cleanupRestoreSource();
@@ -2147,7 +2189,10 @@ ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   }
 });
 
-ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
+ipcMain.handle('backup:restore', async (event, filePath, opts) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    return { success: false, error: 'Unauthorized sender' };
+  }
   if (!workDir) return { success: false, error: 'workDir not set' };
   if (typeof filePath !== 'string' || !filePath) {
     return { success: false, error: 'Invalid restore path' };

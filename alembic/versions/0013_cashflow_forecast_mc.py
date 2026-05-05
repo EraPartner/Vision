@@ -20,7 +20,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("""
-        CREATE TABLE cashflow_forecast_mc (
+        CREATE TABLE IF NOT EXISTS cashflow_forecast_mc (
             id           SERIAL PRIMARY KEY,
             user_id      TEXT NOT NULL DEFAULT 'anonymous',
             month        TEXT NOT NULL,

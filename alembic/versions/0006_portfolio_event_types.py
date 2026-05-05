@@ -34,7 +34,7 @@ def downgrade():
     # migrating any rows that use them to NULL first.
     op.execute(sa.text("""
         UPDATE portfolio_transactions
-        SET type = NULL
+        SET type = 'sell'
         WHERE type::text = ANY(ARRAY['split','merger','spinoff','return_of_capital'])
     """))
 

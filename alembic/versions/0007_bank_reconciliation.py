@@ -28,8 +28,11 @@ depends_on = None
 
 def upgrade():
     op.execute(sa.text("""
-        CREATE TYPE reconciliation_match_status
-            AS ENUM ('unmatched', 'auto', 'confirmed', 'manual', 'ignored')
+        DO $$ BEGIN
+            CREATE TYPE reconciliation_match_status
+                AS ENUM ('unmatched', 'auto', 'confirmed', 'manual', 'ignored');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$
     """))
 
     op.execute(sa.text("""
@@ -88,6 +91,7 @@ def upgrade():
 
     # updated_at triggers
     for table in ('bank_statements', 'reconciliation_entries'):
+        op.execute(sa.text(f"DROP TRIGGER IF EXISTS update_{table}_updated_at ON {table}"))
         op.execute(sa.text(f"""
             CREATE TRIGGER update_{table}_updated_at
                 BEFORE UPDATE ON {table}
