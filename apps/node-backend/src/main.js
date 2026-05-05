@@ -468,6 +468,13 @@ function bootSummary(extraPhase = 'backend_total') {
 }
 
 async function start() {
+  if (!settings.admin.authToken) {
+    logger.warn(
+      'ADMIN_AUTH_TOKEN is not set — admin endpoints are accessible from local/private network addresses only. ' +
+      'Set ADMIN_AUTH_TOKEN to enforce token-based auth.'
+    );
+  }
+
   try {
     // Wait for PostgreSQL to be fully ready.
     // With depends_on removed from docker-compose, both containers start in

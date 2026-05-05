@@ -26,9 +26,9 @@ export async function createMaterializedViews() {
 
   // 1. Monthly income / spending / net per month (last 12 months)
   //    Drop and recreate if the column list changed (e.g. category_id_key added).
-  //    This must run first — DROP CASCADE would destroy the other views if they
-  //    happened to depend on it, so we serialise this one step.
-  await query(`DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE`);
+  //    RESTRICT (default) ensures dependents cause a loud error rather than
+  //    being silently destroyed by CASCADE.
+  await query(`DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary`);
   await query(`
     CREATE MATERIALIZED VIEW mv_monthly_summary AS
     SELECT

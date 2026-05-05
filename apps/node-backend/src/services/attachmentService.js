@@ -95,21 +95,31 @@ export async function storeAttachment(transactionId, file) {
 /**
  * Resolve a DB-stored relative path back to an absolute filesystem path.
  * Throws if the resolved path escapes the attachments root (path traversal guard).
+ * Uses realpath to resolve symlinks so a symlinked path cannot escape the root.
  */
-export function resolveAbsolutePath(storedPath) {
+export async function resolveAbsolutePath(storedPath) {
   const root = getAttachmentsRoot();
   const absolute = resolve(root, storedPath);
+  // Fast path-based check catches .. traversal without I/O
   if (absolute !== root && !absolute.startsWith(root + sep)) {
     throw new Error('Invalid attachment path: outside attachments root');
   }
-  return absolute;
+  // Resolve symlinks — ENOENT is fine (file not yet written or already deleted)
+  const real = await fsPromises.realpath(absolute).catch((err) => {
+    if (err.code === 'ENOENT') return absolute;
+    throw err;
+  });
+  if (real !== root && !real.startsWith(root + sep)) {
+    throw new Error('Invalid attachment path: outside attachments root');
+  }
+  return real;
 }
 
 /**
  * Delete a file from disk. Silently ignores ENOENT (already gone).
  */
 export async function removeAttachmentFile(storedPath) {
-  const absPath = resolveAbsolutePath(storedPath);
+  const absPath = await resolveAbsolutePath(storedPath);
   try {
     await fsPromises.unlink(absPath);
   } catch (err) {

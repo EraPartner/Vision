@@ -1,7 +1,7 @@
 {
   "name": "vision",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.2",
   "description": "Financial transaction management application",
   "license": "AGPL-3.0-only",
   "workspaces": [

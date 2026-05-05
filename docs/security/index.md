@@ -25,8 +25,9 @@ SORT title ASC
 
 - [[docs/security/input-validation|Input Validation]] - Input sanitization and validation
 - [[docs/security/rate-limiting|Rate Limiting]] - Request rate controls
-- [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, path traversal prevention, data protection, privacy
+- [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, path traversal prevention, data protection, privacy, backup encryption, Phase 7 restore safety
 - [[docs/security/ai-data-access|AI Data Access Policy]] - Tool allowlist, rate limits, no-external-calls guarantee, audit logging
 - [[docs/security/container-hardening|Container Hardening]] - Docker defense-in-depth: non-root user, dropped capabilities, read-only filesystem, resource limits, healthcheck, CI image scanning
 - [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] - Workspace dependency hardening and validation outcomes
 - Admin auth token middleware (`ADMIN_AUTH_TOKEN`) is documented in [[docs/api/admin|Admin API]] and [[docs/reference/environment-variables|Environment Variables]].
+- **Phase 7 Hardening (May 2026):** See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for Electron backup/restore safety enhancements and [[docs/adr/002-database-schema|ADR-002]] for Phase 6.1 corrective migration of `updated_at` constraints.

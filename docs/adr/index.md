@@ -3,10 +3,10 @@ title: Architecture Decision Records Index
 type: adr-index
 status: active
 date: 2026-04-23
-updated: 2026-05-03
-last_modified: 2026-05-03
-tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore]
-description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
+updated: 2026-05-05
+last_modified: 2026-05-05
+tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup]
+description: Architecture Decision Records documenting significant technical choices and their rationale. May 2026: Phase 6.1–7 bug hunt recovery hardening (ADR-049), AI Chat module-level stream store (ADR-048), Tailwind CSS v4 migration (ADR-047).
 aliases: [ADRs, decisions, architecture decisions]
 ---
 
@@ -44,6 +44,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-05-05: Phase 6.1–7 Bug Hunt Recovery Hardening
+
+[[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] — Two coordinated fixes during the bug hunt phase. **Phase 6.1:** Corrective migration (0022) fixes 11 core tables that were created with nullable `updated_at` columns instead of `NOT NULL DEFAULT NOW()` (categories, recipients, recipient_bank_accounts, transactions, planned_transactions, planned_transaction_loan_schedule, exchange_rates, belgian_inflation_rates, asset_price_history, bank_statements, reconciliation_entries). Backfills NULLs from `created_at`, sets NOT NULL + DEFAULT NOW(). **Phase 7:** Electron hardening hardens backup/restore operations and fixes timeout/concurrent-backup issues: (1) `httpGet()` adds 10-second timeout to prevent hung connections, (2) `run()` helper reduces default `maxBuffer` from 200 MB to 10 MB (pg_dump streams via spawn, not buffered), (3) `backup:run` IPC handler adds `backupInFlight` flag to prevent concurrent backups, (4) `backup:restore` adds `dialog.showMessageBox()` confirmation before overwriting live data, (5) `backup:restore` pauses health watchdog during restore to prevent container restarts mid-operation.
 
 ### 2026-05-03: AI Chat Module-Level Stream Store
 

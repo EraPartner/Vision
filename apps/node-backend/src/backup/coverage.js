@@ -19,7 +19,7 @@
  *   minus all DROP TABLE ... across all upgrade() blocks
  *   minus Alembic internals (alembic_version)
  *
- * Last verified against: 0019_transaction_splits_and_agg
+ * Last verified against: 0021_split_audit
  */
 export const BACKUP_COVERED_TABLES = Object.freeze([
   'agg_split_outstanding',
@@ -52,6 +52,7 @@ export const BACKUP_COVERED_TABLES = Object.freeze([
   'revolut_raw_transactions',
   'sabb_raw_transactions',
   'saved_charts',
+  'split_audit',
   'split_payments',
   'transaction_raw_references',
   'transaction_splits',

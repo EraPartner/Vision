@@ -3,9 +3,9 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-04-29
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase]
-description: Content Security Policy, CORS, data protection, path traversal prevention, and privacy considerations for Vision
+updated: 2026-05-05
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause]
+description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
 ---
@@ -308,6 +308,40 @@ Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase
 
 See [[docs/features/backup-coverage-audit|Backup Coverage Audit]], [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], and [[docs/features/settings|Settings Feature]] for full details.
 
+### Phase 7 Restore Safety Hardening (May 2026)
+
+Three defensive measures protect the restore operation from data loss and system instability:
+
+**1. Pre-Restore Confirmation Dialog**
+- **Problem:** `backup:restore` silently overwrote live database without user confirmation, risking accidental restore from stale backups
+- **Solution:** User sees warning dialog before restore:
+  ```
+  Title: "Restore Backup"
+  Message: "This will permanently replace all current data and cannot be undone."
+  Detail: "Restore from: my-backup-2025.visionbak"
+  Buttons: [Restore] [Cancel]
+  Default: Cancel (index 1) — prevents Enter-key accidents
+  ```
+- **Impact:** User must explicitly confirm they're about to lose all current data
+
+**2. Concurrent Backup Guard**
+- **Problem:** UI rapid-clicking or renderer bug could spawn multiple `pg_dump` processes simultaneously, causing system overload or corrupted bundle output
+- **Solution:** Module-scope `let backupInFlight = false;` flag in `backup:run` IPC handler
+  - First backup: sets flag
+  - Subsequent calls: rejected with `"A backup is already in progress"` message
+  - Completion: flag reset in `finally` block (even on error)
+- **Impact:** Prevents data corruption, system overload, UI confusion
+
+**3. Health Watchdog Pause During Restore**
+- **Problem:** During restore, the database is stopped, dropped, and recreated. The 10-second health watchdog continued polling `GET /health`, detected backend-offline, and could emit spurious `backend:lost` events while restore was still in progress
+- **Solution:** Restore sequence:
+  1. Call `stopHealthWatchdog()` before restore attempt
+  2. Execute restore (drop DB, load SQL, swap attachments)
+  3. Guarantee `startHealthWatchdog()` in `finally` block
+- **Impact:** No spurious recovery alerts mid-restore; clean separation between restore cleanup and watchdog recovery logic
+
+See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full context and consequences.
+
 ## Installer Security (install.sh, 2026-04-28)
 
 Homebrew installation script now prevents pipe-to-bash vulnerabilities:
@@ -333,8 +367,10 @@ Homebrew installation script now prevents pipe-to-bash vulnerabilities:
 
 ## Related
 
+- [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
+- [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)
 - [[docs/adr/042-codeql-dependabot-remediation-2026-04]] — CORS fix, rate limiters, input validation improvements
 - [[docs/security/index]] — Security documentation index
 - [[docs/security/input-validation]] — Input validation details
 - [[docs/security/rate-limiting]] — Rate limiting details
-- [[docs/architecture/electron]] — Electron architecture
+- [[docs/architecture/electron]] — Electron architecture with Phase 7 restore hardening

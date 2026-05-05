@@ -3,9 +3,9 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-04-27
-updated: 2026-04-28
-tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026]
-description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), and three-mode application update system with checksum verification (April 2026)
+updated: 2026-05-05
+tags: [architecture, electron, desktop, packaging, security, sandbox, health-monitoring, async-io, csp-headers, dev-rebuild, phase-0, phase-1, phase-2, phase-6, phase-7, backup, restore, bundle, ipc, encryption, schema-migration, npm-vs-bun, docker-compose, pre-pull, startup, troubleshooting, alembic-migration-fixes, deployment-modes, shell-installer, docker-pull, update-system, checksum-verification, backup-before-update, cicd, april-2026, bug-hunt, recovery-hardening, concurrent-backup-guard, timeout, watchdog-pause]
+description: Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring, Docker image pre-pull optimization, backup/restore bundle system (Phase 1+2), three-mode application update system with checksum verification (April 2026), and Phase 7 backup/restore hardening with concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026)
 aliases: [electron, desktop app, packaging, IPC, main process, sandbox, watchdog, backup, bundle, update system, deployment modes]
 related_code: ["packaging/electron/", "packaging/electron/backup/bundle.js", "packaging/electron/main.js", "packaging/electron/preload.js", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/components/notifications/UpdateNotification.tsx", "apps/frontend/src/components/settings/tabs/AppTab.tsx", "apps/node-backend/src/main.js", "alembic/versions/0001_initial_database_schema.py", ".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
@@ -298,6 +298,37 @@ This forces npm and electron-builder to include them at the correct depth inside
 **Bundle Format:**
 
 See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for `.visionbak` structure, encryption details, and restore process.
+
+#### Phase 7 Hardening (May 2026)
+
+Three critical issues discovered during bug hunt phase were hardened:
+
+**Issue 1: HTTP Connection Hang**
+- **Problem:** `httpGet()` helper (used for fetching backup settings, triggering backup) had no timeout, causing indefinite hangs if backend became unresponsive mid-operation
+- **Fix:** Added `req.setTimeout(10000, ...)` to destroy hung connections after 10 seconds
+- **Impact:** Prevents UI freeze; timeout is generous enough for slow systems but short enough to show feedback quickly
+
+**Issue 2: Concurrent Backup Operations**
+- **Problem:** Renderer could rapid-click the backup button, spawning multiple concurrent `pg_dump` processes that overloaded the system or corrupted backup bundles
+- **Fix:** Module-scope `let backupInFlight = false;` guard in `backup:run` IPC handler; first backup sets flag, subsequent calls rejected with clear message, flag reset in `finally` block
+- **Impact:** Prevents data corruption, system overload, and user confusion from multiple simultaneous backups
+
+**Issue 3: Pre-Restore Data Loss Risk**
+- **Problem:** `backup:restore` IPC handler silently overwrote live database without user confirmation, making accidental restore from stale backups a critical data-loss vector
+- **Fix:** Added `dialog.showMessageBox()` confirmation dialog before restore attempt, with warning message and filename display; "Cancel" is default button (index 1) to prevent Enter-key accidents
+- **Impact:** User must explicitly confirm they're about to lose all current data, preventing accidents
+
+**Issue 4: Restore ↔ Watchdog Race Condition**
+- **Problem:** Health watchdog polled `GET /health` continuously, even during restore operations. When database was stopped, dropped, and recreated, watchdog would see backend-offline, increment failure counter, and potentially emit spurious `backend:lost` events while restore was still in progress
+- **Fix:** Call `stopHealthWatchdog()` before restore attempt, guarantee `startHealthWatchdog()` in `finally` block; watchdog remains paused until restore completes
+- **Impact:** Prevents spurious recovery alerts mid-restore, eliminates race condition between restore cleanup and watchdog recovery logic
+
+**Issue 5: Excessive Memory Buffering**
+- **Problem:** `run()` helper (used for shell commands) defaulted to 200 MB `maxBuffer`, intended for capturing full command output in memory. However, `pg_dump` uses `spawn()` with stream piping (not buffered), so the default wasted 200 MB per backup
+- **Fix:** Reduced default `maxBuffer` from 200 MB to 10 MB; sufficient for typical Docker CLI output, signals errors if commands exceed it
+- **Impact:** Memory footprint on typical commands drops by 190 MB per operation
+
+See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for detailed rationale, consequences, and testing guidance.
 
 ### Application Updates (April 2026)
 

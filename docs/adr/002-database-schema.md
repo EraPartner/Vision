@@ -3,9 +3,10 @@ title: ADR 002 - Database Schema
 type: adr
 status: Accepted
 date: 2026-04-21
-tags: [architecture, database, schema, postgresql, phase-1]
-description: Complete database schema design with all tables, columns, enums, indexes, and PostgreSQL table inheritance for investments
-aliases: [database schema, ERD, tables, postgresql schema, migrations]
+updated: 2026-05-05
+tags: [architecture, database, schema, postgresql, phase-1, phase-6, audit-trail, updated-at, corrective-migration]
+description: Complete database schema design with all tables, columns, enums, indexes, and PostgreSQL table inheritance for investments. Phase 6.1 corrective migration (0022) fixes missing NOT NULL DEFAULT NOW() constraints on updated_at columns across 11 tables.
+aliases: [database schema, ERD, tables, postgresql schema, migrations, updated-at audit trail]
 ---
 
 # ADR-002: Database Schema Design
@@ -507,7 +508,27 @@ Links transactions to their raw source.
 - Multiple raw transaction tables require maintenance
 - Materialized view refresh adds startup overhead
 
+## Phase 6.1 Corrective Migration (May 2026)
+
+During the bug hunt phase, a schema audit found that 11 core tables had been created with `updated_at TIMESTAMPTZ` columns but **without** `NOT NULL DEFAULT NOW()` constraints (as shown in the schema above with `NULLABLE` keyword):
+
+**Affected tables:**
+- categories, recipients, recipient_bank_accounts
+- transactions, planned_transactions, planned_transaction_loan_schedule
+- exchange_rates, belgian_inflation_rates, asset_price_history
+- bank_statements, reconciliation_entries
+
+**Root cause:** These columns were nullable and unguarded at the application layer, violating the audit-trail contract that every row should track its last modification time.
+
+**Resolution:** Alembic migration `0022_updated_at_not_null_defaults.py` (after 0021_split_audit):
+1. Backfills NULL values from `created_at` (always set) using `COALESCE(created_at, NOW())`
+2. Sets `NOT NULL DEFAULT NOW()` constraints via `ALTER TABLE`
+3. Downgradeable for rollback testing
+
+See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full details.
+
 ## Related
+- [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Corrective migration and Electron hardening
 - [[docs/adr/001-technology-stack|ADR-001: Technology Stack]]
 - [[docs/api/transactions|API: Transactions]]
 - [[docs/api/investments|API: Investments]]

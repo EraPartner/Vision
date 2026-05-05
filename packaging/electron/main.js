@@ -353,8 +353,9 @@ function run(bin, args, cwd, opts = {}) {
   const { env: envOverride, ...rest } = opts;
   const env = envOverride || dockerEnv;
   return new Promise((resolve, reject) => {
-    // Default maxBuffer to 200 MB — pg_dump output can be large.
-    const maxBuffer = rest.maxBuffer ?? 200 * 1024 * 1024;
+    // pg_dump bypasses run() and uses spawn() with stream-to-file — no in-memory
+    // buffering. 10 MB is ample for all docker compose command outputs here.
+    const maxBuffer = rest.maxBuffer ?? 10 * 1024 * 1024;
     execFile(bin, args, { env, cwd, ...rest, maxBuffer }, (err, stdout, stderr) => {
       if (err) return reject(stderr?.trim() || err.message || String(err));
       resolve(stdout);
@@ -366,6 +367,40 @@ function notify(body) {
   if (Notification.isSupported()) {
     new Notification({ title: APP_NAME, body }).show();
   }
+}
+
+// Validate a PostgreSQL identifier (username or database name).
+// Restricts to safe characters so values can never break SQL strings or identifiers.
+function validateIdentifier(name, label) {
+  if (!/^[a-zA-Z0-9_]{1,63}$/.test(name)) {
+    throw new Error(`Invalid ${label} in DATABASE_URL: "${name}". Only alphanumeric characters and underscores are allowed.`);
+  }
+}
+
+// Parse DATABASE_URL from .env file contents and validate extracted identifiers.
+// Returns { dbUser, dbPass, dbName } or throws on invalid/missing URL.
+function parseDatabaseUrlFromEnv(envContents) {
+  const lineMatch = envContents.match(/^DATABASE_URL=(.+)$/m);
+  const rawUrl = lineMatch ? lineMatch[1].trim() : null;
+
+  let dbUser = 'ftm_user';
+  let dbPass = '';
+  let dbName = 'financial_transactions';
+
+  if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      dbUser = decodeURIComponent(parsed.username) || dbUser;
+      dbPass = decodeURIComponent(parsed.password) || dbPass;
+      dbName = parsed.pathname.replace(/^\//, '') || dbName;
+    } catch {
+      // Keep defaults if URL is malformed
+    }
+  }
+
+  validateIdentifier(dbUser, 'username');
+  validateIdentifier(dbName, 'database name');
+  return { dbUser, dbPass, dbName };
 }
 
 function getDefaultICloudBackupDir() {
@@ -1074,20 +1109,16 @@ function compareVersions(a, b) {
 }
 
 function getCurrentVersionTag() {
-  const candidates = [
-    workDir ? path.join(workDir, 'package.json') : null,
-    path.resolve(__dirname, '..', '..', 'package.json'),
-  ].filter(Boolean);
-
-  for (const pkgPath of candidates) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      if (typeof pkg.version === 'string' && pkg.version.trim()) {
-        return normalizeVersionTag(pkg.version.trim());
-      }
-    } catch {
-      // try next candidate
+  // Read from the Electron package.json (accurate in dev and packaged modes).
+  // workDir is the Docker/compose root — its package.json is the monorepo root,
+  // not the Electron app, so we must not use it for version detection.
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+    if (typeof pkg.version === 'string' && pkg.version.trim()) {
+      return normalizeVersionTag(pkg.version.trim());
     }
+  } catch {
+    // fall through
   }
 
   return normalizeVersionTag(app.getVersion());
@@ -1466,13 +1497,16 @@ async function applyDockerImageUpdate(cwd, extraFiles = []) {
 
 function httpGet(url) {
   return new Promise((resolve, reject) => {
-    http.get(url, { headers: { 'Content-Type': 'application/json' } }, (res) => {
+    const req = http.get(url, { headers: { 'Content-Type': 'application/json' } }, (res) => {
       let body = '';
       res.on('data', (c) => { body += c; });
       res.on('end', () => {
         try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
       });
     }).on('error', reject);
+    req.setTimeout(10000, () => {
+      req.destroy(new Error('httpGet timed out after 10 s'));
+    });
   });
 }
 
@@ -1506,13 +1540,11 @@ function httpPut(url, payload) {
 async function runBackup(destDir) {
   if (!destDir) throw new Error('No backup directory configured');
 
-  let dbName = 'financial_transactions';
   let dbUser = 'ftm_user';
+  let dbName = 'financial_transactions';
   try {
-    const envFile = path.join(workDir, '.env');
-    const envContents = await fs.promises.readFile(envFile, 'utf8');
-    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::[^@]*)?@[^/]+\/(\S+)/);
-    if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
+    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
+    ({ dbUser, dbName } = parseDatabaseUrlFromEnv(envContents));
   } catch { /* use defaults */ }
 
   const deviceId = await getBackupDeviceId();
@@ -1595,10 +1627,8 @@ async function runBundleBackup(destDir, frontendStateJson = null) {
   let dbUser = 'ftm_user';
   let dbName = 'financial_transactions';
   try {
-    const envFile = path.join(workDir, '.env');
-    const envContents = await fs.promises.readFile(envFile, 'utf8');
-    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::[^@]*)?@[^/]+\/(\S+)/);
-    if (urlMatch) { dbUser = urlMatch[1]; dbName = urlMatch[2]; }
+    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
+    ({ dbUser, dbName } = parseDatabaseUrlFromEnv(envContents));
   } catch { /* use defaults */ }
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
@@ -1730,10 +1760,8 @@ async function runBundleRestore(bundlePath, { passphrase } = {}) {
   let dbPass = '';
   let dbName = 'financial_transactions';
   try {
-    const envFile = path.join(workDir, '.env');
-    const envContents = await fs.promises.readFile(envFile, 'utf8');
-    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/(\S+)/);
-    if (urlMatch) { dbUser = urlMatch[1]; dbPass = urlMatch[2] || ''; dbName = urlMatch[3]; }
+    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
+    ({ dbUser, dbPass, dbName } = parseDatabaseUrlFromEnv(envContents));
   } catch { /* use defaults */ }
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
@@ -1937,14 +1965,12 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
     cleanupRestoreSource = () => fs.unlink(restoreSource, () => {});
   }
 
-  let dbName = 'financial_transactions';
   let dbUser = 'ftm_user';
   let dbPass = '';
+  let dbName = 'financial_transactions';
   try {
-    const envFile = path.join(workDir, '.env');
-    const envContents = await fs.promises.readFile(envFile, 'utf8');
-    const urlMatch = envContents.match(/DATABASE_URL=postgresql:\/\/([^:@]+)(?::([^@]*))?@[^/]+\/(\S+)/);
-    if (urlMatch) { dbUser = urlMatch[1]; dbPass = urlMatch[2] || ''; dbName = urlMatch[3]; }
+    const envContents = await fs.promises.readFile(path.join(workDir, '.env'), 'utf8');
+    ({ dbUser, dbPass, dbName } = parseDatabaseUrlFromEnv(envContents));
   } catch { /* use defaults */ }
 
   const composeFileArgs = composeArgs(workDir, overrideFiles);
@@ -2108,7 +2134,24 @@ ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
   if (!fs.existsSync(resolved)) {
     return { success: false, error: 'Backup file not found' };
   }
+
+  // Require explicit user confirmation before overwriting live data.
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Restore', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Restore Backup',
+    message: 'This will permanently replace all current data and cannot be undone.',
+    detail: `Restore from: ${path.basename(resolved)}`,
+  });
+  if (response !== 0) return { success: false, error: 'Restore cancelled by user' };
+
   const passphrase = opts && typeof opts === 'object' ? opts.passphrase : undefined;
+
+  // Pause the health watchdog so it cannot restart containers while the restore
+  // is in progress (stop + drop + recreate DB).
+  stopHealthWatchdog();
   try {
     // Route .visionbak / .visionbak.enc through the new bundle restore path;
     // legacy .sql / .enc files fall through to the original runRestore.
@@ -2127,6 +2170,8 @@ ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
       'start', 'app',
     ], workDir, { timeout: 120000, env }).catch(() => {});
     return { success: false, error: String(err) };
+  } finally {
+    startHealthWatchdog();
   }
 });
 
@@ -2134,13 +2179,18 @@ ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
 // frontendStateJson is the serialised { keys: { … } } localStorage snapshot,
 // collected by the renderer before invoking this handler.  Optional — when null
 // (e.g. automated backup on quit) the bundle is created without frontend-state.json.
+let backupInFlight = false;
 ipcMain.handle('backup:run', async (_event, destDir, frontendStateJson = null) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
+  if (backupInFlight) return { success: false, error: 'A backup is already in progress' };
+  backupInFlight = true;
   try {
     const result = await runBundleBackup(destDir, frontendStateJson);
     return result;
   } catch (err) {
     return { success: false, error: String(err) };
+  } finally {
+    backupInFlight = false;
   }
 });
 

@@ -101,7 +101,7 @@ router.get('/:id/download', validateIdParam, async (req, res) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
-  const absPath = resolveAbsolutePath(attachment.stored_path);
+  const absPath = await resolveAbsolutePath(attachment.stored_path);
   const asciiFallback = attachment.filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   const utf8Encoded = encodeURIComponent(attachment.filename);
   res.setHeader('Content-Type', attachment.mime_type);

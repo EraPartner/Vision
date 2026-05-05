@@ -4,7 +4,6 @@
  */
 
 import { RateLimitedError } from './errorHandler.js';
-import { getSettings } from '../config/config.js';
 
 const requestCounts = new Map();
 
@@ -28,8 +27,6 @@ setInterval(() => {
  */
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
   return (req, res, next) => {
-    if (getSettings().isDevelopment()) return next();
-
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();
