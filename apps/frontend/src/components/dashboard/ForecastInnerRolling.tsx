@@ -56,7 +56,7 @@ function ForecastInnerRollingImpl({
         () => [
             ...Y_REFERENCE_LINES,
             {
-                x: new Date(`${data.today}T00:00:00Z`),
+                x: new Date(`${data.today}T00:00:00`),
                 color: "hsl(var(--muted-foreground))",
                 dashed: true,
                 label: t("cashflow.today") ?? "Today",

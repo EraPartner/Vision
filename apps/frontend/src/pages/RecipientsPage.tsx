@@ -53,6 +53,7 @@ export default function RecipientsPage() {
     const offsetRef = useRef(0);
     const hasMoreRef = useRef(true);
     const loadingRef = useRef(false);
+    const generationRef = useRef(0);
     const cancelEditingRef = useRef<(() => void) | null>(null);
 
     const queryClient = useQueryClient();
@@ -69,6 +70,7 @@ export default function RecipientsPage() {
 
     useEffect(() => {
         if (initialData) {
+            generationRef.current += 1;
             setAllItems(initialData.items);
             setTotalItems(initialData.total ?? initialData.items.length);
             offsetRef.current = initialData.items.length;
@@ -80,6 +82,7 @@ export default function RecipientsPage() {
         if (loadingRef.current || !hasMoreRef.current) return;
         loadingRef.current = true;
         setIsFetchingMore(true);
+        const gen = generationRef.current;
         try {
             const result = await apiClient.getRecipients({
                 limit: pageSize,
@@ -90,6 +93,7 @@ export default function RecipientsPage() {
                 sort_by: sortKey || undefined,
                 sort_dir: sortDir || undefined,
             });
+            if (generationRef.current !== gen) return;
             setAllItems(prev => {
                 const existingIds = new Set(prev.map((r) => r.id));
                 const newItems = result.items.filter((r) => !existingIds.has(r.id));

@@ -55,12 +55,24 @@ jobs:
           TAG="${{ github.ref_name }}"
           # Trim leading 'v' from tag
           TAG_VERSION="${TAG#v}"
+          ROOT_VERSION=$(node -p "require('./package.json').version")
           PKG_VERSION=$(node -p "require('./packaging/electron/package.json').version")
-          echo "Tag version    : $TAG_VERSION"
-          echo "Package version: $PKG_VERSION"
+          echo "Tag version              : $TAG_VERSION"
+          echo "Root package.json        : $ROOT_VERSION"
+          echo "Electron package.json    : $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$ROOT_VERSION" ]; then
+            echo "ERROR: git tag ($TAG_VERSION) does not match root package.json version ($ROOT_VERSION)"
+            echo "Update root package.json before tagging."
+            exit 1
+          fi
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "ERROR: git tag ($TAG_VERSION) does not match packaging/electron/package.json version ($PKG_VERSION)"
             echo "Update packaging/electron/package.json before tagging."
+            exit 1
+          fi
+          if [ "$ROOT_VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: root package.json ($ROOT_VERSION) and packaging/electron/package.json ($PKG_VERSION) are out of sync"
+            echo "Both files must have the same version."
             exit 1
           fi
           echo "Version check passed."

@@ -36,6 +36,12 @@ export function formatDate(date: Date, pattern: string, locale = "en-US"): strin
 }
 
 export function parseISO(dateString: string): Date {
+  // date-only strings (YYYY-MM-DD) must parse as local midnight, not UTC midnight,
+  // to avoid off-by-one-day display for users east of UTC.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const [y, m, d] = dateString.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
   return new Date(dateString);
 }
 

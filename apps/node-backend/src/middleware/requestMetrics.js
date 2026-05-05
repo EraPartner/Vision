@@ -10,6 +10,7 @@
 const WINDOW_MINUTES = 15;
 const BUCKET_MS = 60_000; // 1-minute buckets
 const MAX_LATENCY_SAMPLES_PER_BUCKET = 1000; // cap memory; reservoir-sample beyond
+const MAX_ROUTE_STORES = 500; // prevent unbounded growth from unmatched/scanned URLs
 
 // Map<routeKey, BucketStore>
 // routeKey = "METHOD /path/pattern"
@@ -61,6 +62,7 @@ function evictOldBuckets(store, now) {
 
 function getOrCreateStore(routeKey) {
   if (!stores.has(routeKey)) {
+    if (stores.size >= MAX_ROUTE_STORES) return null;
     stores.set(routeKey, { buckets: new Map() });
   }
   return stores.get(routeKey);
@@ -73,10 +75,11 @@ function percentile(sorted, p) {
 }
 
 function normalizeRoute(req) {
-  // Prefer matched Express route pattern over raw URL to group :param routes
-  const pattern = req.route?.path ?? req.path ?? req.url ?? '/';
+  // Unmatched routes (no req.route) collapse to a single bucket per method
+  // to prevent URL scanners/bots from inflating the stores Map.
+  if (!req.route) return `${req.method} <unmatched>`;
   const base = req.baseUrl ?? '';
-  return `${req.method} ${base}${pattern}`;
+  return `${req.method} ${base}${req.route.path}`;
 }
 
 /**
@@ -91,6 +94,7 @@ export function requestMetrics(req, res, next) {
     const now = Date.now();
     const routeKey = normalizeRoute(req);
     const store = getOrCreateStore(routeKey);
+    if (!store) return;
 
     evictOldBuckets(store, now);
 

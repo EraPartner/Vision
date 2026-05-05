@@ -18,32 +18,33 @@ import Decimal from 'decimal.js';
 
 /**
  * Apply corporate-action events (split, merger, spinoff, return_of_capital) to
- * a mutable lot array in-place.  Called by both FIFO and LIFO helpers.
+ * a lot array.  Called by both FIFO and LIFO helpers.
  *
- * @param {{ units: number, costBasis: number }[]} lots - mutable array of open lots
+ * @param {{ units: Decimal, costBasis: Decimal }[]} lots
  * @param {string} type
- * @param {number} units - new total units after split, or units received from spinoff
- * @param {number} amount - proceeds for return_of_capital
- * @param {number} totalUnits - current total units held
- * @returns {{ totalUnits: number }} updated totalUnits
+ * @param {Decimal} units - new total units after split, or units received from spinoff
+ * @param {Decimal} amount - proceeds for return_of_capital
+ * @param {Decimal} totalUnits - current total units held
+ * @returns {{ totalUnits: Decimal, lots: { units: Decimal, costBasis: Decimal }[] }}
  */
 function applyEventToLots(lots, type, units, amount, totalUnits) {
-  if (type === 'split' && totalUnits > 0 && units > 0) {
-    const ratio = units / totalUnits;
+  const ZERO = toDecimal(0);
+
+  if (type === 'split' && totalUnits.gt(0) && units.gt(0)) {
+    const ratio = units.dividedBy(totalUnits);
     return {
       totalUnits: units,
-      lots: lots.map((lot) => ({ ...lot, units: lot.units * ratio })),
+      lots: lots.map((lot) => ({ ...lot, units: lot.units.times(ratio) })),
     };
   }
 
-  if (type === 'return_of_capital' && totalUnits > 0) {
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    const reductionPerUnit = amount / totalUnits;
+  if (type === 'return_of_capital' && totalUnits.gt(0)) {
+    const reductionPerUnit = amount.dividedBy(totalUnits);
     return {
       totalUnits,
       lots: lots.map((lot) => ({
         ...lot,
-        costBasis: Math.max(0, lot.costBasis - reductionPerUnit * lot.units),
+        costBasis: Decimal.max(ZERO, lot.costBasis.minus(reductionPerUnit.times(lot.units))),
       })),
     };
   }
@@ -91,7 +92,7 @@ export function calculateCostBasis(txns) {
         realizedGain = realizedGain.plus(netProceeds.minus(costOfSoldUnits));
         totalUnits = totalUnits.minus(sellUnits);
         totalCost = totalCost.minus(costOfSoldUnits);
-        totalSellProceeds = totalSellProceeds.plus(amount);
+        totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
       }
     } else if (txn.type === 'split' && totalUnits.gt(0) && units.gt(0)) {
       // units = new total post-split; cost basis is unchanged
@@ -125,50 +126,53 @@ export function calculateCostBasis(txns) {
 export function calculateCostBasisFIFO(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
-  /** @type {{ units: number, costBasis: number }[]} */
+  const ZERO = toDecimal(0);
+  /** @type {{ units: Decimal, costBasis: Decimal }[]} */
   let lots = [];
-  let totalUnits = 0;
-  let realizedGain = 0;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
+  let totalUnits = ZERO;
+  let realizedGain = ZERO;
+  let totalBuyCost = ZERO;
+  let totalSellProceeds = ZERO;
 
   for (const txn of sorted) {
-    const units = Number(txn.units) || 0;
-    const amount = Number(txn.amount) || 0;
-    const fees = Number(txn.fees) || 0;
-    const taxes = Number(txn.taxes) || 0;
+    const units = toDecimal(txn.units || 0);
+    const amount = toDecimal(txn.amount || 0);
+    const fees = toDecimal(txn.fees || 0);
+    const taxes = toDecimal(txn.taxes || 0);
 
     if (txn.type === 'buy' || txn.type === 'gift') {
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const buyCost = amount + fees + taxes;
+      const buyCost = amount.plus(fees).plus(taxes);
       lots = [...lots, { units, costBasis: buyCost }];
-      totalUnits += units;
-      totalBuyCost += buyCost;
-    } else if (txn.type === 'sell' && units > 0) {
-      let unitsToSell = Math.min(units, totalUnits);
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const netProceeds = amount - fees - taxes;
-      let costOfSold = 0;
+      totalUnits = totalUnits.plus(units);
+      totalBuyCost = totalBuyCost.plus(buyCost);
+    } else if (txn.type === 'sell' && units.gt(0)) {
+      const sellUnits = Decimal.min(units, totalUnits);
+      const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
+      const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
+      let unitsToSell = sellUnits;
+      let costOfSold = ZERO;
 
-      while (unitsToSell > 0 && lots.length > 0) {
+      while (unitsToSell.gt(0) && lots.length > 0) {
         const lot = lots[0];
-        if (lot.units <= unitsToSell) {
-          costOfSold += lot.costBasis;
-          unitsToSell -= lot.units;
-          totalUnits -= lot.units;
+        if (lot.units.lte(unitsToSell)) {
+          costOfSold = costOfSold.plus(lot.costBasis);
+          unitsToSell = unitsToSell.minus(lot.units);
           lots = lots.slice(1);
         } else {
-          const fraction = unitsToSell / lot.units;
-          const lotCostUsed = lot.costBasis * fraction;
-          costOfSold += lotCostUsed;
-          lots = [{ units: lot.units - unitsToSell, costBasis: lot.costBasis - lotCostUsed }, ...lots.slice(1)];
-          totalUnits -= unitsToSell;
-          unitsToSell = 0;
+          const fraction = unitsToSell.dividedBy(lot.units);
+          const lotCostUsed = lot.costBasis.times(fraction);
+          costOfSold = costOfSold.plus(lotCostUsed);
+          lots = [
+            { units: lot.units.minus(unitsToSell), costBasis: lot.costBasis.minus(lotCostUsed) },
+            ...lots.slice(1),
+          ];
+          unitsToSell = ZERO;
         }
       }
 
-      realizedGain += netProceeds - costOfSold;
-      totalSellProceeds += amount;
+      totalUnits = totalUnits.minus(sellUnits);
+      realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
+      totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
     } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
       const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
       totalUnits = result.totalUnits;
@@ -176,16 +180,17 @@ export function calculateCostBasisFIFO(txns) {
     }
   }
 
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
+  const totalCost = lots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
+  const finalUnits = Decimal.max(ZERO, totalUnits);
+  const finalCost = Decimal.max(ZERO, totalCost);
 
   return {
-    totalUnits: Math.max(0, totalUnits),
-    totalCost: Math.max(0, totalCost),
-    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
-    realizedGain,
-    totalBuyCost,
-    totalSellProceeds,
+    totalUnits: toNumber(finalUnits),
+    totalCost: toNumber(roundToCents(finalCost)),
+    avgCostBasis: toNumber(finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO),
+    realizedGain: toNumber(roundToCents(realizedGain)),
+    totalBuyCost: toNumber(roundToCents(totalBuyCost)),
+    totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
   };
 }
 
@@ -199,50 +204,53 @@ export function calculateCostBasisFIFO(txns) {
 export function calculateCostBasisLIFO(txns) {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
-  /** @type {{ units: number, costBasis: number }[]} */
+  const ZERO = toDecimal(0);
+  /** @type {{ units: Decimal, costBasis: Decimal }[]} */
   let lots = [];
-  let totalUnits = 0;
-  let realizedGain = 0;
-  let totalBuyCost = 0;
-  let totalSellProceeds = 0;
+  let totalUnits = ZERO;
+  let realizedGain = ZERO;
+  let totalBuyCost = ZERO;
+  let totalSellProceeds = ZERO;
 
   for (const txn of sorted) {
-    const units = Number(txn.units) || 0;
-    const amount = Number(txn.amount) || 0;
-    const fees = Number(txn.fees) || 0;
-    const taxes = Number(txn.taxes) || 0;
+    const units = toDecimal(txn.units || 0);
+    const amount = toDecimal(txn.amount || 0);
+    const fees = toDecimal(txn.fees || 0);
+    const taxes = toDecimal(txn.taxes || 0);
 
     if (txn.type === 'buy' || txn.type === 'gift') {
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const buyCost = amount + fees + taxes;
+      const buyCost = amount.plus(fees).plus(taxes);
       lots = [...lots, { units, costBasis: buyCost }];
-      totalUnits += units;
-      totalBuyCost += buyCost;
-    } else if (txn.type === 'sell' && units > 0) {
-      let unitsToSell = Math.min(units, totalUnits);
-      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-      const netProceeds = amount - fees - taxes;
-      let costOfSold = 0;
+      totalUnits = totalUnits.plus(units);
+      totalBuyCost = totalBuyCost.plus(buyCost);
+    } else if (txn.type === 'sell' && units.gt(0)) {
+      const sellUnits = Decimal.min(units, totalUnits);
+      const sellRatio = units.gt(0) ? sellUnits.dividedBy(units) : ZERO;
+      const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
+      let unitsToSell = sellUnits;
+      let costOfSold = ZERO;
 
-      while (unitsToSell > 0 && lots.length > 0) {
+      while (unitsToSell.gt(0) && lots.length > 0) {
         const lot = lots[lots.length - 1];
-        if (lot.units <= unitsToSell) {
-          costOfSold += lot.costBasis;
-          unitsToSell -= lot.units;
-          totalUnits -= lot.units;
+        if (lot.units.lte(unitsToSell)) {
+          costOfSold = costOfSold.plus(lot.costBasis);
+          unitsToSell = unitsToSell.minus(lot.units);
           lots = lots.slice(0, -1);
         } else {
-          const fraction = unitsToSell / lot.units;
-          const lotCostUsed = lot.costBasis * fraction;
-          costOfSold += lotCostUsed;
-          lots = [...lots.slice(0, -1), { units: lot.units - unitsToSell, costBasis: lot.costBasis - lotCostUsed }];
-          totalUnits -= unitsToSell;
-          unitsToSell = 0;
+          const fraction = unitsToSell.dividedBy(lot.units);
+          const lotCostUsed = lot.costBasis.times(fraction);
+          costOfSold = costOfSold.plus(lotCostUsed);
+          lots = [
+            ...lots.slice(0, -1),
+            { units: lot.units.minus(unitsToSell), costBasis: lot.costBasis.minus(lotCostUsed) },
+          ];
+          unitsToSell = ZERO;
         }
       }
 
-      realizedGain += netProceeds - costOfSold;
-      totalSellProceeds += amount;
+      totalUnits = totalUnits.minus(sellUnits);
+      realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
+      totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
     } else if (txn.type === 'split' || txn.type === 'merger' || txn.type === 'spinoff' || txn.type === 'return_of_capital') {
       const result = applyEventToLots(lots, txn.type, units, amount, totalUnits);
       totalUnits = result.totalUnits;
@@ -250,16 +258,17 @@ export function calculateCostBasisLIFO(txns) {
     }
   }
 
-  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-  const totalCost = lots.reduce((sum, lot) => sum + lot.costBasis, 0);
+  const totalCost = lots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
+  const finalUnits = Decimal.max(ZERO, totalUnits);
+  const finalCost = Decimal.max(ZERO, totalCost);
 
   return {
-    totalUnits: Math.max(0, totalUnits),
-    totalCost: Math.max(0, totalCost),
-    avgCostBasis: totalUnits > 0 ? totalCost / totalUnits : 0,
-    realizedGain,
-    totalBuyCost,
-    totalSellProceeds,
+    totalUnits: toNumber(finalUnits),
+    totalCost: toNumber(roundToCents(finalCost)),
+    avgCostBasis: toNumber(finalUnits.gt(0) ? finalCost.dividedBy(finalUnits) : ZERO),
+    realizedGain: toNumber(roundToCents(realizedGain)),
+    totalBuyCost: toNumber(roundToCents(totalBuyCost)),
+    totalSellProceeds: toNumber(roundToCents(totalSellProceeds)),
   };
 }
 

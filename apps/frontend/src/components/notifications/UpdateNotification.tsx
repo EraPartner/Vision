@@ -36,25 +36,25 @@ export function UpdateNotification() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [phase, setPhase] = useState<ApplyPhase>("idle");
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const mountedRef = useRef(true);
 
     const check = useCallback(async () => {
         try {
             const data = await apiClient.checkForUpdates();
-            setStatus(data);
+            if (mountedRef.current) setStatus(data);
         } catch {
             // Silently ignore — don't disrupt the app if the update check fails
         }
     }, []);
 
     useEffect(() => {
+        mountedRef.current = true;
         check();
-        const schedule = () => {
-            timerRef.current = setInterval(() => {
-                if (!document.hidden) check();
-            }, CHECK_INTERVAL_MS);
-        };
-        schedule();
+        timerRef.current = setInterval(() => {
+            if (!document.hidden) check();
+        }, CHECK_INTERVAL_MS);
         return () => {
+            mountedRef.current = false;
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, [check]);

@@ -7,7 +7,7 @@
  *   - inheritance-table CRUD helpers (create/update/hardDelete through base)
  */
 
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { toDecimal, toNumber } from '../lib/money.js';
 
 let _hasPortfolioTransactionInheritanceSchema;
@@ -438,10 +438,13 @@ export async function updateThroughInheritanceTables(id, fields, getByIdFn) {
     const baseUpdate = buildUpdateSql('portfolio_transactions_base', id, fields, BASE_ALLOWED_FIELDS);
     const childUpdate = buildUpdateSql(childTable, id, fields, childAllowed);
 
-    if (baseUpdate) await query(baseUpdate.sql, baseUpdate.params);
-    if (childUpdate) await query(childUpdate.sql, childUpdate.params);
-
     if (!baseUpdate && !childUpdate) return existing;
+
+    await withTransaction(async (client) => {
+      if (baseUpdate) await client.query(baseUpdate.sql, baseUpdate.params);
+      if (childUpdate) await client.query(childUpdate.sql, childUpdate.params);
+    });
+
     return getByIdFn(id);
   } catch (err) {
     if (!isMissingInheritanceRelationError(err)) throw err;

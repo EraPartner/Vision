@@ -26,9 +26,10 @@ export function usePortfolioPrefetch(_workspace?: string) {
   }, [queryClient, currency]);
 
   const prefetchPerformance = useCallback(() => {
+    // queryKey must match PerformancePage: ["portfolio-performance", currency, period]
     queryClient.prefetchQuery({
-      queryKey: ["portfolio-performance", currency],
-      queryFn: () => apiClient.getPortfolioPerformance({ currency }),
+      queryKey: ["portfolio-performance", currency, "all"],
+      queryFn: () => apiClient.getPortfolioPerformance({ currency, period: "all" }),
       staleTime: PREFETCH_STALE_TIME,
     });
   }, [queryClient, currency]);

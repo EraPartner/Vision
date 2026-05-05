@@ -160,6 +160,18 @@ export async function detectRecurringPatterns() {
       byRecipient[key].transactions.push(row);
     }
 
+    // Batch-fetch all planned recipient IDs in one query (avoids N+1)
+    const allRecipientIds = Object.keys(byRecipient).map(Number).filter(Boolean);
+    const plannedRecipientIds = new Set();
+    if (plannedTableAvailable && allRecipientIds.length > 0) {
+      const plannedResult = await query(
+        `SELECT DISTINCT recipient_id FROM planned_transactions
+         WHERE recipient_id = ANY($1) AND is_active = true`,
+        [allRecipientIds]
+      );
+      for (const row of plannedResult.rows) plannedRecipientIds.add(row.recipient_id);
+    }
+
     const patterns = [];
 
     for (const group of Object.values(byRecipient)) {
@@ -201,17 +213,7 @@ export async function detectRecurringPatterns() {
       const nextDate = new Date(lastDate);
       nextDate.setDate(nextDate.getDate() + detected.medianDays);
 
-      // Check if already tracked as planned transaction
-      let isAlreadyPlanned = false;
-      if (plannedTableAvailable) {
-        const existingPlanned = await query(
-          `SELECT id FROM planned_transactions
-           WHERE recipient_id = $1 AND is_active = true
-           LIMIT 1`,
-          [group.recipientId]
-        );
-        isAlreadyPlanned = existingPlanned.rows.length > 0;
-      }
+      const isAlreadyPlanned = plannedRecipientIds.has(group.recipientId);
 
       patterns.push({
         recipientId: group.recipientId,

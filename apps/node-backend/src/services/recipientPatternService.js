@@ -74,7 +74,12 @@ export function compilePattern(row) {
     }
     case 'regex':
     default: {
-      re = new RegExp(row.pattern, flags);
+      try {
+        re = new RegExp(row.pattern, flags);
+      } catch (err) {
+        logger.warn('Skipping invalid regex pattern', { patternId: row.id, pattern: row.pattern, error: err.message });
+        re = /(?!)/;
+      }
       break;
     }
   }
@@ -84,8 +89,27 @@ export function compilePattern(row) {
 }
 
 /**
+ * Detect the most common ReDoS vectors in a raw regex pattern string:
+ * nested quantifiers (a+)+ and quantified alternation (a|b)+ with overlap.
+ *
+ * This is a conservative static heuristic — not exhaustive, but catches the
+ * patterns that cause catastrophic backtracking in practice.
+ */
+function hasRedosRisk(pattern) {
+  // Remove character classes so [...+*] doesn't confuse the group scanner.
+  const stripped = pattern.replace(/\[(?:[^\]\\]|\\.)*\]/g, '[]');
+  // Nested quantifier inside a group: (...QUANT...)QUANT
+  if (/\((?:[^()]*[+*][^()]*)\)[+*{?]/.test(stripped)) return true;
+  // Alternation inside a quantified group: (A|B)+
+  // Only flag when both branches share a non-trivial prefix (overlap check omitted
+  // for simplicity — flag all alternation-under-quantifier as potentially unsafe).
+  if (/\((?:[^()]*\|[^()]*)\)[+*{]/.test(stripped)) return true;
+  return false;
+}
+
+/**
  * Validate a pattern string server-side before saving.
- * Rejects: empty, too long, or patterns that fail to compile.
+ * Rejects: empty, too long, ReDoS-risky (regex kind), or patterns that fail to compile.
  *
  * @param {{ pattern: string, pattern_kind: string, case_sensitive: boolean }} row
  * @returns {{ valid: boolean, error?: string }}
@@ -96,6 +120,9 @@ export function validatePattern(row) {
   }
   if (row.pattern.length > 500) {
     return { valid: false, error: 'Pattern must not exceed 500 characters' };
+  }
+  if (row.pattern_kind === 'regex' && hasRedosRisk(row.pattern)) {
+    return { valid: false, error: 'Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking' };
   }
   try {
     compilePattern({ id: 0, updated_at: '0', ...row });

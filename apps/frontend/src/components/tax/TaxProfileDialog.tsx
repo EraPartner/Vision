@@ -9,7 +9,7 @@
  *   4. Region & surcharge
  */
 // @refresh reset
-import { useState, type ElementType, type ReactNode } from 'react';
+import { useState, useRef, type ElementType, type ReactNode } from 'react';
 import { parseDecimal } from '@/lib/decimal';
 import {
     Sheet,
@@ -234,6 +234,16 @@ function IncomeStep({
     updateProfile: (updates: Partial<ReturnType<typeof useBelgianTaxProfile>['profile']>) => void;
 }) {
     const { t } = useLanguage();
+    const residenceUids = useRef<string[]>([]);
+    const residences = profile.additionalResidences || [];
+    // Grow: assign a stable uid to each new residence
+    while (residenceUids.current.length < residences.length) {
+        residenceUids.current.push(crypto.randomUUID());
+    }
+    // Shrink: trim when residences are removed (e.g. reset)
+    if (residenceUids.current.length > residences.length) {
+        residenceUids.current.length = residences.length;
+    }
     return (
         <div className="space-y-5">
             <div>
@@ -343,8 +353,8 @@ function IncomeStep({
                 <div>
                     <p className="text-sm font-semibold text-foreground mb-2">{t('tax.profile.section.residences.title')}</p>
                     <p className="text-xs text-muted-foreground mb-3">{t('tax.profile.section.residences.desc')}</p>
-                    {(profile.additionalResidences || []).map((r, idx) => (
-                        <div key={idx} className="grid grid-cols-3 gap-2 items-end mb-2">
+                    {residences.map((r, idx) => (
+                        <div key={residenceUids.current[idx]} className="grid grid-cols-3 gap-2 items-end mb-2">
                             <div className="col-span-1">
                                 <Label className="text-xs">{t('tax.profile.field.residenceLabel') || 'Label'}</Label>
                                 <Input value={r.label || ''} onChange={(e) => {

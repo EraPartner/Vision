@@ -186,15 +186,14 @@ export function OnboardingWizard({ open, onComplete, onOpenSettings }: Onboardin
 
     const handleCreateCategories = async () => {
         setCreatingCategories(true);
-        let created = 0;
         try {
-            for (const idx of selectedCategories) {
-                const cat = SUGGESTED_CATEGORIES[idx];
-                try {
-                    await apiClient.createCategory({ general: cat.general, detail: cat.detail });
-                    created++;
-                } catch { /* already exists, skip */ }
-            }
+            const results = await Promise.allSettled(
+                selectedCategories.map((idx) => {
+                    const cat = SUGGESTED_CATEGORIES[idx];
+                    return apiClient.createCategory({ general: cat.general, detail: cat.detail });
+                })
+            );
+            const created = results.filter((r) => r.status === "fulfilled").length;
             setCategoriesCreated(true);
             toast.success(t('onboarding.toast.categoriesCreated', { n: String(created) }));
         } catch (err: unknown) {

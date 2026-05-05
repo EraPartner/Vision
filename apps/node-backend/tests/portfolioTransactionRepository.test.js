@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../src/database/connection.js', () => ({
   query: vi.fn(),
+  withTransaction: vi.fn(),
 }));
 
-import { query } from '../src/database/connection.js';
+import { query, withTransaction } from '../src/database/connection.js';
 import portfolioTransactionRepository, { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.js';
 
 describe('portfolioTransactionRepository.create', () => {
@@ -257,6 +258,7 @@ describe('portfolioTransactionRepository.hardDelete', () => {
 describe('portfolioTransactionRepository.update', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    withTransaction.mockImplementation(async (fn) => fn({ query }));
     __resetPortfolioTransactionSchemaCache();
   });
 

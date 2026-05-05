@@ -5,7 +5,7 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
-import { query } from '../../database/connection.js';
+import { query, withTransaction } from '../../database/connection.js';
 import { logger } from '../../config/logger.js';
 import { toDecimal, toNumber } from '../../lib/money.js';
 
@@ -179,31 +179,30 @@ export async function saveToDatabase(rates) {
     const entries = Object.entries(rates).filter(([c]) => c !== 'EUR');
     if (entries.length === 0) return;
 
-    await query('BEGIN');
-    await query(
-      `UPDATE exchange_rates
-       SET is_latest = false, updated_at = NOW()
-       WHERE currency_code = ANY($1::text[]) AND is_latest = true`,
-      [entries.map(([currency]) => currency)]
-    );
-
-    for (const [currency, rate] of entries) {
-      await query(
-        `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-         VALUES ($1, $2, $3, true)
-         ON CONFLICT (currency_code, rate_date)
-         DO UPDATE SET
-           rate_to_eur = EXCLUDED.rate_to_eur,
-           is_latest = true,
-           fetched_at = NOW(),
-           updated_at = NOW()`,
-        [currency, rate, today]
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE exchange_rates
+         SET is_latest = false, updated_at = NOW()
+         WHERE currency_code = ANY($1::text[]) AND is_latest = true`,
+        [entries.map(([currency]) => currency)]
       );
-    }
-    await query('COMMIT');
+
+      for (const [currency, rate] of entries) {
+        await client.query(
+          `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+           VALUES ($1, $2, $3, true)
+           ON CONFLICT (currency_code, rate_date)
+           DO UPDATE SET
+             rate_to_eur = EXCLUDED.rate_to_eur,
+             is_latest = true,
+             fetched_at = NOW(),
+             updated_at = NOW()`,
+          [currency, rate, today]
+        );
+      }
+    });
     logger.debug(`Saved ${Object.keys(rates).length - 1} latest exchange rates to database`);
   } catch (err) {
-    await query('ROLLBACK').catch(() => {});
     logger.error('Failed to save exchange rates to database', { error: err.message });
   }
 }

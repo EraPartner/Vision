@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { getCurrencyFormatDefaults } from "@/utils/currency";
@@ -196,26 +196,31 @@ export function usePlannedPayments(showInactive: boolean = false) {
   const [payments, setPayments] = useState<PlannedPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await apiClient.getPlannedTransactions({
-        active: !showInactive, // If showInactive is true, fetch all (active: false means fetch all including inactive)
+        active: !showInactive,
         limit: 1000
       });
+      if (!mountedRef.current) return;
       setPayments(response.items.map(mapFromAPI));
     } catch (err) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to fetch planned payments");
       logger.error("Error fetching planned payments:", err);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [showInactive]);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchPayments();
+    return () => { mountedRef.current = false; };
   }, [fetchPayments]);
 
   const addPayment = useCallback(async (payment: Omit<PlannedPayment, "id" | "created_at">) => {

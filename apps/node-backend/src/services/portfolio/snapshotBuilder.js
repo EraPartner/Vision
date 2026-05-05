@@ -177,8 +177,9 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
   // --- Main day loop ---
 
   const allDays = [];
-  const today = new Date();
-  for (let d = new Date(firstDateYmd); d <= today; d.setDate(d.getDate() + 1)) {
+  const _now = new Date();
+  const today = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate()));
+  for (let d = new Date(firstDateYmd); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
     allDays.push(d.toISOString().split('T')[0]);
   }
 

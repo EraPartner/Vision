@@ -1,4 +1,4 @@
-import { query } from '../database/connection.js';
+import { query, withTransaction } from '../database/connection.js';
 import { logger } from '../config/logger.js';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.js';
 
@@ -438,10 +438,9 @@ async function loadFromDatabase(startMonth, endMonth) {
 async function saveToDatabase(rates, source = 'statbel') {
   if (!Array.isArray(rates) || rates.length === 0) return;
 
-  await query('BEGIN');
-  try {
+  await withTransaction(async (client) => {
     for (const rate of rates) {
-      await query(
+      await client.query(
         `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
          VALUES ($1::date, $2, $3)
          ON CONFLICT (month_date)
@@ -453,11 +452,7 @@ async function saveToDatabase(rates, source = 'statbel') {
         [`${rate.month}-01`, rate.monthly_rate, source]
       );
     }
-    await query('COMMIT');
-  } catch (error) {
-    await query('ROLLBACK').catch(() => {});
-    throw error;
-  }
+  });
 }
 
 function filterRates(rates, startMonth, endMonth) {

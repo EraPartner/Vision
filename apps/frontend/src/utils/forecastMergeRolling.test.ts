@@ -71,7 +71,9 @@ describe("mergeForViewRolling", () => {
         const visible = new Set(["simple_avg"]);
         const { rows } = mergeForViewRolling(data, "daily", visible, "Actual");
         expect(rows.every((r) => r.t instanceof Date)).toBe(true);
-        expect(rows[0].t.toISOString().slice(0, 10)).toBe(rows[0].date);
+        const t = rows[0].t;
+        const localDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        expect(localDate).toBe(rows[0].date);
     });
 
     test("daily view: actual is null for future entries", () => {

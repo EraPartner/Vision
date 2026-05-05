@@ -23,6 +23,7 @@ const FIXED_INCOME_CLASSES = new Set(['savings', 'bond']);
 const REAL_ESTATE_CLASS = 'real_estate';
 
 const round2 = (value) => Math.round(Number(value) * 100) / 100;
+const round6 = (value) => Math.round(Number(value) * 1000000) / 1000000;
 
 /**
  * Fetch active investments and their transactions, then compute per-investment
@@ -261,7 +262,7 @@ async function buildInvestmentSummary(inv, txns, targetCurrency) {
     originalCurrency: invCurrency,
 
     // Computed numerics — pre-converted to targetCurrency
-    totalUnits: round2(totalUnits * 10000) / 10000, // 4-decimal precision for units
+    totalUnits: round6(totalUnits),
     currentPrice: round2(convertedCurrentPrice),
     current_price: round2(convertedCurrentPrice),
     interestRate: Number(inv.interest_rate) || 0,

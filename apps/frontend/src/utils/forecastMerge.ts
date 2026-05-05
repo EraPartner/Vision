@@ -325,7 +325,7 @@ export function mergeForViewRolling(
     const rows: MergedDayDate[] = allDates.map((date) => {
         const row: MergedDayDate = {
             date,
-            t: new Date(`${date}T00:00:00Z`),
+            t: new Date(`${date}T00:00:00`),
             actual:
                 view === "cumulative"
                     ? (cumulativeByDate.get(date) ?? null)

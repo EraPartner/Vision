@@ -1078,6 +1078,23 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+  // Block all new-window spawns (target="_blank", window.open, etc.)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Block navigation to any URL that isn't localhost/127.0.0.1 or a local file.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const parsed = new URL(url);
+      const allowed =
+        parsed.protocol === 'file:' ||
+        parsed.hostname === 'localhost' ||
+        parsed.hostname === '127.0.0.1';
+      if (!allowed) event.preventDefault();
+    } catch {
+      event.preventDefault();
+    }
+  });
+
   // Caller is responsible for loading the initial URL.
   mainWindow.on('closed', () => { mainWindow = null; });
 }
@@ -1334,19 +1351,21 @@ async function prepareShellUpdateInstaller() {
   });
 
   const checksumAsset = pickChecksumAsset(release, sourceLauncherAsset.name);
-  if (checksumAsset?.browser_download_url) {
-    // Checksum asset is present — must verify successfully or abort.
-    const body = await fetchUrlBody(checksumAsset.browser_download_url);
-    const expected = parseSha256Body(body);
-    if (!expected) {
-      try { fs.unlinkSync(zipPath); } catch (_) {}
-      throw new Error('Checksum file present but could not parse SHA256 hash');
-    }
-    const actual = await computeFileSha256(zipPath);
-    if (actual.toLowerCase() !== expected.toLowerCase()) {
-      try { fs.unlinkSync(zipPath); } catch (_) {}
-      throw new Error('Checksum mismatch — downloaded file may be corrupted or tampered with');
-    }
+  if (!checksumAsset?.browser_download_url) {
+    try { fs.unlinkSync(zipPath); } catch (_) {}
+    throw new Error('No checksum asset found for this release — aborting update to prevent running an unverified installer');
+  }
+  // Checksum asset present — verify before proceeding.
+  const body = await fetchUrlBody(checksumAsset.browser_download_url);
+  const expected = parseSha256Body(body);
+  if (!expected) {
+    try { fs.unlinkSync(zipPath); } catch (_) {}
+    throw new Error('Checksum file present but could not parse SHA256 hash');
+  }
+  const actual = await computeFileSha256(zipPath);
+  if (actual.toLowerCase() !== expected.toLowerCase()) {
+    try { fs.unlinkSync(zipPath); } catch (_) {}
+    throw new Error('Checksum mismatch — downloaded file may be corrupted or tampered with');
   }
 
   await run('ditto', ['-x', '-k', zipPath, extractDir], tempRoot, { env: process.env });
@@ -2081,6 +2100,12 @@ async function runRestore(sqlFilePath, { passphrase } = {}) {
 // arbitrary filesystem path (e.g. /etc/passwd, malicious .sql) for restore.
 const ALLOWED_RESTORE_PATHS = new Set();
 
+// macOS system directories that must never be used as a backup destination.
+const BLOCKED_BACKUP_PREFIXES = [
+  '/System', '/usr', '/bin', '/sbin', '/etc',
+  '/private/etc', '/private/var/db', '/Library/System',
+];
+
 const ALLOWED_RESTORE_EXTS = new Set(['.visionbak', '.enc', '.sql']);
 function hasAllowedRestoreExt(p) {
   const lower = String(p).toLowerCase();
@@ -2109,11 +2134,14 @@ ipcMain.handle('backup:select-file', async () => {
 
 ipcMain.handle('backup:is-encrypted', async (_event, filePath) => {
   try {
-    if (!filePath || !fs.existsSync(filePath)) return false;
-    if (filePath.endsWith('.visionbak') || filePath.endsWith('.visionbak.enc')) {
-      return await isBundleEncrypted(filePath);
+    if (typeof filePath !== 'string' || !filePath) return false;
+    const resolved = path.resolve(filePath);
+    if (!ALLOWED_RESTORE_PATHS.has(resolved)) return false;
+    if (!fs.existsSync(resolved)) return false;
+    if (resolved.endsWith('.visionbak') || resolved.endsWith('.visionbak.enc')) {
+      return await isBundleEncrypted(resolved);
     }
-    return await isEncryptedBackupFile(filePath);
+    return await isEncryptedBackupFile(resolved);
   } catch {
     return false;
   }
@@ -2182,10 +2210,17 @@ ipcMain.handle('backup:restore', async (_event, filePath, opts) => {
 let backupInFlight = false;
 ipcMain.handle('backup:run', async (_event, destDir, frontendStateJson = null) => {
   if (!workDir) return { success: false, error: 'workDir not set' };
+  if (typeof destDir !== 'string' || !destDir) {
+    return { success: false, error: 'Invalid backup directory' };
+  }
+  const resolvedDest = path.resolve(destDir);
+  if (BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))) {
+    return { success: false, error: 'Backup to system directories is not allowed' };
+  }
   if (backupInFlight) return { success: false, error: 'A backup is already in progress' };
   backupInFlight = true;
   try {
-    const result = await runBundleBackup(destDir, frontendStateJson);
+    const result = await runBundleBackup(resolvedDest, frontendStateJson);
     return result;
   } catch (err) {
     return { success: false, error: String(err) };

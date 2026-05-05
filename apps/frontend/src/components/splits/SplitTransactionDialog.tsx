@@ -13,6 +13,7 @@ import { formatCurrency } from "@/utils/currency";
 import { parseDecimal } from "@/lib/decimal";
 
 interface SplitEntry {
+    uid: string;
     recipient_id: number | null;
     amount: string;
     note: string;
@@ -28,7 +29,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
     const [open, setOpen] = useState(false);
     const [splitType, setSplitType] = useState<"equal" | "custom">("equal");
     const [entries, setEntries] = useState<SplitEntry[]>([
-        { recipient_id: null, amount: "", note: "" },
+        { uid: crypto.randomUUID(), recipient_id: null, amount: "", note: "" },
     ]);
     const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
     const createSplits = useCreateSplits();
@@ -37,7 +38,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
 
     const absAmount = Math.abs(transactionAmount);
 
-    const addEntry = () => setEntries(prev => [...prev, { recipient_id: null, amount: "", note: "" }]);
+    const addEntry = () => setEntries(prev => [...prev, { uid: crypto.randomUUID(), recipient_id: null, amount: "", note: "" }]);
 
     const removeEntry = (idx: number) => setEntries(prev => prev.filter((_, i) => i !== idx));
 
@@ -173,7 +174,7 @@ export function SplitTransactionDialog({ transactionId, transactionAmount, trans
                     {/* Entries */}
                     <div className="space-y-3 max-h-[300px] overflow-y-auto">
                         {entries.map((entry, idx) => (
-                            <div key={idx} className="flex items-start gap-2 p-3 rounded-md border bg-card">
+                            <div key={entry.uid} className="flex items-start gap-2 p-3 rounded-md border bg-card">
                                 <div className="flex-1 space-y-2">
                                     <RecipientCombobox
                                         value={entry.recipient_id}

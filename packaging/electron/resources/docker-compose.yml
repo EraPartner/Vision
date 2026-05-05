@@ -26,19 +26,30 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "${PORT:-3002}:3002"
+      - "127.0.0.1:${PORT:-3002}:3002"
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 4g
+    cpus: 4.0
     environment:
       SERVER_HOST: "0.0.0.0"
       CORS_ORIGINS: "http://localhost:${PORT:-3002}"
-      # Expose version to the backend so /api/admin/update/check can report it
       APP_VERSION: ${APP_IMAGE_TAG:-latest}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ftm_user
+      DB_NAME: financial_transactions
     volumes:
-      # Persist user-uploaded attachments across container recreate / image
-      # update — without this, attachments live on the writable container
-      # layer and disappear on every `docker compose up` after a version bump.
       - attachments_data:/app/data/attachments
       - vision_cache_data:/app/.vision-cache
-    # depends_on removed — see docker-compose.yml for explanation.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data:
