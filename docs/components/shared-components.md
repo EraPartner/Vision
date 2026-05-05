@@ -3,10 +3,10 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [component, shared, utility, frontend, reference, phase-13, multi-select, export-filters]
-description: Reference documentation for shared utility components used across the application
+updated: 2026-05-05
+last_modified: 2026-05-05
+tags: [component, shared, utility, frontend, reference, phase-13, multi-select, export-filters, bug-hunt-2026-05-05, dateutils, utc-safe-dates, date-formatting]
+description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing and expanded dateUtils documentation.
 aliases: [shared components, utility components, common components]
 related_code:
   - apps/frontend/src/components/shared/VirtualDataTable.tsx
@@ -124,13 +124,40 @@ interface Column<T> {
 
 **Path:** `[[apps/frontend/src/components/shared/dateUtils.ts]]`
 
-Date formatting utilities that respect app settings:
+Date formatting and parsing utilities with UTC-safe handling. All date-only strings (YYYY-MM-DD) parse as **local midnight**, not UTC midnight, to avoid off-by-one-day display issues for users east of UTC.
 
 | Function | Purpose |
 |----------|---------|
-| `formatDateWithAppSettings(date, dateFormat)` | Formats a Date using the app's date format setting |
-| `formatDateTimeStringWithAppSettings(dateStr, dateFormat, locale)` | Formats an ISO datetime string |
-| `parseLocalDateFromYmd(ymd)` | Parses YYYY-MM-DD to a local Date object |
+| `formatDate(date, pattern, locale?)` | Generic date formatter supporting patterns like `"yyyy-MM-dd"`, `"dd/MM/yyyy"`, `"MMM yyyy"`, etc. |
+| `formatDateWithAppSettings(date, dateFormat)` | Formats a Date using the app's configured date format setting |
+| `formatDateTimeStringWithAppSettings(dateStr, dateFormat, locale?)` | Formats an ISO datetime string with app date format + time |
+| `parseLocalDateFromYmd(ymd)` | Parses YYYY-MM-DD to a **local** Date object (not UTC) — critical for avoiding calendar display errors |
+| `parseISO(dateString)` | Parses ISO date strings; date-only strings (YYYY-MM-DD) become local midnight |
+| `toYmd(date)` | Formats Date as YYYY-MM-DD (inverse of `parseLocalDateFromYmd`) |
+| `differenceInDays(dateLeft, dateRight)` | Computes days between two dates |
+| `formatDistanceToNow(date, options?)` | Returns relative time string (e.g., "2 hours ago") using `Intl.RelativeTimeFormat` |
+| `appDateFormatToDateFnsPattern(appFormat)` | Converts app date format settings (e.g., "DD/MM/YYYY") to pattern strings |
+| `formatMonthYearWithAppSettings(date, appDateFormat, locale?)` | Formats date as month/year respecting app format |
+| `formatMonthLabelWithLocale(date, locale?, width?)` | Formats month name with locale (short/long) |
+| `formatDateStringWithAppSettings(dateStr?, appDateFormat)` | Safely parses and formats ISO date strings |
+| `formatDateTimeWithAppSettings(date, appDateFormat, locale?)` | Formats Date as "YYYY-MM-DD HH:mm" with app format |
+| `weekStartsOnFromSetting(startOfWeek?)` | Returns 0 (Sunday) or 1 (Monday) for calendar week-start config |
+
+### UTC-Safe Date Handling (2026-05-05)
+
+**Problem:** Parsing date-only strings (YYYY-MM-DD) with `new Date()` creates UTC midnight, which appears as previous day for users in UTC+ timezones.
+
+**Solution:** `parseISO()` and `parseLocalDateFromYmd()` detect date-only strings and create **local** midnight instead:
+```typescript
+// WRONG (UTC midnight)
+new Date("2026-05-05")  // → 2026-05-04 for user in UTC+2
+
+// CORRECT (local midnight via constructor)
+const [y, m, d] = "2026-05-05".split('-').map(Number)
+new Date(y, m - 1, d)  // → 2026-05-05 local midnight for all timezones
+```
+
+**Impact:** Recharts Date x-axis, transaction date displays, and all calendar pickers now show correct dates regardless of user timezone.
 
 ## DataTable
 

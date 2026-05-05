@@ -3,9 +3,9 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-04
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals]
-description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), and portfolio totals single-source-of-truth pattern (Phase 14)
+updated: 2026-05-05
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, bug-hunt-2026-05-05, react-keys, stable-keys, mount-guard, memory-leak-prevention]
+description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index) and mount guard pattern (prevent setState after unmount).
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth]
 ---
 
@@ -2437,6 +2437,178 @@ function PerformancePage() {
 - [[docs/api/portfolio-summary|Portfolio Summary API]]
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]]
 - [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js|Service Implementation]]
+
+---
+
+## React Key Generation Pattern (2026-05-05 Bug Hunt)
+
+**Problem:** Using array index as React key (`key={index}`) causes reconciliation bugs when list items are reordered, filtered, or when item state changes between renders.
+
+**Symptoms:**
+- Form state persists across different items (checkbox checked on wrong item after reorder)
+- Animation state mismatches (entered animation plays for wrong item)
+- Component-local state mixups (focus lost, internal state corrupted)
+
+### Solution: Stable Unique Identifiers
+
+#### For Database Entities
+Use database ID (guaranteed unique and stable):
+```typescript
+// ✅ CORRECT
+{items.map(item => (
+  <SplitEntry key={item.id} item={item} />
+))}
+```
+
+#### For Generated Items (Splits, Residences)
+Generate stable UIDs on initialization and store in a ref:
+
+```typescript
+// SplitTransactionDialog.tsx
+const [splits, setSplits] = useState<SplitEntry[]>([
+  { uid: crypto.randomUUID(), amount: 0, recipient_id: null },
+  { uid: crypto.randomUUID(), amount: 0, recipient_id: null },
+]);
+
+return (
+  <>
+    {splits.map(split => (
+      <SplitEntry key={split.uid} split={split} />
+    ))}
+  </>
+);
+```
+
+#### Ref-Based UID Management
+For immutable lists that need UID rebinding on external changes:
+
+```typescript
+// TaxProfileDialog.tsx
+const residenceUids = useRef<Map<number, string>>(new Map());
+
+const ensureUid = (residenceId: number): string => {
+  if (!residenceUids.current.has(residenceId)) {
+    residenceUids.current.set(residenceId, crypto.randomUUID());
+  }
+  return residenceUids.current.get(residenceId)!;
+};
+
+return (
+  <>
+    {residences.map(res => (
+      <ResidenceRow key={ensureUid(res.id)} residence={res} />
+    ))}
+  </>
+);
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Never use index | Index changes with reorder/filter; causes state corruption |
+| Use DB ID when available | Guaranteed unique and stable across renders |
+| Generate UIDs for new items | Use `crypto.randomUUID()` at creation time |
+| Store UIDs in state or ref | Never regenerate on every render |
+| Don't change keys between renders | Same item must have same key always |
+| For linked lists with refs | Use ref to maintain UID→ID mapping across external changes |
+
+### When to Use
+
+- **Lists with reordering** — drag-drop, sort, filter
+- **Dynamic form arrays** — splits, tax residences, portfolio positions
+- **Stateful list items** — forms, checkboxes, focus states
+- **Any list rendered via `.map()`** — universal safety rule
+
+---
+
+## Mount Guard Pattern (2026-05-05 Bug Hunt)
+
+**Problem:** Async operations (fetch, timers) can set state after a component unmounts, causing React warnings and potential memory leaks.
+
+**Symptoms:**
+- "Can't perform a React state update on an unmounted component" warning
+- Stale state updates overwriting newer data
+- Leaked timers/intervals continuing after unmount
+
+### Solution: useEffect Mount Ref
+
+```typescript
+function usePlannedPayments(options?: UsePlannedPaymentsOptions) {
+  const mountedRef = useRef(true);
+  const [data, setData] = useState<PlannedPayment[]>([]);
+  
+  // Set ref to true on mount, false on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const response = await apiClient.getPlannedPayments(options);
+        // Only update state if still mounted
+        if (mountedRef.current) {
+          setData(response.data);
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          console.error('Failed to load planned payments:', error);
+        }
+      }
+    };
+
+    loadData();
+  }, [options]);
+
+  return { data };
+}
+```
+
+### Interval Cleanup
+For long-running intervals, guard cleanup and state updates:
+
+```typescript
+useEffect(() => {
+  const intervalId = setInterval(() => {
+    if (!mountedRef.current) return; // Skip if unmounted
+    
+    // Perform work
+    fetchStatus();
+  }, 5000);
+
+  return () => {
+    clearInterval(intervalId);
+  };
+}, []);
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Initialize to `true` in mount effect | Synchronous, guaranteed before any async work |
+| Check before all `setState()` calls | Guards against post-unmount updates |
+| Clear timers in cleanup | `clearInterval`, `clearTimeout` still required |
+| Use in custom hooks | Not in component bodies directly |
+| Return false on unmount | Cleanup effect sets it to false |
+
+### When to Use
+
+- **Custom hooks with async operations** — `useFetch`, `useQuery` wrappers
+- **Long-running intervals/timeouts** — Real-time data, health checks
+- **AbortController-free code** — Before migrating to AbortSignal
+- **Legacy hooks without error boundaries** — Temporary safety measure
+
+### When NOT Necessary
+
+- **React Query / SWR** — Handles cleanup automatically
+- **useEffect with AbortController** — Abort signal prevents post-unmount updates
+- **Synchronous effects only** — No async work = no race condition
+- **Modal/Dialog components** — These typically unmount with parent, not selectively
 
 ---
 

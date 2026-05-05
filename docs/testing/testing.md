@@ -3,9 +3,11 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-04-30
-updated: 2026-05-02
-last-updated: 2026-05-02
-last_updated_timestamp: 2026-05-02T00:00:00Z
+updated: 2026-05-05
+last-updated: 2026-05-05
+last_updated_timestamp: 2026-05-05T00:00:00Z
+added_portfolio_math_tests: 2026-05-05
+added_import_pipeline_tests: 2026-05-05
 tags:
   - testing
   - vitest
@@ -1738,3 +1740,88 @@ describe("RestoreFromBackupCard", () => {
 **Test execution:** <10 seconds (integrated into main suite)
 
 **Related documentation:** [[docs/testing/test-inventory#e15-onboarding-wizard-notifications-ai-chat-backup-and-import-dialog-tests-2026-05-01|E15 Test Inventory]], [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/adr/026-unified-api-response-envelope|ADR-026]]
+
+## Backend Unit Tests — Portfolio Math & Import Pipeline (2026-05-05)
+
+Two new backend test suites covering core calculation and import orchestration logic:
+
+### Portfolio Math Tests
+
+**File:** `apps/node-backend/tests/portfolioMath.test.js` — **21 tests**
+
+Covers portfolio cost basis calculations (FIFO/LIFO), accrued interest computation, and snapshot spike sanitization.
+
+**Test suites:**
+
+1. **calculateCostBasisFIFO** (4 tests)
+   - Empty transactions return zeros
+   - Buy-only accumulation tracks units and cost
+   - FIFO ordering: earliest lot exhausted first (realized gain = sell price - cost)
+   - Oversell handling: capped at available units, proceeds scaled by sellRatio
+
+2. **calculateCostBasisLIFO** (3 tests)
+   - Empty transactions return zeros
+   - LIFO ordering: newest lot exhausted first (opposite realized gain from FIFO)
+   - Oversell handling: proportional proceeds scaling
+
+3. **calculateAccruedInterest** (6 tests with fake timers)
+   - Zero rate or principal returns 0
+   - No buy/interest transactions return 0
+   - Exact simple interest calculation: `principal * rate / 365 * daysElapsed`
+   - Interest payment date takes precedence over first buy date
+   - Future dates return 0 (protection against clock drift)
+
+4. **sanitizeSnapshotSpikes** (4 tests + 1 DST safety test)
+   - Non-array input returns empty array
+   - Short arrays (< 3 elements) returned unchanged
+   - Spike detection: high needle (≥ 1.8× neighbors) and low trough (≤ 1.8× neighbors)
+   - Spike replacement: geometric mean of neighbors
+   - Input immutability: original array unchanged
+   - **UTC day-walk DST safety:** Validates that UTC-based date iteration produces exactly 3 days across European spring-forward boundary (2024-03-31)
+
+**Key patterns:**
+- `vi.useFakeTimers()` for deterministic clock control in accrued interest tests
+- `expect(...).toBeCloseTo()` for floating-point geometric-mean assertions
+- Immutability assertions: `sanitizeSnapshotSpikes(input)` does not mutate input array
+- `setUTCDate()` always steps exactly 24 hours regardless of local DST changes
+
+**Related code:** [[apps/node-backend/src/utils/portfolioMath.js]], [[docs/features/portfolio|Portfolio Feature]]
+
+### Import Pipeline Tests
+
+**File:** `apps/node-backend/tests/importPipeline.test.js` — **11 tests**
+
+Covers all four import pipeline phases with comprehensive mocking and error path coverage.
+
+**Test suites:**
+
+1. **validateBatch** (4 tests)
+   - Field validation: `tx_date`, `amount` nulls trigger errors
+   - Non-numeric amount validation
+   - Success path: `{ validated: 1, errors: 0 }`
+   - Error path: `{ validated: 0, errors: 1 }`
+
+2. **stageBatch** (2 tests)
+   - Unknown adapter throws error
+   - Multi-row parse returns `{ rowsTotal: 2 }` count
+
+3. **matchBatch** (2 tests)
+   - Pattern-matched row sets `source: "pattern"`
+   - Unresolved recipient (`null`) counted as unresolved
+
+4. **commitBatch** (3 tests)
+   - Clean insert triggers `refreshAggregations`
+   - Duplicate detection skips aggregation refresh
+   - Insert error via SAVEPOINT rollback recorded as error
+
+**Mocking strategy:**
+- `vi.mock()` for database/connection, logger, adapters, normalization, recipientPatternService, aggregationRefresh
+- `withTransaction.mockImplementation(async (fn) => fn(mockClient))` for transaction simulation
+- `mockClient.query` chained mocks for INSERT/SELECT/UPDATE sequences
+- Per-test error injection: `mockClient.query.mockImplementation()` returns duplicates or throws
+
+**Test execution:** <1 second (pure unit tests, no jsdom or database)
+
+**Related code:** [[apps/node-backend/src/services/importPipeline/validate.js]], [[apps/node-backend/src/services/importPipeline/stage.js]], [[apps/node-backend/src/services/importPipeline/match.js]], [[apps/node-backend/src/services/importPipeline/commit.js]], [[docs/features/import|CSV Import Feature]]
+
+**Impact:** Eliminates gaps in portfolio math calculation coverage and completes the import pipeline orchestration test suite across all four phases.

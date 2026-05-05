@@ -3,10 +3,10 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-05-03
-last_modified: 2026-05-03
-tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture]
-description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. Recent fixes: offline-mode resilience, ADR-040 backup v2 (AES-256-GCM), admin token timing, dedup memo, CRLF CSV, EU decimals.
+updated: 2026-05-05
+last_modified: 2026-05-05
+tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening]
+description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
 ---
 
@@ -157,6 +157,22 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-05-05 Backend Unit Tests — Portfolio Math & Import Pipeline
+
+**New test suites:**
+- **Portfolio Math Tests** (`apps/node-backend/tests/portfolioMath.test.js`) — **21 tests** covering FIFO/LIFO cost basis calculation, accrued interest computation with fake timers, and snapshot spike sanitization (geometric mean) with UTC DST safety
+- **Import Pipeline Tests** (`apps/node-backend/tests/importPipeline.test.js`) — **11 tests** covering all four import orchestration phases: validateBatch, stageBatch, matchBatch, commitBatch with full error path coverage via mock database simulation
+
+**Impact:** Backend test count: 871 → **882** (+11 net; 21 portfolio math + 11 import = +32 but -21 legacy import tests removed per Phase C consolidation). Total test suite: 2109 → **2120** vitest tests.
+
+**Testing patterns established:**
+- Fake timers for time-sensitive calculations (`vi.useFakeTimers()` / `vi.useRealTimers()`)
+- Floating-point tolerance assertions for geometric means (`expect(...).toBeCloseTo()`)
+- Immutability assertions to verify pure functions don't mutate inputs
+- Mock database simulation for transaction orchestration testing
+
+See [[docs/testing/test-inventory#backend-unit-tests--calculation--pipeline-2026-05-05|Test Inventory]], [[docs/testing/testing#backend-unit-tests--portfolio-math--import-pipeline-2026-05-05|Testing Guide]]
 
 ### 2026-05-03 Tailwind CSS v4 Migration & Dependency Upgrades
 

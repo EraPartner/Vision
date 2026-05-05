@@ -3,10 +3,10 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, i18n, notifications, export-filters]
-description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering.
+updated: 2026-05-05
+last_modified: 2026-05-05
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, i18n, notifications, export-filters, bug-hunt-2026-05-05, mount-guard, query-key-fix, prefetch]
+description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments and fixes queryKey mismatch in usePortfolioPrefetch.
 related_code: ["apps/frontend/src/hooks"]
 ---
 
@@ -61,6 +61,7 @@ Vision uses custom hooks for data fetching, state management, and reusable logic
 | Hook | Description | File |
 |------|-------------|------|
 | `usePortfolioTaxAdjustments()` | Per-investment tax/fee adjustments by year | `usePortfolioTaxAdjustments.ts` |
+| `usePortfolioPrefetch()` | Prefetch portfolio performance data with corrected queryKey | [[apps/frontend/src/hooks/usePortfolioPrefetch.ts\|usePortfolioPrefetch.ts]] |
 
 ### Chart & Formatting Hooks
 
@@ -204,6 +205,13 @@ Hook for planned/scheduled transactions.
 ### Settings-Aware Mapping
 
 - API-to-UI mapping fallback currency derives from configured app defaults (`appSettings.defaultCurrency` context) rather than fixed literals
+
+### Mount Guard (2026-05-05)
+
+- Added `mountedRef` to prevent `setState` after component unmount (prevents memory leaks and React warnings)
+- Implementation: `useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; } }, [])`
+- All state updates check `if (mountedRef.current)` before calling `setData()` etc.
+- Impact: Prevents stale state updates on unmounted instances; ensures clean teardown
 
 Code links: [[apps/frontend/src/hooks/usePlannedPayments.ts]], [[apps/frontend/src/contexts/AppSettingsContext.tsx]]
 
@@ -799,6 +807,42 @@ interface SettingsStore {
 ### Internal Hydration (Provider-only)
 
 The AppSettingsContext, SettingsContext, and ThemeContext Providers call store hydration actions once preloaded data arrives. Components should never call `_hydrateAppSettings()`, etc. directly.
+
+---
+
+## usePortfolioPrefetch
+
+Hook for prefetching portfolio performance data.
+
+### Purpose
+
+Prefetches portfolio performance metrics and snapshots using React Query to populate cache before UI renders. Used in Performance page and portfolio summary pages.
+
+### QueryKey Fix (2026-05-05)
+
+Fixed queryKey mismatch that prevented proper cache reuse:
+
+**Before (Broken):**
+```typescript
+queryKey: ["portfolio-performance", currency]
+// Missing the "all" period, mismatches Performance page query
+```
+
+**After (Correct):**
+```typescript
+queryKey: ["portfolio-performance", currency, "all"]
+queryFn: async () => {
+  const response = await getPortfolioPerformance(currency, { period: "all" })
+  return response.data
+}
+```
+
+**Impact:** 
+- Performance page makes same query with `queryKey: ["portfolio-performance", currency, "all"]`
+- Now shares cached data from prefetch instead of making duplicate API call
+- Reduces network traffic and improves perceived performance
+
+Code link: [[apps/frontend/src/hooks/usePortfolioPrefetch.ts]]
 
 ---
 

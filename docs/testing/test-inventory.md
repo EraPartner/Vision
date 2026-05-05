@@ -3,10 +3,12 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-04-30
-last_modified: 2026-05-02
-updated: 2026-05-02
-last-updated: 2026-05-02
-last_updated_timestamp: 2026-05-02T00:00:00Z
+last_modified: 2026-05-05
+updated: 2026-05-05
+last-updated: 2026-05-05
+last_updated_timestamp: 2026-05-05T00:00:00Z
+added_portfolio_math_tests: 2026-05-05
+added_import_pipeline_tests: 2026-05-05
 added_dashboard_error_state_tests: 2026-05-02
 added_context_unit_tests: 2026-05-03
 added_hook_unit_tests: 2026-05-01
@@ -651,8 +653,8 @@ Six new frontend dialog and wizard component integration test files added. Tests
 | Phase F6 (Mutation testing — Stryker) | config + harness | runs on `bun run test:mutation` | NEW 2026-05-02: stryker.config.json scoped to currency.ts + lib/api/client.ts, vitest runner, TS checker, perTest coverage, html report; opt-in (not in CI yet — first baseline run before gating) |
 | Phase F7 (Coverage matrix gap-fill) | 3 | +5 | All passing (NEW 2026-05-02): TransactionsPage refetch revision + offset/limit pagination contract + loading skeleton; RecipientsPage limit pagination + loading; StatisticsPage multi-filter combo (monthly + category-pivot + recipient-by-year fan-out across tab switches) |
 | **Frontend Total** | **81** | **1238** | **All passing (Phase F1–F7 complete: backend drift, mutation invalidation, dialog completeness, Playwright parity, property/chaos, mutation harness, coverage matrix gap-fill)** |
-| **Backend** | 54+ | 871+ | All passing |
-| **Grand Total** | **135+** | **2109** | **All passing (1238 frontend vitest + 871 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)** |
+| **Backend** | 56+ | 882+ | All passing (NEW 2026-05-05: portfolioMath.test.js 21 tests, importPipeline.test.js 11 tests) |
+| **Grand Total** | **137+** | **2120** | **All passing (1238 frontend vitest + 882 backend; +24 live-API + ~41 Playwright in CI; mutation runner opt-in)** |
 
 ### Phase F1 — Backend Drift Detection Sweep (2026-05-02)
 
@@ -815,6 +817,35 @@ bun run test
 
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
 
+### Backend Unit Tests — Calculation & Pipeline (2026-05-05)
+
+Two new backend test suites covering portfolio math and import pipeline orchestration:
+
+| File | Area | Tests | Coverage |
+|------|------|-------|----------|
+| `apps/node-backend/tests/portfolioMath.test.js` | Portfolio calculations | 21 | **calculateCostBasisFIFO** (4 tests): empty txns, buy-only accumulation, FIFO lot exhaustion, oversell with sellRatio scaling; **calculateCostBasisLIFO** (3 tests): empty txns, LIFO-vs-FIFO realized gain inversion, oversell proportional proceeds scaling; **calculateAccruedInterest** (6 tests with fake timers): zero rate/principal/txns, exact 365-day simple interest, interest-payment-date start, future-date guard; **sanitizeSnapshotSpikes** (4 tests + 1 DST safety test): non-array null-guard, short-array reference-return, geometric-mean spike replacement (high needle + low trough), immutability assertion, UTC day-walk DST safety across spring-forward |
+| `apps/node-backend/tests/importPipeline.test.js` | Import orchestration | 11 | **validateBatch** (4 tests): field validation (tx_date, amount nulls, non-numeric), error summary; **stageBatch** (2 tests): unknown-adapter throw, multi-row parse with rows_total count; **matchBatch** (2 tests): pattern-matched row source=pattern, unresolved recipient_raw=null; **commitBatch** (3 tests): clean insert with aggregation refresh, duplicate detection skips refresh, SAVEPOINT rollback on insert error |
+
+**Key testing patterns:**
+
+- **Portfolio Math:**
+  - `vi.useFakeTimers()` / `vi.useRealTimers()` for accrued interest with deterministic clock
+  - `expect(...).toBeCloseTo(...)` for floating-point geometric-mean (spike sanitization)
+  - Immutability assertions: `sanitizeSnapshotSpikes` does not mutate input
+  - DST safety: UTC day-walk using `setUTCDate()` produces exactly 3 days across 2024-03-31 spring-forward
+
+- **Import Pipeline:**
+  - `vi.mock()` for database/connection, logger, adapters, normalization, recipientPatternService, aggregationRefresh
+  - `mockClient.query` for transaction simulation (SAVEPOINT, SELECT, INSERT, UPDATE)
+  - Mock setup: `withTransaction.mockImplementation(async (fn) => fn(mockClient))`
+  - Error simulation: `mockClient.query.mockImplementation()` returns `{ rows: [dup] }` or throws on INSERT
+
+**Test execution:** <1 second (no jsdom, pure unit tests)
+
+**Impact:** Covers core portfolio performance calculation logic (FIFO/LIFO cost basis, accrued interest, spike sanitization) and all four import pipeline phases (validate → stage → match → commit) with full error path coverage.
+
+**Related documentation:** [[docs/features/portfolio|Portfolio Feature]], [[docs/features/import|CSV Import Feature]], [[docs/reference/code-patterns#portfolio-math|Portfolio Math Patterns]]
+
 ### Recently Updated Backend Coverage (2026-04-26)
 
 | File | Area | Coverage Added |
@@ -839,7 +870,9 @@ Backend tests are located in `apps/node-backend/src/` alongside source files as 
 
 | Area | Files | Why It Matters |
 |------|-------|----------------|
-| **Import pipeline** | `bankAdapters.js`, `importPipeline/*.js` (Phase C) | Core data ingestion — each bank adapter needs parsing tests; pipeline phases (stage/validate/match/commit) need orchestration tests |
+| **Bank adapters** | `bankAdapters.js` (Wise, SABB, Vision, others) | Core data ingestion — each bank adapter needs format-specific parsing tests |
+| ~~**Import pipeline**~~ | ~~`importPipeline/*.js`~~ | ✓ **COVERED** (2026-05-05) — 11 tests (`importPipeline.test.js`) covering validateBatch, stageBatch, matchBatch, commitBatch phases with full error path coverage |
+| **Portfolio math utilities** | ~~`portfolioMath.js`~~ | ✓ **COVERED** (2026-05-05) — 21 tests covering FIFO/LIFO cost basis, accrued interest, spike sanitization with DST safety |
 | **Deduplication** | `deduplication.js` | SHA-256 hashing and field-based matching logic |
 | **Recurring detection** | `recurringDetectionService.js` | Complex interval detection algorithm |
 | **Currency conversion** | `currencyConversionService.js` | Multi-source rate resolution, historical rates |

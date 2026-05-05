@@ -4,8 +4,8 @@ type: security
 status: active
 date: 2026-04-19
 updated: 2026-05-05
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause]
-description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard.
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions]
+description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
 ---
@@ -266,6 +266,38 @@ webPreferences: {
 ### IPC Communication
 
 Limited IPC channel exposure through preload scripts. Only validated functions are exposed to the renderer.
+
+### Window & Navigation Hardening (2026-05-05 Bug Hunt)
+
+**setWindowOpenHandler Denial**
+- Prevents renderer-initiated `window.open()` from spawning new windows
+- Implementation: `mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))`
+- Impact: Blocks JavaScript `window.open()` calls and link targets `target="_blank"`; users must explicitly select & open links via right-click → "Open in Browser"
+
+**will-navigate Whitelist**
+- Only allows navigation to explicitly whitelisted protocols and origins:
+  - `file:` protocol (local resources within the app bundle)
+  - `localhost` and `127.0.0.1` (local backend)
+  - Denies all external URLs, preventing accidental leaks of user data to remote sites
+- Implementation: `mainWindow.webContents.on('will-navigate', (event, url) => { /* whitelist check */ })`
+- Impact: Stops renderer JavaScript from navigating to external domains; news links remain visible but require explicit user action to open
+
+### Installer Checksum Enforcement (2026-05-05 Bug Hunt)
+
+**Mandatory Checksum Verification**
+- Release update flow now requires cryptographic verification of downloaded installer
+- When checking for updates via `GET /api/admin/updates/latest`, the response includes asset checksums
+- The update installer (`.dmg` on macOS) must have a corresponding `.sha256` file on the GitHub release
+- Missing checksum asset throws error: `"No checksum asset found for this release — aborting update to prevent running an unverified installer"`
+- Impact: Prevents silent replacement of installer with trojanized variant; users cannot bypass this check
+
+### Backup Directory Restrictions (2026-05-05 Bug Hunt)
+
+**BLOCKED_BACKUP_PREFIXES Validation**
+- Backup restore operation validates destination paths to prevent writing to system directories
+- Blocked prefixes include: `/bin`, `/boot`, `/dev`, `/etc`, `/lib`, `/opt`, `/proc`, `/root`, `/sbin`, `/sys`, `/usr`, `/var` (and subdirectories)
+- Implementation: `BLOCKED_BACKUP_PREFIXES.some(p => resolvedDest === p || resolvedDest.startsWith(p + '/'))`
+- Impact: Prevents accidental (or malicious) restore to system directories that could break macOS, corrupt system libraries, or escalate privileges
 
 ### Admin Bearer Token Authentication (2026-04-28)
 

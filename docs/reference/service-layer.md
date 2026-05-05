@@ -3,9 +3,9 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-04-24
-last_modified: 2026-04-29
-tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown]
-description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, and aggregationRefresh cancellation support (2026-04-29).
+last_modified: 2026-05-05
+tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness]
+description: Complete reference for all 18 backend services — exported functions, dependencies, algorithms, and usage patterns. Updated for Phase C import pipeline consolidation, snapshot-backed net worth computation, quoteBackfillService refactor, AI Chat service, aggregationRefresh cancellation support (2026-04-29), and error handling improvements for belgianInflationService (2026-05-05 bug hunt).
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -103,6 +103,13 @@ Repository Layer (SQL queries)
 - **Eurostat Index-to-Rate Conversion:** `rate = (currentIndex / previousIndex) - 1`
 - **Background Refresh:** Non-blocking refresh scheduled after serving cached data
 - **Throttled Warnings:** Suppresses repeated fetch failure warnings within 30-minute window
+
+### Error Handling (2026-05-05 Bug Hunt)
+
+- **Network failures:** Caught and logged at error level; fallback to database or hardcoded rates
+- **Malformed responses:** JSON parse errors and missing rate data handled gracefully with fallback
+- **Timeout safety:** API fetch calls wrapped with timeout handling to prevent hung requests
+- **Partial success:** If one provider fails, others are still attempted; service doesn't fail-fast
 
 ### Logging
 
