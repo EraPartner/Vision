@@ -21,7 +21,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Remove orphan rows before enforcing the constraint
+    conn = op.get_bind()
+    # In databases migrated from the legacy chain, `investments` is a view
+    # (table-inheritance setup). PostgreSQL rejects FK references to views,
+    # so we only add the constraint when investments is a plain table.
+    row = conn.execute(sa.text("""
+        SELECT relkind FROM pg_class
+        WHERE relname = 'investments'
+          AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+    """)).fetchone()
+    if not row or row[0] != 'r':
+        return
+
     op.execute(sa.text("""
         DELETE FROM asset_price_history
         WHERE investment_id NOT IN (SELECT id FROM investments)

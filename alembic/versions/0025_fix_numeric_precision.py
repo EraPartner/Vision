@@ -114,13 +114,15 @@ _VIEWS_DDL = [
 
 
 def _drop_views(conn) -> None:
+    # Dependencies on view columns are tracked via pg_rewrite rules (d.objid is
+    # the rule OID, not the view OID), so we must bridge through pg_rewrite.
     result = conn.execute(sa.text("""
-        SELECT DISTINCT mv.relname
-        FROM pg_depend d
-        JOIN pg_class mv ON mv.oid = d.objid AND mv.relkind = 'm'
-        JOIN pg_class t  ON t.oid  = d.refobjid AND t.relname = 'transactions'
-        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attname = 'amount'
-          AND a.attnum = d.refobjsubid
+        SELECT DISTINCT c.relname
+        FROM pg_rewrite r
+        JOIN pg_depend  d ON d.objid = r.oid AND d.deptype = 'n'
+        JOIN pg_class   c ON c.oid   = r.ev_class AND c.relkind = 'm'
+        JOIN pg_class   t ON t.oid   = d.refobjid AND t.relname = 'transactions'
+        JOIN pg_namespace n ON n.oid  = c.relnamespace AND n.nspname = 'public'
     """))
     for row in result:
         conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {row[0]} CASCADE"))
