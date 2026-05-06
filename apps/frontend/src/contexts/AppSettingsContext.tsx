@@ -45,6 +45,10 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hasHydrated = useRef(false);
+    // Skip the first persist-effect run: hydration fires before persist in the
+    // same render, so hasHydrated is already true on that first run even though
+    // the settings value came from the server and doesn't need saving back.
+    const isFirstPersistRun = useRef(true);
 
     // Hydrate store from preloaded data
     useEffect(() => {
@@ -59,6 +63,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
         if (!hasHydrated.current) return;
+        if (isFirstPersistRun.current) { isFirstPersistRun.current = false; return; }
         if (isLoading) return;
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

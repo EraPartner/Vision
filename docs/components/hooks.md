@@ -3,9 +3,9 @@ title: Custom Hooks
 type: component
 status: active
 date: 2026-04-23
-updated: 2026-05-05
-last_modified: 2026-05-05
-tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, i18n, notifications, export-filters, bug-hunt-2026-05-05, mount-guard, query-key-fix, prefetch]
+updated: 2026-05-06
+last_modified: 2026-05-06
+tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, mount-guard, query-key-fix, prefetch, memoization, useCallback]
 description: Custom React hooks for data fetching and state management. Includes toast notifications for mutations via i18n keys. Phase 13 adds useBankAccounts hook for export filtering. May 2026 bug hunt adds mount guard to usePlannedPayments and fixes queryKey mismatch in usePortfolioPrefetch.
 related_code: ["apps/frontend/src/hooks"]
 ---
@@ -161,6 +161,12 @@ interface UseCategoriesOptions {
 
 Hook for managing investment portfolio.
 
+### Memoization (Phase C)
+
+- **Module-level `EMPTY_TRANSACTIONS` constant** — Prevents fresh array ref per render (Phase C fix), improving memoization stability
+- Implementation: `const EMPTY_TRANSACTIONS = [];` at module scope, reused across renders instead of creating new refs
+- Impact: React.memo and useMemo hooks referencing this constant now receive stable references, avoiding spurious re-renders
+
 ### API
 
 ```typescript
@@ -195,6 +201,8 @@ interface InvestmentSummary {
   totalIncome: number;
 }
 ```
+
+Code links: [[apps/frontend/src/hooks/usePortfolio.ts]]
 
 ---
 

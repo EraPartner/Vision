@@ -3,8 +3,8 @@ title: Code Patterns Reference
 type: reference
 status: active
 date: 2026-04-26
-updated: 2026-05-05
-tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, bug-hunt-2026-05-05, react-keys, stable-keys, mount-guard, memory-leak-prevention]
+updated: 2026-05-06
+tags: [reference, patterns, conventions, code-style, backend, frontend, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, react-keys, stable-keys, mount-guard, memory-leak-prevention]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via scalar subqueries (Phase Q), portfolio totals single-source-of-truth pattern (Phase 14). May 2026 bug hunt adds React key generation pattern (use UUID instead of index) and mount guard pattern (prevent setState after unmount).
 aliases: [code patterns, coding patterns, conventions, patterns, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth]
 ---
@@ -1677,6 +1677,207 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 | **Probe first** | Check for empty results before streaming headers (early 404 return) |
 | **Error recovery** | If headers sent, close gracefully (`res.end()`); otherwise return JSON error |
 | **Rate limiting** | Apply per-route limiter to protect DB from concurrent bulk exports |
+
+---
+
+## CSV Record Splitter — Multi-Line Field Handling (Phase C)
+
+**Source:** [[apps/frontend/src/hooks/useCsvPreview.ts|useCsvPreview.ts]]
+
+When parsing CSV import previews on the frontend, naive `split('\n')` fails for multi-line field values enclosed in quotes. A quote-aware record splitter respects RFC 4180 CSV escaping (double-quote inside quoted field = literal quote).
+
+### Problem
+
+```csv
+Name,Description,Amount
+"John Doe","Multi-line
+description here",100.50
+"Jane Smith","Single line",200.75
+```
+
+Naive split:
+```typescript
+const records = csvText.split('\n');  // ❌ Splits on line 2, breaking multi-line field
+// Result: ["Name,Description,Amount", "\"John Doe\",\"Multi-line", "description here\",100.50", ...]
+```
+
+### Solution: Quote-Aware Splitter
+
+```typescript
+function splitCsvRecords(csvText: string): string[] {
+  const records: string[] = [];
+  let currentRecord = '';
+  let insideQuotes = false;
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+
+    if (char === '"') {
+      // Check if next char is also a quote (escaped quote in RFC 4180)
+      if (csvText[i + 1] === '"') {
+        currentRecord += '""';
+        i++; // Skip the next quote
+      } else {
+        // Toggle quote state
+        insideQuotes = !insideQuotes;
+        currentRecord += char;
+      }
+    } else if (char === '\n' || char === '\r') {
+      if (insideQuotes) {
+        // Preserve line break inside quoted field
+        currentRecord += char;
+      } else {
+        // End of record
+        if (currentRecord.trim()) records.push(currentRecord);
+        currentRecord = '';
+        // Skip \r\n sequence
+        if (char === '\r' && csvText[i + 1] === '\n') i++;
+      }
+    } else {
+      currentRecord += char;
+    }
+  }
+
+  // Don't forget last record
+  if (currentRecord.trim()) records.push(currentRecord);
+  return records;
+}
+```
+
+### Usage in useCsvPreview
+
+```typescript
+const [csvData, setCsvData] = useState<CsvPreviewRow[]>([]);
+
+const handleCsvSelect = (file: File) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target?.result as string;
+    // ✅ Use quote-aware splitter
+    const records = splitCsvRecords(text);
+    
+    // Parse header
+    const headerRecord = Papa.parse(records[0]).data[0] as string[];
+    
+    // Parse preview rows (first 10 data rows)
+    const preview = records.slice(1, 11).map(record => {
+      const parsed = Papa.parse(record).data[0] as string[];
+      return headerRecord.reduce((row, header, idx) => {
+        row[header] = parsed[idx] ?? '';
+        return row;
+      }, {} as Record<string, string>);
+    });
+    
+    setCsvData(preview);
+  };
+  reader.readAsText(file);
+};
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Track quote state | Toggle on unescaped `"` character |
+| Handle `""` escape | RFC 4180 uses doubled quotes for literal quotes inside quoted fields |
+| Preserve line breaks in fields | Only treat `\n` as record boundary when outside quotes |
+| Trim empty records | Skip blank lines that parse to empty strings |
+| Test with edge cases | Empty quotes `""`, trailing newlines, CRLF line endings |
+
+### When to Use
+
+- **CSV import preview** — Display uploaded CSV with multi-line field support
+- **CSV parsing on frontend** — Before sending to backend for validation
+- **Excel/Google Sheets exports** — Often contain quoted multi-line cells
+
+---
+
+## Query Parameter Filtering Pattern (Phase C)
+
+**Source:** [[apps/frontend/src/lib/api/helpers.ts|helpers.ts]] — `buildQuery` function
+
+When building query strings, filter out falsy and empty values to keep URLs clean and prevent spurious cache key mismatches.
+
+### Problem
+
+```typescript
+// Without filtering
+const params = {
+  category: 'FOOD:GROCERIES',
+  recipient: '',           // Empty string
+  start_date: null,        // Null
+  exclude_splits: false,   // Boolean false
+  limit: 50
+};
+
+const url = buildQuery('/api/transactions', params);
+// Result: ?category=FOOD:GROCERIES&recipient=&start_date=null&exclude_splits=false&limit=50
+// ❌ Includes noise; cache key mismatch if params change between renders
+```
+
+### Solution: Value Filtering
+
+```typescript
+function buildQuery(
+  baseUrl: string,
+  params?: Record<string, unknown>
+): string {
+  if (!params || Object.keys(params).length === 0) {
+    return baseUrl;
+  }
+
+  // Filter out false, empty strings, null, undefined
+  const filtered = Object.entries(params).filter(([_key, value]) => {
+    // Keep only truthy values and 0 (which is falsy but valid for numeric params)
+    if (value === null || value === undefined || value === '' || value === false) {
+      return false;
+    }
+    // Keep 0, non-empty strings, true, non-empty arrays, non-empty objects
+    return true;
+  });
+
+  if (filtered.length === 0) return baseUrl;
+
+  const searchParams = new URLSearchParams(
+    filtered.map(([key, value]) => [key, String(value)])
+  );
+
+  return `${baseUrl}?${searchParams.toString()}`;
+}
+```
+
+### Usage
+
+```typescript
+// In a hook
+const url = buildQuery('/api/transactions', {
+  limit: 50,
+  offset: 0,
+  category: selectedCategory || undefined,  // Filtered if falsy
+  start_date: filters.startDate || null,   // Filtered if null
+  exclude_splits: false,                    // Filtered
+});
+
+// Result: ?limit=50&offset=0  (only truthy values included)
+```
+
+### Key Rules
+
+| Rule | Rationale |
+|------|-----------|
+| Filter `null` and `undefined` | Prevents `?param=null` or `?param=undefined` strings |
+| Filter `false` | Boolean false is not a valid query string value |
+| Filter empty string `''` | Reduces noise; `?param=` is meaningless |
+| Keep `0` | Numeric zero is valid (offset=0, limit=0 are meaningful) |
+| Keep `true` | Boolean true is serializable (some APIs use flag params) |
+| Use `String()` serialization | Converts values to canonical string form for URLSearchParams |
+
+### When to Use
+
+- **Building API query strings** — Keep URLs clean and readable
+- **React Query keys** — Prevent cache mismatches when optional params change
+- **Form filters** — User may not fill all fields; omit falsy ones
+- **API client methods** — Generic `buildQuery` for all endpoints
 
 ---
 

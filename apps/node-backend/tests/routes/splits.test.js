@@ -22,7 +22,9 @@ vi.mock('../../src/repositories/splitRepository.js', () => ({
     getOwedExportRowsByRecipient: vi.fn(),
     getTransactionSplitTotals: vi.fn(),
     createSplit: vi.fn(),
+    createSplitAtomic: vi.fn(),
     createSplitsBatch: vi.fn(),
+    createSplitsBatchAtomic: vi.fn(),
     addPayment: vi.fn(),
     getPayments: vi.fn(),
     settleSplit: vi.fn(),
@@ -94,23 +96,15 @@ describe('Splits Routes', () => {
 
   describe('POST /', () => {
     it('throws ValidationError when split exceeds transaction total', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue({
-        transaction_total: 100,
-        current_split_total: 90,
-      });
+      splitRepository.createSplitAtomic.mockRejectedValue(new ValidationError('Split would exceed transaction total'));
 
       const req = { body: { transaction_id: 1, recipient_id: 2, amount: 15 }, get: () => null };
       const res = mockResponse();
       await expect(routeHandlers['post:/'](req, res)).rejects.toBeInstanceOf(ValidationError);
-      expect(splitRepository.createSplit).not.toHaveBeenCalled();
     });
 
     it('creates split when amount fits remaining total', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue({
-        transaction_total: 100,
-        current_split_total: 80,
-      });
-      splitRepository.createSplit.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
+      splitRepository.createSplitAtomic.mockResolvedValue({ id: 7, transaction_id: 1, recipient_id: 2, amount: 20 });
       splitRepository.writeAudit.mockResolvedValue();
 
       const req = { body: { transaction_id: 1, recipient_id: 2, amount: 20 }, get: () => null };
@@ -118,13 +112,13 @@ describe('Splits Routes', () => {
       await routeHandlers['post:/'](req, res);
 
       expect(res.status).toHaveBeenCalledWith(201);
-      expect(splitRepository.createSplit).toHaveBeenCalledWith(expect.objectContaining({ amount: 20 }));
+      expect(splitRepository.createSplitAtomic).toHaveBeenCalledWith(expect.objectContaining({ amount: 20 }));
     });
   });
 
   describe('POST /batch', () => {
     it('throws NotFoundError when transaction does not exist', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue(null);
+      splitRepository.createSplitsBatchAtomic.mockRejectedValue(new NotFoundError('Transaction not found'));
 
       const req = {
         body: {
@@ -135,14 +129,10 @@ describe('Splits Routes', () => {
       };
       const res = mockResponse();
       await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(NotFoundError);
-      expect(splitRepository.createSplitsBatch).not.toHaveBeenCalled();
     });
 
     it('throws ValidationError when cumulative amount exceeds transaction total', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue({
-        transaction_total: 100,
-        current_split_total: 70,
-      });
+      splitRepository.createSplitsBatchAtomic.mockRejectedValue(new ValidationError('Split would exceed transaction total'));
 
       const req = {
         body: {
@@ -156,14 +146,10 @@ describe('Splits Routes', () => {
       };
       const res = mockResponse();
       await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
-      expect(splitRepository.createSplit).not.toHaveBeenCalled();
     });
 
     it('throws ValidationError for non-positive split amounts in batch', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue({
-        transaction_total: 100,
-        current_split_total: 0,
-      });
+      splitRepository.createSplitsBatchAtomic.mockRejectedValue(new ValidationError('Split amount must be a positive number'));
 
       const req = {
         body: {
@@ -174,15 +160,10 @@ describe('Splits Routes', () => {
       };
       const res = mockResponse();
       await expect(routeHandlers['post:/batch'](req, res)).rejects.toBeInstanceOf(ValidationError);
-      expect(splitRepository.createSplitsBatch).not.toHaveBeenCalled();
     });
 
     it('creates batch with normalized splits', async () => {
-      splitRepository.getTransactionSplitTotals.mockResolvedValue({
-        transaction_total: 100,
-        current_split_total: 0,
-      });
-      splitRepository.createSplitsBatch.mockResolvedValue([{ id: 1 }]);
+      splitRepository.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
       splitRepository.writeAudit.mockResolvedValue();
 
       const req = {
@@ -198,7 +179,7 @@ describe('Splits Routes', () => {
       const res = mockResponse();
       await routeHandlers['post:/batch'](req, res);
 
-      expect(splitRepository.createSplitsBatch).toHaveBeenCalledWith({
+      expect(splitRepository.createSplitsBatchAtomic).toHaveBeenCalledWith({
         transaction_id: 1,
         splits: [{ recipient_id: 2, amount: 20, note: 'x' }],
       });

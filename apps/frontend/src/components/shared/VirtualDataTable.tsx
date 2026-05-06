@@ -110,6 +110,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         onEditingChange?.(editingRow !== null);
     }, [editingRow, onEditingChange]);
 
+    const cancelEditing = useCallback(() => { setEditingRow(null); setEditValues({}); }, []);
+
     // Expose cancelEditing via ref
     useEffect(() => {
         if (cancelEditingRef) {
@@ -349,8 +351,6 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         });
         setEditValues(values);
     };
-
-    const cancelEditing = useCallback(() => { setEditingRow(null); setEditValues({}); }, []);
 
     const saveEditing = (sourceIndex: number, row: T) => {
         if (onRowUpdate) {

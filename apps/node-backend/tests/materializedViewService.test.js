@@ -97,9 +97,8 @@ describe('materializedViewService', () => {
     await createMaterializedViews();
 
     const sqlCalls = query.mock.calls.map(([sql]) => sql);
-    expect(sqlCalls.some((sql) => sql.includes('DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary'))).toBe(true);
-    expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW mv_monthly_summary AS'))).toBe(true);
-    expect(sqlCalls.some((sql) => sql.includes('CREATE UNIQUE INDEX mv_monthly_summary_idx'))).toBe(true);
+    expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS'))).toBe(true);
+    expect(sqlCalls.some((sql) => sql.includes('CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_category_totals'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_cashflow_daily'))).toBe(true);
     expect(sqlCalls.some((sql) => sql.includes('CREATE MATERIALIZED VIEW IF NOT EXISTS mv_bank_balances'))).toBe(true);
@@ -117,7 +116,7 @@ describe('materializedViewService', () => {
 
     await ensureMaterializedViewIndexes();
 
-    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenCalledTimes(4);
     expect(logger.warn).toHaveBeenCalledWith(
       'Could not create index mv_cashflow_daily_idx on mv_cashflow_daily',
       { error: 'index create denied' }

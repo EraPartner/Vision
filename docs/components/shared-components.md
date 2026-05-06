@@ -3,9 +3,9 @@ title: Shared Components Reference
 type: component
 status: active
 date: 2026-04-26
-updated: 2026-05-05
-last_modified: 2026-05-05
-tags: [component, shared, utility, frontend, reference, phase-13, multi-select, export-filters, bug-hunt-2026-05-05, dateutils, utc-safe-dates, date-formatting]
+updated: 2026-05-06
+last_modified: 2026-05-06
+tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback]
 description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing and expanded dateUtils documentation.
 aliases: [shared components, utility components, common components]
 related_code:
@@ -46,6 +46,7 @@ The most complex shared component — a high-performance virtualized data table 
 - **Column resizing**: Drag column borders to resize
 - **Infinite scroll**: `onLoadMore` callback for pagination
 - **Deferred rendering**: Uses `useDeferredValue` to avoid blocking during search
+- **Edit cancellation** — `cancelEditing` wrapped in `useCallback` with proper dependency tracking (Phase C fix) to prevent memory leaks during unmount
 
 ### Props Interface
 
@@ -263,6 +264,43 @@ Uses `useBankAccounts` hook (Phase 13) which wraps `apiClient.getDistinctBankAcc
 
 Combobox for selecting recipients with search. Used in transaction forms and filters.
 
+### Features
+
+- **Debounced search** — 300ms debounce on input to prevent per-keystroke API fetches (Phase C fix)
+- **Async search** — Fetches matching recipients from `/api/recipients` endpoint via `useRecipients` hook
+- **Fuzzy matching** — Backend performs fuzzy string matching on recipient name/alias
+- **Display** — Shows recipient name or "(none)" fallback
+
+### Props
+
+```typescript
+interface RecipientComboboxProps {
+  value: number | null;
+  onChange: (recipientId: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+```
+
+### Implementation Detail (Phase C)
+
+The 300ms debounce prevents API overload on rapid typing:
+
+```typescript
+// Before (bad): Every keystroke triggers API call
+onSearchChange={(query) => {
+  refetch({ filter: query });  // ❌ per-keystroke
+}}
+
+// After (good): 300ms debounce
+const debouncedSearch = useDebounce(searchQuery, 300);
+useEffect(() => {
+  refetch({ filter: debouncedSearch });
+}, [debouncedSearch, refetch]);
+```
+
+This reduces network traffic and backend load significantly in a typical typing scenario.
+
 ## ExclusionToggle
 
 **Path:** `[[apps/frontend/src/components/shared/ExclusionToggle.tsx]]`
@@ -294,6 +332,12 @@ Displays app update notifications in the Electron desktop app. Checks for new ve
 **Path:** `[[apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx]]`
 
 Shows notifications for upcoming planned/recurring payments.
+
+### Accessibility (Phase C)
+
+- **aria-label** attributes added to dismiss and dismiss-all buttons for screen reader accessibility (Phase C fix)
+- Dismiss button label: `aria-label={t('upcoming.dismissAll')}` for "Dismiss all" action
+- Individual item dismiss uses consistent accessibility labeling pattern
 
 ## Usage Across Pages
 

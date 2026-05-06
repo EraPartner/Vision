@@ -27,7 +27,7 @@ describe("TransactionsPage (integration)", () => {
 
         renderTransactionsPage();
 
-        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         expect(heading).toBeInTheDocument();
         expect(errorSpy).not.toHaveBeenCalled();
 
@@ -125,7 +125,7 @@ describe("TransactionsPage (integration)", () => {
 
         await user.click(screen.getByRole("button", { name: /cancel/i }));
 
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
@@ -413,7 +413,7 @@ describe("TransactionsPage (integration)", () => {
             ),
         );
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         expect(screen.queryByText(/error loading transactions/i)).not.toBeInTheDocument();
     });
 
@@ -439,7 +439,7 @@ describe("TransactionsPage (integration)", () => {
             ),
         );
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         await waitFor(() => expect(getCalls).toBeGreaterThan(0));
         const before = getCalls;
 
@@ -467,7 +467,7 @@ describe("TransactionsPage (integration)", () => {
         );
 
         renderTransactionsPage();
-        await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         await waitFor(() => expect(offsetsSeen.length).toBeGreaterThan(0));
 
         // Hook should send numeric (or default) offset + limit. At minimum a limit
@@ -488,7 +488,7 @@ describe("TransactionsPage (integration)", () => {
         );
         renderTransactionsPage();
         // Heading renders before the fetch resolves — proves shell renders w/o data
-        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 2 });
+        const heading = await screen.findByRole("heading", { name: /^transactions$/i, level: 1 });
         expect(heading).toBeInTheDocument();
     });
 });

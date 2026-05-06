@@ -3,8 +3,8 @@ title: Security - Data Protection & CSP
 type: security
 status: active
 date: 2026-04-19
-updated: 2026-05-05
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions]
+updated: 2026-05-06
+tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
 related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.js"]
@@ -307,6 +307,38 @@ Admin endpoints protected by optional `ADMIN_AUTH_TOKEN` environment variable no
 - **Impact**: Prevents side-channel timing attacks where response time leaks information about token validity (e.g., attacker can time how many characters of the token match, reducing brute-force search space)
 - **Implementation**: In `middleware/adminAuth.js`, token comparison wraps both bearer value and configured token with equal-length padding before `timingSafeEqual()` call
 - **Fallback**: If `ADMIN_AUTH_TOKEN` not set, localhost-only access is allowed (see [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]])
+
+### CSV Download Filename Sanitization (Phase C)
+
+**Problem:** User-provided data (recipient names) used directly in HTTP `Content-Disposition` filename could contain path traversal characters (`..`, `/`), special characters breaking headers, or null bytes.
+
+**Example Attack:**
+```
+Recipient: "../../../etc/passwd"
+Filename: transactions_../../../etc/passwd.csv
+Result: File written outside intended directory (on some systems)
+```
+
+**Solution:** Sanitize recipient name before embedding in filename
+
+```javascript
+// In OwesPage.tsx (CSV export)
+function sanitizeFilename(input: string): string {
+  // Remove path traversal sequences
+  let sanitized = input.replace(/\.\./g, '').replace(/\//g, '-');
+  // Remove control characters and null bytes
+  sanitized = sanitized.replace(/[\x00-\x1f\x7f]/g, '');
+  // Limit length to 50 chars
+  sanitized = sanitized.substring(0, 50);
+  // Fallback if completely empty
+  return sanitized || 'export';
+}
+
+const filename = `${sanitizeFilename(recipientName)}_owes.csv`;
+res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+```
+
+**Impact (Phase C):** Prevents path traversal injection in downloaded CSV filenames from user-provided recipient names; filename safe for all filesystems.
 
 ---
 

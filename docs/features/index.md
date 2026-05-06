@@ -3,8 +3,8 @@ title: Features Documentation Index
 type: features-index
 status: active
 date: 2026-04-24
-updated: 2026-05-05
-tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05]
+updated: 2026-05-06
+tags: [features, index, documentation, phase-5a, phase-6, phase-7, phase-10, phase-c, phase-d, phase-e, phase-f, phase-9, statistics-refactoring, cash-flow-forecast, cost-basis, database-maintenance, sankey-flow, rolling-averages, pdf-report, admin-observability, multi-method-forecast, frontend-visualization, accuracy-persistence, materialized-cache, ensemble-methods, nightly-job, bug-hunt-2026-05-05, bug-hunt-2026-05-06, phase-c-bug-fixes, accessibility, csv-parsing, memory-safety, debounce, useCallback]
 description: Feature documentation for all major capabilities of the Vision application. Phase 6 complete with cash flow forecast, cost basis methods. Phase 7 adds database maintenance UI, Sankey flow visualization, rolling average overlays, and PDF report export. Phase 10 adds multi-method statistical cash flow forecast with 7 methods. Phase C adds dashboard frontend visualization. Phase D adds persisted accuracy metrics and historical trend analysis. Phase E adds nightly cache materialization for performance. Phase F adds inverse-MSE ensemble method (8th method). Phase 9 completes aggregation shadow cutover. April 2026 extends Saved Charts with recipients, variants, time buckets, and date ranges; introduces Custom Charts tab in Statistics. May 2026 bug hunt completes comprehensive correctness hardening across frontend, backend, and Electron: mount guards, React key stability, decimal arithmetic, date/timezone safety, queryKey fixes, pagination guards, Electron hardening (window/navigation/backup restrictions), and release workflow version sync.
 aliases: [features, capabilities]
 ---
@@ -74,6 +74,30 @@ SORT title ASC
 
 ### AI & Natural Language
 - [[docs/features/ai-chat\|AI Chat]] - Local AI chat for natural-language financial queries with tool-calling (Ollama-powered)
+
+## Phase C/D Bug Fixes — Accessibility, CSV Parsing, Memory Safety (2026-05-06)
+
+**Medium/low severity bug fixes (commit 8c651eb)** addressing UX, data handling, and memory safety:
+
+### UX & Accessibility
+- **UpcomingPaymentsNotification** — Added `aria-label` to dismiss/dismiss-all buttons for screen reader accessibility
+- **RecipientCombobox** — 300ms debounce on search input prevents per-keystroke fetches and API overload
+
+### Data Handling & Security
+- **CategoriesPage** — Fixed plural key using `activeCount` instead of `items.length`
+- **OwesPage** — Sanitized recipient name before CSV filename usage (prevents path traversal)
+- **api/helpers.ts** — `buildQuery` now filters `false` and empty-string values (not just `null`/`undefined`)
+- **useCsvPreview** — Quote-aware CSV record splitter replaces naive `split('\n')` for multi-line field support
+
+### Memory & Performance
+- **api/client.ts** — Fixed AbortError conflation (timeout vs caller abort) and abort listener leak
+- **useRestoreBackup** — Reload timer tracked in ref for unmount cleanup; i18n template `replace()` → `replaceAll()`
+- **usePortfolio** — Module-level `EMPTY_TRANSACTIONS` constant prevents fresh array ref per render
+- **VirtualDataTable** — `cancelEditing` wrapped in `useCallback` with proper dependencies
+- **MarketLookupPage** — Stable key for analyst actions (date+firm vs index)
+- **snapshotBuilder.js** — Defensive sort on `priceHistorySortedDays` for deterministic ordering
+
+See [[docs/reference/code-patterns|Code Patterns]], [[docs/components/shared-components|Shared Components]], [[docs/features/import|Import Feature]], [[docs/security/data-protection|Data Protection]]
 
 ## May 2026 Bug Hunt Sweep: Correctness Hardening
 

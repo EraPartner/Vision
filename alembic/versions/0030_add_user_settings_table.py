@@ -5,8 +5,8 @@ Revises: 0029_fix_raw_ref_unique
 Create Date: 2026-05-06
 
 Moves user_settings schema ownership to Alembic (ADR-027). Previously the
-table was created at runtime by settingsRepository.js via CREATE TABLE IF NOT
-EXISTS, violating the single-source-of-truth DDL policy.
+table was created at runtime by settingsRepository.js using an idempotent
+CREATE TABLE, violating the single-source-of-truth DDL policy.
 """
 
 from typing import Sequence, Union

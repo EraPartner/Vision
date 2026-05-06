@@ -3,8 +3,8 @@ title: Vision Project Knowledge Base
 type: index
 status: active
 date: 2026-04-27
-updated: 2026-05-05
-last_modified: 2026-05-05
+updated: 2026-05-06
+last_modified: 2026-05-06
 tags: [knowledge-base, index, project, overview, phase-8, phase-5a, phase-6, phase-7, phase-4, phase-3, phase-9, phase-13, aead, backup-v2, security-hardening, offline-resilience, export-filters, multi-select, bug-hunt-2026-04-29, bug-hunt-2026-05-05, startup-optimization, network-reachability, tailwind-v4, dependencies, css-architecture, mount-guard, react-keys, decimal-safety, date-safety, electron-hardening]
 description: Main entry point to the Vision project documentation - financial transaction management application. Phase 9 complete with aggregation shadow cutover; all aggregations now served via `/api/aggregations/*`. Phase 8 complete with portfolio and tax PDF report export (6 + 7 sections). Phase 13 (2026-04-28): Multi-select export filters with CategoryMultiCombobox and BankAccountMultiCombobox components; pivot table drillthrough to filtered transaction lists. Bug-hunt (2026-04-29): Trivy exit-code hardening, release workflow concurrency + setup-bun action, docker-compose volume fix, graceful shutdown timer cleanup (3 intervals + debounce), import cleanup logging, watchlist dialog API client, install.sh interactive checksum gate. May 3 2026: Tailwind CSS v4 migration (3.4.19 → 4.2.4) with unified postcss plugin, sonner 2.0.7, recharts 3.8.1. May 3 2026: Offline-aware startup optimization — backend detects network unavailability early and skips 5-15s external data fetches, reducing readiness time ~15s when offline. **May 5 2026 Bug Hunt:** Comprehensive correctness hardening — frontend mount guards (usePlannedPayments), stable React keys (SplitTransactionDialog, TaxProfileDialog), queryKey fixes (usePortfolioPrefetch), UTC-safe date parsing (dateUtils), pagination stale-response guards (RecipientsPage), decimal arithmetic correctness, backend robustness (recipientPatternService, recurringDetectionService, belgianInflationService), Electron hardening (window/navigation/backup restrictions), and release workflow version sync (3-way check: git tag + root package.json + electron/package.json).
 aliases: [KB, docs, documentation, knowledge base, home]
@@ -157,6 +157,31 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-05-06 Phase C/D Bug Fixes — Accessibility, CSV Parsing, Memory Safety
+
+**Comprehensive medium/low severity bug fixes (commit 8c651eb)** addressing correctness and UX across frontend, backend, and i18n:
+
+**Phase C (Medium Severity):**
+- **UpcomingPaymentsNotification** — Added `aria-label` attributes to dismiss and dismiss-all buttons for screen reader accessibility
+- **RecipientCombobox** — Added 300ms debounce on search input to prevent per-keystroke API fetches and excessive network traffic
+- **CategoriesPage** — Fixed plural key using `activeCount` (correct) instead of `items.length` for accurate active category display
+- **OwesPage** — Sanitized recipient name before using in CSV download filename to prevent path traversal and invalid characters
+- **api/client.ts** — Fixed AbortError conflation (timeout vs user abort) and removed abort listener memory leak in request handler
+- **useCsvPreview** — Replaced naive `split('\n')` with quote-aware CSV record splitter to correctly handle multi-line field values in import preview
+- **useRestoreBackup** — Tracked reload timer in ref for proper cleanup on unmount; fixed i18n template `replace()` → `replaceAll()` for multiple param substitutions
+- **api/helpers.ts** — Fixed `buildQuery` to filter `false` and empty-string values (previously only filtered `null`/`undefined`)
+
+**Phase D (Low Severity):**
+- **planned.js** — Added clarifying comment on ISO string lexicographic date comparison safety
+- **usePortfolio** — Introduced module-level `EMPTY_TRANSACTIONS` constant to prevent fresh array ref per render, improving memoization stability
+- **VirtualDataTable** — Wrapped `cancelEditing` in `useCallback` and added to useEffect dependencies for proper cleanup
+- **MarketLookupPage** — Changed analyst actions list key from array index to `date+firm` composite for stable reconciliation
+- **snapshotBuilder.js** — Added defensive sort on `priceHistorySortedDays` after building lookup map for deterministic ordering
+
+**i18n Sync:** All 14 new translation keys (`txPage.deleteAttachment`, `upcoming.dismissAll`, etc.) synced across `i18n/source/`, `packaging/electron/i18n/`, and `apps/frontend/src/locales/` (en, nl)
+
+See [[docs/reference/code-patterns#csv-record-splitter-phase-c-multi-line-field-handling|Code Patterns — CSV Record Splitter]], [[docs/reference/code-patterns#query-parameter-filtering-phase-c|Code Patterns — Query Parameter Filtering]], [[docs/components/shared-components#recipientcombobox|RecipientCombobox]], [[docs/components/hooks#useportfolio|usePortfolio Hook]], [[docs/security/data-protection|Data Protection — CSV Filename Sanitization]]
 
 ### 2026-05-05 Backend Unit Tests — Portfolio Math & Import Pipeline
 

@@ -3,9 +3,9 @@ title: Components Documentation Index
 type: components-index
 status: active
 date: 2026-04-23
-updated: 2026-04-28
-last_modified: 2026-04-28
-tags: [components, index, frontend, react, design-system, phase-9, phase-13, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, phase-f, lazy-loading, memoization, useCallback, multi-select, export-filters]
+updated: 2026-05-06
+last_modified: 2026-05-06
+tags: [components, index, frontend, react, design-system, phase-9, phase-13, phase-c, performance, refactor, phase-3, phase-4, export-dialog, admin, observability, phase-f, lazy-loading, memoization, useCallback, multi-select, export-filters, debounce, accessibility, aria-label]
 description: Documentation for all frontend React components, hooks, and utilities with emerald + gold aesthetic and performance-optimized design tokens. Phase F adds 4 admin pages with observability dashboards. Phase 13 adds CategoryMultiCombobox and BankAccountMultiCombobox for multi-select export filtering.
 aliases: [components, UI, frontend components, chart components, visx charts]
 ---
