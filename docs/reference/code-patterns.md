@@ -1801,64 +1801,50 @@ When building query strings, filter out falsy and empty values to keep URLs clea
 ### Problem
 
 ```typescript
-// Without filtering
+// Without careful filtering, query strings include noise and spurious values:
 const params = {
   category: 'FOOD:GROCERIES',
-  recipient: '',           // Empty string
-  start_date: null,        // Null
-  exclude_splits: false,   // Boolean false
+  recipient: '',           // Empty string (should be filtered)
+  start_date: null,        // Null (should be filtered)
+  exclude_splits: false,   // Boolean false (meaningful; should be preserved)
   limit: 50
 };
 
-const url = buildQuery('/api/transactions', params);
-// Result: ?category=FOOD:GROCERIES&recipient=&start_date=null&exclude_splits=false&limit=50
-// ❌ Includes noise; cache key mismatch if params change between renders
+// ❌ Without filtering: ?category=FOOD:GROCERIES&recipient=&start_date=null&exclude_splits=false&limit=50
+// ✓ With filtering:    ?category=FOOD:GROCERIES&exclude_splits=false&limit=50
 ```
 
 ### Solution: Value Filtering
 
 ```typescript
-function buildQuery(
-  baseUrl: string,
-  params?: Record<string, unknown>
-): string {
-  if (!params || Object.keys(params).length === 0) {
-    return baseUrl;
-  }
-
-  // Filter out false, empty strings, null, undefined
-  const filtered = Object.entries(params).filter(([_key, value]) => {
-    // Keep only truthy values and 0 (which is falsy but valid for numeric params)
-    if (value === null || value === undefined || value === '' || value === false) {
-      return false;
+function buildQuery(params?: QueryParams): string {
+  if (!params) return '';
+  const queryParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      queryParams.append(key, String(value));
     }
-    // Keep 0, non-empty strings, true, non-empty arrays, non-empty objects
-    return true;
   });
-
-  if (filtered.length === 0) return baseUrl;
-
-  const searchParams = new URLSearchParams(
-    filtered.map(([key, value]) => [key, String(value)])
-  );
-
-  return `${baseUrl}?${searchParams.toString()}`;
+  return queryParams.toString();
 }
 ```
+
+The function preserves `false` boolean values because they represent explicit filter choices (e.g., "exclude splits = false" means "include splits").
 
 ### Usage
 
 ```typescript
 // In a hook
-const url = buildQuery('/api/transactions', {
+const query = buildQuery({
   limit: 50,
   offset: 0,
-  category: selectedCategory || undefined,  // Filtered if falsy
+  category: selectedCategory || undefined,  // Filtered if undefined
   start_date: filters.startDate || null,   // Filtered if null
-  exclude_splits: false,                    // Filtered
+  exclude_splits: false,                    // PRESERVED as "false"
 });
 
-// Result: ?limit=50&offset=0  (only truthy values included)
+// Result: ?limit=50&offset=0&exclude_splits=false
+// (undefined, null, and empty strings filtered; false values preserved)
 ```
 
 ### Key Rules
@@ -1866,8 +1852,8 @@ const url = buildQuery('/api/transactions', {
 | Rule | Rationale |
 |------|-----------|
 | Filter `null` and `undefined` | Prevents `?param=null` or `?param=undefined` strings |
-| Filter `false` | Boolean false is not a valid query string value |
 | Filter empty string `''` | Reduces noise; `?param=` is meaningless |
+| Preserve `false` | Boolean false is a meaningful filter choice (e.g., "exclude splits = false" means "include splits") |
 | Keep `0` | Numeric zero is valid (offset=0, limit=0 are meaningful) |
 | Keep `true` | Boolean true is serializable (some APIs use flag params) |
 | Use `String()` serialization | Converts values to canonical string form for URLSearchParams |

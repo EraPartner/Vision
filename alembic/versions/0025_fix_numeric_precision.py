@@ -114,8 +114,16 @@ _VIEWS_DDL = [
 
 
 def _drop_views(conn) -> None:
-    for name, _, _ in reversed(_VIEWS_DDL):
-        conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {name} CASCADE"))
+    result = conn.execute(sa.text("""
+        SELECT DISTINCT mv.relname
+        FROM pg_depend d
+        JOIN pg_class mv ON mv.oid = d.objid AND mv.relkind = 'm'
+        JOIN pg_class t  ON t.oid  = d.refobjid AND t.relname = 'transactions'
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attname = 'amount'
+          AND a.attnum = d.refobjsubid
+    """))
+    for row in result:
+        conn.execute(sa.text(f"DROP MATERIALIZED VIEW IF EXISTS {row[0]} CASCADE"))
 
 
 def _create_views(conn) -> None:
