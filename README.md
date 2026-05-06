@@ -33,7 +33,7 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 
 ### 💳 Transactions & Imports
 
-- Import CSV exports from **Belfius, Revolut, KBC, SABB, Wise**, your own Vision backup, or a **generic CSV mapper**
+- Import CSV exports from **Belfius, Revolut, KBC, SABB, Wise, ING, BNP Paribas**, your own Vision backup, or a **generic CSV mapper**
 - Fast filtering, search, and pagination via a materialized aggregations layer
 - Deduplication, categorization rules, and recurring pattern detection
 - Transaction splits and manual entry
