@@ -106,6 +106,7 @@ export function UpcomingPaymentsNotification() {
                 type="button"
                 className="inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title={t('recurring.dismiss')}
+                aria-label={t('recurring.dismiss')}
                 onClick={() => dismissById(pt.id)}
               >
                 <X className="h-3 w-3" />
@@ -130,6 +131,8 @@ export function UpcomingPaymentsNotification() {
       <button
         type="button"
         className="absolute top-2 right-2 inline-flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        title={t('upcoming.dismissAll')}
+        aria-label={t('upcoming.dismissAll')}
         onClick={() => {
           const next = new Set(dismissedIds);
           visibleUpcoming.forEach((pt) => next.add(pt.id));

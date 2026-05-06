@@ -17,6 +17,7 @@ export { useInvestmentsQuery, usePortfolioTransactionsQuery, useInvestmentMutati
 export { usePortfolioSummaries } from './portfolio/usePortfolioSummaries';
 
 const EMPTY_INVESTMENTS: never[] = [];
+const EMPTY_TRANSACTIONS: never[] = [];
 
 export function usePortfolio() {
   const { data: invData } = useInvestmentsQuery();
@@ -25,7 +26,7 @@ export function usePortfolio() {
     () => investments.map((i) => i.id).sort((a, b) => a - b),
     [investments]
   );
-  const { data: transactions = [] } = usePortfolioTransactionsQuery(investmentIds);
+  const { data: transactions = EMPTY_TRANSACTIONS } = usePortfolioTransactionsQuery(investmentIds);
 
   const mutations = useInvestmentMutations();
   const { summaries, totals, byAssetClass } = usePortfolioSummaries({ investments, transactions });

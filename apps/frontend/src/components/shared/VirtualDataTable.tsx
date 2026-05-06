@@ -115,7 +115,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         if (cancelEditingRef) {
             cancelEditingRef.current = cancelEditing;
         }
-    }, [cancelEditingRef]);
+    }, [cancelEditingRef, cancelEditing]);
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isTypingRef = useRef(false);
@@ -350,7 +350,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         setEditValues(values);
     };
 
-    const cancelEditing = () => { setEditingRow(null); setEditValues({}); };
+    const cancelEditing = useCallback(() => { setEditingRow(null); setEditValues({}); }, []);
 
     const saveEditing = (sourceIndex: number, row: T) => {
         if (onRowUpdate) {

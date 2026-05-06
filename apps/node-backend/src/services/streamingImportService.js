@@ -118,9 +118,9 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
     recipientId = selectResult.rows[0].id;
   }
 
-  // Optionally link a bank account (fire-and-forget on conflict)
+  // Optionally link a bank account
   if (accountNumber) {
-    query(
+    await query(
       `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, is_primary, is_active)
        VALUES ($1, $2, $3, false, true)
        ON CONFLICT DO NOTHING`,
@@ -130,9 +130,9 @@ async function getOrCreateRecipient(name, accountNumber, address, bankName) {
     });
   }
 
-  // Optionally store address as notes (fire-and-forget)
+  // Optionally store address as notes
   if (address) {
-    query(
+    await query(
       `UPDATE recipients SET notes = $1 WHERE id = $2 AND (notes IS NULL OR notes = '')`,
       [address, recipientId]
     ).catch((err) => {
@@ -174,6 +174,7 @@ async function processRow(txData, bankType) {
       const recipientId = await getOrCreateRecipient(
         txData.recipient, txData.recipientAccount, txData.recipientAddress, txData.recipientBankName
       );
+      if (!(txData.date instanceof Date)) throw new Error(`Invalid date for transaction: ${txData.date}`);
       const dateStr = txData.date.toISOString().split('T')[0];
       const txResult = await query(
         `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
@@ -197,6 +198,7 @@ async function processRow(txData, bankType) {
     }
 
     // Generic / legacy path — use field-based dedup
+    if (!(txData.date instanceof Date)) throw new Error(`Invalid date for transaction: ${txData.date}`);
     const dateStr = txData.date.toISOString().split('T')[0];
     const isDup = await isRawDuplicate(bankType, txData.rawData).catch(async () => {
       return isDuplicateByFields(dateStr, txData.amount, txData.recipient, txData.memo);
@@ -209,8 +211,7 @@ async function processRow(txData, bankType) {
     );
     await query(
       `INSERT INTO transactions (date, bank_account, recipient_id, amount, memo, currency, balance, comment, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
-       ON CONFLICT DO NOTHING`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
       [dateStr, txData.bankAccount, recipientId, txData.amount, txData.memo || '', txData.currency || null, txData.balance, txData.comment]
     );
     return 'imported';

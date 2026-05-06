@@ -413,7 +413,7 @@ export const plannedTransactionRepository = {
    * @param {number} months - Forecast horizon in months (1–24)
    * @returns {Promise<Array>}
    */
-  async getForForecast(_months) {
+  async getForForecast(months) {
     const sql = `
       SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
              pt.memo, pt.is_recurring, pt.recurrence_pattern,
@@ -429,9 +429,10 @@ export const plannedTransactionRepository = {
       LEFT JOIN categories rc ON r.default_category_id = rc.id
       WHERE pt.is_active = true
         AND pt.is_executed = false
+        AND pt.planned_date <= CURRENT_DATE + ($1 * INTERVAL '1 month')
       ORDER BY pt.planned_date ASC
     `;
-    const result = await query(sql, []);
+    const result = await query(sql, [months]);
     return result.rows;
   },
 

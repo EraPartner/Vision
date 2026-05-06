@@ -70,14 +70,19 @@ async function probeUrl(url) {
 }
 
 async function probeYahoo() {
-  // Use the yahoo-finance2 library the same way the price provider does.
-  // Dynamic import keeps this decoupled from the registry module.
   const { default: YahooFinance } = await import('yahoo-finance2');
   const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    await yf.quote('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal });
+    // yahoo-finance2 may not wire AbortSignal in all published versions;
+    // race against a rejection promise to guarantee the timeout fires.
+    await Promise.race([
+      yf.quote('AAPL', { fields: ['regularMarketPrice'] }, { signal: controller.signal }),
+      new Promise((_, reject) =>
+        controller.signal.addEventListener('abort', () => reject(new Error('Yahoo probe timed out')))
+      ),
+    ]);
   } finally {
     clearTimeout(timeout);
   }

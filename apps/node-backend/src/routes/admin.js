@@ -45,9 +45,16 @@ function fetchLatestRelease() {
       },
       timeout: GITHUB_FETCH_TIMEOUT_MS,
     };
+    const MAX_BODY = 512 * 1024;
     const req = https.get(GITHUB_RELEASES_URL, options, (res) => {
       let body = '';
-      res.on('data', (chunk) => { body += chunk; });
+      res.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > MAX_BODY) {
+          req.destroy();
+          reject(new Error('GitHub response exceeded size limit'));
+        }
+      });
       res.on('end', () => {
         try { resolve(JSON.parse(body)); }
         catch (e) { reject(new Error(`Failed to parse GitHub response: ${e.message}`)); }

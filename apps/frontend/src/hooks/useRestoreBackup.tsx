@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import {
     AlertDialog,
@@ -40,7 +40,14 @@ type StartFn = (filePath: string) => Promise<void>;
  */
 export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
     const { t } = useLanguage();
+    const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [running, setRunning] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (reloadTimerRef.current !== null) clearTimeout(reloadTimerRef.current);
+        };
+    }, []);
     const [passphraseOpen, setPassphraseOpen] = useState(false);
     const [pendingFile, setPendingFile] = useState<string | null>(null);
     const [passphraseInput, setPassphraseInput] = useState('');
@@ -63,11 +70,11 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                     }
                 }
                 toast.success(t('settings.restore.success'), {
-                    description: t('settings.restore.successDesc').replace('{file}', result.file ?? filePath),
+                    description: t('settings.restore.successDesc').replaceAll('{file}', result.file ?? filePath),
                     duration: 8000,
                 });
                 onSuccess?.();
-                setTimeout(() => window.location.reload(), 3000);
+                reloadTimerRef.current = setTimeout(() => window.location.reload(), 3000);
                 return 'ok';
             }
 

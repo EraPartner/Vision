@@ -14,7 +14,7 @@ export async function computeRecipientByYear({
 } = {}) {
   const data = await infoRepository.getRecipientByYear(targetCurrency, excludedRecipientIds);
   const hasExclusions = excludedRecipientIds.length > 0;
-  return buildEnvelope(data, { source: hasExclusions ? 'live' : 'live' });
+  return buildEnvelope(data, { source: 'live' });
 }
 
 export default { computeRecipientByYear };

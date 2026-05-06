@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export type Workspace = "budgeting" | "portfolio";
@@ -41,8 +41,11 @@ export function useWorkspace() {
     workspace = readStoredWorkspace();
   } else {
     workspace = isPortfolio ? "portfolio" : "budgeting";
-    writeWorkspace(workspace);
   }
+
+  useEffect(() => {
+    if (!isAdmin) writeWorkspace(workspace);
+  }, [isAdmin, workspace]);
 
   const setWorkspace = useCallback(
     (ws: Workspace) => {

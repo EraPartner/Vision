@@ -171,9 +171,13 @@ export function BelgianTaxProfileProvider({ children }: { children: ReactNode })
     }, []);
 
     const calculation = useMemo(() => computeBelgianPIT(profile), [profile]);
+    const contextValue = useMemo(
+        () => ({ profile, updateProfile, resetProfile, calculation, isLoading }),
+        [profile, updateProfile, resetProfile, calculation, isLoading],
+    );
 
     return (
-        <BelgianTaxProfileContext.Provider value={{ profile, updateProfile, resetProfile, calculation, isLoading }}>
+        <BelgianTaxProfileContext.Provider value={contextValue}>
             {children}
         </BelgianTaxProfileContext.Provider>
     );

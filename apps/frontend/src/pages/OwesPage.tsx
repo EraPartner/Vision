@@ -171,7 +171,8 @@ function RecipientOwesDetail({ recipient, onBack }: { recipient: { id: number; n
         setIsExportingCsv(true);
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
-            const filename = `owed_${recipient.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+            const safeName = recipient.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').toLowerCase().slice(0, 64);
+            const filename = `owed_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`;
             downloadBlob(blob, filename);
             toast.success(t('owesPage.export.success'));
         } catch (error) {

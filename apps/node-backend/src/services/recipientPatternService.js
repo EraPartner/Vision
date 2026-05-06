@@ -51,7 +51,7 @@ const patternCache = makeLruCache(512);
  * @returns {RegExp}
  */
 export function compilePattern(row) {
-  const cacheKey = `${row.id}:${row.updated_at}`;
+  const cacheKey = `${row.id}:${row.updated_at}:${row.pattern_kind}:${row.case_sensitive ? '1' : '0'}:${row.pattern}`;
   const cached = patternCache.get(cacheKey);
   if (cached) return cached;
 
@@ -273,9 +273,19 @@ export async function previewPatternMatches(patternRow) {
     throw new Error(`Pattern compilation failed: ${err.message}`, { cause: err });
   }
 
-  // Push regex matching into Postgres (POSIX ERE via ~ / ~*) rather than
-  // fetching all recipients and filtering in JS. JS always tests against
-  // UPPER(name), so mirror that in SQL.
+  // For `regex` patterns use JS matching (same engine as runtime) because
+  // Postgres POSIX ERE (~) does not support JS tokens like \d, \b, lookaheads.
+  // For literal_prefix/glob the patterns are safe POSIX ERE and Postgres is faster.
+  if (patternRow.pattern_kind === 'regex') {
+    const re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
+    const { rows } = await query(
+      `SELECT id, name FROM recipients WHERE is_active = true`,
+      [],
+    );
+    const matched = rows.filter((r) => re.test(r.name.toUpperCase()));
+    return { matchCount: matched.length, recipientIds: matched.map((r) => r.id) };
+  }
+
   const sqlPattern = buildSqlRegexPattern(patternRow);
   const op = patternRow.case_sensitive ? '~' : '~*';
 

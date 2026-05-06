@@ -87,7 +87,7 @@ export default function ImportReviewPage() {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
-  const locale = numberFormatToLocale(appSettings?.numberFormat ?? "en-US");
+  const locale = numberFormatToLocale(appSettings?.numberFormat ?? "us");
 
   const [groupOverrides, setGroupOverrides] = useState<Map<string, GroupState>>(new Map());
 
@@ -308,7 +308,9 @@ export default function ImportReviewPage() {
       {/* Groups accordion */}
       <Accordion type="multiple" className="space-y-2">
         {preview.groups.map((group) => {
-          const groupKey = String(group.recipient_id ?? "__unresolved__");
+          const groupKey = group.recipient_id != null
+            ? String(group.recipient_id)
+            : `__unresolved__:${group.recipient_name ?? ""}:${group.rows[0]?.memo ?? ""}`;
           const fallbackState = groupStateFor(group, groupKey);
           const state = groupOverrides.get(groupKey) ?? fallbackState;
           const effectiveName = state.recipientName ?? group.recipient_name;
@@ -407,7 +409,7 @@ export default function ImportReviewPage() {
                         <span className="truncate min-w-0 text-muted-foreground/60 hidden sm:block">{row.memo}</span>
                       )}
                       <span className={`ml-auto shrink-0 tabular-nums font-medium ${Number(row.amount) < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}>
-                        {formatCurrency(Math.abs(Number(row.amount)), row.currency ?? "EUR", locale)}
+                        {formatCurrency(Number(row.amount), row.currency ?? "EUR", locale)}
                       </span>
                     </div>
                   ))}

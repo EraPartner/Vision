@@ -27,7 +27,10 @@ setInterval(() => {
  */
 export function rateLimiter({ windowMs = 60_000, maxRequests = 100, keyPrefix = 'global' } = {}) {
   return (req, res, next) => {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const remoteAddr = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+    const isLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+    const forwarded = isLoopback ? (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';
+    const ip = forwarded || remoteAddr || 'unknown';
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();
 

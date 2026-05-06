@@ -39,6 +39,7 @@ function AttachmentRow({
     onDelete: (id: number) => void;
     deleting: boolean;
 }) {
+    const { t } = useLanguage();
     const url = getAttachmentDownloadUrl(attachment.id);
     const isImage = attachment.mime_type.startsWith("image/");
 
@@ -73,7 +74,7 @@ function AttachmentRow({
                 className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={() => onDelete(attachment.id)}
                 disabled={deleting}
-                title="Delete attachment"
+                title={t('txPage.deleteAttachment')}
             >
                 {deleting ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

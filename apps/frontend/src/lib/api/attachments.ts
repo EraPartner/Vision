@@ -2,7 +2,7 @@
  * Attachment API client — receipt and document uploads for transactions.
  */
 
-import { API_BASE_URL, apiRequest, generateRequestId, parseEnvelopeError } from '@/lib/api/client';
+import { API_BASE_URL, apiRequest, rawFetch, parseEnvelopeError } from '@/lib/api/client';
 
 export interface Attachment {
     id: number;
@@ -24,9 +24,8 @@ export async function uploadAttachment(transactionId: number, file: File): Promi
     const form = new FormData();
     form.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/api/attachments/transaction/${transactionId}`, {
+    const response = await rawFetch(`${API_BASE_URL}/api/attachments/transaction/${transactionId}`, {
         method: 'POST',
-        headers: { 'X-Request-Id': generateRequestId() },
         body: form,
     });
 

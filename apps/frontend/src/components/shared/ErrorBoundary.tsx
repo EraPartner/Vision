@@ -26,7 +26,7 @@ function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () =>
       <p className="text-sm text-muted-foreground max-w-md">
         {t('common.errorBoundaryDetail')}
       </p>
-      {process.env.NODE_ENV !== "production" && error && (
+      {import.meta.env.DEV && error && (
         <pre className="mt-2 max-w-lg overflow-auto rounded-md bg-muted p-3 text-xs text-left text-muted-foreground">
           {error.message}
         </pre>

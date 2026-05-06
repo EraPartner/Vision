@@ -304,7 +304,7 @@ export const getProjectedBalance = {
         const nextDate = calculateNextDate(curDate, row.recurrence_pattern);
         if (!nextDate) break;
         const nextStr = nextDate.toISOString().slice(0, 10);
-        if (nextStr > endStr) break;
+        if (nextStr > endStr) break; // ISO YYYY-MM-DD lexicographic order equals chronological order
         const amount = toDecimal(row.amount ?? 0);
         plannedNet = plannedNet.plus(amount);
         plannedRows.push({

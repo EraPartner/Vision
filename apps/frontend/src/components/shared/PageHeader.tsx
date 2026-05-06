@@ -18,7 +18,7 @@ export function PageHeader({ title, subtitle, icon: Icon, iconColor = "from-prim
                     </div>
                 )}
                 <div>
-                    <h2 className="text-3xl font-bold text-foreground tracking-tight">{title}</h2>
+                    <h1 className="text-3xl font-bold text-foreground tracking-tight">{title}</h1>
                     {subtitle && <p className="text-muted-foreground mt-1">{subtitle}</p>}
                 </div>
             </div>

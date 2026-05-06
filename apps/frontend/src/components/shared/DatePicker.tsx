@@ -29,7 +29,7 @@ export function DatePicker({
   buttonClassName,
   align = "start",
   allowClear = false,
-  clearLabel = "Clear",
+  clearLabel,
   portalContainer,
 }: DatePickerProps) {
   const { t } = useLanguage();
@@ -73,7 +73,7 @@ export function DatePicker({
               onClick={() => onChange(undefined)}
             >
               <X className="mr-2 h-3.5 w-3.5" />
-              {clearLabel || t('common.clear')}
+              {clearLabel ?? t('common.clear')}
             </Button>
           </div>
         )}

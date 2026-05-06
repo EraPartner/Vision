@@ -54,10 +54,10 @@ function resolveTheme(mode: ThemeMode, schedule: ThemeSchedule): Theme {
     // schedule mode
     const now = new Date();
     const minutes = now.getHours() * 60 + now.getMinutes();
-    const [lh, lm] = schedule.lightFrom.split(':').map(Number);
-    const [dh, dm] = schedule.darkFrom.split(':').map(Number);
-    const lightMinutes = lh * 60 + lm;
-    const darkMinutes = dh * 60 + dm;
+    const [lh = 8, lm = 0] = schedule.lightFrom.split(':').map(Number);
+    const [dh = 20, dm = 0] = schedule.darkFrom.split(':').map(Number);
+    const lightMinutes = (Number.isFinite(lh) ? lh : 8) * 60 + (Number.isFinite(lm) ? lm : 0);
+    const darkMinutes = (Number.isFinite(dh) ? dh : 20) * 60 + (Number.isFinite(dm) ? dm : 0);
 
     if (lightMinutes < darkMinutes) {
         return minutes >= lightMinutes && minutes < darkMinutes ? 'light' : 'dark';

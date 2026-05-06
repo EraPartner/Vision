@@ -60,7 +60,8 @@ export function createSseWriter(req, res) {
 
     async write(event, data) {
       if (closed) return;
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const safeEvent = String(event).replace(/[\r\n]/g, '_');
+      res.write(`event: ${safeEvent}\ndata: ${JSON.stringify(data)}\n\n`);
       await drainIfNeeded(res);
     },
 

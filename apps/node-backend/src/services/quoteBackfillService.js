@@ -538,8 +538,10 @@ export async function cleanupStaleQuotes(investmentWindows) {
     if (holdingWindows.length === 0) continue;
 
     const fromDates = holdingWindows.map((w) => w.fromDate);
+    const today = new Date();
+    const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const toDates = holdingWindows.map((w) =>
-      w.toDate !== null ? w.toDate : new Date().toISOString().slice(0, 10)
+      w.toDate !== null ? w.toDate : todayLocal
     );
 
     try {

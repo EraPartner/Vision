@@ -127,11 +127,11 @@ export default function MarketLookupPage() {
   const { t } = useLanguage();
   const { appSettings } = useAppSettings();
   const locale = numberFormatToLocale(appSettings.numberFormat);
-  const fmtNum = (val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {
+  const fmtNum = useCallback((val: number | null | undefined, opts?: Intl.NumberFormatOptions) => {
     if (val == null || isNaN(val)) return "—";
     return new Intl.NumberFormat(locale, opts).format(val);
-  };
-  const fmtPrice = (val: number | null | undefined, currency = "USD") => {
+  }, [locale]);
+  const fmtPrice = useCallback((val: number | null | undefined, currency = "USD") => {
     if (val == null || isNaN(val)) return "—";
     return new Intl.NumberFormat(locale, {
       style: "currency",
@@ -139,14 +139,14 @@ export default function MarketLookupPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(val);
-  };
-  const fmtLargeNum = (val: number | null | undefined) => {
+  }, [locale]);
+  const fmtLargeNum = useCallback((val: number | null | undefined) => {
     if (val == null || isNaN(val)) return "—";
     if (val >= 1e12) return `${(val / 1e12).toFixed(2)}T`;
     if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
     if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
     return fmtNum(val, { maximumFractionDigits: 0 });
-  };
+  }, [fmtNum]);
   const [searchText, setSearchText] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState(RANGES[2]); // 1M default
@@ -530,8 +530,8 @@ export default function MarketLookupPage() {
                     <div className="border-t border-border pt-3">
                       <p className="text-xs font-medium text-muted-foreground mb-2">{t('market.recentActions')}</p>
                       <div className="space-y-2">
-                        {quote.recentAnalystActions.map((action, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
+                        {quote.recentAnalystActions.map((action) => (
+                          <div key={`${action.date}-${action.firm}`} className="flex items-center gap-2 text-xs">
                             {action.action === "up"
                               ? <TrendingUp className="h-3 w-3 text-green-500 dark:text-green-400 shrink-0" />
                               : action.action === "down"
@@ -584,10 +584,12 @@ export default function MarketLookupPage() {
                 </div>
               ) : newsData?.articles && newsData.articles.length > 0 ? (
                 <div className="space-y-3">
-                  {newsData.articles.map((article, i) => (
+                  {newsData.articles.map((article) => {
+                    const safeHref = /^https?:\/\//i.test(article.link) ? article.link : undefined;
+                    return (
                     <a
-                      key={i}
-                      href={article.link}
+                      key={article.link}
+                      href={safeHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex gap-3 p-2 -mx-2 rounded-md hover:bg-muted/70 transition-colors group"
@@ -609,14 +611,15 @@ export default function MarketLookupPage() {
                           {article.publishedAt && (
                             <>
                               <span>·</span>
-                              <span>{formatDateStringWithAppSettings(article.publishedAt, appSettings.dateFormat)}</span>
+                              <span>{formatDateWithAppSettings(new Date(article.publishedAt * 1000), appSettings.dateFormat)}</span>
                             </>
                           )}
                           <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                       </div>
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">{t('market.noNews')}</p>

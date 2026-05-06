@@ -121,8 +121,10 @@ router.delete('/:id', validateIdParam, async (req, res) => {
   const attachment = await attachmentRepository.findById(parseInt(req.params.id, 10));
   if (!attachment) throw new NotFoundError('Attachment not found');
 
-  await removeAttachmentFile(attachment.stored_path);
+  // Delete DB row first — if that fails the file is still present and recoverable.
+  // Deleting the file first risks orphaning it if the DB delete subsequently fails.
   await attachmentRepository.deleteById(attachment.id);
+  await removeAttachmentFile(attachment.stored_path);
 
   res.ok({ deleted: true });
 });

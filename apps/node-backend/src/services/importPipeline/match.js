@@ -74,33 +74,41 @@ export async function matchBatch({ batchId, onProgress }) {
     });
   }
 
-  // --- Phase 3: upsert new recipients for unresolved names ---
+  // --- Phase 3: batch-upsert new recipients for unresolved names ---
   const unmatched = distinctRaw.filter((n) => !resolved.has(n));
-  for (const raw of unmatched) {
-    const upperName = String(raw).toUpperCase().trim();
-    const normalized = normalizeForMatching(String(raw));
-    if (!normalized) continue;
+  const toUpsert = unmatched
+    .map((raw) => ({ raw, upper: String(raw).toUpperCase().trim(), normalized: normalizeForMatching(String(raw)) }))
+    .filter((r) => r.normalized);
 
-    const upsert = await query(
+  if (toUpsert.length > 0) {
+    const upperNames = toUpsert.map((r) => r.upper);
+    const normalizedNames = toUpsert.map((r) => r.normalized);
+
+    // Batch insert — ON CONFLICT DO NOTHING returns only newly created rows.
+    const inserted = await query(
       `INSERT INTO recipients (name, normalized_name, is_active)
-       VALUES ($1, $2, true)
+       SELECT UNNEST($1::text[]), UNNEST($2::text[]), true
        ON CONFLICT (normalized_name) DO NOTHING
-       RETURNING id`,
-      [upperName, normalized]
+       RETURNING id, normalized_name`,
+      [upperNames, normalizedNames],
     );
+    const insertedByNorm = new Map(inserted.rows.map((r) => [r.normalized_name, r.id]));
 
-    let id;
-    if (upsert.rows.length) {
-      id = upsert.rows[0].id;
-    } else {
+    // Fetch ids for names that already existed (conflict — not returned above).
+    const conflicted = normalizedNames.filter((n) => !insertedByNorm.has(n));
+    if (conflicted.length > 0) {
       const existing = await query(
-        `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-        [normalized]
+        `SELECT id, normalized_name FROM recipients WHERE normalized_name = ANY($1::text[])`,
+        [conflicted],
       );
-      if (!existing.rows.length) continue;
-      id = existing.rows[0].id;
+      for (const r of existing.rows) insertedByNorm.set(r.normalized_name, r.id);
     }
-    resolved.set(raw, { recipientId: id, matchSource: 'new', matchSimilarity: null, matchedPatternId: null });
+
+    for (const { raw, normalized } of toUpsert) {
+      const id = insertedByNorm.get(normalized);
+      if (id == null) continue;
+      resolved.set(raw, { recipientId: id, matchSource: 'new', matchSimilarity: null, matchedPatternId: null });
+    }
   }
 
   // --- Chunked UPDATE of staging rows ---

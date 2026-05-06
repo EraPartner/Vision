@@ -205,7 +205,7 @@ export function CashFlowForecastChart({
 
     const monthName = mode === "month" && monthQuery.data
         ? formatMonthYearWithAppSettings(
-              new Date(monthQuery.data.month + "-01T00:00:00"),
+              new Date(monthQuery.data.month + "-01T00:00:00Z"),
               appSettings.dateFormat,
               locale,
           )

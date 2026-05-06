@@ -46,7 +46,9 @@ export function parseISO(dateString: string): Date {
 }
 
 export function differenceInDays(dateLeft: Date, dateRight: Date): number {
-  return Math.floor((dateLeft.getTime() - dateRight.getTime()) / 86400000);
+  const utcLeft = Date.UTC(dateLeft.getFullYear(), dateLeft.getMonth(), dateLeft.getDate());
+  const utcRight = Date.UTC(dateRight.getFullYear(), dateRight.getMonth(), dateRight.getDate());
+  return Math.round((utcLeft - utcRight) / 86400000);
 }
 
 export function formatDistanceToNow(date: Date, _options?: { addSuffix?: boolean; locale?: string }): string {

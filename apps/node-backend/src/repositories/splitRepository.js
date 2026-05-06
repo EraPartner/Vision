@@ -72,26 +72,6 @@ export const splitRepository = {
   },
 
   /**
-   * Create multiple splits in a single query.
-   */
-  async createSplitsBatch({ transaction_id, splits }) {
-    if (!Array.isArray(splits) || splits.length === 0) return [];
-
-    const recipientIds = splits.map((split) => split.recipient_id);
-    const amounts = splits.map((split) => split.amount);
-    const notes = splits.map((split) => split.note || null);
-
-    const sql = `
-      INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-      SELECT $1, s.recipient_id, s.amount, s.note
-      FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
-      RETURNING *
-    `;
-    const result = await query(sql, [transaction_id, recipientIds, amounts, notes]);
-    return result.rows;
-  },
-
-  /**
    * Atomically validate and create a single split.
    * Locks the transaction row with SELECT FOR UPDATE to prevent
    * concurrent over-allocation between check and insert.
@@ -369,7 +349,7 @@ export const splitRepository = {
         split_id,
         amount,
         note || null,
-        paid_at || new Date().toISOString().split('T')[0],
+        paid_at || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
       ]);
 
       const settledResult = await client.query(

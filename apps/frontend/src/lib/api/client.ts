@@ -212,11 +212,13 @@ export async function rawFetch(
     const controller = new AbortController();
     activeControllers.add(controller);
 
+    let timedOut = false;
+    const abortHandler = () => controller.abort();
     if (options.signal) {
-        options.signal.addEventListener('abort', () => controller.abort());
+        options.signal.addEventListener('abort', abortHandler);
     }
 
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
 
     const requestId = generateRequestId();
     const mergedHeaders = new Headers(options.headers);
@@ -232,12 +234,16 @@ export async function rawFetch(
         });
     } catch (err: unknown) {
         if ((err as Error).name === 'AbortError') {
-            throw new Error('Request timed out or was cancelled', { cause: err });
+            if (timedOut) throw new Error('Request timed out', { cause: err });
+            throw err;
         }
         throw err;
     } finally {
         clearTimeout(timeoutId);
         activeControllers.delete(controller);
+        if (options.signal) {
+            options.signal.removeEventListener('abort', abortHandler);
+        }
     }
 }
 

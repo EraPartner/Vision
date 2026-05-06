@@ -25,12 +25,8 @@ export async function createMaterializedViews() {
   logger.info('Creating materialized views (if not exist)…');
 
   // 1. Monthly income / spending / net per month (last 12 months)
-  //    Drop and recreate if the column list changed (e.g. category_id_key added).
-  //    RESTRICT (default) ensures dependents cause a loud error rather than
-  //    being silently destroyed by CASCADE.
-  await query(`DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary`);
   await query(`
-    CREATE MATERIALIZED VIEW mv_monthly_summary AS
+    CREATE MATERIALIZED VIEW IF NOT EXISTS mv_monthly_summary AS
     SELECT
       date_trunc('month', t.date)::date AS month_start,
       EXTRACT(MONTH FROM t.date)::int AS month,
@@ -54,7 +50,7 @@ export async function createMaterializedViews() {
 
   // Unique index on plain columns — no expressions, so CONCURRENT refresh works
   await query(`
-    CREATE UNIQUE INDEX mv_monthly_summary_idx
+    CREATE UNIQUE INDEX IF NOT EXISTS mv_monthly_summary_idx
     ON mv_monthly_summary (month_start, currency, category_id_key)
   `);
 
@@ -130,11 +126,14 @@ export async function createMaterializedViews() {
  * Ensure all unique indexes exist (idempotent).
  * Runs at startup separately from createMaterializedViews so that DBs which
  * were created before the indexes were added get them retroactively.
- * Note: mv_monthly_summary is always dropped+recreated above so its index
- * is always fresh — only the remaining views need this safety net.
  */
 export async function ensureMaterializedViewIndexes() {
   const indexes = [
+    {
+      name: 'mv_monthly_summary_idx',
+      view: 'mv_monthly_summary',
+      columns: `(month_start, currency, category_id_key)`,
+    },
     {
       name: 'mv_category_totals_idx',
       view: 'mv_category_totals',

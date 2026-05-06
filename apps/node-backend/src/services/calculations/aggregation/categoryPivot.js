@@ -15,7 +15,7 @@ export async function computeCategoryPivot({
 } = {}) {
   const data = await infoRepository.getCategoryPivot(excludedCategoryIds, targetCurrency, excludedRecipientIds);
   const hasExclusions = excludedCategoryIds.length > 0 || excludedRecipientIds.length > 0;
-  return buildEnvelope(data, { source: hasExclusions ? 'live' : 'live' });
+  return buildEnvelope(data, { source: 'live' });
 }
 
 export default { computeCategoryPivot };

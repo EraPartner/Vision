@@ -57,7 +57,7 @@ export async function isInternetReachable(opts = {}) {
   if (!force && cachedResult !== null && now - cachedAt < CACHE_TTL_MS) {
     return cachedResult;
   }
-  if (inflight) return inflight;
+  if (!force && inflight) return inflight;
 
   inflight = probe({ host, port, timeoutMs })
     .then((ok) => {

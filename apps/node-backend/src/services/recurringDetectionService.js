@@ -191,7 +191,10 @@ export async function detectRecurringPatterns() {
         if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime())) {
           continue;
         }
-        const daysDiff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        // Use UTC dates to avoid DST off-by-one on 23/25-hour days
+        const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
+        const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
+        const daysDiff = Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
         if (daysDiff > 0) intervals.push(daysDiff);
       }
 
@@ -258,6 +261,6 @@ export async function detectRecurringPatterns() {
     };
   } catch (err) {
     logger.error('Error detecting recurring patterns', { error: err.message });
-    return { patterns: [], total: 0 };
+    throw err;
   }
 }

@@ -62,28 +62,70 @@ function parseCsvLine(line: string, sep: string): string[] {
 }
 
 /**
+ * Split raw CSV text into logical records, respecting quoted fields that may
+ * contain embedded newlines. Returns one string per record.
+ */
+function splitCsvRecords(text: string): string[] {
+  const records: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          current += '""';
+          i++;
+        } else {
+          inQuotes = false;
+          current += ch;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+        current += ch;
+      } else if (ch === '\r' && text[i + 1] === '\n') {
+        records.push(current);
+        current = "";
+        i++;
+      } else if (ch === '\n' || ch === '\r') {
+        records.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+  }
+
+  if (current.length > 0) records.push(current);
+  return records;
+}
+
+/**
  * Parse raw text into a CsvPreview (headers + up to MAX_PREVIEW_ROWS rows).
- * Lines that are blank or produce a different number of fields than the
+ * Records that are blank or produce a different number of fields than the
  * header are skipped.
  */
 function parseCsvText(text: string, sep: string): CsvPreview {
-  // Normalise CRLF
-  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const records = splitCsvRecords(text);
 
-  // Find first non-blank line
-  const headerIdx = lines.findIndex((l) => l.trim().length > 0);
+  const headerIdx = records.findIndex((r) => r.trim().length > 0);
   if (headerIdx === -1) {
     return { headers: [], rows: [] };
   }
 
-  const headers = parseCsvLine(lines[headerIdx], sep);
+  const headers = parseCsvLine(records[headerIdx], sep);
   const colCount = headers.length;
 
   const rows: string[][] = [];
-  for (let i = headerIdx + 1; i < lines.length && rows.length < MAX_PREVIEW_ROWS; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const fields = parseCsvLine(lines[i], sep);
+  for (let i = headerIdx + 1; i < records.length && rows.length < MAX_PREVIEW_ROWS; i++) {
+    const record = records[i].trim();
+    if (!record) continue;
+    const fields = parseCsvLine(records[i], sep);
     if (fields.length === colCount) {
       rows.push(fields);
     }

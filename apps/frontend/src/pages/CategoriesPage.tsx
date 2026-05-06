@@ -181,7 +181,7 @@ export default function CategoriesPage() {
                                             {general}
                                         </span>
                                             <Badge variant="secondary" className="ml-auto text-xs font-normal">
-                                                {t(items.length === 1 ? 'categoriesPage.badgeSingular' : 'categoriesPage.badgePlural', { n: activeCount })}
+                                                {t(activeCount === 1 ? 'categoriesPage.badgeSingular' : 'categoriesPage.badgePlural', { n: activeCount })}
                                                 {showAll && activeCount !== items.length ? ` / ${t('categoriesPage.badgePlural', { n: items.length })}` : ''}
                                             </Badge>
                                         </button>

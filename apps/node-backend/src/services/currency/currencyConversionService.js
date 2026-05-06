@@ -33,7 +33,7 @@ import {
 // In-memory cache: { rates: {...}, timestamp: number } | null
 let memoryCache = null;
 
-// Fallback rates — updated in-memory whenever a successful fetch occurs.
+// Static hardcoded fallback rates. Never mutated.
 // Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
 export const FALLBACK_RATES = {
   EUR: 1.0,
@@ -81,6 +81,9 @@ export const FALLBACK_RATES = {
   KES: 1 / 141.0,
 };
 
+// Live fallback — refreshed to latest fetched rates so cache-miss + DB-miss still gets fresh data.
+let liveFallbackRates = FALLBACK_RATES;
+
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 /**
@@ -101,7 +104,7 @@ async function getRates() {
   }
 
   logger.warn('Using fallback exchange rates — ECB API and database unavailable');
-  return { ...FALLBACK_RATES };
+  return { ...liveFallbackRates };
 }
 
 /**
@@ -136,7 +139,7 @@ export async function warmCache() {
 
     if (!ecbRates && !erarRates) {
       const rates = await getRates();
-      logger.warn(`Exchange rate cache warmed from ${rates === FALLBACK_RATES ? 'fallback' : 'database'} (all APIs unavailable)`);
+      logger.warn(`Exchange rate cache warmed from ${rates === liveFallbackRates ? 'fallback' : 'database'} (all APIs unavailable)`);
       return;
     }
 
@@ -151,7 +154,7 @@ export async function warmCache() {
     const totalCount = Object.keys(mergedRates).length - 1;
     logger.info(`Merged exchange rates: ${ecbCount} from ECB + ${erarCount - ecbCount} supplementary = ${totalCount} total`);
 
-    Object.assign(FALLBACK_RATES, mergedRates);
+    liveFallbackRates = mergedRates;
     await saveToDatabase(mergedRates);
     memoryCache = { rates: mergedRates, timestamp: Date.now() };
   } catch (err) {

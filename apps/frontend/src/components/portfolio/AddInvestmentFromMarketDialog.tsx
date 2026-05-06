@@ -58,7 +58,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
   const [newInvestmentForm, setNewInvestmentForm] = useState({
     name: quote.name,
     symbol: quote.symbol,
-    currency: quote.currency === 'USD' ? 'USD' : 'EUR',
+    currency: quote.currency ?? 'EUR',
     currentPrice: quote.price.toString(),
     notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
   });
@@ -82,7 +82,7 @@ export function AddInvestmentFromMarketDialog({ quote, existingInvestment }: Pro
     setNewInvestmentForm({
       name: quote.name,
       symbol: quote.symbol,
-      currency: quote.currency === 'USD' ? 'USD' : 'EUR',
+      currency: quote.currency ?? 'EUR',
       currentPrice: quote.price.toString(),
       notes: t('addInvFromMarket.notesDefault', { date: todayLabel }),
     });

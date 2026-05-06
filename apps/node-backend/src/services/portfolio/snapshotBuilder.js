@@ -127,8 +127,11 @@ export async function computeDailySnapshots(targetCurrency = 'EUR') {
     priceHistoryByInvestment[invId][row.day] = Number(row.close_price) || 0;
     priceHistorySortedDays[invId].push(row.day);
   }
-  // Rows arrive ORDER BY investment_id, price_date — already sorted per investment.
-  // No extra sort needed.
+  // Rows arrive ORDER BY investment_id, price_date — sorted per investment.
+  // Sort defensively so binary-search forward-fill is correct even if query order changes.
+  for (const days of Object.values(priceHistorySortedDays)) {
+    days.sort();
+  }
 
   const inflationByMonth = new Map(
     inflationResult.rows.map(row => [row.month, Number(row.monthly_rate) || 0])

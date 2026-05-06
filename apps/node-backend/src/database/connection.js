@@ -31,9 +31,6 @@ pool.on('error', (err) => {
   logger.error('Unexpected error on idle database client', err);
 });
 
-// Cache for named prepared statements (name -> SQL text).
-// Pass a { name, text, values } object to queryPrepared() to use.
-const preparedStatements = new Map();
 
 /**
  * Execute a query against the database with optional retry on transient errors.
@@ -79,17 +76,15 @@ export async function query(text, params, opts = {}) {
 }
 
 /**
- * Execute a named prepared statement. Prepared statements are parsed by
- * PostgreSQL only once per connection, reducing per-query planning overhead
- * for hot query paths.
+ * Execute a named prepared statement. PostgreSQL parses the plan once per
+ * connection; pg passes text every call because pool connections are independent.
  *
  * @param {string} name      - Unique statement name (stable across calls)
- * @param {string} text      - SQL text (only used on first invocation per name)
+ * @param {string} text      - SQL text
  * @param {any[]}  [values]  - Bound parameters
  * @returns {Promise<pg.QueryResult>}
  */
 export async function queryPrepared(name, text, values) {
-  preparedStatements.set(name, text);
   return pool.query({ name, text, values });
 }
 
